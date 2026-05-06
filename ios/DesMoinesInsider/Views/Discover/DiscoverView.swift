@@ -135,39 +135,33 @@ struct DiscoverView: View {
 
     @ViewBuilder
     private var deckArea: some View {
-        // GeometryReader lives here — outside the ZStack — so it measures the
-        // true available area after horizontal/vertical padding is applied.
-        // Those concrete dimensions are passed straight into SwipeCardStack,
-        // eliminating the nested-GeometryReader ambiguity that caused some
-        // cards to report an inflated proxy width and render full-bleed.
-        GeometryReader { geo in
-            ZStack {
-                if viewModel.isLoading && viewModel.deck.isEmpty {
-                    ProgressView().scaleEffect(1.4)
-                        .frame(width: geo.size.width, height: geo.size.height)
-                } else if viewModel.deck.isEmpty {
-                    emptyState
-                        .frame(width: geo.size.width, height: geo.size.height)
-                } else {
-                    SwipeCardStack(
-                        items: viewModel.deck,
-                        availableWidth: geo.size.width,
-                        availableHeight: geo.size.height,
-                        onLike: { viewModel.like($0) },
-                        onSkip: { viewModel.skip($0) },
-                        onBoost: { viewModel.boost($0) },
-                        onTap: { item in
-                            viewModel.recordDetailTap(item)
-                            switch item {
-                            case .event(let e): navigationPath.append(e)
-                            case .restaurant(let r): navigationPath.append(r)
-                            }
+        ZStack {
+            if viewModel.isLoading && viewModel.deck.isEmpty {
+                ProgressView().scaleEffect(1.4)
+            } else if viewModel.deck.isEmpty {
+                emptyState
+            } else {
+                SwipeCardStack(
+                    items: viewModel.deck,
+                    onLike: { viewModel.like($0) },
+                    onSkip: { viewModel.skip($0) },
+                    onBoost: { viewModel.boost($0) },
+                    onTap: { item in
+                        viewModel.recordDetailTap(item)
+                        switch item {
+                        case .event(let e): navigationPath.append(e)
+                        case .restaurant(let r): navigationPath.append(r)
                         }
-                    )
-                    .id(stackId)
-                }
+                    }
+                )
+                .id(stackId)
             }
         }
+        // .frame fills the remaining VStack height so the GeometryReader inside
+        // SwipeCardStack always receives a concrete non-zero proposed size.
+        // Padding is the OUTERMOST modifier so it reduces what the ZStack
+        // (and GeometryReader) are offered, guaranteeing visible side margins.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
     }

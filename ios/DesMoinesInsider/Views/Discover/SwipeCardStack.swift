@@ -6,12 +6,6 @@ import SwiftUI
 /// drag offset for the in-flight gesture.
 struct SwipeCardStack: View {
     let items: [SwipeItem]
-    /// The exact pixel area the stack should occupy, measured by the parent's
-    /// GeometryReader after all padding has been applied. Passing this in
-    /// eliminates the ambiguity of a nested GeometryReader receiving an
-    /// inflated proposed size from a greedy ZStack ancestor.
-    let availableWidth: CGFloat
-    let availableHeight: CGFloat
     var onLike: (SwipeItem) -> Void
     var onSkip: (SwipeItem) -> Void
     var onBoost: (SwipeItem) -> Void
@@ -25,53 +19,44 @@ struct SwipeCardStack: View {
         items.prefix(3)
     }
 
-    /// Vertical room reserved below cards for the behind-card stack peek
-    /// (.offset(y: +28) is visual-only and doesn't push layout, so without
-    /// this buffer the back card bleeds into the action bar).
+    /// Vertical room reserved below cards for the behind-card stack peek.
     private static let backCardPeekRoom: CGFloat = 32
 
-    /// Card aspect ratio (width / height). 0.7 keeps it firmly portrait so
-    /// the deck never goes wider than tall, regardless of device size.
+    /// Card aspect ratio (width / height).
     private static let cardAspectRatio: CGFloat = 0.7
 
-    /// Top card rotates up to ±18° during a drag. The rotated bounding box
-    /// extends ~16% of the card's width past each side; we shrink the card
-    /// itself so that overshoot stays inside the deck area instead of
-    /// getting clipped by the screen edge.
+    /// Shrink the card so rotation overshoot stays inside the deck area.
     private static let rotationSafetyScale: CGFloat = 0.86
 
-    private var cardWidth: CGFloat {
-        let h = max(0, availableHeight - Self.backCardPeekRoom)
-        let widthFromHeight = h * Self.cardAspectRatio
-        return min(availableWidth, widthFromHeight) * Self.rotationSafetyScale
-    }
-
-    private var cardHeight: CGFloat {
-        cardWidth / Self.cardAspectRatio
-    }
-
     var body: some View {
-        ZStack {
-            ForEach(Array(visibleItems.enumerated()), id: \.element.id) { index, item in
-                SwipeCard(
-                    item: item,
-                    dragOffset: index == 0 ? dragOffset : .zero,
-                    isTopCard: index == 0
-                )
-                .frame(width: cardWidth, height: cardHeight)
-                .scaleEffect(scale(for: index))
-                .offset(y: stackYOffset(for: index))
-                .offset(index == 0 ? dragOffset : .zero)
-                .rotationEffect(index == 0 ? .degrees(rotationDegrees) : .zero)
-                .zIndex(Double(visibleItems.count - index))
-                .animation(.interactiveSpring(response: 0.32, dampingFraction: 0.78), value: dragOffset)
-                .gesture(dragGesture(for: item), including: index == 0 ? .gesture : .none)
-                .onTapGesture { if index == 0 { onTap(item) } }
-                .allowsHitTesting(index == 0 && !isDismissing)
+        GeometryReader { proxy in
+            let availableW = proxy.size.width
+            let availableH = max(0, proxy.size.height - Self.backCardPeekRoom)
+            let widthFromHeight = availableH * Self.cardAspectRatio
+            let cardWidth = min(availableW, widthFromHeight) * Self.rotationSafetyScale
+            let cardHeight = cardWidth / Self.cardAspectRatio
+
+            ZStack {
+                ForEach(Array(visibleItems.enumerated()), id: \.element.id) { index, item in
+                    SwipeCard(
+                        item: item,
+                        dragOffset: index == 0 ? dragOffset : .zero,
+                        isTopCard: index == 0
+                    )
+                    .frame(width: cardWidth, height: cardHeight)
+                    .scaleEffect(scale(for: index))
+                    .offset(y: stackYOffset(for: index))
+                    .offset(index == 0 ? dragOffset : .zero)
+                    .rotationEffect(index == 0 ? .degrees(rotationDegrees) : .zero)
+                    .zIndex(Double(visibleItems.count - index))
+                    .animation(.interactiveSpring(response: 0.32, dampingFraction: 0.78), value: dragOffset)
+                    .gesture(dragGesture(for: item), including: index == 0 ? .gesture : .none)
+                    .onTapGesture { if index == 0 { onTap(item) } }
+                    .allowsHitTesting(index == 0 && !isDismissing)
+                }
             }
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .center)
         }
-        .frame(width: availableWidth, height: availableHeight, alignment: .center)
-        .clipped()
     }
 
     // MARK: - Stack geometry
