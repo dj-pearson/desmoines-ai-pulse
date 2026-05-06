@@ -323,9 +323,10 @@ final class DiscoverViewModel {
             query.dateStart = range.start
             query.dateEnd = range.end
         } else if mode == .mixed {
-            // "Tonight" tab has no explicit date filter — default to today only
-            // so the deck doesn't surface events from later in the month.
-            let range = DateFilterPreset.today.dateRange
+            // "Tonight" tab: show events within the next 7 days so the deck
+            // isn't empty on nights with few events, but doesn't pull events
+            // from weeks/months away.
+            let range = DateFilterPreset.thisWeek.dateRange
             query.dateStart = range.start
             query.dateEnd = range.end
         }
