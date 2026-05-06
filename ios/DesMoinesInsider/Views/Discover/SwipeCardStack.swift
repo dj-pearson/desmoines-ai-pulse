@@ -28,22 +28,23 @@ struct SwipeCardStack: View {
     /// Shrink the card so rotation overshoot stays inside the deck area.
     private static let rotationSafetyScale: CGFloat = 0.86
 
-    /// Horizontal padding applied by deckArea (20pt each side = 40pt total).
-    /// We subtract this from screen width so the card size is known before
-    /// the first layout pass — the same approach every other card in the app
-    /// uses (hardcoded dimensions rather than a GeometryReader inside a VStack).
-    private static let deckHorizontalPadding: CGFloat = 40
+    /// Measured width of the deck container, captured via a background
+    /// GeometryReader. Starts at zero; updates to the real value on the first
+    /// layout pass and on every device/orientation change.
+    @State private var deckWidth: CGFloat = 0
+    @State private var deckHeight: CGFloat = 0
 
-    /// Card width derived from screen width, matching the pattern used by all
-    /// other card components in the app.
     private var cardWidth: CGFloat {
-        let screenWidth = UIScreen.main.bounds.width
-        let availableW = screenWidth - Self.deckHorizontalPadding
-        return availableW * Self.rotationSafetyScale
+        guard deckWidth > 0 else { return 0 }
+        return deckWidth * Self.rotationSafetyScale
     }
 
     private var cardHeight: CGFloat {
-        cardWidth / Self.cardAspectRatio
+        guard deckHeight > 0 else { return 0 }
+        let availableH = max(0, deckHeight - Self.backCardPeekRoom)
+        let fromHeight = availableH * Self.cardAspectRatio
+        // Use whichever axis is the binding constraint.
+        return (min(cardWidth, fromHeight * Self.rotationSafetyScale)) / Self.cardAspectRatio
     }
 
     var body: some View {
@@ -67,6 +68,24 @@ struct SwipeCardStack: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // background(GeometryReader) is the idiomatic SwiftUI pattern for
+        // reading a parent's resolved size. Unlike a foreground GeometryReader
+        // inside a VStack, the background is sized by the parent *after* layout
+        // resolves — so it always reports the real dimensions, not (0, 0), and
+        // updates automatically on rotation or split-view resize.
+        .background(
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear {
+                        deckWidth = geo.size.width
+                        deckHeight = geo.size.height
+                    }
+                    .onChange(of: geo.size) { _, newSize in
+                        deckWidth = newSize.width
+                        deckHeight = newSize.height
+                    }
+            }
+        )
     }
 
     // MARK: - Stack geometry
