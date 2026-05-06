@@ -49,6 +49,7 @@ import {
   AlertCircle,
   XCircle,
   Globe,
+  Image as ImageIcon,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -57,6 +58,7 @@ import EventDataEnhancer from "./EventDataEnhancer";
 import { useWriteupGenerator } from "@/hooks/useWriteupGenerator";
 import { useContentExport } from "@/hooks/useDataExport";
 import { createLogger } from '@/lib/logger';
+import ImagePickerDialog from "./admin/ImagePickerDialog";
 
 const log = createLogger('ContentTable');
 
@@ -442,6 +444,7 @@ export default function ContentTable({
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [sortField, setSortField] = useState<string>("date");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [imagePickerFor, setImagePickerFor] = useState<{ id: string; name: string } | null>(null);
   const { isHighlightedDomain } = useDomainHighlights();
   const { generateWriteup, isGeneratingId } = useWriteupGenerator();
   const { isExporting, exportContent } = useContentExport(type);
@@ -1193,6 +1196,24 @@ export default function ContentTable({
                             <FileText className="h-3 w-3" />
                           </Button>
                         )}
+                        {(type === "event" ||
+                          type === "restaurant" ||
+                          type === "attraction" ||
+                          type === "playground") && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              setImagePickerFor({
+                                id: item.id,
+                                name: item.title || item.name || item.id,
+                              })
+                            }
+                            title="Find / change image"
+                          >
+                            <ImageIcon className="h-3 w-3" />
+                          </Button>
+                        )}
                         <Button
                           size="sm"
                           variant="destructive"
@@ -1401,6 +1422,24 @@ export default function ContentTable({
                                     <FileText className="h-4 w-4" />
                                   </Button>
                                 )}
+                                {(type === "event" ||
+                                  type === "restaurant" ||
+                                  type === "attraction" ||
+                                  type === "playground") && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() =>
+                                      setImagePickerFor({
+                                        id: item.id,
+                                        name: item.title || item.name || item.id,
+                                      })
+                                    }
+                                    title="Find / change image"
+                                  >
+                                    <ImageIcon className="h-4 w-4" />
+                                  </Button>
+                                )}
                                 <Button
                                   size="sm"
                                   variant="destructive"
@@ -1468,6 +1507,30 @@ export default function ContentTable({
           }}
         />
       )}
+
+      {/* Image Picker (per-record manual override) */}
+      {imagePickerFor &&
+        (type === "event" ||
+          type === "restaurant" ||
+          type === "attraction" ||
+          type === "playground") && (
+          <ImagePickerDialog
+            open
+            category={
+              (type === "event"
+                ? "events"
+                : type === "restaurant"
+                  ? "restaurants"
+                  : type === "attraction"
+                    ? "attractions"
+                    : "playgrounds") as "events" | "restaurants" | "attractions" | "playgrounds"
+            }
+            recordId={imagePickerFor.id}
+            recordName={imagePickerFor.name}
+            onClose={() => setImagePickerFor(null)}
+            onApplied={() => onRefresh?.()}
+          />
+        )}
     </div>
   );
 }

@@ -186,6 +186,115 @@ function walkForImages(
   }
 }
 
+/**
+ * Tag describing where a candidate image was found. Used by the picker UI
+ * so admins can see which extraction method produced each option.
+ */
+export type ImageCandidateSource =
+  | "og"
+  | "twitter"
+  | "jsonld"
+  | "image_src"
+  | "img"
+  | "venue"
+  | "places";
+
+export interface ImageCandidate {
+  url: string;
+  source: ImageCandidateSource;
+  width?: number;
+  height?: number;
+}
+
+/**
+ * Like extractImageFromHtml but returns ALL plausible candidates instead of
+ * picking one. Used by find-image-candidates so admins can choose if the
+ * automatic pick was wrong.
+ */
+export function extractAllImagesFromHtml(html: string, pageUrl: string): ImageCandidate[] {
+  const out: ImageCandidate[] = [];
+
+  // og:image (multiple possible — og:image, og:image:url, og:image:secure_url)
+  for (const m of html.matchAll(
+    /<meta[^>]+property=["']og:image(?::secure_url|:url)?["'][^>]+content=["']([^"']+)["']/gi,
+  )) {
+    const u = resolveUrl(m[1], pageUrl);
+    if (u) out.push({ url: u, source: "og" });
+  }
+
+  // twitter:image
+  for (const m of html.matchAll(
+    /<meta[^>]+(?:name|property)=["']twitter:image["'][^>]+content=["']([^"']+)["']/gi,
+  )) {
+    const u = resolveUrl(m[1], pageUrl);
+    if (u) out.push({ url: u, source: "twitter" });
+  }
+
+  // <link rel="image_src">
+  for (const m of html.matchAll(
+    /<link[^>]+rel=["']image_src["'][^>]+href=["']([^"']+)["']/gi,
+  )) {
+    const u = resolveUrl(m[1], pageUrl);
+    if (u) out.push({ url: u, source: "image_src" });
+  }
+
+  // schema.org JSON-LD — collect every image found in any block
+  const jsonLdCollector: Array<{ priority: number; url: string }> = [];
+  const PREF: Record<string, number> = {
+    Event: 0,
+    MusicEvent: 0,
+    SportsEvent: 0,
+    BusinessEvent: 0,
+    SocialEvent: 0,
+    TheaterEvent: 0,
+    Festival: 0,
+    Restaurant: 1,
+    FoodEstablishment: 1,
+    LocalBusiness: 2,
+    Place: 3,
+    TouristAttraction: 3,
+  };
+  for (const block of html.matchAll(
+    /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi,
+  )) {
+    const raw = block[1]?.trim();
+    if (!raw) continue;
+    try {
+      walkForImages(JSON.parse(raw), jsonLdCollector, PREF);
+    } catch {
+      /* ignore malformed blocks */
+    }
+  }
+  jsonLdCollector.sort((a, b) => a.priority - b.priority);
+  for (const c of jsonLdCollector) {
+    const u = resolveUrl(c.url, pageUrl);
+    if (u) out.push({ url: u, source: "jsonld" });
+  }
+
+  // <img> tags — keep ones that look big enough; skip obvious chrome/tracking
+  for (const m of html.matchAll(/<img[^>]+src=["']([^"']+)["'][^>]*>/gi)) {
+    const src = m[1];
+    if (
+      src.startsWith("data:") ||
+      /pixel|tracking|icon|logo|avatar|badge|spinner/i.test(src)
+    ) {
+      continue;
+    }
+    const wMatch = m[0].match(/width=["']?(\d+)["']?/i);
+    const hMatch = m[0].match(/height=["']?(\d+)["']?/i);
+    const width = wMatch ? parseInt(wMatch[1]) : undefined;
+    const height = hMatch ? parseInt(hMatch[1]) : undefined;
+    if (width && width < 100) continue;
+    if (height && height < 100) continue;
+    const u = resolveUrl(src, pageUrl);
+    if (u) out.push({ url: u, source: "img", width, height });
+  }
+
+  // Dedupe by URL while preserving order
+  const seen = new Set<string>();
+  return out.filter((c) => (seen.has(c.url) ? false : (seen.add(c.url), true)));
+}
+
 function resolveUrl(src: string, pageUrl: string): string | null {
   try {
     if (src.startsWith("//")) return `https:${src}`;

@@ -168,6 +168,58 @@ export async function getGooglePlacesPhoto(
 }
 
 /**
+ * Like getGooglePlacesPhoto, but returns up to `maxPhotos` photo URLs from the
+ * top matching Place. Used by the manual image picker so admins can choose.
+ */
+export async function getGooglePlacesPhotos(
+  venueName: string,
+  lat: number | null,
+  lng: number | null,
+  maxPhotos: number = 6,
+): Promise<string[]> {
+  const apiKey = Deno.env.get("GOOGLE_SEARCH_API");
+  if (!apiKey) return [];
+  if (!venueName || venueName.trim().length < 3) return [];
+
+  try {
+    const body: Record<string, unknown> = {
+      textQuery: venueName,
+      maxResultCount: 1,
+    };
+    if (lat != null && lng != null) {
+      body.locationBias = {
+        circle: { center: { latitude: lat, longitude: lng }, radius: 25_000 },
+      };
+    } else {
+      body.locationBias = {
+        circle: { center: { latitude: 41.5868, longitude: -93.625 }, radius: 50_000 },
+      };
+    }
+
+    const res = await fetch("https://places.googleapis.com/v1/places:searchText", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": apiKey,
+        "X-Goog-FieldMask": "places.id,places.displayName,places.photos",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    const photos: Array<{ name?: string }> = data?.places?.[0]?.photos ?? [];
+    return photos
+      .slice(0, maxPhotos)
+      .map((p) => p.name)
+      .filter((n): n is string => !!n)
+      .map((n) => `https://places.googleapis.com/v1/${n}/media?maxHeightPx=1200&maxWidthPx=1600&key=${apiKey}`);
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Per-category default image URL. Empty values mean "no default for this
  * category — leave the record without an image". Once you upload generic
  * hero images to Supabase Storage (e.g. media/defaults/event-music.jpg)
