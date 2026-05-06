@@ -135,20 +135,32 @@ export async function requireAdminOrApiKey(
     );
   }
 
-  const { data: profile } = await supabase
-    .from('profiles')
+  // Match the client-side admin check (src/contexts/AuthContext.tsx):
+  // 1) user_roles.role keyed by user_id, then 2) profiles.user_role keyed by user_id.
+  // Accepted values: 'admin' or 'root_admin'.
+  const ADMIN_VALUES = new Set(['admin', 'root_admin']);
+  const userId = userRes.user.id;
+
+  const { data: roleRow } = await supabase
+    .from('user_roles')
     .select('role')
-    .eq('id', userRes.user.id)
+    .eq('user_id', userId)
     .maybeSingle();
 
-  if (profile?.role !== 'admin') {
-    return new Response(
-      JSON.stringify({ error: 'Admin role required' }),
-      { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-    );
-  }
+  if (roleRow?.role && ADMIN_VALUES.has(roleRow.role)) return null;
 
-  return null;
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('user_role')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (profile?.user_role && ADMIN_VALUES.has(profile.user_role)) return null;
+
+  return new Response(
+    JSON.stringify({ error: 'Admin role required' }),
+    { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+  );
 }
 
 /**
