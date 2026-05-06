@@ -1087,7 +1087,7 @@
         "Smoke-tested with the Play Console 'Test notification' helper"
       ],
       "priority": 68,
-      "passes": false
+      "passes": true
     },
     {
       "id": "SUB-SYNC-012",
