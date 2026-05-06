@@ -174,20 +174,35 @@ Deno.serve(async (req) => {
     const table = TABLE[category];
     const namecol = NAME_COL[category];
     const urlCol = URL_COL[category];
-    const supabaseStorageBase = `${supabaseUrl}/storage/v1/object/public/media/`;
+
+    // Today's date (YYYY-MM-DD) for filtering past events out of the backfill —
+    // there's no point fetching images for events that have already happened.
+    const todayIso = new Date().toISOString().slice(0, 10);
 
     console.log(
-      `🖼️ backfill-images: category=${category} batchSize=${batchSize} offset=${offset} dryRun=${dryRun}`
+      `🖼️ backfill-images: category=${category} batchSize=${batchSize} offset=${offset} dryRun=${dryRun}${
+        category === "events" ? ` (events on or after ${todayIso} only)` : ""
+      }`
     );
 
-    // Fetch records that have no image_url OR whose image_url is NOT already
-    // hosted on Supabase Storage (i.e., external URLs that need migrating).
-    const { data: records, error: fetchError } = await supabase
+    // Only process records that have NO image at all (null or empty string).
+    // We deliberately skip records that already have an external image URL —
+    // the goal is to fill in missing images, not re-pull or migrate existing ones.
+    let recordsQuery = supabase
       .from(table)
       .select(SELECT_COLS[category])
-      .or(`image_url.is.null,image_url.not.ilike.${supabaseStorageBase}%`)
-      .range(offset, offset + batchSize - 1)
-      .order("created_at", { ascending: true });
+      .or("image_url.is.null,image_url.eq.");
+
+    if (category === "events") {
+      recordsQuery = recordsQuery.gte("date", todayIso).order("date", { ascending: true });
+    } else {
+      recordsQuery = recordsQuery.order("created_at", { ascending: true });
+    }
+
+    const { data: records, error: fetchError } = await recordsQuery.range(
+      offset,
+      offset + batchSize - 1,
+    );
 
     if (fetchError) {
       console.error("❌ Failed to fetch records:", fetchError.message);
@@ -219,11 +234,16 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Check total remaining so we know whether there's a next page
-    const { count: totalRemaining } = await supabase
+    // Check total remaining so we know whether there's a next page.
+    // Mirrors the records query filters (esp. the future-events filter).
+    let countQuery = supabase
       .from(table)
       .select("id", { count: "exact", head: true })
-      .or(`image_url.is.null,image_url.not.ilike.${supabaseStorageBase}%`);
+      .or("image_url.is.null,image_url.eq.");
+    if (category === "events") {
+      countQuery = countQuery.gte("date", todayIso);
+    }
+    const { count: totalRemaining } = await countQuery;
 
     const result: BackfillResult = {
       category,

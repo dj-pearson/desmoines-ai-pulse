@@ -104,14 +104,18 @@ export default function ImageBackfill() {
   const fetchStats = useCallback(async (cat: Category) => {
     try {
       const table = cat === 'playgrounds' ? 'playgrounds' : cat;
+      const todayIso = new Date().toISOString().slice(0, 10);
 
-      const { count: total } = await supabase
-        .from(table as string)
-        .select('id', { count: 'exact', head: true });
+      // For events, only count today/future — past events are excluded from the
+      // backfill, so they shouldn't pad the "needs images" count.
+      const baseQuery = () => {
+        let q = supabase.from(table as string).select('id', { count: 'exact', head: true });
+        if (cat === 'events') q = q.gte('date', todayIso);
+        return q;
+      };
 
-      const { count: withImages } = await supabase
-        .from(table as string)
-        .select('id', { count: 'exact', head: true })
+      const { count: total } = await baseQuery();
+      const { count: withImages } = await baseQuery()
         .not('image_url', 'is', null)
         .neq('image_url', '');
 
