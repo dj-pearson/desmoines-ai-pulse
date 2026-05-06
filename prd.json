@@ -1,7 +1,7 @@
 {
   "project": "Des Moines AI Pulse",
   "branchName": "claude/mobile-ui-ux-improvements-yYyVA",
-  "description": "Mobile UI/UX Premium Polish \u2014 Cross-platform (iOS + Android) initiative to elevate the mobile experience so it soars above the competition. Focuses on premium visual identity, delightful micro-interactions, contextual haptic feedback, a compelling paid-tier feel, animated navigation, hero parallax, conversational trip planning, map overhaul, and accessibility. Builds on the completed Mobile Security & Auth Hardening and Android App Audit PRDs.",
+  "description": "Mobile UI/UX Premium Polish — Cross-platform (iOS + Android) initiative to elevate the mobile experience so it soars above the competition. Focuses on premium visual identity, delightful micro-interactions, contextual haptic feedback, a compelling paid-tier feel, animated navigation, hero parallax, conversational trip planning, map overhaul, and accessibility. Builds on the completed Mobile Security & Auth Hardening and Android App Audit PRDs.",
   "userStories": [
     {
       "id": "AND-SEC-001",
@@ -142,7 +142,7 @@
       ],
       "priority": 8,
       "passes": true,
-      "notes": "FIXED: Created rate_limit_entries table with composite index on (client_id, endpoint, window_start) and unique constraint for atomic upsert. Created check_rate_limit() PL/pgSQL function for atomic rate limit check via INSERT ON CONFLICT. Created cleanup_rate_limit_entries() for expired entry removal. RLS enabled with service_role-only policy. Updated rateLimit.ts with new checkRateLimitPersistent() async function using database storage with in-memory fallback. Original checkRateLimit() kept synchronous for backward compatibility \u2014 all 35+ edge functions continue working unchanged."
+      "notes": "FIXED: Created rate_limit_entries table with composite index on (client_id, endpoint, window_start) and unique constraint for atomic upsert. Created check_rate_limit() PL/pgSQL function for atomic rate limit check via INSERT ON CONFLICT. Created cleanup_rate_limit_entries() for expired entry removal. RLS enabled with service_role-only policy. Updated rateLimit.ts with new checkRateLimitPersistent() async function using database storage with in-memory fallback. Original checkRateLimit() kept synchronous for backward compatibility — all 35+ edge functions continue working unchanged."
     },
     {
       "id": "AUTH-UX-001",
@@ -191,7 +191,7 @@
       ],
       "priority": 11,
       "passes": true,
-      "notes": "FIXED: Enhanced CachedAsyncImage.kt with blur-up progressive loading. Uses animateFloatAsState for blur radius (12dp \u2192 0dp) and opacity (0.7 \u2192 1.0) transitions. Modifier.blur() applied during loading, removed after success callback. Respects ANIMATOR_DURATION_SCALE reduce motion setting. Colored surfaceVariant placeholder shown during loading. Smooth crossfade via Coil crossfade(true). Falls back to BrokenImage placeholder on error."
+      "notes": "FIXED: Enhanced CachedAsyncImage.kt with blur-up progressive loading. Uses animateFloatAsState for blur radius (12dp → 0dp) and opacity (0.7 → 1.0) transitions. Modifier.blur() applied during loading, removed after success callback. Respects ANIMATOR_DURATION_SCALE reduce motion setting. Colored surfaceVariant placeholder shown during loading. Smooth crossfade via Coil crossfade(true). Falls back to BrokenImage placeholder on error."
     },
     {
       "id": "SEC-CROSS-001",
@@ -450,7 +450,7 @@
       "title": "Animated bottom navigation with icon morph, scale, and spring-in indicator",
       "description": "As a user, I want the tab bar to feel alive so switching tabs rewards interaction.",
       "acceptanceCriteria": [
-        "Android: custom NavigationBarItem implementation with animateFloatAsState scale (1.0 \u2192 1.12) and crossfade between unselected and selected icons",
+        "Android: custom NavigationBarItem implementation with animateFloatAsState scale (1.0 → 1.12) and crossfade between unselected and selected icons",
         "Android: selection indicator pill animated via animateDpAsState / spring",
         "iOS: matching tab item with withAnimation(.spring) scale + SF Symbol variableValue transition",
         "Respect reduce motion on both platforms",
@@ -496,7 +496,7 @@
       "acceptanceCriteria": [
         "Android EmptyStateView.kt: add optional primary CTA button and secondary text link, subtle fade-in animation",
         "iOS EmptyStateView.swift: matching API with SwiftUI Button + Link",
-        "Wire up screens: Favorites empty \u2192 \"Browse events\" CTA; Search empty \u2192 \"Try trending\" CTA; Offline empty \u2192 \"Retry\" CTA",
+        "Wire up screens: Favorites empty → \"Browse events\" CTA; Search empty → \"Try trending\" CTA; Offline empty → \"Retry\" CTA",
         "Illustration uses a simple SF Symbol / Material Icon at 72dp with brand tint",
         "No raw \"No results\" strings remain in screens"
       ],
@@ -506,7 +506,7 @@
     },
     {
       "id": "MOB-UX-008",
-      "title": "VIP / Insider visual identity \u2014 gold accents and premium unlock animation",
+      "title": "VIP / Insider visual identity — gold accents and premium unlock animation",
       "description": "As a paid subscriber, I want unique visual cues on premium content so my subscription feels recognized throughout the app.",
       "acceptanceCriteria": [
         "Add gold gradient + Crown icon badge component (PremiumBadge.kt on Android, PremiumBadge.swift on iOS)",
@@ -538,7 +538,7 @@
       "title": "Onboarding redesign with animated page indicator and permission priming",
       "description": "As a new user, I want onboarding to explain the value and prime me before permission dialogs so I actually grant location and notifications.",
       "acceptanceCriteria": [
-        "3\u20134 page onboarding: Welcome, Discover events, Personalized picks, Notifications",
+        "3–4 page onboarding: Welcome, Discover events, Personalized picks, Notifications",
         "Animated page indicator (dots expand into a pill on active)",
         "Each page has an illustration, headline, subcopy, and Next button",
         "Permission priming screen BEFORE the system dialog for location + notifications, with clear value explanation",
@@ -552,7 +552,7 @@
     },
     {
       "id": "MOB-UX-011",
-      "title": "Search UX overhaul \u2014 recent searches, trending chips, debounced autocomplete",
+      "title": "Search UX overhaul — recent searches, trending chips, debounced autocomplete",
       "description": "As a user, I want search to feel intelligent with trending suggestions, recent history, and instant autocomplete so finding things is fast.",
       "acceptanceCriteria": [
         "Show trending categories + 5 recent searches when the input is empty",
@@ -569,7 +569,7 @@
     },
     {
       "id": "MOB-UX-012",
-      "title": "Trip Planner conversational UI \u2014 typing indicator, suggestion chips, streaming responses",
+      "title": "Trip Planner conversational UI — typing indicator, suggestion chips, streaming responses",
       "description": "As a user, I want the AI Trip Planner to feel like a real chat with a local expert so planning my visit is fun and fast.",
       "acceptanceCriteria": [
         "Chat-style bubble list with user and assistant message styles",
@@ -586,7 +586,7 @@
     },
     {
       "id": "MOB-UX-013",
-      "title": "Map redesign \u2014 clustered pins, branded markers, bottom sheet preview on tap",
+      "title": "Map redesign — clustered pins, branded markers, bottom sheet preview on tap",
       "description": "As a user, I want the map to be usable with hundreds of venues visible via clustering and branded markers.",
       "acceptanceCriteria": [
         "Clustering enabled with count bubble markers",
@@ -602,7 +602,7 @@
     },
     {
       "id": "MOB-UX-014",
-      "title": "Accessibility audit \u2014 dynamic type, contrast, TalkBack/VoiceOver labels, larger hit targets",
+      "title": "Accessibility audit — dynamic type, contrast, TalkBack/VoiceOver labels, larger hit targets",
       "description": "As a user with accessibility needs, I want the app to fully support dynamic type, high contrast, and screen readers so I can use every feature.",
       "acceptanceCriteria": [
         "All interactive elements have a minimum 44x44pt / 48x48dp hit target",
@@ -619,11 +619,11 @@
     },
     {
       "id": "MOB-UX-015",
-      "title": "Dark mode polish \u2014 OLED true-black option and refined surface hierarchy",
+      "title": "Dark mode polish — OLED true-black option and refined surface hierarchy",
       "description": "As a user who prefers dark mode, I want an OLED-friendly true-black option and carefully chosen surface layers so the app looks premium in dark mode.",
       "acceptanceCriteria": [
         "Settings toggle: System / Light / Dark / OLED (true black)",
-        "OLED theme uses #000000 background with elevated surfaces stepping through #0A0A0A \u2192 #141414 \u2192 #1C1C1C",
+        "OLED theme uses #000000 background with elevated surfaces stepping through #0A0A0A → #141414 → #1C1C1C",
         "Verify every screen for contrast and that no pure-white elements appear in OLED mode",
         "Gradient backgrounds desaturate 20% in dark mode for eye comfort",
         "iOS + Android parity"
@@ -1070,7 +1070,7 @@
         "Logs each event for at-least-once-delivery debugging; idempotent on duplicate notifications"
       ],
       "priority": 67,
-      "passes": false
+      "passes": true
     },
     {
       "id": "SUB-SYNC-011",
