@@ -475,13 +475,14 @@ serve(async (req) => {
       ...(plan?.id ? { plan_id: plan.id } : {}),
     };
 
-    // Check if user already has a subscription record
+    // Check if user already has an iOS subscription record. Scoped to
+    // platform='ios' so we don't clobber a web/Stripe or Android row.
     const { data: existing } = await supabase
       .from('user_subscriptions')
       .select('id')
       .eq('user_id', user.id)
-      .limit(1)
-      .single();
+      .eq('platform', 'ios')
+      .maybeSingle();
 
     if (existing) {
       const { error: updateError } = await supabase

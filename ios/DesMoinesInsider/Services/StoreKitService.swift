@@ -41,9 +41,22 @@ final class StoreKitService {
     private(set) var isLoading = false
     private(set) var errorMessage: String?
 
+    /// Tier resolved from the user's `user_subscriptions` rows in Supabase.
+    /// Picks up entitlements from other platforms (e.g. Stripe purchase on web,
+    /// Google Play on Android) so the iOS UI honors them too.
+    private(set) var backendTier: SubscriptionTier = .free
+
     // MARK: - Computed Properties
 
+    /// Highest tier the user holds across StoreKit (this device) and the backend
+    /// (web/Android purchases synced into `user_subscriptions`).
     var currentTier: SubscriptionTier {
+        let local = localTier
+        return Self.tierRank(local) >= Self.tierRank(backendTier) ? local : backendTier
+    }
+
+    /// Tier resolved from local StoreKit entitlements only.
+    private var localTier: SubscriptionTier {
         for id in purchasedProductIDs {
             if Self.vipProductIDs.contains(id) { return .vip }
         }
@@ -58,6 +71,14 @@ final class StoreKitService {
             if id.contains("insider") { return .insider }
         }
         return .free
+    }
+
+    private static func tierRank(_ tier: SubscriptionTier) -> Int {
+        switch tier {
+        case .vip: return 2
+        case .insider: return 1
+        case .free: return 0
+        }
     }
 
     var insiderProducts: [Product] {
@@ -81,6 +102,7 @@ final class StoreKitService {
         transactionListener = listenForTransactions()
         Task { await loadProducts() }
         Task { await updatePurchasedProducts() }
+        Task { await refreshBackendTier() }
     }
 
     deinit {
@@ -132,6 +154,7 @@ final class StoreKitService {
                 await transaction.finish()
                 await updatePurchasedProducts()
                 await syncEntitlementToBackend(transaction: transaction, productId: product.id)
+                await refreshBackendTier()
                 isLoading = false
                 return transaction
 
@@ -165,6 +188,7 @@ final class StoreKitService {
             try await AppStore.sync()
             await updatePurchasedProducts()
             await syncAllEntitlementsToBackend()
+            await refreshBackendTier()
         } catch {
             errorMessage = StoreError.restoreFailed.localizedDescription
         }
@@ -200,6 +224,7 @@ final class StoreKitService {
                             transaction: transaction,
                             productId: transaction.productID
                         )
+                        await self?.refreshBackendTier()
                     }
                 } catch {
                     AppLogger.storekit.error("Transaction verification failed: \(error.localizedDescription)")
@@ -352,6 +377,62 @@ final class StoreKitService {
         // All retries exhausted or non-transient error.
         // Log but do NOT revoke local entitlement (grace period).
         AppLogger.storekit.error("Server validation failed after \(Self.maxRetries) attempts (grace period): \(lastError?.localizedDescription ?? "unknown error")")
+    }
+
+    // MARK: - Backend Tier (cross-platform read)
+
+    /// Fetches the user's active `user_subscriptions` rows from Supabase and
+    /// resolves the highest tier across platforms. This is how iOS picks up an
+    /// entitlement the user purchased on the web (Stripe) or on Android.
+    /// Safe to call without a session — it no-ops if the user isn't signed in.
+    func refreshBackendTier() async {
+        guard let client = supabase else { return }
+        if Config.isUITesting { return }
+
+        let userId: String
+        do {
+            let session = try await client.auth.session
+            userId = session.user.id.uuidString
+        } catch {
+            // Not signed in — backend tier should reflect that.
+            backendTier = .free
+            return
+        }
+
+        struct PlanRef: Decodable { let name: String? }
+        struct SubRow: Decodable {
+            let status: String?
+            let plan: PlanRef?
+        }
+
+        do {
+            let rows: [SubRow] = try await client
+                .from("user_subscriptions")
+                .select("status, plan:subscription_plans(name)")
+                .eq("user_id", value: userId)
+                .eq("status", value: "active")
+                .execute()
+                .value
+
+            var maxTier: SubscriptionTier = .free
+            for row in rows {
+                let resolved: SubscriptionTier
+                switch (row.plan?.name ?? "free").lowercased() {
+                case "vip": resolved = .vip
+                case "insider": resolved = .insider
+                default: resolved = .free
+                }
+                if Self.tierRank(resolved) > Self.tierRank(maxTier) {
+                    maxTier = resolved
+                }
+            }
+            backendTier = maxTier
+        } catch {
+            #if DEBUG
+            AppLogger.storekit.warning("Failed to refresh backend tier: \(error.localizedDescription)")
+            #endif
+            // Keep prior backendTier on transient failure (don't downgrade UX).
+        }
     }
 
     /// Determines whether an error is transient (5xx / network) and worth retrying.

@@ -8,6 +8,7 @@ struct HomeView: View {
     @State private var navigationPath = NavigationPath()
     @State private var toast: ToastMessage?
     @State private var showScrollToTop = false
+    @State private var showDiscover = false
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
@@ -16,6 +17,10 @@ struct HomeView: View {
                 VStack(spacing: 0) {
                     Color.clear.frame(height: 0).id("top")
                     headerSection
+
+                    discoverHeroCard
+                        .padding(.horizontal)
+                        .padding(.top, 10)
 
                     exploreAttractionsCard
                         .padding(.horizontal)
@@ -70,6 +75,26 @@ struct HomeView: View {
             }
             .navigationTitle("Des Moines Insider")
             .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        showDiscover = true
+                    } label: {
+                        Label("Swipe", systemImage: "rectangle.stack.fill")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .accessibilityLabel("Open swipe discovery")
+                }
+            }
+            .fullScreenCover(isPresented: $showDiscover) {
+                DiscoverView(
+                    initialFilter: discoverFilterFromEvents(),
+                    initialMode: .events,
+                    lockMode: viewModel.activeFilterCount > 0,
+                    onClose: { showDiscover = false }
+                )
+            }
             .navigationDestination(for: Event.self) { event in
                 EventDetailView(event: event)
             }
@@ -91,6 +116,84 @@ struct HomeView: View {
             }
             .toastOverlay(message: $toast)
         }
+    }
+
+    // MARK: - Discover Hero Card
+
+    /// Top-of-feed CTA into the swipe-to-discover deck. Mirrors the
+    /// Explore Attractions card's structure so the home feed reads as a
+    /// row of CTAs above the smart presets.
+    private var discoverHeroCard: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            showDiscover = true
+        } label: {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(PremiumTokens.brandGradient)
+                        .frame(width: 56, height: 56)
+                    Image(systemName: "rectangle.stack.fill")
+                        .font(.title)
+                        .foregroundStyle(.white)
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        Text("Swipe to Discover")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.primary)
+                        Text("NEW")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.pink, in: Capsule())
+                    }
+                    Text("Don't know what to do tonight? Swipe through hand-picked events and dining.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color(.systemBackground))
+                    .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 2)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .strokeBorder(
+                        LinearGradient(colors: [.purple.opacity(0.4), .blue.opacity(0.4)],
+                                       startPoint: .topLeading, endPoint: .bottomTrailing),
+                        lineWidth: 1
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Swipe to discover. Don't know what to do tonight? Swipe through hand-picked events and dining.")
+        .accessibilityHint("Opens the swipe discovery deck")
+    }
+
+    /// Snapshot the events viewmodel's filter state into a DiscoverFilterContext
+    /// so a user who's filtered the home feed (e.g. category=Music) gets their
+    /// filter carried into the swipe deck.
+    private func discoverFilterFromEvents() -> DiscoverFilterContext {
+        var f = DiscoverFilterContext()
+        f.eventCategory = viewModel.selectedCategory
+        f.datePreset = viewModel.selectedDatePreset
+        f.freeOnly = viewModel.showFreeOnly
+        f.locations = Array(viewModel.selectedCities)
+        return f
     }
 
     // MARK: - Explore Attractions Entry Point

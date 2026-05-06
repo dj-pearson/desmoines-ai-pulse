@@ -267,12 +267,14 @@ async function handleSubscriptionPayment(
   const subscriptionId = session.subscription as string;
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
 
-  // Check if user already has a subscription (upgrade/downgrade scenario)
+  // Check if user already has a web/Stripe subscription (upgrade/downgrade scenario).
+  // Scoped to platform='web' so iOS/Android rows for the same user aren't touched.
   const { data: existingSubscription } = await supabase
     .from("user_subscriptions")
     .select("id")
     .eq("user_id", userId)
-    .single();
+    .eq("platform", "web")
+    .maybeSingle();
 
   const subscriptionData = {
     user_id: userId,
@@ -280,6 +282,7 @@ async function handleSubscriptionPayment(
     status: mapStripeStatus(subscription.status),
     stripe_subscription_id: subscriptionId,
     stripe_customer_id: session.customer as string,
+    platform: "web",
     current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
     current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
     cancel_at_period_end: subscription.cancel_at_period_end,
@@ -292,11 +295,12 @@ async function handleSubscriptionPayment(
   };
 
   if (existingSubscription) {
-    // Update existing subscription
+    // Update existing web subscription
     const { error } = await supabase
       .from("user_subscriptions")
       .update(subscriptionData)
-      .eq("user_id", userId);
+      .eq("user_id", userId)
+      .eq("platform", "web");
 
     if (error) {
       console.error("Failed to update subscription:", error);

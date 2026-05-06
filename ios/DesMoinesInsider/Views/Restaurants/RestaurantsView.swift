@@ -5,6 +5,7 @@ struct RestaurantsView: View {
     @State private var viewModel = RestaurantsViewModel()
     @State private var toast: ToastMessage?
     @State private var showScrollToTop = false
+    @State private var showDiscover = false
 
     var body: some View {
         NavigationStack {
@@ -87,9 +88,27 @@ struct RestaurantsView: View {
             }
             .navigationTitle("Dining")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        showDiscover = true
+                    } label: {
+                        Label(swipeButtonLabel, systemImage: "rectangle.stack.fill")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .accessibilityLabel("Swipe through these restaurants")
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     sortMenu
                 }
+            }
+            .fullScreenCover(isPresented: $showDiscover) {
+                DiscoverView(
+                    initialFilter: discoverFilterFromRestaurants(),
+                    initialMode: .restaurants,
+                    lockMode: viewModel.activeFilterCount > 0,
+                    onClose: { showDiscover = false }
+                )
             }
             .navigationDestination(for: Restaurant.self) { restaurant in
                 RestaurantDetailView(restaurant: restaurant)
@@ -99,6 +118,30 @@ struct RestaurantsView: View {
             }
             .toastOverlay(message: $toast)
         }
+    }
+
+    // MARK: - Swipe entry
+
+    /// Toolbar button label adapts so users see exactly what swipe deck
+    /// they're about to enter — "Swipe Italian" reads better than "Swipe".
+    private var swipeButtonLabel: String {
+        if viewModel.selectedCuisines.count == 1, let only = viewModel.selectedCuisines.first {
+            return "Swipe \(only)"
+        }
+        if viewModel.activeFilterCount > 0 {
+            return "Swipe these"
+        }
+        return "Swipe"
+    }
+
+    private func discoverFilterFromRestaurants() -> DiscoverFilterContext {
+        var f = DiscoverFilterContext()
+        f.cuisines = Array(viewModel.selectedCuisines)
+        f.locations = Array(viewModel.selectedLocations)
+        f.priceRanges = Array(viewModel.selectedPriceRanges)
+        f.minRating = viewModel.minRating
+        f.openNow = viewModel.showOpenNowOnly
+        return f
     }
 
     // MARK: - Sort Menu (in toolbar)

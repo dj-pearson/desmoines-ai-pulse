@@ -58,7 +58,9 @@
       "Bash($JAVA_HOME/bin/jar xf:*)",
       "Bash(./gradlew compileDebugSources compileDebugUnitTestSources compileDebugAndroidTestSources)",
       "Bash(infisical:*)",
-      "Bash(./gradlew.bat clean:*)"
+      "Bash(./gradlew.bat clean:*)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\pears\\\\Documents\\\\Des-Moines-Pulse\\\\desmoines-ai-pulse\\\\ios\" -Recurse -Directory)",
+      "Bash(Select-Object -ExpandProperty FullName)"
     ],
     "deny": [],
     "ask": []

@@ -71,7 +71,8 @@ export function useSubscription() {
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
-  // Fetch user's current subscription
+  // Fetch user's current subscription. A user may have one row per platform
+  // (web/Stripe, ios, android) — pick the highest tier (vip > insider > free).
   const { data: subscription, isLoading: subscriptionLoading } = useQuery({
     queryKey: ["user-subscription", user?.id],
     queryFn: async (): Promise<UserSubscription | null> => {
@@ -80,22 +81,31 @@ export function useSubscription() {
       // @ts-ignore -- Supabase SDK TS2589: deep type instantiation under strict mode
       const subQuery = supabase.from("user_subscriptions");
       // @ts-ignore -- Supabase SDK TS2769: overload resolution under strict mode
-      const { data, error } = await subQuery.select('*, plan:subscription_plans(*)').eq("user_id", user.id).eq("status", "active").single();
+      const { data, error } = await subQuery
+        .select('*, plan:subscription_plans(*)')
+        .eq("user_id", user.id)
+        .eq("status", "active");
 
-      if (error) {
-        if (error.code === "PGRST116") {
-          // No subscription found - user is on free tier
-          return null;
-        }
-        throw error;
-      }
+      if (error) throw error;
+      if (!data || (data as unknown[]).length === 0) return null;
 
-      // Cast through unknown to handle Supabase's join types
-      const row = data as unknown as Record<string, unknown>;
-      const joinedPlan = row['plan'] as Record<string, unknown> | null;
+      const tierRank: Record<string, number> = { vip: 2, insider: 1, free: 0 };
+      const rows = data as unknown as Array<Record<string, unknown>>;
+
+      const best = rows.reduce<Record<string, unknown> | null>((acc, row) => {
+        const planName = ((row['plan'] as Record<string, unknown> | null)?.['name'] as string) ?? 'free';
+        const accPlanName = acc
+          ? ((acc['plan'] as Record<string, unknown> | null)?.['name'] as string) ?? 'free'
+          : 'free';
+        return (tierRank[planName] ?? 0) > (tierRank[accPlanName] ?? 0) ? row : (acc ?? row);
+      }, null);
+
+      if (!best) return null;
+
+      const joinedPlan = best['plan'] as Record<string, unknown> | null;
 
       return {
-        ...row,
+        ...best,
         plan: joinedPlan
           ? {
               ...joinedPlan,

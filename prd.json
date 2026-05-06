@@ -781,6 +781,143 @@
       "priority": 49,
       "passes": true,
       "notes": "FIXED: KeychainService.save() now uses kSecAttrAccessibleWhenUnlockedThisDeviceOnly (exposed as static let accessibility so future changes stay centralised). Audited all Keychain consumers — AuthService, SessionTimeoutService, BiometricAuthService, SettingsView — none require locked access; PushNotificationService does not read Keychain. Added migrateAccessibilityIfNeeded() that enumerates every generic-password item under the service bundle, reads each account+data, and re-saves via delete()+save() so existing installs get re-stamped with the stricter flag. Gated by a UserDefaults migration version (keychain.accessibilityMigrationVersion = 1) so it only runs once per upgrade. Called from DesMoinesInsiderApp.task before QueryCache.pruneExpired so later Keychain reads land on the new flag. Biometric prompt ordering unchanged."
+    },
+    {
+      "id": "IOS-DISCOVER-2026-001",
+      "title": "Ask Pulse: conversational AI discovery surface",
+      "description": "As a user who doesn't want to fiddle with filters, I want to describe what I'm looking for in natural language (\"date night, walkable, under $60\", \"something fun with the kids tomorrow afternoon\", \"quiet patio for a meeting\") and get 3-5 curated picks with a one-line explanation of why each fits. This is the trip-planner web feature brought into the iOS home screen as the primary entry point so the app stops feeling filter-heavy and starts feeling like a knowledgeable local friend.",
+      "acceptanceCriteria": [
+        "Create supabase/functions/discover-chat edge function using Anthropic SDK (claude-sonnet-4-6 default, claude-haiku-4-5 for cost-sensitive paths) with prompt caching enabled on the system prompt + tool definitions",
+        "Define tool-calling tools: searchEvents(filters), searchRestaurants(filters), getDateRangeForPhrase(phrase), getUserLocation() — backed by existing Postgres queries / RPCs",
+        "Return structured JSON: { picks: [{ itemType, itemId, reason }], followUpSuggestions: [string] }",
+        "iOS: AskPulseView (chat-style) reachable from a prominent search-bar-style entry on HomeView (above smart presets), and from the Search tab",
+        "Render results using existing EventCard / RestaurantCard components with a one-line \"why\" caption from the model",
+        "Persist conversation history per session in memory only (no Supabase storage in v1) so we don't have to ship privacy controls before the feature ships",
+        "Free tier: 5 queries/day; Insider: 50/day; VIP: unlimited (gate via useSubscription mirrors web)",
+        "Voice input via SwiftUI .searchable + Speech framework (optional v1.5)",
+        "Accessibility: full VoiceOver support; results section announces count on update"
+      ],
+      "priority": 50,
+      "passes": false,
+      "notes": "Queued from 2026-05-06 mobile UX session. Phase 3 in the Discover roadmap. Phase 1 (swipe-to-discover) shipped in this session; Phase 2 is IOS-DISCOVER-2026-002. Web has /trip-planner already — reuse the prompt structure where possible but redesign for chat-first iOS. Watch context size: rely on prompt caching for the system prompt + tool definitions or per-query cost will be unsustainable."
+    },
+    {
+      "id": "IOS-DISCOVER-2026-002",
+      "title": "\"For You\" rail on Home seeded by swipe history",
+      "description": "As a user who has used swipe-to-discover, I want my swipe signals to shape what I see on the Home tab so the app feels like it learns me. Right swipes (like) and up swipes (boost) should pull similar items toward the top; left swipes (skip) should push similar items away. Powers the personalization promise of the swipe feature.",
+      "acceptanceCriteria": [
+        "Update supabase/migrations: extend get_personalized_recommendations() (and its restaurant equivalent if it exists, otherwise create get_personalized_restaurants()) to factor swipe_interactions: boost = +50 score, like = +30, detail = +10, skip = -40 (per item AND per category/cuisine)",
+        "Add a 90-day decay so old swipes don't dominate forever",
+        "iOS HomeView: new \"For You\" rail above the Featured carousel, hidden when the user has fewer than 5 swipes (cold start)",
+        "Cold start fallback: show get_trending_events results with a \"Trending now\" header instead of \"For You\"",
+        "Each card shows the existing recommendation_reason caption (\"Based on your interest in Music\" etc.)",
+        "Tapping \"refresh\" on the rail re-rolls the recommendations with a new random factor",
+        "Web parity: surface the same For You rail on the web home page using the updated RPC"
+      ],
+      "priority": 51,
+      "passes": false,
+      "notes": "Queued from 2026-05-06 mobile UX session. Depends on swipe_interactions table from migration 20260506000002. Without this story, the swipe data we collect doesn't pay off — users will swipe but won't see the result reflected anywhere. Should ship within a release of IOS-DISCOVER-2026-001 to keep the loop closed."
+    },
+    {
+      "id": "IOS-DISCOVER-2026-003",
+      "title": "Events sort menu (Soonest / Featured / Popularity)",
+      "description": "As a user browsing events, I want to sort the events list the same way I can sort restaurants — by Soonest, Featured first, or Popularity — so the events tab matches the dining tab's UX pattern. Today the events list is hardcoded to date ASC and there is no sort affordance.",
+      "acceptanceCriteria": [
+        "Add sortBy field to EventsService.EventsQuery (default .soonest)",
+        "Service: conditional .order() — .soonest = order by date ASC (current behavior), .featured = is_featured DESC then date ASC, .popularity = popularity_score DESC NULLS LAST then date ASC",
+        "Add popularity_score column to events table if absent (matches restaurants.popularity_score) plus the rotation RPC pattern so popularity sort doesn't show the same 20 events every visit",
+        "Add sortBy field to EventsViewModel + cache key contribution",
+        "HomeView toolbar: sort menu identical in style to RestaurantsView.sortMenu",
+        "Web parity: useEvents hook exposes the same sortBy option"
+      ],
+      "priority": 52,
+      "passes": false,
+      "notes": "Queued from 2026-05-06 mobile UX session. Was originally bundled with the swipe feature work but deferred because EventsService.EventsQuery has no sort field today and adding popularity sort requires a backend column + RPC. Lower priority than 001/002 because the events list is already date-sorted (the most common need)."
+    },
+    {
+      "id": "IOS-DISCOVER-2026-004",
+      "title": "Time-slider on Map view (\"what's open at 8pm\")",
+      "description": "As a user planning my evening or weekend, I want a horizontal time slider on the map that lets me scrub through hours of the day or days of the week and see pins appear/disappear based on event start times and restaurant business hours. Solves the \"is this open WHEN I'll actually be there\" problem that today requires multiple back-and-forth checks.",
+      "acceptanceCriteria": [
+        "Add time-slider control to bottom of EventMapView with snap stops (Now, 6pm, 8pm, 10pm, this Sat, next Sat)",
+        "Slider value drives a derived predicate on map annotations: events filtered by event_start_local within ±2h of slider time, restaurants filtered by isOpenNow(at: sliderTime)",
+        "Pin opacity animates instead of pop-in/out so the time-travel effect reads as continuous",
+        "When slider moves, top of map shows a pill: \"7 events + 23 restaurants open at 8pm Saturday\"",
+        "Resetting the slider returns the map to the live \"now\" view",
+        "Persist the user's last slider position for the session only (resets on app launch)"
+      ],
+      "priority": 53,
+      "passes": false,
+      "notes": "Queued from 2026-05-06 mobile UX session. Ranked high-impact, medium-effort. Builds on existing MapViewModel + Restaurant.isOpenNow(at:) which already supports passing a custom Date — the model layer is ready, this is mostly a SwiftUI control + filter-binding job."
+    },
+    {
+      "id": "IOS-DISCOVER-2026-005",
+      "title": "\"Right Now\" contextual ribbon on Home",
+      "description": "As a user opening the app spontaneously, I want a single sentence at the top of the Home tab that tells me what's actually happening right now near me — combining weather, time of day, my location, and the catalog. Replaces filter-fiddling with a one-tap shortcut into a hyper-relevant slice. Examples: \"It's 78° and sunny — 4 patios open within 10 min of you\" or \"Cold and rainy tonight — try one of these 6 cozy spots\".",
+      "acceptanceCriteria": [
+        "Add a WeatherService that pulls current conditions from a free tier API (Open-Meteo or NWS) — keyless preferred to avoid secret rotation",
+        "Compose a sentence from { temperature, conditions, time-of-day, user location, count of matching items } using a small set of templates",
+        "Templates cover at minimum: hot+sunny → patios, cold+wet → cozy/indoor, snowy → comfort food, evening → live music tonight, lunch hour → lunch spots open now",
+        "Tappable: opens DiscoverView (swipe deck) pre-filtered to the matching slice",
+        "Hidden if location permission denied OR weather fetch fails (silent fallback, no broken state)",
+        "Refreshes every 30 minutes max; cache between launches to avoid spinning a request on cold-start",
+        "Accessibility: VoiceOver reads the full sentence as a single button label"
+      ],
+      "priority": 54,
+      "passes": false,
+      "notes": "Queued from 2026-05-06 mobile UX session. The pure-LLM version is more impressive but more expensive — start with the templated version, A/B against an LLM-composed version later. Stay keyless for the weather API (Open-Meteo) so we don't have another secret to rotate."
+    },
+    {
+      "id": "IOS-DISCOVER-2026-006",
+      "title": "Group decision mode — shared swipe sessions",
+      "description": "As one of a group of friends trying to decide where to eat or what to do, I want to start a shared swipe session, send the link to the group, and have everyone swipe at the same time. When two or more of us right-swipe the same place, it surfaces as a \"match\" — solving the perpetual \"where do we eat?\" group paralysis better than any filter ever will.",
+      "acceptanceCriteria": [
+        "Supabase: new tables swipe_sessions (id, host_user_id, mode, filter_context JSONB, expires_at) and swipe_session_participants (session_id, user_id_or_anon_id, joined_at)",
+        "Use existing swipe_interactions table with a new optional session_id column to track per-session swipes",
+        "Realtime: subscribe to swipe_interactions filtered by session_id so all participants see live match notifications",
+        "Match logic: an item right-swiped by ≥2 participants in the same session triggers a celebratory match toast on every participant's screen",
+        "iOS: \"Start group session\" CTA from DiscoverView toolbar; generates a 6-character code (e.g., DSM-AB12) and a deep link",
+        "Anonymous join supported (no signup required to join, just to host) — anon participants get a device-id-based identifier",
+        "Sessions auto-expire after 4 hours",
+        "Host can end the session and see a summary: matches, top picks, who liked what",
+        "Privacy: skips are NOT shared — only likes contribute to matches"
+      ],
+      "priority": 55,
+      "passes": false,
+      "notes": "Queued from 2026-05-06 mobile UX session. Highest social/viral potential of the queued features — group-decision UX is a category-killer for restaurant apps. Larger scope (Realtime + new tables + auth/anon flow) so likely needs its own focused session."
+    },
+    {
+      "id": "IOS-DISCOVER-2026-007",
+      "title": "Voice search + Siri shortcut",
+      "description": "As a user with my hands full or driving, I want to say \"Hey Siri, find me Italian restaurants in Des Moines\" and have the app open with relevant results. Also lets me dictate inside the in-app search bar so I don't have to type filter terms.",
+      "acceptanceCriteria": [
+        "Adopt App Intents framework with at least: FindRestaurantsIntent(cuisine:area:openNow:), FindEventsIntent(category:datePreset:), AskPulseIntent(query:)",
+        "Donate intents on relevant in-app actions so Siri suggests them on the lock screen / Spotlight",
+        "Wire intents to navigate into the existing SearchView / DiscoverView with the captured parameters pre-applied",
+        "Add a microphone button to the Search bar that uses Speech framework for in-app dictation (no Siri round-trip)",
+        "Localized intent phrases for English (en-US) initially",
+        "Handle no-permission state gracefully — show a one-tap settings deep-link"
+      ],
+      "priority": 56,
+      "passes": false,
+      "notes": "Queued from 2026-05-06 mobile UX session. App Intents are platform-natural — wire them once and they appear in Shortcuts, Lock Screen, Action Button (15 Pro+), and Apple Watch. Cheap once IOS-DISCOVER-2026-001 (Ask Pulse) lands, since AskPulseIntent just forwards the query."
+    },
+    {
+      "id": "IOS-DISCOVER-2026-008",
+      "title": "Surprise Me — single-tap committed recommendation",
+      "description": "As a user with decision fatigue, I want one giant button on the Home tab that just decides for me. It uses my favorites, swipe history, time of day, weather, and location to commit to ONE recommendation with a one-line reason. No browsing, no filtering — \"You should go here. Tonight. Because.\"",
+      "acceptanceCriteria": [
+        "Add a Surprise Me button to HomeView (visually distinct from Discover — maybe full-width with a die icon)",
+        "Backend: new RPC get_surprise_pick(user_lat, user_lon) that returns ONE event or restaurant + a templated reason string composed from the same scoring inputs as get_personalized_recommendations",
+        "Frontend: tapping shows a dramatic full-screen reveal animation (card flip, confetti haptic on reveal)",
+        "Reveal screen shows: hero image, title, the \"Because…\" reason, a prominent Save button, and a smaller \"Try another\" button",
+        "Reasons are written in a confident voice: \"Because you've been into Italian lately and Centro is open till 10pm\", \"Because the patio at Eatery A is perfect tonight (75° and sunny)\", \"Because you've never been to a Tuesday jazz night\"",
+        "If user is unauthenticated or has no signal, fall back to a featured event/restaurant with a generic but warm reason",
+        "Tracks acceptance rate (Save vs Try another) so we can tune the algorithm"
+      ],
+      "priority": 57,
+      "passes": false,
+      "notes": "Queued from 2026-05-06 mobile UX session. Best paired with IOS-DISCOVER-2026-005 (weather context) and IOS-DISCOVER-2026-002 (For You signals) since both improve the reasoning quality. Could ship as a v1 with just favorites + time inputs and improve over time."
     }
   ]
 }

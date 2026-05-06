@@ -4,6 +4,7 @@ import SwiftUI
 
 /// One-tap filter scenarios. Mirrors the web app's RestaurantSmartPresets.
 enum RestaurantPreset: String, CaseIterable, Identifiable {
+    case openNow
     case dateNight
     case quickLunch
     case familyFriendly
@@ -17,6 +18,7 @@ enum RestaurantPreset: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
+        case .openNow:        return "Open Now"
         case .dateNight:      return "Date Night"
         case .quickLunch:     return "Quick Lunch"
         case .familyFriendly: return "Family"
@@ -30,6 +32,7 @@ enum RestaurantPreset: String, CaseIterable, Identifiable {
 
     var subtitle: String {
         switch self {
+        case .openNow:        return "Eat right now"
         case .dateNight:      return "Upscale & romantic"
         case .quickLunch:     return "Fast & affordable"
         case .familyFriendly: return "Great for kids"
@@ -43,6 +46,7 @@ enum RestaurantPreset: String, CaseIterable, Identifiable {
 
     var systemImage: String {
         switch self {
+        case .openNow:        return "clock.fill"
         case .dateNight:      return "heart.fill"
         case .quickLunch:     return "bolt.fill"
         case .familyFriendly: return "person.2.fill"
@@ -56,6 +60,7 @@ enum RestaurantPreset: String, CaseIterable, Identifiable {
 
     var gradient: [Color] {
         switch self {
+        case .openNow:        return [Color(red: 0.06, green: 0.72, blue: 0.51), Color(red: 0.02, green: 0.55, blue: 0.42)]
         case .dateNight:      return [Color(red: 0.95, green: 0.27, blue: 0.45), Color(red: 0.86, green: 0.14, blue: 0.47)]
         case .quickLunch:     return [Color(red: 1.00, green: 0.60, blue: 0.18), Color(red: 0.97, green: 0.38, blue: 0.11)]
         case .familyFriendly: return [Color(red: 0.24, green: 0.51, blue: 0.96), Color(red: 0.02, green: 0.71, blue: 0.83)]
@@ -87,7 +92,7 @@ enum RestaurantPreset: String, CaseIterable, Identifiable {
 
     var openNow: Bool {
         switch self {
-        case .quickLunch, .lateNight, .happyHour: return true
+        case .openNow, .quickLunch, .lateNight, .happyHour: return true
         default: return false
         }
     }

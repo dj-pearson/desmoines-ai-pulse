@@ -22,6 +22,8 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.functions.functions
+import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.postgrest.query.Columns
 import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -65,6 +67,14 @@ class BillingService @Inject constructor(
     private val _currentTier = MutableStateFlow(SubscriptionTier.FREE)
     val currentTier: StateFlow<SubscriptionTier> = _currentTier.asStateFlow()
 
+    /**
+     * Tier resolved from the user's `user_subscriptions` rows in Supabase.
+     * Picks up entitlements from other platforms (e.g. Stripe purchase on web,
+     * StoreKit purchase on iOS) so the Android UI honors them too.
+     */
+    private val _backendTier = MutableStateFlow(SubscriptionTier.FREE)
+    val backendTier: StateFlow<SubscriptionTier> = _backendTier.asStateFlow()
+
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
@@ -89,6 +99,7 @@ class BillingService @Inject constructor(
 
     init {
         connect()
+        scope.launch { refreshBackendTier() }
     }
 
     private fun connect() {
@@ -249,6 +260,7 @@ class BillingService @Inject constructor(
                         productId = productId,
                     )
                 }
+                refreshBackendTier()
                 _isLoading.value = false
             }
             Purchase.PurchaseState.PENDING -> {
@@ -277,6 +289,7 @@ class BillingService @Inject constructor(
 
         updatePurchasedProducts()
         syncAllEntitlementsToBackend()
+        refreshBackendTier()
         _isLoading.value = false
     }
 
@@ -301,10 +314,13 @@ class BillingService @Inject constructor(
                 }
             }
             _purchasedProductIDs.value = purchased
-            _currentTier.value = resolveTier(purchased)
+            recomputeCurrentTier()
             Log.i(TAG, "Updated purchases: $purchased, tier: ${_currentTier.value}")
         }
     }
+
+    /** Tier resolved from local Google Play entitlements only. */
+    private fun localTier(): SubscriptionTier = resolveTier(_purchasedProductIDs.value)
 
     private fun resolveTier(purchasedIds: Set<String>): SubscriptionTier {
         // Check VIP first (higher tier)
@@ -320,6 +336,19 @@ class BillingService @Inject constructor(
         }
 
         return SubscriptionTier.FREE
+    }
+
+    private fun tierRank(tier: SubscriptionTier): Int = when (tier) {
+        SubscriptionTier.VIP -> 2
+        SubscriptionTier.INSIDER -> 1
+        SubscriptionTier.FREE -> 0
+    }
+
+    /** Resolves the highest tier across local Google Play and the backend. */
+    private fun recomputeCurrentTier() {
+        val local = localTier()
+        val backend = _backendTier.value
+        _currentTier.value = if (tierRank(local) >= tierRank(backend)) local else backend
     }
 
     // endregion
@@ -413,6 +442,64 @@ class BillingService @Inject constructor(
 
         // All retries exhausted — log but do NOT revoke (grace period)
         Log.w(TAG, "Server validation failed after $MAX_RETRIES attempts (grace period): ${lastError?.message}, product=$productId, user=$userId")
+    }
+
+    @Serializable
+    private data class BackendPlanRef(val name: String? = null)
+
+    @Serializable
+    private data class BackendSubRow(
+        val status: String? = null,
+        val plan: BackendPlanRef? = null,
+    )
+
+    /**
+     * Fetches the user's active `user_subscriptions` rows from Supabase and
+     * resolves the highest tier across platforms. This is how Android picks up
+     * an entitlement the user purchased on the web (Stripe) or on iOS.
+     * Safe to call without a session — it no-ops if the user isn't signed in.
+     */
+    suspend fun refreshBackendTier() {
+        val client = supabaseClient ?: return
+
+        val userId: String = try {
+            client.auth.currentSessionOrNull()?.user?.id ?: run {
+                _backendTier.value = SubscriptionTier.FREE
+                recomputeCurrentTier()
+                return
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "Cannot refresh backend tier — auth error: ${e.message}")
+            return
+        }
+
+        try {
+            val rows = client.from("user_subscriptions")
+                .select(Columns.raw("status, plan:subscription_plans(name)")) {
+                    filter {
+                        eq("user_id", userId)
+                        eq("status", "active")
+                    }
+                }
+                .decodeList<BackendSubRow>()
+
+            var maxTier = SubscriptionTier.FREE
+            rows.forEach { row ->
+                val resolved = when (row.plan?.name?.lowercase()) {
+                    "vip" -> SubscriptionTier.VIP
+                    "insider" -> SubscriptionTier.INSIDER
+                    else -> SubscriptionTier.FREE
+                }
+                if (tierRank(resolved) > tierRank(maxTier)) {
+                    maxTier = resolved
+                }
+            }
+            _backendTier.value = maxTier
+            recomputeCurrentTier()
+        } catch (e: Exception) {
+            // Keep prior backendTier on transient failure (don't downgrade UX).
+            Log.w(TAG, "Failed to refresh backend tier: ${e.message}")
+        }
     }
 
     private fun isTransientError(error: Exception): Boolean {
