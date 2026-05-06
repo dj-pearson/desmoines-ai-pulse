@@ -39,6 +39,10 @@ struct SwipeCardStack: View {
             }
         }
         .padding(.horizontal, 12)
+        // Behind-card .offset(y:) up to +28pt visually peeks past the ZStack
+        // bounds without affecting layout. Reserve room so the back card
+        // doesn't bleed into the action bar.
+        .padding(.bottom, 18)
     }
 
     // MARK: - Stack geometry

@@ -155,9 +155,16 @@ struct DiscoverView: View {
                     }
                 )
                 .id(stackId)
+                // Pin the deck to a portrait card aspect (5:7) and cap width
+                // so cards are the same size across modes (Tonight/Events/
+                // Dining) and devices, instead of stretching to whatever
+                // height the parent VStack hands them.
+                .aspectRatio(0.72, contentMode: .fit)
+                .frame(maxWidth: 460)
             }
         }
-        .frame(maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 4)
         .padding(.vertical, 12)
     }
 
