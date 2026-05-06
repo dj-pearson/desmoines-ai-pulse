@@ -1,5 +1,6 @@
 import SwiftUI
 import os
+import CryptoKit
 
 /// Async image with two-tier cache: NSCache (memory) + FileManager (disk).
 ///
@@ -136,8 +137,13 @@ final class ImageCache: @unchecked Sendable {
         memoryCache.totalCostLimit = 50 * 1024 * 1024 // 50 MB
 
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-        diskCacheDir = caches.appendingPathComponent("ImageDiskCache", isDirectory: true)
+        // v2: prior versions hashed with `key.utf8.hex.prefix(64)`, which is a
+        // 32-byte URL prefix — every Supabase storage URL collides. New
+        // directory name ensures clients with poisoned v1 caches start fresh.
+        diskCacheDir = caches.appendingPathComponent("ImageDiskCache_v2", isDirectory: true)
         try? FileManager.default.createDirectory(at: diskCacheDir, withIntermediateDirectories: true)
+        // Best-effort cleanup of the broken v1 directory.
+        try? FileManager.default.removeItem(at: caches.appendingPathComponent("ImageDiskCache", isDirectory: true))
 
         // Prune on init (background)
         diskQueue.async { [weak self] in
@@ -243,9 +249,14 @@ final class ImageCache: @unchecked Sendable {
     // MARK: - Helpers
 
     private func diskFileURL(for key: String) -> URL {
-        let hash = key.data(using: .utf8)!.map { String(format: "%02x", $0) }.joined()
-        let safeName = String(hash.prefix(64))
-        return diskCacheDir.appendingPathComponent(safeName)
+        // SHA256 of the full URL — collision-resistant. The previous
+        // implementation hex-encoded the UTF-8 bytes and truncated to 64
+        // chars (32 bytes), so any URLs sharing a 32-byte prefix (every
+        // Supabase storage URL!) mapped to the same disk file, causing one
+        // restaurant's image to be served for many others.
+        let digest = SHA256.hash(data: Data(key.utf8))
+        let hash = digest.map { String(format: "%02x", $0) }.joined()
+        return diskCacheDir.appendingPathComponent(hash)
     }
 
     private func diskMetaURL(for key: String) -> URL {

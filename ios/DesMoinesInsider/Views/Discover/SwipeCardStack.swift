@@ -24,14 +24,29 @@ struct SwipeCardStack: View {
     /// this buffer the back card bleeds into the action bar).
     private static let backCardPeekRoom: CGFloat = 32
 
+    /// Card aspect ratio (width / height). 0.7 keeps it firmly portrait so
+    /// the deck never goes wider than tall, regardless of device size.
+    private static let cardAspectRatio: CGFloat = 0.7
+
+    /// Top card rotates up to ±18° during a drag. The rotated bounding box
+    /// extends ~16% of the card's width past each side; we shrink the card
+    /// itself so that overshoot stays inside the deck area instead of
+    /// getting clipped by the screen edge.
+    private static let rotationSafetyScale: CGFloat = 0.86
+
     var body: some View {
         // Own the layout: cards get an explicit (width, height) so their size
         // is identical across modes (Tonight / Events / Dining) and devices,
         // mirroring how FeaturedEventCard / CompactRestaurantCard use fixed
         // .frame(width:height:) on the home tab.
         GeometryReader { proxy in
-            let cardWidth = proxy.size.width
-            let cardHeight = max(0, proxy.size.height - Self.backCardPeekRoom)
+            let availableW = proxy.size.width
+            let availableH = max(0, proxy.size.height - Self.backCardPeekRoom)
+            // Pick the binding axis: card must fit in BOTH width and height
+            // while keeping cardAspectRatio.
+            let widthFromHeight = availableH * Self.cardAspectRatio
+            let cardWidth = min(availableW, widthFromHeight) * Self.rotationSafetyScale
+            let cardHeight = cardWidth / Self.cardAspectRatio
 
             ZStack {
                 ForEach(Array(visibleItems.enumerated()), id: \.element.id) { index, item in
@@ -52,7 +67,7 @@ struct SwipeCardStack: View {
                     .allowsHitTesting(index == 0 && !isDismissing)
                 }
             }
-            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .top)
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .center)
         }
     }
 
