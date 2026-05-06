@@ -6,6 +6,9 @@
 -- per-subscriber token and a RPC that looks up and marks the row as
 -- unsubscribed in a single transaction, without requiring auth.
 
+-- Ensure pgcrypto is available for gen_random_bytes.
+CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;
+
 -- 1) Add a secret token + a public "short id" used in the unsubscribe URL.
 --    The token is generated on first use and rotated only on re-subscription.
 ALTER TABLE public.newsletter_subscribers
@@ -17,7 +20,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_newsletter_subscribers_unsubscribe_token
 
 -- Backfill a token for existing rows.
 UPDATE public.newsletter_subscribers
-SET unsubscribe_token = encode(gen_random_bytes(24), 'hex')
+SET unsubscribe_token = encode(extensions.gen_random_bytes(24), 'hex')
 WHERE unsubscribe_token IS NULL;
 
 -- Trigger so new rows always get a token even if the insert omits it.
@@ -27,7 +30,7 @@ LANGUAGE plpgsql
 AS $$
 BEGIN
     IF NEW.unsubscribe_token IS NULL THEN
-        NEW.unsubscribe_token := encode(gen_random_bytes(24), 'hex');
+        NEW.unsubscribe_token := encode(extensions.gen_random_bytes(24), 'hex');
     END IF;
     RETURN NEW;
 END;
