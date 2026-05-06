@@ -847,7 +847,7 @@
         "Persist the user's last slider position for the session only (resets on app launch)"
       ],
       "priority": 53,
-      "passes": false,
+      "passes": true,
       "notes": "Queued from 2026-05-06 mobile UX session. Ranked high-impact, medium-effort. Builds on existing MapViewModel + Restaurant.isOpenNow(at:) which already supports passing a custom Date — the model layer is ready, this is mostly a SwiftUI control + filter-binding job."
     },
     {

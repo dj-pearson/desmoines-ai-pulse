@@ -57,12 +57,30 @@ struct EventMapView: View {
                 }
             }
             .safeAreaInset(edge: .bottom) {
-                if let event = viewModel.selectedEvent {
-                    eventPopup(event)
-                } else if let restaurant = viewModel.selectedRestaurant {
-                    restaurantPopup(restaurant)
-                } else if let attraction = viewModel.selectedAttraction {
-                    attractionPopup(attraction)
+                VStack(spacing: 8) {
+                    // Time-slider (IOS-DISCOVER-2026-004) — only when no
+                    // selection popup is showing, otherwise the slider would
+                    // crowd the bottom sheet.
+                    if viewModel.selectedEvent == nil
+                        && viewModel.selectedRestaurant == nil
+                        && viewModel.selectedAttraction == nil
+                    {
+                        MapTimeSlider(
+                            mapTime: $viewModel.mapTime,
+                            eventCount: viewModel.eventAnnotations.count,
+                            restaurantCount: viewModel.restaurantAnnotations.count,
+                        )
+                        .padding(.horizontal)
+                        .padding(.bottom, 4)
+                    }
+
+                    if let event = viewModel.selectedEvent {
+                        eventPopup(event)
+                    } else if let restaurant = viewModel.selectedRestaurant {
+                        restaurantPopup(restaurant)
+                    } else if let attraction = viewModel.selectedAttraction {
+                        attractionPopup(attraction)
+                    }
                 }
             }
             .navigationTitle("Explore")
