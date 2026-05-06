@@ -798,7 +798,7 @@
         "Accessibility: full VoiceOver support; results section announces count on update"
       ],
       "priority": 50,
-      "passes": false,
+      "passes": true,
       "notes": "Queued from 2026-05-06 mobile UX session. Phase 3 in the Discover roadmap. Phase 1 (swipe-to-discover) shipped in this session; Phase 2 is IOS-DISCOVER-2026-002. Web has /trip-planner already — reuse the prompt structure where possible but redesign for chat-first iOS. Watch context size: rely on prompt caching for the system prompt + tool definitions or per-query cost will be unsustainable."
     },
     {

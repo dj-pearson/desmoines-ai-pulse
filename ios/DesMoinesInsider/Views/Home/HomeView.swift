@@ -9,6 +9,7 @@ struct HomeView: View {
     @State private var toast: ToastMessage?
     @State private var showScrollToTop = false
     @State private var showDiscover = false
+    @State private var showAskPulse = false
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
@@ -17,6 +18,11 @@ struct HomeView: View {
                 VStack(spacing: 0) {
                     Color.clear.frame(height: 0).id("top")
                     headerSection
+
+                    // Ask Pulse entry — primary AI discovery surface
+                    askPulseEntryBar
+                        .padding(.horizontal)
+                        .padding(.top, 10)
 
                     discoverHeroCard
                         .padding(.horizontal)
@@ -95,6 +101,9 @@ struct HomeView: View {
                     onClose: { showDiscover = false }
                 )
             }
+            .sheet(isPresented: $showAskPulse) {
+                AskPulseView()
+            }
             .navigationDestination(for: Event.self) { event in
                 EventDetailView(event: event)
             }
@@ -123,6 +132,45 @@ struct HomeView: View {
     /// Top-of-feed CTA into the swipe-to-discover deck. Mirrors the
     /// Explore Attractions card's structure so the home feed reads as a
     /// row of CTAs above the smart presets.
+    // MARK: - Ask Pulse Entry
+
+    /// Search-bar-styled CTA that opens AskPulseView. Sits above the swipe
+    /// hero so it reads as the primary discovery entry. Implements the
+    /// iOS half of IOS-DISCOVER-2026-001.
+    private var askPulseEntryBar: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            showAskPulse = true
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "sparkles")
+                    .foregroundStyle(.tint)
+                    .accessibilityHidden(true)
+                Text("Ask Pulse — date night, walkable, under $60…")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Spacer()
+                Image(systemName: "arrow.up.right.circle.fill")
+                    .foregroundStyle(.tint)
+                    .accessibilityHidden(true)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Color(.secondarySystemGroupedBackground))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(Color.accentColor.opacity(0.25), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Ask Pulse — describe what you're looking for and get curated picks")
+        .accessibilityHint("Opens the conversational discovery view")
+    }
+
     private var discoverHeroCard: some View {
         Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
