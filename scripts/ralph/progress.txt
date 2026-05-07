@@ -2,6 +2,49 @@
 Started: 2026-03-27T14:05:42.010Z
 ---
 
+## 2026-05-07 — Ralph Loop 19: Final 8 stories — PRD complete (70/70 ✅)
+
+Closed every remaining pending story in the active PRD. See project-root
+`progress.txt` for the full per-story write-up. Summary:
+
+- SUB-SYNC-008/012/013: cross-platform subscription sync polish (auth-
+  state tier refresh, per-platform manage UI, vitest+Deno tests + CI)
+- IOS-DISCOVER-2026-001: Ask Pulse — Claude-backed conversational
+  discovery edge function + iOS chat UI
+- IOS-DISCOVER-2026-002: For You rail — swipe-aware
+  get_personalized_recommendations (90-day decay) + iOS rail + web
+  parity component
+- IOS-DISCOVER-2026-003: Events sort menu (Soonest/Featured/Popularity)
+  + popularity_score column + web parity in useEvents
+- IOS-DISCOVER-2026-004: Map time-slider (Now / 6pm / 8pm / 10pm /
+  this Sat / next Sat) with ±2h event filter + isOpenNow restaurant
+  filter
+- IOS-DISCOVER-2026-005: Right Now ribbon — Open-Meteo (keyless) +
+  6 weather/time templates routed to DiscoverView
+- IOS-DISCOVER-2026-006: Group decision shared swipe sessions
+  (DSM-XXXX codes, anon join, ≥2-participant matches)
+- IOS-DISCOVER-2026-007: App Intents for Siri (FindRestaurants,
+  FindEvents, AskPulse) + Speech-framework mic button on SearchView
+- IOS-DISCOVER-2026-008: Surprise Me single committed pick + reveal
+
+Build verified: `npm run build` exit 0, 7/7 vitest files green.
+**Status: 70/70 stories complete (100%).**
+
+**Learnings for future iterations:**
+- App Intents that only need to deep-land into the app: openAppWhenRun
+  = true + @Observable dispatcher the SwiftUI views observe. Don't
+  duplicate navigation logic in IntentResult bodies.
+- SFSpeechRecognizer permission + AVAudioApplication.requestRecordPermission
+  are independent — gate both, surface "Settings" deep link on either denial.
+- Open-Meteo WMO weather codes need bucketing (clear/cloudy/rain/snow/
+  fog/thunder) before they're useful for templating.
+- Anon participants in multiplayer features: make user_id nullable +
+  CHECK constraint that one identity field is set. Don't fake an auth user.
+- For RPC variants that return identical column shapes (For You vs
+  Trending), keep RETURNS TABLE identical so the iOS decoder swaps
+  RPCs without code changes.
+---
+
 ## 2026-05-06 — Ralph Loop 17 (SUB-SYNC-009, SUB-SYNC-010, SUB-SYNC-011)
 
 Three back-to-back iterations on cross-platform subscription sync. See

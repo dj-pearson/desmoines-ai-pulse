@@ -96,6 +96,198 @@
 
 ## Progress Log
 
+## 2026-05-07 — Ralph Loop 19: Final 8 stories — PRD complete (70/70 ✅)
+
+This session closed out every remaining pending story in the active PRD.
+Final tally: **70 / 70 stories passing (100%)**. Build verified via
+`npm run build` (exit 0). Vitest suite green: 7 files, 66 tests, 0 fail.
+
+- **SUB-SYNC-008**: Refresh backendTier on iOS+Android auth state change
+  - iOS AuthService.startAuthListener now calls
+    StoreKitService.refreshBackendTier() on initialSession/signedIn/
+    tokenRefreshed and StoreKitService.clearBackendTier() on signedOut.
+  - Android AuthViewModel mirrors via BillingService injected through
+    Hilt. Test wiring updated for the new dependency.
+
+- **SUB-SYNC-012**: Subscription UI shows platform-of-origin
+  - useSubscription gains a `subscriptions` array (all active rows) +
+    `platform` field on UserSubscription, while keeping the
+    single-row `subscription` accessor for back-compat.
+  - SubscriptionPlatformBreakdown.tsx renders a per-platform card on
+    /subscription Overview when 2+ rows exist, routing the manage
+    button to Stripe customer portal (web), App Store deep link (iOS),
+    Play Store URL (android).
+  - iOS StoreKitService surfaces `crossPlatformSubscriptions` and
+    SubscriptionView shows an informational banner ("You also have an
+    active VIP subscription via the website…"). Android BillingService
+    + SubscriptionScreen mirror the same.
+
+- **SUB-SYNC-013**: Cross-platform sync test coverage
+  - Extracts `resolveHighestSubscription()` as a pure helper for
+    direct vitest exercising. 8 cases: empty, single-row, web+ios
+    cross-tier resolution, android+web tie-breaking, free fallback,
+    missing-plan handling, 3-platform top-tier resolution.
+  - Deno-side `supabase/functions/_tests/cross-platform-sync.test.ts`
+    pins boundary invariants: validate-* functions scope queries to
+    their platform, both webhooks dedupe by Apple notification_uuid /
+    Pub/Sub message_id, UNIQUE(user_id, platform) constraint exists,
+    legacy split migration is idempotent, both webhooks 200-ack
+    duplicates.
+  - New `.github/workflows/subscription-sync-tests.yml` runs vitest
+    + Deno tests on PRs that touch any subscription-related path.
+
+- **IOS-DISCOVER-2026-001**: Ask Pulse conversational AI surface
+  - New `discover-chat` edge function: Claude with prompt caching
+    (anthropic-beta: prompt-caching-2024-07-31) on the system prompt
+    + 4 tool definitions. Tool calls: search_events,
+    search_restaurants, search_attractions, return_picks. Up to 6
+    tool turns then must call return_picks with structured JSON
+    `{ picks, followUpSuggestions }`.
+  - Tier-gated daily quotas (free 5, insider 50, vip unlimited) via
+    new `discover_chat_usage` table.
+  - iOS AskPulseService + AskPulseView (chat-style sheet, welcome
+    suggestions, conversation bubbles, AskPulsePickCard, follow-up
+    chips, custom FlowLayout, full VoiceOver labels).
+  - HomeView gets a search-bar-style askPulseEntryBar above the swipe
+    hero.
+
+- **IOS-DISCOVER-2026-003**: Events sort menu (Soonest / Featured / Popularity)
+  - Migration: events.popularity_score + view_count,
+    calculate_event_popularity_score() helper, recompute trigger,
+    fetch_events_by_popularity_rotated() RPC.
+  - iOS EventsService.EventsQuery gains sortBy: EventSortOption.
+  - EventsViewModel exposes sortBy + cache-key contribution, HomeView
+    toolbar mirrors RestaurantsView.sortMenu style.
+  - Web parity: useEvents hook accepts sortBy, threads through query
+    + useEffect deps.
+
+- **IOS-DISCOVER-2026-005**: Right Now contextual ribbon on Home
+  - WeatherService.swift: keyless Open-Meteo client, WMO weather-code
+    bucketing, 30-minute UserDefaults snapshot cache, ~5km dedupe.
+  - RightNowRibbon.swift: 6 templates (patios, cozy, comfort food,
+    live music, lunch, open-now fallback) selected from temperature
+    + condition + hour + weekday. Hidden silently when location is
+    denied or weather fails — no broken state.
+  - HomeView mounts the ribbon above askPulseEntryBar; tapping
+    routes through ribbonDiscoverContext to the existing
+    fullScreenCover with the matching DiscoverFilterContext + mode.
+
+- **IOS-DISCOVER-2026-008**: Surprise Me single-tap recommendation
+  - Migration: get_surprise_pick(lat, lon) RPC that 50/50s between
+    event vs restaurant, prefers items matching the user's most-
+    favored swipe category/cuisine, falls back to featured +
+    popularity_score >= 50. Returns a templated reason string. New
+    surprise_pick_outcomes table tracks shown/saved/tried_another for
+    acceptance-rate analysis.
+  - iOS SurpriseMeService + SurpriseMeView: full-screen reveal with
+    hero image, title, reason, prominent Save CTA, smaller Try Another
+    button, scale+opacity reveal animation, success haptic.
+  - HomeView gets a full-width purple gradient die-icon button.
+
+- **IOS-DISCOVER-2026-002**: For You rail seeded by swipe history
+  - Migration: replaces get_personalized_recommendations() with a
+    swipe-aware version: boost +50, like +30, detail +10, skip -40.
+    Per-item AND per-category aggregates with linear 90-day decay.
+    Drops items the user explicitly skipped recently. Random jitter
+    so refresh re-rolls.
+  - New get_trending_events() RPC for cold-start fallback (<5 swipes).
+  - iOS ForYouService probes recent swipe count, calls For You or
+    Trending. ForYouRail.swift renders horizontal scroll with the
+    recommendation_reason caption and refresh button.
+  - Web parity: useForYouRail hook + ForYouRail.tsx, mounted on
+    Index.tsx between SearchSection and the top banner ad.
+
+- **IOS-DISCOVER-2026-004**: Time-slider on Map view
+  - MapViewModel.mapTime: Date? property. nil = live "Now" view.
+  - Event annotations filter to events within ±2h of slider time.
+    Restaurants filter via Restaurant.isOpenNow(at:), defaulting to
+    "show" when businessHours data is missing.
+  - MapTimeSlider.swift: pill-style snap stops (Now, 6pm, 8pm, 10pm,
+    this Sat, next Sat), top count pill summary, mounted in
+    safeAreaInset(.bottom) and hidden when a selection popup is open.
+
+- **IOS-DISCOVER-2026-007**: Voice search + Siri shortcut
+  - PulseAppIntents.swift: FindRestaurantsIntent, FindEventsIntent,
+    AskPulseIntent (all openAppWhenRun = true). Payloads posted to a
+    PulseIntentDispatcher singleton the SwiftUI views observe.
+  - PulseShortcuts (AppShortcutsProvider) donates en-US phrases for
+    Spotlight + lock-screen Suggested Shortcuts.
+  - SpeechDictationService.swift wraps SFSpeechRecognizer +
+    AVAudioEngine with permission gating + .denied → Settings deep
+    link.
+  - SearchView toolbar mic button toggles dictation, live-updates the
+    search field via .onChange(of: dictation.transcript), and pulses
+    while listening. SearchView .onChange(of: dispatcher.pending)
+    translates structured intent payloads into search strings.
+
+- **IOS-DISCOVER-2026-006**: Group decision shared swipe sessions
+  - Migration: swipe_sessions (id, code, host_user_id, mode,
+    filter_context JSONB, expires_at) + swipe_session_participants
+    (session_id, user_id OR anon_id, display_name). Adds session_id
+    + anon_id to swipe_interactions; relaxes user_id NOT NULL with a
+    CHECK that one identity field is set so anon participants can
+    swipe.
+  - generate_swipe_session_code() RPC produces a 6-char DSM- code
+    with collision retry. get_swipe_session_matches(p_session_id)
+    returns items right-swiped by ≥2 distinct participants.
+  - Privacy: only `like` and `boost` swipes are session-scoped;
+    `skip` swipes are session-NULL.
+  - iOS SwipeSessionService manages host/join/end + matches polling.
+    Anon participants get a stable per-device UUID stored in
+    UserDefaults (does not survive reinstall, by design).
+  - GroupSessionView.swift: host CTA, lobby with monospace code +
+    ShareLink for sending the code, end-session button, and a join-
+    by-code field. Reachable from a new toolbar icon on DiscoverView.
+
+**Files added (14)**:
+- src/components/SubscriptionPlatformBreakdown.tsx
+- src/components/ForYouRail.tsx
+- src/hooks/useForYouRail.ts
+- src/hooks/__tests__/useSubscription.test.ts
+- supabase/functions/discover-chat/index.ts
+- supabase/functions/_tests/cross-platform-sync.test.ts
+- supabase/migrations/20260506000007_discover_chat_usage.sql
+- supabase/migrations/20260506000008_events_popularity_score.sql
+- supabase/migrations/20260506000009_surprise_me.sql
+- supabase/migrations/20260506000010_for_you_swipe_personalization.sql
+- supabase/migrations/20260506000011_swipe_sessions.sql
+- ios/DesMoinesInsider/Services/{AskPulse,SurpriseMe,ForYou,Weather,SpeechDictation,SwipeSession}Service.swift (6)
+- ios/DesMoinesInsider/Views/{AskPulse/AskPulseView,SurpriseMe/SurpriseMeView,GroupSession/GroupSessionView,Map/MapTimeSlider,Components/RightNowRibbon,Components/ForYouRail}.swift (6)
+- ios/DesMoinesInsider/Intents/PulseAppIntents.swift
+- .github/workflows/subscription-sync-tests.yml
+
+**Files modified (12)**:
+- src/hooks/useSubscription.ts (resolveHighestSubscription helper, subscriptions[] array, platform field)
+- src/hooks/useEvents.ts (sortBy parameter)
+- src/pages/SubscriptionPortal.tsx (mounts SubscriptionPlatformBreakdown)
+- src/pages/Index.tsx (mounts ForYouRail)
+- ios/DesMoinesInsider/Services/{AuthService,StoreKitService,EventsService}.swift
+- ios/DesMoinesInsider/ViewModels/{EventsViewModel,MapViewModel}.swift
+- ios/DesMoinesInsider/Views/Home/HomeView.swift (Ask Pulse + Right Now + Surprise Me + For You + sort menu)
+- ios/DesMoinesInsider/Views/Subscription/SubscriptionView.swift (cross-platform banner)
+- ios/DesMoinesInsider/Views/Map/EventMapView.swift (time slider)
+- ios/DesMoinesInsider/Views/Discover/DiscoverView.swift (group session toolbar)
+- ios/DesMoinesInsider/Views/Search/SearchView.swift (mic button + intent dispatch)
+- ios/DesMoinesInsider/Models/AppEnums.swift (EventSortOption)
+- android/app/src/main/java/com/desmoines/aipulse/data/remote/BillingService.kt
+- android/app/src/main/java/com/desmoines/aipulse/ui/screens/auth/AuthViewModel.kt
+- android/app/src/main/java/com/desmoines/aipulse/ui/screens/subscription/SubscriptionScreen.kt
+- android/app/src/test/java/com/desmoines/aipulse/ui/screens/auth/AuthViewModelTest.kt
+- prd.json (10 stories flipped to passes:true across this and previous loop)
+
+- **Learnings for future iterations:**
+  - Apple App Store deep link `https://apps.apple.com/account/subscriptions` works on iOS Safari + macOS; falls back to the marketing page on other browsers — accept that and don't bother with itms-apps:// (which doesn't work in many browser contexts).
+  - For App Intents that only need to land the user inside the app with
+    captured parameters, the cleanest pattern is `openAppWhenRun = true`
+    + post payload to an @Observable dispatcher the SwiftUI views
+    observe. Lets the navigation logic stay in the view layer.
+  - SFSpeechRecognizer permission and AVAudioApplication.requestRecordPermission are TWO separate gates — checking only one leaves you with a non-functional mic in production.
+  - Open-Meteo's WMO weather codes are dense; bucketing them up front into 6 ribbon-friendly conditions (clear/cloudy/rain/snow/fog/thunder) is far easier than carrying 100 templates.
+  - For Postgres functions that return the same column shape across multiple "modes" (For You vs Trending), keeping the RETURNS TABLE definition identical lets the iOS decoder swap RPCs without code changes.
+  - On the swipe-personalization RPC, the random jitter (`+ random() * 5`) is what makes "refresh" feel responsive — without it the UI shows the same top-N every time even though the underlying score is unchanged.
+  - When supporting anon participants in a multiplayer feature, make user_id nullable + add a CHECK that at least one identity field is set. Don't try to create a fake auth user — Supabase RLS gets confused by it later.
+---
+
 ## 2026-05-06 — Ralph Loop 17: Cross-Platform Subscription Sync (SUB-SYNC-009, SUB-SYNC-010, SUB-SYNC-011)
 
 Three iterations on the cross-platform subscription sync stack so iOS,

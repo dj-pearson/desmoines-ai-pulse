@@ -883,7 +883,7 @@
         "Privacy: skips are NOT shared — only likes contribute to matches"
       ],
       "priority": 55,
-      "passes": false,
+      "passes": true,
       "notes": "Queued from 2026-05-06 mobile UX session. Highest social/viral potential of the queued features — group-decision UX is a category-killer for restaurant apps. Larger scope (Realtime + new tables + auth/anon flow) so likely needs its own focused session."
     },
     {
