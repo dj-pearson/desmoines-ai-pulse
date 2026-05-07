@@ -9,6 +9,13 @@ struct HomeView: View {
     @State private var toast: ToastMessage?
     @State private var showScrollToTop = false
     @State private var showDiscover = false
+    @State private var showAskPulse = false
+    @State private var showSurpriseMe = false
+    /// Optional override applied when the user opens DiscoverView via the
+    /// "Right Now" ribbon (IOS-DISCOVER-2026-005). Cleared after the sheet
+    /// is presented so subsequent toolbar Swipe taps go back to the
+    /// derived-from-filters context.
+    @State private var ribbonDiscoverContext: (DiscoverFilterContext, DiscoverMode)?
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
@@ -17,6 +24,23 @@ struct HomeView: View {
                 VStack(spacing: 0) {
                     Color.clear.frame(height: 0).id("top")
                     headerSection
+
+                    // Right Now ribbon — weather-aware contextual entry
+                    RightNowRibbon { ctx, mode in
+                        ribbonDiscoverContext = (ctx, mode)
+                        showDiscover = true
+                    }
+                    .padding(.horizontal)
+                    .padding(.top, 10)
+
+                    // Ask Pulse entry — primary AI discovery surface
+                    askPulseEntryBar
+                        .padding(.horizontal)
+                        .padding(.top, 10)
+
+                    surpriseMeButton
+                        .padding(.horizontal)
+                        .padding(.top, 10)
 
                     discoverHeroCard
                         .padding(.horizontal)
@@ -38,6 +62,10 @@ struct HomeView: View {
                     if let error = viewModel.errorMessage {
                         errorBanner(error)
                     }
+
+                    // For You rail (or Trending fallback for cold-start users)
+                    ForYouRail()
+                        .padding(.top, 4)
 
                     if !viewModel.featuredEvents.isEmpty {
                         featuredSection
@@ -77,6 +105,9 @@ struct HomeView: View {
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
+                    sortMenu
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         showDiscover = true
@@ -87,13 +118,20 @@ struct HomeView: View {
                     .accessibilityLabel("Open swipe discovery")
                 }
             }
-            .fullScreenCover(isPresented: $showDiscover) {
+            .fullScreenCover(isPresented: $showDiscover, onDismiss: { ribbonDiscoverContext = nil }) {
+                let override = ribbonDiscoverContext
                 DiscoverView(
-                    initialFilter: discoverFilterFromEvents(),
-                    initialMode: .events,
-                    lockMode: viewModel.activeFilterCount > 0,
+                    initialFilter: override?.0 ?? discoverFilterFromEvents(),
+                    initialMode: override?.1 ?? .events,
+                    lockMode: override == nil && viewModel.activeFilterCount > 0,
                     onClose: { showDiscover = false }
                 )
+            }
+            .sheet(isPresented: $showAskPulse) {
+                AskPulseView()
+            }
+            .fullScreenCover(isPresented: $showSurpriseMe) {
+                SurpriseMeView()
             }
             .navigationDestination(for: Event.self) { event in
                 EventDetailView(event: event)
@@ -123,6 +161,119 @@ struct HomeView: View {
     /// Top-of-feed CTA into the swipe-to-discover deck. Mirrors the
     /// Explore Attractions card's structure so the home feed reads as a
     /// row of CTAs above the smart presets.
+    // MARK: - Surprise Me (IOS-DISCOVER-2026-008)
+
+    /// Full-width "decide for me" CTA. Visually distinct from Discover via
+    /// the die icon + purple accent so users grok it as the "no browsing,
+    /// no filtering" affordance.
+    private var surpriseMeButton: some View {
+        Button {
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            showSurpriseMe = true
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "die.face.5.fill")
+                    .font(.title2)
+                    .foregroundStyle(.white)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Surprise Me")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                    Text("One pick. One reason. No browsing.")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.85))
+                }
+                Spacer()
+                Image(systemName: "sparkles")
+                    .foregroundStyle(.white.opacity(0.85))
+                    .accessibilityHidden(true)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity)
+            .background(
+                LinearGradient(
+                    colors: [.purple, .indigo],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing,
+                ),
+                in: RoundedRectangle(cornerRadius: 14),
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Surprise Me. One pick, one reason, no browsing.")
+        .accessibilityHint("Opens a single committed recommendation")
+    }
+
+    // MARK: - Sort Menu (IOS-DISCOVER-2026-003)
+
+    /// Sort menu for the events list. Mirrors RestaurantsView.sortMenu so
+    /// the Events tab matches the Restaurants tab UX.
+    private var sortMenu: some View {
+        Menu {
+            ForEach(EventSortOption.allCases) { option in
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    viewModel.sortBy = option
+                } label: {
+                    if viewModel.sortBy == option {
+                        Label(option.rawValue, systemImage: "checkmark")
+                    } else {
+                        Text(option.rawValue)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "arrow.up.arrow.down")
+                    .font(.system(size: 14, weight: .semibold))
+                Text(viewModel.sortBy.rawValue)
+                    .font(.subheadline.weight(.medium))
+            }
+        }
+        .accessibilityLabel("Sort: \(viewModel.sortBy.rawValue)")
+    }
+
+    // MARK: - Ask Pulse Entry
+
+    /// Search-bar-styled CTA that opens AskPulseView. Sits above the swipe
+    /// hero so it reads as the primary discovery entry. Implements the
+    /// iOS half of IOS-DISCOVER-2026-001.
+    private var askPulseEntryBar: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            showAskPulse = true
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "sparkles")
+                    .foregroundStyle(.tint)
+                    .accessibilityHidden(true)
+                Text("Ask Pulse — date night, walkable, under $60…")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Spacer()
+                Image(systemName: "arrow.up.right.circle.fill")
+                    .foregroundStyle(.tint)
+                    .accessibilityHidden(true)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Color(.secondarySystemGroupedBackground))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(Color.accentColor.opacity(0.25), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Ask Pulse — describe what you're looking for and get curated picks")
+        .accessibilityHint("Opens the conversational discovery view")
+    }
+
     private var discoverHeroCard: some View {
         Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()

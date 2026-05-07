@@ -32,6 +32,10 @@ final class EventsViewModel {
     var selectedCities: Set<String> = [] {
         didSet { resetAndFetch() }
     }
+    /// Sort order for the events list. IOS-DISCOVER-2026-003.
+    var sortBy: EventSortOption = .soonest {
+        didSet { if oldValue != sortBy { resetAndFetch() } }
+    }
 
     /// Currently applied smart preset, if any. Cleared when the user changes
     /// any individual filter manually.
@@ -107,6 +111,7 @@ final class EventsViewModel {
             query.isFeatured = showFeaturedOnly ? true : nil
             query.cities = selectedCities.isEmpty ? nil : Array(selectedCities)
             query.freeOnly = showFreeOnly
+            query.sortBy = sortBy
             query.limit = pageSize
             query.offset = currentOffset
 
@@ -180,6 +185,7 @@ final class EventsViewModel {
         if let preset = selectedDatePreset { parts.append("date-\(preset.rawValue)") }
         if showFeaturedOnly { parts.append("featured") }
         if !searchText.isEmpty { parts.append("q-\(searchText)") }
+        parts.append("s-\(sortBy.rawValue)")
         return parts.joined(separator: "-")
     }
 

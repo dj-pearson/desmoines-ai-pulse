@@ -587,6 +587,99 @@ chmod +x scripts/deploy.sh
 
 ---
 
+## Subscription Sync — Cross-Platform Cleanup (SUB-SYNC-009)
+
+The `20260506000006_split_legacy_mixed_platform_subs.sql` migration is a
+**one-shot data fix** for legacy `user_subscriptions` rows that have
+`stripe_*` fields populated even though `platform` is `'ios'` or
+`'android'`. These were created when the receipt-validation edge functions
+performed unscoped `UPDATE`s and clobbered the platform on Stripe-paid
+rows. The migration:
+
+1. Inserts a fresh `platform='web'` row for each affected user, carrying
+   the Stripe identifiers and the canonical period/status/plan_id.
+2. Clears `stripe_subscription_id` and `stripe_customer_id` from the
+   original mobile row so each row carries only its platform's
+   identifiers.
+3. Records each split in `subscription_split_audit` for traceability.
+
+The migration is idempotent (re-running produces zero new rows).
+
+### Deployment checklist
+
+1. **Snapshot the database** before applying. Take a manual backup via
+   `supabase db dump --schema public > pre-split.sql`, or use Supabase's
+   PITR snapshot.
+2. **Apply on staging first.** Run `supabase db push` against staging and
+   inspect `subscription_split_audit` to verify the row count matches
+   what you expect (compare against
+   `SELECT COUNT(*) FROM user_subscriptions WHERE platform IN ('ios',
+   'android') AND stripe_subscription_id IS NOT NULL` from before the
+   migration ran).
+3. **Smoke-test** affected users on staging: confirm `useSubscription`
+   resolves the correct tier (highest active across rows) and that
+   cancellation routes to the correct platform.
+4. **Apply on production** via `supabase db push`. Then re-run the audit
+   query — it should return zero rows.
+
+### Manual reconciliation queries
+
+If `current_period_end` on the new web row looks stale (because Stripe
+has advanced billing since the row was last touched by us), backfill
+from Stripe's source of truth:
+
+```sql
+-- 1. List web rows that may need a Stripe refresh.
+SELECT user_id, stripe_subscription_id, current_period_end, status
+FROM user_subscriptions
+WHERE platform = 'web'
+  AND stripe_subscription_id IS NOT NULL
+  AND updated_at < NOW() - INTERVAL '7 days'
+ORDER BY updated_at ASC;
+```
+
+For each `stripe_subscription_id` returned, fetch the latest from the
+Stripe API and update via the Stripe webhook handler (or directly):
+
+```sql
+-- 2. Apply a refreshed row. Replace the literals with Stripe's response.
+UPDATE user_subscriptions
+SET status = 'active',
+    current_period_start = '2026-05-01T00:00:00Z'::timestamptz,
+    current_period_end   = '2026-06-01T00:00:00Z'::timestamptz,
+    cancel_at_period_end = false,
+    updated_at = NOW()
+WHERE platform = 'web'
+  AND stripe_subscription_id = 'sub_XXXXXXXXXXXX';
+```
+
+### Rollback
+
+The migration cannot be cleanly auto-reverted (the original mobile rows
+no longer carry the Stripe IDs we'd need to reconstitute the pre-split
+state). Use the snapshot from step 1, or manually:
+
+```sql
+-- 1. Find the audit entry.
+SELECT * FROM subscription_split_audit WHERE legacy_subscription_id = '<uuid>';
+
+-- 2. Re-attach the stripe_* fields onto the legacy row using the audit row.
+UPDATE user_subscriptions AS legacy
+SET stripe_subscription_id = audit.stripe_subscription_id,
+    stripe_customer_id     = web_row.stripe_customer_id,
+    updated_at             = NOW()
+FROM subscription_split_audit AS audit
+JOIN user_subscriptions AS web_row ON web_row.id = audit.web_subscription_id
+WHERE legacy.id = audit.legacy_subscription_id;
+
+-- 3. Delete the new web row.
+DELETE FROM user_subscriptions
+USING subscription_split_audit
+WHERE user_subscriptions.id = subscription_split_audit.web_subscription_id;
+```
+
+---
+
 ## Need Help?
 
 - Check [DEVELOPER_GUIDE.md](./DEVELOPER_GUIDE.md) for technical details
@@ -595,4 +688,4 @@ chmod +x scripts/deploy.sh
 
 ---
 
-**Last Updated:** 2025-01-06
+**Last Updated:** 2026-05-06

@@ -46,6 +46,18 @@ final class StoreKitService {
     /// Google Play on Android) so the iOS UI honors them too.
     private(set) var backendTier: SubscriptionTier = .free
 
+    /// Per-platform breakdown of the user's active subscriptions. Used by the
+    /// SubscriptionView to surface a banner like "You also have an active VIP
+    /// subscription via the website" so users know where to cancel from.
+    /// Excludes the iOS row — that's already represented by `localTier`.
+    struct CrossPlatformSubscription: Identifiable, Hashable {
+        enum Platform: String { case web, android }
+        var id: Platform { platform }
+        let platform: Platform
+        let tier: SubscriptionTier
+    }
+    private(set) var crossPlatformSubscriptions: [CrossPlatformSubscription] = []
+
     // MARK: - Computed Properties
 
     /// Highest tier the user holds across StoreKit (this device) and the backend
@@ -396,25 +408,28 @@ final class StoreKitService {
         } catch {
             // Not signed in — backend tier should reflect that.
             backendTier = .free
+            crossPlatformSubscriptions = []
             return
         }
 
         struct PlanRef: Decodable { let name: String? }
         struct SubRow: Decodable {
             let status: String?
+            let platform: String?
             let plan: PlanRef?
         }
 
         do {
             let rows: [SubRow] = try await client
                 .from("user_subscriptions")
-                .select("status, plan:subscription_plans(name)")
+                .select("status, platform, plan:subscription_plans(name)")
                 .eq("user_id", value: userId)
                 .eq("status", value: "active")
                 .execute()
                 .value
 
             var maxTier: SubscriptionTier = .free
+            var breakdown: [CrossPlatformSubscription] = []
             for row in rows {
                 let resolved: SubscriptionTier
                 switch (row.plan?.name ?? "free").lowercased() {
@@ -425,14 +440,31 @@ final class StoreKitService {
                 if Self.tierRank(resolved) > Self.tierRank(maxTier) {
                     maxTier = resolved
                 }
+                // Track non-iOS active subscriptions for the cross-platform
+                // banner — iOS rows are already represented via local StoreKit
+                // entitlements, surfacing them again would be redundant.
+                if let platform = row.platform?.lowercased(), platform != "ios", resolved != .free {
+                    if let p = CrossPlatformSubscription.Platform(rawValue: platform) {
+                        breakdown.append(.init(platform: p, tier: resolved))
+                    }
+                }
             }
             backendTier = maxTier
+            crossPlatformSubscriptions = breakdown
         } catch {
             #if DEBUG
             AppLogger.storekit.warning("Failed to refresh backend tier: \(error.localizedDescription)")
             #endif
             // Keep prior backendTier on transient failure (don't downgrade UX).
         }
+    }
+
+    /// Clears the cached backend tier — used when the user signs out so the
+    /// next account doesn't briefly inherit the previous account's
+    /// entitlement before `refreshBackendTier()` fetches fresh state.
+    func clearBackendTier() {
+        backendTier = .free
+        crossPlatformSubscriptions = []
     }
 
     /// Determines whether an error is transient (5xx / network) and worth retrying.

@@ -45,6 +45,16 @@ final class MapViewModel {
     private(set) var restaurantAnnotations: [RestaurantAnnotation] = []
     private(set) var attractionAnnotations: [AttractionAnnotation] = []
 
+    /// Time slider value (IOS-DISCOVER-2026-004). nil = "now" (live view).
+    /// When non-nil, eventAnnotations are filtered to events within ±2h of
+    /// this time and restaurantAnnotations to those open at this time.
+    var mapTime: Date? = nil {
+        didSet {
+            refreshEventAnnotations()
+            refreshRestaurantAnnotations()
+        }
+    }
+
     var cameraPosition: MapCameraPosition = .region(MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: Config.defaultLatitude, longitude: Config.defaultLongitude),
         span: MKCoordinateSpan(latitudeDelta: 0.15, longitudeDelta: 0.15)
@@ -229,8 +239,24 @@ final class MapViewModel {
             if !eventAnnotations.isEmpty { eventAnnotations = [] }
             return
         }
+        let timeWindow: (Date, Date)? = mapTime.map { t in
+            (t.addingTimeInterval(-2 * 3600), t.addingTimeInterval(2 * 3600))
+        }
+        let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let isoFormatterFallback = ISO8601DateFormatter()
+        isoFormatterFallback.formatOptions = [.withInternetDateTime]
         eventAnnotations = events.compactMap { event in
             guard let coord = event.coordinate else { return nil }
+            // IOS-DISCOVER-2026-004: filter events to ±2h window when slider
+            // is engaged. Prefer eventStartLocal, fall back to date.
+            if let (lo, hi) = timeWindow {
+                let candidates = [event.eventStartLocal, event.date].compactMap { $0 }
+                let parsed = candidates.compactMap { s in
+                    isoFormatter.date(from: s) ?? isoFormatterFallback.date(from: s)
+                }
+                guard let when = parsed.first, when >= lo && when <= hi else { return nil }
+            }
             return EventAnnotation(event: event, coordinate: coord)
         }
     }
@@ -240,10 +266,25 @@ final class MapViewModel {
             if !restaurantAnnotations.isEmpty { restaurantAnnotations = [] }
             return
         }
+        let probeTime = mapTime
         restaurantAnnotations = restaurants.compactMap { restaurant in
             guard let coord = restaurant.coordinate else { return nil }
+            // IOS-DISCOVER-2026-004: when slider is engaged, hide restaurants
+            // that won't be open at the slider time. Best-effort hours parse —
+            // restaurants without parseable hours are kept (rather than hidden)
+            // so we don't drop a pin just because the source is missing data.
+            if let probeTime, !Self.isLikelyOpen(restaurant: restaurant, at: probeTime) {
+                return nil
+            }
             return RestaurantAnnotation(restaurant: restaurant, coordinate: coord)
         }
+    }
+
+    /// Best-effort "is this restaurant open at the given time" check.
+    /// Returns true when there's no businessHours data so the slider doesn't
+    /// hide pins because of data gaps. Defers to Restaurant.isOpenNow(at:).
+    private static func isLikelyOpen(restaurant: Restaurant, at time: Date) -> Bool {
+        return restaurant.isOpenNow(at: time) ?? true
     }
 
     private func refreshAttractionAnnotations() {

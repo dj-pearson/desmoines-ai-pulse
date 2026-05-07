@@ -450,8 +450,27 @@ class BillingService @Inject constructor(
     @Serializable
     private data class BackendSubRow(
         val status: String? = null,
+        val platform: String? = null,
         val plan: BackendPlanRef? = null,
     )
+
+    /**
+     * Per-platform breakdown of the user's active subscriptions. Used by
+     * SubscriptionScreen to surface a banner like "You also have an active
+     * VIP subscription via the website" so users know where to cancel from.
+     * Excludes the Android row — that's already represented by [currentTier].
+     */
+    enum class CrossPlatformOrigin { WEB, IOS }
+
+    data class CrossPlatformSubscription(
+        val origin: CrossPlatformOrigin,
+        val tier: SubscriptionTier,
+    )
+
+    private val _crossPlatformSubscriptions =
+        MutableStateFlow<List<CrossPlatformSubscription>>(emptyList())
+    val crossPlatformSubscriptions: StateFlow<List<CrossPlatformSubscription>> =
+        _crossPlatformSubscriptions.asStateFlow()
 
     /**
      * Fetches the user's active `user_subscriptions` rows from Supabase and
@@ -465,6 +484,7 @@ class BillingService @Inject constructor(
         val userId: String = try {
             client.auth.currentSessionOrNull()?.user?.id ?: run {
                 _backendTier.value = SubscriptionTier.FREE
+                _crossPlatformSubscriptions.value = emptyList()
                 recomputeCurrentTier()
                 return
             }
@@ -475,7 +495,7 @@ class BillingService @Inject constructor(
 
         try {
             val rows = client.from("user_subscriptions")
-                .select(Columns.raw("status, plan:subscription_plans(name)")) {
+                .select(Columns.raw("status, platform, plan:subscription_plans(name)")) {
                     filter {
                         eq("user_id", userId)
                         eq("status", "active")
@@ -484,6 +504,7 @@ class BillingService @Inject constructor(
                 .decodeList<BackendSubRow>()
 
             var maxTier = SubscriptionTier.FREE
+            val breakdown = mutableListOf<CrossPlatformSubscription>()
             rows.forEach { row ->
                 val resolved = when (row.plan?.name?.lowercase()) {
                     "vip" -> SubscriptionTier.VIP
@@ -493,13 +514,40 @@ class BillingService @Inject constructor(
                 if (tierRank(resolved) > tierRank(maxTier)) {
                     maxTier = resolved
                 }
+                // Track non-Android active subscriptions for the cross-
+                // platform banner — Android rows are already represented via
+                // local Play Billing entitlements, surfacing them again
+                // would be redundant.
+                val platformLower = row.platform?.lowercase()
+                if (resolved != SubscriptionTier.FREE && platformLower != null && platformLower != "android") {
+                    val origin = when (platformLower) {
+                        "web" -> CrossPlatformOrigin.WEB
+                        "ios" -> CrossPlatformOrigin.IOS
+                        else -> null
+                    }
+                    if (origin != null) {
+                        breakdown.add(CrossPlatformSubscription(origin, resolved))
+                    }
+                }
             }
             _backendTier.value = maxTier
+            _crossPlatformSubscriptions.value = breakdown
             recomputeCurrentTier()
         } catch (e: Exception) {
             // Keep prior backendTier on transient failure (don't downgrade UX).
             Log.w(TAG, "Failed to refresh backend tier: ${e.message}")
         }
+    }
+
+    /**
+     * Clears the cached backend tier — used when the user signs out so the
+     * next account doesn't briefly inherit the previous account's
+     * entitlement before [refreshBackendTier] fetches fresh state.
+     */
+    fun clearBackendTier() {
+        _backendTier.value = SubscriptionTier.FREE
+        _crossPlatformSubscriptions.value = emptyList()
+        recomputeCurrentTier()
     }
 
     private fun isTransientError(error: Exception): Boolean {

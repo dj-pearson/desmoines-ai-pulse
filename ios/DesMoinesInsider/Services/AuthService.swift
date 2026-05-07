@@ -86,6 +86,10 @@ final class AuthService {
                         // Begin enforcing the documented idle/absolute timeouts.
                         // Restart on tokenRefreshed so admin-role changes apply.
                         SessionTimeoutService.shared.startTracking(isAdmin: self.isAdmin)
+                        // Re-resolve the backend tier so a fresh sign-in (or a
+                        // sign-in to a different account in the same session)
+                        // immediately reflects the new account's entitlements.
+                        await StoreKitService.shared.refreshBackendTier()
                     }
                 case .signedOut:
                     self.currentUser = nil
@@ -93,6 +97,9 @@ final class AuthService {
                     self.isAuthenticated = false
                     self.isAdmin = false
                     SessionTimeoutService.shared.stopTracking()
+                    // Drop the cached backend tier so the next account never
+                    // briefly inherits the previous account's entitlement.
+                    StoreKitService.shared.clearBackendTier()
                 default:
                     break
                 }

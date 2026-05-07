@@ -1,0 +1,44 @@
+name: Cross-Platform Subscription Sync Tests
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'supabase/functions/validate-ios-receipt/**'
+      - 'supabase/functions/validate-android-receipt/**'
+      - 'supabase/functions/appstore-server-notifications-v2/**'
+      - 'supabase/functions/play-rtdn-webhook/**'
+      - 'supabase/functions/_tests/**'
+      - 'supabase/migrations/**subscription**'
+      - 'supabase/migrations/**platform**'
+      - 'src/hooks/useSubscription.ts'
+      - 'src/hooks/__tests__/useSubscription.test.ts'
+      - 'src/components/SubscriptionPlatformBreakdown.tsx'
+      - '.github/workflows/subscription-sync-tests.yml'
+
+concurrency:
+  group: subscription-sync-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  vitest:
+    name: useSubscription read-side tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx vitest run src/hooks/__tests__/useSubscription.test.ts
+
+  deno:
+    name: Edge function & migration invariants
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+      - run: deno test --allow-read supabase/functions/_tests/cross-platform-sync.test.ts

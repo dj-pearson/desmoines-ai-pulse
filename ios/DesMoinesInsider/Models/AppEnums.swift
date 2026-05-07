@@ -224,6 +224,18 @@ enum DateFilterPreset: String, CaseIterable, Identifiable {
     }
 }
 
+// MARK: - Event Sort Option
+
+/// Sort options for the events list. Mirrors RestaurantSortOption so the
+/// Events tab matches the Restaurants tab UX. IOS-DISCOVER-2026-003.
+enum EventSortOption: String, CaseIterable, Identifiable {
+    case soonest = "Soonest"
+    case featured = "Featured"
+    case popularity = "Popularity"
+
+    var id: String { rawValue }
+}
+
 // MARK: - Subscription Tier
 
 enum SubscriptionTier: String, Codable {

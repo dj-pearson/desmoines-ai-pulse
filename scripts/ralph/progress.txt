@@ -2,6 +2,77 @@
 Started: 2026-03-27T14:05:42.010Z
 ---
 
+## 2026-05-07 — Ralph Loop 19: Final 8 stories — PRD complete (70/70 ✅)
+
+Closed every remaining pending story in the active PRD. See project-root
+`progress.txt` for the full per-story write-up. Summary:
+
+- SUB-SYNC-008/012/013: cross-platform subscription sync polish (auth-
+  state tier refresh, per-platform manage UI, vitest+Deno tests + CI)
+- IOS-DISCOVER-2026-001: Ask Pulse — Claude-backed conversational
+  discovery edge function + iOS chat UI
+- IOS-DISCOVER-2026-002: For You rail — swipe-aware
+  get_personalized_recommendations (90-day decay) + iOS rail + web
+  parity component
+- IOS-DISCOVER-2026-003: Events sort menu (Soonest/Featured/Popularity)
+  + popularity_score column + web parity in useEvents
+- IOS-DISCOVER-2026-004: Map time-slider (Now / 6pm / 8pm / 10pm /
+  this Sat / next Sat) with ±2h event filter + isOpenNow restaurant
+  filter
+- IOS-DISCOVER-2026-005: Right Now ribbon — Open-Meteo (keyless) +
+  6 weather/time templates routed to DiscoverView
+- IOS-DISCOVER-2026-006: Group decision shared swipe sessions
+  (DSM-XXXX codes, anon join, ≥2-participant matches)
+- IOS-DISCOVER-2026-007: App Intents for Siri (FindRestaurants,
+  FindEvents, AskPulse) + Speech-framework mic button on SearchView
+- IOS-DISCOVER-2026-008: Surprise Me single committed pick + reveal
+
+Build verified: `npm run build` exit 0, 7/7 vitest files green.
+**Status: 70/70 stories complete (100%).**
+
+**Learnings for future iterations:**
+- App Intents that only need to deep-land into the app: openAppWhenRun
+  = true + @Observable dispatcher the SwiftUI views observe. Don't
+  duplicate navigation logic in IntentResult bodies.
+- SFSpeechRecognizer permission + AVAudioApplication.requestRecordPermission
+  are independent — gate both, surface "Settings" deep link on either denial.
+- Open-Meteo WMO weather codes need bucketing (clear/cloudy/rain/snow/
+  fog/thunder) before they're useful for templating.
+- Anon participants in multiplayer features: make user_id nullable +
+  CHECK constraint that one identity field is set. Don't fake an auth user.
+- For RPC variants that return identical column shapes (For You vs
+  Trending), keep RETURNS TABLE identical so the iOS decoder swaps
+  RPCs without code changes.
+---
+
+## 2026-05-06 — Ralph Loop 17 (SUB-SYNC-009, SUB-SYNC-010, SUB-SYNC-011)
+
+Three back-to-back iterations on cross-platform subscription sync. See
+project-root `progress.txt` for the full write-up. Summary:
+
+- **SUB-SYNC-010**: Apple App Store Server Notifications v2 webhook (new
+  edge function `appstore-server-notifications-v2` + idempotency log
+  table `apple_notification_log`).
+- **SUB-SYNC-011**: Google Play RTDN webhook (new edge function
+  `play-rtdn-webhook` + idempotency log table `play_rtdn_log`,
+  reuses existing `GOOGLE_PLAY_SERVICE_ACCOUNT_KEY`).
+- **SUB-SYNC-009**: One-shot migration `20260506000006` that splits legacy
+  mixed-platform rows into proper per-platform rows with an audit table.
+
+Build verified via `npm run build` (exit 0). Pending stories: 11/70.
+
+**Learnings for future iterations:**
+- Deno's subtle.verify takes JWS raw r||s ECDSA signatures directly — no
+  DER conversion needed for verification.
+- Importing an Apple x5c leaf as `spki` requires extracting just the
+  SubjectPublicKeyInfo via an ASN.1 walk; passing the full cert DER
+  fails on Deno.
+- Google's JWKS at `oauth2/v3/certs` rotates ~daily — cache ≤1h and
+  refetch on `kid` miss to avoid stale-key 401s.
+- The legacy stripe-on-mobile-row bug came from a platform-unscoped
+  UPDATE inside the validate-receipt functions; never reintroduce one.
+---
+
 ## 2026-03-27 - AND-001 (Android)
 - Initialized complete Android project scaffold with Kotlin 2.1.0, AGP 8.7.3, Jetpack Compose BOM 2024.12.01
 - Created version catalog (libs.versions.toml) with all dependencies

@@ -22,6 +22,8 @@ export interface SubscriptionPlan {
   stripe_price_id_yearly?: string;
 }
 
+export type SubscriptionPlatform = "web" | "ios" | "android";
+
 export interface UserSubscription {
   id: string;
   user_id: string;
@@ -30,6 +32,7 @@ export interface UserSubscription {
   current_period_start: string;
   current_period_end: string;
   cancel_at_period_end: boolean;
+  platform: SubscriptionPlatform;
   plan?: SubscriptionPlan;
 }
 
@@ -44,6 +47,24 @@ const FREE_LIMITS: SubscriptionLimits = {
   alerts: 0,
   saved_searches: 0,
 };
+
+const TIER_RANK: Record<string, number> = { vip: 2, insider: 1, free: 0 };
+
+/**
+ * Picks the highest-tier subscription from a per-platform list. Used both
+ * inside `useSubscription` and by SUB-SYNC tests to verify cross-platform
+ * sync logic (e.g. web=insider + ios=vip → vip wins).
+ */
+export function resolveHighestSubscription(
+  subscriptions: UserSubscription[],
+): UserSubscription | null {
+  if (subscriptions.length === 0) return null;
+  return subscriptions.reduce<UserSubscription | null>((best, row) => {
+    const rowRank = TIER_RANK[row.plan?.name ?? 'free'] ?? 0;
+    const bestRank = best ? TIER_RANK[best.plan?.name ?? 'free'] ?? 0 : -1;
+    return rowRank > bestRank ? row : (best ?? row);
+  }, null);
+}
 
 export function useSubscription() {
   const { user } = useAuth();
@@ -71,12 +92,14 @@ export function useSubscription() {
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
-  // Fetch user's current subscription. A user may have one row per platform
-  // (web/Stripe, ios, android) — pick the highest tier (vip > insider > free).
-  const { data: subscription, isLoading: subscriptionLoading } = useQuery({
-    queryKey: ["user-subscription", user?.id],
-    queryFn: async (): Promise<UserSubscription | null> => {
-      if (!user) return null;
+  // Fetch user's current subscriptions. A user may have one row per platform
+  // (web/Stripe, ios, android). We return ALL active rows (used for the per-
+  // platform breakdown in Profile/Pricing) plus a derived `subscription`
+  // pointing at the highest tier for back-compat with existing call sites.
+  const { data: subscriptions = [], isLoading: subscriptionLoading } = useQuery({
+    queryKey: ["user-subscriptions", user?.id],
+    queryFn: async (): Promise<UserSubscription[]> => {
+      if (!user) return [];
 
       // @ts-ignore -- Supabase SDK TS2589: deep type instantiation under strict mode
       const subQuery = supabase.from("user_subscriptions");
@@ -87,36 +110,31 @@ export function useSubscription() {
         .eq("status", "active");
 
       if (error) throw error;
-      if (!data || (data as unknown[]).length === 0) return null;
+      if (!data || (data as unknown[]).length === 0) return [];
 
-      const tierRank: Record<string, number> = { vip: 2, insider: 1, free: 0 };
       const rows = data as unknown as Array<Record<string, unknown>>;
 
-      const best = rows.reduce<Record<string, unknown> | null>((acc, row) => {
-        const planName = ((row['plan'] as Record<string, unknown> | null)?.['name'] as string) ?? 'free';
-        const accPlanName = acc
-          ? ((acc['plan'] as Record<string, unknown> | null)?.['name'] as string) ?? 'free'
-          : 'free';
-        return (tierRank[planName] ?? 0) > (tierRank[accPlanName] ?? 0) ? row : (acc ?? row);
-      }, null);
-
-      if (!best) return null;
-
-      const joinedPlan = best['plan'] as Record<string, unknown> | null;
-
-      return {
-        ...best,
-        plan: joinedPlan
-          ? {
-              ...joinedPlan,
-              features: joinedPlan['features'] as string[],
-              limits: joinedPlan['limits'] as SubscriptionLimits,
-            }
-          : undefined,
-      } as unknown as UserSubscription;
+      return rows.map((row) => {
+        const joinedPlan = row['plan'] as Record<string, unknown> | null;
+        return {
+          ...row,
+          platform: (row['platform'] as SubscriptionPlatform) ?? 'web',
+          plan: joinedPlan
+            ? {
+                ...joinedPlan,
+                features: joinedPlan['features'] as string[],
+                limits: joinedPlan['limits'] as SubscriptionLimits,
+              }
+            : undefined,
+        } as unknown as UserSubscription;
+      });
     },
     enabled: !!user,
   });
+
+  // Single highest-tier subscription, kept for back-compat with code that
+  // expects one canonical row.
+  const subscription = resolveHighestSubscription(subscriptions);
 
   // Determine current tier
   const getCurrentTier = (): SubscriptionTier => {
@@ -270,13 +288,14 @@ export function useSubscription() {
 
   // Refresh subscription data
   const refreshSubscription = () => {
-    queryClient.invalidateQueries({ queryKey: ["user-subscription", user?.id] });
+    queryClient.invalidateQueries({ queryKey: ["user-subscriptions", user?.id] });
   };
 
   return {
     // Data
     plans,
     subscription,
+    subscriptions,
     tier,
     limits,
 

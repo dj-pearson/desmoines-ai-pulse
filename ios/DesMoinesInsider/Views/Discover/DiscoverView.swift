@@ -21,6 +21,7 @@ struct DiscoverView: View {
     @State private var viewModel: DiscoverViewModel
     @State private var navigationPath = NavigationPath()
     @State private var toast: ToastMessage?
+    @State private var showGroupSession = false
     @AppStorage("discover.hasSeenIntro.v1") private var hasSeenIntro = false
     @State private var stackId = UUID()
 
@@ -73,10 +74,23 @@ struct DiscoverView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        showGroupSession = true
+                    } label: {
+                        Image(systemName: "person.3.sequence.fill")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .accessibilityLabel("Start or join a group session")
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     Text("Saved \(viewModel.likedItems.count)")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.secondary)
                 }
+            }
+            .sheet(isPresented: $showGroupSession) {
+                GroupSessionView()
             }
             .navigationDestination(for: Event.self) { EventDetailView(event: $0) }
             .navigationDestination(for: Restaurant.self) { RestaurantDetailView(restaurant: $0) }

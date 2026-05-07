@@ -62,9 +62,57 @@ struct SubscriptionView: View {
 
             currentTierBadge
 
+            crossPlatformBanner
+
             featuresList
         }
         .padding()
+    }
+
+    // MARK: - Cross-Platform Banner
+
+    /// Surfaces other-platform subscriptions (web/Stripe, Android/Play) so the
+    /// user knows where to manage / cancel them. App Store guidelines forbid
+    /// linking to external paid flows from inside an IAP screen, so we only
+    /// surface informational copy here — no out-bound buttons.
+    @ViewBuilder
+    private var crossPlatformBanner: some View {
+        if !storeKit.crossPlatformSubscriptions.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(storeKit.crossPlatformSubscriptions) { sub in
+                    HStack(spacing: 8) {
+                        Image(systemName: bannerIcon(for: sub.platform))
+                            .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
+                        Text(bannerCopy(for: sub))
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.leading)
+                    }
+                }
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+            .padding(.horizontal)
+        }
+    }
+
+    private func bannerIcon(for platform: StoreKitService.CrossPlatformSubscription.Platform) -> String {
+        switch platform {
+        case .web: return "globe"
+        case .android: return "smartphone"
+        }
+    }
+
+    private func bannerCopy(for sub: StoreKitService.CrossPlatformSubscription) -> String {
+        let where_: String = {
+            switch sub.platform {
+            case .web: return "via the website"
+            case .android: return "on Google Play"
+            }
+        }()
+        return "You also have an active \(sub.tier.displayName) subscription \(where_). Manage or cancel it from where you bought it."
     }
 
     // MARK: - Current Tier Badge

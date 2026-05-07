@@ -30,6 +30,7 @@ actor EventsService {
         var dateStart: Date?
         var dateEnd: Date?
         var isFeatured: Bool?
+        var sortBy: EventSortOption = .soonest
         var limit: Int = Config.defaultPageSize
         var offset: Int = 0
     }
@@ -95,13 +96,37 @@ actor EventsService {
             request = request.or("price.is.null,price.ilike.%free%,price.ilike.%$0%")
         }
 
-        // Sort + Paginate + Execute (transforms must come after all filters)
-        let response = try await request
-            .order("date", ascending: true)
-            .range(from: query.offset, to: query.offset + query.limit - 1)
-            .execute()
-        let events = try JSONDecoder().decode([Event].self, from: response.data)
-        let total = response.count ?? events.count
+        // Sort + Paginate + Execute (transforms must come after all filters).
+        // Per-case fully-typed chain mirrors RestaurantsService.fetchRestaurants
+        // — Supabase's PostgrestTransformBuilder doesn't expose a stable public
+        // type name to declare a `var sorted:` of, so we duplicate the
+        // pagination/execute block per case.
+        let data: Data
+        let count: Int?
+        switch query.sortBy {
+        case .soonest:
+            let r = try await request
+                .order("date", ascending: true)
+                .range(from: query.offset, to: query.offset + query.limit - 1)
+                .execute()
+            data = r.data; count = r.count
+        case .featured:
+            let r = try await request
+                .order("is_featured", ascending: false)
+                .order("date", ascending: true)
+                .range(from: query.offset, to: query.offset + query.limit - 1)
+                .execute()
+            data = r.data; count = r.count
+        case .popularity:
+            let r = try await request
+                .order("popularity_score", ascending: false, nullsFirst: false)
+                .order("date", ascending: true)
+                .range(from: query.offset, to: query.offset + query.limit - 1)
+                .execute()
+            data = r.data; count = r.count
+        }
+        let events = try JSONDecoder().decode([Event].self, from: data)
+        let total = count ?? events.count
 
         return EventsResponse(
             events: events,

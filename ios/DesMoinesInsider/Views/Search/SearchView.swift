@@ -3,8 +3,11 @@ import SwiftUI
 /// Unified search across events, restaurants, and attractions.
 struct SearchView: View {
     @State private var viewModel = SearchViewModel()
+    @State private var dictation = SpeechDictationService.shared
+    @State private var dispatcher = PulseIntentDispatcher.shared
     @State private var navigationPath = NavigationPath()
     @State private var showScrollToTop = false
+    @State private var showDictationDeniedAlert = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -58,8 +61,29 @@ struct SearchView: View {
                     ? "Search events, restaurants, attractions..."
                     : "Search unavailable offline"
             )
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    micButton
+                }
+            }
             .disabled(!NetworkMonitor.shared.isConnected && !viewModel.hasSearched)
             .navigationTitle("Search")
+            .onChange(of: dictation.transcript) { _, newValue in
+                // Live-update the search field as the user dictates
+                if !newValue.isEmpty { viewModel.searchText = newValue }
+            }
+            .onChange(of: dispatcher.pending) { _, pending in
+                applyIntent(pending)
+            }
+            .task {
+                applyIntent(dispatcher.pending)
+            }
+            .alert("Microphone access needed", isPresented: $showDictationDeniedAlert) {
+                Button("Open Settings") { SpeechDictationService.openSettings() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Enable microphone and speech recognition in Settings to dictate search terms.")
+            }
             .navigationDestination(for: Event.self) { event in
                 EventDetailView(event: event)
             }
@@ -70,6 +94,62 @@ struct SearchView: View {
                 AttractionDetailView(attraction: attraction)
             }
         }
+    }
+
+    // MARK: - Voice Dictation (IOS-DISCOVER-2026-007)
+
+    /// In-toolbar microphone button. Tapping toggles SFSpeechRecognizer
+    /// dictation directly into the search field. When permission is denied,
+    /// surfaces a one-tap settings deep-link instead of silently failing.
+    private var micButton: some View {
+        Button {
+            Task {
+                switch dictation.status {
+                case .denied:
+                    showDictationDeniedAlert = true
+                default:
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    await dictation.toggle()
+                }
+            }
+        } label: {
+            Image(systemName: micIconName)
+                .foregroundStyle(dictation.statusIsListening ? .red : .primary)
+                .symbolEffect(.pulse, isActive: dictation.statusIsListening)
+        }
+        .accessibilityLabel(dictation.statusIsListening ? "Stop dictation" : "Start voice search")
+    }
+
+    private var micIconName: String {
+        if case .listening = dictation.status { return "mic.fill" }
+        if case .denied = dictation.status { return "mic.slash" }
+        return "mic"
+    }
+
+    /// Apply a Siri / Shortcut intent payload to the search experience.
+    /// Composes a search string from the structured fields so the existing
+    /// SearchViewModel handles the navigation.
+    private func applyIntent(_ pending: PulseIntentDispatcher.Pending?) {
+        guard let pending else { return }
+        switch pending {
+        case .findRestaurants(let cuisine, let area, let openNow):
+            var parts: [String] = []
+            if let cuisine, !cuisine.isEmpty { parts.append(cuisine) }
+            parts.append("restaurants")
+            if let area, !area.isEmpty { parts.append("in \(area)") }
+            if openNow { parts.append("open now") }
+            viewModel.searchText = parts.joined(separator: " ")
+        case .findEvents(let category, let datePreset):
+            var parts: [String] = []
+            if let category, !category.isEmpty { parts.append(category) }
+            parts.append("events")
+            if let datePreset, !datePreset.isEmpty { parts.append(datePreset) }
+            viewModel.searchText = parts.joined(separator: " ")
+        case .askPulse(let query):
+            viewModel.searchText = query
+        }
+        // Clear the pending payload — handled.
+        _ = dispatcher.consume()
     }
 
     // MARK: - Tab Picker
