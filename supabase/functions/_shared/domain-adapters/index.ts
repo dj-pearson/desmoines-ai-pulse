@@ -14,10 +14,19 @@
 import type { AdapterResult, DomainAdapter } from "./types.ts";
 import { milbAdapter } from "./milb.ts";
 import { seatgeekAdapter } from "./seatgeek.ts";
+import { eventbriteAdapter } from "./eventbrite.ts";
+import { barnstormersAdapter } from "./barnstormers.ts";
+import { hyveetixAdapter } from "./hyveetix.ts";
 
 export type { AdapterEvent, AdapterResult, DomainAdapter } from "./types.ts";
 
-const ADAPTERS: DomainAdapter[] = [milbAdapter, seatgeekAdapter];
+const ADAPTERS: DomainAdapter[] = [
+  milbAdapter,
+  seatgeekAdapter,
+  eventbriteAdapter,
+  barnstormersAdapter,
+  hyveetixAdapter,
+];
 
 /**
  * Try to fetch items via a domain-specific adapter. Returns `null` if no

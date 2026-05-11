@@ -62,7 +62,18 @@
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\pears\\\\Documents\\\\Des-Moines-Pulse\\\\desmoines-ai-pulse\\\\ios\" -Recurse -Directory)",
       "Bash(Select-Object -ExpandProperty FullName)",
       "PowerShell(npm run *)",
-      "PowerShell(npx eslint src/components/admin/ImageBackfill.tsx 2>&1 | Select-Object -Last 20)"
+      "PowerShell(npx eslint src/components/admin/ImageBackfill.tsx 2>&1 | Select-Object -Last 20)",
+      "WebFetch(domain:www.eventbrite.com)",
+      "Bash(perl -0777 -ne 'while \\(/<script[^>]+type=\"application\\\\/ld\\\\+json\"[^>]*>\\(.*?\\)<\\\\/script>/sg\\) { print substr\\($1, 0, 800\\); print \"\\\\n---NEXTBLOCK---\\\\n\"; last if ++$i >= 2 }' /tmp/eb.html)",
+      "Bash(perl -0777 -ne 'if \\(/<script[^>]+type=\"application\\\\/ld\\\\+json\"[^>]*>\\(.*?\\)<\\\\/script>/s\\) { print $1 }' /tmp/eb.html)",
+      "Bash(python3 -c ' *)",
+      "Bash(perl -0777 -e ' *)",
+      "Bash(curl -sL -A \"Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36\" \"https://hyveetix.evenue.net/\" -o /tmp/hv.html)",
+      "Bash(perl -0777 -ne 's/<script[^>]*>.*?<\\\\/script>//gs; s/<style[^>]*>.*?<\\\\/style>//gs; s/<[^>]+>/ /g; s/\\\\s+/ /g; print substr\\($_, 0, 1500\\)' /tmp/hv.html)",
+      "Bash(curl -sL https://hyveetix.evenue.net/ -H 'User-Agent: Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/120.0.0.0 Safari/537.36' -H 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8' -H 'Accept-Language: en-US,en;q=0.9' -H 'Accept-Encoding: gzip, deflate, br' -H 'Cache-Control: max-age=0' -H 'DNT: 1' -H 'Sec-Ch-Ua: \"Not_A Brand\";v=\"8\", \"Chromium\";v=\"120\", \"Google Chrome\";v=\"120\"' -H 'Sec-Ch-Ua-Mobile: ?0' -H 'Sec-Ch-Ua-Platform: \"Windows\"' -H 'Sec-Fetch-Dest: document' -H 'Sec-Fetch-Mode: navigate' -H 'Sec-Fetch-Site: none' -H 'Sec-Fetch-User: ?1' -H 'Upgrade-Insecure-Requests: 1' --compressed -o /tmp/hv2.html)",
+      "Bash(perl -0777 -ne 's/<script[^>]*>.*?<\\\\/script>//gs; s/<style[^>]*>.*?<\\\\/style>//gs; s/<[^>]+>/ /g; s/\\\\s+/ /g; print substr\\($_, 0, 800\\)' /tmp/hv2.html)",
+      "Bash(perl -0777 -ne 's/<script[^>]*>.*?<\\\\/script>//gs; s/<style[^>]*>.*?<\\\\/style>//gs; s/<[^>]+>/ /g; s/\\\\s+/ /g; print substr\\($_, 0, 1500\\)' /tmp/grp_AF2.html)",
+      "Bash(curl -sL -H 'User-Agent: Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36' -H 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' -H 'Accept-Language: en-US,en;q=0.9' -H 'Sec-Ch-Ua-Mobile: ?0' -H 'Sec-Fetch-Dest: document' -H 'Sec-Fetch-Mode: navigate' -H 'Sec-Fetch-Site: none' --compressed https://hyveetix.evenue.net/list/__TRACKED_VAR__ -o /tmp/sub.html)"
     ],
     "deny": [],
     "ask": []
