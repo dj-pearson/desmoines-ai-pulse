@@ -16,6 +16,7 @@ import { milbAdapter } from "./milb.ts";
 import { seatgeekAdapter } from "./seatgeek.ts";
 import { eventbriteAdapter } from "./eventbrite.ts";
 import { barnstormersAdapter } from "./barnstormers.ts";
+import { catchdesmoinesAdapter } from "./catchdesmoines.ts";
 // hyveetix.ts kept in the codebase but disabled — Hy-Vee Tix is behind
 // PerimeterX which blocks both Supabase IPs (HTTP 403) and Browserless +
 // stealth (returns the challenge page). Re-enable when a residential-proxy
@@ -29,6 +30,7 @@ const ADAPTERS: DomainAdapter[] = [
   seatgeekAdapter,
   eventbriteAdapter,
   barnstormersAdapter,
+  catchdesmoinesAdapter,
 ];
 
 /**
