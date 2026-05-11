@@ -169,21 +169,24 @@ export const hyveetixAdapter: DomainAdapter = {
 async function fetchGroupPage(code: string): Promise<
   { events: PaciolanEvent[]; childCodes: string[] } | null
 > {
-  const response = await globalThis.fetch(`${BASE}/list/${code}`, {
-    headers: BROWSER_HEADERS,
-  });
-  if (!response.ok) return null;
+  const html = await fetchHtml(`${BASE}/list/${code}`, code);
+  if (!html) return null;
 
-  const html = await response.text();
   const match = html.match(
     /<script[^>]+id="__NEXT_DATA__"[^>]*>([\s\S]+?)<\/script>/,
   );
-  if (!match) return null;
+  if (!match) {
+    console.log(
+      `  ❌ [hyveetix] ${code}: no __NEXT_DATA__ in ${html.length}-byte response`,
+    );
+    return null;
+  }
 
   let data: NextData;
   try {
     data = JSON.parse(match[1]);
-  } catch {
+  } catch (err) {
+    console.log(`  ❌ [hyveetix] ${code}: __NEXT_DATA__ JSON parse failed`);
     return null;
   }
 
@@ -201,7 +204,106 @@ async function fetchGroupPage(code: string): Promise<
       .filter((c): c is string => typeof c === "string" && c.length > 0);
     return { events: [], childCodes: codes };
   }
+  console.log(
+    `  ⚠️ [hyveetix] ${code}: unknown component "${componentUrl}"`,
+  );
   return { events: [], childCodes: [] };
+}
+
+/**
+ * Fetch HTML from Hy-Vee Tix. The site is behind PerimeterX which fingerprints
+ * datacenter IPs and TLS handshakes. We try Browserless with stealth mode first
+ * (most likely to bypass the bot wall); if that's unavailable, fall back to
+ * plain fetch with browser-like headers.
+ */
+async function fetchHtml(url: string, code: string): Promise<string | null> {
+  const browserlessKey = Deno.env.get("BROWSERLESS_API") ||
+    Deno.env.get("BROWSERLESS_API_KEY");
+
+  if (browserlessKey) {
+    const html = await fetchViaBrowserless(url, browserlessKey, code);
+    if (html) return html;
+    console.log(`  ↩ [hyveetix] ${code}: Browserless miss, trying plain fetch`);
+  }
+
+  return fetchPlain(url, code);
+}
+
+async function fetchViaBrowserless(
+  url: string,
+  apiKey: string,
+  code: string,
+): Promise<string | null> {
+  const browserlessUrl =
+    `https://production-sfo.browserless.io/content?token=${apiKey}&stealth=true`;
+  try {
+    const response = await globalThis.fetch(browserlessUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        url,
+        gotoOptions: { waitUntil: "domcontentloaded", timeout: 20000 },
+        waitForTimeout: 1500,
+      }),
+    });
+
+    if (!response.ok) {
+      const errBody = (await response.text()).substring(0, 200);
+      console.log(
+        `  ❌ [hyveetix] ${code}: Browserless HTTP ${response.status} — ${errBody}`,
+      );
+      return null;
+    }
+
+    const html = await response.text();
+    if (isBotChallenge(html)) {
+      console.log(
+        `  🚫 [hyveetix] ${code}: Browserless got bot-challenge page (${html.length} bytes)`,
+      );
+      return null;
+    }
+    return html;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.log(`  ❌ [hyveetix] ${code}: Browserless threw — ${msg}`);
+    return null;
+  }
+}
+
+async function fetchPlain(
+  url: string,
+  code: string,
+): Promise<string | null> {
+  try {
+    const response = await globalThis.fetch(url, { headers: BROWSER_HEADERS });
+    if (!response.ok) {
+      console.log(
+        `  ❌ [hyveetix] ${code}: plain fetch HTTP ${response.status}`,
+      );
+      return null;
+    }
+    const html = await response.text();
+    if (isBotChallenge(html)) {
+      console.log(
+        `  🚫 [hyveetix] ${code}: plain fetch got bot-challenge page (${html.length} bytes)`,
+      );
+      return null;
+    }
+    return html;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.log(`  ❌ [hyveetix] ${code}: plain fetch threw — ${msg}`);
+    return null;
+  }
+}
+
+function isBotChallenge(html: string): boolean {
+  if (html.length < 5000) return true; // real pages are 150KB+
+  if (/Access to this page has been denied/i.test(html)) return true;
+  if (/_pxMonitorAbr|px-captcha/i.test(html) && html.length < 20000) {
+    return true; // PerimeterX challenge page (small variant)
+  }
+  return false;
 }
 
 function toAdapterEvent(
