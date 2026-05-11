@@ -13,6 +13,7 @@ import { scrapeUrl, scrapeUrls } from "../_shared/scraper.ts";
 import { getAIConfig, buildClaudeRequest, buildLightweightClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
 import { validateURLForSSRF } from "../_shared/validation.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
+import { tryDomainAdapter } from "../_shared/domain-adapters/index.ts";
 
 // Marker time for events without specific times (7:31:58 PM Central)
 const NO_TIME_MARKER = "19:31:58";
@@ -709,36 +710,46 @@ serve(async (req) => {
 
     console.log(`🚀 Starting scrape of ${url} for ${category} (max ${maxPages} pages) using ${scraperBackend || 'default backend'}`);
 
+    // Try a domain-specific API adapter first (e.g. statsapi.mlb.com for Iowa
+    // Cubs, SeatGeek Platform API). If it returns items, skip scrape + Claude.
+    const adapterResult = await tryDomainAdapter(url, category);
+
     // Generate URLs for pagination if it's a Catch Des Moines events page
     // Sports schedule domains: use ONLY the provided URL (never add CatchDesMoines)
-    const urlsToScrape = [];
-    const urlObj = new URL(url);
-
-    if (isSportsScheduleDomain(url)) {
-      urlsToScrape.push(url);
-    } else if (urlObj.hostname.includes('catchdesmoines.com') && urlObj.pathname.includes('/events')) {
-      // Generate paginated URLs for Catch Des Moines
-      for (let page = 0; page < maxPages; page++) {
-        const pageUrl = new URL(url);
-        if (page > 0) {
-          pageUrl.searchParams.set('skip', (page * 12).toString());
-          pageUrl.searchParams.set('bounds', 'false');
-          pageUrl.searchParams.set('view', 'grid');
-          pageUrl.searchParams.set('sort', 'date');
+    const urlsToScrape: string[] = [];
+    if (!adapterResult) {
+      const urlObj = new URL(url);
+      if (isSportsScheduleDomain(url)) {
+        urlsToScrape.push(url);
+      } else if (urlObj.hostname.includes('catchdesmoines.com') && urlObj.pathname.includes('/events')) {
+        // Generate paginated URLs for Catch Des Moines
+        for (let page = 0; page < maxPages; page++) {
+          const pageUrl = new URL(url);
+          if (page > 0) {
+            pageUrl.searchParams.set('skip', (page * 12).toString());
+            pageUrl.searchParams.set('bounds', 'false');
+            pageUrl.searchParams.set('view', 'grid');
+            pageUrl.searchParams.set('sort', 'date');
+          }
+          urlsToScrape.push(pageUrl.toString());
         }
-        urlsToScrape.push(pageUrl.toString());
+      } else {
+        // For other sites, just scrape the single URL
+        urlsToScrape.push(url);
       }
-    } else {
-      // For other sites, just scrape the single URL
-      urlsToScrape.push(url);
     }
 
     console.log(`📄 Will scrape ${urlsToScrape.length} pages`);
 
-    const allExtractedItems = [];
+    const allExtractedItems: any[] = adapterResult ? [...adapterResult.items] : [];
     let totalContentLength = 0;
 
+    if (adapterResult) {
+      console.log(`🎯 Using ${adapterResult.adapter} adapter — bypassing scrape + Claude (${adapterResult.items.length} items)`);
+    }
+
     // Scrape URLs using universal scraper (supports Puppeteer/Playwright/Firecrawl)
+    // When the adapter handled it, urlsToScrape is empty and this is a no-op.
     const scrapeResults = await scrapeUrls(urlsToScrape, {
       backend: scraperBackend,
       waitTime: 5000,
