@@ -20,6 +20,7 @@ import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts
 import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
 import { scrapeUrl, scrapeUrls } from "../_shared/scraper.ts";
 import { fetchAndStoreImage as _fetchAndStoreImageShared } from "../_shared/imageStorage.ts";
+import { tryDomainAdapter } from "../_shared/domain-adapters/index.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1545,6 +1546,17 @@ Deno.serve(async (req) => {
 
     console.log(`🚀 Starting AI crawl of ${url} for ${category}`);
 
+    // Try a domain-specific API adapter first (e.g. statsapi.mlb.com for Iowa
+    // Cubs, SeatGeek Platform API). If it returns items, skip scrape+Claude.
+    const adapterResult = await tryDomainAdapter(url, category);
+    let extractedItems: any[];
+
+    if (adapterResult) {
+      console.log(
+        `🎯 Using ${adapterResult.adapter} adapter — bypassing scrape + Claude (${adapterResult.items.length} items)`
+      );
+      extractedItems = adapterResult.items;
+    } else {
     // For sports schedule domains: use ONLY the provided URL (never CatchDesMoines)
     // For other events: try multiple strategies including CatchDesMoines
     const urlsToTry =
@@ -1658,12 +1670,13 @@ Deno.serve(async (req) => {
     );
 
     // Extract content using AI
-    const extractedItems = await extractContentWithAI(
+    extractedItems = await extractContentWithAI(
       bestHtml,
       category,
       bestUrl,
       claudeApiKey
     );
+    } // end of else branch for non-adapter path
 
     // Filter out past events for events category
     const filteredItems =
