@@ -1339,7 +1339,9 @@ Return empty array [] if no competitive content found.`
           try {
             // Transform data based on category
             let transformedData: any = {};
-            
+            // Hoisted out of the switch so the post-insert SEO block can read it.
+            let knownVenue: KnownVenueData | null = null;
+
             switch (category) {
               case 'events':
                 const parsedEventDateTime = item.date ? parseEventDateTime(item.date) : null;
@@ -1352,7 +1354,7 @@ Return empty array [] if no competitive content found.`
 
                 // Check for known venue match to auto-populate address, coordinates, etc.
                 const venueText = item.venue || item.location || '';
-                const knownVenue = await findMatchingKnownVenue(venueText);
+                knownVenue = await findMatchingKnownVenue(venueText);
 
                 // Build location string from known venue or use AI-extracted data
                 let eventLocation = item.location?.substring(0, 100) || "Des Moines, IA";
