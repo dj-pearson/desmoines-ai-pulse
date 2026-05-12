@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.desmoines.aipulse.data.model.DateFilterPreset
 import com.desmoines.aipulse.data.model.Event
 import com.desmoines.aipulse.data.model.EventCategory
+import com.desmoines.aipulse.data.model.EventSortOption
 import com.desmoines.aipulse.data.model.Restaurant
 import com.desmoines.aipulse.data.model.SubscriptionTier
 import com.desmoines.aipulse.data.remote.EventsQuery
@@ -89,6 +90,9 @@ class EventsViewModel @Inject constructor(
     private val _showFeaturedOnly = MutableStateFlow(false)
     val showFeaturedOnly: StateFlow<Boolean> = _showFeaturedOnly.asStateFlow()
 
+    private val _sortBy = MutableStateFlow(EventSortOption.SOONEST)
+    val sortBy: StateFlow<EventSortOption> = _sortBy.asStateFlow()
+
     // Premium filters (Insider+ only)
     private val _showFreeOnly = MutableStateFlow(false)
     val showFreeOnly: StateFlow<Boolean> = _showFreeOnly.asStateFlow()
@@ -132,7 +136,7 @@ class EventsViewModel @Inject constructor(
         combine(
             _selectedCategory, _selectedDatePreset, _showFeaturedOnly,
             _searchText, _showFreeOnly, _maxDistance, _minRating, _currentTier,
-            networkMonitor.isConnected,
+            networkMonitor.isConnected, _sortBy,
         ) { filterValues: Array<Any?> ->
             FilterState(
                 selectedCategory = filterValues[0] as EventCategory?,
@@ -144,6 +148,7 @@ class EventsViewModel @Inject constructor(
                 minRating = filterValues[6] as Double?,
                 currentTier = filterValues[7] as SubscriptionTier,
                 isConnected = filterValues[8] as Boolean,
+                sortBy = filterValues[9] as EventSortOption,
             )
         }
     ) { state, filters ->
@@ -151,6 +156,7 @@ class EventsViewModel @Inject constructor(
             selectedCategory = filters.selectedCategory,
             selectedDatePreset = filters.selectedDatePreset,
             showFeaturedOnly = filters.showFeaturedOnly,
+            sortBy = filters.sortBy,
             activeFilterCount = computeActiveFilterCount(filters),
             currentTier = filters.currentTier,
             isConnected = filters.isConnected,
@@ -230,6 +236,12 @@ class EventsViewModel @Inject constructor(
         resetAndFetch()
     }
 
+    fun setSortBy(option: EventSortOption) {
+        if (_sortBy.value == option) return
+        _sortBy.value = option
+        resetAndFetch()
+    }
+
     fun setShowFreeOnly(freeOnly: Boolean) {
         _showFreeOnly.value = freeOnly
         resetAndFetch()
@@ -300,6 +312,7 @@ class EventsViewModel @Inject constructor(
             dateStart = _selectedDatePreset.value?.dateRange?.first?.format(dateTimeFormatter),
             dateEnd = _selectedDatePreset.value?.dateRange?.second?.format(dateTimeFormatter),
             isFeatured = if (_showFeaturedOnly.value) true else null,
+            sortBy = _sortBy.value,
             limit = pageSize,
             offset = currentOffset,
         )
@@ -428,4 +441,5 @@ private data class FilterState(
     val minRating: Double? = null,
     val currentTier: SubscriptionTier = SubscriptionTier.FREE,
     val isConnected: Boolean = true,
+    val sortBy: EventSortOption = EventSortOption.SOONEST,
 )

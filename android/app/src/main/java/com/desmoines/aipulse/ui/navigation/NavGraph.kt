@@ -52,6 +52,12 @@ sealed class Route(val route: String) {
     data object Subscription : Route("subscription")
     data object Settings : Route("settings")
 
+    // Discovery flow routes
+    data object Discover : Route("discover")
+    data object AskPulse : Route("askpulse")
+    data object SurpriseMe : Route("surprise_me")
+    data object GroupSession : Route("group_session")
+
     // WebView route
     data object WebView : Route("webview/{url}") {
         fun createRoute(url: String) = "webview/${java.net.URLEncoder.encode(url, "UTF-8")}"

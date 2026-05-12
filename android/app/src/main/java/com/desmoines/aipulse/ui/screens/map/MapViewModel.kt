@@ -57,29 +57,42 @@ data class MapScreenState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val hasLoadedOnce: Boolean = false,
+    val mapTime: java.time.LocalDateTime? = null,
     val cameraPosition: CameraPosition = CameraPosition.fromLatLngZoom(
         LatLng(Config.DEFAULT_LATITUDE, Config.DEFAULT_LONGITUDE), 12f
     ),
 ) {
-    /** Event annotations filtered by showEvents toggle and valid coordinates. */
+    /** Event annotations filtered by showEvents toggle, mapTime filter, and valid coordinates. */
     val eventAnnotations: List<EventAnnotation>
-        get() = if (!showEvents) emptyList() else events.mapNotNull { event ->
-            event.coordinate?.let { coord ->
-                EventAnnotation(
-                    event = event,
-                    position = LatLng(coord.latitude, coord.longitude)
-                )
+        get() {
+            if (!showEvents) return emptyList()
+            val timeFiltered = if (mapTime == null) events else events.filter { event ->
+                val parsed = event.parsedDate?.toLocalDateTime() ?: return@filter false
+                val diffMinutes = java.time.Duration.between(parsed, mapTime).abs().toMinutes()
+                diffMinutes <= 120
+            }
+            return timeFiltered.mapNotNull { event ->
+                event.coordinate?.let { coord ->
+                    EventAnnotation(event = event, position = LatLng(coord.latitude, coord.longitude))
+                }
             }
         }
 
-    /** Restaurant annotations filtered by showRestaurants toggle and valid coordinates. */
+    /** Restaurant annotations filtered by showRestaurants toggle, mapTime, and valid coordinates. */
     val restaurantAnnotations: List<RestaurantAnnotation>
-        get() = if (!showRestaurants) emptyList() else restaurants.mapNotNull { restaurant ->
-            restaurant.coordinate?.let { coord ->
-                RestaurantAnnotation(
-                    restaurant = restaurant,
-                    position = LatLng(coord.latitude, coord.longitude)
-                )
+        get() {
+            if (!showRestaurants) return emptyList()
+            val timeFiltered = if (mapTime == null) restaurants else restaurants.filter { r ->
+                // Default to "show" when business hours data is unavailable to avoid hiding pins.
+                r.isOpenNow(mapTime) ?: true
+            }
+            return timeFiltered.mapNotNull { restaurant ->
+                restaurant.coordinate?.let { coord ->
+                    RestaurantAnnotation(
+                        restaurant = restaurant,
+                        position = LatLng(coord.latitude, coord.longitude)
+                    )
+                }
             }
         }
 
@@ -171,11 +184,14 @@ class MapViewModel @Inject constructor(
     private val _isLoading = MutableStateFlow(false)
     private val _errorMessage = MutableStateFlow<String?>(null)
     private val _hasLoadedOnce = MutableStateFlow(false)
+    private val _mapTime = MutableStateFlow<java.time.LocalDateTime?>(null)
     private val _cameraPosition = MutableStateFlow(
         CameraPosition.fromLatLngZoom(
             LatLng(Config.DEFAULT_LATITUDE, Config.DEFAULT_LONGITUDE), 12f
         )
     )
+
+    fun setMapTime(time: java.time.LocalDateTime?) { _mapTime.value = time }
 
     private var currentLatitude = Config.DEFAULT_LATITUDE
     private var currentLongitude = Config.DEFAULT_LONGITUDE
@@ -202,12 +218,13 @@ class MapViewModel @Inject constructor(
                 searchText = search,
             )
         },
-        combine(_isLoading, _errorMessage, _hasLoadedOnce, _cameraPosition) { loading, error, loaded, cam ->
+        combine(_isLoading, _errorMessage, _hasLoadedOnce, _cameraPosition, _mapTime) { loading, error, loaded, cam, mt ->
             MapScreenState(
                 isLoading = loading,
                 errorMessage = error,
                 hasLoadedOnce = loaded,
                 cameraPosition = cam,
+                mapTime = mt,
             )
         }
     ) { dataState, selectionState, uiStateChunk ->
@@ -225,6 +242,7 @@ class MapViewModel @Inject constructor(
             isLoading = uiStateChunk.isLoading,
             errorMessage = uiStateChunk.errorMessage,
             hasLoadedOnce = uiStateChunk.hasLoadedOnce,
+            mapTime = uiStateChunk.mapTime,
             cameraPosition = uiStateChunk.cameraPosition,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MapScreenState())

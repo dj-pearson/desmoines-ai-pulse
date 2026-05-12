@@ -53,6 +53,8 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -92,6 +94,24 @@ fun SearchScreen(
     onNavigateToAttractionDetail: (String) -> Unit = {},
 ) {
     val haptics = rememberHapticPerformer()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val speech = androidx.compose.runtime.remember(context) {
+        com.desmoines.aipulse.util.SpeechDictationService(context.applicationContext)
+    }
+    val speechStatus by speech.status.collectAsState()
+    val speechTranscript by speech.transcript.collectAsState()
+
+    androidx.compose.runtime.LaunchedEffect(speechTranscript) {
+        if (speechTranscript.isNotBlank() && speechTranscript != state.searchText) {
+            onSearchTextChanged(speechTranscript)
+        }
+    }
+
+    val recordAudioLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) speech.start() else speech.reset()
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Search bar
@@ -99,6 +119,18 @@ fun SearchScreen(
             searchText = state.searchText,
             onSearchTextChanged = onSearchTextChanged,
             onClear = onClearSearch,
+            isListening = speechStatus is com.desmoines.aipulse.util.SpeechDictationService.Status.Listening,
+            onMicTap = {
+                haptics.light()
+                if (speech.isListening) {
+                    speech.stop()
+                } else {
+                    val hasPerm = androidx.core.content.ContextCompat.checkSelfPermission(
+                        context, android.Manifest.permission.RECORD_AUDIO,
+                    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                    if (hasPerm) speech.start() else recordAudioLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                }
+            },
         )
 
         // Tab picker (only shown after searching)
@@ -160,6 +192,8 @@ private fun SearchBar(
     searchText: String,
     onSearchTextChanged: (String) -> Unit,
     onClear: () -> Unit,
+    isListening: Boolean = false,
+    onMicTap: () -> Unit = {},
 ) {
     OutlinedTextField(
         value = searchText,
@@ -181,13 +215,24 @@ private fun SearchBar(
             )
         },
         trailingIcon = {
-            if (searchText.isNotEmpty()) {
-                IconButton(onClick = onClear) {
+            androidx.compose.foundation.layout.Row {
+                IconButton(onClick = onMicTap) {
                     Icon(
-                        imageVector = Icons.Filled.Close,
-                        contentDescription = "Clear search",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        imageVector = if (isListening) androidx.compose.material.icons.Icons.Filled.MicOff
+                        else androidx.compose.material.icons.Icons.Filled.Mic,
+                        contentDescription = if (isListening) "Stop dictation" else "Voice search",
+                        tint = if (isListening) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                }
+                if (searchText.isNotEmpty()) {
+                    IconButton(onClick = onClear) {
+                        Icon(
+                            imageVector = Icons.Filled.Close,
+                            contentDescription = "Clear search",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
         },

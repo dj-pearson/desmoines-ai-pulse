@@ -116,6 +116,7 @@ fun MapScreen(
     onNavigateToEventDetail: (String) -> Unit,
     onNavigateToRestaurantDetail: (String) -> Unit,
     onNavigateToAttractionDetail: (String) -> Unit,
+    onSelectMapTime: (java.time.LocalDateTime?) -> Unit = {},
 ) {
     val context = LocalContext.current
     val hasLocationPermission = remember(context) {
@@ -247,6 +248,16 @@ fun MapScreen(
                     modifier = Modifier
                         .align(Alignment.CenterHorizontally)
                         .padding(bottom = 4.dp),
+                )
+            }
+
+            // Time slider — hide when a selection popup is showing (matches iOS)
+            if (state.selectedEvent == null && state.selectedRestaurant == null && state.selectedAttraction == null) {
+                MapTimeSlider(
+                    mapTime = state.mapTime,
+                    eventCount = state.eventAnnotations.size,
+                    restaurantCount = state.restaurantAnnotations.size,
+                    onSelect = onSelectMapTime,
                 )
             }
         }

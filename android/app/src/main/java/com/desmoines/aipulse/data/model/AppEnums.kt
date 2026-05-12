@@ -126,10 +126,10 @@ enum class UserRole(val value: String) {
 
 // region Sort Options
 
-enum class EventSortOption(val displayName: String) {
-    DATE("Date"),
-    DISTANCE("Distance"),
-    POPULARITY("Popularity");
+enum class EventSortOption(val displayName: String, val rawValue: String) {
+    SOONEST("Soonest", "soonest"),
+    FEATURED("Featured", "featured"),
+    POPULARITY("Popularity", "popularity");
 }
 
 enum class RestaurantSortOption(val displayName: String) {

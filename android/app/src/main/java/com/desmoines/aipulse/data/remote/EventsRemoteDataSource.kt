@@ -2,6 +2,7 @@ package com.desmoines.aipulse.data.remote
 
 import android.util.Log
 import com.desmoines.aipulse.data.model.Event
+import com.desmoines.aipulse.data.model.EventSortOption
 import com.desmoines.aipulse.util.Config
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.from
@@ -29,6 +30,9 @@ data class EventsQuery(
     val dateStart: String? = null,
     val dateEnd: String? = null,
     val isFeatured: Boolean? = null,
+    val freeOnly: Boolean = false,
+    val cities: List<String>? = null,
+    val sortBy: EventSortOption = EventSortOption.SOONEST,
     val limit: Int = Config.DEFAULT_PAGE_SIZE,
     val offset: Int = 0,
 )
@@ -95,9 +99,26 @@ class EventsRemoteDataSource @Inject constructor(
                 if (query.isFeatured == true) {
                     eq("is_featured", true)
                 }
+
+                // City list filter
+                if (!query.cities.isNullOrEmpty()) {
+                    isIn("city", query.cities)
+                }
             }
 
-            order("date", Order.ASCENDING)
+            when (query.sortBy) {
+                EventSortOption.SOONEST -> {
+                    order("date", Order.ASCENDING)
+                }
+                EventSortOption.FEATURED -> {
+                    order("is_featured", Order.DESCENDING)
+                    order("date", Order.ASCENDING)
+                }
+                EventSortOption.POPULARITY -> {
+                    order("popularity_score", Order.DESCENDING)
+                    order("date", Order.ASCENDING)
+                }
+            }
             range(query.offset.toLong(), (query.offset + query.limit - 1).toLong())
         }
 

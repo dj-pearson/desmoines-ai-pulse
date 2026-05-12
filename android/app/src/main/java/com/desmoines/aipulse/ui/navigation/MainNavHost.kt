@@ -166,6 +166,22 @@ private fun NavGraphBuilder.addTabDestinations(
             onRefresh = { viewModel.refresh() },
             onLoadMore = { viewModel.loadMoreIfNeeded(state.events.size - 1) },
             onFavoriteClick = null, // Favorites implemented in AND-024
+            onSortBySelected = { viewModel.setSortBy(it) },
+            onOpenAskPulse = { navController.navigate(Route.AskPulse.route) },
+            onOpenDiscover = { navController.navigate(Route.Discover.route) },
+            onOpenSurpriseMe = { navController.navigate(Route.SurpriseMe.route) },
+            rightNowRibbon = {
+                com.desmoines.aipulse.ui.components.RightNowRibbon(
+                    onTap = { _, _ -> navController.navigate(Route.Discover.route) },
+                )
+            },
+            forYouRail = {
+                com.desmoines.aipulse.ui.components.ForYouRail(
+                    onItemClick = { rec ->
+                        navController.navigate(Route.EventDetail.createRoute(rec.id))
+                    },
+                )
+            },
         )
 
         // Dismiss filter sheet on system back press before navigating away
@@ -292,6 +308,7 @@ private fun NavGraphBuilder.addTabDestinations(
             onNavigateToAttractionDetail = { id ->
                 navController.navigate(Route.AttractionDetail.createRoute(id))
             },
+            onSelectMapTime = viewModel::setMapTime,
         )
     }
 
@@ -651,6 +668,33 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
         WebViewScreen(
             url = url,
             onNavigateBack = { navController.popBackStack() }
+        )
+    }
+
+    composable(Route.Discover.route) {
+        com.desmoines.aipulse.ui.screens.discover.DiscoverScreen(
+            onClose = { navController.popBackStack() },
+            onOpenGroupSession = { navController.navigate(Route.GroupSession.route) },
+            onOpenEventDetail = { id -> navController.navigate(Route.EventDetail.createRoute(id)) },
+            onOpenRestaurantDetail = { id -> navController.navigate(Route.RestaurantDetail.createRoute(id)) },
+        )
+    }
+
+    composable(Route.AskPulse.route) {
+        com.desmoines.aipulse.ui.screens.askpulse.AskPulseScreen(
+            onClose = { navController.popBackStack() },
+        )
+    }
+
+    composable(Route.SurpriseMe.route) {
+        com.desmoines.aipulse.ui.screens.surpriseme.SurpriseMeScreen(
+            onClose = { navController.popBackStack() },
+        )
+    }
+
+    composable(Route.GroupSession.route) {
+        com.desmoines.aipulse.ui.screens.groupsession.GroupSessionScreen(
+            onClose = { navController.popBackStack() },
         )
     }
 }

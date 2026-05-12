@@ -103,6 +103,7 @@ data class HomeScreenState(
     val selectedCategory: EventCategory? = null,
     val selectedDatePreset: DateFilterPreset? = null,
     val showFeaturedOnly: Boolean = false,
+    val sortBy: com.desmoines.aipulse.data.model.EventSortOption = com.desmoines.aipulse.data.model.EventSortOption.SOONEST,
     val activeFilterCount: Int = 0,
     val currentTier: SubscriptionTier = SubscriptionTier.FREE,
     val isConnected: Boolean = true,
@@ -142,6 +143,12 @@ fun HomeScreen(
     onRefresh: () -> Unit = {},
     onLoadMore: () -> Unit = {},
     onFavoriteClick: ((String) -> Unit)? = null,
+    onSortBySelected: (com.desmoines.aipulse.data.model.EventSortOption) -> Unit = {},
+    onOpenAskPulse: () -> Unit = {},
+    onOpenDiscover: () -> Unit = {},
+    onOpenSurpriseMe: () -> Unit = {},
+    rightNowRibbon: (@Composable () -> Unit)? = null,
+    forYouRail: (@Composable () -> Unit)? = null,
 ) {
     val haptic = rememberHapticPerformer()
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
@@ -192,6 +199,13 @@ fun HomeScreen(
             LargeTopAppBar(
                 title = { Text("Des Moines Insider") },
                 actions = {
+                    SortMenu(
+                        current = state.sortBy,
+                        onSelect = {
+                            haptic.light()
+                            onSortBySelected(it)
+                        },
+                    )
                     // Filter button with badge
                     FilterButton(
                         activeFilterCount = state.activeFilterCount,
@@ -239,6 +253,30 @@ fun HomeScreen(
                     // Full-span header sections
                     item(key = "header", span = { GridItemSpan(maxLineSpan) }) {
                         HeaderSection(totalCount = state.totalCount)
+                    }
+                    if (rightNowRibbon != null) {
+                        item(key = "rightNow", span = { GridItemSpan(maxLineSpan) }) { rightNowRibbon() }
+                    }
+                    item(key = "askPulse", span = { GridItemSpan(maxLineSpan) }) {
+                        AskPulseEntryCard(onClick = {
+                            haptic.light()
+                            onOpenAskPulse()
+                        })
+                    }
+                    item(key = "discoverAndSurprise", span = { GridItemSpan(maxLineSpan) }) {
+                        DiscoverAndSurpriseRow(
+                            onDiscover = {
+                                haptic.light()
+                                onOpenDiscover()
+                            },
+                            onSurprise = {
+                                haptic.medium()
+                                onOpenSurpriseMe()
+                            },
+                        )
+                    }
+                    if (forYouRail != null) {
+                        item(key = "forYou", span = { GridItemSpan(maxLineSpan) }) { forYouRail() }
                     }
                     item(key = "datePresets", span = { GridItemSpan(maxLineSpan) }) {
                         DatePresetsRow(
@@ -374,6 +412,30 @@ fun HomeScreen(
                 ) {
                     item(key = "header") {
                         HeaderSection(totalCount = state.totalCount)
+                    }
+                    if (rightNowRibbon != null) {
+                        item(key = "rightNow") { rightNowRibbon() }
+                    }
+                    item(key = "askPulse") {
+                        AskPulseEntryCard(onClick = {
+                            haptic.light()
+                            onOpenAskPulse()
+                        })
+                    }
+                    item(key = "discoverAndSurprise") {
+                        DiscoverAndSurpriseRow(
+                            onDiscover = {
+                                haptic.light()
+                                onOpenDiscover()
+                            },
+                            onSurprise = {
+                                haptic.medium()
+                                onOpenSurpriseMe()
+                            },
+                        )
+                    }
+                    if (forYouRail != null) {
+                        item(key = "forYou") { forYouRail() }
                     }
                     item(key = "datePresets") {
                         DatePresetsRow(
@@ -863,3 +925,160 @@ private fun HomeScreenEmptyPreview() {
         )
     }
 }
+
+// region Sort menu + Discover/AskPulse/Surprise entry cards
+
+@Composable
+private fun SortMenu(
+    current: com.desmoines.aipulse.data.model.EventSortOption,
+    onSelect: (com.desmoines.aipulse.data.model.EventSortOption) -> Unit,
+) {
+    var expanded by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { expanded = true }) {
+            Icon(
+                imageVector = androidx.compose.material.icons.Icons.AutoMirrored.Filled.Sort,
+                contentDescription = "Sort events, currently ${current.displayName}",
+            )
+        }
+        androidx.compose.material3.DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            com.desmoines.aipulse.data.model.EventSortOption.entries.forEach { option ->
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text(option.displayName) },
+                    onClick = {
+                        expanded = false
+                        onSelect(option)
+                    },
+                    trailingIcon = if (option == current) {
+                        {
+                            Icon(
+                                imageVector = androidx.compose.material.icons.Icons.Filled.Check,
+                                contentDescription = null,
+                            )
+                        }
+                    } else null,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AskPulseEntryCard(onClick: () -> Unit) {
+    androidx.compose.material3.Card(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = Dimens.SpacingLg, vertical = 6.dp),
+        colors = androidx.compose.material3.CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+        ),
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(
+                imageVector = androidx.compose.material.icons.Icons.Filled.AutoAwesome,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Ask Pulse",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+                Text(
+                    text = "Tell me what you're in the mood for",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+                )
+            }
+            Icon(
+                imageVector = androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DiscoverAndSurpriseRow(
+    onDiscover: () -> Unit,
+    onSurprise: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = Dimens.SpacingLg, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        androidx.compose.material3.OutlinedCard(
+            onClick = onDiscover,
+            modifier = Modifier.weight(1f),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Icon(
+                    imageVector = androidx.compose.material.icons.Icons.Filled.SwipeRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    text = "Swipe to discover",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = "Tonight's picks",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        androidx.compose.material3.Card(
+            onClick = onSurprise,
+            modifier = Modifier.weight(1f),
+            colors = androidx.compose.material3.CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+            ),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Icon(
+                    imageVector = androidx.compose.material.icons.Icons.Filled.Casino,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                )
+                Text(
+                    text = "Surprise me",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                )
+                Text(
+                    text = "Pick something for me",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f),
+                )
+            }
+        }
+    }
+}
+
+// endregion
