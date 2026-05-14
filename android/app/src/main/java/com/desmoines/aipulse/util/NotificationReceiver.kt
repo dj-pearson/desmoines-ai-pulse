@@ -49,7 +49,7 @@ class NotificationReceiver : BroadcastReceiver() {
         )
 
         val notification = NotificationCompat.Builder(context, LocalNotificationService.CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.mipmap.ic_launcher_foreground)
             .setContentTitle("Event Reminder")
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
