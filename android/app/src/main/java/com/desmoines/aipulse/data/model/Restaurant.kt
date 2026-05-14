@@ -46,14 +46,14 @@ data class Restaurant(
 
     // region Open/Closed Status
 
-    private companion object {
-        val DAY_NAMES = listOf("sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday")
+    companion object {
+        private val DAY_NAMES = listOf("sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday")
 
         /**
          * Parse time string like "11:00", "11:00 AM", "9:30 PM" to minutes since midnight.
          * Mirrors iOS Restaurant.parseTime(_:)
          */
-        fun parseTime(string: String): Int? {
+        private fun parseTime(string: String): Int? {
             val trimmed = string.trim()
             val parts = trimmed.split(":")
             if (parts.size < 2) return null
@@ -73,7 +73,7 @@ data class Restaurant(
          * Get hours string for a given day from the business_hours JSON.
          * Supports both flat {"monday": "11:00 - 22:00"} and nested {"hours": {"monday": "..."}} shapes.
          */
-        fun getHoursForDay(businessHours: JsonElement?, day: String): String? {
+        private fun getHoursForDay(businessHours: JsonElement?, day: String): String? {
             if (businessHours == null || businessHours !is JsonObject) return null
             val obj = businessHours.jsonObject
 
@@ -93,6 +93,22 @@ data class Restaurant(
 
             return null
         }
+
+        val preview = Restaurant(
+            id = "preview-1",
+            name = "Zombie Burger + Drink Lab",
+            cuisine = "American",
+            location = "300 E Grand Ave",
+            city = "Des Moines",
+            rating = 4.5,
+            priceRange = "$$",
+            description = "Creative burgers with horror-themed names and craft cocktails in a fun, quirky atmosphere.",
+            phone = "(515) 555-0123",
+            website = "https://zombieburger.com",
+            isFeatured = true,
+            latitude = 41.5910,
+            longitude = -93.6088,
+        )
     }
 
     /**
@@ -192,22 +208,4 @@ data class Restaurant(
         }
 
     // endregion
-
-    companion object {
-        val preview = Restaurant(
-            id = "preview-1",
-            name = "Zombie Burger + Drink Lab",
-            cuisine = "American",
-            location = "300 E Grand Ave",
-            city = "Des Moines",
-            rating = 4.5,
-            priceRange = "$$",
-            description = "Creative burgers with horror-themed names and craft cocktails in a fun, quirky atmosphere.",
-            phone = "(515) 555-0123",
-            website = "https://zombieburger.com",
-            isFeatured = true,
-            latitude = 41.5910,
-            longitude = -93.6088,
-        )
-    }
 }
