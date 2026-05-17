@@ -96,6 +96,94 @@
 
 ## Progress Log
 
+## 2026-05-17 — Ralph Loop 20: Deep-dive security + code-quality (6 done, 13 backlog added)
+
+Prior PRD was 70/70 complete (Loop 19). With no pending stories, ran a
+three-track deep dive (security, code quality, UX cohesion) via parallel
+audit agents and turned the findings into 19 new PRD stories
+(NEW-SEC-001..007, NEW-DX-001..006, NEW-UX-001..006). Implemented the 6
+highest-value, low-risk, verifiable ones this loop. Build verified:
+`tsc --noEmit` exit 0, `vite build` exit 0, vitest 8 files / 86 tests
+(20 new) all green.
+
+- **NEW-SEC-001**: PostgREST filter injection in `nlp-search`
+  - Added `sanitizePostgrestPattern()` to
+    `supabase/functions/_shared/validation.ts` — builds on
+    `sanitizeLikeInput`, additionally replaces `, ( ) * \`` with a space
+    and collapses whitespace.
+  - Applied to `searchKeyword`, `locationFilter`, `parsedIntent.category`
+    and `parsedIntent.cuisine` across all three search blocks
+    (events/restaurants/attractions). Function runs with the
+    service-role key so this closed an unauth RLS-bypassing
+    column-exfiltration vector.
+
+- **NEW-SEC-002**: PostgREST filter injection in `discover-chat`
+  - Imported the same helper; replaced the insufficient
+    `.replace(/[%_]/g,'')` term sanitization (it left `,` and `)` intact)
+    and the category/cuisine/type ilike interpolations across
+    `search_events`/`search_restaurants`/`search_attractions`.
+
+- **NEW-SEC-003**: `parse-menu-upload` had no auth despite an
+  "admin-only" header comment
+  - Added `Authorization` → `supabase.auth.getUser` →
+    `profiles.role === 'admin'` gate (mirroring `process-stripe-refund`)
+    before any body parse / Anthropic call / DB write. Updated the
+    SECURITY header comment. Request/response unchanged for admins.
+
+- **NEW-SEC-004**: `refresh_oauth_token` RPC leaked cross-user tokens +
+  app `client_secret`
+  - New migration `20260517000000_harden_refresh_oauth_token.sql`.
+    `CREATE OR REPLACE` keeps the `(UUID, TEXT)` signature (verified zero
+    callers in web/edge — only the original migration + generated types),
+    derives the user from `auth.uid()` and ignores the caller-supplied
+    `p_user_id`, drops `client_secret` from the return, pins
+    `search_path=''` with schema-qualified refs, `REVOKE` from
+    PUBLIC/anon + `GRANT` to authenticated/service_role, and narrows the
+    over-broad `GRANT ALL ON user_oauth_tokens`.
+
+- **NEW-DX-001**: 6 hooks still used `export default`
+  - Removed the redundant trailing `export default useX;` from
+    `useMediaLibrary`, `useNLPSearch`, `useWebVitals`,
+    `useFocusOnRouteChange`, `useMediaUpload`, `useTripPlanner`. All
+    already had named exports and all consumers already used named
+    imports, so zero consumer changes; verified no default-import sites
+    remain.
+
+- **NEW-DX-002**: zero unit coverage on content auto-approval gates
+  - Added `src/lib/__tests__/contentValidation.test.ts` (20 tests):
+    URL/phone/email/date/image validators edge cases + `validateEvent`
+    happy path / missing-required / score-clamp / generic-title warning
+    + `validateRestaurant` shape. (ownership.ts deferred to NEW-DX-006 —
+    needs Supabase client mocking.)
+
+### Backlog added (not yet implemented)
+- NEW-SEC-005 (email-deliver account-deletion token), NEW-SEC-006
+  (encrypt oauth tokens at rest), NEW-SEC-007 (stable Stripe idempotency
+  key), NEW-DX-003 (TanStack Query migration of core data hooks),
+  NEW-DX-004 (decompose ContentTable.tsx), NEW-DX-005 (remove `any` from
+  security/validation libs), NEW-DX-006 (ownership.ts tests), NEW-UX-001
+  (generalize favorites), NEW-UX-002 (web push/email alerts), NEW-UX-003
+  (Events list/map toggle), NEW-UX-004 (unify filter/sort UX), NEW-UX-005
+  (unified Saved hub), NEW-UX-006 (guard/surface orphaned routes).
+
+### Files changed
+- supabase/functions/_shared/validation.ts (new sanitizePostgrestPattern)
+- supabase/functions/nlp-search/index.ts
+- supabase/functions/discover-chat/index.ts
+- supabase/functions/parse-menu-upload/index.ts
+- supabase/migrations/20260517000000_harden_refresh_oauth_token.sql (new)
+- src/hooks/{useMediaLibrary,useNLPSearch,useWebVitals,useFocusOnRouteChange,useMediaUpload,useTripPlanner}.ts
+- src/lib/__tests__/contentValidation.test.ts (new)
+- prd.json (19 stories appended; 6 marked passes:true; branchName updated)
+- progress.txt
+
+### Build Verification
+- `npx tsc --noEmit` — ✅ exit 0
+- `npx vite build` — ✅ exit 0
+- `npx vitest run` — ✅ 8 files, 86 tests (20 new), 0 fail
+- **Progress**: 76/89 stories passing; 6 completed this loop
+---
+
 ## 2026-05-07 — Ralph Loop 19: Final 8 stories — PRD complete (70/70 ✅)
 
 This session closed out every remaining pending story in the active PRD.

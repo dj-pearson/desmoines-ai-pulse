@@ -30,6 +30,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import { handleCors, getCorsHeaders, isOriginAllowed } from '../_shared/cors.ts';
 import { checkRateLimit, addRateLimitHeaders } from '../_shared/rateLimit.ts';
 import { getAIConfig } from '../_shared/aiConfig.ts';
+import { sanitizePostgrestPattern } from '../_shared/validation.ts';
 
 // ---------------------------------------------------------------------------
 // Tier-gated daily quotas — mirror web /trip-planner gating
@@ -148,9 +149,9 @@ async function execTool(
       const startsAfter = (input.startsAfter as string | undefined) ?? new Date().toISOString();
       q = q.gte('date', startsAfter);
       if (input.startsBefore) q = q.lte('date', input.startsBefore as string);
-      if (input.category) q = q.ilike('category', `%${input.category}%`);
+      if (input.category) q = q.ilike('category', `%${sanitizePostgrestPattern(input.category as string)}%`);
       if (input.query) {
-        const term = (input.query as string).replace(/[%_]/g, '');
+        const term = sanitizePostgrestPattern(input.query as string);
         q = q.or(`title.ilike.%${term}%,description.ilike.%${term}%`);
       }
 
@@ -167,10 +168,10 @@ async function execTool(
         .limit(limit)
         .order('rating', { ascending: false });
 
-      if (input.cuisine) q = q.ilike('cuisine', `%${input.cuisine}%`);
+      if (input.cuisine) q = q.ilike('cuisine', `%${sanitizePostgrestPattern(input.cuisine as string)}%`);
       if (input.priceLevel) q = q.eq('price_level', input.priceLevel as string);
       if (input.query) {
-        const term = (input.query as string).replace(/[%_]/g, '');
+        const term = sanitizePostgrestPattern(input.query as string);
         q = q.or(`name.ilike.%${term}%,description.ilike.%${term}%`);
       }
 
@@ -187,9 +188,9 @@ async function execTool(
         .limit(limit)
         .order('rating', { ascending: false });
 
-      if (input.type) q = q.ilike('category', `%${input.type}%`);
+      if (input.type) q = q.ilike('category', `%${sanitizePostgrestPattern(input.type as string)}%`);
       if (input.query) {
-        const term = (input.query as string).replace(/[%_]/g, '');
+        const term = sanitizePostgrestPattern(input.query as string);
         q = q.or(`name.ilike.%${term}%,description.ilike.%${term}%`);
       }
 

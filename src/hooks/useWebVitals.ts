@@ -247,4 +247,3 @@ export const performanceUtils = {
   }
 };
 
-export default useWebVitals;

@@ -441,4 +441,3 @@ export function useTripPlanner() {
   };
 }
 
-export default useTripPlanner;

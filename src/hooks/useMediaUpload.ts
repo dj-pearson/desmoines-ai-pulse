@@ -405,4 +405,3 @@ export function useMediaUpload() {
   };
 }
 
-export default useMediaUpload;
