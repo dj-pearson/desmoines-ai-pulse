@@ -192,8 +192,9 @@ jobs:
             GOOGLE_WEB_CLIENT_ID="placeholder-client-id"
           fi
           if [ -z "$GOOGLE_MAPS_API_KEY" ]; then
-            echo "::warning::GOOGLE_MAPS_API_KEY not set — Maps will be broken in this build."
-            GOOGLE_MAPS_API_KEY="placeholder-maps-key"
+            echo "::error::GOOGLE_MAPS_API_KEY secret is required for release builds."
+            echo "::error::A missing/placeholder key makes the Map tab non-functional — Google Play rejects this as Broken Functionality. Set the GOOGLE_MAPS_API_KEY repo secret to a real Android-restricted key with 'Maps SDK for Android' enabled."
+            exit 1
           fi
 
           cat > local.properties <<EOF

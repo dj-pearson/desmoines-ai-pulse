@@ -3,6 +3,9 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Location: powers "My Location" on the Map tab and nearby search -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <application
         android:name=".DesMoinesInsiderApp"
@@ -32,6 +35,31 @@
                     android:host="auth-callback" />
             </intent-filter>
         </activity>
+
+        <!--
+            Google Maps SDK API key. REQUIRED: the Maps renderer throws a fatal
+            exception at MapView init if this meta-data is absent, crashing the
+            app the moment the "Map" tab is opened. Value is injected from
+            local.properties via the GOOGLE_MAPS_API_KEY manifest placeholder
+            (see app/build.gradle.kts). Must be an Android-restricted key with
+            the "Maps SDK for Android" API enabled.
+        -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="${GOOGLE_MAPS_API_KEY}" />
+
+        <!--
+            Receiver for scheduled event-reminder alarms. Must be declared or
+            the AlarmManager PendingIntent silently never fires (broken
+            reminders). Not exported: only our own exact-match Intent triggers it.
+        -->
+        <receiver
+            android:name=".util.NotificationReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.desmoines.aipulse.EVENT_REMINDER" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>
