@@ -138,4 +138,3 @@ function announceToScreenReader(
   }, 1500);
 }
 
-export default useFocusOnRouteChange;

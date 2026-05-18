@@ -2,6 +2,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
 import { getAIConfig, buildLightweightClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
+import { sanitizePostgrestPattern } from "../_shared/validation.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -262,10 +263,14 @@ Return ONLY the JSON object, no other text.`;
       }
     }
 
-    // Build search keyword from parsed intent
-    const searchKeyword = parsedIntent.keywords.length > 0
-      ? parsedIntent.keywords.join(' ')
-      : query;
+    // Build search keyword from parsed intent. Sanitize every value that gets
+    // interpolated into a PostgREST filter string to prevent filter injection
+    // (this function runs with the service-role key, bypassing RLS).
+    const searchKeyword = sanitizePostgrestPattern(
+      parsedIntent.keywords.length > 0
+        ? parsedIntent.keywords.join(' ')
+        : query
+    );
 
     // Search events if requested
     if (parsedIntent.contentTypes.includes('events')) {
@@ -288,12 +293,12 @@ Return ONLY the JSON object, no other text.`;
 
       // Apply category filter
       if (parsedIntent.category) {
-        eventsQuery = eventsQuery.ilike('category', `%${parsedIntent.category}%`);
+        eventsQuery = eventsQuery.ilike('category', `%${sanitizePostgrestPattern(parsedIntent.category)}%`);
       }
 
       // Apply location filter
       if (parsedIntent.location || parsedIntent.neighborhood) {
-        const locationFilter = parsedIntent.neighborhood || parsedIntent.location;
+        const locationFilter = sanitizePostgrestPattern(parsedIntent.neighborhood || parsedIntent.location);
         eventsQuery = eventsQuery.or(`location.ilike.%${locationFilter}%,venue.ilike.%${locationFilter}%`);
       }
 
@@ -323,12 +328,12 @@ Return ONLY the JSON object, no other text.`;
 
       // Apply cuisine filter
       if (parsedIntent.cuisine) {
-        restaurantsQuery = restaurantsQuery.ilike('cuisine', `%${parsedIntent.cuisine}%`);
+        restaurantsQuery = restaurantsQuery.ilike('cuisine', `%${sanitizePostgrestPattern(parsedIntent.cuisine)}%`);
       }
 
       // Apply location filter
       if (parsedIntent.location || parsedIntent.neighborhood) {
-        const locationFilter = parsedIntent.neighborhood || parsedIntent.location;
+        const locationFilter = sanitizePostgrestPattern(parsedIntent.neighborhood || parsedIntent.location);
         restaurantsQuery = restaurantsQuery.ilike('location', `%${locationFilter}%`);
       }
 
@@ -368,7 +373,7 @@ Return ONLY the JSON object, no other text.`;
 
       // Apply location filter
       if (parsedIntent.location || parsedIntent.neighborhood) {
-        const locationFilter = parsedIntent.neighborhood || parsedIntent.location;
+        const locationFilter = sanitizePostgrestPattern(parsedIntent.neighborhood || parsedIntent.location);
         attractionsQuery = attractionsQuery.ilike('location', `%${locationFilter}%`);
       }
 

@@ -334,4 +334,3 @@ export function useMediaStats() {
   });
 }
 
-export default useMediaLibrary;
