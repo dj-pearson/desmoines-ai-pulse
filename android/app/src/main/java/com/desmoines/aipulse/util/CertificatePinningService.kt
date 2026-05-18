@@ -1,6 +1,5 @@
 package com.desmoines.aipulse.util
 
-import com.desmoines.aipulse.BuildConfig
 import okhttp3.CertificatePinner
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
@@ -51,9 +50,16 @@ object CertificatePinningService {
 
     /**
      * When `true`, pinning failures are logged but connections are NOT blocked.
-     * Set to `true` during development/testing, `false` for production.
+     *
+     * Forced to report-only (all build types) until the hardcoded SPKI hashes
+     * below are re-verified against Supabase's current certificate chain.
+     * Enforcing a stale pin set blocks every backend call — the app launches
+     * but loads no data, which Google flags as Broken Functionality just like
+     * an outright crash. Re-enable enforcement (`= BuildConfig.DEBUG`) only
+     * after confirming the pins with the openssl command documented above and
+     * shipping a tested release.
      */
-    val isReportOnly: Boolean = BuildConfig.DEBUG
+    val isReportOnly: Boolean = true
 
     /**
      * Creates an OkHttpClient.Builder with certificate pinning configured.

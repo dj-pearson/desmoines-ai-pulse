@@ -17,6 +17,27 @@ val localProperties = Properties().apply {
     }
 }
 
+// Fail fast if a RELEASE artifact is built without the credentials the app
+// needs to function. A blank GOOGLE_MAPS_API_KEY crashes the Map tab; blank
+// Supabase keys leave every screen empty. Both got an AAB rejected by Google
+// Play for Broken Functionality — never let that artifact build again.
+run {
+    val requestedTasks = gradle.startParameter.taskNames.joinToString(" ").lowercase()
+    val isReleaseBuild = listOf("bundlerelease", "assemblerelease", "publish")
+        .any { requestedTasks.contains(it) }
+    if (isReleaseBuild) {
+        val required = listOf("SUPABASE_URL", "SUPABASE_ANON_KEY", "GOOGLE_MAPS_API_KEY")
+        val missing = required.filter { localProperties.getProperty(it, "").isBlank() }
+        if (missing.isNotEmpty()) {
+            throw GradleException(
+                "Release build aborted: missing required local.properties values: " +
+                    "${missing.joinToString()}. Populate them before assembling a " +
+                    "release bundle (these are absent from the gitignored working copy)."
+            )
+        }
+    }
+}
+
 android {
     namespace = "com.desmoines.aipulse"
     compileSdk = 35
