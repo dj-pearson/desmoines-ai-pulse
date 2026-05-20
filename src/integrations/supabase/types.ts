@@ -709,6 +709,22 @@ export type Database = {
           type: string
           updated_at: string | null
           website: string | null
+          // Admin curation fields added by 20260520000004
+          address: string | null
+          hours_summary: string | null
+          hours: Json | null
+          is_indoor: boolean | null
+          is_kid_friendly: boolean | null
+          is_free: boolean | null
+          is_active: boolean
+          accessibility_notes: string | null
+          seo_title: string | null
+          seo_description: string | null
+          seo_keywords: string[] | null
+          seo_h1: string | null
+          geo_summary: string | null
+          geo_key_facts: string[] | null
+          geo_faq: Json | null
         }
         Insert: {
           created_at?: string | null
@@ -724,6 +740,21 @@ export type Database = {
           type: string
           updated_at?: string | null
           website?: string | null
+          address?: string | null
+          hours_summary?: string | null
+          hours?: Json | null
+          is_indoor?: boolean | null
+          is_kid_friendly?: boolean | null
+          is_free?: boolean | null
+          is_active?: boolean
+          accessibility_notes?: string | null
+          seo_title?: string | null
+          seo_description?: string | null
+          seo_keywords?: string[] | null
+          seo_h1?: string | null
+          geo_summary?: string | null
+          geo_key_facts?: string[] | null
+          geo_faq?: Json | null
         }
         Update: {
           created_at?: string | null
@@ -739,6 +770,21 @@ export type Database = {
           type?: string
           updated_at?: string | null
           website?: string | null
+          address?: string | null
+          hours_summary?: string | null
+          hours?: Json | null
+          is_indoor?: boolean | null
+          is_kid_friendly?: boolean | null
+          is_free?: boolean | null
+          is_active?: boolean
+          accessibility_notes?: string | null
+          seo_title?: string | null
+          seo_description?: string | null
+          seo_keywords?: string[] | null
+          seo_h1?: string | null
+          geo_summary?: string | null
+          geo_key_facts?: string[] | null
+          geo_faq?: Json | null
         }
         Relationships: []
       }

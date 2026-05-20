@@ -107,8 +107,8 @@
         "Typecheck + lint pass"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "SHIPPED: AttractionManager (list/search/filter/bulk/pagination — mirrors HotelManager shape) + AttractionEditDialog (tabbed Basics / Location / Features / SEO / GEO). Migration 20260520000004_add_attraction_admin_fields.sql brings attractions up to parity with hotels: address, hours_summary, hours (jsonb), is_indoor, is_kid_friendly, is_free, is_active (default true), accessibility_notes, plus the standard seo_*/geo_* columns. Types.ts updated. Extended useAttractions with indoorOnly/kidFriendlyOnly/freeOnly/activeOnly/sortBy filters; existing callers untouched. Bulk actions: Feature, Un-feature, Mark kid-friendly, Deactivate. TriField widget for indoor/kid-friendly/free since these are tri-state (yes / no / unknown). Image upload uses the 'media' bucket under attractions/<uuid> prefix. Typecheck + lint clean."
     },
     {
       "id": "ADMIN-PLAYGROUND-001",

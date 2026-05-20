@@ -21,6 +21,15 @@ interface AttractionFilters {
   type?: string;
   minRating?: number;
   featuredOnly?: boolean;
+  /** Admin-only: true = indoor-only, false = outdoor-only, undefined = both */
+  indoorOnly?: boolean;
+  /** Admin-only: true = kid-friendly only, false = not-kid-friendly only */
+  kidFriendlyOnly?: boolean;
+  /** Admin-only: true = free admission only */
+  freeOnly?: boolean;
+  /** Admin-only: when false, includes is_active=false rows. Defaults to true (active only) for back-compat. */
+  activeOnly?: boolean;
+  sortBy?: "newest" | "updated" | "alphabetical" | "rating";
   limit?: number;
   offset?: number;
 }
@@ -37,10 +46,12 @@ export function useAttractions(filters: AttractionFilters = {}) {
     try {
       setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
-      let query = supabase
-        .from("attractions")
-        .select("*", { count: "exact" })
-        .order("created_at", { ascending: false });
+      let query = supabase.from("attractions").select("*", { count: "exact" });
+
+      // Default to active rows only; admin callers can pass false to see all.
+      if (filters.activeOnly !== false) {
+        query = query.eq("is_active", true);
+      }
 
       if (filters.search) {
         query = query.or(
@@ -58,6 +69,36 @@ export function useAttractions(filters: AttractionFilters = {}) {
 
       if (filters.featuredOnly) {
         query = query.eq("is_featured", true);
+      }
+
+      if (filters.indoorOnly === true) {
+        query = query.eq("is_indoor", true);
+      } else if (filters.indoorOnly === false) {
+        query = query.eq("is_indoor", false);
+      }
+
+      if (filters.kidFriendlyOnly === true) {
+        query = query.eq("is_kid_friendly", true);
+      }
+
+      if (filters.freeOnly === true) {
+        query = query.eq("is_free", true);
+      }
+
+      switch (filters.sortBy ?? "newest") {
+        case "updated":
+          query = query.order("updated_at", { ascending: false });
+          break;
+        case "alphabetical":
+          query = query.order("name", { ascending: true });
+          break;
+        case "rating":
+          query = query.order("rating", { ascending: false, nullsFirst: false });
+          break;
+        case "newest":
+        default:
+          query = query.order("created_at", { ascending: false });
+          break;
       }
 
       if (filters.limit) {
@@ -146,7 +187,20 @@ export function useAttractions(filters: AttractionFilters = {}) {
 
   useEffect(() => {
     fetchAttractions();
-  }, [filters.search, filters.type, filters.minRating, filters.featuredOnly, filters.limit, filters.offset]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    filters.search,
+    filters.type,
+    filters.minRating,
+    filters.featuredOnly,
+    filters.indoorOnly,
+    filters.kidFriendlyOnly,
+    filters.freeOnly,
+    filters.activeOnly,
+    filters.sortBy,
+    filters.limit,
+    filters.offset,
+  ]);
 
   return {
     ...state,

@@ -23,6 +23,43 @@ function's `Cache-Control: max-age` to avoid wasted re-fetches. Disable
 
 ---
 
+## 2026-05-20 — ADMIN-ATTRACTION-001 (Attraction admin manager)
+
+Attractions table started life much thinner than hotels — just
+id/name/type/description/location/lat/lng/image_url/website/rating/is_featured.
+Migration adds the admin curation columns (address, hours_summary,
+hours JSONB, is_indoor/is_kid_friendly/is_free as nullable BOOL for
+tri-state, is_active BOOL NOT NULL DEFAULT true, accessibility_notes)
+and the seo_*/geo_* set so attractions get the same admin shape as
+hotels.
+
+Files added:
+- `supabase/migrations/20260520000004_add_attraction_admin_fields.sql`
+- `src/components/admin/AttractionManager.tsx`
+- `src/components/admin/AttractionEditDialog.tsx`
+
+Files modified:
+- `src/hooks/useAttractions.ts` (admin filters + sortBy; existing
+  public callers untouched because all new fields are optional)
+- `src/integrations/supabase/types.ts` (manual sync of new columns)
+- `src/pages/AdminAttractions.tsx` (placeholder → real manager)
+
+**Learnings for future iterations:**
+- For boolean flags that genuinely have three states (yes / no /
+  unknown) on a content table, use `BOOLEAN NULL`, NOT `BOOLEAN
+  DEFAULT false`. A button trio in the edit dialog maps to
+  `'true' | 'false' | ''` strings and back. Defaulting to false
+  silently lies about coverage and skews public filters.
+- Hard-required schema columns (NOT NULL) — like attractions.type —
+  must stay required in the Zod schema, even if the rest of the
+  form is mostly optional. Otherwise the insert fails on the DB,
+  not the form.
+- When mirroring a manager pattern (Hotel → Attraction), keep
+  prefixes unique (`a-name`, `h-name`) in element IDs so the two
+  dialogs can coexist if ever rendered on the same page.
+
+---
+
 ## 2026-05-20 — ADMIN-HOTEL-003 (Bulk affiliate URL regeneration)
 
 Hotel vertical complete. Added bulk affiliate URL regen to HotelManager.
