@@ -60,7 +60,7 @@ async function sendOne(
   to: string,
   subject: string,
   bodyHtml: string,
-): Promise<void> {
+): Promise<{ message_id: string | null }> {
   if (!RESEND_API_KEY) {
     throw new Error("RESEND_API_KEY is not configured");
   }
@@ -81,6 +81,8 @@ async function sendOne(
     const text = await r.text();
     throw new Error(`Resend ${r.status}: ${text.slice(0, 200)}`);
   }
+  const body = await r.json().catch(() => ({} as { id?: string }));
+  return { message_id: typeof body.id === "string" ? body.id : null };
 }
 
 async function dispatchCampaign(
@@ -91,23 +93,56 @@ async function dispatchCampaign(
   let delivered = 0;
   let failed = 0;
   const errors: string[] = [];
+  const deliveryRows: Array<{
+    campaign_id: string;
+    email: string;
+    resend_message_id: string | null;
+    status: string;
+    error_message: string | null;
+  }> = [];
 
   for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
     const batch = recipients.slice(i, i + BATCH_SIZE);
     const settled = await Promise.allSettled(
       batch.map((r) => sendOne(r.email, campaign.subject, campaign.body_html)),
     );
-    for (const s of settled) {
+    settled.forEach((s, idx) => {
+      const recipient = batch[idx];
       if (s.status === "fulfilled") {
         delivered++;
+        deliveryRows.push({
+          campaign_id: campaign.id,
+          email: recipient.email,
+          resend_message_id: s.value.message_id,
+          status: "queued",
+          error_message: null,
+        });
       } else {
         failed++;
-        if (errors.length < 5) {
-          errors.push(
-            s.reason instanceof Error ? s.reason.message : String(s.reason),
-          );
-        }
+        const reason = s.reason instanceof Error
+          ? s.reason.message
+          : String(s.reason);
+        if (errors.length < 5) errors.push(reason);
+        deliveryRows.push({
+          campaign_id: campaign.id,
+          email: recipient.email,
+          resend_message_id: null,
+          status: "bounced",
+          error_message: reason.slice(0, 500),
+        });
       }
+    });
+  }
+
+  if (deliveryRows.length > 0) {
+    const { error: deliveriesError } = await supabase
+      .from("newsletter_deliveries")
+      .insert(deliveryRows);
+    if (deliveriesError) {
+      console.error(
+        "newsletter_deliveries insert failed:",
+        deliveriesError.message,
+      );
     }
   }
 

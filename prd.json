@@ -53,8 +53,8 @@
         "Typecheck + lint pass"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "SHIPPED: Migration 20260520000013 (a) adds opens/clicks/bounces/complaints columns to newsletter_campaigns (INTEGER, NOT NULL, default 0), (b) creates public.newsletter_deliveries (one row per recipient per send: id, campaign_id FK CASCADE, email, resend_message_id UNIQUE, status enum queued/delivered/opened/clicked/bounced/complained, event_at, error_message) with service_role-full + admin-SELECT RLS, and (c) creates a SECURITY DEFINER helper bump_newsletter_campaign_counter(p_campaign_id, p_field) so the webhook stays tiny. Both send paths (send-newsletter-campaign send_now + dispatch-scheduled-newsletters) now capture the Resend message_id from the API response and write a delivery row per recipient with status='queued' on success or status='bounced'+error_message on failure. New edge function resend-webhook (verify_jwt=false; Svix signature verified via svix npm package + RESEND_WEBHOOK_SECRET) handles email.delivered/opened/clicked/bounced/complained — looks up the delivery by resend_message_id, updates status (rank-aware so clicked won't downgrade to delivered on a late event), and calls the RPC to bump the campaign counter. Unknown event types acknowledged 200 to avoid retry storms. Frontend: NewsletterCampaignsManager grew Opens / Clicks columns at lg+ and a Bounce % column at xl+ that turns amber when >5%. Required new secret: RESEND_WEBHOOK_SECRET (Svix signing key from the Resend dashboard webhook). Configuration steps documented in the resend-webhook header."
     },
     {
       "id": "FEEDBACK-REPLY-001",

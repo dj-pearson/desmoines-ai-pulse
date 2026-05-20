@@ -55,7 +55,7 @@ async function sendOne(
   to: string,
   subject: string,
   bodyHtml: string,
-): Promise<void> {
+): Promise<{ message_id: string | null }> {
   if (!RESEND_API_KEY) {
     throw new Error("RESEND_API_KEY is not configured");
   }
@@ -76,6 +76,10 @@ async function sendOne(
     const text = await r.text();
     throw new Error(`Resend ${r.status}: ${text.slice(0, 200)}`);
   }
+  // Resend returns { id } on success; capture it so the webhook can
+  // correlate later engagement events to this recipient.
+  const body = await r.json().catch(() => ({} as { id?: string }));
+  return { message_id: typeof body.id === "string" ? body.id : null };
 }
 
 serve(async (req) => {
@@ -233,10 +237,20 @@ serve(async (req) => {
         );
       }
 
-      // send_now — dispatch and tally outcomes.
+      // send_now — dispatch and tally outcomes. EMAIL-WEBHOOK-001: also
+      // record one newsletter_deliveries row per recipient with the
+      // Resend message_id so the resend-webhook can correlate
+      // subsequent engagement events back to this campaign.
       let delivered = 0;
       let failed = 0;
       const errors: string[] = [];
+      const deliveryRows: Array<{
+        campaign_id: string;
+        email: string;
+        resend_message_id: string | null;
+        status: string;
+        error_message: string | null;
+      }> = [];
       // Cap concurrency to be polite to Resend.
       const batchSize = 5;
       for (let i = 0; i < recipients.length; i += batchSize) {
@@ -244,18 +258,45 @@ serve(async (req) => {
         const settled = await Promise.allSettled(
           batch.map((r) => sendOne(r.email, subject, body_html)),
         );
-        for (const s of settled) {
+        settled.forEach((s, idx) => {
+          const recipient = batch[idx];
           if (s.status === "fulfilled") {
             delivered++;
+            deliveryRows.push({
+              campaign_id: campaign.id,
+              email: recipient.email,
+              resend_message_id: s.value.message_id,
+              status: "queued",
+              error_message: null,
+            });
           } else {
             failed++;
-            if (errors.length < 5) {
-              const reason = s.reason instanceof Error
-                ? s.reason.message
-                : String(s.reason);
-              errors.push(reason);
-            }
+            const reason = s.reason instanceof Error
+              ? s.reason.message
+              : String(s.reason);
+            if (errors.length < 5) errors.push(reason);
+            deliveryRows.push({
+              campaign_id: campaign.id,
+              email: recipient.email,
+              resend_message_id: null,
+              status: "bounced",
+              error_message: reason.slice(0, 500),
+            });
           }
+        });
+      }
+
+      if (deliveryRows.length > 0) {
+        const { error: deliveriesError } = await supabase
+          .from("newsletter_deliveries")
+          .insert(deliveryRows);
+        if (deliveriesError) {
+          console.error(
+            "newsletter_deliveries insert failed:",
+            deliveriesError.message,
+          );
+          // Don't fail the whole send — the deliveries table is for
+          // tracking only; the actual emails already went out.
         }
       }
 

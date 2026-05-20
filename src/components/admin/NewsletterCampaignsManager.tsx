@@ -53,6 +53,10 @@ interface CampaignRow {
   recipient_count: number;
   delivered: number;
   failed: number;
+  opens: number;
+  clicks: number;
+  bounces: number;
+  complaints: number;
   error_message: string | null;
   created_at: string;
 }
@@ -126,7 +130,7 @@ export default function NewsletterCampaignsManager() {
       const { data, error } = await supabase
         .from("newsletter_campaigns")
         .select(
-          "id, subject, preheader, status, scheduled_for, sent_at, recipient_count, delivered, failed, error_message, created_at",
+          "id, subject, preheader, status, scheduled_for, sent_at, recipient_count, delivered, failed, opens, clicks, bounces, complaints, error_message, created_at",
         )
         .order("created_at", { ascending: false })
         .limit(50);
@@ -320,6 +324,15 @@ export default function NewsletterCampaignsManager() {
                 <TableHead className="hidden lg:table-cell text-right">
                   Delivered
                 </TableHead>
+                <TableHead className="hidden lg:table-cell text-right">
+                  Opens
+                </TableHead>
+                <TableHead className="hidden lg:table-cell text-right">
+                  Clicks
+                </TableHead>
+                <TableHead className="hidden xl:table-cell text-right">
+                  Bounce %
+                </TableHead>
                 <TableHead className="hidden xl:table-cell text-right">
                   Failed
                 </TableHead>
@@ -337,7 +350,7 @@ export default function NewsletterCampaignsManager() {
               ) : rows.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={6}
+                    colSpan={9}
                     className="text-center text-sm text-muted-foreground py-12"
                   >
                     <Mail className="h-8 w-8 mx-auto mb-2 opacity-50" />
@@ -345,7 +358,11 @@ export default function NewsletterCampaignsManager() {
                   </TableCell>
                 </TableRow>
               ) : (
-                rows.map((r) => (
+                rows.map((r) => {
+                  const bouncePct = r.recipient_count > 0
+                    ? (r.bounces / r.recipient_count) * 100
+                    : 0;
+                  return (
                   <TableRow key={r.id}>
                     <TableCell>
                       <div className="font-medium truncate max-w-[280px]">
@@ -381,6 +398,25 @@ export default function NewsletterCampaignsManager() {
                     <TableCell className="hidden lg:table-cell text-right text-sm tabular-nums">
                       {r.delivered.toLocaleString()}
                     </TableCell>
+                    <TableCell className="hidden lg:table-cell text-right text-sm tabular-nums">
+                      {r.opens.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell text-right text-sm tabular-nums">
+                      {r.clicks.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="hidden xl:table-cell text-right text-sm tabular-nums">
+                      {r.recipient_count > 0 ? (
+                        <span
+                          className={
+                            bouncePct > 5 ? "text-amber-600 font-medium" : ""
+                          }
+                        >
+                          {bouncePct.toFixed(1)}%
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </TableCell>
                     <TableCell className="hidden xl:table-cell text-right text-sm tabular-nums">
                       {r.failed > 0 ? (
                         <span className="text-red-600">{r.failed}</span>
@@ -389,7 +425,8 @@ export default function NewsletterCampaignsManager() {
                       )}
                     </TableCell>
                   </TableRow>
-                ))
+                  );
+                })
               )}
             </TableBody>
           </Table>
