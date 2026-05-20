@@ -161,8 +161,8 @@
         "Typecheck + lint pass"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "SHIPPED: SocialPostQueue against the existing social_media_posts table (no need for a new social_post_queue table — schema was already there with scheduled_for, status, posted_at, platform_type, post_content, etc.). Migration 20260520000007 adds error_message + last_attempt_at columns so failed sends have a place to record why. Queue dashboard: status badges (Scheduled / Sent / Failed / Canceled), platform + status filters, per-row actions (Retry for failed → resets status to draft, Reschedule + Cancel for drafts, external link for sent). Realtime subscription to social_media_posts so the list refreshes on insert/update/delete. AdminSocial Queue tab now live. SCOPE DEVIATIONS: 'related event/restaurant link' uses /events/:id and /restaurants/:id (the actual route shape uses slugs but ids resolve via the existing fetcher); retry path puts the row back to draft for the existing cron-driven social-media-manager to re-attempt rather than triggering an immediate send (less risk, no API key reshuffling needed)."
     },
     {
       "id": "ADMIN-EMAIL-001",

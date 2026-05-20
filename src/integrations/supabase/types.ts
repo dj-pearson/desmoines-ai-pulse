@@ -5682,6 +5682,9 @@ export type Database = {
           subject_type: string
           updated_at: string | null
           webhook_urls: Json | null
+          // Added by 20260520000007 for the admin queue dashboard
+          error_message: string | null
+          last_attempt_at: string | null
         }
         Insert: {
           ai_prompt_used?: string | null
@@ -5701,6 +5704,8 @@ export type Database = {
           subject_type: string
           updated_at?: string | null
           webhook_urls?: Json | null
+          error_message?: string | null
+          last_attempt_at?: string | null
         }
         Update: {
           ai_prompt_used?: string | null
@@ -5720,6 +5725,8 @@ export type Database = {
           subject_type?: string
           updated_at?: string | null
           webhook_urls?: Json | null
+          error_message?: string | null
+          last_attempt_at?: string | null
         }
         Relationships: []
       }

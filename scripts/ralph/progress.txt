@@ -23,6 +23,45 @@ function's `Cache-Control: max-age` to avoid wasted re-fetches. Disable
 
 ---
 
+## 2026-05-20 — ADMIN-SOCIAL-002 (Social post queue dashboard)
+
+Files added:
+- `src/components/admin/SocialPostQueue.tsx`
+- `supabase/migrations/20260520000007_social_media_posts_error_tracking.sql`
+
+Files modified:
+- `src/integrations/supabase/types.ts` (error_message + last_attempt_at)
+- `src/pages/AdminSocial.tsx` (Queue tab now real)
+
+Existing `social_media_posts` had every column we needed except error
+tracking; reuse over a new social_post_queue table.
+
+**Learnings for future iterations:**
+- Supabase Realtime subscription pattern for an admin queue:
+  ```ts
+  useEffect(() => {
+    const ch = supabase
+      .channel("name")
+      .on("postgres_changes",
+          { event: "*", schema: "public", table: "…" },
+          () => load())
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [filters]);
+  ```
+  Reinclude filter deps in the array so the channel rebuilds when the
+  query changes — otherwise the realtime callback runs an out-of-date
+  `load()`.
+- Retry pattern for queue rows: don't trigger an immediate API call
+  from the admin client. Reset `status → draft`, clear
+  `error_message`, leave the existing cron / worker to pick it up on
+  its next pass. Less risk, no secret reshuffling.
+- For tri-state column filtering on a text status enum, "Failed"
+  often means "row has an error_message", not a particular status
+  value. Filter by `.not("error_message", "is", null)`.
+
+---
+
 ## 2026-05-20 — ADMIN-SOCIAL-001 (Social account credentials manager)
 
 Files added:
