@@ -236,8 +236,8 @@
         "Typecheck + lint pass"
       ],
       "priority": 13,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "SHIPPED: FeedbackInbox built against the existing public.contact_submissions table — which already has every column the PRD wanted (status: new/read/in_progress/responded/closed/spam, priority: low/normal/high/urgent, assigned_to, admin_notes, responded_at, inquiry_type, source_page). List view with search + status + priority + inquiry_type filters; status badge color-coded per state; priority badge for non-normal. New rows render bold. Row click opens a Sheet with the full message, inline status + priority dropdowns that write through immediately, admin-notes textarea (save button), and metadata footer (submitted-at, responded-at, source page). Opening a 'new' row auto-flips it to 'read'. Realtime subscription on contact_submissions so new submissions appear without refresh. SCOPE DEFERRED: conversation thread + reply-via-Resend, screenshot attachments, assignee dropdown with autocomplete (would need profiles join and a richer UX) — all useful follow-ups but not strictly required for triage."
     },
     {
       "id": "ADMIN-B2B-001",
