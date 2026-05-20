@@ -255,8 +255,8 @@
         "Typecheck + lint pass"
       ],
       "priority": 14,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "SHIPPED: PartnershipsManager against the existing partnership_applications table (business_name, business_type, contact_email, contact_phone, website, description, desired_tier, status, admin_notes, reviewed_at, reviewed_by). Toggle between Kanban (4 columns: Lead / Qualified / Signed / Lost mapped to pending / in_review / approved / rejected) and List views. Filters: stage, desired tier, search. Detail Sheet: inline stage + tier dropdowns that write through and stamp reviewed_at + reviewed_by when moving to approved/rejected, mailto/tel/website links, admin-notes textarea. SCOPE DEFERRED: notes timeline (would need a separate partnership_notes table), file attachments (Supabase Storage bucket setup), drag-to-update kanban (uses dropdown for now — drag would be nicer but @dnd-kit not currently in deps), Stripe customer link (no FK in the table yet)."
     },
     {
       "id": "ADMIN-TRENDING-001",

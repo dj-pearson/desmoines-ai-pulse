@@ -1,11 +1,15 @@
-import AdminPlaceholder from "@/components/admin/AdminPlaceholder";
+import AdminNav from "@/components/admin/AdminNav";
+import PartnershipsManager from "@/components/admin/PartnershipsManager";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 
 export default function AdminPartnerships() {
+  useDocumentTitle("Partnerships · Admin");
   return (
-    <AdminPlaceholder
-      title="Business partnerships"
-      storyId="ADMIN-B2B-001"
-      description="B2B partnership workspace: kanban + list views, stage tracking, notes timeline, attached documents, linked Stripe customer."
-    />
+    <div className="min-h-screen bg-background">
+      <AdminNav />
+      <div className="p-4 md:p-6">
+        <PartnershipsManager />
+      </div>
+    </div>
   );
 }
