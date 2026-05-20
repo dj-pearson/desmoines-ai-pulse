@@ -180,8 +180,8 @@
         "Typecheck + lint pass"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "SHIPPED: NewsletterSubscribersManager against the existing newsletter_subscribers table (active / unsubscribed / bounced status, source, utm_*, subscribed_at). Features: debounced email search, status filter, source filter, paginated 50/page, bulk select with bulk unsubscribe (audit logged) + bulk CSV export, per-row Unsubscribe / Re-subscribe buttons, Export filtered CSV (capped at 10k). Audit logs go to security_audit_logs with event_type='admin_action' and resource='newsletter_subscribers:<id>'. /admin/email Subscribers tab live; Campaigns tab stubs ADMIN-EMAIL-002. SCOPE DEFERRED: tier join from profiles (skipped — requires denormalization or a view), last_sent_at / bounce_count / complaint_count (require Resend webhook integration — future story)."
     },
     {
       "id": "ADMIN-EMAIL-002",

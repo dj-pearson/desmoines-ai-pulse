@@ -23,6 +23,33 @@ function's `Cache-Control: max-age` to avoid wasted re-fetches. Disable
 
 ---
 
+## 2026-05-20 — ADMIN-EMAIL-001 (Newsletter subscribers admin)
+
+Files added:
+- `src/components/admin/NewsletterSubscribersManager.tsx`
+
+Files modified:
+- `src/pages/AdminEmail.tsx` (Subscribers tab live, Campaigns stubbed)
+
+**Learnings for future iterations:**
+- `newsletter_subscribers` is NOT in `types.ts` — the public hook uses
+  `as any`. New admin code uses a local interface plus
+  `data as unknown as LocalType[]` casts. Acceptable until the types
+  are regenerated. Don't add the entry by hand unless something
+  actually consumes the generated shape — keeps types.ts churn down.
+- CSV export pattern: build header row, escapeCsv every cell
+  (`"`, `,`, `\n`), Blob + URL.createObjectURL + anchor click +
+  revokeObjectURL. Cap server fetch at a safe ceiling (10k here) so
+  an unfiltered export doesn't take down the page.
+- Admin destructive action audit pattern: write a
+  `security_audit_logs` row with `event_type='admin_action'`,
+  `action='<resource>:<verb>'`, `resource='<table>:<id>'`,
+  `user_id`, and `details: { count: N }`. Bulk operations write one
+  row per affected entity so an investigator can trace exactly which
+  records were touched.
+
+---
+
 ## 2026-05-20 — ADMIN-SOCIAL-002 (Social post queue dashboard)
 
 Files added:
