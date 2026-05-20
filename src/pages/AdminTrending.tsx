@@ -1,11 +1,15 @@
-import AdminPlaceholder from "@/components/admin/AdminPlaceholder";
+import AdminNav from "@/components/admin/AdminNav";
+import TrendingTuner from "@/components/admin/TrendingTuner";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 
 export default function AdminTrending() {
+  useDocumentTitle("Trending tuner · Admin");
   return (
-    <AdminPlaceholder
-      title="Trending tuner"
-      storyId="ADMIN-TRENDING-001"
-      description="Live tuner for the trending algorithm: weight sliders, decay half-life, featured boost, preview of the top 20 under the proposed config, change history."
-    />
+    <div className="min-h-screen bg-background">
+      <AdminNav />
+      <div className="p-4 md:p-6">
+        <TrendingTuner />
+      </div>
+    </div>
   );
 }

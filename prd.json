@@ -272,8 +272,8 @@
         "Typecheck + lint pass"
       ],
       "priority": 15,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "SHIPPED: Migration 20260520000009 creates public.trending_config (singleton via PK CHECK id=1) and public.trending_config_history with a trigger that snapshots every update. RLS: service_role full access, admin can SELECT both + UPDATE config. TrendingTuner UI: 7 controls (view/favorite/share/click weights, recency_half_life_hours, min_age_hours, featured_boost) each as a Slider + numeric Input combo with dirty-state border highlight, Defaults / Revert / Save buttons, last-10 history table below. SCOPE DEFERRED: rewiring calculate_trending_scores() PL/pgSQL function to read these weights — the function lives only in the remote DB (dashboard-created), not in any migration we can safely edit. Captured this as an explicit caveat in the UI description so admins know edits don't yet affect scoring until the SQL function is rewritten. Also deferred: live top-20 preview in the tuner (depends on the function being rewritten)."
     },
     {
       "id": "ADMIN-REFUND-001",
