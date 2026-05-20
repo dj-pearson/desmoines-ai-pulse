@@ -86,7 +86,14 @@ serve(async (req) => {
 
     // Parse request body
     const body = await req.json();
-    const { campaignId, amount, reason, policyViolation } = body;
+    const {
+      campaignId,
+      amount,
+      reason,
+      policyViolation,
+      refundReason,
+      refundReasonNotes,
+    } = body;
 
     if (!campaignId) {
       return new Response(JSON.stringify({ error: "Campaign ID is required" }), {
@@ -100,6 +107,30 @@ serve(async (req) => {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // ADMIN-REFUND-001: enforce structured taxonomy alongside free-text reason.
+    const ALLOWED_REASONS = [
+      "duplicate_charge",
+      "user_request",
+      "campaign_cancelled",
+      "fraud",
+      "technical_issue",
+      "content_takedown",
+      "accidental_purchase",
+      "other",
+    ];
+    if (!refundReason || !ALLOWED_REASONS.includes(refundReason)) {
+      return new Response(
+        JSON.stringify({
+          error: "Structured refund_reason is required",
+          allowed: ALLOWED_REASONS,
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Get campaign with payment details
@@ -174,6 +205,24 @@ serve(async (req) => {
       policy_violation: policyViolation || null,
       status: refund.status === "succeeded" ? "completed" : "pending",
       stripe_refund_id: refund.id,
+      refund_reason: refundReason ?? "other",
+      refund_reason_notes: refundReasonNotes ?? null,
+    });
+
+    // ADMIN-REFUND-001: structured audit log for finance reporting.
+    await supabase.from("security_audit_logs").insert({
+      event_type: "admin_action",
+      identifier: user.email ?? user.id,
+      severity: "low",
+      action: "refund:process",
+      resource: `campaigns:${campaignId}`,
+      user_id: user.id,
+      details: {
+        amount: refundAmount,
+        refund_reason: refundReason ?? "other",
+        refund_reason_notes: refundReasonNotes ?? null,
+        stripe_refund_id: refund.id,
+      },
     });
 
     if (refundRecordError) {

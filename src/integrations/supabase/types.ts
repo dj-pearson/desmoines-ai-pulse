@@ -3959,6 +3959,9 @@ export type Database = {
           reason: string
           status: Database["public"]["Enums"]["refund_status"]
           stripe_refund_id: string | null
+          // ADMIN-REFUND-001: added by migration 20260520000010
+          refund_reason: string | null
+          refund_reason_notes: string | null
         }
         Insert: {
           admin_user_id?: string | null
@@ -3971,6 +3974,8 @@ export type Database = {
           reason: string
           status?: Database["public"]["Enums"]["refund_status"]
           stripe_refund_id?: string | null
+          refund_reason?: string | null
+          refund_reason_notes?: string | null
         }
         Update: {
           admin_user_id?: string | null
@@ -3983,6 +3988,8 @@ export type Database = {
           reason?: string
           status?: Database["public"]["Enums"]["refund_status"]
           stripe_refund_id?: string | null
+          refund_reason?: string | null
+          refund_reason_notes?: string | null
         }
         Relationships: [
           {

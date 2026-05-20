@@ -289,8 +289,8 @@
         "Typecheck + lint pass"
       ],
       "priority": 16,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "SHIPPED: Migration 20260520000010 adds refund_reason (CHECK against 8-bucket taxonomy: duplicate_charge / user_request / campaign_cancelled / fraud / technical_issue / content_takedown / accidental_purchase / other) + refund_reason_notes columns to public.refunds, with a backfill that sets pre-taxonomy rows to 'other' with note 'pre-taxonomy'. process-stripe-refund edge function now requires refundReason on every call (returns 400 with the allowed list if missing) and writes both columns + a structured security_audit_logs row (event_type=admin_action, action='refund:process', resource='campaigns:<id>', details with amount + reason + stripe_refund_id). AdminRefunds dialog grew a required Select for the category above the freeform notes; Process Refund button disabled until both are set. Added a 90-day Reasons breakdown card with a Recharts pie chart and a 'Export CSV' button that downloads every refund row with the new columns. types.ts updated for the new columns."
     },
     {
       "id": "ADMIN-EVENT-SUBMIT-001",
