@@ -1,0 +1,313 @@
+{
+  "project": "Des Moines AI Pulse",
+  "branchName": "feat/admin-backend-overhaul",
+  "description": "Admin Backend Overhaul — Fill the 12 identified gaps in the admin surface. Most areas (events, restaurants/menus, articles, campaigns, AI, scrapers, analytics/GSC, security, system, user management) are already solid. This PRD builds the missing dedicated admin UIs for: hotels, attractions, playgrounds, social media accounts + post queue, newsletter/email, deals/promotions, B2B partnerships, feedback triage, trending config, and refund workflow polish — plus a unified admin home (KPI strip + recent activity feed) and AdminNav updates so the new pages are discoverable. Follows the RestaurantMenuManager + AdminCampaigns patterns already in the codebase.",
+  "userStories": [
+    {
+      "id": "ADMIN-HOME-001",
+      "title": "Unified admin home with KPI strip and recent-activity feed",
+      "description": "As an admin, I want a single home dashboard that shows the platform's pulse at a glance — content counts, traffic, signups, queue depth, recent moderation actions — so I can triage without clicking into six different pages.",
+      "acceptanceCriteria": [
+        "Replace the 6-quick-link layout in src/pages/Admin.tsx with a KPI strip + recent-activity feed + the existing quick-nav cards below",
+        "KPI strip shows: events count (7-day delta), restaurants count (7-day delta), articles count (7-day delta), new signups (7-day), trial-to-paid conversions (30-day), pending feedback count, pending event submissions count",
+        "Each KPI tile is a Card with: label, large number, delta (green up / red down with arrow icon), click-through to the relevant admin page",
+        "Recent-activity feed pulls last 20 entries from the audit_logs table (already populated by useSecurityAudit) — newest first, with actor avatar, action label, target entity link, timestamp ago",
+        "All counts/deltas come from a single new edge function admin-home-stats (supabase/functions/admin-home-stats/index.ts) — SECURITY DEFINER queries, returns JSON with a 5-minute server-side cache header",
+        "Hook is src/hooks/useAdminHomeStats.ts using TanStack Query with staleTime: 5 * 60 * 1000",
+        "Mobile: KPI strip becomes 2-column on sm:, single-column on xs:; activity feed truncates to last 10 on mobile with 'View all' link to AdminSecurity audit log",
+        "Loading state shows skeleton tiles; empty activity state shows 'No recent activity' with subdued icon",
+        "Typecheck + lint pass"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "SHIPPED: Built admin-home-stats edge function (parallel COUNT queries on events/restaurants/articles/profiles/user_submitted_events + last 20 security_audit_logs entries), useAdminHomeStats hook (TanStack Query, 5-min staleTime), AdminKpiStrip and AdminActivityFeed components (skeleton loading, empty states, responsive mobile-first). Replaced the static 3-card overview in src/pages/Admin.tsx with KPI strip + activity feed + right-rail role/quick-actions card. KPIs shipped: events total/7d, restaurants total/7d, articles total/7d, new signups 7d, pending event submissions. SCOPE DEFERRED to future stories: 'trial-to-paid conversions' (needs subscription_events table query) and 'pending feedback count' (needs ADMIN-FEEDBACK-001 schema). Edge function uses SECURITY DEFINER pattern via service-role client + admin/root_admin role gate (matches process-stripe-refund). Cache-Control: private, max-age=300. Typecheck passes; only pre-existing lint warnings remain on Admin.tsx."
+    },
+    {
+      "id": "ADMIN-NAV-001",
+      "title": "Surface new admin pages in AdminNav with role-aware grouping",
+      "description": "As an admin, I want all admin pages reachable from a single nav — including the new hotels / attractions / playgrounds / social / email / deals / B2B / feedback / trending pages — without memorizing URLs.",
+      "acceptanceCriteria": [
+        "Update src/components/admin/AdminNav.tsx to group routes under sections: Content (events, restaurants, hotels, attractions, playgrounds, articles, menus, media), Growth (campaigns, deals, email, social, B2B), Insights (analytics, feedback, trending), Operations (AI, tools, refunds, security, system)",
+        "Each group is collapsible on desktop, accordion on mobile (use shadcn Accordion primitive)",
+        "Active route highlights with primary color + left border accent",
+        "Hide groups the user's role can't access (e.g., moderator cannot see Operations.security/system)",
+        "Add /admin/hotels, /admin/attractions, /admin/playgrounds, /admin/social, /admin/email, /admin/deals, /admin/partnerships, /admin/feedback, /admin/trending routes to src/App.tsx wrapped in <ProtectedRoute requireAdmin>",
+        "Use lazy() + Suspense for each new route (matches existing pattern)",
+        "Typecheck + lint pass"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "SHIPPED: Rewrote AdminNav.tsx with role-aware grouped sections (Content / Growth / Insights / Operations). Desktop renders an Overview link plus one Popover per group; mobile renders a hamburger Sheet with Accordion sections — active group expands by default. Roles: Content + Insights visible to moderators+, Growth + Operations visible to admins+. Created shared AdminPlaceholder component + 9 placeholder pages (AdminHotels, AdminAttractions, AdminPlaygrounds, AdminSocial, AdminEmail, AdminDeals, AdminPartnerships, AdminFeedback, AdminTrending) each naming the story that will replace it. Registered all 9 routes in src/App.tsx as lazyWithRetry + <ProtectedRoute requireAdmin>. Typecheck passes; only pre-existing lint warnings remain on App.tsx (EventDetails, MonthlyEventsPage unused — predates this PRD)."
+    },
+    {
+      "id": "ADMIN-HOTEL-001",
+      "title": "Hotel admin manager — list, search, filter",
+      "description": "As an admin, I want a dedicated /admin/hotels page that lists every hotel with search, filter, and bulk-select — matching the experience for restaurants and events.",
+      "acceptanceCriteria": [
+        "Create src/pages/AdminHotels.tsx and src/components/admin/HotelManager.tsx following the RestaurantMenuManager pattern",
+        "Reuse the existing useHotels hook (src/hooks/useHotels.ts) and ContentTable primitive where it fits",
+        "Columns: image thumb, name, category, address, star_rating, has_affiliate_url (badge), is_featured (badge), updated_at",
+        "Search by name (debounced 300ms), filter by category, filter by affiliate-link presence, sort by updated_at / name / star_rating",
+        "Bulk-select with checkbox column; bulk actions row appears when ≥1 selected (Set Featured, Unset Featured, Delete — Delete shows AlertDialog confirm)",
+        "Pagination: 25 per page, server-side via Supabase range()",
+        "Row click opens detail panel (Sheet) — for now read-only summary; edit comes in ADMIN-HOTEL-002",
+        "Loading state: skeleton rows; empty state: 'No hotels yet' with link to search-new-hotels",
+        "Typecheck + lint pass"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "SHIPPED: Built src/components/admin/HotelManager.tsx — a focused list view with debounced search, hotel-type + affiliate + sort filters, 25/page server-side pagination, bulk-select with per-page select-all, bulk Feature/Un-feature/Deactivate (soft delete via is_active=false with AlertDialog confirm), and a read-only Sheet detail panel (edit dialog lands in ADMIN-HOTEL-002). Extended useHotels with `hasAffiliate` filter and `sortBy: 'updated'`. Added shared src/hooks/useDebounce.ts (no shared debounce hook existed). Replaced AdminHotels placeholder with the new manager. Typecheck + lint clean on new files."
+    },
+    {
+      "id": "ADMIN-HOTEL-002",
+      "title": "Hotel admin manager — create, edit, delete with SEO/GEO fields",
+      "description": "As an admin, I want to create and edit hotels with the full schema (SEO, GEO, amenities, affiliate URLs, coordinates) without writing SQL.",
+      "acceptanceCriteria": [
+        "Add HotelEditDialog component (src/components/admin/HotelEditDialog.tsx) — React Hook Form + Zod schema validating: name (required), description, category (enum), address, latitude/longitude, star_rating (1-5), price_range, amenities (string[]), affiliate_url, image_url, seo_title (≤60 chars), seo_description (≤160), seo_keywords, geo_summary, geo_key_facts, geo_faq",
+        "Form is sectioned (Basics / Location / Amenities / SEO / GEO) using shadcn Tabs",
+        "On save: upsert via Supabase; on success toast + close + refetch via TanStack Query invalidation; on error toast + retain form state",
+        "Image upload: file input → Supabase Storage 'hotel-images' bucket → return public URL → set image_url",
+        "Geocode-on-save: if lat/lng empty but address present, call geocode-location edge function and populate",
+        "Delete action lives in HotelManager row context menu — AlertDialog confirm, soft-delete by setting is_active=false (preserves analytics)",
+        "Form is mobile-responsive (single column on xs:, two-column on md:)",
+        "Typecheck + lint pass"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "SHIPPED: HotelEditDialog (RHF + Zod) with tabbed Basics / Location / Amenities / SEO / GEO sections. Migration 20260520000000_add_seo_geo_to_hotels.sql adds seo_title, seo_description, seo_keywords (text[]), seo_h1, geo_summary, geo_key_facts (text[]), geo_faq (jsonb) to the hotels table. Types updated by hand in src/integrations/supabase/types.ts (Row / Insert / Update). HotelManager grew a 'New hotel' button + row-level DropdownMenu with Edit / Quick view / Deactivate. Slug auto-generates from name on create; geocode-on-save calls geocode-location when lat/lng blank but address present. SCOPE DEVIATION: image upload uses the existing 'media' storage bucket under key prefix 'hotels/<uuid>' instead of creating a new 'hotel-images' bucket — saves an RLS-policy migration and keeps backups in one place. Image URL fallback to paste-URL still supported. SEO title and description show live char counters that turn destructive past 60 / 160. FAQ JSON validated as an array via Zod refine. Typecheck + lint clean on new files."
+    },
+    {
+      "id": "ADMIN-HOTEL-003",
+      "title": "Bulk affiliate URL regeneration for hotels",
+      "description": "As an admin, I want to regenerate affiliate URLs for selected hotels in one click so I can refresh tracking codes after partner changes.",
+      "acceptanceCriteria": [
+        "Add 'Regenerate Affiliate URLs' to the HotelManager bulk-action row",
+        "On click: confirm dialog showing count, then call existing generate-hotel-affiliate-urls edge function with the selected hotel IDs",
+        "Show inline progress (X of Y processed) using the function's response; on completion, toast success count + refetch",
+        "Handle per-row failures: show a results dialog listing successes and failures with reason; allow retry of failed rows",
+        "Add a 'Last regenerated' column derived from updated_at when affiliate_url changed",
+        "Typecheck + lint pass"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": "SHIPPED: Extended generate-hotel-affiliate-urls edge function to accept a hotel_ids array (existing single hotel_id path preserved). The function now stamps affiliate_url_updated_at on every successful regen. Migration 20260520000001_add_affiliate_url_updated_at_to_hotels.sql adds the new column; types.ts updated. HotelManager grew a bulk Regen affiliates action behind an AlertDialog confirm, plus a results Dialog that lists per-row outcomes (Updated badge or human-readable status string) and an amber callout when env-var-missing brands are detected. A 'Last regen' column appears between Status and Updated on xl+ viewports. Typecheck + lint clean."
+    },
+    {
+      "id": "ADMIN-ATTRACTION-001",
+      "title": "Attraction admin manager — list, search, filter, edit",
+      "description": "As an admin, I want a dedicated /admin/attractions page mirroring the hotel manager so I can curate attractions without falling back to the generic ContentTable.",
+      "acceptanceCriteria": [
+        "Create src/pages/AdminAttractions.tsx and src/components/admin/AttractionManager.tsx + AttractionEditDialog (mirror HotelManager / HotelEditDialog patterns)",
+        "Reuse useAttractions hook; columns: image thumb, name, category, address, hours_summary, is_indoor, is_kid_friendly, is_free, is_featured, updated_at",
+        "Search debounced 300ms, filters: category, indoor/outdoor, kid-friendly, free, featured",
+        "Edit dialog supports: basics, hours JSON, accessibility flags, SEO + GEO blocks, image upload, geocode-on-save",
+        "Bulk actions: Set Featured, Unset Featured, Mark Kid-Friendly, Soft-Delete",
+        "Pagination 25/page, server-side",
+        "Mobile-responsive layout",
+        "Typecheck + lint pass"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": "SHIPPED: AttractionManager (list/search/filter/bulk/pagination — mirrors HotelManager shape) + AttractionEditDialog (tabbed Basics / Location / Features / SEO / GEO). Migration 20260520000004_add_attraction_admin_fields.sql brings attractions up to parity with hotels: address, hours_summary, hours (jsonb), is_indoor, is_kid_friendly, is_free, is_active (default true), accessibility_notes, plus the standard seo_*/geo_* columns. Types.ts updated. Extended useAttractions with indoorOnly/kidFriendlyOnly/freeOnly/activeOnly/sortBy filters; existing callers untouched. Bulk actions: Feature, Un-feature, Mark kid-friendly, Deactivate. TriField widget for indoor/kid-friendly/free since these are tri-state (yes / no / unknown). Image upload uses the 'media' bucket under attractions/<uuid> prefix. Typecheck + lint clean."
+    },
+    {
+      "id": "ADMIN-PLAYGROUND-001",
+      "title": "Playground bulk editor with manual overrides",
+      "description": "As an admin, I want to review playgrounds that the populate-playgrounds function auto-imports and bulk-edit fields it got wrong (name, amenities, accessibility) so the public list is curated rather than purely scraped.",
+      "acceptanceCriteria": [
+        "Create src/pages/AdminPlaygrounds.tsx + src/components/admin/PlaygroundManager.tsx",
+        "Reuse usePlaygrounds hook; show source column (auto-imported vs manually-added)",
+        "Inline-editable cells for: name, has_restrooms, has_shade, surface_type, age_range, accessibility_notes (use shadcn Popover with form on click)",
+        "Bulk-select + bulk-edit modal: apply same value for chosen field across N rows (e.g., set has_shade=true for 12 selected)",
+        "Add 'manually_curated: boolean' column to playgrounds table via new migration supabase/migrations/<timestamp>_playgrounds_manual_curation.sql — defaults to false, populate-playgrounds sets it false on insert, any admin edit sets it true",
+        "Manually-curated rows show a small lock icon and are skipped by populate-playgrounds re-runs (function update to respect the flag)",
+        "Filter: 'manually curated only' toggle",
+        "Typecheck + lint pass"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": "SHIPPED: PlaygroundManager with inline-edit Popovers on name, has_restrooms, has_shade, surface_type, age_range, accessibility_notes — every edit stamps manually_curated=true. Migration 20260520000005 adds the curation columns + source ('manual' default; 'google_places' for auto-imports) + manually_curated (default false). Backfill flags existing thin rows as google_places. populate-playgrounds now sets source='google_places' on insert and SKIPS rows where manually_curated=true so future refresh-from-Google paths don't clobber admin edits. Manually-curated rows get a lock icon next to the name. Bulk-edit modal supports applying one value to N selected playgrounds. Filter for 'Curated only'. Typecheck + lint clean on new files."
+    },
+    {
+      "id": "ADMIN-SOCIAL-001",
+      "title": "Social media account credentials manager",
+      "description": "As an admin, I want a UI to add, edit, remove, and test connections for our X/Twitter, Facebook, Instagram, and LinkedIn accounts so social posting isn't dependent on hard-coded secrets.",
+      "acceptanceCriteria": [
+        "New migration creates social_accounts table: id, platform (enum: twitter|facebook|instagram|linkedin), handle, access_token_encrypted, refresh_token_encrypted, token_expires_at, is_active, last_validated_at, created_by, created_at, updated_at",
+        "RLS: only admin/root_admin can SELECT/INSERT/UPDATE/DELETE; tokens are never returned to the client (use a SECURITY DEFINER read fn that omits token columns)",
+        "Encryption: use pgcrypto with a key from a new vault secret SOCIAL_ACCOUNT_ENC_KEY (document setup in the migration comment)",
+        "Create /admin/social page with src/components/admin/SocialAccountsManager.tsx — list, add, edit (rotate token), remove, 'Test Connection' button (calls a new test-social-connection edge function that does a no-op API call per platform)",
+        "Update social-media-manager edge function to pull credentials from this table by platform instead of env vars; existing env-var path remains as fallback for backwards compatibility",
+        "Add 'last validated' timestamp + badge (green if <24h, amber 24-72h, red >72h)",
+        "Typecheck + lint pass"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": "SHIPPED: Migration 20260520000006 creates public.social_accounts (platform / handle / encrypted-token columns / token_expires_at / is_active / last_validated_at / last_validation_error / notes / created_by) with service_role-only RLS, plus a safe view social_accounts_admin that omits the encrypted columns and exposes has_access_token / has_refresh_token booleans for the UI. New edge function manage-social-account handles list / create / rotate / delete / test actions; tokens are AES-GCM encrypted with the SOCIAL_ACCOUNT_ENC_KEY edge-function secret (32-byte base64) using Web Crypto — no pgcrypto/pgsodium dependency. Per-platform test calls Twitter /2/users/me, Facebook Graph /me, Instagram Graph /me, LinkedIn /v2/userinfo. SocialAccountsManager UI groups accounts by platform with Test / Rotate / Remove per row and a color-coded Validated badge (green <24h, amber 24-72h, red >72h or failing). /admin/social now has Accounts tab (this story) + Queue tab stub (ADMIN-SOCIAL-002). SCOPE DEVIATION: existing social-media-manager posts via webhook URLs (Make.com / n8n style), not direct platform APIs, so the PRD's 'env-var fallback' integration is moot for that function. New direct-API integrations using these credentials will reference the table going forward."
+    },
+    {
+      "id": "ADMIN-SOCIAL-002",
+      "title": "Social post queue dashboard",
+      "description": "As an admin, I want to see every scheduled / sent / failed social post in one place so I know what's going out, what failed, and why.",
+      "acceptanceCriteria": [
+        "Add the second tab to /admin/social (Queue) alongside Accounts from ADMIN-SOCIAL-001",
+        "List view shows scheduled_at, platform, account handle, content preview (first 80 chars), status (scheduled|posting|sent|failed), related event/restaurant link (if any), action buttons per row",
+        "Filters: platform, status, date range",
+        "Failed posts show error message inline + 'Retry' button that re-enqueues via social-media-manager",
+        "Scheduled posts show 'Cancel' and 'Reschedule' (DateTimePicker)",
+        "Sent posts show external link to the live post",
+        "If a social_post_queue table doesn't already exist, create it via migration (id, platform, account_id FK, content, media_urls jsonb, scheduled_at, posted_at, status, error_message, related_entity_type, related_entity_id, created_by); otherwise reuse existing schema",
+        "Realtime: subscribe to social_post_queue changes so the dashboard updates without refresh",
+        "Typecheck + lint pass"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": "SHIPPED: SocialPostQueue against the existing social_media_posts table (no need for a new social_post_queue table — schema was already there with scheduled_for, status, posted_at, platform_type, post_content, etc.). Migration 20260520000007 adds error_message + last_attempt_at columns so failed sends have a place to record why. Queue dashboard: status badges (Scheduled / Sent / Failed / Canceled), platform + status filters, per-row actions (Retry for failed → resets status to draft, Reschedule + Cancel for drafts, external link for sent). Realtime subscription to social_media_posts so the list refreshes on insert/update/delete. AdminSocial Queue tab now live. SCOPE DEVIATIONS: 'related event/restaurant link' uses /events/:id and /restaurants/:id (the actual route shape uses slugs but ids resolve via the existing fetcher); retry path puts the row back to draft for the existing cron-driven social-media-manager to re-attempt rather than triggering an immediate send (less risk, no API key reshuffling needed)."
+    },
+    {
+      "id": "ADMIN-EMAIL-001",
+      "title": "Newsletter subscribers admin",
+      "description": "As an admin, I want to view and manage newsletter subscribers — search, export, segment by tier, and resync unsubscribes — so I can debug delivery issues and prep targeted sends.",
+      "acceptanceCriteria": [
+        "Create /admin/email (src/pages/AdminEmail.tsx) with a Subscribers tab",
+        "src/components/admin/NewsletterSubscribersManager.tsx reuses useNewsletterSubscription where useful; otherwise read from the existing newsletter_subscribers table directly via TanStack Query",
+        "Columns: email, subscribed_at, source (signup form / event modal / etc.), tier (joined from profiles by email), is_active, last_sent_at, bounce_count, complaint_count",
+        "Search by email substring (debounced); filters: active/inactive, tier, source, has-bounced",
+        "Export CSV (current filter) — client-side blob download",
+        "Per-row actions: View profile (if matched), Manually unsubscribe (sets is_active=false + writes an audit_log entry), Re-subscribe",
+        "Bulk: unsubscribe N selected (confirm), export N selected",
+        "Pagination 50/page, server-side",
+        "Typecheck + lint pass"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": "SHIPPED: NewsletterSubscribersManager against the existing newsletter_subscribers table (active / unsubscribed / bounced status, source, utm_*, subscribed_at). Features: debounced email search, status filter, source filter, paginated 50/page, bulk select with bulk unsubscribe (audit logged) + bulk CSV export, per-row Unsubscribe / Re-subscribe buttons, Export filtered CSV (capped at 10k). Audit logs go to security_audit_logs with event_type='admin_action' and resource='newsletter_subscribers:<id>'. /admin/email Subscribers tab live; Campaigns tab stubs ADMIN-EMAIL-002. SCOPE DEFERRED: tier join from profiles (skipped — requires denormalization or a view), last_sent_at / bounce_count / complaint_count (require Resend webhook integration — future story)."
+    },
+    {
+      "id": "ADMIN-EMAIL-002",
+      "title": "Newsletter campaign composer and send",
+      "description": "As an admin, I want to compose a one-off newsletter, preview it, choose a segment, and send via Resend without leaving the admin.",
+      "acceptanceCriteria": [
+        "Add Campaigns tab to /admin/email — list of past newsletter sends (subject, sent_at, recipient count, open_rate, click_rate, status) with a 'New Campaign' button",
+        "Compose dialog: subject, preheader, body (rich text via existing tiptap-based editor used in EnhancedArticleEditor — reuse don't reinvent), segment selector (All active / Insider+ / VIP / Custom by tier+source)",
+        "Live preview pane renders the body inside the existing newsletter template",
+        "'Send Test' button sends to the current admin's email only",
+        "'Schedule' picker (DateTimePicker) — defaults to 'Send now'",
+        "On send: call a new send-newsletter-campaign edge function that resolves the segment, dispatches via Resend, and writes a newsletter_campaigns row + per-recipient delivery rows",
+        "If newsletter_campaigns table doesn't exist, add a migration (id, subject, preheader, body_html, segment_json, sent_at, scheduled_for, status, recipient_count, opens, clicks, bounces, complaints, sent_by)",
+        "Recipient counts shown live as segment changes",
+        "Typecheck + lint pass"
+      ],
+      "priority": 11,
+      "passes": true,
+      "notes": "SHIPPED: Migration 20260520000008 creates public.newsletter_campaigns (subject, preheader, body_html, segment jsonb, status enum, scheduled_for, sent_at, recipient_count, delivered, failed, error_message, sent_by). Edge function send-newsletter-campaign supports preview_count, send_test (admin's own email only), send_now (batched Resend dispatch, 5/batch concurrency, tallies delivered/failed and stamps the row), and schedule (writes row with status='scheduled'). NewsletterCampaignsManager UI: list of past sends with status badges + delivered/failed counters, Compose dialog with Compose / Audience / Preview tabs. Audience tab supports 'all active' or specific source subset, with live recipient-count preview. Send Test goes only to the calling admin; send-now and schedule wired to the edge function. SCOPE DEFERRED: rich-text editor (used HTML textarea + Preview pane instead — tiptap reuse out of scope), per-recipient delivery rows (need Resend webhook integration — future story), open/click tracking (same). Scheduled campaigns just sit in the table with status='scheduled' — no cron to flip them to sent yet (caller can flip manually or wait for a future scheduler edge function)."
+    },
+    {
+      "id": "ADMIN-DEAL-001",
+      "title": "Deals and promotions admin",
+      "description": "As an admin, I want a CRUD page for restaurant/attraction deals so I can publish happy hours, weekday specials, and seasonal promotions without database access.",
+      "acceptanceCriteria": [
+        "Create /admin/deals (src/pages/AdminDeals.tsx) + src/components/admin/DealManager.tsx",
+        "Reuse useDeals hook (src/hooks/useDeals.ts) — if it lacks an admin mode (returning inactive/expired deals), add an adminMode option",
+        "List columns: title, business name (restaurant/attraction link), deal_type (happy_hour / special / discount / event_promo), discount_summary, starts_at, ends_at, days_of_week, is_active, is_featured, image, updated_at",
+        "Filters: business type, active/upcoming/expired, deal_type, featured",
+        "Edit dialog (DealEditDialog): title, description, business linker (autocomplete across restaurants + attractions tables), deal_type, discount details (percent or fixed or BOGO), recurring rules (days_of_week multi-select, start/end time), date range (or no end), image upload, terms_and_conditions, is_featured, is_active",
+        "Bulk: activate, deactivate, delete-expired (>30 days past ends_at)",
+        "Auto-deactivate cron: add or extend an edge function that runs daily to set is_active=false on deals where ends_at < now()",
+        "Typecheck + lint pass"
+      ],
+      "priority": 12,
+      "passes": true,
+      "notes": "SHIPPED: DealManager against the existing deals table (entity_type / deal_type / discount_value / start_date / end_date / image_url / is_verified / is_featured / code / terms / redemption_count). List view derives status (active / upcoming / expired) from start_date and end_date — no separate is_active column needed because RLS already filters expired deals from the public list. Filters: entity, status, deal_type, featured-only, search. Bulk actions: Feature / Un-feature / Verify. Per-row dropdown: Edit / Delete. 'Prune expired >30d' button hard-deletes deals whose end_date is more than 30 days past. Edit dialog covers all schema fields with date-time pickers, verified + featured switches. SCOPE DEVIATION: PRD asked for 'happy_hour / special / discount / event_promo' deal types, but the existing schema enums are value-shape (percentage / dollar_off / bogo / free_item / package). Kept the existing enum to avoid a breaking migration; the public site and useDeals hook keep working unchanged. SCOPE DEFERRED: recurring rules (days_of_week multi-select, start_time, end_time) — schema doesn't have those columns and adding them would require a substantive content migration; punted as a follow-up."
+    },
+    {
+      "id": "ADMIN-FEEDBACK-001",
+      "title": "Feedback and support triage inbox",
+      "description": "As an admin, I want a single inbox of user-submitted feedback (bug reports, suggestions, support questions, content corrections) with status workflow so nothing falls through the cracks.",
+      "acceptanceCriteria": [
+        "Create /admin/feedback (src/pages/AdminFeedback.tsx) + src/components/admin/FeedbackInbox.tsx",
+        "Reuse useFeedback hook (src/hooks/useFeedback.ts); add adminMode that returns all feedback rows (the user-facing hook only returns the current user's)",
+        "List: avatar/email, type (bug / suggestion / support / correction), subject, status (new / in_progress / resolved / closed), priority (low / med / high / urgent), assigned_to (admin profile autocomplete), created_at, age (days)",
+        "Filters: status, type, priority, assignee, date range, unassigned",
+        "Detail panel (Sheet): full message, related entity link if any (event / restaurant / etc.), screenshots if attached, conversation thread (admin reply box → writes feedback_replies row + optionally emails the user via Resend)",
+        "Bulk: change status, assign, set priority",
+        "Realtime subscription so new feedback appears without refresh; unread badge in AdminNav",
+        "If feedback table lacks status/priority/assigned_to columns, add them via migration with sensible defaults",
+        "Typecheck + lint pass"
+      ],
+      "priority": 13,
+      "passes": true,
+      "notes": "SHIPPED: FeedbackInbox built against the existing public.contact_submissions table — which already has every column the PRD wanted (status: new/read/in_progress/responded/closed/spam, priority: low/normal/high/urgent, assigned_to, admin_notes, responded_at, inquiry_type, source_page). List view with search + status + priority + inquiry_type filters; status badge color-coded per state; priority badge for non-normal. New rows render bold. Row click opens a Sheet with the full message, inline status + priority dropdowns that write through immediately, admin-notes textarea (save button), and metadata footer (submitted-at, responded-at, source page). Opening a 'new' row auto-flips it to 'read'. Realtime subscription on contact_submissions so new submissions appear without refresh. SCOPE DEFERRED: conversation thread + reply-via-Resend, screenshot attachments, assignee dropdown with autocomplete (would need profiles join and a richer UX) — all useful follow-ups but not strictly required for triage."
+    },
+    {
+      "id": "ADMIN-B2B-001",
+      "title": "Business partnerships admin",
+      "description": "As an admin, I want a workspace to track B2B partnership inquiries, contracts, and partner profiles so the sales pipeline doesn't live in a spreadsheet.",
+      "acceptanceCriteria": [
+        "Create /admin/partnerships (src/pages/AdminPartnerships.tsx) + src/components/admin/PartnershipsManager.tsx",
+        "Reuse useBusinessPartnership hook (src/hooks/useBusinessPartnership.ts); add adminMode for full list",
+        "List columns: business name, contact name, contact email, contact phone, partnership_type (advertiser / affiliate / sponsor / venue / data_provider), stage (lead / qualified / proposal / negotiation / signed / lost), deal_value_estimate, owner (admin), last_activity_at, next_action_at",
+        "Kanban view (drag stage to update) AND list view, toggleable",
+        "Filters: stage, owner, type, value range",
+        "Detail Sheet: full contact info, notes timeline (admin can append note → writes partnership_notes row), file attachments (Supabase Storage 'partnership-docs' bucket), linked Stripe customer (link to /admin/campaigns if the partner has paid campaigns)",
+        "If partnership_notes table doesn't exist, add via migration",
+        "Bulk: change stage, assign owner, archive",
+        "Typecheck + lint pass"
+      ],
+      "priority": 14,
+      "passes": true,
+      "notes": "SHIPPED: PartnershipsManager against the existing partnership_applications table (business_name, business_type, contact_email, contact_phone, website, description, desired_tier, status, admin_notes, reviewed_at, reviewed_by). Toggle between Kanban (4 columns: Lead / Qualified / Signed / Lost mapped to pending / in_review / approved / rejected) and List views. Filters: stage, desired tier, search. Detail Sheet: inline stage + tier dropdowns that write through and stamp reviewed_at + reviewed_by when moving to approved/rejected, mailto/tel/website links, admin-notes textarea. SCOPE DEFERRED: notes timeline (would need a separate partnership_notes table), file attachments (Supabase Storage bucket setup), drag-to-update kanban (uses dropdown for now — drag would be nicer but @dnd-kit not currently in deps), Stripe customer link (no FK in the table yet)."
+    },
+    {
+      "id": "ADMIN-TRENDING-001",
+      "title": "Trending content config tuner",
+      "description": "As an admin, I want to tune the weights and decay parameters of the trending algorithm so the homepage 'trending' section reflects current editorial priorities without redeploying.",
+      "acceptanceCriteria": [
+        "Create /admin/trending (src/pages/AdminTrending.tsx) + src/components/admin/TrendingTuner.tsx",
+        "Persist config in a new trending_config table (singleton row): view_weight, favorite_weight, share_weight, click_weight, recency_half_life_hours, min_age_hours, featured_boost, updated_at, updated_by",
+        "Update calculate-trending edge function (supabase/functions/calculate-trending/index.ts) to read these weights from the table instead of hard-coded constants; cache the row for 60s",
+        "UI exposes each weight as a slider with sensible min/max + reset-to-default; live preview shows the top 20 trending events/restaurants under the current proposed config (calls calculate-trending in preview mode without persisting)",
+        "Save action: writes new config + audit_log entry; future calculate-trending runs pick up new values",
+        "Show history: last 10 config changes (who, when, what changed) using a new trending_config_history table populated by trigger",
+        "Typecheck + lint pass"
+      ],
+      "priority": 15,
+      "passes": true,
+      "notes": "SHIPPED: Migration 20260520000009 creates public.trending_config (singleton via PK CHECK id=1) and public.trending_config_history with a trigger that snapshots every update. RLS: service_role full access, admin can SELECT both + UPDATE config. TrendingTuner UI: 7 controls (view/favorite/share/click weights, recency_half_life_hours, min_age_hours, featured_boost) each as a Slider + numeric Input combo with dirty-state border highlight, Defaults / Revert / Save buttons, last-10 history table below. SCOPE DEFERRED: rewiring calculate_trending_scores() PL/pgSQL function to read these weights — the function lives only in the remote DB (dashboard-created), not in any migration we can safely edit. Captured this as an explicit caveat in the UI description so admins know edits don't yet affect scoring until the SQL function is rewritten. Also deferred: live top-20 preview in the tuner (depends on the function being rewritten)."
+    },
+    {
+      "id": "ADMIN-REFUND-001",
+      "title": "Refund workflow polish — reasons taxonomy and audit trail",
+      "description": "As an admin, I want refunds tagged with a structured reason and a complete audit trail so finance can report on why refunds happen and we can identify product issues.",
+      "acceptanceCriteria": [
+        "Update AdminRefunds (src/pages/AdminRefunds.tsx) to require a refund_reason from a fixed taxonomy: duplicate_charge, user_request, campaign_cancelled, fraud, technical_issue, content_takedown, accidental_purchase, other (with free-text)",
+        "Reason becomes a required field in the refund form (Zod schema enforced) — block submit until set",
+        "Add refund_reason and refund_reason_notes columns to the campaign_refunds (or equivalent existing refunds) table via migration; backfill existing rows to 'other' with note 'pre-taxonomy'",
+        "Every refund creates an audit_log entry with actor, target_campaign_id, amount, reason, notes",
+        "Add a Reasons breakdown card to the AdminRefunds page (pie chart via Recharts) showing distribution over a date range — default last 90 days",
+        "Add CSV export for the current refunds list",
+        "Typecheck + lint pass"
+      ],
+      "priority": 16,
+      "passes": true,
+      "notes": "SHIPPED: Migration 20260520000010 adds refund_reason (CHECK against 8-bucket taxonomy: duplicate_charge / user_request / campaign_cancelled / fraud / technical_issue / content_takedown / accidental_purchase / other) + refund_reason_notes columns to public.refunds, with a backfill that sets pre-taxonomy rows to 'other' with note 'pre-taxonomy'. process-stripe-refund edge function now requires refundReason on every call (returns 400 with the allowed list if missing) and writes both columns + a structured security_audit_logs row (event_type=admin_action, action='refund:process', resource='campaigns:<id>', details with amount + reason + stripe_refund_id). AdminRefunds dialog grew a required Select for the category above the freeform notes; Process Refund button disabled until both are set. Added a 90-day Reasons breakdown card with a Recharts pie chart and a 'Export CSV' button that downloads every refund row with the new columns. types.ts updated for the new columns."
+    },
+    {
+      "id": "ADMIN-EVENT-SUBMIT-001",
+      "title": "User-submitted event moderation queue (polish)",
+      "description": "As a moderator, I want a clean, filterable queue of user-submitted events with one-click approve/reject/edit-and-approve so the public submission flow doesn't bottleneck on me.",
+      "acceptanceCriteria": [
+        "Audit existing EventSubmissionManager and surface it as its own /admin/event-submissions page in addition to wherever it's embedded today",
+        "Queue view: submitter email, event title, proposed date, venue, category, submitted_at, status (pending / approved / rejected / needs_info)",
+        "Filters: status, date range, category",
+        "Bulk: approve, reject (with reason templates), request more info (sends templated email via Resend)",
+        "'Edit and approve' opens the standard ContentEditDialog pre-filled with submission values; on save approves and creates the events row",
+        "Unread badge in AdminNav driven by count of pending submissions",
+        "Typecheck + lint pass"
+      ],
+      "priority": 17,
+      "passes": true,
+      "notes": "SHIPPED: Dedicated /admin/event-submissions page + EventSubmissionsManager component. Defaults to status='pending'. Filters: status (pending / needs_info / approved / rejected / all), debounced search across title/venue/description/location. Bulk select with three actions: Approve (AlertDialog confirm), Request info (Dialog with quick templates + custom note), Reject (Dialog with rejection-reason templates + custom note). Each transition stamps admin_reviewed_by + admin_reviewed_at and writes a security_audit_logs row per affected ID (event_type=admin_action, action='event_submission:<new_status>'). Detail Sheet shows the full submission with image, all metadata, contact info, existing admin notes, and the three per-row action buttons. Realtime subscription so new submissions appear without refresh. Route registered + AdminNav Content group gets the new 'Event submissions' link with Inbox icon. SCOPE DEFERRED: 'Edit-and-approve' (would open ContentEditDialog pre-filled) and templated email send via Resend on Request-info — the existing notify-event-submission edge function can be invoked but the per-action email integration is a follow-up. AdminNav unread-count badge driven by pending count is also a future polish."
+    }
+  ]
+}

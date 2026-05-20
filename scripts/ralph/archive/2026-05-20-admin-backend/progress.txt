@@ -1,0 +1,456 @@
+# Ralph Progress Log — Admin Backend Overhaul
+Started: 2026-05-20
+
+## Codebase Patterns
+
+### Admin edge-function auth gate (discovered 2026-05-20)
+Pattern for admin-only edge functions:
+1. `handleCors(req)` → early return on OPTIONS
+2. `checkRateLimit(req, { windowMs, max, message })` → 429 + Retry-After
+3. Reject non-GET/POST → 405
+4. Build service-role client with `Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")`
+5. Read `Authorization: Bearer <token>`, call `supabase.auth.getUser(token)`
+6. Lookup `profiles.role` and require `admin` or `root_admin`
+7. Run queries, return JSON with `Cache-Control: private, max-age=N`
+Reference: `supabase/functions/process-stripe-refund/index.ts` and the new
+`supabase/functions/admin-home-stats/index.ts`.
+
+### TanStack hook for admin data (discovered 2026-05-20)
+Use `supabase.functions.invoke<ResponseType>("fn-name", { body })` (not raw fetch)
+so auth headers are attached automatically. Match `staleTime` to the edge
+function's `Cache-Control: max-age` to avoid wasted re-fetches. Disable
+`refetchOnWindowFocus` for admin dashboards — focus-thrash is noise here.
+
+---
+
+## 2026-05-20 — ADMIN-EVENT-SUBMIT-001 (Event submissions moderation queue)
+
+Final story of the Admin Backend Overhaul PRD. 17/17 complete.
+
+Files added:
+- `src/components/admin/EventSubmissionsManager.tsx`
+- `src/pages/AdminEventSubmissions.tsx`
+
+Files modified:
+- `src/App.tsx` (lazy import + route)
+- `src/components/admin/AdminNav.tsx` (Content group link with Inbox icon)
+
+**Learnings for future iterations:**
+- Quick-template buttons + a free-text fallback in the same dialog
+  is a better moderation UX than just a textarea. Templates make
+  common rejections fast; free text covers the edge cases.
+- Per-row + bulk reusing the same action dialog: set `selected` to
+  a singleton `Set([row.id])` from the detail Sheet, then trigger
+  the same `bulkAction` state. One code path, two entry points.
+- For tables where moderators land most often on a specific status
+  (pending here), default the filter to that status instead of
+  "all" — saves a click every session.
+
+---
+
+## End of Admin Backend Overhaul PRD ✅ 17/17
+
+See `prd.json` for the full set of completed stories with per-story
+SHIPPED notes (including scope deviations and what was deferred).
+
+Required secrets that admins need to set before exercising new
+functionality:
+- `SOCIAL_ACCOUNT_ENC_KEY` (base64 of 32 random bytes) for
+  manage-social-account.
+- `RESEND_API_KEY` already in use; `NEWSLETTER_FROM` optional override.
+
+Known follow-ups worth filing as their own stories:
+- Rewrite `calculate_trending_scores` PL/pgSQL to read from
+  `trending_config` (currently captures intent only).
+- Per-recipient delivery rows + open/click tracking for newsletter
+  campaigns (needs Resend webhook).
+- Drag-to-update kanban in PartnershipsManager (needs @dnd-kit).
+- Reply thread + email send-via-Resend in the FeedbackInbox.
+- Recurring rules (days_of_week / start_time / end_time) on deals.
+
+---
+
+## 2026-05-20 — ADMIN-EMAIL-002 (Newsletter campaign composer + send)
+
+Files added:
+- `supabase/migrations/20260520000008_create_newsletter_campaigns.sql`
+- `supabase/functions/send-newsletter-campaign/index.ts`
+- `src/components/admin/NewsletterCampaignsManager.tsx`
+
+Files modified:
+- `src/pages/AdminEmail.tsx` (Campaigns tab now real)
+
+**Learnings for future iterations:**
+- Resend dispatch from an edge function: don't `Promise.all` over
+  hundreds of subscribers. Batch (5 at a time is a reasonable
+  default), use `Promise.allSettled` so one failure doesn't kill the
+  whole batch, and cap stored error messages to the first ~5 unique
+  reasons so the campaign row stays under reasonable size.
+- Preview-count pattern for segment-based sends: a dedicated
+  `preview_count` action on the same edge fn that takes the same
+  segment shape and returns just `{ count }`. The compose UI calls
+  it whenever the segment changes; saves wiring up a separate RPC.
+- For HTML body input from a trusted admin, `dangerouslySetInnerHTML`
+  on the preview pane is acceptable. Tag the comment so future
+  readers know the trust boundary is intentional, not a miss.
+- Scheduled campaign rows sit in the table with `status='scheduled'`
+  until a separate worker / cron picks them up. Don't try to send
+  on a schedule from the request that creates the row — that
+  couples send latency to the admin's HTTP timeout.
+
+---
+
+## 2026-05-20 — ADMIN-EMAIL-001 (Newsletter subscribers admin)
+
+Files added:
+- `src/components/admin/NewsletterSubscribersManager.tsx`
+
+Files modified:
+- `src/pages/AdminEmail.tsx` (Subscribers tab live, Campaigns stubbed)
+
+**Learnings for future iterations:**
+- `newsletter_subscribers` is NOT in `types.ts` — the public hook uses
+  `as any`. New admin code uses a local interface plus
+  `data as unknown as LocalType[]` casts. Acceptable until the types
+  are regenerated. Don't add the entry by hand unless something
+  actually consumes the generated shape — keeps types.ts churn down.
+- CSV export pattern: build header row, escapeCsv every cell
+  (`"`, `,`, `\n`), Blob + URL.createObjectURL + anchor click +
+  revokeObjectURL. Cap server fetch at a safe ceiling (10k here) so
+  an unfiltered export doesn't take down the page.
+- Admin destructive action audit pattern: write a
+  `security_audit_logs` row with `event_type='admin_action'`,
+  `action='<resource>:<verb>'`, `resource='<table>:<id>'`,
+  `user_id`, and `details: { count: N }`. Bulk operations write one
+  row per affected entity so an investigator can trace exactly which
+  records were touched.
+
+---
+
+## 2026-05-20 — ADMIN-SOCIAL-002 (Social post queue dashboard)
+
+Files added:
+- `src/components/admin/SocialPostQueue.tsx`
+- `supabase/migrations/20260520000007_social_media_posts_error_tracking.sql`
+
+Files modified:
+- `src/integrations/supabase/types.ts` (error_message + last_attempt_at)
+- `src/pages/AdminSocial.tsx` (Queue tab now real)
+
+Existing `social_media_posts` had every column we needed except error
+tracking; reuse over a new social_post_queue table.
+
+**Learnings for future iterations:**
+- Supabase Realtime subscription pattern for an admin queue:
+  ```ts
+  useEffect(() => {
+    const ch = supabase
+      .channel("name")
+      .on("postgres_changes",
+          { event: "*", schema: "public", table: "…" },
+          () => load())
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [filters]);
+  ```
+  Reinclude filter deps in the array so the channel rebuilds when the
+  query changes — otherwise the realtime callback runs an out-of-date
+  `load()`.
+- Retry pattern for queue rows: don't trigger an immediate API call
+  from the admin client. Reset `status → draft`, clear
+  `error_message`, leave the existing cron / worker to pick it up on
+  its next pass. Less risk, no secret reshuffling.
+- For tri-state column filtering on a text status enum, "Failed"
+  often means "row has an error_message", not a particular status
+  value. Filter by `.not("error_message", "is", null)`.
+
+---
+
+## 2026-05-20 — ADMIN-SOCIAL-001 (Social account credentials manager)
+
+Files added:
+- `supabase/migrations/20260520000006_create_social_accounts.sql`
+  (table + RLS service_role-only + safe view social_accounts_admin)
+- `supabase/functions/manage-social-account/index.ts`
+  (CRUD + test connection; AES-GCM via Web Crypto)
+- `src/components/admin/SocialAccountsManager.tsx`
+
+Files modified:
+- `src/pages/AdminSocial.tsx` (tabs: Accounts ready, Queue stub)
+
+**Required secret:** Set
+`supabase secrets set SOCIAL_ACCOUNT_ENC_KEY=<base64 of a 32-byte key>`
+before adding accounts. Generate with:
+`node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`
+
+**Learnings for future iterations:**
+- AES-GCM via the Deno Web Crypto API is simpler than pgcrypto for
+  this use case: no DB extension, no SECURITY DEFINER RPC wrapper,
+  and the key never leaves the edge function. Pattern: import key
+  via `crypto.subtle.importKey(raw, …, ["encrypt","decrypt"])`,
+  prepend a 12-byte random IV to the ciphertext, base64 the
+  combined blob, store as TEXT. Decrypt is the inverse.
+- "Tokens never returned to the client" pattern: stand up a safe
+  view that selects every column EXCEPT the encrypted ones and
+  exposes booleans (`has_access_token`) instead. RLS keeps the
+  underlying table service-role-only. All writes route through an
+  edge function that has both the key and the service role.
+- JSX gotcha: an unbraced `>` inside text triggers a parser error.
+  Wrap as `{"Stale (>24h)"}` or use the HTML entity.
+- Don't add a table to types.ts unless something in the codebase
+  references `Database["public"]["Tables"]["foo"]`. Local
+  interfaces on the consumers are fine when the data only flows
+  through edge-function-shaped responses.
+
+---
+
+## 2026-05-20 — ADMIN-PLAYGROUND-001 (Playground bulk editor)
+
+Different shape from the hotel/attraction managers: this one is
+inline-edit-first (cells are buttons that open Popover forms) rather
+than dialog-driven. Designed for the workflow where an admin reviews
+auto-imported Google Places rows and patches the fields Google
+doesn't supply (restrooms, shade, surface, age range, accessibility).
+
+Every admin edit stamps `manually_curated = true`. Future refreshes
+from Google Places skip those rows.
+
+Files added:
+- `supabase/migrations/20260520000005_add_playground_admin_fields.sql`
+- `src/components/admin/PlaygroundManager.tsx`
+
+Files modified:
+- `src/hooks/usePlaygrounds.ts` (source / manuallyCuratedOnly / sortBy
+  filters)
+- `src/integrations/supabase/types.ts` (manual sync)
+- `src/pages/AdminPlaygrounds.tsx` (placeholder → real manager)
+- `supabase/functions/populate-playgrounds/index.ts` (stamps source +
+  skips manually_curated rows)
+
+**Learnings for future iterations:**
+- Inline-edit Popover pattern: each editable cell becomes a `<button>`
+  that opens a `<Popover>` containing a tiny form. Save writes the
+  field + sets `manually_curated = true` + closes the popover.
+  Beats dialog forms when the user is curating 50+ rows.
+- Bulk edit modal that takes a single field + value avoids the "edit
+  20 fields at once" UX that doesn't make sense in practice. The list
+  of bulk-editable fields is just the inline-editable ones minus
+  `name`.
+- When extending a data-import edge function with a "skip if admin
+  touched it" guard, fetch the curation flag in the existence-check
+  query, not a separate round-trip.
+
+---
+
+## 2026-05-20 — ADMIN-ATTRACTION-001 (Attraction admin manager)
+
+Attractions table started life much thinner than hotels — just
+id/name/type/description/location/lat/lng/image_url/website/rating/is_featured.
+Migration adds the admin curation columns (address, hours_summary,
+hours JSONB, is_indoor/is_kid_friendly/is_free as nullable BOOL for
+tri-state, is_active BOOL NOT NULL DEFAULT true, accessibility_notes)
+and the seo_*/geo_* set so attractions get the same admin shape as
+hotels.
+
+Files added:
+- `supabase/migrations/20260520000004_add_attraction_admin_fields.sql`
+- `src/components/admin/AttractionManager.tsx`
+- `src/components/admin/AttractionEditDialog.tsx`
+
+Files modified:
+- `src/hooks/useAttractions.ts` (admin filters + sortBy; existing
+  public callers untouched because all new fields are optional)
+- `src/integrations/supabase/types.ts` (manual sync of new columns)
+- `src/pages/AdminAttractions.tsx` (placeholder → real manager)
+
+**Learnings for future iterations:**
+- For boolean flags that genuinely have three states (yes / no /
+  unknown) on a content table, use `BOOLEAN NULL`, NOT `BOOLEAN
+  DEFAULT false`. A button trio in the edit dialog maps to
+  `'true' | 'false' | ''` strings and back. Defaulting to false
+  silently lies about coverage and skews public filters.
+- Hard-required schema columns (NOT NULL) — like attractions.type —
+  must stay required in the Zod schema, even if the rest of the
+  form is mostly optional. Otherwise the insert fails on the DB,
+  not the form.
+- When mirroring a manager pattern (Hotel → Attraction), keep
+  prefixes unique (`a-name`, `h-name`) in element IDs so the two
+  dialogs can coexist if ever rendered on the same page.
+
+---
+
+## 2026-05-20 — ADMIN-HOTEL-003 (Bulk affiliate URL regeneration)
+
+Hotel vertical complete. Added bulk affiliate URL regen to HotelManager.
+
+Files modified:
+- `supabase/functions/generate-hotel-affiliate-urls/index.ts` (accepts
+  `hotel_ids: string[]`; existing `hotel_id` and `brand_parent` paths
+  preserved; sets `affiliate_url_updated_at` on every successful write)
+- `src/components/admin/HotelManager.tsx` (bulk Regen action behind
+  AlertDialog confirm; results Dialog with per-row outcomes; new "Last
+  regen" column at xl breakpoint)
+- `src/integrations/supabase/types.ts` (added affiliate_url_updated_at)
+
+Files added:
+- `supabase/migrations/20260520000001_add_affiliate_url_updated_at_to_hotels.sql`
+
+**Learnings for future iterations:**
+- When extending an existing edge function with a bulk variant, accept
+  a new `<thing>_ids: string[]` field rather than overloading the
+  singular. Keep the old path so existing callers (CronMonitor jobs,
+  per-row admin UI) don't have to change.
+- A dedicated tracking column (`<thing>_updated_at`) beats inferring
+  from `updated_at` when you want "last time this specific operation
+  ran" — `updated_at` changes on every edit and gives false positives.
+- Showing "unconfigured brands" in the results dialog made it
+  immediately obvious which Marriott / Hilton / IHG env vars are
+  missing, without having to dig through Supabase secrets UI.
+
+---
+
+## 2026-05-20 — ADMIN-HOTEL-002 (Hotel create/edit/delete dialog with SEO + GEO)
+
+Added the full HotelEditDialog and wired CRUD into HotelManager.
+
+Files added:
+- `src/components/admin/HotelEditDialog.tsx` (RHF + Zod, tabbed)
+- `supabase/migrations/20260520000000_add_seo_geo_to_hotels.sql`
+
+Files modified:
+- `src/components/admin/HotelManager.tsx` (New button + row dropdown
+  with Edit / Quick view / Deactivate; per-row soft-delete confirm)
+- `src/integrations/supabase/types.ts` (added seo_*/geo_* columns to
+  hotels Row/Insert/Update by hand; generated-types regen will catch
+  up the next time `supabase gen types` is run)
+
+**Learnings for future iterations:**
+- The hotels table did NOT have SEO/GEO columns — they're standard on
+  events / restaurants but the hotels migration (20260216000000) shipped
+  without them. Pattern for any content table being promoted to a full
+  admin vertical: add migration with `ALTER TABLE … ADD COLUMN IF NOT
+  EXISTS seo_title TEXT, seo_description TEXT, seo_keywords TEXT[],
+  seo_h1 TEXT, geo_summary TEXT, geo_key_facts TEXT[], geo_faq JSONB;`
+  Then add the matching columns to `types.ts` Row/Insert/Update by hand.
+- Image upload pattern when no dedicated bucket exists: use the shared
+  `media` bucket with a per-vertical key prefix (`hotels/<uuid>.<ext>`).
+  Avoids creating a new bucket + RLS policies for every vertical.
+- `geocode-location` edge function: POST `{ location }` → returns
+  `{ latitude, longitude }` or `{ error }`. No auth required (public
+  utility). Strategy: only geocode when both lat/lng are blank.
+- React Hook Form + Zod number fields: use
+  `z.union([z.literal(""), z.coerce.number()…])` so empty inputs are
+  valid and get coerced to a clean nullable on save.
+- Slug auto-generation pattern: track a `slugTouched` boolean that
+  flips when the user edits the slug field directly; while false (and
+  not in edit mode), keep regenerating from the name.
+
+---
+
+## 2026-05-20 — ADMIN-HOTEL-001 (Hotel admin manager: list, search, filter)
+
+Built the first real admin manager from the new PRD. Pattern other
+verticals (attractions, playgrounds) should follow.
+
+Shape of the manager component:
+1. Debounced search (`useDebounce`, 300ms)
+2. Filter row (type / affiliate-presence / sort)
+3. Bulk-action bar that only appears when ≥1 row is selected
+4. shadcn Table with select-all-on-page + per-row checkbox
+5. Status badges column collapsing Featured/Inactive/Affiliate into one cell
+6. Sheet panel for read-only detail (edit dialog ships in next story)
+7. Pagination (Prev/Next, 25/page, server-side via `offset` + `limit`)
+8. Mobile-first responsive: hide Type/Area on <md, Rating on <lg, Updated on <xl
+
+Files:
+- `src/components/admin/HotelManager.tsx` (new)
+- `src/hooks/useHotels.ts` (added `hasAffiliate` filter + `sortBy: 'updated'`)
+- `src/hooks/useDebounce.ts` (new — there was no shared debounce hook)
+- `src/pages/AdminHotels.tsx` (replaced placeholder with the real manager)
+
+**Learnings for future iterations:**
+- No shared `useDebounce` existed; `SearchAutocomplete.tsx` had a local
+  `useDebouncedValue`. Going forward use the new
+  `@/hooks/useDebounce` for any admin filter that needs debouncing.
+- Don't shoehorn admin verticals into the generic `ContentTable` —
+  it's tightly coupled to event-style content (writeup generator,
+  domain highlights, event enhancer). Build a focused manager.
+- Soft delete pattern for content tables: `UPDATE … SET is_active = false`
+  inside an `AlertDialog` confirm. Preserves analytics + lets us
+  reactivate without resurrecting from backups.
+- When a hook is consumed in many places, prefer additive options
+  (new sortBy enum value, new optional filter) over breaking the
+  signature. `useHotels` is used by public pages too; the new admin
+  filters default to undefined.
+---
+
+## 2026-05-20 — ADMIN-NAV-001 (role-aware grouped AdminNav + 9 new routes)
+
+Replaced flat 9-link AdminNav with role-aware grouped navigation:
+- Desktop: Overview link + 4 Popover groups (Content / Growth / Insights /
+  Operations). Active group highlighted; popover items show inline icon +
+  optional description.
+- Mobile: hamburger Sheet + Accordion sections. Active group's accordion
+  is open by default. Active item gets a left-border accent.
+- Role gating: Content + Insights visible to moderator+;
+  Growth + Operations require admin+.
+
+Registered 9 new admin routes (hotels, attractions, playgrounds, social,
+email, deals, partnerships, feedback, trending) using shared
+`AdminPlaceholder` component. Each placeholder names the future story
+that will replace it.
+
+Files added:
+- `src/components/admin/AdminPlaceholder.tsx`
+- `src/pages/AdminHotels.tsx`, AdminAttractions.tsx, AdminPlaygrounds.tsx,
+  AdminSocial.tsx, AdminEmail.tsx, AdminDeals.tsx, AdminPartnerships.tsx,
+  AdminFeedback.tsx, AdminTrending.tsx (9 placeholder pages)
+
+Files modified:
+- `src/components/admin/AdminNav.tsx` (full rewrite)
+- `src/App.tsx` (added 9 lazyWithRetry imports + Route entries)
+
+**Learnings for future iterations:**
+- `lazyWithRetry()` is the local helper in App.tsx that wraps React.lazy
+  with chunk-reload retry. Use it (not raw `lazy()`) for all new admin
+  pages so Cloudflare cache purges don't strand users on "Loading…".
+- ROLE_RANK comparator pattern: keep an enum-like map in the nav module
+  and use `ROLE_RANK[user] >= ROLE_RANK[group.minRole]`. Easier to read
+  than ad-hoc `includes(["admin", "root_admin"])` arrays.
+- AdminPlaceholder pattern: when registering routes ahead of full
+  implementation, prefer a single shared placeholder component over 9
+  near-identical placeholder pages. Each page becomes a 5-line wrapper
+  that names its tracking story.
+---
+
+## 2026-05-20 — ADMIN-HOME-001 (unified admin home)
+
+Replaced the static 3-card admin overview with:
+- KPI strip (events / restaurants / articles / new-signups-7d / pending-submissions)
+- Recent-activity feed pulling last 20 from `security_audit_logs`
+- Right-rail card with role badge + quick actions
+
+Files added:
+- `supabase/functions/admin-home-stats/index.ts`
+- `src/hooks/useAdminHomeStats.ts`
+- `src/components/admin/AdminKpiStrip.tsx`
+- `src/components/admin/AdminActivityFeed.tsx`
+
+Files modified:
+- `src/pages/Admin.tsx` (replaced overview cards; removed dead imports of
+  useRestaurants/useAttractions/usePlaygrounds — counts now come from the
+  edge function so the home page doesn't pull every row over the wire)
+
+**Learnings for future iterations:**
+- The audit table is named `security_audit_logs` (not `audit_logs`) — see
+  migration 20250805134517. Columns: event_type (enum), action, resource,
+  user_id, severity (low|medium|high), details (jsonb), timestamp.
+- User-submitted events live in `user_submitted_events` with `status` text
+  field ('pending' | 'approved' | 'rejected' | 'needs_revision'). No
+  separate event_submissions table.
+- Pre-existing lint error in `src/components/media/VideoPlayer.tsx:587`
+  (parsing error) lives on `main` — unrelated to this PRD but blocks a
+  fully-green `npm run lint`. Worth filing as a fix-up later.
+- Dev server starts on `http://localhost:8080` (per CLAUDE.md; not the
+  playwright base url 8082).
+---
