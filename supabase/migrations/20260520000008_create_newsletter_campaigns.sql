@@ -58,11 +58,7 @@ DO $$ BEGIN
     FOR SELECT
     TO authenticated
     USING (
-      EXISTS (
-        SELECT 1 FROM public.profiles
-        WHERE profiles.id = auth.uid()
-          AND profiles.role IN ('admin', 'root_admin')
-      )
+      is_admin()
     );
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;

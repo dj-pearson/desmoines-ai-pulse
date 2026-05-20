@@ -80,13 +80,7 @@ DO $$ BEGIN
     ON public.trending_config
     FOR SELECT
     TO authenticated
-    USING (
-      EXISTS (
-        SELECT 1 FROM public.profiles
-        WHERE profiles.id = auth.uid()
-          AND profiles.role IN ('admin', 'root_admin')
-      )
-    );
+    USING (is_admin());
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
@@ -95,13 +89,7 @@ DO $$ BEGIN
     ON public.trending_config
     FOR UPDATE
     TO authenticated
-    USING (
-      EXISTS (
-        SELECT 1 FROM public.profiles
-        WHERE profiles.id = auth.uid()
-          AND profiles.role IN ('admin', 'root_admin')
-      )
-    );
+    USING (is_admin());
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
@@ -110,12 +98,6 @@ DO $$ BEGIN
     ON public.trending_config_history
     FOR SELECT
     TO authenticated
-    USING (
-      EXISTS (
-        SELECT 1 FROM public.profiles
-        WHERE profiles.id = auth.uid()
-          AND profiles.role IN ('admin', 'root_admin')
-      )
-    );
+    USING (is_admin());
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
