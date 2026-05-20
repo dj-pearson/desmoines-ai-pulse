@@ -36,8 +36,8 @@
         "Typecheck + lint pass"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "SHIPPED: Rewrote AdminNav.tsx with role-aware grouped sections (Content / Growth / Insights / Operations). Desktop renders an Overview link plus one Popover per group; mobile renders a hamburger Sheet with Accordion sections — active group expands by default. Roles: Content + Insights visible to moderators+, Growth + Operations visible to admins+. Created shared AdminPlaceholder component + 9 placeholder pages (AdminHotels, AdminAttractions, AdminPlaygrounds, AdminSocial, AdminEmail, AdminDeals, AdminPartnerships, AdminFeedback, AdminTrending) each naming the story that will replace it. Registered all 9 routes in src/App.tsx as lazyWithRetry + <ProtectedRoute requireAdmin>. Typecheck passes; only pre-existing lint warnings remain on App.tsx (EventDetails, MonthlyEventsPage unused — predates this PRD)."
     },
     {
       "id": "ADMIN-HOTEL-001",

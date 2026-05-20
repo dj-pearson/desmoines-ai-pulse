@@ -23,6 +23,45 @@ function's `Cache-Control: max-age` to avoid wasted re-fetches. Disable
 
 ---
 
+## 2026-05-20 — ADMIN-NAV-001 (role-aware grouped AdminNav + 9 new routes)
+
+Replaced flat 9-link AdminNav with role-aware grouped navigation:
+- Desktop: Overview link + 4 Popover groups (Content / Growth / Insights /
+  Operations). Active group highlighted; popover items show inline icon +
+  optional description.
+- Mobile: hamburger Sheet + Accordion sections. Active group's accordion
+  is open by default. Active item gets a left-border accent.
+- Role gating: Content + Insights visible to moderator+;
+  Growth + Operations require admin+.
+
+Registered 9 new admin routes (hotels, attractions, playgrounds, social,
+email, deals, partnerships, feedback, trending) using shared
+`AdminPlaceholder` component. Each placeholder names the future story
+that will replace it.
+
+Files added:
+- `src/components/admin/AdminPlaceholder.tsx`
+- `src/pages/AdminHotels.tsx`, AdminAttractions.tsx, AdminPlaygrounds.tsx,
+  AdminSocial.tsx, AdminEmail.tsx, AdminDeals.tsx, AdminPartnerships.tsx,
+  AdminFeedback.tsx, AdminTrending.tsx (9 placeholder pages)
+
+Files modified:
+- `src/components/admin/AdminNav.tsx` (full rewrite)
+- `src/App.tsx` (added 9 lazyWithRetry imports + Route entries)
+
+**Learnings for future iterations:**
+- `lazyWithRetry()` is the local helper in App.tsx that wraps React.lazy
+  with chunk-reload retry. Use it (not raw `lazy()`) for all new admin
+  pages so Cloudflare cache purges don't strand users on "Loading…".
+- ROLE_RANK comparator pattern: keep an enum-like map in the nav module
+  and use `ROLE_RANK[user] >= ROLE_RANK[group.minRole]`. Easier to read
+  than ad-hoc `includes(["admin", "root_admin"])` arrays.
+- AdminPlaceholder pattern: when registering routes ahead of full
+  implementation, prefer a single shared placeholder component over 9
+  near-identical placeholder pages. Each page becomes a 5-line wrapper
+  that names its tracking story.
+---
+
 ## 2026-05-20 — ADMIN-HOME-001 (unified admin home)
 
 Replaced the static 3-card admin overview with:
