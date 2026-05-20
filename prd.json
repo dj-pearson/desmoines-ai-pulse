@@ -34,8 +34,8 @@
         "Typecheck + lint pass"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "SHIPPED: New edge function dispatch-scheduled-newsletters reads up to 5 due rows per run via a SECURITY DEFINER RPC public.claim_scheduled_newsletter_campaigns(p_limit) that atomically flips status='scheduled' → 'sending' inside a single UPDATE ... FOR UPDATE SKIP LOCKED ... RETURNING. This makes concurrent / duplicate cron firings idempotent (later firings see no claimable rows). Dispatcher then loops the existing Resend send pattern (5/batch via Promise.allSettled) and updates each row with final status='sent' (or 'failed' if zero delivered), sent_at, delivered, failed, and a 500-char error_message digest. Migration 20260520000012 also registers the cron schedule (every minute via pg_cron + net.http_post + service-role bearer) following the established 20250107000006_schedule_event_scraping.sql pattern. Manual admin invocation works the same way for future drain-overdue buttons."
     },
     {
       "id": "EMAIL-WEBHOOK-001",
