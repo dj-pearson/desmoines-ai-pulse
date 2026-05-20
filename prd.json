@@ -69,8 +69,8 @@
         "Typecheck + lint pass"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "SHIPPED: Migration 20260520000014 creates public.feedback_replies (id, submission_id FK CASCADE, direction CHECK admin_to_user/user_to_admin default admin_to_user, body_html, sent_by, sent_at, resend_message_id) with service_role-full + admin SELECT/INSERT RLS via is_admin(). New edge function send-feedback-reply (admin-only): looks up the contact_submission, sends Re: <subject> via Resend (SUPPORT_FROM env var or NEWSLETTER_FROM fallback), records a feedback_replies row with the message id, and flips the submission to status='responded' + stamps responded_at if blank. FeedbackInbox Sheet now loads + shows the thread newest-first below the original message: each entry has a direction header chip and timestamp; admin replies use a primary-tinted background, user replies use muted (future-proofs the user_to_admin direction even though inbound mail parsing is still out of scope). Composer is a textarea + 'Send to <email>' button at the bottom of the Sheet; disabled while sending; success appends the new reply via loadReplies() and refreshes the detail badge. body_html rendered via dangerouslySetInnerHTML — trusted because only admins can insert."
     },
     {
       "id": "DEAL-RECURRING-001",

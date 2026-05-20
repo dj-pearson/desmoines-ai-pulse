@@ -170,6 +170,18 @@ export default function FeedbackInbox() {
   const [detailNotes, setDetailNotes] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // FEEDBACK-REPLY-001: reply thread state.
+  interface ReplyRow {
+    id: string;
+    direction: "admin_to_user" | "user_to_admin";
+    body_html: string;
+    sent_by: string | null;
+    sent_at: string;
+  }
+  const [replies, setReplies] = useState<ReplyRow[]>([]);
+  const [replyBody, setReplyBody] = useState("");
+  const [sendingReply, setSendingReply] = useState(false);
+
   async function load() {
     setLoading(true);
     try {
@@ -233,6 +245,9 @@ export default function FeedbackInbox() {
   function openDetail(s: Submission) {
     setDetail(s);
     setDetailNotes(s.admin_notes ?? "");
+    setReplyBody("");
+    setReplies([]);
+    loadReplies(s.id);
     // Auto-mark as read when opened (if currently "new").
     if (s.status === "new") {
       supabase
@@ -240,6 +255,57 @@ export default function FeedbackInbox() {
         .update({ status: "read" })
         .eq("id", s.id)
         .then(() => load());
+    }
+  }
+
+  async function loadReplies(submissionId: string) {
+    try {
+      const { data, error } = await supabase
+        .from("feedback_replies")
+        .select("id, direction, body_html, sent_by, sent_at")
+        .eq("submission_id", submissionId)
+        .order("sent_at", { ascending: false });
+      if (error) throw error;
+      setReplies((data ?? []) as unknown as ReplyRow[]);
+    } catch (err) {
+      handleError(err, {
+        component: "FeedbackInbox",
+        action: "loadReplies",
+      });
+    }
+  }
+
+  async function sendReply() {
+    if (!detail || !replyBody.trim()) return;
+    setSendingReply(true);
+    try {
+      const { data, error } = await supabase.functions.invoke<{
+        ok: boolean;
+        message_id?: string | null;
+        error?: string;
+      }>("send-feedback-reply", {
+        body: { submission_id: detail.id, body_html: replyBody },
+      });
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.error ?? "Send failed");
+      toast.success(`Reply sent to ${detail.email}`);
+      setReplyBody("");
+      await loadReplies(detail.id);
+      await load();
+      // Refresh detail's local copy so the responded badge appears.
+      setDetail({
+        ...detail,
+        status: "responded",
+        responded_at: detail.responded_at ?? new Date().toISOString(),
+      });
+    } catch (err) {
+      handleError(err, {
+        component: "FeedbackInbox",
+        action: "sendReply",
+      });
+      toast.error("Reply failed. Check console.");
+    } finally {
+      setSendingReply(false);
     }
   }
 
@@ -553,6 +619,70 @@ export default function FeedbackInbox() {
                     <code className="font-mono">{detail.source_page}</code>
                   </div>
                 )}
+
+                {/* FEEDBACK-REPLY-001: thread + composer */}
+                <div className="border-t pt-3">
+                  <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Conversation ({replies.length})
+                  </Label>
+                  <div className="mt-2 space-y-2">
+                    {replies.length === 0 ? (
+                      <div className="text-xs text-muted-foreground italic">
+                        No replies yet.
+                      </div>
+                    ) : (
+                      replies.map((r) => (
+                        <div
+                          key={r.id}
+                          className={cn(
+                            "rounded-md border p-3",
+                            r.direction === "admin_to_user"
+                              ? "bg-primary/5 border-primary/20"
+                              : "bg-muted",
+                          )}
+                        >
+                          <div className="flex items-center justify-between text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+                            <span>
+                              {r.direction === "admin_to_user"
+                                ? "Admin → User"
+                                : "User → Admin"}
+                            </span>
+                            <span>
+                              {new Date(r.sent_at).toLocaleString()}
+                            </span>
+                          </div>
+                          <div
+                            className="text-sm prose prose-sm dark:prose-invert max-w-none"
+                            // Admin-authored HTML; trusted source.
+                            dangerouslySetInnerHTML={{ __html: r.body_html }}
+                          />
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    <Label
+                      htmlFor="fb-reply"
+                      className="text-xs uppercase tracking-wide text-muted-foreground"
+                    >
+                      Reply via email
+                    </Label>
+                    <Textarea
+                      id="fb-reply"
+                      rows={5}
+                      value={replyBody}
+                      onChange={(e) => setReplyBody(e.target.value)}
+                      placeholder="Write a reply. Plain text or HTML — sent through Resend, recorded on the thread, and flips status to responded."
+                    />
+                    <Button
+                      size="sm"
+                      onClick={sendReply}
+                      disabled={sendingReply || !replyBody.trim()}
+                    >
+                      {sendingReply ? "Sending…" : `Send to ${detail.email}`}
+                    </Button>
+                  </div>
+                </div>
 
                 <div>
                   <Label
