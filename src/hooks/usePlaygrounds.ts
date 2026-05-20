@@ -16,6 +16,11 @@ interface PlaygroundsState {
 interface PlaygroundFilters {
   search?: string;
   age_range?: string;
+  /** Admin-only: filter by source label */
+  source?: "google_places" | "manual";
+  /** Admin-only: only manually-curated rows */
+  manuallyCuratedOnly?: boolean;
+  sortBy?: "newest" | "updated" | "alphabetical" | "name";
   limit?: number;
   offset?: number;
 }
@@ -32,10 +37,21 @@ export function usePlaygrounds(filters: PlaygroundFilters = {}) {
     try {
       setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
-      let query = supabase
-        .from("playgrounds")
-        .select("*", { count: "exact" })
-        .order("created_at", { ascending: false });
+      let query = supabase.from("playgrounds").select("*", { count: "exact" });
+
+      switch (filters.sortBy ?? "newest") {
+        case "updated":
+          query = query.order("updated_at", { ascending: false });
+          break;
+        case "alphabetical":
+        case "name":
+          query = query.order("name", { ascending: true });
+          break;
+        case "newest":
+        default:
+          query = query.order("created_at", { ascending: false });
+          break;
+      }
 
       if (filters.search) {
         query = query.or(
@@ -45,6 +61,14 @@ export function usePlaygrounds(filters: PlaygroundFilters = {}) {
 
       if (filters.age_range) {
         query = query.eq("age_range", filters.age_range);
+      }
+
+      if (filters.source) {
+        query = query.eq("source", filters.source);
+      }
+
+      if (filters.manuallyCuratedOnly) {
+        query = query.eq("manually_curated", true);
       }
 
       if (filters.limit) {
@@ -133,7 +157,16 @@ export function usePlaygrounds(filters: PlaygroundFilters = {}) {
 
   useEffect(() => {
     fetchPlaygrounds();
-  }, [filters.search, filters.age_range, filters.limit, filters.offset]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    filters.search,
+    filters.age_range,
+    filters.source,
+    filters.manuallyCuratedOnly,
+    filters.sortBy,
+    filters.limit,
+    filters.offset,
+  ]);
 
   return {
     ...state,

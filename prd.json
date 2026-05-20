@@ -125,8 +125,8 @@
         "Typecheck + lint pass"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "SHIPPED: PlaygroundManager with inline-edit Popovers on name, has_restrooms, has_shade, surface_type, age_range, accessibility_notes — every edit stamps manually_curated=true. Migration 20260520000005 adds the curation columns + source ('manual' default; 'google_places' for auto-imports) + manually_curated (default false). Backfill flags existing thin rows as google_places. populate-playgrounds now sets source='google_places' on insert and SKIPS rows where manually_curated=true so future refresh-from-Google paths don't clobber admin edits. Manually-curated rows get a lock icon next to the name. Bulk-edit modal supports applying one value to N selected playgrounds. Filter for 'Curated only'. Typecheck + lint clean on new files."
     },
     {
       "id": "ADMIN-SOCIAL-001",

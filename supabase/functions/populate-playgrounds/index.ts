@@ -66,10 +66,11 @@ serve(async (req) => {
       const description = playground.editorialSummary?.text || null
       const imageUrl = playground.photos?.[0]?.name || null // Store photo resource name
 
-      // Check for duplicates
+      // Check for duplicates. We also pull the manually_curated flag so
+      // future refresh-from-Google paths can respect admin edits.
       const { data: existingPlayground, error: fetchError } = await supabase
         .from('playgrounds')
-        .select('id')
+        .select('id, manually_curated')
         .eq('name', name)
         .eq('location', location)
         .single()
@@ -79,8 +80,15 @@ serve(async (req) => {
         continue
       }
 
+      // Skip if the row has been manually curated by an admin — see
+      // ADMIN-PLAYGROUND-001.
+      if (existingPlayground && existingPlayground.manually_curated) {
+        console.log(`Skipping manually-curated playground: ${name}`)
+        continue
+      }
+
       if (!existingPlayground) {
-        // Insert new playground
+        // Insert new playground, stamping the source for the admin filter.
         const { error: insertError } = await supabase.from('playgrounds').insert({
           name,
           location,
@@ -88,6 +96,7 @@ serve(async (req) => {
           age_range: null, // Google Places API does not provide this directly
           amenities: null, // Google Places API does not provide this directly
           image_url: imageUrl,
+          source: 'google_places',
         })
 
         if (insertError) {

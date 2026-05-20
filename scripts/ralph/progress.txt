@@ -23,6 +23,44 @@ function's `Cache-Control: max-age` to avoid wasted re-fetches. Disable
 
 ---
 
+## 2026-05-20 — ADMIN-PLAYGROUND-001 (Playground bulk editor)
+
+Different shape from the hotel/attraction managers: this one is
+inline-edit-first (cells are buttons that open Popover forms) rather
+than dialog-driven. Designed for the workflow where an admin reviews
+auto-imported Google Places rows and patches the fields Google
+doesn't supply (restrooms, shade, surface, age range, accessibility).
+
+Every admin edit stamps `manually_curated = true`. Future refreshes
+from Google Places skip those rows.
+
+Files added:
+- `supabase/migrations/20260520000005_add_playground_admin_fields.sql`
+- `src/components/admin/PlaygroundManager.tsx`
+
+Files modified:
+- `src/hooks/usePlaygrounds.ts` (source / manuallyCuratedOnly / sortBy
+  filters)
+- `src/integrations/supabase/types.ts` (manual sync)
+- `src/pages/AdminPlaygrounds.tsx` (placeholder → real manager)
+- `supabase/functions/populate-playgrounds/index.ts` (stamps source +
+  skips manually_curated rows)
+
+**Learnings for future iterations:**
+- Inline-edit Popover pattern: each editable cell becomes a `<button>`
+  that opens a `<Popover>` containing a tiny form. Save writes the
+  field + sets `manually_curated = true` + closes the popover.
+  Beats dialog forms when the user is curating 50+ rows.
+- Bulk edit modal that takes a single field + value avoids the "edit
+  20 fields at once" UX that doesn't make sense in practice. The list
+  of bulk-editable fields is just the inline-editable ones minus
+  `name`.
+- When extending a data-import edge function with a "skip if admin
+  touched it" guard, fetch the curation flag in the existence-check
+  query, not a separate round-trip.
+
+---
+
 ## 2026-05-20 — ADMIN-ATTRACTION-001 (Attraction admin manager)
 
 Attractions table started life much thinner than hotels — just
