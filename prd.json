@@ -19,8 +19,8 @@
         "Typecheck + lint pass"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "SHIPPED: Built admin-home-stats edge function (parallel COUNT queries on events/restaurants/articles/profiles/user_submitted_events + last 20 security_audit_logs entries), useAdminHomeStats hook (TanStack Query, 5-min staleTime), AdminKpiStrip and AdminActivityFeed components (skeleton loading, empty states, responsive mobile-first). Replaced the static 3-card overview in src/pages/Admin.tsx with KPI strip + activity feed + right-rail role/quick-actions card. KPIs shipped: events total/7d, restaurants total/7d, articles total/7d, new signups 7d, pending event submissions. SCOPE DEFERRED to future stories: 'trial-to-paid conversions' (needs subscription_events table query) and 'pending feedback count' (needs ADMIN-FEEDBACK-001 schema). Edge function uses SECURITY DEFINER pattern via service-role client + admin/root_admin role gate (matches process-stripe-refund). Cache-Control: private, max-age=300. Typecheck passes; only pre-existing lint warnings remain on Admin.tsx."
     },
     {
       "id": "ADMIN-NAV-001",

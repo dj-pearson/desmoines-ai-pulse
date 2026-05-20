@@ -3,8 +3,54 @@ Started: 2026-05-20
 
 ## Codebase Patterns
 
-(Append general, reusable patterns here as they're discovered. Examples expected:
-hotel/attraction/playground manager component shape, edge-function SECURITY
-DEFINER stats fns, social account encryption, segment-based newsletter dispatch.)
+### Admin edge-function auth gate (discovered 2026-05-20)
+Pattern for admin-only edge functions:
+1. `handleCors(req)` → early return on OPTIONS
+2. `checkRateLimit(req, { windowMs, max, message })` → 429 + Retry-After
+3. Reject non-GET/POST → 405
+4. Build service-role client with `Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")`
+5. Read `Authorization: Bearer <token>`, call `supabase.auth.getUser(token)`
+6. Lookup `profiles.role` and require `admin` or `root_admin`
+7. Run queries, return JSON with `Cache-Control: private, max-age=N`
+Reference: `supabase/functions/process-stripe-refund/index.ts` and the new
+`supabase/functions/admin-home-stats/index.ts`.
 
+### TanStack hook for admin data (discovered 2026-05-20)
+Use `supabase.functions.invoke<ResponseType>("fn-name", { body })` (not raw fetch)
+so auth headers are attached automatically. Match `staleTime` to the edge
+function's `Cache-Control: max-age` to avoid wasted re-fetches. Disable
+`refetchOnWindowFocus` for admin dashboards — focus-thrash is noise here.
+
+---
+
+## 2026-05-20 — ADMIN-HOME-001 (unified admin home)
+
+Replaced the static 3-card admin overview with:
+- KPI strip (events / restaurants / articles / new-signups-7d / pending-submissions)
+- Recent-activity feed pulling last 20 from `security_audit_logs`
+- Right-rail card with role badge + quick actions
+
+Files added:
+- `supabase/functions/admin-home-stats/index.ts`
+- `src/hooks/useAdminHomeStats.ts`
+- `src/components/admin/AdminKpiStrip.tsx`
+- `src/components/admin/AdminActivityFeed.tsx`
+
+Files modified:
+- `src/pages/Admin.tsx` (replaced overview cards; removed dead imports of
+  useRestaurants/useAttractions/usePlaygrounds — counts now come from the
+  edge function so the home page doesn't pull every row over the wire)
+
+**Learnings for future iterations:**
+- The audit table is named `security_audit_logs` (not `audit_logs`) — see
+  migration 20250805134517. Columns: event_type (enum), action, resource,
+  user_id, severity (low|medium|high), details (jsonb), timestamp.
+- User-submitted events live in `user_submitted_events` with `status` text
+  field ('pending' | 'approved' | 'rejected' | 'needs_revision'). No
+  separate event_submissions table.
+- Pre-existing lint error in `src/components/media/VideoPlayer.tsx:587`
+  (parsing error) lives on `main` — unrelated to this PRD but blocks a
+  fully-green `npm run lint`. Worth filing as a fix-up later.
+- Dev server starts on `http://localhost:8080` (per CLAUDE.md; not the
+  playwright base url 8082).
 ---

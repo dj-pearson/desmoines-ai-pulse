@@ -15,6 +15,8 @@ import { Link } from "react-router-dom";
 import AdminNav from "@/components/admin/AdminNav";
 import QuickCreatePanel from "@/components/admin/QuickCreatePanel";
 import ContentEditDialog from "@/components/ContentEditDialog";
+import { AdminKpiStrip } from "@/components/admin/AdminKpiStrip";
+import { AdminActivityFeed } from "@/components/admin/AdminActivityFeed";
 import { useState } from "react";
 import {
   Shield,
@@ -28,16 +30,13 @@ import {
   Server,
 } from "lucide-react";
 import { useEvents } from "@/hooks/useEvents";
-import { useRestaurants } from "@/hooks/useRestaurants";
-import { useAttractions } from "@/hooks/useAttractions";
-import { usePlaygrounds } from "@/hooks/usePlaygrounds";
+import { useAdminHomeStats } from "@/hooks/useAdminHomeStats";
 import { ContentItem, ContentType } from "@/lib/types";
 import { toast } from "sonner";
 import { useClearEventCache } from "@/hooks/useClearEventCache";
 
 export default function Admin() {
-  const { user, userRole, isLoading, hasAdminAccess, isRootAdmin } =
-    useAdminAuth();
+  const { userRole, isRootAdmin } = useAdminAuth();
   const { clearEventCache } = useClearEventCache();
   useDocumentTitle("Admin Dashboard");
 
@@ -52,11 +51,10 @@ export default function Admin() {
     item: null,
   });
 
-  // Data hooks for counts on overview
+  // Data: counts/deltas/activity come from the admin-home-stats edge fn;
+  // useEvents() is still loaded so QuickCreatePanel can refetch after a save.
   const events = useEvents();
-  const restaurants = useRestaurants();
-  const attractions = useAttractions();
-  const playgrounds = usePlaygrounds();
+  const homeStats = useAdminHomeStats();
 
   const getRoleIcon = () => {
     if (isRootAdmin) return <Crown className="h-5 w-5" />;
@@ -119,81 +117,70 @@ export default function Admin() {
     <>
       <div className="min-h-screen bg-background">
         <AdminNav />
-        <div className="p-4 md:p-6">
-          {/* Overview Stats Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-            <Card>
-              <CardHeader className="mobile-padding">
-                <CardTitle className="flex items-center gap-2 text-mobile-body md:text-lg">
-                  <Shield className="h-4 w-4 md:h-5 md:w-5" />
-                  Your Role
-                </CardTitle>
-                <CardDescription className="text-mobile-caption">
-                  Current access level
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="mobile-padding pt-0">
-                <div className="text-xl md:text-2xl font-bold flex items-center gap-2">
-                  {getRoleIcon()}
-                  <span className="break-words">
-                    {userRole.replace("_", " ")}
-                  </span>
-                </div>
-                <div className="mt-3 md:mt-4 text-mobile-caption text-muted-foreground">
-                  {isRootAdmin && "Full system access"}
-                  {userRole === "admin" && !isRootAdmin && "Administrative access"}
-                  {userRole === "moderator" && "Content management access"}
-                </div>
-              </CardContent>
-            </Card>
+        <div className="p-4 md:p-6 space-y-6">
+          {/* KPI strip (story ADMIN-HOME-001) */}
+          <AdminKpiStrip
+            tiles={homeStats.data?.kpis}
+            isLoading={homeStats.isLoading}
+          />
 
-            <Card>
-              <CardHeader className="mobile-padding">
-                <CardTitle className="flex items-center gap-2 text-mobile-body md:text-lg">
-                  <Settings className="h-4 w-4 md:h-5 md:w-5" />
-                  Permissions
-                </CardTitle>
-                <CardDescription className="text-mobile-caption">
-                  What you can do
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="mobile-padding pt-0">
-                <div className="space-y-2 text-mobile-caption">
-                  {canManageContent() && (
-                    <div className="text-green-600">Manage content</div>
-                  )}
-                  {canManageUsers() && (
-                    <div className="text-green-600">Manage users</div>
-                  )}
-                  {!canManageUsers() && (
-                    <div className="text-muted-foreground">
-                      No user management
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+          {/* Recent activity + role/permissions side-by-side on lg, stacked below */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
+            <div className="lg:col-span-2">
+              <AdminActivityFeed
+                entries={homeStats.data?.activity}
+                isLoading={homeStats.isLoading}
+              />
+            </div>
+            <div className="space-y-4">
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Shield className="h-4 w-4" />
+                    Your role
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    Current access level
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="text-xl font-bold flex items-center gap-2">
+                    {getRoleIcon()}
+                    <span className="break-words">
+                      {userRole.replace("_", " ")}
+                    </span>
+                  </div>
+                  <div className="mt-3 text-xs text-muted-foreground space-y-1">
+                    {canManageContent() && (
+                      <div className="text-green-600 dark:text-green-500">
+                        ✓ Manage content
+                      </div>
+                    )}
+                    {canManageUsers() && (
+                      <div className="text-green-600 dark:text-green-500">
+                        ✓ Manage users
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
 
-            <Card>
-              <CardHeader className="mobile-padding">
-                <CardTitle className="flex items-center gap-2 text-mobile-body md:text-lg">
-                  <Users className="h-4 w-4 md:h-5 md:w-5" />
-                  Quick Actions
-                </CardTitle>
-                <CardDescription className="text-mobile-caption">
-                  Common tasks
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="mobile-padding pt-0">
-                <div className="space-y-2">
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Settings className="h-4 w-4" />
+                    Quick actions
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0 space-y-2">
                   {canManageContent() && (
                     <Link to="/admin/content">
                       <Button
                         variant="outline"
                         size="sm"
-                        className="w-full justify-start touch-target"
+                        className="w-full justify-start"
                       >
-                        Manage Events
+                        Manage events
                       </Button>
                     </Link>
                   )}
@@ -202,15 +189,14 @@ export default function Admin() {
                       <Button
                         variant="outline"
                         size="sm"
-                        className="w-full justify-start touch-target"
+                        className="w-full justify-start"
                       >
-                        Manage Users
+                        Manage users
                       </Button>
                     </Link>
                   )}
-
                   <Button
-                    variant="destructive"
+                    variant="ghost"
                     size="sm"
                     onClick={() => {
                       clearEventCache();
@@ -218,45 +204,17 @@ export default function Admin() {
                         "Event cache cleared! Refresh the page to see fresh data."
                       );
                     }}
-                    className="w-full justify-start touch-target"
+                    className="w-full justify-start text-muted-foreground"
                   >
-                    Clear Event Cache (Debug)
+                    Clear event cache (debug)
                   </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Content Counts */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6">
-            <Card>
-              <CardContent className="p-4 text-center">
-                <div className="text-2xl font-bold">{events.events.length}</div>
-                <div className="text-sm text-muted-foreground">Events</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4 text-center">
-                <div className="text-2xl font-bold">{restaurants.restaurants.length}</div>
-                <div className="text-sm text-muted-foreground">Restaurants</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4 text-center">
-                <div className="text-2xl font-bold">{attractions.attractions.length}</div>
-                <div className="text-sm text-muted-foreground">Attractions</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4 text-center">
-                <div className="text-2xl font-bold">{playgrounds.playgrounds.length}</div>
-                <div className="text-sm text-muted-foreground">Playgrounds</div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </div>
           </div>
 
           {/* Quick Navigation Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {QUICK_LINKS.map((link) => {
               const Icon = link.icon;
               return (
@@ -279,7 +237,7 @@ export default function Admin() {
 
           {/* Quick Create Panel */}
           {canManageContent() && (
-            <div className="mt-6">
+            <div>
               <QuickCreatePanel onCreateFromTemplate={handleQuickCreate} />
             </div>
           )}
