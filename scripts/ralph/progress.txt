@@ -23,6 +23,43 @@ function's `Cache-Control: max-age` to avoid wasted re-fetches. Disable
 
 ---
 
+## 2026-05-20 — ADMIN-HOTEL-001 (Hotel admin manager: list, search, filter)
+
+Built the first real admin manager from the new PRD. Pattern other
+verticals (attractions, playgrounds) should follow.
+
+Shape of the manager component:
+1. Debounced search (`useDebounce`, 300ms)
+2. Filter row (type / affiliate-presence / sort)
+3. Bulk-action bar that only appears when ≥1 row is selected
+4. shadcn Table with select-all-on-page + per-row checkbox
+5. Status badges column collapsing Featured/Inactive/Affiliate into one cell
+6. Sheet panel for read-only detail (edit dialog ships in next story)
+7. Pagination (Prev/Next, 25/page, server-side via `offset` + `limit`)
+8. Mobile-first responsive: hide Type/Area on <md, Rating on <lg, Updated on <xl
+
+Files:
+- `src/components/admin/HotelManager.tsx` (new)
+- `src/hooks/useHotels.ts` (added `hasAffiliate` filter + `sortBy: 'updated'`)
+- `src/hooks/useDebounce.ts` (new — there was no shared debounce hook)
+- `src/pages/AdminHotels.tsx` (replaced placeholder with the real manager)
+
+**Learnings for future iterations:**
+- No shared `useDebounce` existed; `SearchAutocomplete.tsx` had a local
+  `useDebouncedValue`. Going forward use the new
+  `@/hooks/useDebounce` for any admin filter that needs debouncing.
+- Don't shoehorn admin verticals into the generic `ContentTable` —
+  it's tightly coupled to event-style content (writeup generator,
+  domain highlights, event enhancer). Build a focused manager.
+- Soft delete pattern for content tables: `UPDATE … SET is_active = false`
+  inside an `AlertDialog` confirm. Preserves analytics + lets us
+  reactivate without resurrecting from backups.
+- When a hook is consumed in many places, prefer additive options
+  (new sortBy enum value, new optional filter) over breaking the
+  signature. `useHotels` is used by public pages too; the new admin
+  filters default to undefined.
+---
+
 ## 2026-05-20 — ADMIN-NAV-001 (role-aware grouped AdminNav + 9 new routes)
 
 Replaced flat 9-link AdminNav with role-aware grouped navigation:

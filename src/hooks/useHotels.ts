@@ -20,9 +20,18 @@ interface HotelFilters {
   hotelType?: string[];
   amenities?: string[];
   starRating?: number;
-  sortBy?: "featured" | "price_low" | "price_high" | "rating" | "alphabetical" | "newest";
+  sortBy?:
+    | "featured"
+    | "price_low"
+    | "price_high"
+    | "rating"
+    | "alphabetical"
+    | "newest"
+    | "updated";
   featuredOnly?: boolean;
   activeOnly?: boolean;
+  /** Admin-only filter: undefined = ignore, true = require affiliate_url, false = require null */
+  hasAffiliate?: boolean;
   limit?: number;
   offset?: number;
 }
@@ -83,6 +92,13 @@ export function useHotels(filters: HotelFilters = {}) {
         query = query.eq("is_featured", true);
       }
 
+      // Has-affiliate filter (admin-only)
+      if (filters.hasAffiliate === true) {
+        query = query.not("affiliate_url", "is", null);
+      } else if (filters.hasAffiliate === false) {
+        query = query.is("affiliate_url", null);
+      }
+
       // Sorting
       const sortBy = filters.sortBy || "featured";
       switch (sortBy) {
@@ -112,6 +128,9 @@ export function useHotels(filters: HotelFilters = {}) {
           break;
         case "newest":
           query = query.order("created_at", { ascending: false });
+          break;
+        case "updated":
+          query = query.order("updated_at", { ascending: false });
           break;
         default:
           query = query
@@ -163,6 +182,7 @@ export function useHotels(filters: HotelFilters = {}) {
     filters.sortBy,
     filters.featuredOnly,
     filters.activeOnly,
+    filters.hasAffiliate,
     filters.limit,
     filters.offset,
   ]);

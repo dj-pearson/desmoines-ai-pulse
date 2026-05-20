@@ -55,8 +55,8 @@
         "Typecheck + lint pass"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "SHIPPED: Built src/components/admin/HotelManager.tsx — a focused list view with debounced search, hotel-type + affiliate + sort filters, 25/page server-side pagination, bulk-select with per-page select-all, bulk Feature/Un-feature/Deactivate (soft delete via is_active=false with AlertDialog confirm), and a read-only Sheet detail panel (edit dialog lands in ADMIN-HOTEL-002). Extended useHotels with `hasAffiliate` filter and `sortBy: 'updated'`. Added shared src/hooks/useDebounce.ts (no shared debounce hook existed). Replaced AdminHotels placeholder with the new manager. Typecheck + lint clean on new files."
     },
     {
       "id": "ADMIN-HOTEL-002",

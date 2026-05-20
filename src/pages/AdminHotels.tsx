@@ -1,11 +1,15 @@
-import AdminPlaceholder from "@/components/admin/AdminPlaceholder";
+import AdminNav from "@/components/admin/AdminNav";
+import HotelManager from "@/components/admin/HotelManager";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 
 export default function AdminHotels() {
+  useDocumentTitle("Hotels · Admin");
   return (
-    <AdminPlaceholder
-      title="Hotels"
-      storyId="ADMIN-HOTEL-001"
-      description="Dedicated hotel manager with list, search, filter, edit, and bulk affiliate-URL regeneration. Replaces editing hotels through the generic ContentTable."
-    />
+    <div className="min-h-screen bg-background">
+      <AdminNav />
+      <div className="p-4 md:p-6">
+        <HotelManager />
+      </div>
+    </div>
   );
 }
