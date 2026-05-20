@@ -1,5 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import {
   ExternalLink,
   HandCoins,
   LayoutGrid,
@@ -89,19 +101,9 @@ function StageBadge({ status }: { status: string | null }) {
   );
 }
 
-function AppCard({
-  app,
-  onOpen,
-}: {
-  app: Application;
-  onOpen: () => void;
-}) {
+function AppCardBody({ app }: { app: Application }) {
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="text-left w-full rounded-md border bg-card hover:bg-accent/40 transition-colors p-3 space-y-1"
-    >
+    <div className="space-y-1">
       <div className="font-medium truncate">{app.business_name}</div>
       <div className="text-xs text-muted-foreground truncate">
         {app.business_type}
@@ -118,7 +120,64 @@ function AppCard({
       <div className="text-[10px] text-muted-foreground">
         {new Date(app.created_at).toLocaleDateString()}
       </div>
-    </button>
+    </div>
+  );
+}
+
+function DraggableAppCard({
+  app,
+  onOpen,
+}: {
+  app: Application;
+  onOpen: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: app.id,
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      onClick={onOpen}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        // Don't intercept dnd-kit's space/enter pickup; only fire onOpen
+        // when the card isn't currently being grabbed.
+        if (!isDragging && (e.key === "Enter")) {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+      className={cn(
+        "text-left w-full rounded-md border bg-card hover:bg-accent/40 transition-colors p-3 cursor-grab active:cursor-grabbing",
+        isDragging && "opacity-50",
+      )}
+    >
+      <AppCardBody app={app} />
+    </div>
+  );
+}
+
+function DroppableColumn({
+  stageKey,
+  children,
+}: {
+  stageKey: string;
+  children: React.ReactNode;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: `column-${stageKey}` });
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "space-y-2 min-h-24 rounded-md p-1 transition-colors",
+        isOver && "bg-accent/40 ring-2 ring-primary/40",
+      )}
+    >
+      {children}
+    </div>
   );
 }
 
@@ -133,6 +192,60 @@ export default function PartnershipsManager() {
   const [detail, setDetail] = useState<Application | null>(null);
   const [detailNotes, setDetailNotes] = useState("");
   const [busy, setBusy] = useState(false);
+  // B2B-KANBAN-001: drag-to-update state.
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor),
+  );
+
+  async function handleDragEnd(event: DragEndEvent) {
+    setActiveDragId(null);
+    if (!event.over) return;
+    const targetId = String(event.over.id);
+    if (!targetId.startsWith("column-")) return;
+    const newStage = targetId.replace("column-", "");
+    const card = rows.find((r) => r.id === event.active.id);
+    if (!card || card.status === newStage) return;
+
+    // Optimistic update: move the card immediately.
+    const prevStage = card.status;
+    setRows((rs) =>
+      rs.map((r) =>
+        r.id === card.id ? { ...r, status: newStage } : r,
+      ),
+    );
+
+    try {
+      const patch: Record<string, unknown> = { status: newStage };
+      if (
+        ["approved", "rejected"].includes(newStage) &&
+        !card.reviewed_at
+      ) {
+        const { data: user } = await supabase.auth.getUser();
+        patch.reviewed_at = new Date().toISOString();
+        patch.reviewed_by = user.user?.id ?? null;
+      }
+      const { error } = await supabase
+        .from("partnership_applications")
+        .update(patch as never)
+        .eq("id", card.id);
+      if (error) throw error;
+      toast.success(`Moved to ${STAGES.find((s) => s.value === newStage)?.label ?? newStage}`);
+    } catch (err) {
+      handleError(err, {
+        component: "PartnershipsManager",
+        action: "handleDragEnd",
+      });
+      toast.error("Move failed — reverted");
+      // Revert.
+      setRows((rs) =>
+        rs.map((r) =>
+          r.id === card.id ? { ...r, status: prevStage } : r,
+        ),
+      );
+    }
+  }
 
   async function load() {
     setLoading(true);
@@ -303,36 +416,56 @@ export default function PartnershipsManager() {
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-              {STAGES.map((s) => {
-                const items = byStage.get(s.value) ?? [];
-                return (
-                  <div key={s.value} className="space-y-2">
-                    <div className="flex items-center justify-between text-sm font-medium">
-                      <span>{s.label}</span>
-                      <span className="text-xs text-muted-foreground tabular-nums">
-                        {items.length}
-                      </span>
+            <DndContext
+              sensors={sensors}
+              onDragStart={(e: DragStartEvent) => setActiveDragId(String(e.active.id))}
+              onDragEnd={handleDragEnd}
+              onDragCancel={() => setActiveDragId(null)}
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                {STAGES.map((s) => {
+                  const items = byStage.get(s.value) ?? [];
+                  return (
+                    <div key={s.value} className="space-y-2">
+                      <div className="flex items-center justify-between text-sm font-medium">
+                        <span>{s.label}</span>
+                        <span className="text-xs text-muted-foreground tabular-nums">
+                          {items.length}
+                        </span>
+                      </div>
+                      <DroppableColumn stageKey={s.value}>
+                        {items.length === 0 ? (
+                          <div className="rounded-md border border-dashed p-3 text-center text-xs text-muted-foreground">
+                            drop here
+                          </div>
+                        ) : (
+                          items.map((app) => (
+                            <DraggableAppCard
+                              key={app.id}
+                              app={app}
+                              onOpen={() => openDetail(app)}
+                            />
+                          ))
+                        )}
+                      </DroppableColumn>
                     </div>
-                    <div className="space-y-2 min-h-24">
-                      {items.length === 0 ? (
-                        <div className="rounded-md border border-dashed p-3 text-center text-xs text-muted-foreground">
-                          empty
+                  );
+                })}
+              </div>
+              <DragOverlay>
+                {activeDragId
+                  ? (() => {
+                      const dragging = rows.find((r) => r.id === activeDragId);
+                      if (!dragging) return null;
+                      return (
+                        <div className="rounded-md border bg-card shadow-lg p-3 opacity-90 rotate-1">
+                          <AppCardBody app={dragging} />
                         </div>
-                      ) : (
-                        items.map((app) => (
-                          <AppCard
-                            key={app.id}
-                            app={app}
-                            onOpen={() => openDetail(app)}
-                          />
-                        ))
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                      );
+                    })()
+                  : null}
+              </DragOverlay>
+            </DndContext>
           )
         ) : (
           <div className="rounded-md border overflow-x-auto">

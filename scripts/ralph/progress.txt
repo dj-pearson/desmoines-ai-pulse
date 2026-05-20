@@ -36,6 +36,113 @@ useEffect(() => {
 
 ---
 
+## 2026-05-20 — B2B-KANBAN-001 (drag-to-update kanban)
+6/6 — Admin Follow-ups PRD complete.
+
+Files modified:
+- `package.json` + `package-lock.json` (added @dnd-kit/core ^6.3,
+  @dnd-kit/sortable ^8)
+- `src/components/admin/PartnershipsManager.tsx`
+  (DndContext + DraggableAppCard + DroppableColumn + DragOverlay)
+
+**Learnings for future iterations:**
+- @dnd-kit PointerSensor needs `activationConstraint: { distance: 4 }`
+  on a card that also acts as a click target — without it, every
+  click is interpreted as a drag start. Distance 4px is the dnd-kit
+  default suggestion.
+- For accessibility, @dnd-kit's `KeyboardSensor` is plug-and-play
+  (Tab to focus, Space to pick up, arrows to move, Space to drop),
+  but the wrapping `<div role="button" tabIndex={0}>` should still
+  call `onOpen` on Enter so the detail Sheet stays reachable.
+- DragOverlay rendering: take the dragged row's data (rows.find),
+  render with rotate-1 + shadow-lg + opacity-90 for the floating
+  card. Don't reuse the same JSX that renders inside the column —
+  the overlay is positioned by dnd-kit, not by column layout.
+
+---
+
+## 2026-05-20 — DEAL-RECURRING-001 (recurring rules on deals)
+
+Files added:
+- `supabase/migrations/20260520000015_deals_recurrence.sql`
+
+Files modified:
+- `src/components/admin/DealManager.tsx`
+
+**Learnings:**
+- Postgres TIME columns serialize as 'HH:MM:SS' strings — strip
+  seconds with `.slice(0, 5)` before binding to an `<input type="time">`
+  which expects 'HH:MM'.
+- "Both times set or neither" is cleanly expressed as a CHECK
+  constraint, AND validated in the UI before the network round-trip.
+  Doing it twice protects against direct SQL inserts later.
+
+---
+
+## 2026-05-20 — FEEDBACK-REPLY-001 (reply thread + Resend reply)
+
+Files added:
+- `supabase/migrations/20260520000014_create_feedback_replies.sql`
+- `supabase/functions/send-feedback-reply/index.ts`
+
+Files modified:
+- `src/components/admin/FeedbackInbox.tsx`
+
+---
+
+## 2026-05-20 — EMAIL-WEBHOOK-001 (Resend webhook + delivery tracking)
+
+Files added:
+- `supabase/migrations/20260520000013_newsletter_delivery_tracking.sql`
+- `supabase/functions/resend-webhook/index.ts`
+
+Files modified:
+- `supabase/functions/send-newsletter-campaign/index.ts`
+- `supabase/functions/dispatch-scheduled-newsletters/index.ts`
+- `src/components/admin/NewsletterCampaignsManager.tsx`
+
+**Learnings:**
+- Svix-based webhook verification: use `new Webhook(secret).verify(rawBody, headers)`
+  with the three `svix-id`, `svix-timestamp`, `svix-signature` headers.
+  Reading `req.text()` once and passing the raw string is critical —
+  `req.json()` would re-serialize and break the signature.
+- Rank-aware status update for engagement events: if a `delivered`
+  event arrives AFTER an `opened` event (Resend sometimes orders
+  these out of sequence), don't downgrade the recipient's recorded
+  status. Map each status to a rank and only update when the new
+  event's rank is >= the previous one.
+- Unknown event types should return 200 OK with `{ ignored: type }`,
+  not 400 — otherwise Resend treats it as a delivery failure and
+  retries forever.
+
+---
+
+## 2026-05-20 — EMAIL-SCHED-001 (scheduler cron for newsletter campaigns)
+
+Files added:
+- `supabase/functions/dispatch-scheduled-newsletters/index.ts`
+- `supabase/migrations/20260520000012_schedule_newsletter_dispatch.sql`
+
+**Learnings:**
+- Atomic claim pattern with `FOR UPDATE SKIP LOCKED`:
+  ```sql
+  WITH due AS (
+    SELECT id FROM ... WHERE status='scheduled' AND scheduled_for <= now()
+    ORDER BY scheduled_for ASC
+    LIMIT p_limit
+    FOR UPDATE SKIP LOCKED
+  )
+  UPDATE ... SET status='sending' FROM due WHERE id=due.id RETURNING ...
+  ```
+  Lets multiple worker invocations run concurrently without
+  double-dispatching, and keeps the lock window tiny.
+- pg_cron + net.http_post pattern requires the
+  `app.settings.supabase_url` and `app.settings.supabase_service_role_key`
+  session settings to be configured. Established in
+  20250107000006_schedule_event_scraping.sql.
+
+---
+
 ## 2026-05-20 — TRENDING-FN-001 (rewire calculate_trending_scores)
 
 Files added:
