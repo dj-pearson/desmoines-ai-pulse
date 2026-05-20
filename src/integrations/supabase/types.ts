@@ -3639,6 +3639,13 @@ export type Database = {
           name: string
           rating: number | null
           updated_at: string | null
+          // Admin curation fields added by 20260520000005
+          has_restrooms: boolean | null
+          has_shade: boolean | null
+          surface_type: string | null
+          accessibility_notes: string | null
+          source: string
+          manually_curated: boolean
         }
         Insert: {
           age_range?: string | null
@@ -3654,6 +3661,12 @@ export type Database = {
           name: string
           rating?: number | null
           updated_at?: string | null
+          has_restrooms?: boolean | null
+          has_shade?: boolean | null
+          surface_type?: string | null
+          accessibility_notes?: string | null
+          source?: string
+          manually_curated?: boolean
         }
         Update: {
           age_range?: string | null
@@ -3669,6 +3682,12 @@ export type Database = {
           name?: string
           rating?: number | null
           updated_at?: string | null
+          has_restrooms?: boolean | null
+          has_shade?: boolean | null
+          surface_type?: string | null
+          accessibility_notes?: string | null
+          source?: string
+          manually_curated?: boolean
         }
         Relationships: []
       }

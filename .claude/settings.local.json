@@ -86,7 +86,9 @@
       "Bash(sed -n '948,958p' \"C:\\\\Users\\\\dpearson\\\\Documents\\\\Des-Moines-Insider\\\\Des-Moines-Insider\\\\desmoines-ai-pulse\\\\supabase\\\\functions\\\\firecrawl-scraper\\\\index.ts\")",
       "Bash(magick --version)",
       "Bash(git fetch *)",
-      "Bash(git checkout *)"
+      "Bash(git checkout *)",
+      "Bash(git commit *)",
+      "Bash(git restore *)"
     ],
     "deny": [],
     "ask": []
