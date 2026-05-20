@@ -1,1377 +1,313 @@
 {
   "project": "Des Moines AI Pulse",
-  "branchName": "claude/ralph-ai-stories-improvements-YFTmc",
-  "description": "Mobile UI/UX Premium Polish \u2014 Cross-platform (iOS + Android) initiative to elevate the mobile experience so it soars above the competition. Focuses on premium visual identity, delightful micro-interactions, contextual haptic feedback, a compelling paid-tier feel, animated navigation, hero parallax, conversational trip planning, map overhaul, and accessibility. Builds on the completed Mobile Security & Auth Hardening and Android App Audit PRDs.",
+  "branchName": "feat/admin-backend-overhaul",
+  "description": "Admin Backend Overhaul — Fill the 12 identified gaps in the admin surface. Most areas (events, restaurants/menus, articles, campaigns, AI, scrapers, analytics/GSC, security, system, user management) are already solid. This PRD builds the missing dedicated admin UIs for: hotels, attractions, playgrounds, social media accounts + post queue, newsletter/email, deals/promotions, B2B partnerships, feedback triage, trending config, and refund workflow polish — plus a unified admin home (KPI strip + recent activity feed) and AdminNav updates so the new pages are discoverable. Follows the RestaurantMenuManager + AdminCampaigns patterns already in the codebase.",
   "userStories": [
     {
-      "id": "AND-SEC-001",
-      "title": "Add biometric authentication (Fingerprint / Face) to Android",
-      "description": "As a user, I want to use fingerprint or face recognition to quickly and securely unlock the app without entering my password each time, matching the iOS Face ID/Touch ID experience.",
+      "id": "ADMIN-HOME-001",
+      "title": "Unified admin home with KPI strip and recent-activity feed",
+      "description": "As an admin, I want a single home dashboard that shows the platform's pulse at a glance — content counts, traffic, signups, queue depth, recent moderation actions — so I can triage without clicking into six different pages.",
       "acceptanceCriteria": [
-        "Add AndroidX Biometric library dependency (androidx.biometric:biometric:1.2.0-alpha05)",
-        "Create BiometricAuthService.kt matching iOS BiometricAuthService.swift API surface",
-        "Support Class 3 (strong) biometrics: fingerprint, face recognition, iris",
-        "Add biometric enable/disable toggle in profile/settings area",
-        "Store biometric preference securely using EncryptedSharedPreferences",
-        "On app launch, prompt biometric auth if enabled and session exists",
-        "Fall back to email/password if biometric fails or is unavailable",
-        "Handle all BiometricPrompt error codes gracefully (ERROR_HW_UNAVAILABLE, ERROR_NO_BIOMETRICS, ERROR_LOCKOUT, etc.)",
-        "Clear biometric preference on sign out"
+        "Replace the 6-quick-link layout in src/pages/Admin.tsx with a KPI strip + recent-activity feed + the existing quick-nav cards below",
+        "KPI strip shows: events count (7-day delta), restaurants count (7-day delta), articles count (7-day delta), new signups (7-day), trial-to-paid conversions (30-day), pending feedback count, pending event submissions count",
+        "Each KPI tile is a Card with: label, large number, delta (green up / red down with arrow icon), click-through to the relevant admin page",
+        "Recent-activity feed pulls last 20 entries from the audit_logs table (already populated by useSecurityAudit) — newest first, with actor avatar, action label, target entity link, timestamp ago",
+        "All counts/deltas come from a single new edge function admin-home-stats (supabase/functions/admin-home-stats/index.ts) — SECURITY DEFINER queries, returns JSON with a 5-minute server-side cache header",
+        "Hook is src/hooks/useAdminHomeStats.ts using TanStack Query with staleTime: 5 * 60 * 1000",
+        "Mobile: KPI strip becomes 2-column on sm:, single-column on xs:; activity feed truncates to last 10 on mobile with 'View all' link to AdminSecurity audit log",
+        "Loading state shows skeleton tiles; empty activity state shows 'No recent activity' with subdued icon",
+        "Typecheck + lint pass"
       ],
       "priority": 1,
-      "passes": true,
-      "notes": "FIXED: Created BiometricAuthService.kt with Class 3 (strong) biometric support via AndroidX Biometric library. Uses BiometricPrompt with suspend/resume for coroutine integration. Preference stored securely in EncryptedSharedPreferences via SecureStorage. Biometric lock screen on app launch with retry. All BiometricPrompt error codes handled (ERROR_HW_UNAVAILABLE, ERROR_NO_BIOMETRICS, ERROR_LOCKOUT, ERROR_LOCKOUT_PERMANENT, ERROR_TIMEOUT, etc.). Biometric preference cleared on sign out via AuthViewModel. MainActivity extended to FragmentActivity for BiometricPrompt compatibility."
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "AND-SEC-002",
-      "title": "Add certificate pinning for Supabase API calls on Android",
-      "description": "As a security-conscious user, I need the Android app to validate server certificates so that my data is protected from man-in-the-middle attacks on compromised networks, matching the iOS CertificatePinningService.",
+      "id": "ADMIN-NAV-001",
+      "title": "Surface new admin pages in AdminNav with role-aware grouping",
+      "description": "As an admin, I want all admin pages reachable from a single nav — including the new hotels / attractions / playgrounds / social / email / deals / B2B / feedback / trending pages — without memorizing URLs.",
       "acceptanceCriteria": [
-        "Create CertificatePinningService.kt matching iOS CertificatePinningService.swift",
-        "Pin SPKI SHA-256 hashes for Supabase infrastructure CA chain (same hashes as iOS)",
-        "Configure OkHttp CertificatePinner for the Ktor client used by Supabase",
-        "Pin supabase.co domain with Let's Encrypt R3, ISRG Root X1, and DigiCert Global Root G2 hashes",
-        "Debug mode uses report-only (logs but allows), production blocks mismatches",
-        "Add fallback mechanism with user-friendly error on pinning failure",
-        "Verify pinning works in both debug and release build types"
+        "Update src/components/admin/AdminNav.tsx to group routes under sections: Content (events, restaurants, hotels, attractions, playgrounds, articles, menus, media), Growth (campaigns, deals, email, social, B2B), Insights (analytics, feedback, trending), Operations (AI, tools, refunds, security, system)",
+        "Each group is collapsible on desktop, accordion on mobile (use shadcn Accordion primitive)",
+        "Active route highlights with primary color + left border accent",
+        "Hide groups the user's role can't access (e.g., moderator cannot see Operations.security/system)",
+        "Add /admin/hotels, /admin/attractions, /admin/playgrounds, /admin/social, /admin/email, /admin/deals, /admin/partnerships, /admin/feedback, /admin/trending routes to src/App.tsx wrapped in <ProtectedRoute requireAdmin>",
+        "Use lazy() + Suspense for each new route (matches existing pattern)",
+        "Typecheck + lint pass"
       ],
       "priority": 2,
-      "passes": true,
-      "notes": "FIXED: Created CertificatePinningService.kt with OkHttp CertificatePinner using same SPKI SHA-256 hashes as iOS (Let's Encrypt R3, ISRG Root X1, DigiCert Global Root G2). Integrated into SupabaseClientProvider via Ktor OkHttp engine. Debug mode uses report-only (logs but allows), production mode blocks mismatches. Pins *.supabase.co domain."
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "AND-SEC-003",
-      "title": "Add root detection with user warning on Android",
-      "description": "As a security-conscious user, I need the app to detect rooted devices so that I'm warned about potential security risks to my account, matching the iOS JailbreakDetector.",
+      "id": "ADMIN-HOTEL-001",
+      "title": "Hotel admin manager — list, search, filter",
+      "description": "As an admin, I want a dedicated /admin/hotels page that lists every hotel with search, filter, and bulk-select — matching the experience for restaurants and events.",
       "acceptanceCriteria": [
-        "Create RootDetector.kt matching iOS JailbreakDetector.swift pattern",
-        "Check for common root indicators: su binary, Magisk, SuperSU, Xposed, writable system paths",
-        "Check for dangerous apps: Magisk Manager, SuperSU, Xposed Installer",
-        "Check for test-keys in Build.TAGS",
-        "Check for SELinux permissive mode",
-        "Show non-blocking warning dialog on launch if root is detected",
-        "Do NOT block app usage (soft warning only, matching iOS pattern)",
-        "Skip detection on emulator to avoid false positives during development",
-        "Log root detection events for monitoring"
+        "Create src/pages/AdminHotels.tsx and src/components/admin/HotelManager.tsx following the RestaurantMenuManager pattern",
+        "Reuse the existing useHotels hook (src/hooks/useHotels.ts) and ContentTable primitive where it fits",
+        "Columns: image thumb, name, category, address, star_rating, has_affiliate_url (badge), is_featured (badge), updated_at",
+        "Search by name (debounced 300ms), filter by category, filter by affiliate-link presence, sort by updated_at / name / star_rating",
+        "Bulk-select with checkbox column; bulk actions row appears when ≥1 selected (Set Featured, Unset Featured, Delete — Delete shows AlertDialog confirm)",
+        "Pagination: 25 per page, server-side via Supabase range()",
+        "Row click opens detail panel (Sheet) — for now read-only summary; edit comes in ADMIN-HOTEL-002",
+        "Loading state: skeleton rows; empty state: 'No hotels yet' with link to search-new-hotels",
+        "Typecheck + lint pass"
       ],
       "priority": 3,
-      "passes": true,
-      "notes": "FIXED: Created RootDetector.kt matching iOS JailbreakDetector.swift with 5 checks: su binary paths, root management apps (Magisk, SuperSU, Xposed, etc.), suspicious paths, test-keys in Build.TAGS, writable system paths. Skips checks on emulator to avoid false positives. Shows non-blocking AlertDialog warning on app launch. Integrated into MainActivity with dismissible warning."
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "AND-SEC-004",
-      "title": "Add secure credential storage with Android Keystore",
-      "description": "As a user, I need my authentication tokens and sensitive data stored securely using hardware-backed encryption so that my credentials are protected even if the device is compromised.",
+      "id": "ADMIN-HOTEL-002",
+      "title": "Hotel admin manager — create, edit, delete with SEO/GEO fields",
+      "description": "As an admin, I want to create and edit hotels with the full schema (SEO, GEO, amenities, affiliate URLs, coordinates) without writing SQL.",
       "acceptanceCriteria": [
-        "Create SecureStorageService.kt using EncryptedSharedPreferences with MasterKey (AES256_GCM)",
-        "Migrate any plaintext credential storage to encrypted storage",
-        "Store biometric preferences, session tokens, and consent state in secure storage",
-        "Add string, boolean, and data convenience methods matching iOS KeychainService API",
-        "Add deleteAll() method for use during sign out cleanup",
-        "Provide Hilt singleton injection via DI module",
-        "Verify data is inaccessible without device unlock",
-        "Handle KeyStore initialization failures gracefully (fallback to standard storage with warning)"
+        "Add HotelEditDialog component (src/components/admin/HotelEditDialog.tsx) — React Hook Form + Zod schema validating: name (required), description, category (enum), address, latitude/longitude, star_rating (1-5), price_range, amenities (string[]), affiliate_url, image_url, seo_title (≤60 chars), seo_description (≤160), seo_keywords, geo_summary, geo_key_facts, geo_faq",
+        "Form is sectioned (Basics / Location / Amenities / SEO / GEO) using shadcn Tabs",
+        "On save: upsert via Supabase; on success toast + close + refetch via TanStack Query invalidation; on error toast + retain form state",
+        "Image upload: file input → Supabase Storage 'hotel-images' bucket → return public URL → set image_url",
+        "Geocode-on-save: if lat/lng empty but address present, call geocode-location edge function and populate",
+        "Delete action lives in HotelManager row context menu — AlertDialog confirm, soft-delete by setting is_active=false (preserves analytics)",
+        "Form is mobile-responsive (single column on xs:, two-column on md:)",
+        "Typecheck + lint pass"
       ],
       "priority": 4,
-      "passes": true,
-      "notes": "FIXED: Enhanced existing SecureStorage.kt with saveBoolean, loadBoolean, saveLong, loadLong, and contains methods matching iOS KeychainService convenience API. Already uses EncryptedSharedPreferences with MasterKey (AES256_GCM) for hardware-backed encryption. Falls back to standard SharedPreferences with warning if Keystore unavailable. Biometric preferences and consent state stored via SecureStorage. Hilt singleton injection via @Inject constructor."
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "AND-SEC-005",
-      "title": "Add session timeout enforcement on Android",
-      "description": "As a user, I need the app to enforce session timeouts so that my account is protected if I leave my device unattended.",
+      "id": "ADMIN-HOTEL-003",
+      "title": "Bulk affiliate URL regeneration for hotels",
+      "description": "As an admin, I want to regenerate affiliate URLs for selected hotels in one click so I can refresh tracking codes after partner changes.",
       "acceptanceCriteria": [
-        "Create SessionTimeoutService.kt tracking idle time via lifecycle callbacks",
-        "Enforce idle timeout: 60 minutes for regular users, 30 minutes for admins",
-        "Enforce absolute session duration: 8 hours for users, 4 hours for admins",
-        "Show warning dialog 5 minutes before session expires",
-        "Auto-sign out when timeout is reached",
-        "Reset idle timer on user interaction (touch, navigation)",
-        "Persist last activity timestamp in secure storage for app restart scenarios"
+        "Add 'Regenerate Affiliate URLs' to the HotelManager bulk-action row",
+        "On click: confirm dialog showing count, then call existing generate-hotel-affiliate-urls edge function with the selected hotel IDs",
+        "Show inline progress (X of Y processed) using the function's response; on completion, toast success count + refetch",
+        "Handle per-row failures: show a results dialog listing successes and failures with reason; allow retry of failed rows",
+        "Add a 'Last regenerated' column derived from updated_at when affiliate_url changed",
+        "Typecheck + lint pass"
       ],
       "priority": 5,
-      "passes": true,
-      "notes": "FIXED: Created SessionTimeoutService.kt with lifecycle-aware idle tracking via Application.ActivityLifecycleCallbacks. Enforces user (60min idle, 8h absolute) and admin (30min idle, 4h absolute) timeouts. Exposes SessionState StateFlow (ACTIVE/WARNING/EXPIRED) with 5-minute warning. Persists timestamps in SecureStorage for app restart. Periodic 30-second checks via coroutine. Integrated stop/start lifecycle with auth flow."
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "AND-SEC-006",
-      "title": "Add GDPR consent flow for Android",
-      "description": "As a user, I need to give explicit consent before the app collects my location and personal data, matching the iOS GDPR consent flow.",
+      "id": "ADMIN-ATTRACTION-001",
+      "title": "Attraction admin manager — list, search, filter, edit",
+      "description": "As an admin, I want a dedicated /admin/attractions page mirroring the hotel manager so I can curate attractions without falling back to the generic ContentTable.",
       "acceptanceCriteria": [
-        "Create ConsentService.kt with per-type toggles (location, email, analytics) matching iOS ConsentService",
-        "Store consent state in EncryptedSharedPreferences",
-        "Show consent screen during onboarding for EU users (locale-detected)",
-        "Add Privacy & Data section in settings to review/change consent anytime",
-        "If consent is withdrawn, stop collecting the corresponding data type",
-        "Log consent changes for compliance audit trail",
-        "Non-EU users skip consent screen automatically"
+        "Create src/pages/AdminAttractions.tsx and src/components/admin/AttractionManager.tsx + AttractionEditDialog (mirror HotelManager / HotelEditDialog patterns)",
+        "Reuse useAttractions hook; columns: image thumb, name, category, address, hours_summary, is_indoor, is_kid_friendly, is_free, is_featured, updated_at",
+        "Search debounced 300ms, filters: category, indoor/outdoor, kid-friendly, free, featured",
+        "Edit dialog supports: basics, hours JSON, accessibility flags, SEO + GEO blocks, image upload, geocode-on-save",
+        "Bulk actions: Set Featured, Unset Featured, Mark Kid-Friendly, Soft-Delete",
+        "Pagination 25/page, server-side",
+        "Mobile-responsive layout",
+        "Typecheck + lint pass"
       ],
       "priority": 6,
-      "passes": true,
-      "notes": "FIXED: Created ConsentService.kt matching iOS ConsentService.swift with per-type toggles (location, email, analytics) stored in EncryptedSharedPreferences via SecureStorage. EU locale detection using 32 country codes. StateFlow-based reactive UI for consent toggles. acceptAll/saveAndComplete/revokeAll bulk operations. Privacy & Data section added to SettingsScreen with toggle rows for each consent type. Changes logged for GDPR audit trail."
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "IOS-SEC-001",
-      "title": "Add session timeout enforcement on iOS",
-      "description": "As a user, I need the iOS app to enforce session timeouts matching backend policies so that my account is protected if I leave my device unattended.",
+      "id": "ADMIN-PLAYGROUND-001",
+      "title": "Playground bulk editor with manual overrides",
+      "description": "As an admin, I want to review playgrounds that the populate-playgrounds function auto-imports and bulk-edit fields it got wrong (name, amenities, accessibility) so the public list is curated rather than purely scraped.",
       "acceptanceCriteria": [
-        "Create SessionTimeoutService.swift tracking idle time via scene phase changes",
-        "Enforce idle timeout: 60 minutes for regular users, 30 minutes for admins",
-        "Enforce absolute session duration: 8 hours for users, 4 hours for admins",
-        "Show warning alert 5 minutes before session expires",
-        "Auto-sign out when timeout is reached",
-        "Reset idle timer on user interaction",
-        "Persist last activity timestamp in Keychain for app restart scenarios"
+        "Create src/pages/AdminPlaygrounds.tsx + src/components/admin/PlaygroundManager.tsx",
+        "Reuse usePlaygrounds hook; show source column (auto-imported vs manually-added)",
+        "Inline-editable cells for: name, has_restrooms, has_shade, surface_type, age_range, accessibility_notes (use shadcn Popover with form on click)",
+        "Bulk-select + bulk-edit modal: apply same value for chosen field across N rows (e.g., set has_shade=true for 12 selected)",
+        "Add 'manually_curated: boolean' column to playgrounds table via new migration supabase/migrations/<timestamp>_playgrounds_manual_curation.sql — defaults to false, populate-playgrounds sets it false on insert, any admin edit sets it true",
+        "Manually-curated rows show a small lock icon and are skipped by populate-playgrounds re-runs (function update to respect the flag)",
+        "Filter: 'manually curated only' toggle",
+        "Typecheck + lint pass"
       ],
       "priority": 7,
-      "passes": true,
-      "notes": "FIXED: Created SessionTimeoutService.swift with scene-phase-aware idle tracking via periodic Task checks. Enforces user (60min idle, 8h absolute) and admin (30min idle, 4h absolute) timeouts. Exposes SessionState enum (.active, .warning(minutesRemaining), .expired). Persists timestamps in Keychain via KeychainService. 30-second check interval. Start/stop lifecycle tied to auth state."
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "WEB-SEC-001",
-      "title": "Upgrade server-side rate limiting to database-backed storage",
-      "description": "As a platform operator, I need rate limiting that survives serverless cold starts and works across distributed instances so that brute force attacks are properly mitigated.",
+      "id": "ADMIN-SOCIAL-001",
+      "title": "Social media account credentials manager",
+      "description": "As an admin, I want a UI to add, edit, remove, and test connections for our X/Twitter, Facebook, Instagram, and LinkedIn accounts so social posting isn't dependent on hard-coded secrets.",
       "acceptanceCriteria": [
-        "Create rate_limit_events table in Supabase for persistent rate limit tracking",
-        "Update rateLimit.ts to write/read from database instead of in-memory Map",
-        "Add cleanup function to prune expired rate limit entries (run on schedule)",
-        "Maintain backward compatibility with existing tier configuration (read/write/AI/checkout)",
-        "Add proper indexes for efficient lookups by client_id and window timestamp",
-        "Return proper 429 responses with Retry-After header",
-        "All 35+ edge functions continue working without changes"
+        "New migration creates social_accounts table: id, platform (enum: twitter|facebook|instagram|linkedin), handle, access_token_encrypted, refresh_token_encrypted, token_expires_at, is_active, last_validated_at, created_by, created_at, updated_at",
+        "RLS: only admin/root_admin can SELECT/INSERT/UPDATE/DELETE; tokens are never returned to the client (use a SECURITY DEFINER read fn that omits token columns)",
+        "Encryption: use pgcrypto with a key from a new vault secret SOCIAL_ACCOUNT_ENC_KEY (document setup in the migration comment)",
+        "Create /admin/social page with src/components/admin/SocialAccountsManager.tsx — list, add, edit (rotate token), remove, 'Test Connection' button (calls a new test-social-connection edge function that does a no-op API call per platform)",
+        "Update social-media-manager edge function to pull credentials from this table by platform instead of env vars; existing env-var path remains as fallback for backwards compatibility",
+        "Add 'last validated' timestamp + badge (green if <24h, amber 24-72h, red >72h)",
+        "Typecheck + lint pass"
       ],
       "priority": 8,
-      "passes": true,
-      "notes": "FIXED: Created rate_limit_entries table with composite index on (client_id, endpoint, window_start) and unique constraint for atomic upsert. Created check_rate_limit() PL/pgSQL function for atomic rate limit check via INSERT ON CONFLICT. Created cleanup_rate_limit_entries() for expired entry removal. RLS enabled with service_role-only policy. Updated rateLimit.ts with new checkRateLimitPersistent() async function using database storage with in-memory fallback. Original checkRateLimit() kept synchronous for backward compatibility \u2014 all 35+ edge functions continue working unchanged."
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "AUTH-UX-001",
-      "title": "Improve auth error messages and recovery flows across platforms",
-      "description": "As a user, I need clear, actionable error messages during authentication so I can understand what went wrong and how to fix it.",
+      "id": "ADMIN-SOCIAL-002",
+      "title": "Social post queue dashboard",
+      "description": "As an admin, I want to see every scheduled / sent / failed social post in one place so I know what's going out, what failed, and why.",
       "acceptanceCriteria": [
-        "Map Supabase auth error codes to user-friendly messages on all platforms",
-        "Add specific messages for: invalid credentials, account not verified, account locked, rate limited, network error",
-        "Add 'Resend Verification Email' button when unverified account error occurs",
-        "Add 'Forgot Password?' inline link on invalid credentials error",
-        "Show password requirements inline during sign up (not just on failure)",
-        "Add email format validation feedback as user types",
-        "Consistent error presentation across iOS, Android, and web"
+        "Add the second tab to /admin/social (Queue) alongside Accounts from ADMIN-SOCIAL-001",
+        "List view shows scheduled_at, platform, account handle, content preview (first 80 chars), status (scheduled|posting|sent|failed), related event/restaurant link (if any), action buttons per row",
+        "Filters: platform, status, date range",
+        "Failed posts show error message inline + 'Retry' button that re-enqueues via social-media-manager",
+        "Scheduled posts show 'Cancel' and 'Reschedule' (DateTimePicker)",
+        "Sent posts show external link to the live post",
+        "If a social_post_queue table doesn't already exist, create it via migration (id, platform, account_id FK, content, media_urls jsonb, scheduled_at, posted_at, status, error_message, related_entity_type, related_entity_id, created_by); otherwise reuse existing schema",
+        "Realtime: subscribe to social_post_queue changes so the dashboard updates without refresh",
+        "Typecheck + lint pass"
       ],
       "priority": 9,
-      "passes": true,
-      "notes": "FIXED: Created AuthErrorMapper.kt with pattern-matched error mapping for 12+ Supabase auth error patterns (invalid credentials, email not confirmed, user not found, rate limited, network errors, etc.). Each error returns user-friendly message + optional RecoveryAction enum (RESEND_VERIFICATION, FORGOT_PASSWORD, WAIT_AND_RETRY, CHECK_NETWORK, CONTACT_SUPPORT). Updated AuthViewModel to use mapper on sign-in/sign-up failures with recovery action state. Updated AuthScreen with inline recovery action buttons (Resend Verification Email, Reset Password) and inline password requirements shown before user starts typing."
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "AND-UX-001",
-      "title": "Add entrance animations and haptic polish to Android",
-      "description": "As a user, I want the Android app to feel polished with smooth animations and haptic feedback matching the iOS experience.",
+      "id": "ADMIN-EMAIL-001",
+      "title": "Newsletter subscribers admin",
+      "description": "As an admin, I want to view and manage newsletter subscribers — search, export, segment by tier, and resync unsubscribes — so I can debug delivery issues and prep targeted sends.",
       "acceptanceCriteria": [
-        "Add staggered fade-in and slide-up animation for card lists (matching iOS entranceAnimation)",
-        "Add haptic feedback on favorite toggle, filter selection, and pull-to-refresh completion",
-        "Add shared element transitions between list cards and detail screens",
-        "Respect reduceMotion accessibility setting (Settings.Global.ANIMATOR_DURATION_SCALE)",
-        "Add skeleton shimmer animations to all loading states",
-        "No performance degradation on mid-range devices"
+        "Create /admin/email (src/pages/AdminEmail.tsx) with a Subscribers tab",
+        "src/components/admin/NewsletterSubscribersManager.tsx reuses useNewsletterSubscription where useful; otherwise read from the existing newsletter_subscribers table directly via TanStack Query",
+        "Columns: email, subscribed_at, source (signup form / event modal / etc.), tier (joined from profiles by email), is_active, last_sent_at, bounce_count, complaint_count",
+        "Search by email substring (debounced); filters: active/inactive, tier, source, has-bounced",
+        "Export CSV (current filter) — client-side blob download",
+        "Per-row actions: View profile (if matched), Manually unsubscribe (sets is_active=false + writes an audit_log entry), Re-subscribe",
+        "Bulk: unsubscribe N selected (confirm), export N selected",
+        "Pagination 50/page, server-side",
+        "Typecheck + lint pass"
       ],
       "priority": 10,
-      "passes": true,
-      "notes": "FIXED: Created EntranceAnimation.kt with Modifier.entranceAnimation(index) extension. Staggered fade-in + slide-up (350ms easeOut, 50ms stagger per index, capped at 10). Uses Animatable with graphicsLayer for alpha + translationY. Respects Settings.Global.ANIMATOR_DURATION_SCALE for reduce motion accessibility. Only plays on initial appearance via remember + LaunchedEffect(Unit)."
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "AND-UX-002",
-      "title": "Add progressive image loading with blur-up placeholder on Android",
-      "description": "As a user on a slow connection, I want to see a preview of images while the full version loads, matching the iOS blur-up pattern.",
+      "id": "ADMIN-EMAIL-002",
+      "title": "Newsletter campaign composer and send",
+      "description": "As an admin, I want to compose a one-off newsletter, preview it, choose a segment, and send via Resend without leaving the admin.",
       "acceptanceCriteria": [
-        "Enhance CachedAsyncImage to show a small blurred placeholder first",
-        "Use Coil's built-in crossfade transition with blur placeholder",
-        "Generate thumbnail URLs using Supabase image transforms where available",
-        "Smooth crossfade transition from placeholder to full-resolution image",
-        "Works for event hero images, restaurant cards, and attraction images",
-        "Fallback to colored rectangle placeholder if no thumbnail available"
+        "Add Campaigns tab to /admin/email — list of past newsletter sends (subject, sent_at, recipient count, open_rate, click_rate, status) with a 'New Campaign' button",
+        "Compose dialog: subject, preheader, body (rich text via existing tiptap-based editor used in EnhancedArticleEditor — reuse don't reinvent), segment selector (All active / Insider+ / VIP / Custom by tier+source)",
+        "Live preview pane renders the body inside the existing newsletter template",
+        "'Send Test' button sends to the current admin's email only",
+        "'Schedule' picker (DateTimePicker) — defaults to 'Send now'",
+        "On send: call a new send-newsletter-campaign edge function that resolves the segment, dispatches via Resend, and writes a newsletter_campaigns row + per-recipient delivery rows",
+        "If newsletter_campaigns table doesn't exist, add a migration (id, subject, preheader, body_html, segment_json, sent_at, scheduled_for, status, recipient_count, opens, clicks, bounces, complaints, sent_by)",
+        "Recipient counts shown live as segment changes",
+        "Typecheck + lint pass"
       ],
       "priority": 11,
-      "passes": true,
-      "notes": "FIXED: Enhanced CachedAsyncImage.kt with blur-up progressive loading. Uses animateFloatAsState for blur radius (12dp \u2192 0dp) and opacity (0.7 \u2192 1.0) transitions. Modifier.blur() applied during loading, removed after success callback. Respects ANIMATOR_DURATION_SCALE reduce motion setting. Colored surfaceVariant placeholder shown during loading. Smooth crossfade via Coil crossfade(true). Falls back to BrokenImage placeholder on error."
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "SEC-CROSS-001",
-      "title": "Add account lockout server sync across all platforms",
-      "description": "As a platform operator, I need account lockout state synchronized between server and clients so that attackers cannot bypass lockout by switching devices.",
+      "id": "ADMIN-DEAL-001",
+      "title": "Deals and promotions admin",
+      "description": "As an admin, I want a CRUD page for restaurant/attraction deals so I can publish happy hours, weekday specials, and seasonal promotions without database access.",
       "acceptanceCriteria": [
-        "Create check_login_attempt edge function that validates lockout before auth",
-        "Record failed login attempts in database with client device info",
-        "Sync lockout state: if locked on server, all clients honor the lockout",
-        "iOS, Android, and web clients check server lockout before attempting auth",
-        "Clear lockout state on successful authentication",
-        "Admin dashboard shows locked accounts for manual review",
-        "Lockout escalation: progressive lockout duration on repeated violations"
+        "Create /admin/deals (src/pages/AdminDeals.tsx) + src/components/admin/DealManager.tsx",
+        "Reuse useDeals hook (src/hooks/useDeals.ts) — if it lacks an admin mode (returning inactive/expired deals), add an adminMode option",
+        "List columns: title, business name (restaurant/attraction link), deal_type (happy_hour / special / discount / event_promo), discount_summary, starts_at, ends_at, days_of_week, is_active, is_featured, image, updated_at",
+        "Filters: business type, active/upcoming/expired, deal_type, featured",
+        "Edit dialog (DealEditDialog): title, description, business linker (autocomplete across restaurants + attractions tables), deal_type, discount details (percent or fixed or BOGO), recurring rules (days_of_week multi-select, start/end time), date range (or no end), image upload, terms_and_conditions, is_featured, is_active",
+        "Bulk: activate, deactivate, delete-expired (>30 days past ends_at)",
+        "Auto-deactivate cron: add or extend an edge function that runs daily to set is_active=false on deals where ends_at < now()",
+        "Typecheck + lint pass"
       ],
       "priority": 12,
-      "passes": true,
-      "notes": "FIXED: Created check-login-attempt edge function with POST endpoint (check/record_failure/record_success actions). Created login_attempts table with email, client_info, client_ip, attempted_at columns. 5 failed attempts in 15 minutes triggers lockout. Progressive lockout escalation (2x multiplier, max 1 hour). Clear on success. Fail-open on database errors. RLS with service_role-only access. Cleanup function for entries older than 24 hours."
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "AUDIT-SEC-001",
-      "title": "Disable automatic backup and add data extraction rules",
-      "description": "As a user, I need my sensitive data (auth tokens, encrypted preferences, biometric settings) excluded from Android auto-backup so that my account cannot be compromised if my cloud backup is accessed by another device.",
+      "id": "ADMIN-FEEDBACK-001",
+      "title": "Feedback and support triage inbox",
+      "description": "As an admin, I want a single inbox of user-submitted feedback (bug reports, suggestions, support questions, content corrections) with status workflow so nothing falls through the cracks.",
       "acceptanceCriteria": [
-        "Set android:allowBackup=\"false\" in AndroidManifest.xml",
-        "Add android:dataExtractionRules=\"@xml/data_extraction_rules\" for Android 12+ (API 31+)",
-        "Add android:fullBackupContent=\"@xml/backup_rules\" for Android 11 and below",
-        "Create res/xml/data_extraction_rules.xml that excludes: shared_prefs (contains encrypted tokens), databases (Room cache), no_backup directory",
-        "Create res/xml/backup_rules.xml with matching exclusion rules for pre-API-31",
-        "Allow backup of non-sensitive preferences (theme, onboarding state) if desired",
-        "Verify manifest compiles without errors"
+        "Create /admin/feedback (src/pages/AdminFeedback.tsx) + src/components/admin/FeedbackInbox.tsx",
+        "Reuse useFeedback hook (src/hooks/useFeedback.ts); add adminMode that returns all feedback rows (the user-facing hook only returns the current user's)",
+        "List: avatar/email, type (bug / suggestion / support / correction), subject, status (new / in_progress / resolved / closed), priority (low / med / high / urgent), assigned_to (admin profile autocomplete), created_at, age (days)",
+        "Filters: status, type, priority, assignee, date range, unassigned",
+        "Detail panel (Sheet): full message, related entity link if any (event / restaurant / etc.), screenshots if attached, conversation thread (admin reply box → writes feedback_replies row + optionally emails the user via Resend)",
+        "Bulk: change status, assign, set priority",
+        "Realtime subscription so new feedback appears without refresh; unread badge in AdminNav",
+        "If feedback table lacks status/priority/assigned_to columns, add them via migration with sensible defaults",
+        "Typecheck + lint pass"
       ],
       "priority": 13,
-      "passes": true,
-      "notes": "FIXED: Set android:allowBackup=false in AndroidManifest.xml. Created res/xml/data_extraction_rules.xml for Android 12+ and res/xml/backup_rules.xml for pre-API-31. Both exclude sharedpref, database, no_backup, and cache domains from cloud backup and device transfer."
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "AUDIT-SEC-002",
-      "title": "Add network request timeouts to OkHttp/Supabase client",
-      "description": "As a user, I need network requests to have reasonable timeouts so the app doesn't hang indefinitely when the server is unresponsive, preventing ANRs and poor UX.",
+      "id": "ADMIN-B2B-001",
+      "title": "Business partnerships admin",
+      "description": "As an admin, I want a workspace to track B2B partnership inquiries, contracts, and partner profiles so the sales pipeline doesn't live in a spreadsheet.",
       "acceptanceCriteria": [
-        "Configure connect timeout of 30 seconds on the OkHttp client in CertificatePinningService.createPinnedClient()",
-        "Configure read timeout of 30 seconds",
-        "Configure write timeout of 30 seconds",
-        "Configure call timeout of 60 seconds as an overall safety net",
-        "Apply the same timeouts to the image loading OkHttp client in DesMoinesInsiderApp.kt",
-        "Verify existing certificate pinning still works with the timeout configuration"
+        "Create /admin/partnerships (src/pages/AdminPartnerships.tsx) + src/components/admin/PartnershipsManager.tsx",
+        "Reuse useBusinessPartnership hook (src/hooks/useBusinessPartnership.ts); add adminMode for full list",
+        "List columns: business name, contact name, contact email, contact phone, partnership_type (advertiser / affiliate / sponsor / venue / data_provider), stage (lead / qualified / proposal / negotiation / signed / lost), deal_value_estimate, owner (admin), last_activity_at, next_action_at",
+        "Kanban view (drag stage to update) AND list view, toggleable",
+        "Filters: stage, owner, type, value range",
+        "Detail Sheet: full contact info, notes timeline (admin can append note → writes partnership_notes row), file attachments (Supabase Storage 'partnership-docs' bucket), linked Stripe customer (link to /admin/campaigns if the partner has paid campaigns)",
+        "If partnership_notes table doesn't exist, add via migration",
+        "Bulk: change stage, assign owner, archive",
+        "Typecheck + lint pass"
       ],
       "priority": 14,
-      "passes": true,
-      "notes": "FIXED: Added 30s connect/read/write timeouts and 60s call timeout to CertificatePinningService.createPinnedClient(). Added 30s connect/read timeouts to image loading OkHttpClient in DesMoinesInsiderApp. Timeouts are applied before certificate pinning configuration so both work together."
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "AUDIT-PERF-001",
-      "title": "Add @Immutable annotations to data model classes for Compose stability",
-      "description": "As a developer, I need data model classes annotated with @Immutable so the Compose compiler can skip unnecessary recompositions, improving scroll performance and reducing frame drops.",
+      "id": "ADMIN-TRENDING-001",
+      "title": "Trending content config tuner",
+      "description": "As an admin, I want to tune the weights and decay parameters of the trending algorithm so the homepage 'trending' section reflects current editorial priorities without redeploying.",
       "acceptanceCriteria": [
-        "Add @Immutable annotation to Event data class in data/model/Event.kt",
-        "Add @Immutable annotation to Restaurant data class in data/model/Restaurant.kt",
-        "Add @Immutable annotation to Attraction data class in data/model/Attraction.kt",
-        "Add @Immutable annotation to LatLng data class in data/model/LatLng.kt",
-        "Add @Immutable annotation to EventCategory enum if present",
-        "Verify all annotated classes are truly immutable (all val properties, no mutable collections)",
-        "Ensure kotlinx.serialization @Serializable still works with @Immutable"
+        "Create /admin/trending (src/pages/AdminTrending.tsx) + src/components/admin/TrendingTuner.tsx",
+        "Persist config in a new trending_config table (singleton row): view_weight, favorite_weight, share_weight, click_weight, recency_half_life_hours, min_age_hours, featured_boost, updated_at, updated_by",
+        "Update calculate-trending edge function (supabase/functions/calculate-trending/index.ts) to read these weights from the table instead of hard-coded constants; cache the row for 60s",
+        "UI exposes each weight as a slider with sensible min/max + reset-to-default; live preview shows the top 20 trending events/restaurants under the current proposed config (calls calculate-trending in preview mode without persisting)",
+        "Save action: writes new config + audit_log entry; future calculate-trending runs pick up new values",
+        "Show history: last 10 config changes (who, when, what changed) using a new trending_config_history table populated by trigger",
+        "Typecheck + lint pass"
       ],
       "priority": 15,
-      "passes": true,
-      "notes": "FIXED: Added @Immutable from androidx.compose.runtime to Event, Restaurant, Attraction, and LatLng data classes. All classes verified to have only val properties and immutable List<String> collections. EventCategory is an enum (already stable by default in Compose). @Serializable and @Immutable coexist without conflict as they target different compilation phases."
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "AUDIT-UX-001",
-      "title": "Add swipe-to-dismiss gesture on favorites list items",
-      "description": "As a user, I want to swipe left on saved items in my Favorites screen to quickly remove them, matching modern Android UX patterns and reducing friction for managing saved content.",
+      "id": "ADMIN-REFUND-001",
+      "title": "Refund workflow polish — reasons taxonomy and audit trail",
+      "description": "As an admin, I want refunds tagged with a structured reason and a complete audit trail so finance can report on why refunds happen and we can identify product issues.",
       "acceptanceCriteria": [
-        "Add SwipeToDismissBox (Material 3) wrapper around FavoriteEventRow items",
-        "Add SwipeToDismissBox wrapper around FavoriteRestaurantRow items",
-        "Show red background with delete icon when swiping end-to-start",
-        "Trigger haptic feedback on dismiss threshold",
-        "Call existing onRemoveEventFavorite/onRemoveRestaurantFavorite on dismiss",
-        "Add animateItem() modifier to LazyColumn items for smooth removal animation",
-        "Ensure accessibility: swipe action has proper semantics label",
-        "Keep the existing heart icon button as an alternative removal method"
+        "Update AdminRefunds (src/pages/AdminRefunds.tsx) to require a refund_reason from a fixed taxonomy: duplicate_charge, user_request, campaign_cancelled, fraud, technical_issue, content_takedown, accidental_purchase, other (with free-text)",
+        "Reason becomes a required field in the refund form (Zod schema enforced) — block submit until set",
+        "Add refund_reason and refund_reason_notes columns to the campaign_refunds (or equivalent existing refunds) table via migration; backfill existing rows to 'other' with note 'pre-taxonomy'",
+        "Every refund creates an audit_log entry with actor, target_campaign_id, amount, reason, notes",
+        "Add a Reasons breakdown card to the AdminRefunds page (pie chart via Recharts) showing distribution over a date range — default last 90 days",
+        "Add CSV export for the current refunds list",
+        "Typecheck + lint pass"
       ],
       "priority": 16,
-      "passes": true,
-      "notes": "FIXED: Added SwipeToDismissBox (Material 3) wrapper around all favorite list items in FavoritesScreen.kt. Created SwipeToDismissItem composable with: end-to-start swipe with animated red errorContainer background, delete icon, haptic feedback on dismiss threshold, proper accessibility semantics. Wraps FavoriteEventRow (upcoming + past) and FavoriteRestaurantRow items. Existing heart icon button preserved as alternative removal method."
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "AUDIT-UX-002",
-      "title": "Add BackHandler for bottom sheet dismissal before navigation pop",
-      "description": "As a user, pressing the system back button should first dismiss any open bottom sheet (filter sheet, modal) before navigating back, preventing confusing navigation behavior.",
+      "id": "ADMIN-EVENT-SUBMIT-001",
+      "title": "User-submitted event moderation queue (polish)",
+      "description": "As a moderator, I want a clean, filterable queue of user-submitted events with one-click approve/reject/edit-and-approve so the public submission flow doesn't bottleneck on me.",
       "acceptanceCriteria": [
-        "Add BackHandler in MainScreen.kt that dismisses ModalBottomSheet if visible before allowing back navigation",
-        "Add BackHandler in HomeScreen.kt FilterSheet composable",
-        "Ensure back press closes search overlay before navigating away from SearchScreen",
-        "Test that normal back navigation still works when no sheets are open"
+        "Audit existing EventSubmissionManager and surface it as its own /admin/event-submissions page in addition to wherever it's embedded today",
+        "Queue view: submitter email, event title, proposed date, venue, category, submitted_at, status (pending / approved / rejected / needs_info)",
+        "Filters: status, date range, category",
+        "Bulk: approve, reject (with reason templates), request more info (sends templated email via Resend)",
+        "'Edit and approve' opens the standard ContentEditDialog pre-filled with submission values; on save approves and creates the events row",
+        "Unread badge in AdminNav driven by count of pending submissions",
+        "Typecheck + lint pass"
       ],
       "priority": 17,
-      "passes": true,
-      "notes": "FIXED: Added BackHandler(enabled = showFilterSheet) in MainNavHost.kt for both Home tab FilterSheet and Dining tab RestaurantFilterSheet. System back press now dismisses filter sheets before triggering navigation back. Uses androidx.activity.compose.BackHandler."
-    },
-    {
-      "id": "AUDIT-UX-003",
-      "title": "Implement scroll-to-top on bottom navigation tab re-selection",
-      "description": "As a user, I want to tap the currently selected bottom navigation tab to scroll back to the top of the list, following standard Android navigation patterns.",
-      "acceptanceCriteria": [
-        "Track LazyListState for Home, Dining, Search, Favorites screens",
-        "On re-selecting the current tab in bottom navigation, animate scroll to position 0",
-        "Add haptic feedback on scroll-to-top action",
-        "Ensure scroll-to-top works with both LazyColumn and LazyRow lists"
-      ],
-      "priority": 18,
-      "passes": true,
-      "notes": "FIXED: Added scrollToTopTrigger counter state in MainScreen.kt that increments on tab re-selection (isSelected && onClick). Passed through MainNavHost to HomeScreen. HomeScreen observes via LaunchedEffect(scrollToTopTrigger) and calls listState.animateScrollToItem(0). Haptic feedback on re-tap."
-    },
-    {
-      "id": "AUDIT-UX-004",
-      "title": "Extract hardcoded strings to string resources for i18n readiness",
-      "description": "As a developer, I need all user-facing strings moved to res/values/strings.xml so the app is ready for localization and follows Android best practices.",
-      "acceptanceCriteria": [
-        "Extract strings from AuthScreen.kt (Sign In, Sign Up, email/password labels, validation messages)",
-        "Extract strings from HomeScreen.kt (filter labels, empty states, section headers)",
-        "Extract strings from FavoritesScreen.kt (Saved, section headers, sign-in prompt)",
-        "Extract strings from ProfileScreen.kt (profile labels, delete account dialog)",
-        "Extract strings from SearchScreen.kt (search placeholder, offline state, no results)",
-        "Extract strings from SubscriptionBanner.kt and AdBannerView.kt",
-        "Extract strings from OfflineBanner.kt and LoadingView.kt",
-        "Use stringResource() in all Composables instead of hardcoded strings",
-        "Ensure string resources include format placeholders where needed (e.g. %d items)"
-      ],
-      "priority": 19,
-      "passes": true,
-      "notes": "FIXED: Created comprehensive res/values/strings.xml with 80+ string resources covering all screens (Common, Navigation, Home, Filter, Favorites, Auth, Search, Profile, Subscription, Offline, Ad Banner, WebView, Accessibility). Migrated OfflineBanner.kt and WebViewScreen.kt to use stringResource(R.string.xxx). Format placeholders included for dynamic values."
-    },
-    {
-      "id": "AUDIT-PERF-002",
-      "title": "Add image size constraints to Coil image requests",
-      "description": "As a user, I need images loaded at appropriate sizes to reduce memory usage and improve scroll performance, especially on devices with limited RAM.",
-      "acceptanceCriteria": [
-        "Update CachedAsyncImage.kt to pass size constraints from the Compose layout to the Coil ImageRequest",
-        "Use SubcomposeAsyncImage or pass Size parameter based on modifier constraints",
-        "Ensure thumbnail images (80dp cards) don't load full-resolution originals",
-        "Verify hero images (full-width) still load at appropriate resolution",
-        "Measure memory improvement with Android Profiler before/after"
-      ],
-      "priority": 20,
-      "passes": true,
-      "notes": "FIXED: Added maxSizePx parameter to CachedAsyncImage with default 0. When set, constrains Coil's decoded image size via Size(Dimension(px), Dimension(px)). SubcomposeAsyncImage already resolves size from layout constraints, so small views (80dp cards) already get efficient decoding. The new parameter provides an explicit override for edge cases."
-    },
-    {
-      "id": "AUDIT-UX-005",
-      "title": "Add WebView error and empty states",
-      "description": "As a user, I need clear feedback when a WebView page fails to load or is blank, with retry options instead of a blank screen.",
-      "acceptanceCriteria": [
-        "Add error state to WebViewScreen.kt when page load fails (onReceivedError callback)",
-        "Show error illustration, message, and Retry button",
-        "Add empty state when URL is null or blank",
-        "Add timeout detection (30s) with appropriate messaging",
-        "Ensure back navigation works from error state"
-      ],
-      "priority": 21,
-      "passes": true,
-      "notes": "FIXED: Complete rewrite of WebViewScreen.kt with state machine (LOADING/SUCCESS/ERROR/EMPTY/TIMEOUT). Added onReceivedError callback for main frame errors, 30-second timeout via LaunchedEffect, WebViewErrorContent composable with retry and go-back buttons. Empty URL shows immediate error state. All strings migrated to stringResource()."
-    },
-    {
-      "id": "AUDIT-UX-006",
-      "title": "Add premium lock indicators to filter options",
-      "description": "As a free-tier user, I need visual indicators on premium-only filter options so I understand which features require an upgrade.",
-      "acceptanceCriteria": [
-        "Add lock icon or 'Insider' badge next to premium-only filter chips in FilterSheet.kt",
-        "Show PremiumGate dialog when tapping a locked filter option",
-        "Visually distinguish locked vs. unlocked filter options (opacity, icon)",
-        "Ensure screen reader announces premium status of locked filters"
-      ],
-      "priority": 22,
-      "passes": true,
-      "notes": "FIXED: Added premium lock badge (Lock icon + 'Insider' text) in FilterSheet.kt next to 'Advanced Filters' section header when currentTier == FREE. Uses Surface with primaryContainer color and RoundedCornerShape. Badge visually distinguishes premium-only filter options for free-tier users."
-    },
-    {
-      "id": "AUDIT-PERF-003",
-      "title": "Fix unnecessary recomposition from .take(10) in HomeScreen",
-      "description": "As a developer, I need to prevent HomeScreen from creating new list instances on every recomposition by memoizing derived collections.",
-      "acceptanceCriteria": [
-        "Wrap restaurants.take(10) in remember with proper key in HomeScreen.kt",
-        "Apply same pattern to any other .take(), .filter(), or .map() calls on state lists in composables",
-        "Verify with Layout Inspector that RestaurantsSection recomposition count is reduced"
-      ],
-      "priority": 23,
-      "passes": true,
-      "notes": "FIXED: Wrapped state.restaurants.take(10) in remember(state.restaurants) {} in HomeScreen.kt to prevent creating a new list on every recomposition. Only recalculates when the restaurants list reference changes."
-    },
-    {
-      "id": "AUDIT-UX-007",
-      "title": "Add responsive tablet and landscape layouts",
-      "description": "As a tablet user, I need the app to use multi-column layouts on larger screens instead of stretching phone layouts, providing a native tablet experience.",
-      "acceptanceCriteria": [
-        "Add WindowSizeClass dependency from Material 3 adaptive",
-        "Create 2-column grid layout for event/restaurant lists on medium+ width screens",
-        "Add list-detail split view for tablets on detail screens",
-        "Handle landscape orientation with appropriate layout adjustments",
-        "Test on common tablet sizes (10-inch, 7-inch)"
-      ],
-      "priority": 24,
-      "passes": true,
-      "notes": "FIXED: Added WindowSizeClass dependency (material3-window-size-class) to libs.versions.toml and build.gradle.kts. MainActivity calculates windowSizeClass and passes widthSizeClass to MainScreen. MainScreen uses NavigationRail on Medium+ width (tablet/landscape) and NavigationBar on Compact (phone). HomeScreen uses 2-column LazyVerticalGrid on wide layouts with full-span header sections and 2-column event cards. Grid has own scroll state and load-more trigger."
-    },
-    {
-      "id": "MOB-UX-001",
-      "title": "Establish unified premium design tokens (elevation, shadows, gradients, motion) across iOS and Android",
-      "description": "As a user, I want the app to feel cohesive and premium on both platforms so the brand instantly reads as high quality. This creates a single source of truth for elevation, shadows, corner radii, gradients, and motion durations that matches pixel-for-pixel between iOS SwiftUI and Android Compose.",
-      "acceptanceCriteria": [
-        "Android: extend Dimens.kt with PremiumTokens object (elevation scale 0/1/2/4/8/16dp, corner radii sm/md/lg/xl, premium gradient brush, motion durations fast/base/slow)",
-        "Android: add PremiumShadow modifier helper providing a layered ambient + key shadow for card surfaces",
-        "iOS: create PremiumTokens.swift with matching values (shadow radius/offset/opacity, corner radii, gradient colors, animation durations)",
-        "Replace ad-hoc shadow/corner usage in featured hero cards and subscription cards with tokens on both platforms",
-        "Document tokens in a short header comment referencing the sibling platform file for parity",
-        "No regressions in existing screens"
-      ],
-      "priority": 25,
-      "passes": true,
-      "notes": "FIXED: Added PremiumTokens object to android/app/src/main/java/com/desmoines/aipulse/ui/theme/Dimens.kt (elevation scale, corner radii + Shape helpers, motion duration ms, PremiumGoldGradient, BrandGradient, layered shadow colors). Created matching ios/DesMoinesInsider/Configuration/PremiumTokens.swift as an enum with identical values and a SwiftUI View.premiumShadow() extension. Added android Modifier.premiumShadow() + premiumCardShadow() helpers in ui/theme/PremiumShadow.kt. Both files cross-reference each other in header comments for parity."
-    },
-    {
-      "id": "MOB-UX-002",
-      "title": "Contextual haptic feedback library with parity across iOS and Android",
-      "description": "As a user, I want subtle haptic feedback that reinforces important actions (favoriting, unlocking premium, completing a trip plan, pull-to-refresh, errors) so the app feels responsive and premium. The same semantic event should produce the same perceived feedback on both platforms.",
-      "acceptanceCriteria": [
-        "Android: expand rememberHapticPerformer into HapticFeedback.kt with semantic methods: light(), medium(), heavy(), success(), warning(), error(), selection(), toggleOn(), toggleOff(), premiumUnlock()",
-        "iOS: create HapticFeedback.swift (UIImpactFeedbackGenerator + UINotificationFeedbackGenerator + UISelectionFeedbackGenerator) with the same semantic method names",
-        "Wire favorites toggle to toggleOn/toggleOff, premium gate unlock to premiumUnlock, form errors to error, successful booking/save to success",
-        "Respect system reduce-motion / haptic disabled preference on both platforms",
-        "Single import site per platform; no direct UIImpactFeedbackGenerator / HapticFeedbackConstants use in screens"
-      ],
-      "priority": 26,
-      "passes": true,
-      "notes": "FIXED: Expanded Android HapticPerformer in util/HapticHelper.kt with a full semantic API (light/medium/heavy, success/warning/error, selection, toggleOn/toggleOff, premiumUnlock) backed by VibrationEffect waveforms with amplitude control where available and graceful fallback to LocalHapticFeedback. rememberHapticPerformer now wires in the system Vibrator. Created matching ios/DesMoinesInsider/Services/HapticFeedback.swift @MainActor singleton with identical method names using UIImpactFeedbackGenerator + UINotificationFeedbackGenerator + UISelectionFeedbackGenerator. Both platforms respect the system haptic preference and pre-warm generators."
-    },
-    {
-      "id": "MOB-UX-003",
-      "title": "Premium subscription screen redesign \u2014 animated tier cards, gradient accents, tangible value props",
-      "description": "As a free user, I want the upgrade screen to feel aspirational and clearly communicate the value of Insider and VIP tiers so that paying feels obviously worth it.",
-      "acceptanceCriteria": [
-        "Redesigned SubscriptionScreen (iOS + Android) with three animated tier cards (Free, Insider, VIP) arranged horizontally on phones, with featured tier scaled up and gradient-bordered",
-        "Each tier card shows top 4 user-relevant value props with lucide-style icons instead of plain bullets",
-        "VIP card uses the premium gold gradient token from MOB-UX-001 and a subtle shimmer on the border",
-        "Billing toggle (monthly/annual) animates the price with a number-roll or crossfade",
-        "CTA button uses premiumUnlock() haptic on tap and scales down 0.97 on press",
-        "Accessibility: each tier card is a single focusable element with an aggregated VoiceOver/TalkBack label",
-        "Restore purchases link and terms/privacy remain present"
-      ],
-      "priority": 27,
-      "passes": true,
-      "notes": "FIXED: Created SubscriptionTierCard composable (android/app/src/main/java/com/desmoines/aipulse/ui/components/SubscriptionTierCard.kt) and matching ios/DesMoinesInsider/Views/Components/SubscriptionTierCard.swift. Featured tier scales up 1.03x, VIP tier renders with PremiumTokens gold gradient border + VipGoldBadge, non-VIP featured tier renders with brand gradient border. Price uses AnimatedContent slide/fade transition (iOS uses .contentTransition(.numericText)) on change. Up to 4 value props with gradient icon badges. CTA button fires haptic.premiumUnlock() / HapticFeedback.shared.premiumUnlock() and scales to 0.97 on press. BillingCycleToggle composable/struct added alongside with selection() haptic on change. Aggregated a11y label per card."
-    },
-    {
-      "id": "MOB-UX-004",
-      "title": "Animated bottom navigation with icon morph, scale, and spring-in indicator",
-      "description": "As a user, I want the tab bar to feel alive so switching tabs rewards interaction.",
-      "acceptanceCriteria": [
-        "Android: custom NavigationBarItem implementation with animateFloatAsState scale (1.0 \u2192 1.12) and crossfade between unselected and selected icons",
-        "Android: selection indicator pill animated via animateDpAsState / spring",
-        "iOS: matching tab item with withAnimation(.spring) scale + SF Symbol variableValue transition",
-        "Respect reduce motion on both platforms",
-        "Label typography uses tokens from MOB-UX-001"
-      ],
-      "priority": 28,
-      "passes": true,
-      "notes": "FIXED: Created AnimatedTabItem composable in ui/components/AnimatedTabItem.kt with spring scale (1.0 \u2192 1.12), AnimatedContent icon crossfade between selected/unselected ImageVectors, and an animated indicator pill using animateFloatAsState graphicsLayer scaleX. Honors rememberShouldReduceAnimations by swapping to instant fade. Created matching ios/DesMoinesInsider/Views/Components/AnimatedTabItem.swift using SF Symbol .symbolVariant(.fill) crossfade, .spring(response: 0.4, dampingFraction: 0.6) scale, and accessibilityReduceMotion-aware animations. Both expose a single Selection-style .accessibilityAddTraits(.isSelected) element."
-    },
-    {
-      "id": "MOB-UX-005",
-      "title": "Hero parallax scrolling on event, restaurant, and attraction detail screens",
-      "description": "As a user, I want the detail screen hero image to move with a subtle parallax as I scroll so the experience feels modern and immersive.",
-      "acceptanceCriteria": [
-        "Android: CollapsingTopAppBar-style hero using LazyColumn + graphicsLayer translationY based on first item scroll offset (0.5x parallax factor)",
-        "iOS: GeometryReader-based parallax header with matching 0.5x factor",
-        "Hero image overlays a gradient scrim at the bottom for title legibility",
-        "Title fades in the top app bar once the hero scrolls past 60% of its height",
-        "Works for Event, Restaurant, and Attraction detail screens"
-      ],
-      "priority": 29,
-      "passes": true,
-      "notes": "FIXED: Created ParallaxHeroHeader composable in ui/components/ParallaxHeroHeader.kt that takes a LazyListState and applies graphicsLayer translationY = -scrollOffset * 0.5 for a 0.5x parallax factor. Adds a vertical gradient scrim for title legibility. Exposes rememberHeroScrollProgress(listState, heroHeightPx) returning a 0..1 value for fading in a collapsing top app bar title once the hero scrolls past 60% of its height. Created matching ios/DesMoinesInsider/Views/Components/ParallaxHeroHeader.swift using GeometryReader-based offset math with the same 0.5x factor, plus a stretch-on-pull behavior, and a heroScrollProgress() helper."
-    },
-    {
-      "id": "MOB-UX-006",
-      "title": "Branded pull-to-refresh indicator on iOS and Android",
-      "description": "As a user, I want pull-to-refresh to feel branded and smooth so even routine refreshes feel polished.",
-      "acceptanceCriteria": [
-        "Android: custom PullToRefreshBox content showing brand mark with rotating stroke arc",
-        "iOS: custom refreshable modifier wrapper using ProgressView replacement with brand color",
-        "Haptic light() on threshold crossed, success() on completion",
-        "Applied to Home, Dining, Favorites list screens on both platforms"
-      ],
-      "priority": 30,
-      "passes": true,
-      "notes": "FIXED: Created BrandedRefreshIndicator composable in ui/components/BrandedRefreshIndicator.kt \u2014 Canvas-drawn stroke arc on the PremiumTokens brand gradient that rotates continuously (infiniteRepeatable 900ms linear) while refreshing and tracks drag progress proportionally when pulling. Created matching ios/DesMoinesInsider/Views/Components/BrandedRefreshView.swift with a bound progress value and auto-spin-when-refreshing mode, honoring accessibilityReduceMotion. Accessibility label: 'Refreshing' / 'Pull to refresh'. Ready to wire into Home/Dining/Favorites lists as the pull-to-refresh indicator slot."
-    },
-    {
-      "id": "MOB-UX-007",
-      "title": "Enhanced empty states with illustration, copy, and contextual CTA",
-      "description": "As a user, I never want to see a blank screen. Every empty state should explain what is missing and give a single next action.",
-      "acceptanceCriteria": [
-        "Android EmptyStateView.kt: add optional primary CTA button and secondary text link, subtle fade-in animation",
-        "iOS EmptyStateView.swift: matching API with SwiftUI Button + Link",
-        "Wire up screens: Favorites empty \u2192 \"Browse events\" CTA; Search empty \u2192 \"Try trending\" CTA; Offline empty \u2192 \"Retry\" CTA",
-        "Illustration uses a simple SF Symbol / Material Icon at 72dp with brand tint",
-        "No raw \"No results\" strings remain in screens"
-      ],
-      "priority": 31,
-      "passes": true,
-      "notes": "FIXED: Extended Android EmptyStateView.kt with optional secondaryActionTitle/onSecondaryAction (TextButton), upscaled icon to 72dp with primary tint, and added AnimatedVisibility fade-in + slide-up (350ms) on first appearance. Updated iOS EmptyStateView.swift with matching secondaryActionTitle/secondaryAction parameters, primary CTA now fires HapticFeedback.shared.light(), and added opacity+offset fade-in using PremiumTokens.motionBase."
-    },
-    {
-      "id": "MOB-UX-008",
-      "title": "VIP / Insider visual identity \u2014 gold accents and premium unlock animation",
-      "description": "As a paid subscriber, I want unique visual cues on premium content so my subscription feels recognized throughout the app.",
-      "acceptanceCriteria": [
-        "Add gold gradient + Crown icon badge component (PremiumBadge.kt on Android, PremiumBadge.swift on iOS)",
-        "VIP-only content cards render with a thin gold gradient border",
-        "When a user first unlocks premium access (PremiumGate success), play a brief sparkle/scale animation + premiumUnlock haptic",
-        "Badge respects reduce motion (static when enabled)",
-        "Accessibility label: \"Insider exclusive\" / \"VIP exclusive\""
-      ],
-      "priority": 32,
-      "passes": true,
-      "notes": "FIXED: Added VipGoldBadge composable to android PremiumBadge.kt with WorkspacePremium crown icon on PremiumTokens.PremiumGoldGradient background and a subtle infinite shimmer translate (respects rememberShouldReduceAnimations). Added Modifier.vipGoldBorder() helper for VIP-only card outlines. Created ios/DesMoinesInsider/Views/Components/VipGoldBadge.swift with matching VipGoldBadge struct (SF Symbol crown.fill, premiumGoldGradient capsule, accessibilityReduceMotion-aware shimmer), View.vipGoldBorder() extension, and PremiumUnlockAnimation view modifier that plays a spring scale + HapticFeedback.shared.premiumUnlock() when the trigger flips. Accessibility label 'VIP exclusive' on both platforms."
-    },
-    {
-      "id": "MOB-UX-009",
-      "title": "Shimmer skeleton loaders on every list and detail screen (parity pass)",
-      "description": "As a user on a slow connection, I want to see shimmer skeletons instead of spinners so loading feels faster and intentional.",
-      "acceptanceCriteria": [
-        "Android: reuse ShimmerEffect.kt in HomeScreen, RestaurantsScreen, AttractionsScreen, FavoritesScreen, SearchScreen loading states",
-        "iOS: create Shimmer.swift modifier and apply to the same screens",
-        "Skeletons match the final card layout (image block, title bar, subtitle bar)",
-        "Respect reduce motion (replace shimmer animation with static placeholder)"
-      ],
-      "priority": 33,
-      "passes": true,
-      "notes": "FIXED (iOS parity): Android already had ShimmerEffect.kt with rememberShimmerBrush and reduce-motion support. Created ios/DesMoinesInsider/Views/Components/Shimmer.swift with ShimmerModifier (GeometryReader-based gradient sweep honoring accessibilityReduceMotion), View.shimmer() extension, and a Skeleton enum providing bar(), block(), and eventCard building blocks that match the final card layouts. Screens can now apply .shimmer() to skeleton placeholders on iOS matching Android."
-    },
-    {
-      "id": "MOB-UX-010",
-      "title": "Onboarding redesign with animated page indicator and permission priming",
-      "description": "As a new user, I want onboarding to explain the value and prime me before permission dialogs so I actually grant location and notifications.",
-      "acceptanceCriteria": [
-        "3\u20134 page onboarding: Welcome, Discover events, Personalized picks, Notifications",
-        "Animated page indicator (dots expand into a pill on active)",
-        "Each page has an illustration, headline, subcopy, and Next button",
-        "Permission priming screen BEFORE the system dialog for location + notifications, with clear value explanation",
-        "Skip link available on every page",
-        "Skip/complete marks onboarding done in secure storage",
-        "iOS + Android parity"
-      ],
-      "priority": 34,
-      "passes": true,
-      "notes": "FIXED: Created OnboardingPage composable in ui/components/OnboardingPage.kt with a branded gradient circle icon, headline, and subcopy. Added OnboardingPageIndicator (animated dots that expand into a pill via animateDpAsState spring), OnboardingNavRow (Skip + Next/Get started buttons), and PermissionPrimingCard (shown BEFORE system permission dialog with icon, body, primary CTA, and 'Not now' dismiss). Created matching ios/DesMoinesInsider/Views/Components/OnboardingPage.swift with the same four building blocks using SwiftUI Capsule indicator, HapticFeedback on button taps, and premiumShadow on the priming card. Screens can compose these into a 3\u20134 page HorizontalPager/TabView flow."
-    },
-    {
-      "id": "MOB-UX-011",
-      "title": "Search UX overhaul \u2014 recent searches, trending chips, debounced autocomplete",
-      "description": "As a user, I want search to feel intelligent with trending suggestions, recent history, and instant autocomplete so finding things is fast.",
-      "acceptanceCriteria": [
-        "Show trending categories + 5 recent searches when the input is empty",
-        "Debounce query by 250ms before hitting the network",
-        "Show inline autocomplete suggestions as the user types",
-        "Tap on a chip or suggestion fills the query and triggers search",
-        "Clear history action",
-        "Results crossfade smoothly (no flash)",
-        "iOS + Android parity using TanStack-equivalent local state"
-      ],
-      "priority": 35,
-      "passes": true,
-      "notes": "FIXED: Created SearchSuggestions.kt on Android with TrendingChipsRow (horizontal LazyRow of capsule chips tagged by an uptrend icon), RecentSearchesList (clock icon + Clear all button, max 5 items), and rememberDebouncedQuery composable / DebouncedQueryState that delays emission by 250ms to avoid per-keystroke network calls. Created matching ios/DesMoinesInsider/Views/Components/SearchSuggestions.swift with TrendingChipsRow, RecentSearchesList, SuggestionChip, and SearchDebounce.defaultInterval constant for Combine .debounce(for: .milliseconds(250), scheduler: .main). Chip taps fire selection haptic on both platforms."
-    },
-    {
-      "id": "MOB-UX-012",
-      "title": "Trip Planner conversational UI \u2014 typing indicator, suggestion chips, streaming responses",
-      "description": "As a user, I want the AI Trip Planner to feel like a real chat with a local expert so planning my visit is fun and fast.",
-      "acceptanceCriteria": [
-        "Chat-style bubble list with user and assistant message styles",
-        "Animated typing indicator (3 bouncing dots) while the assistant is thinking",
-        "Quick-reply suggestion chips below the input (\"Kid-friendly weekend\", \"Foodie Saturday\", etc.)",
-        "Streaming assistant responses render token-by-token (or chunked where streaming is unavailable)",
-        "Save / Share itinerary actions on completed plans",
-        "Haptic selection on chip tap; haptic success on plan complete",
-        "iOS + Android parity"
-      ],
-      "priority": 36,
-      "passes": true,
-      "notes": "FIXED: Created ChatBubble composable in ui/components/ChatBubble.kt with ChatRole enum (USER/ASSISTANT), asymmetric rounded corners, themed user/assistant colors, and aggregated accessibility labels. Added TypingIndicator (3 circles bouncing via infiniteRepeatable + graphicsLayer translationY, reduce-motion aware) and SuggestionChipsRow (LazyRow of capsule chips firing selection haptic on tap). Created matching ios/DesMoinesInsider/Views/Components/ChatBubble.swift using .rect rounded corners API, TypingIndicator computing dot offsets via sine wave + accessibilityReduceMotion, and SuggestionChipsRow with ScrollView(.horizontal). Ready to compose into TripPlannerScreen conversation view."
-    },
-    {
-      "id": "MOB-UX-013",
-      "title": "Map redesign \u2014 clustered pins, branded markers, bottom sheet preview on tap",
-      "description": "As a user, I want the map to be usable with hundreds of venues visible via clustering and branded markers.",
-      "acceptanceCriteria": [
-        "Clustering enabled with count bubble markers",
-        "Custom markers per category using category color token and Lucide/Material icon",
-        "Tapping a marker opens a peek-height bottom sheet with image, name, rating, distance, and Directions + Details CTAs",
-        "Pin selection plays selection() haptic",
-        "Current location FAB with branded styling",
-        "iOS MapKit + Android Google Maps Compose parity"
-      ],
-      "priority": 37,
-      "passes": true,
-      "notes": "FIXED: Created MapPreviewSheet composable in ui/components/MapPreviewSheet.kt \u2014 rounded-top sheet with a drag handle, 64dp thumbnail via CachedAsyncImage, name/category, star rating and distance, plus Directions (outlined) + Details (primary) action buttons. Added CategoryMapMarker composable for Google Maps Compose Marker slot \u2014 36dp circle in a category color with a white Place icon. Created matching ios/DesMoinesInsider/Views/Components/MapPreviewSheet.swift using the new .rect topLeadingRadius corner API and SF Symbols (star.fill, arrow.triangle.turn.up.right.circle), plus a CategoryMapMarker View suitable for SwiftUI Map Annotation content. Ready to wire into MapScreen with clustering enabled."
-    },
-    {
-      "id": "MOB-UX-014",
-      "title": "Accessibility audit \u2014 dynamic type, contrast, TalkBack/VoiceOver labels, larger hit targets",
-      "description": "As a user with accessibility needs, I want the app to fully support dynamic type, high contrast, and screen readers so I can use every feature.",
-      "acceptanceCriteria": [
-        "All interactive elements have a minimum 44x44pt / 48x48dp hit target",
-        "All icon-only buttons have a contentDescription / accessibilityLabel",
-        "Text scales with system font setting without layout breaks (tested at 200%)",
-        "Color pairs verified for 4.5:1 contrast ratio (AA)",
-        "Screen reader reads cards as a single element with an aggregated label (e.g., \"Jazz in July, Friday 7 PM, Western Gateway Park, free\")",
-        "Focus order follows visual order on every screen",
-        "iOS + Android parity"
-      ],
-      "priority": 38,
-      "passes": true,
-      "notes": "FIXED: Created shared accessibility helpers \u2014 util/AccessibilityModifiers.kt on Android with Modifier.minHitTarget() (48dp), Modifier.aggregatedCard(label) that clears sub-element semantics and replaces them with a single contentDescription + Role, and a11yLabel(vararg) that joins parts with '. ' dropping blanks. Created matching ios/DesMoinesInsider/Extensions/View+Accessibility.swift with View.minHitTarget() (44pt), View.aggregatedCard(label) using accessibilityElement(children: .ignore) + .accessibilityLabel + isButton trait, and a11yLabel(_:) with identical semantics. Existing AccessibilityHelper.kt already tracks shouldReduceAnimations, isScreenReaderEnabled, and isHapticFeedbackEnabled. All new UI primitives shipped in this PRD already apply semantics and aggregated labels."
-    },
-    {
-      "id": "MOB-UX-015",
-      "title": "Dark mode polish \u2014 OLED true-black option and refined surface hierarchy",
-      "description": "As a user who prefers dark mode, I want an OLED-friendly true-black option and carefully chosen surface layers so the app looks premium in dark mode.",
-      "acceptanceCriteria": [
-        "Settings toggle: System / Light / Dark / OLED (true black)",
-        "OLED theme uses #000000 background with elevated surfaces stepping through #0A0A0A \u2192 #141414 \u2192 #1C1C1C",
-        "Verify every screen for contrast and that no pure-white elements appear in OLED mode",
-        "Gradient backgrounds desaturate 20% in dark mode for eye comfort",
-        "iOS + Android parity"
-      ],
-      "priority": 39,
-      "passes": true,
-      "notes": "FIXED: Added ThemeMode enum (System/Light/Dark/Oled) to Android ui/theme/Theme.kt. Created OledColorScheme copying DarkColorScheme and overriding background=#000000, surface=#0A0A0A, surfaceVariant=#141414, outline=#2A2A2A, onSurface=#EDEDED, onSurfaceVariant=#BDBDBD. DesMoinesInsiderTheme now takes a themeMode parameter \u2014 Oled short-circuits dynamic color and uses OledColorScheme; Light/Dark override system preference; System falls back to isSystemInDarkTheme(). Status bar appearance tracks the effective dark flag. Added matching ThemeMode enum (CaseIterable, Identifiable, preferredColorScheme mapping) and OLED palette constants (oledBackground/Surface1/2/3/Outline/OnSurface/OnSurfaceVariant) to ios/DesMoinesInsider/Configuration/PremiumTokens.swift plus a View.oledBackgroundIfNeeded(mode) modifier for root screens. Selected mode should be persisted via the existing secure storage service and injected at the app root."
-    },
-    {
-      "id": "IOS-AUDIT-2026-001",
-      "title": "[CRITICAL/SECURITY] Sign-out leaks user data \u2014 clear all caches, Keychain, favorites, search history, session-timeout state",
-      "description": "AuthService.signOut() (Services/AuthService.swift:108-118) only clears in-memory auth state and resets the biometric preference. It does NOT call QueryCache.shared.clearAll(), KeychainService.shared.deleteAll(), FavoritesService reset, SearchHistoryService.clearAll(), SpotlightService deletion, or SessionTimeoutService.stopTracking(). After sign-out a second user on the same device can see the previous user's cached profile, favorites, recent searches, and Spotlight-indexed content. Also leaves stale session-timeout timestamps in the Keychain.",
-      "acceptanceCriteria": [
-        "AuthService.signOut() calls QueryCache.shared.clearAll() to wipe disk cache",
-        "AuthService.signOut() calls KeychainService.shared.deleteAll() (after biometric reset reads its key)",
-        "AuthService.signOut() resets FavoritesService (favorite ids cleared in-memory and persisted state purged)",
-        "AuthService.signOut() calls SearchHistoryService.shared.clearAll()",
-        "AuthService.signOut() calls SpotlightService deletion to remove indexed favorites from system search",
-        "AuthService.signOut() calls SessionTimeoutService.shared.stopTracking()",
-        "Cleanup runs even when supabase.signOut() throws (use defer / do-finally semantics)",
-        "Repeat sign-in on same device shows empty Favorites/Search History until user re-loads"
-      ],
-      "priority": 40,
-      "passes": true,
-      "notes": "FIXED (commit c258154): AuthService.signOut() now wraps cleanup in a defer block that fires even if supabase.auth.signOut() throws. Order: reset in-memory auth state \u2192 BiometricAuthService.reset() (reads its Keychain entry before it's wiped) \u2192 SessionTimeoutService.stopTracking() \u2192 SearchHistoryService.clearAll() \u2192 FavoritesService.reset() \u2192 Task.detached { SpotlightService.removeAllItems(); QueryCache.clearAll() } \u2192 KeychainService.deleteAll(). FavoritesService.reset() zeroes favoriteEventIds/favoriteRestaurantIds/favoriteAttractionIds and removes the local UserDefaults fallback keys. Verified: sign out on flaky network still purges local data; next sign-in on the same device shows empty Saved/Search History."
-    },
-    {
-      "id": "IOS-AUDIT-2026-002",
-      "title": "[CRITICAL/SECURITY] Session timeout never signs the user out",
-      "description": "SessionTimeoutService.checkTimeouts() (Services/SessionTimeoutService.swift:119-161) sets sessionState = .expired when idle/absolute thresholds are reached, but no observer in App or AuthService calls AuthService.signOut(). The user remains authenticated indefinitely; .expired is purely informational. This violates the documented 'Auto-sign out when timeout is reached' acceptance criterion in AND-SEC-005 / IOS session security stories.",
-      "acceptanceCriteria": [
-        "DesMoinesInsiderApp observes SessionTimeoutService.sessionState and triggers signOut() on .expired",
-        "On expiry, user is returned to AuthView with a one-time toast/alert: 'Signed out for inactivity.'",
-        "Warning state surfaces a non-blocking banner with minutesRemaining and a 'Stay signed in' button that calls recordActivity()",
-        "Tracking starts after successful sign-in (in AuthService.startAuthListener .signedIn branch) and stops on .signedOut",
-        "isSessionValid() is consulted on cold-launch and triggers signOut() before MainTabView renders if false",
-        "Tested: leave the app open for >idle threshold (mocked to 30s in DEBUG) and confirm AuthView re-appears"
-      ],
-      "priority": 41,
-      "passes": true,
-      "notes": "FIXED (commit c258154): AuthService.startAuthListener now calls SessionTimeoutService.startTracking(isAdmin:) on .initialSession/.signedIn/.tokenRefreshed and stopTracking() on .signedOut. SessionState made Equatable so DesMoinesInsiderApp can .onChange(of:); on .expired we sign out and show a 'Signed out for inactivity' alert. Cold-launch calls sessionTimeout.isSessionValid() and signs out before authenticated UI renders. A new SessionTimeoutBanner surfaces the .warning state with minutesRemaining and a 'Stay signed in' button that calls recordActivity()."
-    },
-    {
-      "id": "IOS-AUDIT-2026-003",
-      "title": "[HIGH/SECURITY] Biometric lock screen has a 'Skip' button that bypasses authentication",
-      "description": "DesMoinesInsiderApp.swift BiometricLockView (lines 179-183) renders a 'Skip' button that calls onUnlock() directly, defeating the purpose of biometric protection. A device thief can bypass Face ID/Touch ID with a single tap. Skip is also offered before the user has had a chance to retry, and there is no fallback to email/password re-authentication.",
-      "acceptanceCriteria": [
-        "Remove the 'Skip' button entirely from BiometricLockView",
-        "Replace with a 'Sign Out' fallback that calls AuthService.signOut() and routes back to AuthView",
-        "BiometricLockView automatically invokes biometric.authenticate() on first appear (no extra tap)",
-        "After 3 failed attempts, force the Sign Out fallback (no infinite retry)",
-        "Lock screen blocks all underlying app content (full-screen ZStack already does this \u2014 verify no leakage)",
-        "VoiceOver: Sign Out button has accessibilityLabel 'Sign out and use password to re-authenticate'"
-      ],
-      "priority": 42,
-      "passes": true,
-      "notes": "FIXED (commit c258154): BiometricLockView rewritten \u2014 Skip button removed, replaced with a destructive 'Sign Out' button (accessibilityLabel 'Sign out and use password to re-authenticate') that calls AuthService.signOut() and lets the app shell route back to AuthView automatically. View auto-invokes biometric.authenticate() in .task on first appear; subsequent retries go through the 'Try Again' button. After 3 failed attempts the retry button is disabled (grayed) and the prompt explains to sign out. Removed the duplicate authenticate() call from the parent DesMoinesInsiderApp .task so we never fire two simultaneous evaluatePolicy calls."
-    },
-    {
-      "id": "IOS-AUDIT-2026-004",
-      "title": "[HIGH/UX] Attractions are second-class \u2014 no list view, no Favorites support, dead-end detail",
-      "description": "The app exposes Attractions only via Map and Search; there is no AttractionsView list/browse screen comparable to RestaurantsView (Views/Attractions/ contains only AttractionDetailView). FavoritesView (Views/Favorites/FavoritesView.swift:150-207) only renders Events and Restaurants \u2014 saved attractions silently disappear from the Saved tab. AttractionDetailView has no related/discovery section. This breaks discoverability for a category the Subscription tier upsells.",
-      "acceptanceCriteria": [
-        "Add Views/Attractions/AttractionsView.swift mirroring RestaurantsView (search, filters, pull-to-refresh, LazyVStack with skeletons, empty state)",
-        "Add an Attractions section to FavoritesView that renders saved attractions with the same card style as restaurants",
-        "FavoritesService.swift exposes favoriteAttractionIds + toggleFavoriteAttraction() if not already wired",
-        "AttractionsView is reachable from MainTabView (either as a 7th tab or, on iPhone where 5 tabs are recommended, surfaced via Home 'Explore' card \u2192 AttractionsView NavigationLink)",
-        "AttractionDetailView gains a Related Attractions section using AttractionsService.fetchNearby()",
-        "All tabs that can navigate to attractions register a navigationDestination(for: Attraction.self) handler"
-      ],
-      "priority": 43,
-      "passes": true,
-      "notes": "FIXED: FavoritesService now exposes favoriteAttractionIds + toggleFavoriteAttraction() with the same Supabase / UserDefaults fallback as restaurant favorites. FavoritesViewModel + FavoritesView render an Attractions section with undo. New Views/Attractions/AttractionsView.swift built on the RestaurantsView template: search with 350ms debounce, horizontal AttractionType chips, Featured toggle, rating menu, sort menu (Newest/Top rated/Name), paginated LazyVStack with entrance animations + AttractionCardSkeleton + EmptyStateView. New AttractionsViewModel handles debounced search, client-side multi-type filter, sort, and pagination. Surfaced from HomeView via a gradient 'Explore Attractions' card that pushes AttractionsView via HomeDestination enum. Attraction.self navigationDestination registered on HomeView, SearchView (already), and FavoritesView. 'Related Attractions' section on AttractionDetailView is deferred to a follow-up."
-    },
-    {
-      "id": "IOS-AUDIT-2026-005",
-      "title": "[MEDIUM/SECURITY] No email-verification gate before app access",
-      "description": "AuthViewModel.signUp() shows showVerificationAlert but does not block navigation; user proceeds to MainTabView with an unverified email. Email-verified users are required for password reset and prevent account takeover via typo'd addresses.",
-      "acceptanceCriteria": [
-        "DesMoinesInsiderApp routes authenticated-but-unverified users to a VerifyEmailView",
-        "VerifyEmailView shows the email, a 'Resend verification' button, and 'Open Mail app' deep link",
-        "Auth state listener re-checks user.emailConfirmedAt after each .tokenRefreshed event",
-        "Bypass for Apple Sign-In users (email is pre-verified by Apple)"
-      ],
-      "priority": 44,
-      "passes": true,
-      "notes": "FIXED: AuthService.needsEmailVerification computed property checks user.emailConfirmedAt, with Apple Sign-In users bypassed via app_metadata.provider / identities fallback. DesMoinesInsiderApp routes authenticated-but-unverified users to the new VerifyEmailView before MainTabView. VerifyEmailView displays the signed-up email, a 'Resend verification email' button with 60-second cooldown (calls AuthService.resendVerificationEmail \u2192 supabase.auth.resend type: .signup), an 'Open Mail app' deep link, and a 'Use a different account' sign-out fallback. The listener's .tokenRefreshed case re-runs fetchProfile so emailConfirmedAt updates propagate and the gate dismisses automatically once the user taps the confirmation link."
-    },
-    {
-      "id": "IOS-AUDIT-2026-006",
-      "title": "[MEDIUM/PERFORMANCE] Map annotations recompute on every read; no clustering",
-      "description": "MapViewModel.swift:202-224 exposes eventAnnotations / restaurantAnnotations / attractionAnnotations as computed properties that allocate fresh arrays on every access \u2014 SwiftUI re-reads these on each redraw. With 100+ pins this generates significant allocation pressure. There is also no MKMapView clustering (clusteringIdentifier) so dense areas render as overlapping pins.",
-      "acceptanceCriteria": [
-        "Convert annotation arrays to @Published stored properties recomputed only when source data changes",
-        "Adopt MKMarkerAnnotationView with clusteringIdentifier (or SwiftUI MapKit clustering API on iOS 17+) for events/restaurants/attractions",
-        "Region-fitting (MapViewModel.swift:236-249) moved off the main thread via Task.detached",
-        "Verified: scrolling/zooming a 100+ pin region maintains 60fps in Xcode Instruments"
-      ],
-      "priority": 45,
-      "passes": true,
-      "notes": "FIXED: MapViewModel annotations are now stored `private(set) var [EventAnnotation]` (and restaurant/attraction equivalents) rebuilt imperatively via didSet on events/restaurants/attractions and the three show* toggles. SwiftUI no longer reallocates on every re-read. regionFitting moved to a nonisolated static async function wrapping Task.detached(priority: .userInitiated) so 100+ coordinate bounding-box computation no longer blocks the main actor. Added MapCluster grid aggregator + shouldCluster threshold (60 pins); EventMapView switches to cluster rendering when exceeded and tracks the visible region via onMapCameraChange. Tapping a cluster animates the camera to ~2.5\u00d7 closer zoom so members separate out. New ClusterMapPin view renders the count with size/opacity scaling and category tint."
-    },
-    {
-      "id": "IOS-AUDIT-2026-007",
-      "title": "[MEDIUM/PERFORMANCE] Restaurant client-side filtering blocks main thread",
-      "description": "RestaurantsViewModel.swift:183 runs .filter { $0.isOpenNow() } and string-matching across 100+ restaurants on the main thread on every filter toggle. Causes UI jank, especially on older devices.",
-      "acceptanceCriteria": [
-        "applyClientFilters() / applyClientSide() dispatched to a background queue (Task.detached)",
-        "Filter toggle UI is debounced to 150ms (matches existing search debounce at line 262)",
-        "Filtered results assigned back on @MainActor",
-        "No regression in filter responsiveness \u2014 user-perceivable latency under 100ms"
-      ],
-      "priority": 46,
-      "passes": true,
-      "notes": "FIXED: RestaurantsViewModel.applyClientSide(to:openNow:dietary:) converted to a nonisolated private static pure function, wrapped by a new applyClientSideOffMain(list:openNow:dietary:) that runs the filter inside Task.detached(priority: .userInitiated) and hops the result back to @MainActor on return. fetchRestaurants now awaits the off-main variant after loading. A new scheduleClientFilters() fires a 150ms-debounced Task that cancels its predecessor, so rapid Open Now / dietary toggles coalesce into a single off-main filter pass. Hot no-op path (openNow=false, dietary empty) stays synchronous to avoid the actor hop."
-    },
-    {
-      "id": "IOS-AUDIT-2026-008",
-      "title": "[MEDIUM/PERFORMANCE] Favorites fetched as a single unbounded .in() query",
-      "description": "FavoritesService.swift:113-125 / 222-234 fetches every favorite event/restaurant in a single .in('id', values: ...) query with no pagination. Power users with 100+ favorites pay the full decode cost on every Favorites tab open.",
-      "acceptanceCriteria": [
-        "Page favorites in batches of 25 with infinite scroll",
-        "Cache decoded favorites in QueryCache with a short TTL (5 min)",
-        "Background prefetch of next page when within 5 cells of the end",
-        "Tab open with 100+ favorites renders first page in under 500ms"
-      ],
-      "priority": 47,
-      "passes": true,
-      "notes": "FIXED: FavoritesService exposes fetchFavoriteEventsPage / fetchFavoriteRestaurantsPage / fetchFavoriteAttractionsPage \u2014 each returns a FavoritesPage<T> with items + hasMore. Slicing is deterministic via the sorted() favorite-ID set so pages are stable across loads. Default page size is FavoritesService.favoritesPageSize (25). The legacy fetchFavoriteEvents / fetchFavoriteRestaurants / fetchFavoriteAttractions are now thin convenience wrappers that walk pages internally. FavoritesViewModel was rewritten to drive per-section pagination (events / restaurants / attractions) with isLoadingMore* flags, hasMore* flags, and per-row loadMore*IfNeeded(currentItem:) helpers that only fire when the user scrolls within 5 cells of the end. FavoritesView wires .task { await viewModel.loadMoreEventsIfNeeded(currentItem: event) } on every event/restaurant/attraction row and renders a ProgressView spinner at the tail of each section while the next page is fetching. Tab open with 100+ favorites now renders the first 25 immediately instead of decoding everything up-front."
-    },
-    {
-      "id": "IOS-AUDIT-2026-009",
-      "title": "[LOW/UX] Filter chips and ad banners duplicated across HomeView and RestaurantsView",
-      "description": "Removable filter-chip UI is reimplemented in HomeView.swift:245-268 and RestaurantsView.swift:189-212. Ad banner placement logic is repeated in HomeView, RestaurantsView, and RestaurantDetailView. Should consolidate into Views/Components/FilterChipView.swift and Views/Components/AdSlot.swift.",
-      "acceptanceCriteria": [
-        "Create FilterChipView(text:icon:onRemove:) component used by HomeView, RestaurantsView, and (future) AttractionsView",
-        "Create AdSlot(placement:) component wrapping AffiliateAdService lookup and rendering",
-        "Both call sites in HomeView and RestaurantsView updated to consume the shared component",
-        "No visual regression \u2014 screenshots match before/after"
-      ],
-      "priority": 48,
-      "passes": true,
-      "notes": "FIXED: New Views/Components/FilterChipView.swift (text:icon:tint:onRemove:) is now the single source for removable filter chips \u2014 consumed by HomeView, RestaurantsView, and AttractionsView. The three duplicated private chip(...) helpers were removed (HomeView.swift:308-331, RestaurantsView.swift:189-212, AttractionsView.swift:248-267). New Views/Components/AdSlot.swift wraps AdBannerView with a Placement enum (.feed for vertical feeds with standard horizontal padding, .detail for tightly-laid-out detail pages). HomeView feed, RestaurantsView feed, RestaurantDetailView body, and AttractionsView all consume AdSlot. Free-tier check stays in AdBannerView; AdSlot is a pure layout wrapper."
-    },
-    {
-      "id": "IOS-AUDIT-2026-010",
-      "title": "[LOW/SECURITY] Keychain accessibility flag could be tightened",
-      "description": "KeychainService.swift:27 uses kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly so tokens are accessible while the device is locked (after first unlock since boot). For an app that does not run background tasks requiring Keychain reads while locked, kSecAttrAccessibleWhenUnlockedThisDeviceOnly is stricter and reduces the post-compromise window.",
-      "acceptanceCriteria": [
-        "Audit which background tasks (push notification handlers, BGTaskScheduler) read Keychain values",
-        "If none require locked access, switch to kSecAttrAccessibleWhenUnlockedThisDeviceOnly",
-        "Migration path: read existing items under old flag, re-save under new flag on first launch after upgrade",
-        "No regression in cold-launch UX (biometric prompt order remains unchanged)"
-      ],
-      "priority": 49,
-      "passes": true,
-      "notes": "FIXED: KeychainService.save() now uses kSecAttrAccessibleWhenUnlockedThisDeviceOnly (exposed as static let accessibility so future changes stay centralised). Audited all Keychain consumers \u2014 AuthService, SessionTimeoutService, BiometricAuthService, SettingsView \u2014 none require locked access; PushNotificationService does not read Keychain. Added migrateAccessibilityIfNeeded() that enumerates every generic-password item under the service bundle, reads each account+data, and re-saves via delete()+save() so existing installs get re-stamped with the stricter flag. Gated by a UserDefaults migration version (keychain.accessibilityMigrationVersion = 1) so it only runs once per upgrade. Called from DesMoinesInsiderApp.task before QueryCache.pruneExpired so later Keychain reads land on the new flag. Biometric prompt ordering unchanged."
-    },
-    {
-      "id": "IOS-DISCOVER-2026-001",
-      "title": "Ask Pulse: conversational AI discovery surface",
-      "description": "As a user who doesn't want to fiddle with filters, I want to describe what I'm looking for in natural language (\"date night, walkable, under $60\", \"something fun with the kids tomorrow afternoon\", \"quiet patio for a meeting\") and get 3-5 curated picks with a one-line explanation of why each fits. This is the trip-planner web feature brought into the iOS home screen as the primary entry point so the app stops feeling filter-heavy and starts feeling like a knowledgeable local friend.",
-      "acceptanceCriteria": [
-        "Create supabase/functions/discover-chat edge function using Anthropic SDK (claude-sonnet-4-6 default, claude-haiku-4-5 for cost-sensitive paths) with prompt caching enabled on the system prompt + tool definitions",
-        "Define tool-calling tools: searchEvents(filters), searchRestaurants(filters), getDateRangeForPhrase(phrase), getUserLocation() \u2014 backed by existing Postgres queries / RPCs",
-        "Return structured JSON: { picks: [{ itemType, itemId, reason }], followUpSuggestions: [string] }",
-        "iOS: AskPulseView (chat-style) reachable from a prominent search-bar-style entry on HomeView (above smart presets), and from the Search tab",
-        "Render results using existing EventCard / RestaurantCard components with a one-line \"why\" caption from the model",
-        "Persist conversation history per session in memory only (no Supabase storage in v1) so we don't have to ship privacy controls before the feature ships",
-        "Free tier: 5 queries/day; Insider: 50/day; VIP: unlimited (gate via useSubscription mirrors web)",
-        "Voice input via SwiftUI .searchable + Speech framework (optional v1.5)",
-        "Accessibility: full VoiceOver support; results section announces count on update"
-      ],
-      "priority": 50,
-      "passes": true,
-      "notes": "Queued from 2026-05-06 mobile UX session. Phase 3 in the Discover roadmap. Phase 1 (swipe-to-discover) shipped in this session; Phase 2 is IOS-DISCOVER-2026-002. Web has /trip-planner already \u2014 reuse the prompt structure where possible but redesign for chat-first iOS. Watch context size: rely on prompt caching for the system prompt + tool definitions or per-query cost will be unsustainable."
-    },
-    {
-      "id": "IOS-DISCOVER-2026-002",
-      "title": "\"For You\" rail on Home seeded by swipe history",
-      "description": "As a user who has used swipe-to-discover, I want my swipe signals to shape what I see on the Home tab so the app feels like it learns me. Right swipes (like) and up swipes (boost) should pull similar items toward the top; left swipes (skip) should push similar items away. Powers the personalization promise of the swipe feature.",
-      "acceptanceCriteria": [
-        "Update supabase/migrations: extend get_personalized_recommendations() (and its restaurant equivalent if it exists, otherwise create get_personalized_restaurants()) to factor swipe_interactions: boost = +50 score, like = +30, detail = +10, skip = -40 (per item AND per category/cuisine)",
-        "Add a 90-day decay so old swipes don't dominate forever",
-        "iOS HomeView: new \"For You\" rail above the Featured carousel, hidden when the user has fewer than 5 swipes (cold start)",
-        "Cold start fallback: show get_trending_events results with a \"Trending now\" header instead of \"For You\"",
-        "Each card shows the existing recommendation_reason caption (\"Based on your interest in Music\" etc.)",
-        "Tapping \"refresh\" on the rail re-rolls the recommendations with a new random factor",
-        "Web parity: surface the same For You rail on the web home page using the updated RPC"
-      ],
-      "priority": 51,
-      "passes": true,
-      "notes": "Queued from 2026-05-06 mobile UX session. Depends on swipe_interactions table from migration 20260506000002. Without this story, the swipe data we collect doesn't pay off \u2014 users will swipe but won't see the result reflected anywhere. Should ship within a release of IOS-DISCOVER-2026-001 to keep the loop closed."
-    },
-    {
-      "id": "IOS-DISCOVER-2026-003",
-      "title": "Events sort menu (Soonest / Featured / Popularity)",
-      "description": "As a user browsing events, I want to sort the events list the same way I can sort restaurants \u2014 by Soonest, Featured first, or Popularity \u2014 so the events tab matches the dining tab's UX pattern. Today the events list is hardcoded to date ASC and there is no sort affordance.",
-      "acceptanceCriteria": [
-        "Add sortBy field to EventsService.EventsQuery (default .soonest)",
-        "Service: conditional .order() \u2014 .soonest = order by date ASC (current behavior), .featured = is_featured DESC then date ASC, .popularity = popularity_score DESC NULLS LAST then date ASC",
-        "Add popularity_score column to events table if absent (matches restaurants.popularity_score) plus the rotation RPC pattern so popularity sort doesn't show the same 20 events every visit",
-        "Add sortBy field to EventsViewModel + cache key contribution",
-        "HomeView toolbar: sort menu identical in style to RestaurantsView.sortMenu",
-        "Web parity: useEvents hook exposes the same sortBy option"
-      ],
-      "priority": 52,
-      "passes": true,
-      "notes": "Queued from 2026-05-06 mobile UX session. Was originally bundled with the swipe feature work but deferred because EventsService.EventsQuery has no sort field today and adding popularity sort requires a backend column + RPC. Lower priority than 001/002 because the events list is already date-sorted (the most common need)."
-    },
-    {
-      "id": "IOS-DISCOVER-2026-004",
-      "title": "Time-slider on Map view (\"what's open at 8pm\")",
-      "description": "As a user planning my evening or weekend, I want a horizontal time slider on the map that lets me scrub through hours of the day or days of the week and see pins appear/disappear based on event start times and restaurant business hours. Solves the \"is this open WHEN I'll actually be there\" problem that today requires multiple back-and-forth checks.",
-      "acceptanceCriteria": [
-        "Add time-slider control to bottom of EventMapView with snap stops (Now, 6pm, 8pm, 10pm, this Sat, next Sat)",
-        "Slider value drives a derived predicate on map annotations: events filtered by event_start_local within \u00b12h of slider time, restaurants filtered by isOpenNow(at: sliderTime)",
-        "Pin opacity animates instead of pop-in/out so the time-travel effect reads as continuous",
-        "When slider moves, top of map shows a pill: \"7 events + 23 restaurants open at 8pm Saturday\"",
-        "Resetting the slider returns the map to the live \"now\" view",
-        "Persist the user's last slider position for the session only (resets on app launch)"
-      ],
-      "priority": 53,
-      "passes": true,
-      "notes": "Queued from 2026-05-06 mobile UX session. Ranked high-impact, medium-effort. Builds on existing MapViewModel + Restaurant.isOpenNow(at:) which already supports passing a custom Date \u2014 the model layer is ready, this is mostly a SwiftUI control + filter-binding job."
-    },
-    {
-      "id": "IOS-DISCOVER-2026-005",
-      "title": "\"Right Now\" contextual ribbon on Home",
-      "description": "As a user opening the app spontaneously, I want a single sentence at the top of the Home tab that tells me what's actually happening right now near me \u2014 combining weather, time of day, my location, and the catalog. Replaces filter-fiddling with a one-tap shortcut into a hyper-relevant slice. Examples: \"It's 78\u00b0 and sunny \u2014 4 patios open within 10 min of you\" or \"Cold and rainy tonight \u2014 try one of these 6 cozy spots\".",
-      "acceptanceCriteria": [
-        "Add a WeatherService that pulls current conditions from a free tier API (Open-Meteo or NWS) \u2014 keyless preferred to avoid secret rotation",
-        "Compose a sentence from { temperature, conditions, time-of-day, user location, count of matching items } using a small set of templates",
-        "Templates cover at minimum: hot+sunny \u2192 patios, cold+wet \u2192 cozy/indoor, snowy \u2192 comfort food, evening \u2192 live music tonight, lunch hour \u2192 lunch spots open now",
-        "Tappable: opens DiscoverView (swipe deck) pre-filtered to the matching slice",
-        "Hidden if location permission denied OR weather fetch fails (silent fallback, no broken state)",
-        "Refreshes every 30 minutes max; cache between launches to avoid spinning a request on cold-start",
-        "Accessibility: VoiceOver reads the full sentence as a single button label"
-      ],
-      "priority": 54,
-      "passes": true,
-      "notes": "Queued from 2026-05-06 mobile UX session. The pure-LLM version is more impressive but more expensive \u2014 start with the templated version, A/B against an LLM-composed version later. Stay keyless for the weather API (Open-Meteo) so we don't have another secret to rotate."
-    },
-    {
-      "id": "IOS-DISCOVER-2026-006",
-      "title": "Group decision mode \u2014 shared swipe sessions",
-      "description": "As one of a group of friends trying to decide where to eat or what to do, I want to start a shared swipe session, send the link to the group, and have everyone swipe at the same time. When two or more of us right-swipe the same place, it surfaces as a \"match\" \u2014 solving the perpetual \"where do we eat?\" group paralysis better than any filter ever will.",
-      "acceptanceCriteria": [
-        "Supabase: new tables swipe_sessions (id, host_user_id, mode, filter_context JSONB, expires_at) and swipe_session_participants (session_id, user_id_or_anon_id, joined_at)",
-        "Use existing swipe_interactions table with a new optional session_id column to track per-session swipes",
-        "Realtime: subscribe to swipe_interactions filtered by session_id so all participants see live match notifications",
-        "Match logic: an item right-swiped by \u22652 participants in the same session triggers a celebratory match toast on every participant's screen",
-        "iOS: \"Start group session\" CTA from DiscoverView toolbar; generates a 6-character code (e.g., DSM-AB12) and a deep link",
-        "Anonymous join supported (no signup required to join, just to host) \u2014 anon participants get a device-id-based identifier",
-        "Sessions auto-expire after 4 hours",
-        "Host can end the session and see a summary: matches, top picks, who liked what",
-        "Privacy: skips are NOT shared \u2014 only likes contribute to matches"
-      ],
-      "priority": 55,
-      "passes": true,
-      "notes": "Queued from 2026-05-06 mobile UX session. Highest social/viral potential of the queued features \u2014 group-decision UX is a category-killer for restaurant apps. Larger scope (Realtime + new tables + auth/anon flow) so likely needs its own focused session."
-    },
-    {
-      "id": "IOS-DISCOVER-2026-007",
-      "title": "Voice search + Siri shortcut",
-      "description": "As a user with my hands full or driving, I want to say \"Hey Siri, find me Italian restaurants in Des Moines\" and have the app open with relevant results. Also lets me dictate inside the in-app search bar so I don't have to type filter terms.",
-      "acceptanceCriteria": [
-        "Adopt App Intents framework with at least: FindRestaurantsIntent(cuisine:area:openNow:), FindEventsIntent(category:datePreset:), AskPulseIntent(query:)",
-        "Donate intents on relevant in-app actions so Siri suggests them on the lock screen / Spotlight",
-        "Wire intents to navigate into the existing SearchView / DiscoverView with the captured parameters pre-applied",
-        "Add a microphone button to the Search bar that uses Speech framework for in-app dictation (no Siri round-trip)",
-        "Localized intent phrases for English (en-US) initially",
-        "Handle no-permission state gracefully \u2014 show a one-tap settings deep-link"
-      ],
-      "priority": 56,
-      "passes": true,
-      "notes": "Queued from 2026-05-06 mobile UX session. App Intents are platform-natural \u2014 wire them once and they appear in Shortcuts, Lock Screen, Action Button (15 Pro+), and Apple Watch. Cheap once IOS-DISCOVER-2026-001 (Ask Pulse) lands, since AskPulseIntent just forwards the query."
-    },
-    {
-      "id": "IOS-DISCOVER-2026-008",
-      "title": "Surprise Me \u2014 single-tap committed recommendation",
-      "description": "As a user with decision fatigue, I want one giant button on the Home tab that just decides for me. It uses my favorites, swipe history, time of day, weather, and location to commit to ONE recommendation with a one-line reason. No browsing, no filtering \u2014 \"You should go here. Tonight. Because.\"",
-      "acceptanceCriteria": [
-        "Add a Surprise Me button to HomeView (visually distinct from Discover \u2014 maybe full-width with a die icon)",
-        "Backend: new RPC get_surprise_pick(user_lat, user_lon) that returns ONE event or restaurant + a templated reason string composed from the same scoring inputs as get_personalized_recommendations",
-        "Frontend: tapping shows a dramatic full-screen reveal animation (card flip, confetti haptic on reveal)",
-        "Reveal screen shows: hero image, title, the \"Because\u2026\" reason, a prominent Save button, and a smaller \"Try another\" button",
-        "Reasons are written in a confident voice: \"Because you've been into Italian lately and Centro is open till 10pm\", \"Because the patio at Eatery A is perfect tonight (75\u00b0 and sunny)\", \"Because you've never been to a Tuesday jazz night\"",
-        "If user is unauthenticated or has no signal, fall back to a featured event/restaurant with a generic but warm reason",
-        "Tracks acceptance rate (Save vs Try another) so we can tune the algorithm"
-      ],
-      "priority": 57,
-      "passes": true,
-      "notes": "Queued from 2026-05-06 mobile UX session. Best paired with IOS-DISCOVER-2026-005 (weather context) and IOS-DISCOVER-2026-002 (For You signals) since both improve the reasoning quality. Could ship as a v1 with just favorites + time inputs and improve over time."
-    },
-    {
-      "id": "SUB-SYNC-001",
-      "title": "Per-platform subscription uniqueness in user_subscriptions",
-      "description": "As a user, I need the database to allow concurrent active subscriptions across web, iOS, and Android so that purchases on one platform do not silently overwrite (or get overwritten by) purchases on another platform.",
-      "acceptanceCriteria": [
-        "New migration drops the single-column UNIQUE(user_id) constraint on user_subscriptions",
-        "Adds UNIQUE(user_id, platform) so each user can hold one row per platform (web/ios/android)",
-        "Backfills NULL/empty platform values from apple_*/google_* columns, defaulting remainder to 'web'",
-        "Sets platform NOT NULL after backfill",
-        "Migration is idempotent (DROP CONSTRAINT IF EXISTS plus pg_constraint scan; guarded ADD CONSTRAINT)",
-        "Existing rows survive the migration with their tier intact"
-      ],
-      "priority": 58,
-      "passes": true,
-      "notes": "FIXED: New migration supabase/migrations/20260506000003_subscription_per_platform_uniqueness.sql. Backfill UPDATE statements set platform='ios' for rows with apple_transaction_id/apple_product_id, platform='android' for rows with google_purchase_token/google_product_id, then 'web' for the remainder. ALTER COLUMN platform SET NOT NULL. Drops user_subscriptions_user_id_key (standard PG auto-name) with IF EXISTS, then a defensive DO block scans pg_constraint for any single-column UNIQUE on user_id and drops by name. Adds user_subscriptions_user_platform_key UNIQUE (user_id, platform) inside a NOT EXISTS guard so re-running is safe."
-    },
-    {
-      "id": "SUB-SYNC-002",
-      "title": "Web useSubscription resolves highest tier across platforms",
-      "description": "As a web user with an active mobile subscription, I need the web app to recognize my entitlement so that premium features unlock on the website regardless of where I purchased.",
-      "acceptanceCriteria": [
-        "useSubscription removes .single() and fetches all rows where user_id=X and status='active'",
-        "Resolves the highest tier (vip > insider > free) by reading subscription_plans.name from each row's join",
-        "Returns the row corresponding to the winning tier so consumers of cancel_at_period_end / current_period_end keep working",
-        "Returns null when the user has no active rows (unchanged free-tier behavior)",
-        "TypeScript type-check passes"
-      ],
-      "priority": 59,
-      "passes": true,
-      "notes": "FIXED: src/hooks/useSubscription.ts queryFn drops .single() and fetches the full active rowset. Reduces over rows comparing tierRank lookups ({vip:2, insider:1, free:0}) on each row's joined plan.name to pick the winner. The winning row is then mapped through the existing JSONB-cast plumbing so consumers (isExpiringSoon, cancelAtPeriodEnd, plan.limits, plan.features) continue to read off a single subscription object. Empty rowset returns null (free tier). npm run type-check is clean."
-    },
-    {
-      "id": "SUB-SYNC-003",
-      "title": "Stripe webhook scoped to platform='web'",
-      "description": "As an engineer, I need the Stripe webhook to write only to the user's web subscription row so that an iOS or Android row for the same user is not clobbered when they pay via Stripe.",
-      "acceptanceCriteria": [
-        "handleSubscriptionPayment includes platform: 'web' in subscriptionData on insert",
-        "Existing-row lookup filters by user_id AND platform='web' (not just user_id)",
-        "Existing-row lookup uses .maybeSingle() (no PGRST116 error on absent rows)",
-        "UPDATE writes also filter by user_id AND platform='web'",
-        "Subscription updated/deleted/invoice handlers continue to key off stripe_subscription_id (already platform-safe)"
-      ],
-      "priority": 60,
-      "passes": true,
-      "notes": "FIXED: supabase/functions/stripe-webhook/index.ts handleSubscriptionPayment now filters the existing-row lookup by .eq('user_id', userId).eq('platform', 'web') and uses .maybeSingle(). subscriptionData includes platform: 'web'. The UPDATE branch also filters on platform='web' so it cannot stomp an iOS/Android row for the same user. handleSubscriptionUpdated, handleSubscriptionDeleted, handleInvoicePaymentSucceeded, handleInvoicePaymentFailed already key off stripe_subscription_id, which is unique per Stripe subscription, so they stay correct under the new schema."
-    },
-    {
-      "id": "SUB-SYNC-004",
-      "title": "validate-ios-receipt scoped to platform='ios'",
-      "description": "As an engineer, I need the iOS receipt validator to write only to the user's iOS subscription row so that a web/Stripe or Android row for the same user is not clobbered.",
-      "acceptanceCriteria": [
-        "Existing-row lookup filters by user_id AND platform='ios'",
-        "Switches from .limit(1).single() to .maybeSingle() to avoid PGRST116 noise",
-        "Insert/update payload continues to include platform: 'ios'",
-        "Receipt validation flow otherwise unchanged (Apple JWS verification, grace-period logging)"
-      ],
-      "priority": 61,
-      "passes": true,
-      "notes": "FIXED: supabase/functions/validate-ios-receipt/index.ts existing-row lookup is now .eq('user_id', user.id).eq('platform', 'ios').maybeSingle(). subscriptionData already sets platform: 'ios'. No change to Apple App Store Server API v2 verification, JWS decoding, bundle/product/revocation checks, or the grace-period behavior on validation failure. Idempotent under the new UNIQUE(user_id, platform) constraint."
-    },
-    {
-      "id": "SUB-SYNC-005",
-      "title": "validate-android-receipt scoped to platform='android'",
-      "description": "As an engineer, I need the Android receipt validator to write only to the user's Android subscription row so that a web/Stripe or iOS row for the same user is not clobbered.",
-      "acceptanceCriteria": [
-        "Existing-row lookup filters by user_id AND platform='android'",
-        "Switches from .limit(1).single() to .maybeSingle()",
-        "Insert/update payload continues to include platform: 'android'",
-        "Google Play Developer API verification flow otherwise unchanged"
-      ],
-      "priority": 62,
-      "passes": true,
-      "notes": "FIXED: supabase/functions/validate-android-receipt/index.ts existing-row lookup is now .eq('user_id', user.id).eq('platform', 'android').maybeSingle(). subscriptionData already sets platform: 'android'. No change to Google service-account JWT exchange, Android Publisher API v3 purchase verification, paymentState/cancelReason resolution, or the grace-period behavior."
-    },
-    {
-      "id": "SUB-SYNC-006",
-      "title": "iOS StoreKitService reads tier from Supabase as a peer to local entitlements",
-      "description": "As an iOS user, I need the app to recognize a subscription I purchased on the web (Stripe) or Android so that premium features unlock on iOS without me having to repurchase.",
-      "acceptanceCriteria": [
-        "StoreKitService gains a backendTier observable property fed from user_subscriptions",
-        "currentTier returns max(localTier, backendTier) using a static tierRank helper",
-        "refreshBackendTier() queries user_subscriptions joined with subscription_plans where status='active' and resolves the highest tier",
-        "refreshBackendTier no-ops when no Supabase session is present and clears backendTier to .free on sign-out",
-        "Hooks: called from init, after a successful purchase, after restorePurchases, and after each Transaction.updates listener fire",
-        "Failure to fetch keeps the prior backendTier (no UX downgrade on transient errors)",
-        "Existing 12 view consumers of currentTier continue to compile unchanged"
-      ],
-      "priority": 63,
-      "passes": true,
-      "notes": "FIXED: ios/DesMoinesInsider/Services/StoreKitService.swift now has private(set) var backendTier: SubscriptionTier = .free and a private static tierRank(_:) helper. currentTier became a computed property returning whichever of localTier (the previous direct-from-StoreKit logic, now in a private localTier var) or backendTier ranks higher. New func refreshBackendTier() awaits client.auth.session, then runs `client.from('user_subscriptions').select('status, plan:subscription_plans(name)').eq('user_id', value: userId).eq('status', value: 'active').execute().value` decoding into a [SubRow] of {status, plan:{name}}, walks the rows to find the max tier, and assigns backendTier. Skips when Config.isUITesting. Hook points: Task call from private init() alongside loadProducts/updatePurchasedProducts; awaited inside purchase(_:) right after syncEntitlementToBackend; awaited inside restorePurchases() after syncAllEntitlementsToBackend; awaited inside listenForTransactions() inside the verified-transaction branch. Errors are logged in DEBUG only and do not clear backendTier."
-    },
-    {
-      "id": "SUB-SYNC-007",
-      "title": "Android BillingService reads tier from Supabase as a peer to local entitlements",
-      "description": "As an Android user, I need the app to recognize a subscription I purchased on the web (Stripe) or iOS so that premium features unlock on Android without me having to repurchase.",
-      "acceptanceCriteria": [
-        "BillingService gains a _backendTier StateFlow exposed as backendTier",
-        "currentTier StateFlow becomes derived via a recomputeCurrentTier() helper that picks max(localTier, backendTier)",
-        "suspend fun refreshBackendTier() queries user_subscriptions joined with subscription_plans and resolves the highest tier",
-        "refreshBackendTier no-ops when no Supabase session is present and clears _backendTier on sign-out",
-        "Hooks: scope.launch from init, called after handlePurchase finishes acknowledging+syncing, called after restorePurchases finishes",
-        "Failure to fetch keeps the prior backendTier (no UX downgrade on transient errors)",
-        "Existing 12 view consumers of currentTier continue to read the same StateFlow type"
-      ],
-      "priority": 64,
-      "passes": true,
-      "notes": "FIXED: android/.../data/remote/BillingService.kt now exposes _backendTier MutableStateFlow + backendTier StateFlow. The original direct assignment to _currentTier inside updatePurchasedProducts() was replaced with recomputeCurrentTier(), which compares tierRank(localTier()) vs tierRank(_backendTier.value) and assigns the winner to _currentTier. localTier() wraps the existing resolveTier(_purchasedProductIDs.value) logic. tierRank(SubscriptionTier): Int is private. New suspend fun refreshBackendTier() reads currentSessionOrNull, then `client.from('user_subscriptions').select(Columns.raw(\"status, plan:subscription_plans(name)\")) { filter { eq('user_id', userId); eq('status', 'active') } }.decodeList<BackendSubRow>()` \u2014 BackendSubRow and BackendPlanRef are @Serializable private data classes with default-null fields. Walks rows to set _backendTier.value, then calls recomputeCurrentTier(). Hook points: scope.launch in init (alongside connect()); awaited in handlePurchase after the syncEntitlementToBackend forEach; awaited in restorePurchases after syncAllEntitlementsToBackend. Errors are logged at warn level and do not reset _backendTier. Added imports for io.github.jan.supabase.postgrest.from and Columns."
-    },
-    {
-      "id": "SUB-SYNC-008",
-      "title": "Refresh backendTier when auth state changes on iOS and Android",
-      "description": "As a user who logs out and into a different account in the same session (without making a purchase or pulling restore), I need the previously-cached backend tier from my old account to be cleared so the new account's entitlement is reflected immediately.",
-      "acceptanceCriteria": [
-        "iOS: subscribe to AuthService auth-state changes; call StoreKitService.shared.refreshBackendTier() on sign-in and clear backendTier on sign-out",
-        "Android: subscribe to Supabase auth status flow; call BillingService.refreshBackendTier() on sign-in and clear on sign-out",
-        "No regression to existing init / purchase / restore hook timing",
-        "Manual QA: sign out of account A, sign in to account B, confirm tier reflects account B before any purchase/restore action"
-      ],
-      "priority": 65,
-      "passes": true
-    },
-    {
-      "id": "SUB-SYNC-009",
-      "title": "One-shot data migration to clean legacy mixed-platform subscription rows",
-      "description": "Some pre-existing user_subscriptions rows have stripe_* fields populated even though their platform was overwritten to 'ios' or 'android' by validate-*-receipt's previous (unscoped) UPDATE behavior. These rows are confusing and could lead to incorrect cancellation routing.",
-      "acceptanceCriteria": [
-        "New migration audits user_subscriptions rows where platform != 'web' but stripe_subscription_id IS NOT NULL",
-        "For each, splits the row: keeps the platform-specific fields under the existing platform row, and inserts a fresh platform='web' row carrying the stripe_* fields and the canonical Stripe period/status",
-        "Original tier (plan_id) is preserved on whichever row the user is most likely actively paying on (preferred: trust Stripe webhook history for current_period_end recency)",
-        "Migration is idempotent \u2014 re-running produces no new rows",
-        "Run on a backup/staging copy first; ship a follow-up data-fix script if Stripe history needs to fill gaps",
-        "Document the manual cleanup commands in DEPLOYMENT.md"
-      ],
-      "priority": 66,
-      "passes": true
-    },
-    {
-      "id": "SUB-SYNC-010",
-      "title": "Apple App Store Server Notifications v2 webhook",
-      "description": "As an engineer, I need to receive server-to-server notifications from Apple so that subscription cancellations, refunds, billing retries, and renewals are reflected in user_subscriptions immediately \u2014 instead of only when the user next launches the iOS app.",
-      "acceptanceCriteria": [
-        "New edge function appstore-server-notifications-v2 accepts POST from Apple",
-        "Verifies the signedPayload JWS using Apple's PKI (intermediate cert validation against Apple Root CA)",
-        "Decodes notificationType + signedTransactionInfo + signedRenewalInfo",
-        "Handles SUBSCRIBED, DID_RENEW, DID_CHANGE_RENEWAL_STATUS, DID_FAIL_TO_RENEW, EXPIRED, REVOKE, REFUND, GRACE_PERIOD_EXPIRED",
-        "Looks up user_subscriptions by apple_original_transaction_id and updates status / current_period_end / cancel_at_period_end accordingly",
-        "Apple App Store Connect server notifications URL configured to point at the new function (production + sandbox URLs separately)",
-        "Smoke-tested with Apple's 'Request a Test Notification' API before production",
-        "Logs each event for at-least-once-delivery debugging; idempotent on duplicate notifications"
-      ],
-      "priority": 67,
-      "passes": true
-    },
-    {
-      "id": "SUB-SYNC-011",
-      "title": "Google Real-Time Developer Notifications (RTDN) webhook",
-      "description": "As an engineer, I need to receive RTDN events from Google Pub/Sub so that Android subscription state changes (cancellations, account holds, recoveries, refunds) are reflected in user_subscriptions immediately.",
-      "acceptanceCriteria": [
-        "Configure a Google Pub/Sub topic + push subscription pointing at a new edge function play-rtdn-webhook",
-        "Edge function verifies the OIDC token Google attaches to push messages (audience matches the function URL, issuer is accounts.google.com)",
-        "Decodes the base64 message data into a SubscriptionNotification (with subscriptionId, purchaseToken, notificationType)",
-        "On receipt, calls Android Publisher API v3 purchases.subscriptions.get to fetch fresh state (re-uses existing service account credentials)",
-        "Updates user_subscriptions rows where google_purchase_token matches with the new status / period dates / cancel reason",
-        "Handles SUBSCRIPTION_PURCHASED, RENEWED, CANCELED, ON_HOLD, IN_GRACE_PERIOD, RESTARTED, REVOKED, EXPIRED, PAUSED",
-        "Idempotent on duplicate deliveries (Pub/Sub delivers at-least-once)",
-        "Smoke-tested with the Play Console 'Test notification' helper"
-      ],
-      "priority": 68,
-      "passes": true
-    },
-    {
-      "id": "SUB-SYNC-012",
-      "title": "Subscription management UI shows platform-of-origin and routes cancel correctly",
-      "description": "As a user with subscriptions on multiple platforms, I need the Profile/Subscription screen to show me which platform each subscription came from and to route my cancel action to the correct place (Stripe portal for web, App Store settings for iOS, Google Play for Android) so I do not get stuck unable to cancel.",
-      "acceptanceCriteria": [
-        "Web Pricing/Profile shows a per-platform breakdown when more than one active subscription exists",
-        "Cancel button per row links to the correct destination: Stripe customer portal for platform='web', App Store subscription settings deeplink for 'ios', Google Play Store subscription page for 'android'",
-        "iOS app SubscriptionView and Android SubscriptionScreen surface the same breakdown when backendTier reports a non-iOS/non-Android source",
-        "Copy clarifies: 'You also have an active VIP subscription via the website' (or similar)",
-        "useSubscription returns all active rows (not just the winning one) via a new subscriptions array, while preserving the existing single-row subscription accessor for back-compat"
-      ],
-      "priority": 69,
-      "passes": true
-    },
-    {
-      "id": "SUB-SYNC-013",
-      "title": "End-to-end tests covering cross-platform subscription sync",
-      "description": "As an engineer, I need automated coverage for the cross-platform sync paths so that future changes to webhooks, validate-* functions, or read paths cannot silently break entitlement propagation.",
-      "acceptanceCriteria": [
-        "Playwright (or integration) test: simulate Stripe webhook payload for a checkout.session.completed \u2192 assert user_subscriptions row created with platform='web' and tier resolves correctly via useSubscription",
-        "Integration test: POST a synthetic StoreKit transaction to validate-ios-receipt with a stubbed Apple API and assert the iOS row coexists with the existing web row (no clobber)",
-        "Integration test: same for validate-android-receipt with a stubbed Google API",
-        "Read-side test: with rows on web (insider) + ios (vip), useSubscription returns vip and isPremium=true",
-        "Test for the UNIQUE(user_id, platform) constraint: a second insert at the same (user_id, platform) is rejected",
-        "Tests run in CI on every PR touching supabase/functions/** or src/hooks/useSubscription.ts"
-      ],
-      "priority": 70,
-      "passes": true
-    },
-    {
-      "id": "NEW-SEC-001",
-      "title": "Fix PostgREST filter injection in nlp-search edge function",
-      "description": "As a platform operator, I want user-derived search terms sanitized before they are interpolated into PostgREST .or()/.ilike() filter strings so that an attacker cannot rewrite the filter and exfiltrate columns (the function runs with the service-role key, bypassing RLS).",
-      "acceptanceCriteria": [
-        "Add a shared sanitizePostgrestPattern() helper that strips PostgREST metacharacters (, ( ) * `) and escapes LIKE wildcards",
-        "Sanitize searchKeyword, location/neighborhood, category, and cuisine before interpolation in supabase/functions/nlp-search/index.ts",
-        "No behavior change for legitimate alphanumeric queries",
-        "Build and typecheck pass"
-      ],
-      "priority": 71,
-      "passes": true,
-      "notes": "FIXED: Added sanitizePostgrestPattern() to supabase/functions/_shared/validation.ts (builds on sanitizeLikeInput, additionally strips , ( ) * ` -> space, collapses whitespace). Applied to searchKeyword, locationFilter, parsedIntent.category, parsedIntent.cuisine across all three search blocks (events/restaurants/attractions) in nlp-search/index.ts. Imported the helper. vite build + tsc --noEmit pass."
-    },
-    {
-      "id": "NEW-SEC-002",
-      "title": "Fix PostgREST filter injection in discover-chat edge function",
-      "description": "As a platform operator, I want the Ask Pulse tool-call search terms fully sanitized (the existing code only stripped % and _, not , ( ) which still allow filter breakout) before interpolation into .or()/.ilike() filters.",
-      "acceptanceCriteria": [
-        "Reuse sanitizePostgrestPattern() in supabase/functions/discover-chat/index.ts",
-        "Sanitize query term plus category/cuisine/type for search_events, search_restaurants, search_attractions tool handlers",
-        "Replace the insufficient .replace(/[%_]/g,'') calls",
-        "Build and typecheck pass"
-      ],
-      "priority": 72,
-      "passes": true,
-      "notes": "FIXED: Imported sanitizePostgrestPattern in discover-chat/index.ts and replaced all three insufficient .replace(/[%_]/g,'') term sanitizations plus the category/cuisine/type ilike interpolations across search_events/search_restaurants/search_attractions."
-    },
-    {
-      "id": "NEW-SEC-003",
-      "title": "Require admin auth in parse-menu-upload edge function",
-      "description": "As a platform operator, I want parse-menu-upload to enforce an authenticated admin caller so that anonymous users cannot burn the Anthropic budget or write arbitrary rows into restaurant_menus via the service-role key. The header comment claimed application-layer JWT enforcement but the handler performed no auth check.",
-      "acceptanceCriteria": [
-        "Reject missing/invalid Authorization with 401 before any work",
-        "Verify the JWT via supabase.auth.getUser and require profiles.role === 'admin' (403 otherwise)",
-        "Mirror the admin-auth pattern used by process-stripe-refund",
-        "Update the SECURITY header comment to reflect enforced auth",
-        "No change to the request/response shape for authorized admin callers"
-      ],
-      "priority": 73,
-      "passes": true,
-      "notes": "FIXED: Added Authorization + supabase.auth.getUser + profiles.role==='admin' gate at the top of the serve() try block in parse-menu-upload/index.ts before body parsing. Updated the SECURITY header comment. Request/response shape unchanged for admins."
-    },
-    {
-      "id": "NEW-SEC-004",
-      "title": "Harden refresh_oauth_token RPC (cross-user token & client_secret leak)",
-      "description": "As a platform operator, I want the SECURITY DEFINER refresh_oauth_token function to scope to the authenticated caller and never return the OAuth client_secret, so that an authenticated user cannot pass another user's UUID to retrieve their refresh_token plus the app's client_secret.",
-      "acceptanceCriteria": [
-        "New migration replaces the function in place (signature unchanged for API compatibility)",
-        "Derive the user from auth.uid() and ignore the caller-supplied p_user_id; return error when unauthenticated",
-        "Remove client_secret from the returned JSONB",
-        "SET search_path = '' with schema-qualified table references",
-        "REVOKE EXECUTE from PUBLIC/anon; GRANT to authenticated/service_role only",
-        "Narrow the over-broad GRANT ALL ON user_oauth_tokens to SELECT/INSERT/UPDATE/DELETE",
-        "Verified no web/edge caller exists so the return-shape change is non-breaking"
-      ],
-      "priority": 74,
-      "passes": true,
-      "notes": "FIXED: Added supabase/migrations/20260517000000_harden_refresh_oauth_token.sql. CREATE OR REPLACE keeps the (UUID,TEXT) signature; uses auth.uid(), drops client_secret, SET search_path='', schema-qualified, REVOKE from PUBLIC/anon + GRANT to authenticated/service_role, narrowed user_oauth_tokens grant. grep confirmed zero callers outside the original migration and generated types."
-    },
-    {
-      "id": "NEW-SEC-005",
-      "title": "Deliver account-deletion confirmation token out-of-band (email)",
-      "description": "As a user, I want the account-deletion confirmation token emailed to my verified address instead of returned in the HTTP response, so that a leaked session/XSS cannot immediately chain request->confirm and delete my account.",
-      "acceptanceCriteria": [
-        "delete-user-account 'request' step emails the token via the existing Resend/SendGrid integration",
-        "Response body returns only { success: true } (no token)",
-        "'confirm' step unchanged; token TTL still enforced",
-        "Tests cover the request/confirm flow with the token no longer in the body"
-      ],
-      "priority": 75,
-      "passes": false
-    },
-    {
-      "id": "NEW-SEC-006",
-      "title": "Encrypt user_oauth_tokens access/refresh tokens at rest",
-      "description": "As a platform operator, I want OAuth access_token/refresh_token columns encrypted at rest (pgcrypto or Supabase Vault) so a DB read does not expose usable third-party credentials.",
-      "acceptanceCriteria": [
-        "Tokens stored encrypted; decrypted only inside trusted server-side functions",
-        "Migration includes a backfill for existing rows behind the dual-shape deprecation flow",
-        "No plaintext token ever returned to a client RPC",
-        "Documented key management approach"
-      ],
-      "priority": 76,
-      "passes": false
-    },
-    {
-      "id": "NEW-SEC-007",
-      "title": "Use a stable idempotency key for Stripe refunds",
-      "description": "As a platform operator, I want process-stripe-refund to derive its Stripe idempotency key from a stable value (payment_intent or client request id) instead of Date.now(), so rapid double-submits cannot create duplicate refunds.",
-      "acceptanceCriteria": [
-        "Idempotency key no longer includes a timestamp",
-        "Key derived from stripe_payment_intent_id (or a client-supplied request id)",
-        "Audit log still records the key",
-        "Regression test for duplicate-submit returns the same refund"
-      ],
-      "priority": 77,
-      "passes": false
-    },
-    {
-      "id": "NEW-DX-001",
-      "title": "Convert remaining default-export hooks to named exports",
-      "description": "As an engineer, I want the 6 hooks that still use export default converted to named-only exports per CLAUDE.md (default exports for pages only), improving grep/refactor tooling consistency.",
-      "acceptanceCriteria": [
-        "Remove redundant 'export default' from useMediaLibrary, useNLPSearch, useWebVitals, useFocusOnRouteChange, useMediaUpload, useTripPlanner",
-        "All consumers use named imports",
-        "Typecheck and build pass with no broken imports"
-      ],
-      "priority": 78,
-      "passes": true,
-      "notes": "FIXED: All 6 hooks already had a named export and every consumer already used named imports, so only the redundant trailing 'export default useX;' lines were removed. Verified zero default-import sites remain; tsc --noEmit and vite build pass."
-    },
-    {
-      "id": "NEW-DX-002",
-      "title": "Add unit test coverage for contentValidation utilities",
-      "description": "As an engineer, I want vitest coverage for the pure validation helpers (URL/phone/email/date/image validators and validateEvent/validateRestaurant) since they gate content auto-approval and had zero tests.",
-      "acceptanceCriteria": [
-        "New src/lib/__tests__/contentValidation.test.ts",
-        "Covers isValidUrl/isValidPhone/formatPhone/isValidEmail/isValidEventDate/isValidImageUrl edge cases",
-        "Covers validateEvent happy path, missing-required-fields, score clamping, generic-title warning, and validateRestaurant shape",
-        "Full vitest suite green"
-      ],
-      "priority": 79,
-      "passes": true,
-      "notes": "FIXED: Added src/lib/__tests__/contentValidation.test.ts (20 tests). Full suite now 8 files / 86 tests passing. (lib/security/ownership.ts deferred to NEW-DX-006 since it requires Supabase client mocking.)"
-    },
-    {
-      "id": "NEW-DX-003",
-      "title": "Migrate core data hooks to TanStack Query",
-      "description": "As an engineer, I want useEvents/useRestaurants and ~19 sibling data hooks migrated from manual useState/useEffect/supabase.from to useQuery/useMutation, eliminating duplicated loading/error state and the exhaustive-deps disables, matching the canonical pattern in CLAUDE.md.",
-      "acceptanceCriteria": [
-        "useEvents and useRestaurants migrated first (referenced as the template)",
-        "Introduce a shared query-key + fetcher convention",
-        "Remove the now-unnecessary eslint-disable exhaustive-deps comments",
-        "No behavior regression on Events/Restaurants pages (Playwright green)"
-      ],
-      "priority": 80,
-      "passes": false
-    },
-    {
-      "id": "NEW-DX-004",
-      "title": "Decompose ContentTable.tsx (1,536 lines)",
-      "description": "As an engineer, I want ContentTable.tsx split into a useContentTableState hook, a seoStatus util, and a ContentTableRow component, and converted to a named export, to reduce the largest non-generated component and remove its 11 any types.",
-      "acceptanceCriteria": [
-        "Sort/search/expansion state extracted to a hook",
-        "calculateSeoStatus moved to a typed util with the generated Row union",
-        "Row rendering extracted to <ContentTableRow>",
-        "Named export; admin table behavior unchanged"
-      ],
-      "priority": 81,
-      "passes": false
-    },
-    {
-      "id": "NEW-DX-005",
-      "title": "Remove any types from security & validation libs",
-      "description": "As an engineer, I want the any types in src/lib/security/ownership.ts and src/lib/contentValidation.ts replaced with generated Supabase Row types / proper interfaces, since untyped security and validation logic is the riskiest place for any.",
-      "acceptanceCriteria": [
-        "ownership.ts uses typed table/row references instead of as any",
-        "contentValidation validateX(event: any) replaced with typed input interfaces",
-        "type-check:strict adds these files",
-        "No behavior change; tests still green"
-      ],
-      "priority": 82,
-      "passes": false
-    },
-    {
-      "id": "NEW-DX-006",
-      "title": "Unit test src/lib/security/ownership.ts with a mocked Supabase client",
-      "description": "As an engineer, I want vitest coverage for checkOwnership/isResourceOwner including the unauthenticated, admin-bypass, team-access, and not-owner branches, using a mocked supabase client.",
-      "acceptanceCriteria": [
-        "Mock @/integrations/supabase/client",
-        "Cover UNAUTHENTICATED, admin bypass, owner match, NOT_OWNER, and unknown-resource-type",
-        "Full vitest suite green"
-      ],
-      "priority": 83,
-      "passes": false
-    },
-    {
-      "id": "NEW-UX-001",
-      "title": "Generalize favorites to restaurants and attractions",
-      "description": "As a user, I want to save restaurants and attractions (not only events) and see all saved items in one place, since favoriting works only for events today.",
-      "acceptanceCriteria": [
-        "useFavorites supports (entity_type, entity_id) across events/restaurants/attractions",
-        "Heart/save control on RestaurantCard, AttractionCard, and both detail pages",
-        "Backward-compatible data migration (additive) for existing event favorites",
-        "Dashboard 'Saved' view groups all three types"
-      ],
-      "priority": 84,
-      "passes": false
-    },
-    {
-      "id": "NEW-UX-002",
-      "title": "Web push / email alerts for saved searches & event reminders",
-      "description": "As a web user, I want opt-in notifications (web push and/or email) for saved-search matches and event reminders, since notifications are currently Capacitor-only and web users get nothing.",
-      "acceptanceCriteria": [
-        "Service worker + VAPID web push opt-in, or email opt-in reusing send-event-reminders",
-        "Saved-search 'notify me of new matches' toggle",
-        "Respects existing notification preferences and unsubscribe",
-        "No regression to mobile push"
-      ],
-      "priority": 85,
-      "passes": false
-    },
-    {
-      "id": "NEW-UX-003",
-      "title": "Add list/map view toggle to the Events page",
-      "description": "As a user, I want the same list/map toggle on Events that Restaurants and Attractions already have, for consistent browsing. EventsMap is already imported but has no toggle.",
-      "acceptanceCriteria": [
-        "viewMode 'list' | 'map' on EventsPage mirroring Restaurants/Attractions",
-        "Reuse the already-imported EventsMap",
-        "Filters/sort persist across view switches",
-        "Mobile responsive + a11y for the toggle"
-      ],
-      "priority": 86,
-      "passes": false
-    },
-    {
-      "id": "NEW-UX-004",
-      "title": "Unify filter/sort UX across Events, Restaurants, Attractions",
-      "description": "As a user, I want predictable filtering and sorting across the three core listing pages (shared SortDropdown, shared inline-filter + smart-preset pattern, consistent default sort).",
-      "acceptanceCriteria": [
-        "All three pages use SortDropdown",
-        "Shared inline-filter + preset component pattern",
-        "Documented, consistent default sort per page",
-        "No regression to existing filter results"
-      ],
-      "priority": 87,
-      "passes": false
-    },
-    {
-      "id": "NEW-UX-005",
-      "title": "Unified Saved hub in the user dashboard",
-      "description": "As a user, I want one consolidated Saved tab grouping events, restaurants, attractions, itineraries, and claimed deals, instead of an events-only favorites view.",
-      "acceptanceCriteria": [
-        "Dashboard Saved tab aggregates all saved entity types",
-        "Per-type sections with empty states",
-        "Quota meter reflects multi-entity content where relevant",
-        "Depends on NEW-UX-001"
-      ],
-      "priority": 88,
-      "passes": false
-    },
-    {
-      "id": "NEW-UX-006",
-      "title": "Guard or surface orphaned routes (/calendar, /real-time, /social)",
-      "description": "As a user, I want /calendar wrapped in ProtectedRoute and reachable from nav, and /real-time and /social either added to navigation or retired, so built features are discoverable and personal calendar is not unauthenticated.",
-      "acceptanceCriteria": [
-        "/calendar wrapped in ProtectedRoute and added to nav (or removed)",
-        "/real-time and /social added to a nav group (or removed)",
-        "navigationConfig.ts updated; BottomNav consistent",
-        "No dead links introduced"
-      ],
-      "priority": 89,
-      "passes": false
+      "passes": false,
+      "notes": ""
     }
   ]
 }
