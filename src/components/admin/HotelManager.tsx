@@ -6,9 +6,11 @@ import {
   Hotel as HotelIcon,
   Link2,
   Link2Off,
+  Loader2,
   MoreVertical,
   Pencil,
   Plus,
+  RefreshCw,
   Search,
   Star,
   Trash2,
@@ -42,6 +44,14 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -84,7 +94,24 @@ type AffiliateFilter = "all" | "with" | "without";
 
 interface BulkActionState {
   open: boolean;
-  kind: "delete" | null;
+  kind: "delete" | "regen" | null;
+}
+
+interface RegenRow {
+  id: string;
+  name: string;
+  brand_parent: string;
+  affiliate_url: string | null;
+  status: string;
+}
+
+interface RegenResult {
+  success: boolean;
+  updated: number;
+  skipped: number;
+  results?: RegenRow[];
+  configured_brands?: string[];
+  unconfigured_brands?: string[];
 }
 
 function HotelImage({ src, alt }: { src: string | null; alt: string }) {
@@ -227,6 +254,7 @@ export default function HotelManager() {
     kind: null,
   });
   const [busy, setBusy] = useState(false);
+  const [regenResult, setRegenResult] = useState<RegenResult | null>(null);
 
   const filterOptions = useHotelFilterOptions();
   const hotelsState = useHotels({
@@ -327,6 +355,35 @@ export default function HotelManager() {
         action: "softDeleteOne",
       });
       toast.error("Deactivate failed. Check console for details.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function bulkRegenAffiliates() {
+    if (selectedIds.length === 0) return;
+    setBusy(true);
+    try {
+      const { supabase } = await import("@/integrations/supabase/client");
+      const { data, error } = await supabase.functions.invoke<RegenResult>(
+        "generate-hotel-affiliate-urls",
+        { body: { hotel_ids: selectedIds } },
+      );
+      if (error) throw error;
+      if (!data) throw new Error("Empty response from regen function");
+
+      setRegenResult(data);
+      setBulkState({ open: false, kind: null });
+      toast.success(
+        `Regenerated: ${data.updated} updated, ${data.skipped} skipped`,
+      );
+      await hotelsState.refetch();
+    } catch (error) {
+      handleError(error, {
+        component: "HotelManager",
+        action: "bulkRegenAffiliates",
+      });
+      toast.error("Affiliate regen failed. Check console for details.");
     } finally {
       setBusy(false);
     }
@@ -475,6 +532,44 @@ export default function HotelManager() {
                 Un-feature
               </Button>
               <AlertDialog
+                open={bulkState.open && bulkState.kind === "regen"}
+                onOpenChange={(open) =>
+                  setBulkState({ open, kind: open ? "regen" : null })
+                }
+              >
+                <AlertDialogTrigger asChild>
+                  <Button size="sm" variant="outline" disabled={busy}>
+                    {busy && bulkState.kind === "regen" ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                    ) : (
+                      <RefreshCw className="h-3.5 w-3.5 mr-1" />
+                    )}
+                    Regen affiliates
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Regenerate affiliate URLs?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Calls the generate-hotel-affiliate-urls edge function for{" "}
+                      {selectedIds.length} hotel
+                      {selectedIds.length === 1 ? "" : "s"}. Hotels without a{" "}
+                      <code>brand_parent</code> or a website are skipped. A
+                      results dialog will list per-hotel outcomes.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => bulkRegenAffiliates()}
+                      disabled={busy}
+                    >
+                      Regenerate
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+              <AlertDialog
                 open={bulkState.open && bulkState.kind === "delete"}
                 onOpenChange={(open) =>
                   setBulkState({ open, kind: open ? "delete" : null })
@@ -539,6 +634,7 @@ export default function HotelManager() {
                 <TableHead className="hidden md:table-cell">Area</TableHead>
                 <TableHead className="hidden lg:table-cell">Rating</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead className="hidden xl:table-cell">Last regen</TableHead>
                 <TableHead className="hidden xl:table-cell">Updated</TableHead>
                 <TableHead className="w-12" aria-label="Actions" />
               </TableRow>
@@ -547,7 +643,7 @@ export default function HotelManager() {
               {hotelsState.isLoading
                 ? Array.from({ length: 5 }).map((_, i) => (
                     <TableRow key={`skel-${i}`}>
-                      <TableCell colSpan={9}>
+                      <TableCell colSpan={10}>
                         <Skeleton className="h-8 w-full" />
                       </TableCell>
                     </TableRow>
@@ -556,7 +652,7 @@ export default function HotelManager() {
                   ? (
                     <TableRow>
                       <TableCell
-                        colSpan={9}
+                        colSpan={10}
                         className="text-center text-sm text-muted-foreground py-12"
                       >
                         <HotelIcon className="h-8 w-8 mx-auto mb-2 opacity-50" />
@@ -640,6 +736,13 @@ export default function HotelManager() {
                                 </Badge>
                               )}
                             </div>
+                          </TableCell>
+                          <TableCell className="hidden xl:table-cell text-xs text-muted-foreground">
+                            {hotel.affiliate_url_updated_at
+                              ? new Date(
+                                  hotel.affiliate_url_updated_at,
+                                ).toLocaleDateString()
+                              : "—"}
                           </TableCell>
                           <TableCell className="hidden xl:table-cell text-xs text-muted-foreground">
                             {hotel.updated_at
@@ -733,6 +836,70 @@ export default function HotelManager() {
           hotelsState.refetch();
         }}
       />
+
+      <Dialog
+        open={regenResult !== null}
+        onOpenChange={(open) => !open && setRegenResult(null)}
+      >
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Affiliate regeneration results</DialogTitle>
+            <DialogDescription>
+              {regenResult
+                ? `${regenResult.updated} updated · ${regenResult.skipped} skipped`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          {regenResult?.unconfigured_brands &&
+            regenResult.unconfigured_brands.length > 0 && (
+              <div className="text-xs bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded p-2 mb-2">
+                Unconfigured brands (env vars missing):{" "}
+                <span className="font-medium">
+                  {regenResult.unconfigured_brands.join(", ")}
+                </span>
+              </div>
+            )}
+          <div className="rounded-md border max-h-96 overflow-y-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Hotel</TableHead>
+                  <TableHead>Brand</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(regenResult?.results ?? []).map((row) => (
+                  <TableRow key={row.id}>
+                    <TableCell className="text-sm font-medium">
+                      {row.name}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {row.brand_parent}
+                    </TableCell>
+                    <TableCell>
+                      {row.status === "updated" ? (
+                        <Badge variant="default" className="text-[10px]">
+                          Updated
+                        </Badge>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">
+                          {row.status}
+                        </span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRegenResult(null)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog
         open={softDeleting !== null}

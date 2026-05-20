@@ -89,8 +89,8 @@
         "Typecheck + lint pass"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "SHIPPED: Extended generate-hotel-affiliate-urls edge function to accept a hotel_ids array (existing single hotel_id path preserved). The function now stamps affiliate_url_updated_at on every successful regen. Migration 20260520000001_add_affiliate_url_updated_at_to_hotels.sql adds the new column; types.ts updated. HotelManager grew a bulk Regen affiliates action behind an AlertDialog confirm, plus a results Dialog that lists per-row outcomes (Updated badge or human-readable status string) and an amber callout when env-var-missing brands are detected. A 'Last regen' column appears between Status and Updated on xl+ viewports. Typecheck + lint clean."
     },
     {
       "id": "ADMIN-ATTRACTION-001",

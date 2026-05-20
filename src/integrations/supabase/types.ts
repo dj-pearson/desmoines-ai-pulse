@@ -3120,6 +3120,8 @@ export type Database = {
           geo_summary: string | null
           geo_key_facts: string[] | null
           geo_faq: Json | null
+          // Set whenever the affiliate URL is (re)generated. Migration 20260520000001.
+          affiliate_url_updated_at: string | null
           created_at: string | null
           updated_at: string | null
         }
@@ -3164,6 +3166,7 @@ export type Database = {
           geo_summary?: string | null
           geo_key_facts?: string[] | null
           geo_faq?: Json | null
+          affiliate_url_updated_at?: string | null
           created_at?: string | null
           updated_at?: string | null
         }
@@ -3208,6 +3211,7 @@ export type Database = {
           geo_summary?: string | null
           geo_key_facts?: string[] | null
           geo_faq?: Json | null
+          affiliate_url_updated_at?: string | null
           created_at?: string | null
           updated_at?: string | null
         }

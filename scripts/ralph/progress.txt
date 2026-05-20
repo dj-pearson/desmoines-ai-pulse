@@ -23,6 +23,36 @@ function's `Cache-Control: max-age` to avoid wasted re-fetches. Disable
 
 ---
 
+## 2026-05-20 — ADMIN-HOTEL-003 (Bulk affiliate URL regeneration)
+
+Hotel vertical complete. Added bulk affiliate URL regen to HotelManager.
+
+Files modified:
+- `supabase/functions/generate-hotel-affiliate-urls/index.ts` (accepts
+  `hotel_ids: string[]`; existing `hotel_id` and `brand_parent` paths
+  preserved; sets `affiliate_url_updated_at` on every successful write)
+- `src/components/admin/HotelManager.tsx` (bulk Regen action behind
+  AlertDialog confirm; results Dialog with per-row outcomes; new "Last
+  regen" column at xl breakpoint)
+- `src/integrations/supabase/types.ts` (added affiliate_url_updated_at)
+
+Files added:
+- `supabase/migrations/20260520000001_add_affiliate_url_updated_at_to_hotels.sql`
+
+**Learnings for future iterations:**
+- When extending an existing edge function with a bulk variant, accept
+  a new `<thing>_ids: string[]` field rather than overloading the
+  singular. Keep the old path so existing callers (CronMonitor jobs,
+  per-row admin UI) don't have to change.
+- A dedicated tracking column (`<thing>_updated_at`) beats inferring
+  from `updated_at` when you want "last time this specific operation
+  ran" — `updated_at` changes on every edit and gives false positives.
+- Showing "unconfigured brands" in the results dialog made it
+  immediately obvious which Marriott / Hilton / IHG env vars are
+  missing, without having to dig through Supabase secrets UI.
+
+---
+
 ## 2026-05-20 — ADMIN-HOTEL-002 (Hotel create/edit/delete dialog with SEO + GEO)
 
 Added the full HotelEditDialog and wired CRUD into HotelManager.

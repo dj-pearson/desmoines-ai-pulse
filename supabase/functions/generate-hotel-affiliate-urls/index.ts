@@ -127,11 +127,15 @@ serve(async (req) => {
 
     // Parse request body (optional filters)
     let hotelId: string | null = null;
+    let hotelIds: string[] | null = null;
     let brandParent: string | null = null;
 
     if (req.method === "POST") {
       const body = await req.json().catch(() => ({}));
       hotelId = body.hotel_id || null;
+      // Bulk variant added for the admin HotelManager regen action
+      // (ADMIN-HOTEL-003). Accepts an array of hotel UUIDs.
+      hotelIds = Array.isArray(body.hotel_ids) ? body.hotel_ids : null;
       brandParent = body.brand_parent || null;
     }
 
@@ -141,7 +145,9 @@ serve(async (req) => {
       .select("id, name, website, brand_parent, affiliate_url")
       .eq("is_active", true);
 
-    if (hotelId) {
+    if (hotelIds && hotelIds.length > 0) {
+      query = query.in("id", hotelIds);
+    } else if (hotelId) {
       query = query.eq("id", hotelId);
     }
     if (brandParent) {
@@ -202,6 +208,9 @@ serve(async (req) => {
           .update({
             affiliate_url: affiliateUrl,
             affiliate_provider: affiliateProvider,
+            // Tracking column added by 20260520000001 — used by the admin
+            // HotelManager "Last regen" column.
+            affiliate_url_updated_at: new Date().toISOString(),
           })
           .eq("id", hotel.id);
 
