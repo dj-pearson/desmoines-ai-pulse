@@ -23,6 +23,53 @@ function's `Cache-Control: max-age` to avoid wasted re-fetches. Disable
 
 ---
 
+## 2026-05-20 — ADMIN-EVENT-SUBMIT-001 (Event submissions moderation queue)
+
+Final story of the Admin Backend Overhaul PRD. 17/17 complete.
+
+Files added:
+- `src/components/admin/EventSubmissionsManager.tsx`
+- `src/pages/AdminEventSubmissions.tsx`
+
+Files modified:
+- `src/App.tsx` (lazy import + route)
+- `src/components/admin/AdminNav.tsx` (Content group link with Inbox icon)
+
+**Learnings for future iterations:**
+- Quick-template buttons + a free-text fallback in the same dialog
+  is a better moderation UX than just a textarea. Templates make
+  common rejections fast; free text covers the edge cases.
+- Per-row + bulk reusing the same action dialog: set `selected` to
+  a singleton `Set([row.id])` from the detail Sheet, then trigger
+  the same `bulkAction` state. One code path, two entry points.
+- For tables where moderators land most often on a specific status
+  (pending here), default the filter to that status instead of
+  "all" — saves a click every session.
+
+---
+
+## End of Admin Backend Overhaul PRD ✅ 17/17
+
+See `prd.json` for the full set of completed stories with per-story
+SHIPPED notes (including scope deviations and what was deferred).
+
+Required secrets that admins need to set before exercising new
+functionality:
+- `SOCIAL_ACCOUNT_ENC_KEY` (base64 of 32 random bytes) for
+  manage-social-account.
+- `RESEND_API_KEY` already in use; `NEWSLETTER_FROM` optional override.
+
+Known follow-ups worth filing as their own stories:
+- Rewrite `calculate_trending_scores` PL/pgSQL to read from
+  `trending_config` (currently captures intent only).
+- Per-recipient delivery rows + open/click tracking for newsletter
+  campaigns (needs Resend webhook).
+- Drag-to-update kanban in PartnershipsManager (needs @dnd-kit).
+- Reply thread + email send-via-Resend in the FeedbackInbox.
+- Recurring rules (days_of_week / start_time / end_time) on deals.
+
+---
+
 ## 2026-05-20 — ADMIN-EMAIL-002 (Newsletter campaign composer + send)
 
 Files added:

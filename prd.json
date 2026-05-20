@@ -306,8 +306,8 @@
         "Typecheck + lint pass"
       ],
       "priority": 17,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "SHIPPED: Dedicated /admin/event-submissions page + EventSubmissionsManager component. Defaults to status='pending'. Filters: status (pending / needs_info / approved / rejected / all), debounced search across title/venue/description/location. Bulk select with three actions: Approve (AlertDialog confirm), Request info (Dialog with quick templates + custom note), Reject (Dialog with rejection-reason templates + custom note). Each transition stamps admin_reviewed_by + admin_reviewed_at and writes a security_audit_logs row per affected ID (event_type=admin_action, action='event_submission:<new_status>'). Detail Sheet shows the full submission with image, all metadata, contact info, existing admin notes, and the three per-row action buttons. Realtime subscription so new submissions appear without refresh. Route registered + AdminNav Content group gets the new 'Event submissions' link with Inbox icon. SCOPE DEFERRED: 'Edit-and-approve' (would open ContentEditDialog pre-filled) and templated email send via Resend on Request-info — the existing notify-event-submission edge function can be invoked but the per-action email integration is a follow-up. AdminNav unread-count badge driven by pending count is also a future polish."
     }
   ]
 }
