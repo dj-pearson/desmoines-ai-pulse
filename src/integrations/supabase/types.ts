@@ -3112,6 +3112,14 @@ export type Database = {
           is_featured: boolean | null
           is_active: boolean | null
           sort_order: number | null
+          // SEO + GEO columns added by migration 20260520000000_add_seo_geo_to_hotels.sql
+          seo_title: string | null
+          seo_description: string | null
+          seo_keywords: string[] | null
+          seo_h1: string | null
+          geo_summary: string | null
+          geo_key_facts: string[] | null
+          geo_faq: Json | null
           created_at: string | null
           updated_at: string | null
         }
@@ -3149,6 +3157,13 @@ export type Database = {
           is_featured?: boolean | null
           is_active?: boolean | null
           sort_order?: number | null
+          seo_title?: string | null
+          seo_description?: string | null
+          seo_keywords?: string[] | null
+          seo_h1?: string | null
+          geo_summary?: string | null
+          geo_key_facts?: string[] | null
+          geo_faq?: Json | null
           created_at?: string | null
           updated_at?: string | null
         }
@@ -3186,6 +3201,13 @@ export type Database = {
           is_featured?: boolean | null
           is_active?: boolean | null
           sort_order?: number | null
+          seo_title?: string | null
+          seo_description?: string | null
+          seo_keywords?: string[] | null
+          seo_h1?: string | null
+          geo_summary?: string | null
+          geo_key_facts?: string[] | null
+          geo_faq?: Json | null
           created_at?: string | null
           updated_at?: string | null
         }

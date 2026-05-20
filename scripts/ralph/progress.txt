@@ -23,6 +23,44 @@ function's `Cache-Control: max-age` to avoid wasted re-fetches. Disable
 
 ---
 
+## 2026-05-20 — ADMIN-HOTEL-002 (Hotel create/edit/delete dialog with SEO + GEO)
+
+Added the full HotelEditDialog and wired CRUD into HotelManager.
+
+Files added:
+- `src/components/admin/HotelEditDialog.tsx` (RHF + Zod, tabbed)
+- `supabase/migrations/20260520000000_add_seo_geo_to_hotels.sql`
+
+Files modified:
+- `src/components/admin/HotelManager.tsx` (New button + row dropdown
+  with Edit / Quick view / Deactivate; per-row soft-delete confirm)
+- `src/integrations/supabase/types.ts` (added seo_*/geo_* columns to
+  hotels Row/Insert/Update by hand; generated-types regen will catch
+  up the next time `supabase gen types` is run)
+
+**Learnings for future iterations:**
+- The hotels table did NOT have SEO/GEO columns — they're standard on
+  events / restaurants but the hotels migration (20260216000000) shipped
+  without them. Pattern for any content table being promoted to a full
+  admin vertical: add migration with `ALTER TABLE … ADD COLUMN IF NOT
+  EXISTS seo_title TEXT, seo_description TEXT, seo_keywords TEXT[],
+  seo_h1 TEXT, geo_summary TEXT, geo_key_facts TEXT[], geo_faq JSONB;`
+  Then add the matching columns to `types.ts` Row/Insert/Update by hand.
+- Image upload pattern when no dedicated bucket exists: use the shared
+  `media` bucket with a per-vertical key prefix (`hotels/<uuid>.<ext>`).
+  Avoids creating a new bucket + RLS policies for every vertical.
+- `geocode-location` edge function: POST `{ location }` → returns
+  `{ latitude, longitude }` or `{ error }`. No auth required (public
+  utility). Strategy: only geocode when both lat/lng are blank.
+- React Hook Form + Zod number fields: use
+  `z.union([z.literal(""), z.coerce.number()…])` so empty inputs are
+  valid and get coerced to a clean nullable on save.
+- Slug auto-generation pattern: track a `slugTouched` boolean that
+  flips when the user edits the slug field directly; while false (and
+  not in edit mode), keep regenerating from the name.
+
+---
+
 ## 2026-05-20 — ADMIN-HOTEL-001 (Hotel admin manager: list, search, filter)
 
 Built the first real admin manager from the new PRD. Pattern other

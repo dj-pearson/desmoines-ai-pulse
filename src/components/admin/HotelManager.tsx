@@ -6,10 +6,21 @@ import {
   Hotel as HotelIcon,
   Link2,
   Link2Off,
+  MoreVertical,
+  Pencil,
+  Plus,
   Search,
   Star,
   Trash2,
 } from "lucide-react";
+import HotelEditDialog from "@/components/admin/HotelEditDialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -209,6 +220,8 @@ export default function HotelManager() {
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [detail, setDetail] = useState<Hotel | null>(null);
+  const [editing, setEditing] = useState<Hotel | null | undefined>(undefined);
+  const [softDeleting, setSoftDeleting] = useState<Hotel | null>(null);
   const [bulkState, setBulkState] = useState<BulkActionState>({
     open: false,
     kind: null,
@@ -296,6 +309,29 @@ export default function HotelManager() {
     }
   }
 
+  async function softDeleteOne(hotel: Hotel) {
+    setBusy(true);
+    try {
+      const { supabase } = await import("@/integrations/supabase/client");
+      const { error } = await supabase
+        .from("hotels")
+        .update({ is_active: false })
+        .eq("id", hotel.id);
+      if (error) throw error;
+      toast.success(`Deactivated ${hotel.name}`);
+      setSoftDeleting(null);
+      await hotelsState.refetch();
+    } catch (error) {
+      handleError(error, {
+        component: "HotelManager",
+        action: "softDeleteOne",
+      });
+      toast.error("Deactivate failed. Check console for details.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function bulkSoftDelete() {
     if (selectedIds.length === 0) return;
     setBusy(true);
@@ -337,6 +373,10 @@ export default function HotelManager() {
               selected
             </CardDescription>
           </div>
+          <Button size="sm" onClick={() => setEditing(null)}>
+            <Plus className="h-4 w-4 mr-1" />
+            New hotel
+          </Button>
         </div>
 
         {/* Filter bar */}
@@ -500,13 +540,14 @@ export default function HotelManager() {
                 <TableHead className="hidden lg:table-cell">Rating</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="hidden xl:table-cell">Updated</TableHead>
+                <TableHead className="w-12" aria-label="Actions" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {hotelsState.isLoading
                 ? Array.from({ length: 5 }).map((_, i) => (
                     <TableRow key={`skel-${i}`}>
-                      <TableCell colSpan={8}>
+                      <TableCell colSpan={9}>
                         <Skeleton className="h-8 w-full" />
                       </TableCell>
                     </TableRow>
@@ -515,7 +556,7 @@ export default function HotelManager() {
                   ? (
                     <TableRow>
                       <TableCell
-                        colSpan={8}
+                        colSpan={9}
                         className="text-center text-sm text-muted-foreground py-12"
                       >
                         <HotelIcon className="h-8 w-8 mx-auto mb-2 opacity-50" />
@@ -605,6 +646,41 @@ export default function HotelManager() {
                               ? new Date(hotel.updated_at).toLocaleDateString()
                               : "—"}
                           </TableCell>
+                          <TableCell
+                            className="w-12"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-8 w-8"
+                                  aria-label={`Actions for ${hotel.name}`}
+                                >
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => setEditing(hotel)}>
+                                  <Pencil className="h-4 w-4 mr-2" />
+                                  Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setDetail(hotel)}>
+                                  Quick view
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className="text-destructive focus:text-destructive"
+                                  disabled={!hotel.is_active}
+                                  onClick={() => setSoftDeleting(hotel)}
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Deactivate
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
                         </TableRow>
                       );
                     })}
@@ -648,6 +724,40 @@ export default function HotelManager() {
         open={detail !== null}
         onOpenChange={(open) => !open && setDetail(null)}
       />
+
+      <HotelEditDialog
+        open={editing !== undefined}
+        onOpenChange={(open) => !open && setEditing(undefined)}
+        hotel={editing ?? null}
+        onSaved={() => {
+          hotelsState.refetch();
+        }}
+      />
+
+      <AlertDialog
+        open={softDeleting !== null}
+        onOpenChange={(open) => !open && setSoftDeleting(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Deactivate hotel?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {softDeleting
+                ? `Set is_active = false on ${softDeleting.name}? Hidden from the public site but row + analytics preserved.`
+                : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => softDeleting && softDeleteOne(softDeleting)}
+              disabled={busy}
+            >
+              Deactivate
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }

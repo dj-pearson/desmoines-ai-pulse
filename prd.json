@@ -73,8 +73,8 @@
         "Typecheck + lint pass"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "SHIPPED: HotelEditDialog (RHF + Zod) with tabbed Basics / Location / Amenities / SEO / GEO sections. Migration 20260520000000_add_seo_geo_to_hotels.sql adds seo_title, seo_description, seo_keywords (text[]), seo_h1, geo_summary, geo_key_facts (text[]), geo_faq (jsonb) to the hotels table. Types updated by hand in src/integrations/supabase/types.ts (Row / Insert / Update). HotelManager grew a 'New hotel' button + row-level DropdownMenu with Edit / Quick view / Deactivate. Slug auto-generates from name on create; geocode-on-save calls geocode-location when lat/lng blank but address present. SCOPE DEVIATION: image upload uses the existing 'media' storage bucket under key prefix 'hotels/<uuid>' instead of creating a new 'hotel-images' bucket — saves an RLS-policy migration and keeps backups in one place. Image URL fallback to paste-URL still supported. SEO title and description show live char counters that turn destructive past 60 / 160. FAQ JSON validated as an array via Zod refine. Typecheck + lint clean on new files."
     },
     {
       "id": "ADMIN-HOTEL-003",
