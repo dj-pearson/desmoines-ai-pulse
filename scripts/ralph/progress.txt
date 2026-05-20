@@ -23,6 +23,44 @@ function's `Cache-Control: max-age` to avoid wasted re-fetches. Disable
 
 ---
 
+## 2026-05-20 — ADMIN-SOCIAL-001 (Social account credentials manager)
+
+Files added:
+- `supabase/migrations/20260520000006_create_social_accounts.sql`
+  (table + RLS service_role-only + safe view social_accounts_admin)
+- `supabase/functions/manage-social-account/index.ts`
+  (CRUD + test connection; AES-GCM via Web Crypto)
+- `src/components/admin/SocialAccountsManager.tsx`
+
+Files modified:
+- `src/pages/AdminSocial.tsx` (tabs: Accounts ready, Queue stub)
+
+**Required secret:** Set
+`supabase secrets set SOCIAL_ACCOUNT_ENC_KEY=<base64 of a 32-byte key>`
+before adding accounts. Generate with:
+`node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`
+
+**Learnings for future iterations:**
+- AES-GCM via the Deno Web Crypto API is simpler than pgcrypto for
+  this use case: no DB extension, no SECURITY DEFINER RPC wrapper,
+  and the key never leaves the edge function. Pattern: import key
+  via `crypto.subtle.importKey(raw, …, ["encrypt","decrypt"])`,
+  prepend a 12-byte random IV to the ciphertext, base64 the
+  combined blob, store as TEXT. Decrypt is the inverse.
+- "Tokens never returned to the client" pattern: stand up a safe
+  view that selects every column EXCEPT the encrypted ones and
+  exposes booleans (`has_access_token`) instead. RLS keeps the
+  underlying table service-role-only. All writes route through an
+  edge function that has both the key and the service role.
+- JSX gotcha: an unbraced `>` inside text triggers a parser error.
+  Wrap as `{"Stale (>24h)"}` or use the HTML entity.
+- Don't add a table to types.ts unless something in the codebase
+  references `Database["public"]["Tables"]["foo"]`. Local
+  interfaces on the consumers are fine when the data only flows
+  through edge-function-shaped responses.
+
+---
+
 ## 2026-05-20 — ADMIN-PLAYGROUND-001 (Playground bulk editor)
 
 Different shape from the hotel/attraction managers: this one is

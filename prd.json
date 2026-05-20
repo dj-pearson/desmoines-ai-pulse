@@ -142,8 +142,8 @@
         "Typecheck + lint pass"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "SHIPPED: Migration 20260520000006 creates public.social_accounts (platform / handle / encrypted-token columns / token_expires_at / is_active / last_validated_at / last_validation_error / notes / created_by) with service_role-only RLS, plus a safe view social_accounts_admin that omits the encrypted columns and exposes has_access_token / has_refresh_token booleans for the UI. New edge function manage-social-account handles list / create / rotate / delete / test actions; tokens are AES-GCM encrypted with the SOCIAL_ACCOUNT_ENC_KEY edge-function secret (32-byte base64) using Web Crypto — no pgcrypto/pgsodium dependency. Per-platform test calls Twitter /2/users/me, Facebook Graph /me, Instagram Graph /me, LinkedIn /v2/userinfo. SocialAccountsManager UI groups accounts by platform with Test / Rotate / Remove per row and a color-coded Validated badge (green <24h, amber 24-72h, red >72h or failing). /admin/social now has Accounts tab (this story) + Queue tab stub (ADMIN-SOCIAL-002). SCOPE DEVIATION: existing social-media-manager posts via webhook URLs (Make.com / n8n style), not direct platform APIs, so the PRD's 'env-var fallback' integration is moot for that function. New direct-API integrations using these credentials will reference the table going forward."
     },
     {
       "id": "ADMIN-SOCIAL-002",
