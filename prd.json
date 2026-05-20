@@ -86,8 +86,8 @@
         "Typecheck + lint pass"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "SHIPPED: Migration 20260520000015 adds days_of_week TEXT[], start_time TIME, end_time TIME to public.deals, with a CHECK that every day-of-week value is in {mon,tue,wed,thu,fri,sat,sun} and another that times are paired (both set or both null). DealManager: local Deal/FormState interfaces extended, load query selects the new columns, edit dialog grew a Recurrence section with 7 day-toggle buttons + two TIME inputs and inline validation that blocks save if only one time is set. List view added a 'Recurrence' column at lg+ rendering a compact summary like 'Tue-Wed-Thu 4pm-6pm' via a formatTimeShort helper. New columns are nullable so the existing public site useDeals consumers keep working unchanged."
     },
     {
       "id": "B2B-KANBAN-001",

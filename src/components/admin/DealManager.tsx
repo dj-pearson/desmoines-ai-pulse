@@ -88,6 +88,41 @@ interface Deal {
   is_featured: boolean;
   redemption_count: number;
   created_at: string;
+  // DEAL-RECURRING-001
+  days_of_week: string[] | null;
+  start_time: string | null;
+  end_time: string | null;
+}
+
+const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
+const DAY_LABELS: Record<(typeof DAY_KEYS)[number], string> = {
+  mon: "Mon",
+  tue: "Tue",
+  wed: "Wed",
+  thu: "Thu",
+  fri: "Fri",
+  sat: "Sat",
+  sun: "Sun",
+};
+
+function formatTimeShort(t: string | null): string {
+  if (!t) return "";
+  // t comes in as "HH:MM:SS" from Postgres TIME; trim seconds.
+  const [hh, mm] = t.split(":");
+  const h = parseInt(hh, 10);
+  if (Number.isNaN(h)) return t;
+  const period = h >= 12 ? "pm" : "am";
+  const display = ((h + 11) % 12) + 1;
+  return mm === "00" ? `${display}${period}` : `${display}:${mm}${period}`;
+}
+
+function recurrenceSummary(deal: Deal): string {
+  if (!deal.days_of_week || deal.days_of_week.length === 0) return "";
+  const days = DAY_KEYS.filter((d) => deal.days_of_week?.includes(d))
+    .map((d) => DAY_LABELS[d])
+    .join("-");
+  if (!deal.start_time || !deal.end_time) return days;
+  return `${days} ${formatTimeShort(deal.start_time)}–${formatTimeShort(deal.end_time)}`;
 }
 
 type StatusFilter = "all" | "active" | "upcoming" | "expired";
@@ -145,6 +180,9 @@ interface FormState {
   image_url: string;
   is_verified: boolean;
   is_featured: boolean;
+  days_of_week: string[];
+  start_time: string;
+  end_time: string;
 }
 
 function emptyForm(): FormState {
@@ -163,6 +201,9 @@ function emptyForm(): FormState {
     image_url: "",
     is_verified: false,
     is_featured: false,
+    days_of_week: [],
+    start_time: "",
+    end_time: "",
   };
 }
 
@@ -186,6 +227,9 @@ function fromDeal(d: Deal): FormState {
     image_url: d.image_url ?? "",
     is_verified: d.is_verified,
     is_featured: d.is_featured,
+    days_of_week: d.days_of_week ?? [],
+    start_time: d.start_time ? d.start_time.slice(0, 5) : "",
+    end_time: d.end_time ? d.end_time.slice(0, 5) : "",
   };
 }
 
@@ -212,7 +256,7 @@ export default function DealManager() {
       let q = supabase
         .from("deals")
         .select(
-          "id, title, description, business_name, entity_type, entity_id, deal_type, discount_value, code, terms, start_date, end_date, image_url, is_verified, is_featured, redemption_count, created_at",
+          "id, title, description, business_name, entity_type, entity_id, deal_type, discount_value, code, terms, start_date, end_date, image_url, is_verified, is_featured, redemption_count, created_at, days_of_week, start_time, end_time",
           { count: "exact" },
         );
       if (search) {
@@ -344,6 +388,13 @@ export default function DealManager() {
   async function saveForm(form: FormState) {
     setBusy(true);
     try {
+      // Recurrence validation: if either time is set, both must be.
+      if ((form.start_time && !form.end_time) || (!form.start_time && form.end_time)) {
+        toast.error("Set both start and end time, or leave both blank.");
+        setBusy(false);
+        return;
+      }
+
       const payload = {
         title: form.title.trim(),
         description: form.description.trim() || null,
@@ -360,6 +411,10 @@ export default function DealManager() {
         image_url: form.image_url.trim() || null,
         is_verified: form.is_verified,
         is_featured: form.is_featured,
+        days_of_week:
+          form.days_of_week.length > 0 ? form.days_of_week : null,
+        start_time: form.start_time || null,
+        end_time: form.end_time || null,
       };
       if (form.id) {
         const { error } = await supabase
@@ -555,6 +610,7 @@ export default function DealManager() {
                 <TableHead className="hidden md:table-cell">Business</TableHead>
                 <TableHead className="hidden md:table-cell">Type</TableHead>
                 <TableHead className="hidden lg:table-cell">Value</TableHead>
+                <TableHead className="hidden lg:table-cell">Recurrence</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="hidden lg:table-cell">Ends</TableHead>
                 <TableHead className="w-12" aria-label="Actions" />
@@ -564,7 +620,7 @@ export default function DealManager() {
               {loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={`skel-${i}`}>
-                    <TableCell colSpan={8}>
+                    <TableCell colSpan={9}>
                       <Skeleton className="h-8 w-full" />
                     </TableCell>
                   </TableRow>
@@ -572,7 +628,7 @@ export default function DealManager() {
               ) : rows.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={8}
+                    colSpan={9}
                     className="text-center text-sm text-muted-foreground py-12"
                   >
                     <Tag className="h-8 w-8 mx-auto mb-2 opacity-50" />
@@ -624,6 +680,9 @@ export default function DealManager() {
                       </TableCell>
                       <TableCell className="hidden lg:table-cell text-sm">
                         {d.discount_value ?? "—"}
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell text-xs text-muted-foreground tabular-nums">
+                        {recurrenceSummary(d) || "—"}
                       </TableCell>
                       <TableCell>
                         <StatusBadge deal={d} />
@@ -854,6 +913,67 @@ export default function DealManager() {
                   }
                 />
               </div>
+
+              {/* DEAL-RECURRING-001: Recurrence section */}
+              <div className="rounded-md border p-3 space-y-3">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Recurrence (optional)
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {DAY_KEYS.map((d) => {
+                    const active = editing.days_of_week.includes(d);
+                    return (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => {
+                          const next = active
+                            ? editing.days_of_week.filter((x) => x !== d)
+                            : [...editing.days_of_week, d];
+                          setEditing({ ...editing, days_of_week: next });
+                        }}
+                        className={cn(
+                          "px-3 py-1.5 rounded-md text-xs font-medium border transition-colors",
+                          active
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-background hover:bg-accent",
+                        )}
+                      >
+                        {DAY_LABELS[d]}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label htmlFor="d-start-time">Start time</Label>
+                    <Input
+                      id="d-start-time"
+                      type="time"
+                      value={editing.start_time}
+                      onChange={(e) =>
+                        setEditing({ ...editing, start_time: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="d-end-time">End time</Label>
+                    <Input
+                      id="d-end-time"
+                      type="time"
+                      value={editing.end_time}
+                      onChange={(e) =>
+                        setEditing({ ...editing, end_time: e.target.value })
+                      }
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Pick the days the deal runs and optionally a daily window.
+                  Leave days unselected for a one-time / continuous deal.
+                </p>
+              </div>
+
               <div className="flex items-center gap-6">
                 <label className="flex items-center gap-2 text-sm">
                   <Checkbox
