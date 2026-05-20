@@ -1,11 +1,15 @@
-import AdminPlaceholder from "@/components/admin/AdminPlaceholder";
+import AdminNav from "@/components/admin/AdminNav";
+import DealManager from "@/components/admin/DealManager";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 
 export default function AdminDeals() {
+  useDocumentTitle("Deals · Admin");
   return (
-    <AdminPlaceholder
-      title="Deals and promotions"
-      storyId="ADMIN-DEAL-001"
-      description="CRUD page for restaurant/attraction happy hours, specials, and seasonal promotions. Includes recurring rules, date ranges, and auto-deactivation on expiry."
-    />
+    <div className="min-h-screen bg-background">
+      <AdminNav />
+      <div className="p-4 md:p-6">
+        <DealManager />
+      </div>
+    </div>
   );
 }
