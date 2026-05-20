@@ -17,8 +17,8 @@
         "Typecheck + lint pass"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "SHIPPED: Migration 20260520000011 creates public.calculate_trending_scores() — reads the singleton trending_config row, counts views/clicks/shares/saves from user_event_interactions and 'thumbs_up'+'interested' from user_event_feedback in the last 7 days per event, applies the recency decay (exp(-age_hours / recency_half_life_hours)) with featured_boost added when is_featured, gates rows younger than min_age_hours to zero, and clamps to >=0. SECURITY DEFINER + search_path = public. The calculate-trending edge function continues to work without changes (it calls supabase.rpc('calculate_trending_scores') and ignores the return value, now an INTEGER row count). SCOPE DEVIATION FROM PRD: writes to a NEW events.trending_score column instead of overwriting the existing events.popularity_score. Reason — popularity_score is maintained by a per-row BEFORE UPDATE trigger from 20260506000008 that recomputes a 0-100 structural score (featured + imminence + view_count + saves) on every edit. If this scheduled function wrote popularity_score, the next admin edit would silently revert engagement-weighted scores. The two signals coexist cleanly on separate columns; if a future story wants the public 'Popularity' sort to use engagement-weighted scoring, that's a tiny follow-up that swaps the ORDER BY column. types.ts not updated since no codebase consumer reads trending_score yet."
     },
     {
       "id": "EMAIL-SCHED-001",

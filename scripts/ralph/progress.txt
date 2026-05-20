@@ -35,3 +35,42 @@ useEffect(() => {
 ```
 
 ---
+
+## 2026-05-20 — TRENDING-FN-001 (rewire calculate_trending_scores)
+
+Files added:
+- `supabase/migrations/20260520000011_rewire_calculate_trending_scores.sql`
+
+Migration creates `events.trending_score` (NUMERIC, default 0, indexed
+DESC NULLS LAST) and replaces `public.calculate_trending_scores()`
+with a version that:
+
+1. Reads weights from `trending_config` (singleton row id=1) with
+   documented defaults as fallback if the row is missing
+2. Counts engagement from user_event_interactions (view/click/share/save)
+   + user_event_feedback (thumbs_up/interested as proxy for favorites)
+   over the last 7 days
+3. Applies the formula: (sum of weighted counts) * exp(-age_hours /
+   half_life) + (featured_boost if is_featured)
+4. Zeros out rows younger than min_age_hours
+5. Updates events.trending_score for every event with date >= today
+
+SECURITY DEFINER + search_path = public. Returns the count of rows
+updated (INTEGER).
+
+**Learnings for future iterations:**
+- When wiring a new "scheduled scoring" function for a table that
+  already has trigger-maintained columns, USE A SEPARATE COLUMN.
+  Sharing the column makes the trigger and the scheduled job fight
+  every time a user edits the row. Future cost of switching
+  consumers to the new column is trivial compared to debugging
+  silent score reverts.
+- The dashboard-created version of calculate_trending_scores() (which
+  the calculate-trending edge function expects) was never in any
+  migration. The new version DROP-IF-EXISTS-then-CREATEs to be the
+  single source of truth. After db push, the edge function continues
+  to work because the new function has the same parameterless
+  signature (return type went from VOID to INTEGER, which is a
+  superset — callers that ignore the return value see no difference).
+
+---
