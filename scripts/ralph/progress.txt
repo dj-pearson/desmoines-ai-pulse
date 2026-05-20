@@ -23,6 +23,36 @@ function's `Cache-Control: max-age` to avoid wasted re-fetches. Disable
 
 ---
 
+## 2026-05-20 — ADMIN-EMAIL-002 (Newsletter campaign composer + send)
+
+Files added:
+- `supabase/migrations/20260520000008_create_newsletter_campaigns.sql`
+- `supabase/functions/send-newsletter-campaign/index.ts`
+- `src/components/admin/NewsletterCampaignsManager.tsx`
+
+Files modified:
+- `src/pages/AdminEmail.tsx` (Campaigns tab now real)
+
+**Learnings for future iterations:**
+- Resend dispatch from an edge function: don't `Promise.all` over
+  hundreds of subscribers. Batch (5 at a time is a reasonable
+  default), use `Promise.allSettled` so one failure doesn't kill the
+  whole batch, and cap stored error messages to the first ~5 unique
+  reasons so the campaign row stays under reasonable size.
+- Preview-count pattern for segment-based sends: a dedicated
+  `preview_count` action on the same edge fn that takes the same
+  segment shape and returns just `{ count }`. The compose UI calls
+  it whenever the segment changes; saves wiring up a separate RPC.
+- For HTML body input from a trusted admin, `dangerouslySetInnerHTML`
+  on the preview pane is acceptable. Tag the comment so future
+  readers know the trust boundary is intentional, not a miss.
+- Scheduled campaign rows sit in the table with `status='scheduled'`
+  until a separate worker / cron picks them up. Don't try to send
+  on a schedule from the request that creates the row — that
+  couples send latency to the admin's HTTP timeout.
+
+---
+
 ## 2026-05-20 — ADMIN-EMAIL-001 (Newsletter subscribers admin)
 
 Files added:

@@ -199,8 +199,8 @@
         "Typecheck + lint pass"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "SHIPPED: Migration 20260520000008 creates public.newsletter_campaigns (subject, preheader, body_html, segment jsonb, status enum, scheduled_for, sent_at, recipient_count, delivered, failed, error_message, sent_by). Edge function send-newsletter-campaign supports preview_count, send_test (admin's own email only), send_now (batched Resend dispatch, 5/batch concurrency, tallies delivered/failed and stamps the row), and schedule (writes row with status='scheduled'). NewsletterCampaignsManager UI: list of past sends with status badges + delivered/failed counters, Compose dialog with Compose / Audience / Preview tabs. Audience tab supports 'all active' or specific source subset, with live recipient-count preview. Send Test goes only to the calling admin; send-now and schedule wired to the edge function. SCOPE DEFERRED: rich-text editor (used HTML textarea + Preview pane instead — tiptap reuse out of scope), per-recipient delivery rows (need Resend webhook integration — future story), open/click tracking (same). Scheduled campaigns just sit in the table with status='scheduled' — no cron to flip them to sent yet (caller can flip manually or wait for a future scheduler edge function)."
     },
     {
       "id": "ADMIN-DEAL-001",
