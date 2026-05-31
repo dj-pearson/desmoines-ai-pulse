@@ -1168,3 +1168,70 @@ Key constraints captured for implementers:
 iOS build/verify convention for every story: cd ios && xcodegen generate && xcodebuild
 -scheme DesMoinesInsider build, plus keep DesMoinesInsiderTests / UITests green.
 ---
+
+## 2026-05-31 — IOS-IA-001 (content-first Home + data-driven rails) [awaiting CI build]
+
+Redesigned the Home tab so the first screenful is content, not a stack of
+promotional CTA cards.
+
+Files added:
+- ios/DesMoinesInsider/Views/Home/HomeSections.swift (631 lines) — all Home
+  feed building blocks: WaysToExploreRow, the data-driven HomeRail enum +
+  HomeRailsView, HomeRailHeader, HomeEventRail / HomeRestaurantRail /
+  HomeAttractionRail, HomeRailSkeleton + HomeRailEmpty (non-collapsing
+  loading/empty states), and the card structs moved out of HomeView
+  (CompactRestaurantCard, CompactAttractionCard [new], FeaturedEventCard,
+  EventCardSkeleton).
+
+Files modified:
+- ios/DesMoinesInsider/Views/Home/HomeView.swift (820 -> 398 lines) — removed
+  the four full-width CTA cards (askPulseEntryBar, surpriseMeButton,
+  discoverHeroCard, exploreAttractionsCard) and the inline featured/restaurant
+  sections + duplicated card structs. New order: header -> RightNowRibbon ->
+  WaysToExploreRow (one compact row) -> smart presets -> inline filters ->
+  HomeRailsView (data-driven) -> events list. Added attractionsVM + a
+  dedicated weekendVM (date-scoped to .thisWeekend). Rails are hidden while
+  the user is actively filtering so the feed collapses to filtered results.
+  "See all" routes via handleSeeAll().
+- ios/DesMoinesInsider/Models/Attraction.swift — added
+  compactCardAccessibilityLabel mirroring Restaurant's, used by the new
+  CompactAttractionCard.
+
+Design decisions:
+- Rail order is data-driven ([HomeRail] passed to HomeRailsView, default
+  .allCases) precisely so IOS-IA-006 can personalize the sequence without
+  another layout refactor. fromBlog is intentionally not in allCases until
+  the Articles hub (IOS-PARITY-002) exists.
+- Ad slots are interleaved at deterministic rail indices (after rail 1 and 3)
+  rather than a single hard-coded AdSlot, so IOS-ADS-012 can swap them for
+  native in-feed ad cards without moving call sites. AdSlot still renders
+  nothing for subscribers.
+- Each rail owns its own loading (HomeRailSkeleton, mirrors card shape so no
+  layout jump) and empty (HomeRailEmpty, stays visible) state — no
+  all-or-nothing spinner across the feed.
+- XcodeGen picks up the new file automatically (project.yml sources glob is
+  the whole DesMoinesInsider dir), so no project.yml change needed.
+
+Verification status:
+- No Swift/Xcode toolchain in the Linux dev container, so the acceptance
+  "xcodebuild build" gate runs in the ios-native-build CI workflow on macOS,
+  NOT here. Verified statically instead: balanced delimiters, no duplicate
+  type definitions (each moved struct defined exactly once), all referenced
+  APIs confirmed to exist with matching signatures (glassCard, CategoryBadge,
+  ToastMessage, Skeleton.block/bar, EventInlineFilters/@Bindable,
+  RightNowRibbon closure, FavoritesService not needed here). Leaving
+  passes:false until CI confirms the compile; will flip to true on green.
+
+**Learnings for future iterations:**
+- When extracting `private struct`s out of a 800+ line SwiftUI View into a
+  shared file, drop the `private` (they become internal) and grep the whole
+  target for same-named types first — SwiftUI codebases often have parallel
+  card types per feature that would collide.
+- The Home tab already had strong native-only discovery surfaces (Ask Pulse,
+  Swipe, Surprise Me); the problem was never missing features, it was four
+  full-width CTAs stacked above the content. Consolidating them into one
+  horizontal "Ways to explore" row is the single highest-leverage layout fix.
+- EventsViewModel is cheap to instantiate twice (main feed + weekend rail);
+  setting .selectedDatePreset triggers its own debounced fetch via didSet, so
+  the weekend rail needs no bespoke fetch path.
+---
