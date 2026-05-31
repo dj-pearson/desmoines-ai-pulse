@@ -66,11 +66,26 @@ struct WaysToExploreRow: View {
                         action: onSurprise,
                         hint: "One committed recommendation, no browsing"
                     )
-                    // Explore is a real navigation push, so it's a NavigationLink
-                    // that resolves against HomeView's navigationDestination.
+                    // Discover hub + Attractions are real navigation pushes, so
+                    // they're NavigationLinks resolving against HomeView's
+                    // navigationDestination(for: HomeDestination.self).
+                    NavigationLink(value: HomeDestination.discoverHub) {
+                        tileLabel(
+                            title: "Discover",
+                            systemImage: "square.grid.2x2.fill",
+                            colors: [Color(red: 0.31, green: 0.27, blue: 0.90), Color(red: 0.23, green: 0.51, blue: 0.96)]
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .simultaneousGesture(TapGesture().onEnded {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    })
+                    .accessibilityLabel("Discover")
+                    .accessibilityHint("Trip planner, guides, hotels, deals and more")
+
                     NavigationLink(value: HomeDestination.attractions) {
                         tileLabel(
-                            title: "Explore",
+                            title: "Attractions",
                             systemImage: "star.circle.fill",
                             colors: [Color.purple.opacity(0.85), Color.pink.opacity(0.7)]
                         )

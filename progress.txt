@@ -1235,3 +1235,68 @@ Verification status:
   setting .selectedDatePreset triggers its own debounced fetch via didSet, so
   the weekend rail needs no bespoke fetch path.
 ---
+
+## 2026-05-31 — IOS-IA-002 (Discover hub + IA for full web parity) [awaiting CI build]
+
+Information architecture for reaching every web surface without overflowing the
+6-item iPhone tab bar.
+
+IA decision (source of truth lives in DiscoverHubView.swift header):
+- Primary tabs stay lean and UNCHANGED (Home, Dining, Search, Map, Saved,
+  Profile). Did NOT drop Search or Map for a Discover tab — both are high-use
+  and Apple HIG caps comfortable iPhone tabs at ~5.
+- Discover is a hub screen reached from Home (new "Discover" tile in
+  WaysToExploreRow) on iPhone, and a first-class sidebar item on iPad.
+- Every parity feature is a tile in the hub: Trip Planner, Articles & Guides,
+  Where to Stay, This Weekend, Best Of, Music, Sports, Outdoors, Neighborhoods,
+  Deals. Each routes to ComingSoonView (with a web fallback) until its
+  IOS-PARITY-* story swaps in the native screen — nothing is a dead end.
+
+Files added:
+- ios/DesMoinesInsider/Views/Discover/DiscoverHubView.swift (224 lines) —
+  DiscoverHubView (ownsNavigationStack flag so it can borrow Home's stack when
+  pushed, or own one as an iPad sheet) + DiscoverDestination enum (title,
+  subtitle, icon, gradient, slug, init?(slug:), webURL, destinationView) +
+  DiscoverTile grid cell.
+- ios/DesMoinesInsider/Views/Components/ComingSoonView.swift (48 lines) —
+  reusable placeholder with an "Open on the web" sheet (WebViewPage) so parity
+  content is reachable today before native screens land.
+
+Files modified:
+- Views/Home/HomeView.swift — added HomeDestination.discoverHub case +
+  navigationDestination that pushes DiscoverHubView(ownsNavigationStack: false).
+- Views/Home/HomeSections.swift — WaysToExploreRow now has a "Discover" tile
+  (-> hub) and an "Attractions" tile (-> attractions); previously the single
+  "Explore" tile only reached attractions.
+- Views/MainTabView.swift — iPad sidebar gets a dedicated Discover section that
+  presents DiscoverHubView as a sheet.
+- Services/DeepLinkHandler.swift — added Destination.discover(DiscoverDestination)
+  and parsing for both universal links (desmoinesinsider.com/<slug>, e.g.
+  /trip-planner, /deals — handled in both the single-segment root branch and the
+  default branch) and custom scheme (com.desmoines.aipulse://discover/<slug>).
+  Stable routes per parity surface via DiscoverDestination.slug.
+
+Verification status:
+- Same as IOS-IA-001: no Swift toolchain locally; xcodebuild gate runs in macOS
+  CI. Static checks pass — balanced delimiters across all 7 touched files,
+  exhaustive HomeDestination switch, no duplicate symbols, WebViewPage label
+  order matches existing SettingsView usage. passes:false until CI is green.
+
+**Learnings / flags for future iterations:**
+- PRE-EXISTING DRIFT (not introduced here, do not blame this PR): 
+  DesMoinesInsiderTests/DeepLinkHandlerTests.swift calls `handler.handle(url:)`
+  (labeled) with scheme `dsminsider://`, but DeepLinkHandler implements
+  `handle(_ url:)` (unlabeled) and matches scheme `com.desmoines.aipulse`
+  (Config.appBundleId). Those tests cannot compile/pass against the current
+  implementation — the test file predates a refactor of the handler. I did NOT
+  add new tests in that broken pattern and did NOT change the handler signature
+  (additive changes only). Worth a dedicated chore: reconcile the test's
+  expected scheme/label with the implementation (or vice-versa). Also note:
+  DeepLinkHandler is defined + (intended to be) tested but is NOT yet consumed
+  in DesMoinesInsiderApp.onOpenURL (only Supabase's client.handle(url) is wired
+  there), so the .discover route is parseable but app-level navigation to it is
+  separate pre-existing debt.
+- ComingSoonView + DiscoverDestination.destinationView is the seam every
+  IOS-PARITY-* story plugs into: replace the one `destinationView` case with the
+  real screen, delete nothing else. Keeps those stories small and isolated.
+---

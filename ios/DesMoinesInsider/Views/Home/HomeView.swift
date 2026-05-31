@@ -151,6 +151,10 @@ struct HomeView: View {
             .navigationDestination(for: HomeDestination.self) { destination in
                 switch destination {
                 case .attractions: AttractionsView()
+                case .discoverHub:
+                    // Pushed within Home's NavigationStack, so the hub borrows
+                    // this ambient stack rather than nesting its own.
+                    DiscoverHubView(ownsNavigationStack: false)
                 }
             }
             .task {
@@ -391,6 +395,7 @@ struct HomeView: View {
 /// Restaurant, Attraction) which each have their own navigationDestination.
 enum HomeDestination: Hashable {
     case attractions
+    case discoverHub
 }
 
 #Preview {

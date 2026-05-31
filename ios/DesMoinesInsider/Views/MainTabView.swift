@@ -134,6 +134,11 @@ struct MainTabView: View {
         )
     }
 
+    /// iPad sidebar shows the 6 primary tabs plus a dedicated Discover entry
+    /// (IOS-IA-002). On iPad there's room, so Discover is a first-class sidebar
+    /// item rather than being tucked behind Home as it is on iPhone.
+    @State private var iPadShowDiscover = false
+
     private var iPadLayout: some View {
         NavigationSplitView {
             List(selection: iPadSelectionBinding) {
@@ -141,11 +146,23 @@ struct MainTabView: View {
                     Label(tab.title, systemImage: tab.icon)
                         .tag(tab)
                 }
+
+                Section {
+                    Button {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        iPadShowDiscover = true
+                    } label: {
+                        Label("Discover", systemImage: "square.grid.2x2.fill")
+                    }
+                }
             }
             .navigationTitle("DSM Insider")
             .listStyle(.sidebar)
         } detail: {
             tabContent(for: selectedTab)
+        }
+        .sheet(isPresented: $iPadShowDiscover) {
+            DiscoverHubView()
         }
     }
 
