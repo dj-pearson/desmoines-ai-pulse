@@ -1113,3 +1113,58 @@ three storefronts.
 - `npx vite build` — ✅ passes
 - All 30/30 security stories now fully implemented (0 deferred)
 ---
+
+
+## 2026-05-31 — PRD ROTATED to iOS Layout & Monetization initiative (branch claude/ios-layout-monetization-plan-5IQFu)
+
+Previous prd.json (feat/admin-followups, 6/6 complete) is preserved in git history.
+prd.json now holds the iOS Layout & Monetization PRD: 41 stories — 10 baseline
+capabilities marked passes:true (already shipped in app v1.1.30 / build 57) and 31
+new stories marked passes:false for Ralph to work in array order.
+
+User direction captured in the planning session:
+- Build BOTH revenue engines in parallel (ads/featured + subscriptions).
+- Full web feature parity (Trip Planner, Weekend, Best-Of, Articles, Stay, Music/Sports/
+  Outdoors/Neighborhood hubs, Dashboard, Deals).
+- "Best layout possible" for all the information the desktop app carries.
+
+Already shipped (recorded passes:true so the queue reflects reality):
+- IOS-BASE-NAV-001        6-tab native shell (MainTabView, iPad split)
+- IOS-BASE-SUB-001/002/003 StoreKit 2 + cross-platform entitlement sync + receipt/ASSN-v2 backend
+- IOS-BASE-ADS-001        Affiliate hotel banner (free-tier, FTC-labeled)
+- IOS-BASE-GATE-001       PremiumGate + insider/dining tips gating
+- IOS-BASE-DISCOVERY-001  Ask Pulse AI chat + Swipe Discover + Surprise Me
+- IOS-BASE-COMPLY-001/002 Account deletion + privacy manifest (ATT-correct)
+- IOS-BASE-PLATFORM-001   Biometric/session/cert-pinning/offline/Spotlight/App Intents/App Clip
+
+New work, grouped (passes:false, execution order = array order):
+- EPIC A Layout/IA:  IOS-IA-001 Home content-first redesign; IOS-IA-002 Discover-hub IA for parity;
+  IOS-IA-003 unified card+skeleton system; IOS-IA-004 sticky search + persistent filter chips;
+  IOS-IA-005 iPad adaptivity; IOS-IA-006 personalized section ordering.
+- EPIC B Subscriptions: IOS-SUB-010 contextual paywall; 011 placement/enforcement strategy;
+  012 annual SKUs + intro trial; 013 onboarding trial + soft paywall; 014 win-back/offer codes.
+- EPIC C Ads/Sponsored (mostly outside Apple's 30%): IOS-ADS-010 first-party campaign serving;
+  011 sponsored/featured listings; 012 native in-feed + capped interstitial; 013 house-ad fill;
+  014 ad analytics parity; 015 sponsored AI-flow results; 016 advertiser self-serve linkout.
+- EPIC D Parity screens: IOS-PARITY-001 Trip Planner (also a premium hook); 002 Articles/Guides;
+  003 Stay/hotels (affiliate $); 004 Weekend; 005 Best-Of voting; 006 Music/Sports/Outdoors/
+  Neighborhood hubs; 007 Dashboard; 008 saved searches+alerts (premium+push); 009 reviews;
+  010 Deals (recurring).
+- EPIC E Compliance/polish: IOS-COMPLY-003 accessibility audit; 004 offline/error states;
+  005 App Store metadata/screenshots/review notes.
+
+Key constraints captured for implementers:
+- Keep ad serving FIRST-PARTY (no IDFA / no 3rd-party ad SDK) so ATT stays unnecessary
+  (IOS-BASE-COMPLY-002). A 3rd-party ad SDK would make ATT + privacy-manifest updates a hard
+  prerequisite.
+- Consumer subscriptions MUST use StoreKit IAP. The advertiser "Promote this listing" flow
+  (IOS-ADS-016) links out to the web Stripe campaign checkout because it is advertising for a
+  real-world business, not an in-app digital good for the purchasing user — document this for
+  App Review.
+- Trip Planner is advertised in subscription copy today but has ZERO native implementation —
+  IOS-PARITY-001 closes both a parity gap and a broken promise; gate it via IOS-SUB-011 quota.
+- New screens must reuse OfflineBanner/NetworkMonitor/QueryCache and the unified card system.
+
+iOS build/verify convention for every story: cd ios && xcodegen generate && xcodebuild
+-scheme DesMoinesInsider build, plus keep DesMoinesInsiderTests / UITests green.
+---

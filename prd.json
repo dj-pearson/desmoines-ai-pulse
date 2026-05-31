@@ -1,110 +1,621 @@
 {
-  "project": "Des Moines AI Pulse",
-  "branchName": "feat/admin-followups",
-  "description": "Admin Follow-ups — Close the six known gaps from the Admin Backend Overhaul that shipped intent but not the underlying mechanics. (1) Rewire calculate_trending_scores to read from trending_config so the tuner actually changes scoring. (2) Add a scheduler cron that flips newsletter_campaigns rows from scheduled to sent at the right time. (3) Wire up the Resend webhook so newsletter campaigns get real delivery / open / click / bounce numbers instead of zeros. (4) Add a reply thread + Resend-backed admin reply to FeedbackInbox so support conversations don't dead-end in the dashboard. (5) Extend deals with recurring-rule columns (days_of_week, start_time, end_time) and surface them in the DealManager. (6) Replace the dropdown stage-change in PartnershipsManager with drag-to-update kanban via @dnd-kit.",
+  "project": "Des Moines AI Pulse — iOS Layout & Monetization",
+  "branchName": "claude/ios-layout-monetization-plan-5IQFu",
+  "description": "Bring the native iOS app (DesMoinesInsider, Swift/SwiftUI, currently v1.1.30) to full feature parity with the web/desktop product and maximize revenue across BOTH engines in parallel: (1) consumer subscriptions via StoreKit IAP and (2) local advertising/sponsored inventory (mostly outside Apple's commission). The app already ships a strong native base (6-tab shell, StoreKit 2 + cross-platform entitlement sync, account deletion, privacy manifest, affiliate ads, PremiumGate, Ask Pulse AI / Swipe / Surprise Me, App Clip, security & platform services) — those are recorded here as passes:true baselines. The new work: a content-first Home + Discover-hub information architecture so every web surface is reachable; a unified card/skeleton system; sticky search + persistent filter chips; a contextual paywall with per-feature placement, annual SKUs, trials, and win-back offers; first-party campaign ad serving, sponsored/featured listings, native in-feed + capped interstitial ads, house-ad fill, AI-flow sponsored placements, advertiser self-serve linkout, and ad analytics parity; native builds of Trip Planner, Articles/Guides, Stay, Weekend, Best-Of voting, Music/Sports/Outdoors/Neighborhood hubs, Dashboard, saved searches/alerts, reviews, and Deals; plus iPad adaptivity, personalization, and an accessibility/offline/store-readiness pass. Ralph picks the first story with passes:false.",
   "userStories": [
     {
-      "id": "TRENDING-FN-001",
-      "title": "Rewrite calculate_trending_scores to read weights from trending_config",
-      "description": "As an admin, when I save new weights in the Trending tuner I need the next scheduled trending recalculation to actually use those weights, not the hard-coded values the dashboard-created SQL function currently has baked in.",
+      "id": "IOS-BASE-NAV-001",
+      "title": "Native 6-tab navigation shell (baseline)",
+      "description": "As a user, I need a native tab-based shell so the app feels like an iOS app, not a website.",
       "acceptanceCriteria": [
-        "New migration creates (or replaces) public.calculate_trending_scores() — pulls the single row from public.trending_config inside the function and uses each column in the score formula",
-        "Score formula at minimum: (views * view_weight) + (favorites * favorite_weight) + (shares * share_weight) + (clicks * click_weight), multiplied by exp(-age_hours / recency_half_life_hours), plus featured_boost when is_featured is true",
-        "Rows younger than min_age_hours are excluded from the result (zero score)",
-        "Function is SECURITY DEFINER with search_path = public so RLS doesn't trip it",
-        "Existing callers continue to work — same return shape (popularity_score column on events) and the calculate-trending edge function does not need changes",
-        "Verify by saving a markedly different weight in the tuner, invoking calculate-trending, and asserting popularity_score actually shifts for a known row",
-        "Typecheck + lint pass"
+        "MainTabView renders 6 tabs (Home, Dining, Search, Map, Saved, Profile) on iPhone",
+        "iPad uses NavigationSplitView sidebar",
+        "Glass-morphism translucent bar appearance",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 1,
       "passes": true,
-      "notes": "SHIPPED: Migration 20260520000011 creates public.calculate_trending_scores() — reads the singleton trending_config row, counts views/clicks/shares/saves from user_event_interactions and 'thumbs_up'+'interested' from user_event_feedback in the last 7 days per event, applies the recency decay (exp(-age_hours / recency_half_life_hours)) with featured_boost added when is_featured, gates rows younger than min_age_hours to zero, and clamps to >=0. SECURITY DEFINER + search_path = public. The calculate-trending edge function continues to work without changes (it calls supabase.rpc('calculate_trending_scores') and ignores the return value, now an INTEGER row count). SCOPE DEVIATION FROM PRD: writes to a NEW events.trending_score column instead of overwriting the existing events.popularity_score. Reason — popularity_score is maintained by a per-row BEFORE UPDATE trigger from 20260506000008 that recomputes a 0-100 structural score (featured + imminence + view_count + saves) on every edit. If this scheduled function wrote popularity_score, the next admin edit would silently revert engagement-weighted scores. The two signals coexist cleanly on separate columns; if a future story wants the public 'Popularity' sort to use engagement-weighted scoring, that's a tiny follow-up that swaps the ORDER BY column. types.ts not updated since no codebase consumer reads trending_score yet."
+      "notes": "ALREADY SHIPPED: ios/DesMoinesInsider/Views/MainTabView.swift (167 lines). Recorded as the baseline the IOS-IA-* redesign stories build on. NOTE: the redesign in IOS-IA-002 revisits whether 6 flat tabs is the right IA once parity features (Trip Planner, Articles, Stay, hubs) land."
     },
     {
-      "id": "EMAIL-SCHED-001",
-      "title": "Cron worker that dispatches scheduled newsletter campaigns",
-      "description": "As an admin, when I schedule a newsletter campaign for a future time I need a worker to actually pick it up and send it; right now the row sits with status='scheduled' forever.",
+      "id": "IOS-BASE-SUB-001",
+      "title": "StoreKit 2 subscription engine + native store UI (baseline)",
+      "description": "As a user, I need to buy Insider/VIP inside the iOS app via Apple IAP so purchasing is compliant and frictionless.",
       "acceptanceCriteria": [
-        "New edge function dispatch-scheduled-newsletters reads newsletter_campaigns where status='scheduled' AND scheduled_for <= now() (limit 5 per run), atomically flips each to status='sending' before dispatching, then calls the existing send pipeline",
-        "On success, updates row to status='sent' with sent_at, delivered, failed counts (same shape as send_now in send-newsletter-campaign)",
-        "On failure, updates row to status='failed' with error_message (first 500 chars) so it surfaces in the admin Campaigns list",
-        "pg_cron schedule registered via migration (minute granularity) — calls the edge function via supabase_url + service-role auth header pattern that send-weekly-digest already uses",
-        "Function is admin-callable too so an admin can 'send overdue scheduled' manually from a future button (not required in this story)",
-        "Idempotent: a row that's already 'sending' is skipped, never double-dispatched",
-        "Typecheck + lint pass"
+        "StoreKitService loads products, runs purchase flow, listens for transactions, verifies entitlements",
+        "SubscriptionView uses native SubscriptionStoreView with Restore Purchases + policy links",
+        "Insider ($4.99/mo, prod_U4oa7Cpn0bRnuo) and VIP ($12.99/mo, prod_U4oaGFEy12auTx) in group 21957951",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 2,
       "passes": true,
-      "notes": "SHIPPED: New edge function dispatch-scheduled-newsletters reads up to 5 due rows per run via a SECURITY DEFINER RPC public.claim_scheduled_newsletter_campaigns(p_limit) that atomically flips status='scheduled' → 'sending' inside a single UPDATE ... FOR UPDATE SKIP LOCKED ... RETURNING. This makes concurrent / duplicate cron firings idempotent (later firings see no claimable rows). Dispatcher then loops the existing Resend send pattern (5/batch via Promise.allSettled) and updates each row with final status='sent' (or 'failed' if zero delivered), sent_at, delivered, failed, and a 500-char error_message digest. Migration 20260520000012 also registers the cron schedule (every minute via pg_cron + net.http_post + service-role bearer) following the established 20250107000006_schedule_event_scraping.sql pattern. Manual admin invocation works the same way for future drain-overdue buttons."
+      "notes": "ALREADY SHIPPED: Services/StoreKitService.swift (518 lines) + Views/Subscription/SubscriptionView.swift (198) + Models/AppEnums.swift SubscriptionTier. StoreKit config Resources/Products.storekit wired in project.yml scheme. Deepened by IOS-SUB-010..014."
     },
     {
-      "id": "EMAIL-WEBHOOK-001",
-      "title": "Resend delivery webhook — populate per-recipient delivery rows + campaign tallies",
-      "description": "As an admin, I need real open / click / bounce / complaint numbers in the Campaigns list so I can tell whether a newsletter actually landed; right now the table only knows what Resend's accept-time response said.",
+      "id": "IOS-BASE-SUB-002",
+      "title": "Cross-platform subscription entitlement sync (baseline)",
+      "description": "As a user who paid on web or Android, I need iOS to honor that tier so I never pay twice.",
       "acceptanceCriteria": [
-        "New migration creates newsletter_deliveries table: id, campaign_id (FK newsletter_campaigns), email, resend_message_id (unique), status (queued/delivered/opened/clicked/bounced/complained), event_at, error_message, created_at, updated_at. RLS: service_role full, admin SELECT",
-        "send-newsletter-campaign now writes one newsletter_deliveries row per recipient at send time with status='queued' and the Resend message id from the API response (Resend returns { id } on 200)",
-        "New edge function resend-webhook (verify_jwt=false) verifies the X-Resend-Signature using RESEND_WEBHOOK_SECRET, updates the matching delivery row by resend_message_id, and increments / decrements the parent campaign tallies (delivered / opens / clicks / bounces / complaints)",
-        "newsletter_campaigns gains columns: opens INTEGER NOT NULL DEFAULT 0, clicks INTEGER NOT NULL DEFAULT 0, bounces INTEGER NOT NULL DEFAULT 0, complaints INTEGER NOT NULL DEFAULT 0 (added via this migration)",
-        "Handle the Resend event types we care about: email.delivered, email.opened, email.clicked, email.bounced, email.complained. Other events return 200 + ignore",
-        "NewsletterCampaignsManager UI grows two additional columns (Opens, Clicks) on lg+ and surfaces bounce % inline when > 5% with an amber tone",
-        "types.ts updated for newsletter_deliveries and the new newsletter_campaigns columns",
-        "Document the Resend webhook URL + RESEND_WEBHOOK_SECRET in the function header so an admin can configure it once",
-        "Typecheck + lint pass"
+        "StoreKitService resolves currentTier as max(localTier from StoreKit, backendTier from user_subscriptions)",
+        "Cross-platform banner surfaces active web/Android subs with manage links",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 3,
       "passes": true,
-      "notes": "SHIPPED: Migration 20260520000013 (a) adds opens/clicks/bounces/complaints columns to newsletter_campaigns (INTEGER, NOT NULL, default 0), (b) creates public.newsletter_deliveries (one row per recipient per send: id, campaign_id FK CASCADE, email, resend_message_id UNIQUE, status enum queued/delivered/opened/clicked/bounced/complained, event_at, error_message) with service_role-full + admin-SELECT RLS, and (c) creates a SECURITY DEFINER helper bump_newsletter_campaign_counter(p_campaign_id, p_field) so the webhook stays tiny. Both send paths (send-newsletter-campaign send_now + dispatch-scheduled-newsletters) now capture the Resend message_id from the API response and write a delivery row per recipient with status='queued' on success or status='bounced'+error_message on failure. New edge function resend-webhook (verify_jwt=false; Svix signature verified via svix npm package + RESEND_WEBHOOK_SECRET) handles email.delivered/opened/clicked/bounced/complained — looks up the delivery by resend_message_id, updates status (rank-aware so clicked won't downgrade to delivered on a late event), and calls the RPC to bump the campaign counter. Unknown event types acknowledged 200 to avoid retry storms. Frontend: NewsletterCampaignsManager grew Opens / Clicks columns at lg+ and a Bounce % column at xl+ that turns amber when >5%. Required new secret: RESEND_WEBHOOK_SECRET (Svix signing key from the Resend dashboard webhook). Configuration steps documented in the resend-webhook header."
+      "notes": "ALREADY SHIPPED: StoreKitService backendTier + resolveHighestSubscription; user_subscriptions has platform/apple_* columns (migration 20260327000001). Web=Stripe, Android=Play, iOS=StoreKit all converge."
     },
     {
-      "id": "FEEDBACK-REPLY-001",
-      "title": "Reply thread + admin reply via Resend in FeedbackInbox",
-      "description": "As an admin, I need to reply to support messages from the inbox without copying the email address into a separate client; conversations should stay in the admin tool with a visible thread.",
+      "id": "IOS-BASE-SUB-003",
+      "title": "Receipt validation + App Store Server Notifications v2 backend (baseline)",
+      "description": "As the platform, I need server-side validation and lifecycle webhooks so entitlements stay correct without app launches.",
       "acceptanceCriteria": [
-        "New migration creates feedback_replies table: id, submission_id (FK contact_submissions), direction (admin_to_user|user_to_admin), body_html, sent_by (UUID, admin reply), sent_at, resend_message_id, created_at. RLS: service_role full, admin SELECT/INSERT",
-        "New edge function send-feedback-reply: admin-only, takes { submission_id, body_html }, sends via Resend (from same NEWSLETTER_FROM or a new SUPPORT_FROM), records feedback_replies row, updates contact_submissions.status to 'responded' + responded_at",
-        "FeedbackInbox detail Sheet shows the reply thread newest-first below the original message; each entry has direction badge, body, timestamp",
-        "Reply composer is a textarea + Send button at the bottom of the Sheet; disabled while sending; success appends the new reply to the thread inline",
-        "If the customer replies later to the threaded email, that's an out-of-scope follow-up (the table direction column supports it, but inbound mail parsing isn't part of this story)",
-        "Typecheck + lint pass"
+        "validate-ios-receipt edge function verifies JWS transactions with Apple App Store Server API",
+        "appstore-server-notifications-v2 verifies cert chain, is idempotent via notificationUUID, handles SUBSCRIBED/DID_RENEW/EXPIRED/REFUND/etc.",
+        "Writes user_subscriptions with platform=ios + apple_transaction_id/original/product_id"
       ],
       "priority": 4,
       "passes": true,
-      "notes": "SHIPPED: Migration 20260520000014 creates public.feedback_replies (id, submission_id FK CASCADE, direction CHECK admin_to_user/user_to_admin default admin_to_user, body_html, sent_by, sent_at, resend_message_id) with service_role-full + admin SELECT/INSERT RLS via is_admin(). New edge function send-feedback-reply (admin-only): looks up the contact_submission, sends Re: <subject> via Resend (SUPPORT_FROM env var or NEWSLETTER_FROM fallback), records a feedback_replies row with the message id, and flips the submission to status='responded' + stamps responded_at if blank. FeedbackInbox Sheet now loads + shows the thread newest-first below the original message: each entry has a direction header chip and timestamp; admin replies use a primary-tinted background, user replies use muted (future-proofs the user_to_admin direction even though inbound mail parsing is still out of scope). Composer is a textarea + 'Send to <email>' button at the bottom of the Sheet; disabled while sending; success appends the new reply via loadReplies() and refreshes the detail badge. body_html rendered via dangerouslySetInnerHTML — trusted because only admins can insert."
+      "notes": "ALREADY SHIPPED: supabase/functions/validate-ios-receipt + appstore-server-notifications-v2. Mirrors Android validate-android-receipt + play-rtdn-webhook."
     },
     {
-      "id": "DEAL-RECURRING-001",
-      "title": "Recurring rules on deals (days_of_week + start/end times)",
-      "description": "As an admin, I need to express 'happy hour, Tuesday through Thursday, 4 to 6 pm' on a deal so the public Deals page can show recurring patterns instead of just a date range.",
+      "id": "IOS-BASE-ADS-001",
+      "title": "Affiliate hotel ad banner — free-tier, FTC-labeled (baseline)",
+      "description": "As the business, I need ad revenue from free users so the free tier is monetized.",
       "acceptanceCriteria": [
-        "New migration adds to public.deals: days_of_week TEXT[] (CHECK every element in {mon,tue,wed,thu,fri,sat,sun}), start_time TIME, end_time TIME. All nullable",
-        "types.ts updated",
-        "DealManager edit dialog gains a 'Recurrence' section: 7 day-of-week toggles + start_time + end_time TIME inputs",
-        "List view renders a compact recurrence summary in a new column on lg+ (e.g. 'T-W-Th 4–6pm') when days_of_week is non-empty",
-        "Validation: if either start_time or end_time is set, both must be; days_of_week without times is allowed (all-day recurring)",
-        "useDeals consumers on the public site keep working — new columns are additive and optional",
-        "Typecheck + lint pass"
+        "AffiliateAdService rotates Hyatt/IHG/Marriott creatives (30-min session stickiness)",
+        "AffiliateAdBanner shows FTC 'Ad' label; hidden for Insider/VIP; upgrade upsell beneath",
+        "AdSlot placed in Home feed + restaurant detail",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 5,
       "passes": true,
-      "notes": "SHIPPED: Migration 20260520000015 adds days_of_week TEXT[], start_time TIME, end_time TIME to public.deals, with a CHECK that every day-of-week value is in {mon,tue,wed,thu,fri,sat,sun} and another that times are paired (both set or both null). DealManager: local Deal/FormState interfaces extended, load query selects the new columns, edit dialog grew a Recurrence section with 7 day-toggle buttons + two TIME inputs and inline validation that blocks save if only one time is set. List view added a 'Recurrence' column at lg+ rendering a compact summary like 'Tue-Wed-Thu 4pm-6pm' via a formatTimeShort helper. New columns are nullable so the existing public site useDeals consumers keep working unchanged."
+      "notes": "ALREADY SHIPPED: Services/AffiliateAdService.swift (129) + Views/Components/{AffiliateAdBanner,AdBannerView,AdSlot}.swift. This is affiliate-only; first-party campaign serving + sponsored listings + house ads are added by IOS-ADS-010..016."
     },
     {
-      "id": "B2B-KANBAN-001",
-      "title": "Drag-to-update kanban in PartnershipsManager",
-      "description": "As an admin, I want to drag a partnership card from Qualified to Signed instead of opening the detail Sheet just to change the stage dropdown.",
+      "id": "IOS-BASE-GATE-001",
+      "title": "PremiumGate + insider/dining tips gating (baseline)",
+      "description": "As the business, I need a reusable gate so premium content drives conversions.",
       "acceptanceCriteria": [
-        "Add @dnd-kit/core + @dnd-kit/sortable to package.json (yarn / npm install)",
-        "PartnershipsManager Kanban view wraps each column in a DndContext + Droppable; each card is a Draggable",
-        "Dropping a card on a different column calls the existing partnership_applications update + reviewed_at/reviewed_by stamping path",
-        "Optimistic update: card moves immediately; reverts with toast.error on save failure",
-        "Cards are accessible to keyboard users: Tab + space picks up, arrows move, space drops (use @dnd-kit's KeyboardSensor)",
-        "List view path is unchanged (still uses Sheet dropdown)",
-        "Typecheck + lint pass"
+        "PremiumGate component locks content behind .insider/.vip",
+        "EventDetailInsiderTips + RestaurantDetailDiningTips gated; Ask Pulse has a quota gate",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 6,
       "passes": true,
-      "notes": "SHIPPED: Added @dnd-kit/core ^6.3 + @dnd-kit/sortable ^8 to deps (sortable bundled now as a hedge though only @dnd-kit/core is actually imported — keeps the dep ready for a future ordering-within-column story). PartnershipsManager kanban view wrapped in DndContext with PointerSensor (4px activation distance to avoid hijacking clicks) + KeyboardSensor (Tab to focus, Space to pick up, arrows to move, Space to drop — built-in @dnd-kit a11y). Each card became a DraggableAppCard (useDraggable, opacity-50 while dragging, cursor-grab/grabbing); each column became a DroppableColumn (useDroppable, ring + accent tint when isOver, empty state now says 'drop here'). DragOverlay shows a tilted shadow preview while dragging. onDragEnd: parses the target column id (column-<stage>), no-op if same stage, optimistic local setRows update, then update partnership_applications via supabase. On approved/rejected transitions, stamps reviewed_at + reviewed_by like the detail Sheet path does. On error, toast + revert. List view untouched."
+      "notes": "ALREADY SHIPPED: Views/Components/PremiumGate.swift (112) + SubscriptionBanner/SubscriptionTierCard/VipGoldBadge. Gating today is narrow (tips + Ask Pulse quota); IOS-SUB-011 widens it to favorites cap, saved searches, alerts, advanced filters, Trip Planner."
+    },
+    {
+      "id": "IOS-BASE-DISCOVERY-001",
+      "title": "Ask Pulse AI chat + Swipe Discover + Surprise Me (baseline)",
+      "description": "As a user, I need fun, low-effort discovery surfaces so I keep coming back.",
+      "acceptanceCriteria": [
+        "AskPulseView conversational discovery (edge fn discover-chat) with picks + follow-ups",
+        "DiscoverView swipe deck + SurpriseMeView single random reveal",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": "ALREADY SHIPPED: Views/AskPulse, Views/Discover (DiscoverView/SwipeCard/SwipeCardStack), Views/SurpriseMe, plus ForYouRail/ForYouService/SwipeSessionService/GroupSessionView. These are strong native-only differentiators to lean on in the layout redesign and to monetize (IOS-ADS-015)."
+    },
+    {
+      "id": "IOS-BASE-COMPLY-001",
+      "title": "Account deletion flow (baseline)",
+      "description": "As a user, I need to delete my account from the app so Apple guideline 5.1.1(v) is satisfied.",
+      "acceptanceCriteria": [
+        "Delete Account button in Profile + Settings with consequence-stating confirmation",
+        "Calls delete-user-account edge function then signs out",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": "ALREADY SHIPPED: Views/Profile/{ProfileView,SettingsView}.swift + ProfileViewModel.deleteAccount; two-step token flow on backend (SEC-025)."
+    },
+    {
+      "id": "IOS-BASE-COMPLY-002",
+      "title": "Privacy manifest + permission strings + ATT-correct (baseline)",
+      "description": "As the platform, I need a complete privacy posture so the app passes review.",
+      "acceptanceCriteria": [
+        "PrivacyInfo.xcprivacy declares collected types (location/email/userID/name) all non-tracking",
+        "Info.plist has location/calendar/FaceID usage strings + ITSAppUsesNonExemptEncryption=false",
+        "No ATT prompt (no cross-app tracking) — correct as-is"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": "ALREADY SHIPPED. IMPORTANT CONSTRAINT for IOS-ADS-*: keep first-party ad serving non-tracking (no IDFA / cross-app SDK) so we do NOT trip ATT. If a future 3rd-party ad SDK is added, ATT + manifest updates become a hard prerequisite."
+    },
+    {
+      "id": "IOS-BASE-PLATFORM-001",
+      "title": "Platform & security services (baseline)",
+      "description": "As a user, I need a secure, resilient native app so it handles auth, offline, and OS integrations well.",
+      "acceptanceCriteria": [
+        "Biometric lock, session timeout, certificate pinning, jailbreak detection, keychain",
+        "NetworkMonitor + OfflineBanner, QueryCache, CrashReporting/MetricKit",
+        "Spotlight indexing, App Intents/Siri, DeepLinkHandler, universal links, App Clip target",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": "ALREADY SHIPPED: Services/{Biometric,SessionTimeout,CertificatePinning,Jailbreak,Keychain,NetworkMonitor,QueryCache,CrashReporting,MetricKit,Spotlight}; Intents/PulseAppIntents; DesMoinesInsiderClip target. New screens must reuse OfflineBanner/NetworkMonitor (see IOS-COMPLY-004)."
+    },
+    {
+      "id": "IOS-IA-001",
+      "title": "Redesign Home into a content-first, personalized 'Today' feed",
+      "description": "As a user, I open Home and want to see what's happening today right away, not scroll past a stack of six promotional CTA cards before reaching real content.",
+      "acceptanceCriteria": [
+        "HomeView.swift (currently 820 lines, ~6 stacked CTA/hero cards before content) is decomposed so the first screenful is content: RightNowRibbon + a single primary 'Discover' entry + the first real event cards above the fold on an iPhone 13/15",
+        "Surprise Me, Swipe-to-Discover, Explore-Attractions, Ask-Pulse entry points are consolidated into ONE compact, swipeable 'Ways to explore' row (not four full-width stacked cards)",
+        "Home is reorganized into clearly-titled, reorderable sections rendered from a single [HomeSection] model: Right Now, Featured, For You, Popular Restaurants, Trending Attractions, This Weekend, From the Blog — each a horizontal rail with a 'See all' that deep-links into the relevant tab/hub",
+        "Each section lazy-loads independently with skeletons (no all-or-nothing spinner) and an empty/error state that does not collapse layout",
+        "Ad + house-ad slots are positioned between sections at deterministic indices (handed to IOS-ADS-012) instead of a single hard-coded AdSlot",
+        "Section order is data-driven so IOS-IA-007 can later personalize it without another refactor",
+        "Scroll performance: LazyVStack/ScrollView stays at 60fps on an iPhone 12-class device with 100+ feed items (verify in Instruments or via no dropped-frame UI test)",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "IOS-IA-002",
+      "title": "Information architecture for full web parity (Discover hub + tab restructure)",
+      "description": "As a user, I need to reach every web surface (Trip Planner, Articles, Stay, Weekend, Best-Of, Music/Sports/Outdoors/Neighborhoods, Deals, Dashboard) from the app without the 6-tab bar overflowing or features hiding where nobody finds them.",
+      "acceptanceCriteria": [
+        "Define the target IA in a short doc comment at the top of MainTabView.swift and implement it: keep primary tabs lean and introduce a dedicated 'Discover'/'Explore' hub screen that is the home for parity features that don't deserve a permanent tab",
+        "Decision recorded for each parity feature: permanent tab vs Discover-hub tile vs Home rail vs deep section — no feature is unreachable",
+        "Discover hub is a native grid/list of entry tiles (Trip Planner, Articles & Guides, Where to Stay, This Weekend, Best Of / Voting, Music, Sports, Outdoors, Neighborhoods, Deals) with icons + one-line descriptions, each pushing its screen",
+        "Tab bar remains <=5 primary tabs on iPhone if any tab is added/removed (Apple HIG); the 5th tab may become 'Discover' replacing one of Search/Map if usage data warrants — document the tradeoff, do not silently drop Search or Map",
+        "Deep links + Spotlight + App Intents updated so each parity destination has a stable route (DeepLinkHandler cases added)",
+        "iPad sidebar lists the same destinations as top-level items",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "IOS-IA-003",
+      "title": "Unified content-card + skeleton system across all surfaces",
+      "description": "As a user, I want events, restaurants, attractions, articles, hotels and deals to look consistent and load gracefully everywhere they appear.",
+      "acceptanceCriteria": [
+        "A single set of card components (Featured / Standard / Compact / List-row variants) is used by Home rails, list tabs, Search results, Favorites, hub screens and detail 'related' rows — eliminating the current parallel EventCardView/RestaurantCardView/AttractionCardView/Compact/Featured duplication where it diverges visually",
+        "Matching skeleton placeholders (Shimmer) for every card variant; every list/rail shows skeletons while loading",
+        "Cards expose a consistent affordance for favorite, sponsored badge (IOS-ADS-011) and premium/VIP badge",
+        "Image loading uses CachedAsyncImage with correct aspect ratios and no layout shift",
+        "Dynamic Type: cards reflow (not truncate-to-unreadable) up to XXL; verified at AX sizes",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "IOS-IA-004",
+      "title": "Sticky search + persistent inline filter chips on list screens",
+      "description": "As a user filtering Events/Dining/Attractions, I want to see and change my active filters without reopening a sheet, and reach search without scrolling back to the top.",
+      "acceptanceCriteria": [
+        "Events, Restaurants, Attractions list screens keep a sticky search/filter bar pinned under the nav title on scroll",
+        "Active filters render as removable inline chips that persist while the list is shown (not hidden behind the filter button) with a result count and 'Clear all'",
+        "Tapping a chip edits that facet directly; the full filter sheet remains for advanced/combined edits",
+        "Smart presets (EventSmartPresets/RestaurantSmartPresets) and inline filters share one filter-state source of truth per screen",
+        "State survives tab switches and is restored on return",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "IOS-SUB-010",
+      "title": "Contextual native paywall component + per-feature upsell sheets",
+      "description": "As the business, I need a beautiful, reusable paywall that appears at the moment a user hits a locked feature, with copy tailored to that feature, so conversion is higher than a generic pricing screen.",
+      "acceptanceCriteria": [
+        "New Paywall view (reusable) that accepts a context (feature id, headline, benefit bullets, recommended tier) and presents the StoreKit purchase affordance inline",
+        "PremiumGate and all gated entry points present this contextual paywall instead of pushing the generic SubscriptionView",
+        "At least these contexts have tailored copy: unlimited favorites, AI Trip Planner, insider/dining tips, saved searches, custom alerts, advanced filters, ad-free",
+        "Paywall shows the right tier for the context (Insider vs VIP) preselected, with a clear monthly/annual toggle and the legally-required auto-renew disclosure",
+        "Restore Purchases + Terms/Privacy always reachable from the paywall",
+        "Every paywall present/dismiss/purchase/restore event is logged via AnalyticsService with the context id so we can measure per-surface conversion",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "IOS-SUB-011",
+      "title": "Paywall placement strategy across all gated surfaces",
+      "description": "As the business, I need premium limits actually enforced and surfaced in the app, because today only insider tips and the Ask Pulse quota gate — most premium features are advertised but not gated natively.",
+      "acceptanceCriteria": [
+        "Free-tier favorites cap (3, per SubscriptionTier.maxFavorites) is enforced in FavoritesService with a FavoritesLimitBanner + paywall on the 4th save",
+        "Saved searches and custom alerts (IOS-PARITY-008) are gated to Insider+ with a count limit per tier",
+        "Advanced filters in FilterSheet gate premium-only facets behind the paywall",
+        "AI Trip Planner (IOS-PARITY-001) enforces the tier quota (Insider 5/mo, VIP unlimited) with a quota meter + paywall when exhausted",
+        "Each gate is a soft gate (shows the value, then the paywall) — never a dead end",
+        "A single PremiumFeature enum centralizes feature->required-tier mapping, mirroring the web useSubscription hasFeature() list so web/iOS stay consistent",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "IOS-SUB-012",
+      "title": "Annual SKUs + StoreKit introductory offer / free trial",
+      "description": "As a user, I want an annual plan and a free trial so committing is cheaper and lower-risk; as the business, annual + trial materially lifts LTV.",
+      "acceptanceCriteria": [
+        "Annual products created in App Store Connect for Insider and VIP and added to Products.storekit; SubscriptionTier/product mapping updated",
+        "Paywall shows monthly vs annual with the % savings badge (mirror web: ~17% / Insider $49.99yr, VIP $129.99yr)",
+        "Introductory offer (e.g., 7-day free trial) configured as a StoreKit intro offer and shown with correct, localized, compliant trial+renewal copy",
+        "Eligibility handled correctly (intro offers only for users who never had one) via StoreKit",
+        "validate-ios-receipt + appstore-server-notifications-v2 handle the new product ids and trial/intro states; user_subscriptions tier resolves correctly during trial",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "IOS-SUB-013",
+      "title": "Onboarding free-trial moment + post-onboarding soft paywall",
+      "description": "As the business, I need a well-timed first-session upsell because trial starts during onboarding convert far better than ones discovered later.",
+      "acceptanceCriteria": [
+        "OnboardingView gains a final, skippable value+trial screen after interest selection that presents the annual-trial paywall",
+        "Skipping is one tap and never blocks app use (no hard wall at first launch — App Store-safe)",
+        "A post-onboarding soft paywall re-appears at a sensible engagement threshold (e.g., after N favorites or first Trip Planner attempt), frequency-capped so it is not nagging",
+        "All onboarding paywall events logged with cohort/source for funnel analysis",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "IOS-SUB-014",
+      "title": "Win-back & promotional offers for lapsed/expiring subscribers",
+      "description": "As the business, I want to recover churned and lapsing subscribers using Apple's offer mechanisms instead of losing them silently.",
+      "acceptanceCriteria": [
+        "StoreKit promotional/win-back offers configured and surfaced to eligible lapsed users on next launch",
+        "Offer-code redemption entry point in Settings (presentCodeRedemptionSheet)",
+        "Expiring-soon and billing-retry/grace states (from appstore-server-notifications-v2) drive a non-intrusive in-app banner prompting renewal/update-payment with deep link to Apple subscription management",
+        "Eligibility + display rules logged via AnalyticsService",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "IOS-ADS-010",
+      "title": "First-party campaign ad serving in-app (real campaigns, not just affiliate)",
+      "description": "As an advertiser, I paid for a campaign on the web and need it to actually render in the iOS app; today the app only shows hard-coded hotel affiliate creatives.",
+      "acceptanceCriteria": [
+        "New AdService (or extend AffiliateAdService) fetches active, approved creatives from the existing campaigns/advertisements tables via the get_active_ads(placement_type) RPC for the placements the app supports (top_banner, featured_spot, below_fold, sidebar->feed, sponsored_listing)",
+        "AdSlot renders a real campaign creative when one is available for the placement and falls back to affiliate, then to a house ad (IOS-ADS-013), so a slot is never empty",
+        "Creatives load via CachedAsyncImage; tap opens the campaign target (in-app SFSafariViewController / WebView)",
+        "Free-tier only (hidden for Insider/VIP), FTC 'Ad' label preserved",
+        "No IDFA / no third-party ad SDK — stays first-party so ATT is not triggered (per IOS-BASE-COMPLY-002)",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "IOS-ADS-011",
+      "title": "Sponsored / featured listings inline in feeds",
+      "description": "As an advertiser, I want my event/restaurant boosted in the normal browse flow, because in-feed native placements outperform banners.",
+      "acceptanceCriteria": [
+        "Cards for items linked via sponsored_listing_links (is_sponsored) render a ring/elevated treatment + a 'Sponsored' badge using the unified card system (IOS-ADS-011 depends on IOS-IA-003)",
+        "Sponsored items are injected at defined positions in Home rails and the Events/Dining/Attractions lists (e.g., position 1 and every Nth) — clearly labeled, never disguised as organic",
+        "Sponsored placements are shown to all tiers (they are content, not interruptive ads) but counted/【tracked】 distinctly",
+        "Tapping opens the normal detail screen; impression+click logged against the campaign",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "IOS-ADS-012",
+      "title": "Native in-feed ad cards + frequency-capped interstitial",
+      "description": "As the business, I want higher-value native ad inventory beyond a single banner, without wrecking the experience.",
+      "acceptanceCriteria": [
+        "A native in-feed ad card variant (image + headline + CTA + 'Ad' label) is inserted between Home sections and into long lists at deterministic indices coordinated with IOS-IA-001",
+        "An optional interstitial can show on a low-frequency, capped basis (e.g., at most once per session, not on first launch, never mid-task) on a major navigation boundary — free-tier only",
+        "All ad density is centrally configurable so we can tune without code changes (remote-config-style constant or Supabase-driven config)",
+        "Insider/VIP see zero ads (banner, in-feed, interstitial); verify via UI test for a mocked premium user",
+        "Respects Reduce Motion and never blocks content the user was reading",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "IOS-ADS-013",
+      "title": "House-ad fill: promote subscription when no paid campaign",
+      "description": "As the business, I want unsold ad inventory to sell the subscription instead of showing blank space, turning ad slots into a second conversion surface.",
+      "acceptanceCriteria": [
+        "When no paid campaign/affiliate creative is available for a slot, the slot renders a house ad promoting Insider/VIP (ad-free + premium benefits) that opens the contextual paywall (IOS-SUB-010)",
+        "House ads rotate among a few messages and are also free-tier only",
+        "House-ad impressions/taps logged distinctly from paid inventory so fill rate and house-ad conversion are measurable",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
+      ],
+      "priority": 23,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "IOS-ADS-014",
+      "title": "Ad analytics parity (viewability, dedupe) wired to backend",
+      "description": "As an advertiser, I need trustworthy impression/click numbers from the app so reporting matches the web.",
+      "acceptanceCriteria": [
+        "Impressions count only on >=50% viewable for >=1s (match the web useAdTracking thresholds), deduped per slot per session",
+        "Clicks tracked with campaign_id/creative_id/placement_type and posted to the same tracking endpoint/tables the web uses (campaign analytics)",
+        "Distinguishes paid campaign vs affiliate vs sponsored-listing vs house ad in the event payload",
+        "Offline-safe: events queue and flush when NetworkMonitor reports connectivity",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "IOS-ADS-015",
+      "title": "Sponsored results inside Ask Pulse / Surprise Me / Trip Planner",
+      "description": "As an advertiser, I want a labeled placement inside the AI discovery flows, which are high-intent and uniquely native.",
+      "acceptanceCriteria": [
+        "Ask Pulse can surface at most one clearly-labeled 'Sponsored pick' among its picks when an eligible campaign matches the query/context",
+        "Surprise Me can occasionally return a labeled sponsored result (capped, never every roll)",
+        "Trip Planner (IOS-PARITY-001) can include a labeled sponsored stop/recommendation",
+        "All AI-surfaced ads carry a visible 'Sponsored' label, are free-tier only, and respect the same tracking + frequency caps",
+        "Sponsored injection is server-driven (edge function) so relevance/labeling rules live with the existing campaign system, not hard-coded in the app",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "IOS-ADS-016",
+      "title": "In-app 'Promote this listing' entry for business owners",
+      "description": "As a local business owner using the app, I want to start promoting my event/restaurant from the listing, creating a new advertiser-acquisition funnel — handled so it does not run afoul of IAP rules.",
+      "acceptanceCriteria": [
+        "A 'Promote' / 'Advertise this' affordance appears on event/restaurant detail (and in a Profile 'For Businesses' area) for owners/admins",
+        "Because this is advertising for a real-world business (not an in-app digital good for the purchasing user), checkout is handled via the existing web campaign flow (create-campaign-checkout / Stripe) opened in SFSafariViewController, NOT StoreKit — document the App Review rationale in code comments",
+        "Entry point pre-fills the listing via the existing ListingPicker/campaign create path on web",
+        "No purchase UI for advertising is rendered natively in StoreKit; the app only links out to the advertiser portal",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
+      ],
+      "priority": 26,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "IOS-PARITY-001",
+      "title": "Native AI Trip Planner (itinerary builder) — premium hook",
+      "description": "As a user, I want to build an AI itinerary in the app; today the app advertises 'AI Trip Planner' in subscription copy but has zero implementation, which is both a parity gap and a broken promise.",
+      "acceptanceCriteria": [
+        "New native Trip Planner flow (input: dates, interests, party, budget, neighborhood) calling the same backend the web useTripPlanner/trip-planner uses",
+        "Generated itinerary renders as native day-by-day cards (events/restaurants/attractions) with map preview, reorder, save, share, and add-to-calendar",
+        "Saved itineraries persist to the backend and are accessible from Dashboard (IOS-PARITY-007) and a Saved filter",
+        "Tier quota enforced (Insider 5/mo, VIP unlimited) via IOS-SUB-011 with a quota meter and contextual paywall when exhausted",
+        "Reachable from the Discover hub (IOS-IA-002) and offered as a Home entry point",
+        "Loading, offline, and generation-error states handled (IOS-COMPLY-004)",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
+      ],
+      "priority": 27,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "IOS-PARITY-002",
+      "title": "Articles / Guides hub + native reader",
+      "description": "As a user, I want to read the site's guides and blog in the app for SEO content, dwell time and ad/affiliate revenue.",
+      "acceptanceCriteria": [
+        "Articles list/hub screen backed by the same content the web /articles uses (TanStack/web equivalent query against the articles content source)",
+        "Native reader renders rich content (markdown/HTML) with images, headings, links (in-app browser), share, and related-content rail",
+        "Free-tier ad slots within the reader (IOS-ADS-010/012); affiliate/sponsored inline allowed",
+        "Saveable to Favorites/Dashboard; deep-linkable; Spotlight-indexed",
+        "Dynamic Type + VoiceOver friendly long-form reading",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
+      ],
+      "priority": 28,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "IOS-PARITY-003",
+      "title": "Where to Stay (hotels) browse + affiliate booking",
+      "description": "As a user planning a trip, I want to browse hotels in the app; as the business, this is direct affiliate revenue beyond the banner.",
+      "acceptanceCriteria": [
+        "Stay screen lists hotels/accommodations (same data source as web /stay) with filters (area, price, rating)",
+        "Hotel detail with photos, amenities, map, and an affiliate 'Book' CTA opening the partner in SFSafariViewController with the affiliate link (revenue, outside IAP)",
+        "Affiliate clickouts tracked via AnalyticsService/ad tracking",
+        "Reachable from Discover hub + Trip Planner cross-links",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
+      ],
+      "priority": 29,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "IOS-PARITY-004",
+      "title": "This Weekend guide screen",
+      "description": "As a user, I want a curated weekend view in the app, not just a 'Free Weekend' filter preset.",
+      "acceptanceCriteria": [
+        "Dedicated Weekend screen (same curation as web /weekend) grouping Fri/Sat/Sun with featured picks across events/dining/attractions",
+        "Surfaced as a Home rail ('This Weekend') and a Discover-hub tile",
+        "Shareable; deep-linkable; refreshes by current week",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
+      ],
+      "priority": 30,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "IOS-PARITY-005",
+      "title": "Best Of / community voting",
+      "description": "As a user, I want to vote in Best-Of and see winners in the app, driving engagement and repeat visits.",
+      "acceptanceCriteria": [
+        "Best-Of screen lists categories + nominees (same backend as web /best-of) with native voting that requires auth and respects per-user vote rules",
+        "Results/leaderboard view with vote counts; optimistic vote UI with revert on failure",
+        "Winners/badges surface on the relevant listing cards (unified card system)",
+        "Voting can be positioned as an engagement driver and a soft funnel to account creation",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
+      ],
+      "priority": 31,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "IOS-PARITY-006",
+      "title": "Content hubs: Music, Sports, Outdoors, Neighborhoods (curated screens)",
+      "description": "As a user, I want real curated hub screens like the web, not just category filters buried in the events list.",
+      "acceptanceCriteria": [
+        "Each hub (Music, Sports, Outdoors, Neighborhoods) is a curated native screen mixing featured content, relevant events/restaurants/attractions, and editorial blurbs — parity with web /music, /sports, /outdoors, neighborhood guides",
+        "Hubs reachable from the Discover hub (IOS-IA-002) and via deep links/Spotlight",
+        "Reuse unified cards + rails; each hub supports its own ad/sponsored slots",
+        "Neighborhood hub integrates location (nearby in this neighborhood)",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
+      ],
+      "priority": 32,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "IOS-PARITY-007",
+      "title": "User Dashboard (activity, saved, recommendations)",
+      "description": "As a signed-in user, I want a home base showing my saved itineraries, favorites summary, alerts, and tailored recommendations — parity with web /dashboard.",
+      "acceptanceCriteria": [
+        "Dashboard screen aggregates: saved Trip Planner itineraries, favorites overview, saved searches/alerts (IOS-PARITY-008), recently viewed, and For-You recommendations",
+        "Subscription status card with manage/upgrade entry (paywall for free users)",
+        "Reachable from Profile and/or as the authenticated Discover landing",
+        "Empty/guest state prompts sign-in; never a dead end",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
+      ],
+      "priority": 33,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "IOS-PARITY-008",
+      "title": "Saved searches + custom alerts (premium + push)",
+      "description": "As a power user, I want to save searches and get alerts for new matching events; as the business, this is a high-value premium feature and a push re-engagement driver.",
+      "acceptanceCriteria": [
+        "Users can save a search (query + filters) and toggle alerts on it; gated to Insider+ with per-tier limits (IOS-SUB-011)",
+        "Backend stores saved searches/alerts (reuse web schema); a scheduled job + PushNotificationService deliver new-match alerts",
+        "Manage saved searches/alerts from Dashboard and Search",
+        "Alert pushes deep-link to the filtered results",
+        "Free users see the feature and a contextual paywall",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
+      ],
+      "priority": 34,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "IOS-PARITY-009",
+      "title": "Write reviews & ratings (premium)",
+      "description": "As a user, I want to rate and review places in the app; as the business, this deepens content and is a gated premium benefit.",
+      "acceptanceCriteria": [
+        "Native review/rating composer on event/restaurant/attraction detail, writing to the existing reviews/ratings tables with RLS",
+        "Writing reviews is gated to Insider+ (web parity) via the contextual paywall; reading reviews is free",
+        "Reviews display with author, rating, date; user can edit/delete own; basic moderation/report affordance",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
+      ],
+      "priority": 35,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "IOS-PARITY-010",
+      "title": "Deals page (incl. recurring deals) native",
+      "description": "As a user, I want to see local deals — including recurring happy-hour-style rules — in the app.",
+      "acceptanceCriteria": [
+        "Deals screen lists active deals (same backend as web useDeals) including the recurring fields days_of_week/start_time/end_time (DEAL-RECURRING-001) rendered as a readable schedule",
+        "Filter by category/neighborhood/active-now; deep link to the related listing",
+        "Deals are a natural sponsored/featured surface (coordinate with IOS-ADS-011) and a Discover-hub tile",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
+      ],
+      "priority": 36,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "IOS-IA-005",
+      "title": "iPad / large-screen adaptive layouts",
+      "description": "As an iPad user, I want the extra space used well, not a stretched phone layout, across the new screens.",
+      "acceptanceCriteria": [
+        "NavigationSplitView sidebar lists all primary + Discover destinations (IOS-IA-002)",
+        "List/hub/detail screens use multi-column grids and a list+detail two-pane where it makes sense (e.g., Events list + detail)",
+        "Trip Planner, Articles reader, Dashboard, and hubs all have iPad-optimized layouts",
+        "Verified in portrait + landscape on iPad via UI snapshot tests (Fastlane snapshot targets exist)",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
+      ],
+      "priority": 37,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "IOS-IA-006",
+      "title": "Personalized Home section ordering via For-You signals",
+      "description": "As a returning user, I want Home to lead with what I care about, increasing engagement and ad/premium exposure.",
+      "acceptanceCriteria": [
+        "The data-driven [HomeSection] order (IOS-IA-001) is personalized using ForYouService signals (interests, recent interactions, location)",
+        "Ordering is computed deterministically with a sensible default for new/guest users",
+        "Personalization respects consent (ConsentService) and is first-party only",
+        "A/B-friendly: ordering strategy is centralized so it can be experimented on",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
+      ],
+      "priority": 38,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "IOS-COMPLY-003",
+      "title": "Full accessibility audit across new + existing screens",
+      "description": "As a user relying on assistive tech, I need the whole app — including all new parity/monetization screens — to be fully usable, which is also an App Review risk area.",
+      "acceptanceCriteria": [
+        "VoiceOver: every screen navigable; cards aggregated into single elements with meaningful labels; ads/paywalls/sponsored badges announced correctly",
+        "Dynamic Type: all text scales to AX5 without clipping or broken layout (cards reflow per IOS-IA-003)",
+        "Reduce Motion: parallax/scale/burst animations (ParallaxHeroHeader, HeartBurst, SwipeCard, theme crossfade) respect the setting",
+        "Color contrast meets 4.5:1; verified in light/dark/OLED themes",
+        "Hit targets >=44x44 (minHitTarget) on all new controls",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
+      ],
+      "priority": 39,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "IOS-COMPLY-004",
+      "title": "Offline + error states across all new screens",
+      "description": "As a user on a flaky connection, I need every new screen to fail gracefully, not show blank/broken UI (also an App Review checkpoint).",
+      "acceptanceCriteria": [
+        "Every new screen (Trip Planner, Articles, Stay, Weekend, Best-Of, hubs, Dashboard, Deals) reuses OfflineBanner + NetworkMonitor and shows skeletons, empty states, and retryable error states",
+        "Network requests use NetworkRetry with backoff; cached content (QueryCache) shown when available offline",
+        "No screen presents a dead end on error — always a retry or a navigate-away path",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
+      ],
+      "priority": 40,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "IOS-COMPLY-005",
+      "title": "App Store metadata, screenshots & review notes for the new feature set + paywalls",
+      "description": "As the release owner, I need store assets and reviewer notes updated so the expanded app (with paywalls, ads, sponsored content, Trip Planner, etc.) passes review and markets well.",
+      "acceptanceCriteria": [
+        "Fastlane snapshot screens added/updated for the redesigned Home, Discover hub, Trip Planner, a paywall, and a content hub (ios/fastlane + DesMoinesInsiderUITests)",
+        "App Store description/keywords updated to cover Trip Planner, guides, deals, premium tiers",
+        "App Review notes document: IAP for consumer subscriptions, the advertiser/'Promote' flow links out (not a digital good for the purchasing user), sponsored-content labeling, and the demo account for premium",
+        "MARKETING_VERSION bumped in project.yml; release cut via ios-native-release workflow",
+        "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
+      ],
+      "priority": 41,
+      "passes": false,
+      "notes": ""
     }
   ]
 }
