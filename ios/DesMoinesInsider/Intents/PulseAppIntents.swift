@@ -140,7 +140,7 @@ struct PulseShortcuts: AppShortcutsProvider {
             intent: FindRestaurantsIntent(),
             phrases: [
                 "Find restaurants with \(.applicationName)",
-                "Find \(\.$cuisine) restaurants in \(.applicationName)",
+                "Find restaurants in \(.applicationName)",
             ],
             shortTitle: "Find Restaurants",
             systemImageName: "fork.knife",
@@ -149,7 +149,7 @@ struct PulseShortcuts: AppShortcutsProvider {
             intent: FindEventsIntent(),
             phrases: [
                 "Find events on \(.applicationName)",
-                "Find \(\.$category) events on \(.applicationName)",
+                "Find something to do on \(.applicationName)",
             ],
             shortTitle: "Find Events",
             systemImageName: "calendar",
