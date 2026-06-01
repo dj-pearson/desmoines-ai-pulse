@@ -67,8 +67,8 @@ private struct ForYouCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             ZStack {
-                if let urlString = rec.imageUrl, let url = URL(string: urlString) {
-                    CachedAsyncImage(url: url)
+                if let urlString = rec.imageUrl, URL(string: urlString) != nil {
+                    CachedAsyncImage(url: urlString)
                         .scaledToFill()
                 } else {
                     Color.secondary.opacity(0.15)

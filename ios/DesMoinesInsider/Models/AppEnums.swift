@@ -160,14 +160,6 @@ enum UserRole: String, Codable {
 
 // MARK: - Sort Option
 
-enum EventSortOption: String, CaseIterable, Identifiable {
-    case date = "Date"
-    case distance = "Distance"
-    case popularity = "Popularity"
-
-    var id: String { rawValue }
-}
-
 enum RestaurantSortOption: String, CaseIterable, Identifiable {
     case popularity = "Popular"
     case rating = "Rating"

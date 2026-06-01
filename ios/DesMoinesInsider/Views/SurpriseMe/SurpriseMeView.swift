@@ -135,8 +135,8 @@ struct SurpriseMeView: View {
 
     @ViewBuilder
     private func heroImage(url: String?) -> some View {
-        if let url, let parsed = URL(string: url) {
-            CachedAsyncImage(url: parsed)
+        if let url, URL(string: url) != nil {
+            CachedAsyncImage(url: url)
                 .scaledToFill()
                 .clipped()
         } else {
