@@ -164,6 +164,9 @@ COMMENT ON FUNCTION public.get_personalized_recommendations IS
 -- without changing the decoder.
 -- ---------------------------------------------------------------------------
 
+-- Drop first so we can change the return type (new columns added).
+DROP FUNCTION IF EXISTS public.get_trending_events(INTEGER);
+
 CREATE OR REPLACE FUNCTION public.get_trending_events(
   p_limit INTEGER DEFAULT 12
 )

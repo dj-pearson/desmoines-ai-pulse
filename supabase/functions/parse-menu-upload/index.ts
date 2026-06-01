@@ -1,6 +1,7 @@
 /**
  * SECURITY: verify_jwt = false
- * Reason: Called from admin UI with a bearer token; JWT verification handled at application layer.
+ * Reason: Called from admin UI with a bearer token; JWT + admin-role check
+ * enforced in the handler (profiles.role === 'admin') before any work.
  * Alternative measures: Service role key for DB writes, Anthropic API key kept server-side.
  * Risk level: LOW (admin-only feature, file size limited to 10 MB)
  */
@@ -179,6 +180,36 @@ serve(async (req) => {
   }
 
   try {
+    // Admin authentication — this function writes to the DB with the
+    // service-role key and burns the Anthropic budget, so it must not be
+    // callable anonymously despite verify_jwt=false at the platform layer.
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'Authorization required' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid authentication' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+    if (!profile || profile.role !== 'admin') {
+      return new Response(
+        JSON.stringify({ error: 'Admin access required' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const body: ParseRequest = await req.json();
     const { restaurant_id, file_base64, file_type, file_name, save_to_db = false, notes } = body;
 

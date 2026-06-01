@@ -709,6 +709,22 @@ export type Database = {
           type: string
           updated_at: string | null
           website: string | null
+          // Admin curation fields added by 20260520000004
+          address: string | null
+          hours_summary: string | null
+          hours: Json | null
+          is_indoor: boolean | null
+          is_kid_friendly: boolean | null
+          is_free: boolean | null
+          is_active: boolean
+          accessibility_notes: string | null
+          seo_title: string | null
+          seo_description: string | null
+          seo_keywords: string[] | null
+          seo_h1: string | null
+          geo_summary: string | null
+          geo_key_facts: string[] | null
+          geo_faq: Json | null
         }
         Insert: {
           created_at?: string | null
@@ -724,6 +740,21 @@ export type Database = {
           type: string
           updated_at?: string | null
           website?: string | null
+          address?: string | null
+          hours_summary?: string | null
+          hours?: Json | null
+          is_indoor?: boolean | null
+          is_kid_friendly?: boolean | null
+          is_free?: boolean | null
+          is_active?: boolean
+          accessibility_notes?: string | null
+          seo_title?: string | null
+          seo_description?: string | null
+          seo_keywords?: string[] | null
+          seo_h1?: string | null
+          geo_summary?: string | null
+          geo_key_facts?: string[] | null
+          geo_faq?: Json | null
         }
         Update: {
           created_at?: string | null
@@ -739,6 +770,21 @@ export type Database = {
           type?: string
           updated_at?: string | null
           website?: string | null
+          address?: string | null
+          hours_summary?: string | null
+          hours?: Json | null
+          is_indoor?: boolean | null
+          is_kid_friendly?: boolean | null
+          is_free?: boolean | null
+          is_active?: boolean
+          accessibility_notes?: string | null
+          seo_title?: string | null
+          seo_description?: string | null
+          seo_keywords?: string[] | null
+          seo_h1?: string | null
+          geo_summary?: string | null
+          geo_key_facts?: string[] | null
+          geo_faq?: Json | null
         }
         Relationships: []
       }
@@ -3112,6 +3158,16 @@ export type Database = {
           is_featured: boolean | null
           is_active: boolean | null
           sort_order: number | null
+          // SEO + GEO columns added by migration 20260520000000_add_seo_geo_to_hotels.sql
+          seo_title: string | null
+          seo_description: string | null
+          seo_keywords: string[] | null
+          seo_h1: string | null
+          geo_summary: string | null
+          geo_key_facts: string[] | null
+          geo_faq: Json | null
+          // Set whenever the affiliate URL is (re)generated. Migration 20260520000001.
+          affiliate_url_updated_at: string | null
           created_at: string | null
           updated_at: string | null
         }
@@ -3149,6 +3205,14 @@ export type Database = {
           is_featured?: boolean | null
           is_active?: boolean | null
           sort_order?: number | null
+          seo_title?: string | null
+          seo_description?: string | null
+          seo_keywords?: string[] | null
+          seo_h1?: string | null
+          geo_summary?: string | null
+          geo_key_facts?: string[] | null
+          geo_faq?: Json | null
+          affiliate_url_updated_at?: string | null
           created_at?: string | null
           updated_at?: string | null
         }
@@ -3186,6 +3250,14 @@ export type Database = {
           is_featured?: boolean | null
           is_active?: boolean | null
           sort_order?: number | null
+          seo_title?: string | null
+          seo_description?: string | null
+          seo_keywords?: string[] | null
+          seo_h1?: string | null
+          geo_summary?: string | null
+          geo_key_facts?: string[] | null
+          geo_faq?: Json | null
+          affiliate_url_updated_at?: string | null
           created_at?: string | null
           updated_at?: string | null
         }
@@ -3567,6 +3639,13 @@ export type Database = {
           name: string
           rating: number | null
           updated_at: string | null
+          // Admin curation fields added by 20260520000005
+          has_restrooms: boolean | null
+          has_shade: boolean | null
+          surface_type: string | null
+          accessibility_notes: string | null
+          source: string
+          manually_curated: boolean
         }
         Insert: {
           age_range?: string | null
@@ -3582,6 +3661,12 @@ export type Database = {
           name: string
           rating?: number | null
           updated_at?: string | null
+          has_restrooms?: boolean | null
+          has_shade?: boolean | null
+          surface_type?: string | null
+          accessibility_notes?: string | null
+          source?: string
+          manually_curated?: boolean
         }
         Update: {
           age_range?: string | null
@@ -3597,6 +3682,12 @@ export type Database = {
           name?: string
           rating?: number | null
           updated_at?: string | null
+          has_restrooms?: boolean | null
+          has_shade?: boolean | null
+          surface_type?: string | null
+          accessibility_notes?: string | null
+          source?: string
+          manually_curated?: boolean
         }
         Relationships: []
       }
@@ -3868,6 +3959,9 @@ export type Database = {
           reason: string
           status: Database["public"]["Enums"]["refund_status"]
           stripe_refund_id: string | null
+          // ADMIN-REFUND-001: added by migration 20260520000010
+          refund_reason: string | null
+          refund_reason_notes: string | null
         }
         Insert: {
           admin_user_id?: string | null
@@ -3880,6 +3974,8 @@ export type Database = {
           reason: string
           status?: Database["public"]["Enums"]["refund_status"]
           stripe_refund_id?: string | null
+          refund_reason?: string | null
+          refund_reason_notes?: string | null
         }
         Update: {
           admin_user_id?: string | null
@@ -3892,6 +3988,8 @@ export type Database = {
           reason?: string
           status?: Database["public"]["Enums"]["refund_status"]
           stripe_refund_id?: string | null
+          refund_reason?: string | null
+          refund_reason_notes?: string | null
         }
         Relationships: [
           {
@@ -5591,6 +5689,9 @@ export type Database = {
           subject_type: string
           updated_at: string | null
           webhook_urls: Json | null
+          // Added by 20260520000007 for the admin queue dashboard
+          error_message: string | null
+          last_attempt_at: string | null
         }
         Insert: {
           ai_prompt_used?: string | null
@@ -5610,6 +5711,8 @@ export type Database = {
           subject_type: string
           updated_at?: string | null
           webhook_urls?: Json | null
+          error_message?: string | null
+          last_attempt_at?: string | null
         }
         Update: {
           ai_prompt_used?: string | null
@@ -5629,6 +5732,8 @@ export type Database = {
           subject_type?: string
           updated_at?: string | null
           webhook_urls?: Json | null
+          error_message?: string | null
+          last_attempt_at?: string | null
         }
         Relationships: []
       }

@@ -66,6 +66,29 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import {
+  Cell,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+} from "recharts";
+import { Download } from "lucide-react";
+
+// ADMIN-REFUND-001: structured taxonomy for finance reporting.
+const REFUND_REASON_OPTIONS = [
+  { value: "duplicate_charge", label: "Duplicate charge" },
+  { value: "user_request", label: "User request" },
+  { value: "campaign_cancelled", label: "Campaign cancelled" },
+  { value: "fraud", label: "Fraud" },
+  { value: "technical_issue", label: "Technical issue" },
+  { value: "content_takedown", label: "Content takedown" },
+  { value: "accidental_purchase", label: "Accidental purchase" },
+  { value: "other", label: "Other" },
+] as const;
+
+type RefundReason = (typeof REFUND_REASON_OPTIONS)[number]["value"];
 
 interface Refund {
   id: string;
@@ -73,6 +96,8 @@ interface Refund {
   admin_user_id: string | null;
   amount: number;
   reason: string | null;
+  refund_reason: RefundReason | null;
+  refund_reason_notes: string | null;
   status: "pending" | "approved" | "processed" | "rejected";
   stripe_refund_id: string | null;
   processed_at: string | null;
@@ -113,6 +138,8 @@ export default function AdminRefunds() {
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
   const [refundAmount, setRefundAmount] = useState("");
   const [refundReason, setRefundReason] = useState("");
+  // ADMIN-REFUND-001: required structured taxonomy alongside free-text reason.
+  const [refundReasonCategory, setRefundReasonCategory] = useState<RefundReason | "">("");
   const [isRefundDialogOpen, setIsRefundDialogOpen] = useState(false);
   const [confirmRefund, setConfirmRefund] = useState<Refund | null>(null);
 
@@ -169,10 +196,14 @@ export default function AdminRefunds() {
       paymentId,
       amount,
       reason,
+      refundReason,
+      refundReasonNotes,
     }: {
       paymentId: string;
       amount: number;
       reason: string;
+      refundReason: RefundReason;
+      refundReasonNotes?: string;
     }) => {
       const { data, error } = await supabase.functions.invoke(
         "process-stripe-refund",
@@ -181,6 +212,8 @@ export default function AdminRefunds() {
             paymentId,
             amount,
             reason,
+            refundReason,
+            refundReasonNotes,
           },
         }
       );
@@ -195,6 +228,7 @@ export default function AdminRefunds() {
       setSelectedPayment(null);
       setRefundAmount("");
       setRefundReason("");
+      setRefundReasonCategory("");
       toast.success("Refund processed successfully");
     },
     onError: (error) => {
@@ -310,11 +344,17 @@ export default function AdminRefunds() {
       toast.error("Please provide a reason for the refund");
       return;
     }
+    if (!refundReasonCategory) {
+      toast.error("Please pick a refund reason category");
+      return;
+    }
 
     processRefund.mutate({
       paymentId: selectedPayment.id,
       amount,
       reason: refundReason,
+      refundReason: refundReasonCategory,
+      refundReasonNotes: refundReason,
     });
   };
 
@@ -327,6 +367,87 @@ export default function AdminRefunds() {
       .filter((r) => r.status === "processed")
       .reduce((sum, r) => sum + r.amount, 0),
   };
+
+  // ADMIN-REFUND-001: 90-day reasons breakdown.
+  const reasonsBreakdown = (() => {
+    const cutoff = Date.now() - 90 * 24 * 60 * 60 * 1000;
+    const counts = new Map<string, number>();
+    for (const r of refunds) {
+      if (new Date(r.created_at).getTime() < cutoff) continue;
+      const key = r.refund_reason ?? "other";
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return REFUND_REASON_OPTIONS
+      .map((opt) => ({
+        name: opt.label,
+        value: counts.get(opt.value) ?? 0,
+        key: opt.value,
+      }))
+      .filter((row) => row.value > 0);
+  })();
+
+  const REASON_COLORS = [
+    "hsl(var(--primary))",
+    "#22c55e",
+    "#f59e0b",
+    "#ef4444",
+    "#8b5cf6",
+    "#06b6d4",
+    "#ec4899",
+    "#64748b",
+  ];
+
+  function exportCsv() {
+    const header = [
+      "id",
+      "created_at",
+      "amount",
+      "status",
+      "refund_reason",
+      "refund_reason_notes",
+      "reason",
+      "campaign_id",
+      "stripe_refund_id",
+      "admin_user_id",
+    ];
+    const esc = (v: unknown) => {
+      if (v === null || v === undefined) return "";
+      const s = String(v);
+      if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
+    const lines = [header.join(",")];
+    for (const r of refunds) {
+      lines.push(
+        [
+          esc(r.id),
+          esc(r.created_at),
+          esc(r.amount),
+          esc(r.status),
+          esc(r.refund_reason),
+          esc(r.refund_reason_notes),
+          esc(r.reason),
+          esc(r.campaign_id),
+          esc(r.stripe_refund_id),
+          esc(r.admin_user_id),
+        ].join(","),
+      );
+    }
+    const blob = new Blob([lines.join("\n")], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `refunds-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${refunds.length} refunds`);
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -403,7 +524,62 @@ export default function AdminRefunds() {
           </Card>
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
+        {/* ADMIN-REFUND-001: 90-day reasons breakdown + CSV export */}
+        <Card className="mt-6">
+          <CardHeader className="flex flex-row items-start justify-between gap-3">
+            <div>
+              <CardTitle className="text-base">
+                Reasons breakdown · last 90 days
+              </CardTitle>
+              <CardDescription>
+                Sourced from the structured <code>refund_reason</code> column
+              </CardDescription>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={exportCsv}
+              disabled={refunds.length === 0}
+            >
+              <Download className="h-3.5 w-3.5 mr-1" />
+              Export CSV
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {reasonsBreakdown.length === 0 ? (
+              <div className="text-sm text-muted-foreground py-8 text-center">
+                No refunds in the last 90 days.
+              </div>
+            ) : (
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={reasonsBreakdown}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={80}
+                      label={(entry) => `${entry.name} (${entry.value})`}
+                    >
+                      {reasonsBreakdown.map((entry, idx) => (
+                        <Cell
+                          key={entry.key}
+                          fill={REASON_COLORS[idx % REASON_COLORS.length]}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6">
           <TabsList className="mb-6">
             <TabsTrigger value="refunds">Refund Requests</TabsTrigger>
             <TabsTrigger value="new-refund">Issue New Refund</TabsTrigger>
@@ -680,7 +856,33 @@ export default function AdminRefunds() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="refundReason">Reason for Refund</Label>
+                <Label htmlFor="refundReasonCategory">
+                  Refund reason category *
+                </Label>
+                <Select
+                  value={refundReasonCategory}
+                  onValueChange={(v) =>
+                    setRefundReasonCategory(v as RefundReason)
+                  }
+                >
+                  <SelectTrigger id="refundReasonCategory">
+                    <SelectValue placeholder="Pick a category…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {REFUND_REASON_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Required. Used for finance reporting and the breakdown
+                  chart on this page.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="refundReason">Reason / notes *</Label>
                 <Textarea
                   id="refundReason"
                   value={refundReason}
@@ -700,7 +902,11 @@ export default function AdminRefunds() {
             </Button>
             <Button
               onClick={handleProcessRefund}
-              disabled={processRefund.isPending}
+              disabled={
+                processRefund.isPending ||
+                !refundReasonCategory ||
+                !refundReason.trim()
+              }
             >
               {processRefund.isPending ? (
                 <>

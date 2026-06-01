@@ -164,6 +164,22 @@ export function sanitizeLikeInput(input: string, maxLength = 500): string {
 }
 
 /**
+ * Sanitize a value that will be interpolated into a PostgREST filter string
+ * (e.g. supabase `.or("col.ilike.%VALUE%,...")` or `.ilike("col", "%VALUE%")`).
+ *
+ * PostgREST parses commas, parentheses, asterisks and backticks structurally,
+ * so a raw user value containing those characters can rewrite the filter and
+ * exfiltrate columns. This strips those metacharacters and also escapes the
+ * LIKE wildcards via sanitizeLikeInput.
+ */
+export function sanitizePostgrestPattern(input: string, maxLength = 200): string {
+  return sanitizeLikeInput(input, maxLength)
+    .replace(/[,()*`]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
  * Validate query parameters from URL
  */
 export function validateQueryParams(

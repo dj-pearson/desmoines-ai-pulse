@@ -96,6 +96,94 @@
 
 ## Progress Log
 
+## 2026-05-17 — Ralph Loop 20: Deep-dive security + code-quality (6 done, 13 backlog added)
+
+Prior PRD was 70/70 complete (Loop 19). With no pending stories, ran a
+three-track deep dive (security, code quality, UX cohesion) via parallel
+audit agents and turned the findings into 19 new PRD stories
+(NEW-SEC-001..007, NEW-DX-001..006, NEW-UX-001..006). Implemented the 6
+highest-value, low-risk, verifiable ones this loop. Build verified:
+`tsc --noEmit` exit 0, `vite build` exit 0, vitest 8 files / 86 tests
+(20 new) all green.
+
+- **NEW-SEC-001**: PostgREST filter injection in `nlp-search`
+  - Added `sanitizePostgrestPattern()` to
+    `supabase/functions/_shared/validation.ts` — builds on
+    `sanitizeLikeInput`, additionally replaces `, ( ) * \`` with a space
+    and collapses whitespace.
+  - Applied to `searchKeyword`, `locationFilter`, `parsedIntent.category`
+    and `parsedIntent.cuisine` across all three search blocks
+    (events/restaurants/attractions). Function runs with the
+    service-role key so this closed an unauth RLS-bypassing
+    column-exfiltration vector.
+
+- **NEW-SEC-002**: PostgREST filter injection in `discover-chat`
+  - Imported the same helper; replaced the insufficient
+    `.replace(/[%_]/g,'')` term sanitization (it left `,` and `)` intact)
+    and the category/cuisine/type ilike interpolations across
+    `search_events`/`search_restaurants`/`search_attractions`.
+
+- **NEW-SEC-003**: `parse-menu-upload` had no auth despite an
+  "admin-only" header comment
+  - Added `Authorization` → `supabase.auth.getUser` →
+    `profiles.role === 'admin'` gate (mirroring `process-stripe-refund`)
+    before any body parse / Anthropic call / DB write. Updated the
+    SECURITY header comment. Request/response unchanged for admins.
+
+- **NEW-SEC-004**: `refresh_oauth_token` RPC leaked cross-user tokens +
+  app `client_secret`
+  - New migration `20260517000000_harden_refresh_oauth_token.sql`.
+    `CREATE OR REPLACE` keeps the `(UUID, TEXT)` signature (verified zero
+    callers in web/edge — only the original migration + generated types),
+    derives the user from `auth.uid()` and ignores the caller-supplied
+    `p_user_id`, drops `client_secret` from the return, pins
+    `search_path=''` with schema-qualified refs, `REVOKE` from
+    PUBLIC/anon + `GRANT` to authenticated/service_role, and narrows the
+    over-broad `GRANT ALL ON user_oauth_tokens`.
+
+- **NEW-DX-001**: 6 hooks still used `export default`
+  - Removed the redundant trailing `export default useX;` from
+    `useMediaLibrary`, `useNLPSearch`, `useWebVitals`,
+    `useFocusOnRouteChange`, `useMediaUpload`, `useTripPlanner`. All
+    already had named exports and all consumers already used named
+    imports, so zero consumer changes; verified no default-import sites
+    remain.
+
+- **NEW-DX-002**: zero unit coverage on content auto-approval gates
+  - Added `src/lib/__tests__/contentValidation.test.ts` (20 tests):
+    URL/phone/email/date/image validators edge cases + `validateEvent`
+    happy path / missing-required / score-clamp / generic-title warning
+    + `validateRestaurant` shape. (ownership.ts deferred to NEW-DX-006 —
+    needs Supabase client mocking.)
+
+### Backlog added (not yet implemented)
+- NEW-SEC-005 (email-deliver account-deletion token), NEW-SEC-006
+  (encrypt oauth tokens at rest), NEW-SEC-007 (stable Stripe idempotency
+  key), NEW-DX-003 (TanStack Query migration of core data hooks),
+  NEW-DX-004 (decompose ContentTable.tsx), NEW-DX-005 (remove `any` from
+  security/validation libs), NEW-DX-006 (ownership.ts tests), NEW-UX-001
+  (generalize favorites), NEW-UX-002 (web push/email alerts), NEW-UX-003
+  (Events list/map toggle), NEW-UX-004 (unify filter/sort UX), NEW-UX-005
+  (unified Saved hub), NEW-UX-006 (guard/surface orphaned routes).
+
+### Files changed
+- supabase/functions/_shared/validation.ts (new sanitizePostgrestPattern)
+- supabase/functions/nlp-search/index.ts
+- supabase/functions/discover-chat/index.ts
+- supabase/functions/parse-menu-upload/index.ts
+- supabase/migrations/20260517000000_harden_refresh_oauth_token.sql (new)
+- src/hooks/{useMediaLibrary,useNLPSearch,useWebVitals,useFocusOnRouteChange,useMediaUpload,useTripPlanner}.ts
+- src/lib/__tests__/contentValidation.test.ts (new)
+- prd.json (19 stories appended; 6 marked passes:true; branchName updated)
+- progress.txt
+
+### Build Verification
+- `npx tsc --noEmit` — ✅ exit 0
+- `npx vite build` — ✅ exit 0
+- `npx vitest run` — ✅ 8 files, 86 tests (20 new), 0 fail
+- **Progress**: 76/89 stories passing; 6 completed this loop
+---
+
 ## 2026-05-07 — Ralph Loop 19: Final 8 stories — PRD complete (70/70 ✅)
 
 This session closed out every remaining pending story in the active PRD.
@@ -1024,4 +1112,191 @@ three storefronts.
 ### Build Verification
 - `npx vite build` — ✅ passes
 - All 30/30 security stories now fully implemented (0 deferred)
+---
+
+
+## 2026-05-31 — PRD ROTATED to iOS Layout & Monetization initiative (branch claude/ios-layout-monetization-plan-5IQFu)
+
+Previous prd.json (feat/admin-followups, 6/6 complete) is preserved in git history.
+prd.json now holds the iOS Layout & Monetization PRD: 41 stories — 10 baseline
+capabilities marked passes:true (already shipped in app v1.1.30 / build 57) and 31
+new stories marked passes:false for Ralph to work in array order.
+
+User direction captured in the planning session:
+- Build BOTH revenue engines in parallel (ads/featured + subscriptions).
+- Full web feature parity (Trip Planner, Weekend, Best-Of, Articles, Stay, Music/Sports/
+  Outdoors/Neighborhood hubs, Dashboard, Deals).
+- "Best layout possible" for all the information the desktop app carries.
+
+Already shipped (recorded passes:true so the queue reflects reality):
+- IOS-BASE-NAV-001        6-tab native shell (MainTabView, iPad split)
+- IOS-BASE-SUB-001/002/003 StoreKit 2 + cross-platform entitlement sync + receipt/ASSN-v2 backend
+- IOS-BASE-ADS-001        Affiliate hotel banner (free-tier, FTC-labeled)
+- IOS-BASE-GATE-001       PremiumGate + insider/dining tips gating
+- IOS-BASE-DISCOVERY-001  Ask Pulse AI chat + Swipe Discover + Surprise Me
+- IOS-BASE-COMPLY-001/002 Account deletion + privacy manifest (ATT-correct)
+- IOS-BASE-PLATFORM-001   Biometric/session/cert-pinning/offline/Spotlight/App Intents/App Clip
+
+New work, grouped (passes:false, execution order = array order):
+- EPIC A Layout/IA:  IOS-IA-001 Home content-first redesign; IOS-IA-002 Discover-hub IA for parity;
+  IOS-IA-003 unified card+skeleton system; IOS-IA-004 sticky search + persistent filter chips;
+  IOS-IA-005 iPad adaptivity; IOS-IA-006 personalized section ordering.
+- EPIC B Subscriptions: IOS-SUB-010 contextual paywall; 011 placement/enforcement strategy;
+  012 annual SKUs + intro trial; 013 onboarding trial + soft paywall; 014 win-back/offer codes.
+- EPIC C Ads/Sponsored (mostly outside Apple's 30%): IOS-ADS-010 first-party campaign serving;
+  011 sponsored/featured listings; 012 native in-feed + capped interstitial; 013 house-ad fill;
+  014 ad analytics parity; 015 sponsored AI-flow results; 016 advertiser self-serve linkout.
+- EPIC D Parity screens: IOS-PARITY-001 Trip Planner (also a premium hook); 002 Articles/Guides;
+  003 Stay/hotels (affiliate $); 004 Weekend; 005 Best-Of voting; 006 Music/Sports/Outdoors/
+  Neighborhood hubs; 007 Dashboard; 008 saved searches+alerts (premium+push); 009 reviews;
+  010 Deals (recurring).
+- EPIC E Compliance/polish: IOS-COMPLY-003 accessibility audit; 004 offline/error states;
+  005 App Store metadata/screenshots/review notes.
+
+Key constraints captured for implementers:
+- Keep ad serving FIRST-PARTY (no IDFA / no 3rd-party ad SDK) so ATT stays unnecessary
+  (IOS-BASE-COMPLY-002). A 3rd-party ad SDK would make ATT + privacy-manifest updates a hard
+  prerequisite.
+- Consumer subscriptions MUST use StoreKit IAP. The advertiser "Promote this listing" flow
+  (IOS-ADS-016) links out to the web Stripe campaign checkout because it is advertising for a
+  real-world business, not an in-app digital good for the purchasing user — document this for
+  App Review.
+- Trip Planner is advertised in subscription copy today but has ZERO native implementation —
+  IOS-PARITY-001 closes both a parity gap and a broken promise; gate it via IOS-SUB-011 quota.
+- New screens must reuse OfflineBanner/NetworkMonitor/QueryCache and the unified card system.
+
+iOS build/verify convention for every story: cd ios && xcodegen generate && xcodebuild
+-scheme DesMoinesInsider build, plus keep DesMoinesInsiderTests / UITests green.
+---
+
+## 2026-05-31 — IOS-IA-001 (content-first Home + data-driven rails) [awaiting CI build]
+
+Redesigned the Home tab so the first screenful is content, not a stack of
+promotional CTA cards.
+
+Files added:
+- ios/DesMoinesInsider/Views/Home/HomeSections.swift (631 lines) — all Home
+  feed building blocks: WaysToExploreRow, the data-driven HomeRail enum +
+  HomeRailsView, HomeRailHeader, HomeEventRail / HomeRestaurantRail /
+  HomeAttractionRail, HomeRailSkeleton + HomeRailEmpty (non-collapsing
+  loading/empty states), and the card structs moved out of HomeView
+  (CompactRestaurantCard, CompactAttractionCard [new], FeaturedEventCard,
+  EventCardSkeleton).
+
+Files modified:
+- ios/DesMoinesInsider/Views/Home/HomeView.swift (820 -> 398 lines) — removed
+  the four full-width CTA cards (askPulseEntryBar, surpriseMeButton,
+  discoverHeroCard, exploreAttractionsCard) and the inline featured/restaurant
+  sections + duplicated card structs. New order: header -> RightNowRibbon ->
+  WaysToExploreRow (one compact row) -> smart presets -> inline filters ->
+  HomeRailsView (data-driven) -> events list. Added attractionsVM + a
+  dedicated weekendVM (date-scoped to .thisWeekend). Rails are hidden while
+  the user is actively filtering so the feed collapses to filtered results.
+  "See all" routes via handleSeeAll().
+- ios/DesMoinesInsider/Models/Attraction.swift — added
+  compactCardAccessibilityLabel mirroring Restaurant's, used by the new
+  CompactAttractionCard.
+
+Design decisions:
+- Rail order is data-driven ([HomeRail] passed to HomeRailsView, default
+  .allCases) precisely so IOS-IA-006 can personalize the sequence without
+  another layout refactor. fromBlog is intentionally not in allCases until
+  the Articles hub (IOS-PARITY-002) exists.
+- Ad slots are interleaved at deterministic rail indices (after rail 1 and 3)
+  rather than a single hard-coded AdSlot, so IOS-ADS-012 can swap them for
+  native in-feed ad cards without moving call sites. AdSlot still renders
+  nothing for subscribers.
+- Each rail owns its own loading (HomeRailSkeleton, mirrors card shape so no
+  layout jump) and empty (HomeRailEmpty, stays visible) state — no
+  all-or-nothing spinner across the feed.
+- XcodeGen picks up the new file automatically (project.yml sources glob is
+  the whole DesMoinesInsider dir), so no project.yml change needed.
+
+Verification status:
+- No Swift/Xcode toolchain in the Linux dev container, so the acceptance
+  "xcodebuild build" gate runs in the ios-native-build CI workflow on macOS,
+  NOT here. Verified statically instead: balanced delimiters, no duplicate
+  type definitions (each moved struct defined exactly once), all referenced
+  APIs confirmed to exist with matching signatures (glassCard, CategoryBadge,
+  ToastMessage, Skeleton.block/bar, EventInlineFilters/@Bindable,
+  RightNowRibbon closure, FavoritesService not needed here). Leaving
+  passes:false until CI confirms the compile; will flip to true on green.
+
+**Learnings for future iterations:**
+- When extracting `private struct`s out of a 800+ line SwiftUI View into a
+  shared file, drop the `private` (they become internal) and grep the whole
+  target for same-named types first — SwiftUI codebases often have parallel
+  card types per feature that would collide.
+- The Home tab already had strong native-only discovery surfaces (Ask Pulse,
+  Swipe, Surprise Me); the problem was never missing features, it was four
+  full-width CTAs stacked above the content. Consolidating them into one
+  horizontal "Ways to explore" row is the single highest-leverage layout fix.
+- EventsViewModel is cheap to instantiate twice (main feed + weekend rail);
+  setting .selectedDatePreset triggers its own debounced fetch via didSet, so
+  the weekend rail needs no bespoke fetch path.
+---
+
+## 2026-05-31 — IOS-IA-002 (Discover hub + IA for full web parity) [awaiting CI build]
+
+Information architecture for reaching every web surface without overflowing the
+6-item iPhone tab bar.
+
+IA decision (source of truth lives in DiscoverHubView.swift header):
+- Primary tabs stay lean and UNCHANGED (Home, Dining, Search, Map, Saved,
+  Profile). Did NOT drop Search or Map for a Discover tab — both are high-use
+  and Apple HIG caps comfortable iPhone tabs at ~5.
+- Discover is a hub screen reached from Home (new "Discover" tile in
+  WaysToExploreRow) on iPhone, and a first-class sidebar item on iPad.
+- Every parity feature is a tile in the hub: Trip Planner, Articles & Guides,
+  Where to Stay, This Weekend, Best Of, Music, Sports, Outdoors, Neighborhoods,
+  Deals. Each routes to ComingSoonView (with a web fallback) until its
+  IOS-PARITY-* story swaps in the native screen — nothing is a dead end.
+
+Files added:
+- ios/DesMoinesInsider/Views/Discover/DiscoverHubView.swift (224 lines) —
+  DiscoverHubView (ownsNavigationStack flag so it can borrow Home's stack when
+  pushed, or own one as an iPad sheet) + DiscoverDestination enum (title,
+  subtitle, icon, gradient, slug, init?(slug:), webURL, destinationView) +
+  DiscoverTile grid cell.
+- ios/DesMoinesInsider/Views/Components/ComingSoonView.swift (48 lines) —
+  reusable placeholder with an "Open on the web" sheet (WebViewPage) so parity
+  content is reachable today before native screens land.
+
+Files modified:
+- Views/Home/HomeView.swift — added HomeDestination.discoverHub case +
+  navigationDestination that pushes DiscoverHubView(ownsNavigationStack: false).
+- Views/Home/HomeSections.swift — WaysToExploreRow now has a "Discover" tile
+  (-> hub) and an "Attractions" tile (-> attractions); previously the single
+  "Explore" tile only reached attractions.
+- Views/MainTabView.swift — iPad sidebar gets a dedicated Discover section that
+  presents DiscoverHubView as a sheet.
+- Services/DeepLinkHandler.swift — added Destination.discover(DiscoverDestination)
+  and parsing for both universal links (desmoinesinsider.com/<slug>, e.g.
+  /trip-planner, /deals — handled in both the single-segment root branch and the
+  default branch) and custom scheme (com.desmoines.aipulse://discover/<slug>).
+  Stable routes per parity surface via DiscoverDestination.slug.
+
+Verification status:
+- Same as IOS-IA-001: no Swift toolchain locally; xcodebuild gate runs in macOS
+  CI. Static checks pass — balanced delimiters across all 7 touched files,
+  exhaustive HomeDestination switch, no duplicate symbols, WebViewPage label
+  order matches existing SettingsView usage. passes:false until CI is green.
+
+**Learnings / flags for future iterations:**
+- PRE-EXISTING DRIFT (not introduced here, do not blame this PR): 
+  DesMoinesInsiderTests/DeepLinkHandlerTests.swift calls `handler.handle(url:)`
+  (labeled) with scheme `dsminsider://`, but DeepLinkHandler implements
+  `handle(_ url:)` (unlabeled) and matches scheme `com.desmoines.aipulse`
+  (Config.appBundleId). Those tests cannot compile/pass against the current
+  implementation — the test file predates a refactor of the handler. I did NOT
+  add new tests in that broken pattern and did NOT change the handler signature
+  (additive changes only). Worth a dedicated chore: reconcile the test's
+  expected scheme/label with the implementation (or vice-versa). Also note:
+  DeepLinkHandler is defined + (intended to be) tested but is NOT yet consumed
+  in DesMoinesInsiderApp.onOpenURL (only Supabase's client.handle(url) is wired
+  there), so the .discover route is parseable but app-level navigation to it is
+  separate pre-existing debt.
+- ComingSoonView + DiscoverDestination.destinationView is the seam every
+  IOS-PARITY-* story plugs into: replace the one `destinationView` case with the
+  real screen, delete nothing else. Keeps those stories small and isolated.
 ---

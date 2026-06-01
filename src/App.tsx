@@ -183,6 +183,20 @@ const AdminGscCallback = lazyWithRetry(() => import("./pages/AdminGscCallback"))
 const AdminSecurity = lazyWithRetry(() => import("./pages/AdminSecurity"));
 const AdminSystem = lazyWithRetry(() => import("./pages/AdminSystem"));
 const AdminMedia = lazyWithRetry(() => import("./pages/AdminMedia"));
+// Admin Backend Overhaul (PRD: feat/admin-backend-overhaul) — stubs until each
+// story fleshes the dedicated page out. See AdminPlaceholder for the shell.
+const AdminHotels = lazyWithRetry(() => import("./pages/AdminHotels"));
+const AdminAttractions = lazyWithRetry(() => import("./pages/AdminAttractions"));
+const AdminPlaygrounds = lazyWithRetry(() => import("./pages/AdminPlaygrounds"));
+const AdminSocial = lazyWithRetry(() => import("./pages/AdminSocial"));
+const AdminEmail = lazyWithRetry(() => import("./pages/AdminEmail"));
+const AdminDeals = lazyWithRetry(() => import("./pages/AdminDeals"));
+const AdminPartnerships = lazyWithRetry(() => import("./pages/AdminPartnerships"));
+const AdminFeedback = lazyWithRetry(() => import("./pages/AdminFeedback"));
+const AdminTrending = lazyWithRetry(() => import("./pages/AdminTrending"));
+const AdminEventSubmissions = lazyWithRetry(
+  () => import("./pages/AdminEventSubmissions"),
+);
 const BestOf = lazyWithRetry(() => import("./pages/BestOf"));
 const BestOfCategory = lazyWithRetry(() => import("./pages/BestOfCategory"));
 const WhatsNew = lazyWithRetry(() => import("./pages/WhatsNew"));
@@ -291,6 +305,17 @@ const App = () => (
             <Route path="/admin/system" element={<ProtectedRoute requireAdmin><AdminSystem /></ProtectedRoute>} />
             <Route path="/admin/media" element={<ProtectedRoute requireAdmin><AdminMedia /></ProtectedRoute>} />
             <Route path="/admin/menus" element={<ProtectedRoute requireAdmin><AdminMenus /></ProtectedRoute>} />
+            {/* Admin Backend Overhaul routes — stubs until each story replaces the page */}
+            <Route path="/admin/hotels" element={<ProtectedRoute requireAdmin><AdminHotels /></ProtectedRoute>} />
+            <Route path="/admin/attractions" element={<ProtectedRoute requireAdmin><AdminAttractions /></ProtectedRoute>} />
+            <Route path="/admin/playgrounds" element={<ProtectedRoute requireAdmin><AdminPlaygrounds /></ProtectedRoute>} />
+            <Route path="/admin/social" element={<ProtectedRoute requireAdmin><AdminSocial /></ProtectedRoute>} />
+            <Route path="/admin/email" element={<ProtectedRoute requireAdmin><AdminEmail /></ProtectedRoute>} />
+            <Route path="/admin/deals" element={<ProtectedRoute requireAdmin><AdminDeals /></ProtectedRoute>} />
+            <Route path="/admin/partnerships" element={<ProtectedRoute requireAdmin><AdminPartnerships /></ProtectedRoute>} />
+            <Route path="/admin/feedback" element={<ProtectedRoute requireAdmin><AdminFeedback /></ProtectedRoute>} />
+            <Route path="/admin/trending" element={<ProtectedRoute requireAdmin><AdminTrending /></ProtectedRoute>} />
+            <Route path="/admin/event-submissions" element={<ProtectedRoute requireAdmin><AdminEventSubmissions /></ProtectedRoute>} />
             <Route path="/restaurants" element={<Restaurants />} />
             {/* Restaurant SEO hub pages */}
             <Route path="/restaurants/open-now" element={<OpenNowRestaurants />} />

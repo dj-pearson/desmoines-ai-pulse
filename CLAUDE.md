@@ -184,14 +184,138 @@ tsx scripts/backfill-coordinates.ts   # backfill lat/lng
 node scripts/generate-sitemap.js
 ```
 
-## Branch & Commit Strategy
+## Critical Rules
 
-- `main` — production (protected)
-- `develop` — development (protected)
-- `feature/*`, `fix/*`, `docs/*` — work branches
-- `claude/*` — AI-generated branches
+These override anything else in this file. Read before doing work.
 
-Conventional commits: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`, `perf:`.
+### Branch first, code second
+
+Before writing or pushing code on any non-trivial task, **confirm the target branch with the user**. Map the request phrasing to a branch type:
+
+| Phrase the user used | Target branch | Branched from |
+|---|---|---|
+| "production bug", "live site is broken", "users are seeing X right now", "hotfix" | `hotfix/<short-slug>` | `main` |
+| "new feature", "add", "build", "let's prototype", "experimental" | `claude/<slug>` or `feat/<slug>` | `develop` |
+| "release prep", "cut a release", "ship v1.4", "submit to App Store" | `release/x.y.z` | `develop` |
+| "fix on develop", "fix the staging bug", "in-flight feature is broken" | `fix/<slug>` (off `develop`) | `develop` |
+| "docs", "update README", "tweak CLAUDE.md" | `docs/<slug>` | `develop` (or `main` if it's a hotfix-style doc correction) |
+| "chore", "bump deps", "rename folder" | `chore/<slug>` | `develop` |
+
+If ambiguous (e.g. "fix the events page" — is it broken in prod, or only on develop?), **ask** before branching. Never assume.
+
+### Never do these (rulesets will block, but don't try)
+
+- Force-push to `main`, `develop`, `release/*`, or `hotfix/*`.
+- Delete `main`, `develop`, `release/*`, or `hotfix/*`.
+- Commit directly to `main` or `develop` — always via PR.
+- Merge `develop` straight to `main` — releases go through `release/x.y.z` (or `hotfix/*` for emergencies).
+- Skip pre-commit / CI hooks with `--no-verify` (see top of this file).
+- Ship a destructive DB migration (DROP COLUMN, NOT NULL tightening, enum value removal, RPC arg removal) in the same release that introduces the new shape. See **Backward Compatibility** below.
+
+## Branching & Release
+
+This project has **three live client surfaces** (web, iOS app, Android app) and one shared backend (Supabase). The branching model has to keep older mobile clients working while web ships continuously.
+
+### Branch → deploy surface map
+
+| Branch / pattern | Deploys to | Purpose |
+|---|---|---|
+| `main` | **Web prod** (Cloudflare Pages auto-deploys on push). Tagged releases trigger mobile store submissions via `workflow_dispatch`. | Production. Merge-only, never commit directly. Every merge is a deployable state. |
+| `develop` | Web preview / staging (Cloudflare Pages preview deploys per commit). Internal-only mobile builds (TestFlight internal / Play internal track) cut from here on demand. | Long-lived integration branch. All non-emergency work lands here first. |
+| `release/x.y.z` | Web prod **candidate** (preview URL); mobile store submission candidate (TestFlight external / Play closed testing). | Release stabilization: only bug fixes, version bumps, store metadata. No new features. Tag `vX.Y.Z` on merge to `main`. |
+| `hotfix/<slug>` | Direct fast-path to prod, skipping queued features on `develop`. Web deploys when merged to `main`; mobile may need an out-of-band store submission. | Emergency-only. Branch from `main`, PR into `main` AND `develop`. |
+| `claude/<slug>`, `feat/<slug>`, `fix/<slug>`, `docs/<slug>`, `chore/<slug>` | PR previews only. | Work branches. Branch from `develop`, PR back to `develop`. |
+
+### Rules of thumb
+
+- **Hotfixes branch from `main`, not `develop`.** `develop` may contain unreleased features you don't want to ship as part of a hotfix. After merging the hotfix to `main`, also merge `main` → `develop` (or cherry-pick the hotfix into `develop`) so the fix isn't lost on the next release.
+- **Web ships independently of mobile.** A web-only change goes through the normal `feat/* → develop → release/x.y.z → main` flow and deploys to Cloudflare Pages on merge to `main`. Mobile workflows are `workflow_dispatch`-only and don't trigger.
+- **Mobile review in flight ≠ frozen web.** While iOS/Android are in App Store/Play review, keep cutting `release/*` for web on the same cadence — just don't bump the mobile binary version until the previous one clears review.
+- **Tag releases on `main`.** Pattern: `vX.Y.Z` (web), `ios-vX.Y.Z+build`, `android-vX.Y.Z+code`. Mobile release workflows take version inputs explicitly; tags are documentation, not triggers.
+- **`develop` → `main` is only legal via a `release/x.y.z` branch.** Don't open a `develop` → `main` PR directly.
+- **`release/x.y.z` accepts merges only from `develop`** (cut point) and small fix-up PRs branched from `release/x.y.z` itself. No `feat/*` PRs into `release/*`.
+- **`MIN_SUPPORTED_APP_VERSION`** (defined in `supabase/functions/_shared/`, see Backward Compatibility) is load-bearing — older iOS/Android binaries still in the wild rely on the backend keeping shapes they read.
+
+### Conventional commits
+
+`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`, `perf:`. Scope is encouraged: `feat(events): …`, `fix(ios): …`.
+
+## Backward Compatibility — Persistent State
+
+Three surfaces carry persistent state that older clients depend on. All three follow the same multi-release deprecation flow.
+
+### The deprecation flow (memorize this)
+
+1. **Release N**: add the new shape alongside the old. Dual-write (server populates both). Old readers keep working.
+2. **Release N+1**: migrate readers (web + new mobile binaries) to the new shape. Old shape is still populated but unused by new code.
+3. **Release N+M** (where `M` is large enough that `MIN_SUPPORTED_APP_VERSION` ≥ the binary shipped in N+1): retire the old shape. Now safe to drop.
+
+Never compress these steps into a single release while live clients exist.
+
+### 1. Supabase Postgres (the database)
+
+**Always safe in a single release:**
+- `CREATE TABLE`
+- `ADD COLUMN ... NULL` (no default that forces a table rewrite on big tables)
+- `CREATE INDEX CONCURRENTLY`
+- `CREATE OR REPLACE FUNCTION` that **adds** an optional parameter (with default) or **adds** a returned column
+- New RLS policy that loosens access; new view; new enum **value** (additive only)
+
+**Never do in a single release** (split across releases per the flow above):
+- `DROP COLUMN` / `DROP TABLE` / `DROP TYPE`
+- `RENAME COLUMN` / `RENAME TABLE` (drops the old name from the client's POV)
+- Tightening: adding `NOT NULL` to an existing column, tightening a `CHECK`, narrowing a type (`text → varchar(50)`), changing default values that affect existing rows
+- **Removing** an enum value (Postgres can't even do this directly; requires a type swap)
+- Changing or removing a function/RPC parameter (old clients still send it)
+- Reducing a function's return columns
+- Tightening an RLS policy in a way that would deny reads/writes the old client expects to succeed
+
+**Rule:** every migration in `supabase/migrations/` that does any of the "never" items must be paired with a prior migration (in an earlier release) that introduced the replacement and switched the writers.
+
+### 2. Supabase Edge Functions (the API contract)
+
+73 edge functions in `supabase/functions/`. Each one is a versioned API surface — older mobile binaries call them by name with the request shape that shipped with that binary.
+
+**Always safe:**
+- New endpoint (new function directory)
+- New optional request field (must default cleanly when absent)
+- New response field (older clients ignore unknown keys)
+
+**Never in a single release:**
+- Renaming or removing an endpoint
+- Removing or renaming a request field
+- Removing a response field that any shipped binary reads
+- Tightening validation (e.g. `validateInput` rejecting a value previously accepted)
+- Changing an HTTP status code an older client branches on
+- Tightening rate limits below what an older client retries against
+
+**Deprecation path:** add `v2` endpoint → switch web + new mobile binaries → wait until `MIN_SUPPORTED_APP_VERSION` ≥ the binary using `v2` → retire `v1`.
+
+### 3. Mobile app store binaries (iOS / Android)
+
+Define and maintain a `MIN_SUPPORTED_APP_VERSION` constant per platform (recommended location: `supabase/functions/_shared/minSupportedVersions.ts`, returned by a `version-check` edge function the apps call on launch). Any data shape, edge function, or RPC any binary `≥ MIN_SUPPORTED_APP_VERSION` still reads is load-bearing.
+
+**Always safe:**
+- Adding a new screen / feature behind a remote config flag
+- Adding a new field to a response (clients ignore unknowns)
+
+**Never in a single release:**
+- Removing a feature an older binary tries to call without first updating `MIN_SUPPORTED_APP_VERSION` to exclude that binary
+- Adding a required request field older binaries don't send
+- Changing the auth/session shape (`profiles` table, `subscription_tier` enum, JWT claims) without a dual-shape transition
+
+**Force-update flow:** when you genuinely need to retire a binary, bump `MIN_SUPPORTED_APP_VERSION` in a release ≥ 2 weeks before the destructive change. The `version-check` endpoint should return a force-upgrade payload that older binaries display as a blocking screen. (Not yet implemented — see follow-up at the bottom of this file.)
+
+### 4. On-disk / client-stored state
+
+- **`localStorage`** (via `@/lib/safeStorage`): treat saved keys as a schema. Don't rename keys; if the shape changes, write to a new key and migrate-on-read with a fallback to the old key for one release.
+- **Cookies / session storage**: same rule.
+- **URL params and route shapes**: external links and the sitemap reference these. Don't remove or rename a public route without a 301 redirect kept in place for ≥ 1 release cycle.
+
+### Branch protection backs this up
+
+`release/*` and `hotfix/*` are protected (see `.github/rulesets/`) so destructive migrations can't be slipped in via direct push — they have to go through a reviewed PR where the deprecation flow is checked.
+
 
 ## Deployment
 

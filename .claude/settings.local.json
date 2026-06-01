@@ -83,7 +83,14 @@
       "Bash(sed -n '950,960p' \"C:\\\\Users\\\\dpearson\\\\Documents\\\\Des-Moines-Insider\\\\Des-Moines-Insider\\\\desmoines-ai-pulse\\\\supabase\\\\functions\\\\firecrawl-scraper\\\\index.ts\")",
       "Bash(sed -n '1068,1074p' \"C:\\\\Users\\\\dpearson\\\\Documents\\\\Des-Moines-Insider\\\\Des-Moines-Insider\\\\desmoines-ai-pulse\\\\supabase\\\\functions\\\\firecrawl-scraper\\\\index.ts\")",
       "Bash(sed -i '953,1070d' \"C:\\\\Users\\\\dpearson\\\\Documents\\\\Des-Moines-Insider\\\\Des-Moines-Insider\\\\desmoines-ai-pulse\\\\supabase\\\\functions\\\\firecrawl-scraper\\\\index.ts\")",
-      "Bash(sed -n '948,958p' \"C:\\\\Users\\\\dpearson\\\\Documents\\\\Des-Moines-Insider\\\\Des-Moines-Insider\\\\desmoines-ai-pulse\\\\supabase\\\\functions\\\\firecrawl-scraper\\\\index.ts\")"
+      "Bash(sed -n '948,958p' \"C:\\\\Users\\\\dpearson\\\\Documents\\\\Des-Moines-Insider\\\\Des-Moines-Insider\\\\desmoines-ai-pulse\\\\supabase\\\\functions\\\\firecrawl-scraper\\\\index.ts\")",
+      "Bash(magick --version)",
+      "Bash(git fetch *)",
+      "Bash(git checkout *)",
+      "Bash(git commit *)",
+      "Bash(git restore *)",
+      "Bash(git ls-remote *)",
+      "Bash(awk '/^      events: \\\\{/,/^      [a-z]+: \\\\{/' src/integrations/supabase/types.ts)"
     ],
     "deny": [],
     "ask": []
