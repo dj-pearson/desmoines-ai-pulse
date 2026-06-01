@@ -1,10 +1,25 @@
 import SwiftUI
 
-/// Main home/feed view with featured events, popular restaurants, smart
-/// presets, inline filter pills, and event list.
+/// Main home/feed view. Content-first layout (IOS-IA-001):
+///
+/// 1. Right Now ribbon (weather-aware contextual entry)
+/// 2. A single compact "Ways to explore" row (Ask Pulse / Swipe / Surprise /
+///    Explore) — replaces the four full-width CTA cards that used to push real
+///    content below the fold.
+/// 3. Smart presets + inline filter pills
+/// 4. Data-driven content rails (`HomeRailsView`) with interleaved ad slots
+/// 5. The main, paginated events list
+///
+/// The rail order is data-driven so IOS-IA-006 can personalize the sequence
+/// without touching layout. Each rail owns its own loading/empty state, so a
+/// slow source never blocks the rest of the feed.
 struct HomeView: View {
     @State private var viewModel = EventsViewModel()
     @State private var restaurantsVM = RestaurantsViewModel()
+    @State private var attractionsVM = AttractionsViewModel()
+    /// Dedicated VM for the "This Weekend" rail so its date-scoped query is
+    /// independent of the user's filtering on the main events feed.
+    @State private var weekendVM = EventsViewModel()
     @State private var navigationPath = NavigationPath()
     @State private var toast: ToastMessage?
     @State private var showScrollToTop = false
@@ -33,26 +48,18 @@ struct HomeView: View {
                     .padding(.horizontal)
                     .padding(.top, 10)
 
-                    // Ask Pulse entry — primary AI discovery surface
-                    askPulseEntryBar
-                        .padding(.horizontal)
-                        .padding(.top, 10)
-
-                    surpriseMeButton
-                        .padding(.horizontal)
-                        .padding(.top, 10)
-
-                    discoverHeroCard
-                        .padding(.horizontal)
-                        .padding(.top, 10)
-
-                    exploreAttractionsCard
-                        .padding(.horizontal)
-                        .padding(.top, 10)
+                    // Consolidated discovery entry points — one compact row
+                    // instead of four stacked full-width cards.
+                    WaysToExploreRow(
+                        onAskPulse: { showAskPulse = true },
+                        onSwipe: { showDiscover = true },
+                        onSurprise: { showSurpriseMe = true }
+                    )
+                    .padding(.top, 12)
 
                     // Smart Presets — one-tap event scenarios
                     EventSmartPresets(viewModel: viewModel)
-                        .padding(.top, 6)
+                        .padding(.top, 10)
 
                     // Inline filter pills — always visible, no hidden sheet
                     EventInlineFilters(viewModel: viewModel)
@@ -63,20 +70,17 @@ struct HomeView: View {
                         errorBanner(error)
                     }
 
-                    // For You rail (or Trending fallback for cold-start users)
-                    ForYouRail()
-                        .padding(.top, 4)
-
-                    if !viewModel.featuredEvents.isEmpty {
-                        featuredSection
-                    }
-
-                    // Ad banner for free users (hidden for subscribers — ad-free experience)
-                    AdSlot(.feed)
-
-                    // Popular Restaurants
-                    if !restaurantsVM.restaurants.isEmpty {
-                        restaurantsSection
+                    // Data-driven content rails with interleaved ad slots.
+                    // Hidden while the user is actively filtering so the feed
+                    // collapses to just their filtered results.
+                    if viewModel.activeFilterCount == 0 {
+                        HomeRailsView(
+                            eventsVM: viewModel,
+                            restaurantsVM: restaurantsVM,
+                            attractionsVM: attractionsVM,
+                            weekendVM: weekendVM,
+                            onSeeAll: handleSeeAll
+                        )
                     }
 
                     activeFiltersBar
@@ -94,7 +98,9 @@ struct HomeView: View {
             .refreshable {
                 async let eventsRefresh: () = viewModel.refresh()
                 async let restaurantsRefresh: () = restaurantsVM.refresh()
-                _ = await (eventsRefresh, restaurantsRefresh)
+                async let attractionsRefresh: () = attractionsVM.refresh()
+                async let weekendRefresh: () = weekendVM.refresh()
+                _ = await (eventsRefresh, restaurantsRefresh, attractionsRefresh, weekendRefresh)
                 if viewModel.errorMessage == nil {
                     UINotificationFeedbackGenerator().notificationOccurred(.success)
                 } else {
@@ -145,65 +151,44 @@ struct HomeView: View {
             .navigationDestination(for: HomeDestination.self) { destination in
                 switch destination {
                 case .attractions: AttractionsView()
+                case .discoverHub:
+                    // Pushed within Home's NavigationStack, so the hub borrows
+                    // this ambient stack rather than nesting its own.
+                    DiscoverHubView(ownsNavigationStack: false)
                 }
             }
             .task {
                 async let eventsLoad: () = viewModel.loadInitialData()
                 async let restaurantsLoad: () = restaurantsVM.loadInitialData()
-                _ = await (eventsLoad, restaurantsLoad)
+                async let attractionsLoad: () = attractionsVM.loadInitialData()
+                _ = await (eventsLoad, restaurantsLoad, attractionsLoad)
+                // "This Weekend" rail — scope a separate VM to the weekend.
+                if weekendVM.events.isEmpty {
+                    weekendVM.selectedDatePreset = .thisWeekend
+                }
             }
             .toastOverlay(message: $toast)
         }
     }
 
-    // MARK: - Discover Hero Card
+    // MARK: - See All routing
 
-    /// Top-of-feed CTA into the swipe-to-discover deck. Mirrors the
-    /// Explore Attractions card's structure so the home feed reads as a
-    /// row of CTAs above the smart presets.
-    // MARK: - Surprise Me (IOS-DISCOVER-2026-008)
-
-    /// Full-width "decide for me" CTA. Visually distinct from Discover via
-    /// the die icon + purple accent so users grok it as the "no browsing,
-    /// no filtering" affordance.
-    private var surpriseMeButton: some View {
-        Button {
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
-            showSurpriseMe = true
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "die.face.5.fill")
-                    .font(.title2)
-                    .foregroundStyle(.white)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Surprise Me")
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                    Text("One pick. One reason. No browsing.")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.85))
-                }
-                Spacer()
-                Image(systemName: "sparkles")
-                    .foregroundStyle(.white.opacity(0.85))
-                    .accessibilityHidden(true)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 14)
-            .frame(maxWidth: .infinity)
-            .background(
-                LinearGradient(
-                    colors: [.purple, .indigo],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing,
-                ),
-                in: RoundedRectangle(cornerRadius: 14),
-            )
+    /// Routes a rail's "See all" tap. Events-based rails reuse the Home tab's
+    /// own list (applying the matching filter); cross-type rails push the
+    /// relevant browse screen. When the native hubs land (IOS-PARITY-004 for
+    /// Weekend), the .thisWeekend case will deep-link there instead.
+    private func handleSeeAll(_ rail: HomeRail) {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        switch rail {
+        case .featured:
+            viewModel.showFeaturedOnly = true
+        case .thisWeekend:
+            viewModel.selectedDatePreset = .thisWeekend
+        case .popularRestaurants, .trendingAttractions:
+            navigationPath.append(HomeDestination.attractions)
+        case .forYou:
+            break
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Surprise Me. One pick, one reason, no browsing.")
-        .accessibilityHint("Opens a single committed recommendation")
     }
 
     // MARK: - Sort Menu (IOS-DISCOVER-2026-003)
@@ -235,106 +220,6 @@ struct HomeView: View {
         .accessibilityLabel("Sort: \(viewModel.sortBy.rawValue)")
     }
 
-    // MARK: - Ask Pulse Entry
-
-    /// Search-bar-styled CTA that opens AskPulseView. Sits above the swipe
-    /// hero so it reads as the primary discovery entry. Implements the
-    /// iOS half of IOS-DISCOVER-2026-001.
-    private var askPulseEntryBar: some View {
-        Button {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            showAskPulse = true
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: "sparkles")
-                    .foregroundStyle(.tint)
-                    .accessibilityHidden(true)
-                Text("Ask Pulse — date night, walkable, under $60…")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                Spacer()
-                Image(systemName: "arrow.up.right.circle.fill")
-                    .foregroundStyle(.tint)
-                    .accessibilityHidden(true)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(Color(.secondarySystemGroupedBackground))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(Color.accentColor.opacity(0.25), lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Ask Pulse — describe what you're looking for and get curated picks")
-        .accessibilityHint("Opens the conversational discovery view")
-    }
-
-    private var discoverHeroCard: some View {
-        Button {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            showDiscover = true
-        } label: {
-            HStack(spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(PremiumTokens.brandGradient)
-                        .frame(width: 56, height: 56)
-                    Image(systemName: "rectangle.stack.fill")
-                        .font(.title)
-                        .foregroundStyle(.white)
-                }
-
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 6) {
-                        Text("Swipe to Discover")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.primary)
-                        Text("NEW")
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.pink, in: Capsule())
-                    }
-                    Text("Don't know what to do tonight? Swipe through hand-picked events and dining.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-                }
-
-                Spacer(minLength: 0)
-
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color(.systemBackground))
-                    .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 2)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .strokeBorder(
-                        LinearGradient(colors: [.purple.opacity(0.4), .blue.opacity(0.4)],
-                                       startPoint: .topLeading, endPoint: .bottomTrailing),
-                        lineWidth: 1
-                    )
-            )
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Swipe to discover. Don't know what to do tonight? Swipe through hand-picked events and dining.")
-        .accessibilityHint("Opens the swipe discovery deck")
-    }
-
     /// Snapshot the events viewmodel's filter state into a DiscoverFilterContext
     /// so a user who's filtered the home feed (e.g. category=Music) gets their
     /// filter carried into the swipe deck.
@@ -345,57 +230,6 @@ struct HomeView: View {
         f.freeOnly = viewModel.showFreeOnly
         f.locations = Array(viewModel.selectedCities)
         return f
-    }
-
-    // MARK: - Explore Attractions Entry Point
-
-    /// Primary entry point to the Attractions browse screen. Tab bar is already
-    /// at 6 items on iPhone, so Attractions lives here as an "Explore" CTA on
-    /// the Home tab rather than a 7th tab.
-    private var exploreAttractionsCard: some View {
-        Button {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            navigationPath.append(HomeDestination.attractions)
-        } label: {
-            HStack(spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(
-                            LinearGradient(
-                                colors: [Color.purple.opacity(0.85), Color.pink.opacity(0.7)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 56, height: 56)
-
-                    Image(systemName: "star.circle.fill")
-                        .font(.title)
-                        .foregroundStyle(.white)
-                }
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Explore Attractions")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.primary)
-                    Text("Museums, parks, and must-see places")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(12)
-            .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 14))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Explore attractions. Museums, parks, and must-see places.")
-        .accessibilityHint("Opens the attractions browse screen")
     }
 
     // MARK: - Header
@@ -415,68 +249,6 @@ struct HomeView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal)
         .padding(.top, 4)
-    }
-
-    // MARK: - Featured Section
-
-    private var featuredSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Label("Featured", systemImage: "star.fill")
-                    .font(.headline)
-                    .foregroundStyle(.orange)
-                Spacer()
-            }
-            .padding(.horizontal)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 14) {
-                    ForEach(viewModel.featuredEvents) { event in
-                        Button {
-                            navigationPath.append(event)
-                        } label: {
-                            FeaturedEventCard(event: event)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(event.featuredCardAccessibilityLabel)
-                        .accessibilityHint("Double-tap to view event details")
-                    }
-                }
-                .padding(.horizontal)
-            }
-        }
-        .padding(.vertical, 8)
-    }
-
-    // MARK: - Popular Restaurants Section
-
-    private var restaurantsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Label("Popular Restaurants", systemImage: "fork.knife")
-                    .font(.headline)
-                    .foregroundStyle(.orange)
-                Spacer()
-            }
-            .padding(.horizontal)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 14) {
-                    ForEach(restaurantsVM.restaurants.prefix(10)) { restaurant in
-                        Button {
-                            navigationPath.append(restaurant)
-                        } label: {
-                            CompactRestaurantCard(restaurant: restaurant)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(restaurant.compactCardAccessibilityLabel)
-                        .accessibilityHint("Double-tap to view restaurant details")
-                    }
-                }
-                .padding(.horizontal)
-            }
-        }
-        .padding(.vertical, 8)
     }
 
     // MARK: - Error Banner
@@ -616,196 +388,6 @@ struct HomeView: View {
 
 }
 
-// MARK: - Compact Restaurant Card (for home feed horizontal scroll)
-
-private struct CompactRestaurantCard: View {
-    let restaurant: Restaurant
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            CachedAsyncImage(url: restaurant.imageUrl) {
-                ZStack {
-                    Rectangle().fill(Color.orange.opacity(0.15).gradient)
-                    Image(systemName: "fork.knife")
-                        .font(.title2)
-                        .foregroundStyle(.orange.opacity(0.3))
-                }
-            }
-            .frame(width: 180, height: 110)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-
-            Text(restaurant.name)
-                .font(.subheadline.weight(.semibold))
-                .lineLimit(1)
-
-            HStack(spacing: 6) {
-                if let cuisine = restaurant.cuisine {
-                    Text(cuisine)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                if let price = restaurant.priceRange {
-                    Text(price)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.green)
-                }
-
-                Spacer()
-
-                if let rating = restaurant.rating {
-                    HStack(spacing: 2) {
-                        Image(systemName: "star.fill")
-                            .font(.caption2)
-                            .foregroundStyle(.yellow)
-                        Text(String(format: "%.1f", rating))
-                            .font(.caption2.weight(.medium))
-                    }
-                }
-            }
-        }
-        .frame(width: 180)
-        // Suppress redundant child reads — full label set on the Button wrapper above
-        .accessibilityElement(children: .ignore)
-        .accessibilityHidden(true)
-    }
-}
-
-// MARK: - Featured Event Card
-
-private struct FeaturedEventCard: View {
-    let event: Event
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Image with scrim for legibility
-            ZStack(alignment: .bottomLeading) {
-                CachedAsyncImage(url: event.imageUrl) {
-                    Rectangle()
-                        .fill(event.eventCategory.color.gradient)
-                }
-                .frame(width: 260, height: 150)
-                .overlay(PremiumTokens.imageScrim)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
-                .glassCard(cornerRadius: 14, material: .regularMaterial, elevation: PremiumTokens.elevation4)
-
-                // Category badge
-                CategoryBadge(category: event.eventCategory)
-                    .padding(10)
-            }
-
-            // Title
-            Text(event.title)
-                .font(.subheadline.weight(.semibold))
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
-
-            // Date & Location
-            HStack(spacing: 4) {
-                if let date = event.parsedDate {
-                    Image(systemName: "calendar")
-                        .font(.caption2)
-                    Text(date.formatted(.dateTime.month(.abbreviated).day()))
-                        .font(.caption)
-                }
-
-                Spacer()
-
-                if event.isFree {
-                    // Uses icon + text so colour alone is not the only differentiator
-                    Label("FREE", systemImage: "ticket")
-                        .font(.caption2.bold())
-                        .foregroundStyle(.green)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.green.opacity(0.15), in: Capsule())
-                }
-            }
-            .foregroundStyle(.secondary)
-        }
-        .frame(width: 260)
-        // Suppress redundant child reads — full label set on the Button wrapper above
-        .accessibilityElement(children: .ignore)
-        .accessibilityHidden(true)
-    }
-}
-
-// MARK: - Skeleton (matches EventCardView layout)
-
-private struct EventCardSkeleton: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Image area with overlays
-            ZStack(alignment: .topTrailing) {
-                RoundedRectangle(cornerRadius: 0)
-                    .fill(Color(.systemGray5))
-                    .frame(height: 180)
-
-                VStack(alignment: .trailing, spacing: 6) {
-                    // Favorite button placeholder
-                    Circle()
-                        .fill(Color(.systemGray4))
-                        .frame(width: 36, height: 36)
-
-                    Spacer()
-
-                    // Date badge placeholder
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color(.systemGray4))
-                        .frame(width: 48, height: 52)
-                }
-                .padding(10)
-
-                // Category badge placeholder
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(Color(.systemGray4))
-                    .frame(width: 70, height: 22)
-                    .position(x: 60, y: 14)
-            }
-
-            // Content area
-            VStack(alignment: .leading, spacing: 8) {
-                // Title
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(Color(.systemGray5))
-                    .frame(height: 18)
-                    .padding(.trailing, 40)
-
-                // Time row
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(Color(.systemGray6))
-                        .frame(width: 12, height: 12)
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color(.systemGray6))
-                        .frame(width: 160, height: 12)
-                }
-
-                // Location row
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(Color(.systemGray6))
-                        .frame(width: 12, height: 12)
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color(.systemGray6))
-                        .frame(width: 120, height: 12)
-                }
-
-                // Price badge
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color(.systemGray6))
-                    .frame(width: 60, height: 22)
-            }
-            .padding(14)
-        }
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 2)
-        .redacted(reason: .placeholder)
-        .shimmer()
-    }
-}
-
 // MARK: - Navigation
 
 /// Typed destinations for navigationPath.append(). Keeps the Home tab's
@@ -813,6 +395,7 @@ private struct EventCardSkeleton: View {
 /// Restaurant, Attraction) which each have their own navigationDestination.
 enum HomeDestination: Hashable {
     case attractions
+    case discoverHub
 }
 
 #Preview {

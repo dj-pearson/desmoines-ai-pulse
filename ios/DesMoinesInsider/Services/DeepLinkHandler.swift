@@ -22,6 +22,8 @@ final class DeepLinkHandler {
         case restaurant(id: String)
         case attraction(id: String)
         case tab(MainTabView.Tab)
+        /// A Discover-hub parity surface (IOS-IA-002), e.g. trip planner, deals.
+        case discover(DiscoverDestination)
     }
 
     private init() {}
@@ -78,6 +80,10 @@ final class DeepLinkHandler {
             // Root path — navigate to appropriate tab
             if path.first == "events" { return .tab(.home) }
             if path.first == "restaurants" { return .tab(.restaurants) }
+            // Single-segment Discover parity surfaces, e.g. /trip-planner.
+            if let slug = path.first, let discover = DiscoverDestination(slug: slug) {
+                return .discover(discover)
+            }
             return nil
         }
 
@@ -94,7 +100,13 @@ final class DeepLinkHandler {
         case "attractions":
             guard let id = validatedId(rawId, source: "universal-link") else { return .tab(.home) }
             return .attraction(id: id)
-        default: return nil
+        default:
+            // Discover-hub parity surfaces (IOS-IA-002): the path's first
+            // component is itself the slug, e.g. /trip-planner, /deals.
+            if let discover = DiscoverDestination(slug: type) {
+                return .discover(discover)
+            }
+            return nil
         }
     }
 
@@ -119,6 +131,12 @@ final class DeepLinkHandler {
         case "search": return .tab(.search)
         case "favorites": return .tab(.favorites)
         case "profile": return .tab(.profile)
+        case "discover":
+            // com.desmoines.aipulse://discover/<slug> (IOS-IA-002). Bare
+            // //discover opens the hub's first tile's surface is not assumed;
+            // require an explicit slug.
+            if let discover = DiscoverDestination(slug: rawId) { return .discover(discover) }
+            return nil
         default: return nil
         }
     }

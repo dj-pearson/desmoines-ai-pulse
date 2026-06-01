@@ -47,6 +47,15 @@ struct Attraction: Identifiable, Codable, Hashable {
         return String(format: "%.1f", rating)
     }
 
+    /// Full VoiceOver label for a compact card button (name, type, rating).
+    /// Mirrors `Restaurant.compactCardAccessibilityLabel` so the home rails
+    /// read consistently (IOS-IA-001).
+    var compactCardAccessibilityLabel: String {
+        var parts: [String] = [name, attractionType.displayName]
+        if rating != nil { parts.append("Rated \(ratingText)") }
+        return parts.joined(separator: ". ")
+    }
+
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
     }
