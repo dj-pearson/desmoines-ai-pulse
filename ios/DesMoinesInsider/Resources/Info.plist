@@ -50,6 +50,10 @@
 	<string>Des Moines Insider can add events directly to your calendar so you never miss out.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Des Moines Insider uses Face ID so you can quickly and securely sign in without entering your password.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Des Moines Insider uses speech recognition so you can search for events and restaurants by voice.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Des Moines Insider uses the microphone to let you dictate searches by voice.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
