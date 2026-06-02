@@ -83,7 +83,6 @@ struct HomeView: View {
                         )
                     }
 
-                    activeFiltersBar
                     eventsList
                 }
                 .trackScrollOffset(showScrollToTop: $showScrollToTop)
@@ -92,6 +91,16 @@ struct HomeView: View {
             .overlay(alignment: .bottomTrailing) {
                 ScrollToTopButton(isVisible: showScrollToTop) {
                     withAnimation { proxy.scrollTo("top") }
+                }
+            }
+            // Home is a content-first feed (IOS-IA-001), so the discovery
+            // controls (presets, filter pills) stay in-flow. What pins under the
+            // nav title is the sticky search (.searchable below) plus — once the
+            // user is actively filtering — the removable active-filter chips, so
+            // they can review/clear filters without scrolling back up (IOS-IA-004).
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if viewModel.activeFilterCount > 0 {
+                    StickyFilterBar { activeFiltersBar }
                 }
             }
             } // ScrollViewReader
@@ -109,6 +118,11 @@ struct HomeView: View {
             }
             .navigationTitle("Des Moines Insider")
             .navigationBarTitleDisplayMode(.large)
+            .searchable(
+                text: $viewModel.searchText,
+                placement: .navigationBarDrawer(displayMode: .always),
+                prompt: "Search events"
+            )
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     sortMenu

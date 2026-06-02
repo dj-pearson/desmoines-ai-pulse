@@ -16,16 +16,6 @@ struct AttractionsView: View {
                     VStack(spacing: 14) {
                         Color.clear.frame(height: 0).id("top")
 
-                        searchField
-
-                        typeChips
-
-                        featuredAndRatingRow
-
-                        if viewModel.activeFilterCount > 0 {
-                            activeChips
-                        }
-
                         if let error = viewModel.errorMessage {
                             errorBanner(error)
                         }
@@ -75,12 +65,28 @@ struct AttractionsView: View {
                         withAnimation { proxy.scrollTo("top") }
                     }
                 }
+                // Sticky type chips + featured/rating + active chips pinned
+                // under the nav title (IOS-IA-004).
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    StickyFilterBar {
+                        typeChips.padding(.horizontal, 14)
+                        featuredAndRatingRow.padding(.horizontal, 14)
+                        if viewModel.activeFilterCount > 0 {
+                            activeChips.padding(.horizontal, 14)
+                        }
+                    }
+                }
             }
             .refreshable {
                 await viewModel.refresh()
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
             }
             .navigationTitle("Explore")
+            .searchable(
+                text: $viewModel.searchText,
+                placement: .navigationBarDrawer(displayMode: .always),
+                prompt: "Search museums, parks, places…"
+            )
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) { sortMenu }
             }
@@ -102,35 +108,6 @@ struct AttractionsView: View {
                 }
             }
         }
-    }
-
-    // MARK: - Search
-
-    private var searchField: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-                .font(.subheadline)
-
-            TextField("Search museums, parks, places…", text: $viewModel.searchText)
-                .textFieldStyle(.plain)
-                .font(.subheadline)
-                .submitLabel(.search)
-
-            if !viewModel.searchText.isEmpty {
-                Button {
-                    viewModel.searchText = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
-                        .font(.subheadline)
-                }
-                .accessibilityLabel("Clear search")
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12))
     }
 
     // MARK: - Type Chips

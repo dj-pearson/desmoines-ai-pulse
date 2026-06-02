@@ -202,7 +202,7 @@
       ],
       "priority": 14,
       "passes": false,
-      "notes": ""
+      "notes": "Implemented 2026-06-02 (awaiting macOS CI xcodebuild gate). Found all three VMs already wire searchText into fetch + activeFilterCount + clearFilters; the gap was UI placement. Added Views/Components/StickyFilterBar.swift (a .bar-material + divider container) and pinned filters via .safeAreaInset(edge:.top). Restaurants & Attractions: .searchable(navigationBarDrawer, displayMode:.always) for sticky search + a sticky bar holding the inline filter pills (RestaurantInlineFilters / typeChips+featuredAndRatingRow) and the existing removable active-filter chips (result count + Clear all); removed the in-flow copies. Attractions' old in-content searchField deleted in favor of .searchable. Home/Events (no search before): added .searchable; kept the IOS-IA-001 content-first controls in-flow but pinned the removable active chips while filtering. Presets+inline filters already share one VM source of truth per screen; chips remove facets, pills/popovers edit them without reopening a sheet; iPhone TabView keeps each tab VM alive so state survives tab switches. iPad sidebar re-creates VMs (pre-existing, flagged for IOS-IA-005). passes=false until CI green."
     },
     {
       "id": "IOS-SUB-010",

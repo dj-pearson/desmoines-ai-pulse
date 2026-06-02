@@ -1397,3 +1397,90 @@ Verification status:
 - Rating display changed from a 5-star strip to a single ★-number pill. If
   product wants the strip back, add a dedicated variant/flag rather than
   re-forking per screen.
+
+## 2026-06-02 — IOS-IA-004 (sticky search + persistent inline filter chips) [awaiting CI build]
+
+Gave the three list screens a sticky search bar pinned under the nav title and
+a persistent (no-longer-scrolls-away) filter bar, so users can reach search and
+review/clear active filters without scrolling back to the top.
+
+Key finding before coding: all three ViewModels (Events, Restaurants,
+Attractions) ALREADY had `searchText` wired into their fetch pipelines +
+`activeFilterCount` + `clearFilters` — but the search field was missing entirely
+on Events/Restaurants and present-but-scrolls-away on Attractions. And the inline
+filter pills + active chips already existed (one source of truth per screen) but
+lived inside the scrolling VStack, so they scrolled out of view. This story was
+therefore mostly a UI/placement change, not new filter plumbing.
+
+File added:
+- ios/DesMoinesInsider/Views/Components/StickyFilterBar.swift (~25 lines) — a
+  reusable container (system `.bar` material + hairline `Divider`) that the
+  three screens drop into `.safeAreaInset(edge: .top)` so their filter pills /
+  chips pin under the nav title consistently.
+
+Files modified:
+- Views/Restaurants/RestaurantsView.swift — added
+  `.searchable(..., placement: .navigationBarDrawer(displayMode: .always))`
+  (native sticky search under the nav title) and a `.safeAreaInset(edge: .top)`
+  StickyFilterBar holding RestaurantInlineFilters (pills) + the existing
+  `activeChips` (count + removable chips + Clear all). Removed the in-flow copies
+  of the pills + chips from the scrolling VStack; presets + AdSlot stay in flow.
+- Views/Attractions/AttractionsView.swift — same treatment: `.searchable`
+  replaces the old in-content custom `searchField` (deleted), and typeChips +
+  featuredAndRatingRow + activeChips moved into the sticky `.safeAreaInset` bar.
+- Views/Home/HomeView.swift — added `.searchable` (Home/Events had NO search
+  before). Home is a content-first feed (IOS-IA-001), so its discovery controls
+  (RightNowRibbon, WaysToExplore, smart presets, EventInlineFilters pills) stay
+  in-flow; what pins is the native search PLUS — only while filtering
+  (activeFilterCount > 0) — the removable active-filter chips bar via
+  `.safeAreaInset`. Removed the in-flow `activeFiltersBar` call (now pinned).
+
+Design decisions:
+- Differentiated stickiness by screen type, documented inline: the pure list
+  tabs (Dining/Explore) pin the FULL filter bar (pills + chips) because they
+  have no hero content to preserve; Home pins only search + active chips so the
+  IOS-IA-001 content-first feed (ribbon → ways-to-explore → presets → rails)
+  isn't pushed below a filter bar. All three are consistent on the two things
+  the AC cares most about: sticky search reachable without scrolling, and active
+  filters that persist with a result count + Clear all.
+- Used native `.searchable` rather than a bespoke pinned TextField: it gives the
+  correct under-the-large-title placement, the system "always" sticky behavior,
+  Cancel button, and dictation for free, and binds straight to the VM's existing
+  `searchText` (same `$viewModel.searchText` binding the old Attractions
+  TextField used, so no VM changes were needed).
+- Used `.safeAreaInset(edge: .top)` (truly always-visible, content insets below
+  it) instead of a pinned LazyVStack section header (which only pins AFTER you
+  scroll to it) — lower risk, less structural churn to the existing ScrollViews,
+  and a better "persistent" result.
+- AC items already satisfied and left intact: smart presets + inline filters
+  share one filter-state source of truth (the screen's @Observable VM); chips
+  edit each facet (remove) while the inline pills/popovers edit facets directly
+  without reopening a sheet. State survives tab switches because the iPhone
+  TabView keeps each tab's view (and its @State VM) alive.
+
+Verification status:
+- No Swift toolchain locally; xcodebuild gate runs in macOS CI. Static checks
+  pass — balanced delimiters across all 4 touched Swift files + the new
+  component; every referenced symbol resolves (RestaurantInlineFilters /
+  EventInlineFilters / typeChips / featuredAndRatingRow / activeChips /
+  activeFiltersBar all still defined and now consumed from the sticky bar);
+  iOS 17.0 deployment target supports `.searchable(placement:)` + `.safeAreaInset`
+  + `Material.bar`. project.yml directory-based sources auto-include
+  StickyFilterBar.swift. passes:false until CI is green.
+
+**Learnings / flags for future iterations:**
+- iPad caveat (pre-existing, out of scope): MainTabView.iPadLayout's
+  `tabContent(for:)` is a `switch` in the split-view detail, so selecting a
+  sidebar item RE-CREATES the screen and its @State VM — filter/search state
+  would NOT persist across iPad sidebar switches the way it does in the iPhone
+  TabView. IOS-IA-005 (iPad adaptive layouts) should make those VMs owned higher
+  up (or use scene storage) if cross-navigation persistence is required there.
+- EventInlineFilters self-pads `.horizontal, 16`; RestaurantInlineFilters only
+  pads `.horizontal, 2` and historically relied on the parent VStack's
+  `.padding(.horizontal)`. Inside the sticky bar I re-added `.padding(.horizontal,
+  14)` around the Restaurant/Attraction rows; if these inline-filter components
+  are ever reused elsewhere, normalize their internal horizontal padding.
+- A "search" chip is intentionally NOT added to the active-chips rails — the
+  native search field already shows the query and Clear all clears it. If a
+  visible search chip is wanted, each screen's activeChips/activeFiltersBar is
+  the single place to add it.

@@ -17,14 +17,6 @@ struct RestaurantsView: View {
                         // Smart Presets — one-tap filter combos
                         RestaurantSmartPresets(viewModel: viewModel)
 
-                        // Inline Filter Pills — always visible
-                        RestaurantInlineFilters(viewModel: viewModel)
-
-                        // Active filter chips (tap × to remove individually)
-                        if viewModel.activeFilterCount > 0 {
-                            activeChips
-                        }
-
                         // Ad banner for free users (hidden for subscribers)
                         AdSlot(.detail)
 
@@ -77,6 +69,18 @@ struct RestaurantsView: View {
                         withAnimation { proxy.scrollTo("top") }
                     }
                 }
+                // Sticky filter pills + active chips pinned under the nav title
+                // (IOS-IA-004) so the user can edit/clear filters without
+                // scrolling back to the top.
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    StickyFilterBar {
+                        RestaurantInlineFilters(viewModel: viewModel)
+                            .padding(.horizontal, 14)
+                        if viewModel.activeFilterCount > 0 {
+                            activeChips.padding(.horizontal, 14)
+                        }
+                    }
+                }
             } // ScrollViewReader
             .refreshable {
                 await viewModel.refresh()
@@ -87,6 +91,11 @@ struct RestaurantsView: View {
                 }
             }
             .navigationTitle("Dining")
+            .searchable(
+                text: $viewModel.searchText,
+                placement: .navigationBarDrawer(displayMode: .always),
+                prompt: "Search restaurants"
+            )
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
