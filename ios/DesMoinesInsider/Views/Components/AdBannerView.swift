@@ -135,7 +135,12 @@ struct AdBannerView: View {
                 .stroke(Color.orange.opacity(0.15), lineWidth: 1)
         )
         .sheet(isPresented: $showSubscription) {
-            PaywallView(context: .adFree)
+            // Present the same inline subscription store used by Settings.
+            // It loads every plan in the App Store Connect group (monthly +
+            // annual, Insider + VIP) by group ID, so all tiers show inline
+            // without the tier/period toggle and without depending on the
+            // hardcoded annual product IDs matching App Store Connect exactly.
+            SubscriptionView()
         }
     }
 }
