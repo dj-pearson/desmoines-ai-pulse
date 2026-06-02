@@ -251,7 +251,7 @@ struct FavoritesLimitBanner: View {
                 in: RoundedRectangle(cornerRadius: 12)
             )
             .sheet(isPresented: $showSubscription) {
-                SubscriptionView()
+                PaywallView(context: .unlimitedFavorites)
             }
         }
     }

@@ -83,7 +83,7 @@ struct EventDetailView: View {
             FullScreenImageViewer(imageUrl: event.imageUrl, isPresented: $showImageViewer)
         }
         .sheet(isPresented: $showSubscription) {
-            SubscriptionView()
+            PaywallView(context: .insiderTips)
         }
         .task {
             await viewModel.loadEvent(event)

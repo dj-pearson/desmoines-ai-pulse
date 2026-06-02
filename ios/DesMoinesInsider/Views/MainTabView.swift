@@ -41,6 +41,15 @@ struct MainTabView: View {
         }
     }
 
+    /// Presents the unlimited-favorites paywall when any save surface hits the
+    /// free cap (IOS-SUB-011). Driven by a notification so there's exactly one
+    /// presenter instead of per-call-site sheets.
+    @State private var showFavoritesPaywall = false
+
+    /// Post-onboarding soft paywall (IOS-SUB-013) — engagement-triggered +
+    /// frequency-capped by SoftPaywallService, presented from one place here.
+    @State private var softPaywallContext: PaywallContext?
+
     var body: some View {
         Group {
             if sizeClass == .regular {
@@ -50,11 +59,35 @@ struct MainTabView: View {
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
-            OfflineBanner()
+            VStack(spacing: 0) {
+                OfflineBanner()
+                SubscriptionStatusBanner()
+            }
         }
         .tint(Color.accentColor)
         .onAppear {
             Self.configureTranslucentAppearance()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .favoritesLimitReached)) { _ in
+            showFavoritesPaywall = true
+        }
+        .sheet(isPresented: $showFavoritesPaywall) {
+            PaywallView(context: .unlimitedFavorites)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .softPaywallTriggered)) { note in
+            let id = note.userInfo?["context"] as? String ?? "unlimited_favorites"
+            softPaywallContext = Self.softContext(for: id)
+        }
+        .sheet(item: $softPaywallContext) { ctx in
+            PaywallView(context: ctx)
+        }
+    }
+
+    /// Maps a SoftPaywallService context id to its PaywallContext preset.
+    private static func softContext(for id: String) -> PaywallContext {
+        switch id {
+        case "trip_planner": return .tripPlanner
+        default: return .unlimitedFavorites
         }
     }
 

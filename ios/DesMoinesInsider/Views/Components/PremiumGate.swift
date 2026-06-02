@@ -12,6 +12,9 @@ import SwiftUI
 struct PremiumGate<Content: View>: View {
     let requiredTier: SubscriptionTier
     let feature: String
+    /// Optional tailored paywall context. When nil, a generic context is built
+    /// from `requiredTier` + `feature` (IOS-SUB-010).
+    var context: PaywallContext? = nil
     @ViewBuilder let content: () -> Content
 
     @State private var storeKit = StoreKitService.shared
@@ -73,7 +76,7 @@ struct PremiumGate<Content: View>: View {
                 .stroke(Color.orange.opacity(0.2), lineWidth: 1)
         )
         .sheet(isPresented: $showSubscription) {
-            SubscriptionView()
+            PaywallView(context: context ?? .generic(tier: requiredTier, feature: feature))
         }
     }
 }

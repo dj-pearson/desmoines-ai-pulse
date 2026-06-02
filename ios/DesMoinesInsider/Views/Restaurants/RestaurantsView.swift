@@ -17,14 +17,6 @@ struct RestaurantsView: View {
                         // Smart Presets — one-tap filter combos
                         RestaurantSmartPresets(viewModel: viewModel)
 
-                        // Inline Filter Pills — always visible
-                        RestaurantInlineFilters(viewModel: viewModel)
-
-                        // Active filter chips (tap × to remove individually)
-                        if viewModel.activeFilterCount > 0 {
-                            activeChips
-                        }
-
                         // Ad banner for free users (hidden for subscribers)
                         AdSlot(.detail)
 
@@ -77,6 +69,18 @@ struct RestaurantsView: View {
                         withAnimation { proxy.scrollTo("top") }
                     }
                 }
+                // Sticky filter pills + active chips pinned under the nav title
+                // (IOS-IA-004) so the user can edit/clear filters without
+                // scrolling back to the top.
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    StickyFilterBar {
+                        RestaurantInlineFilters(viewModel: viewModel)
+                            .padding(.horizontal, 14)
+                        if viewModel.activeFilterCount > 0 {
+                            activeChips.padding(.horizontal, 14)
+                        }
+                    }
+                }
             } // ScrollViewReader
             .refreshable {
                 await viewModel.refresh()
@@ -87,6 +91,11 @@ struct RestaurantsView: View {
                 }
             }
             .navigationTitle("Dining")
+            .searchable(
+                text: $viewModel.searchText,
+                placement: .navigationBarDrawer(displayMode: .always),
+                prompt: "Search restaurants"
+            )
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
@@ -259,62 +268,13 @@ struct RestaurantsView: View {
     }
 }
 
-// MARK: - Skeleton (matches RestaurantCardView layout)
+// MARK: - Skeleton
 
+/// IOS-IA-003: delegates to the unified `ContentCardSkeleton` (`.listRow`) so
+/// the loading shape matches the restaurant `.listRow` card exactly.
 private struct RestaurantCardSkeleton: View {
     var body: some View {
-        HStack(spacing: 14) {
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(.systemGray5))
-                .frame(width: 100, height: 100)
-
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color(.systemGray5))
-                        .frame(height: 16)
-                    Spacer()
-                    Circle()
-                        .fill(Color(.systemGray6))
-                        .frame(width: 16, height: 16)
-                }
-
-                HStack(spacing: 8) {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color(.systemGray6))
-                        .frame(width: 70, height: 12)
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color(.systemGray6))
-                        .frame(width: 30, height: 12)
-                }
-
-                HStack(spacing: 3) {
-                    ForEach(0..<5, id: \.self) { _ in
-                        Circle()
-                            .fill(Color(.systemGray6))
-                            .frame(width: 10, height: 10)
-                    }
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color(.systemGray6))
-                        .frame(width: 24, height: 10)
-                }
-
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(Color(.systemGray6))
-                        .frame(width: 9, height: 9)
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color(.systemGray6))
-                        .frame(width: 100, height: 10)
-                }
-            }
-        }
-        .padding(10)
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 2)
-        .redacted(reason: .placeholder)
-        .shimmer()
+        ContentCardSkeleton(.listRow)
     }
 }
 

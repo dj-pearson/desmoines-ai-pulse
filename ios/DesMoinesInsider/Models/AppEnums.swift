@@ -250,6 +250,35 @@ enum SubscriptionTier: String, Codable {
         }
     }
 
+    /// Per-tier count limits for the other quota-gated features (IOS-SUB-011),
+    /// mirroring the web `SubscriptionLimits`. `-1` means unlimited. Saved
+    /// searches / alerts (IOS-PARITY-008) and the AI Trip Planner quota
+    /// (IOS-PARITY-001) read these once those screens land.
+    var maxSavedSearches: Int {
+        switch self {
+        case .free: return 0
+        case .insider: return 10
+        case .vip: return -1
+        }
+    }
+
+    var maxAlerts: Int {
+        switch self {
+        case .free: return 0
+        case .insider: return 10
+        case .vip: return -1
+        }
+    }
+
+    /// AI Trip Planner: Insider 5 trips/month, VIP unlimited (per the PRD).
+    var maxTripPlansPerMonth: Int {
+        switch self {
+        case .free: return 0
+        case .insider: return 5
+        case .vip: return -1
+        }
+    }
+
     /// Features included in this tier (for display in subscription UI).
     var features: [String] {
         switch self {

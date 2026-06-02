@@ -79,6 +79,56 @@ final class AnalyticsService {
         trackEvent("purchase_complete", parameters: ["product_id": productId])
     }
 
+    // MARK: - Contextual Paywall (IOS-SUB-010)
+    //
+    // Every paywall lifecycle event carries the `context` id (e.g.
+    // "unlimited_favorites", "trip_planner") so per-surface conversion can be
+    // measured — which upsell moments convert and which don't.
+
+    func trackPaywallPresented(context: String, tier: String) {
+        trackEvent("paywall_present", parameters: ["context": context, "tier": tier])
+    }
+
+    func trackPaywallDismissed(context: String) {
+        trackEvent("paywall_dismiss", parameters: ["context": context])
+    }
+
+    func trackPaywallPurchaseStart(context: String, productId: String) {
+        trackEvent("paywall_purchase_start", parameters: ["context": context, "product_id": productId])
+    }
+
+    func trackPaywallPurchaseComplete(context: String, productId: String) {
+        trackEvent("paywall_purchase_complete", parameters: ["context": context, "product_id": productId])
+    }
+
+    func trackPaywallRestore(context: String) {
+        trackEvent("paywall_restore", parameters: ["context": context])
+    }
+
+    // MARK: - Onboarding & soft paywall (IOS-SUB-013)
+    //
+    // `action`: shown / start_tapped / skipped — for first-session trial funnel.
+    // `source`: which engagement threshold fired the post-onboarding soft paywall.
+
+    func trackOnboardingTrial(action: String) {
+        trackEvent("onboarding_trial", parameters: ["action": action, "cohort": "onboarding"])
+    }
+
+    func trackSoftPaywall(source: String) {
+        trackEvent("soft_paywall_present", parameters: ["source": source])
+    }
+
+    // MARK: - Win-back / renewal (IOS-SUB-014)
+
+    /// `state`: expiring_soon / billing_retry / grace / expired.
+    func trackRenewalBanner(action: String, state: String) {
+        trackEvent("renewal_banner", parameters: ["action": action, "state": state])
+    }
+
+    func trackOfferCodeRedeem(action: String) {
+        trackEvent("offer_code_redeem", parameters: ["action": action])
+    }
+
     // MARK: - User Properties
 
     func setUserId(_ userId: String?) {

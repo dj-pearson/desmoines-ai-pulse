@@ -28,11 +28,13 @@ struct AdSlot: View {
     var body: some View {
         switch placement {
         case .feed:
-            AdBannerView(affiliatePlacement: .banner)
+            // In-feed slot → web's below_fold campaign placement.
+            AdBannerView(affiliatePlacement: .banner, campaignPlacement: .belowFold)
                 .padding(.horizontal)
                 .padding(.vertical, 4)
         case .detail:
-            AdBannerView(affiliatePlacement: .banner)
+            // Detail pages → featured_spot campaign placement.
+            AdBannerView(affiliatePlacement: .banner, campaignPlacement: .featuredSpot)
         }
     }
 }

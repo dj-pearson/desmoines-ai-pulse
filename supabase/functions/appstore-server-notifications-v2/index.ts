@@ -40,8 +40,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 
 const EXPECTED_BUNDLE_ID = 'com.desmoines.aipulse';
 
-const INSIDER_PRODUCT_IDS = new Set(['prod_U4oa7Cpn0bRnuo']);
-const VIP_PRODUCT_IDS = new Set(['prod_U4oaGFEy12auTx']);
+// Monthly + annual product IDs (annual added in IOS-SUB-012).
+const INSIDER_PRODUCT_IDS = new Set(['prod_U4oa7Cpn0bRnuo', 'prod_insider_annual']);
+const VIP_PRODUCT_IDS = new Set(['prod_U4oaGFEy12auTx', 'prod_vip_annual']);
 const ALL_PRODUCT_IDS = new Set([...INSIDER_PRODUCT_IDS, ...VIP_PRODUCT_IDS]);
 
 /**

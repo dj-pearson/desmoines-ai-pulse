@@ -15,7 +15,7 @@ struct FilterSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     private var hasPremiumAccess: Bool {
-        storeKit.currentTier == .insider || storeKit.currentTier == .vip
+        storeKit.hasFeature(.advancedFilters)
     }
 
     var body: some View {
@@ -76,7 +76,8 @@ struct FilterSheet: View {
                     Section {
                         PremiumGate(
                             requiredTier: .insider,
-                            feature: "Distance radius, free events filter, and minimum rating"
+                            feature: "Distance radius, free events filter, and minimum rating",
+                            context: .advancedFilters
                         ) {
                             advancedFiltersSection
                         }
