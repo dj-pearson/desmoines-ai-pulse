@@ -326,86 +326,18 @@ struct AttractionsView: View {
 
 // MARK: - Attraction Card
 
+/// IOS-IA-003: thin wrapper over the unified `ContentCard` (`.listRow`). The
+/// favorite affordance is `.external` because the Attractions screen owns the
+/// favorite state + its own toast.
 private struct BrowseAttractionCardView: View {
     let attraction: Attraction
     let isFavorite: Bool
     let onToggleFavorite: () -> Void
 
     var body: some View {
-        HStack(spacing: 14) {
-            CachedAsyncImage(url: attraction.imageUrl) {
-                ZStack {
-                    Rectangle().fill(Color.purple.opacity(0.1))
-                    Image(systemName: attraction.attractionType.icon)
-                        .font(.title2)
-                        .foregroundStyle(.purple.opacity(0.45))
-                }
-            }
-            .frame(width: 100, height: 100)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .top) {
-                    Text(attraction.name)
-                        .font(.subheadline.weight(.semibold))
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-
-                    Spacer()
-
-                    Button {
-                        onToggleFavorite()
-                    } label: {
-                        Image(systemName: isFavorite ? "heart.fill" : "heart")
-                            .font(.body)
-                            .foregroundStyle(isFavorite ? .red : .secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(isFavorite ? "Remove from saved" : "Save to favorites")
-                }
-
-                HStack(spacing: 6) {
-                    Image(systemName: attraction.attractionType.icon)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                    Text(attraction.attractionType.displayName)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    if attraction.isFeatured == true {
-                        Text("Featured")
-                            .font(.caption2.weight(.semibold))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.orange.opacity(0.18), in: Capsule())
-                            .foregroundStyle(.orange)
-                    }
-                }
-
-                if let rating = attraction.rating {
-                    HStack(spacing: 3) {
-                        Image(systemName: "star.fill")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.yellow)
-                        Text(String(format: "%.1f", rating))
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                if let location = attraction.location, !location.isEmpty {
-                    Label(location, systemImage: "mappin")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                }
-            }
-        }
-        .padding(10)
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 2)
-        .accessibilityElement(children: .combine)
+        var data = attraction.cardData
+        data.favorite = .external(isFavorited: isFavorite, name: attraction.name, onToggle: onToggleFavorite)
+        return ContentCard(data, variant: .listRow)
     }
 }
 
@@ -413,25 +345,7 @@ private struct BrowseAttractionCardView: View {
 
 private struct AttractionCardSkeleton: View {
     var body: some View {
-        HStack(spacing: 14) {
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(.systemGray5))
-                .frame(width: 100, height: 100)
-
-            VStack(alignment: .leading, spacing: 6) {
-                RoundedRectangle(cornerRadius: 4).fill(Color(.systemGray5)).frame(height: 16)
-                RoundedRectangle(cornerRadius: 4).fill(Color(.systemGray6)).frame(width: 90, height: 12)
-                RoundedRectangle(cornerRadius: 4).fill(Color(.systemGray6)).frame(width: 50, height: 10)
-                RoundedRectangle(cornerRadius: 4).fill(Color(.systemGray6)).frame(width: 120, height: 10)
-            }
-            Spacer()
-        }
-        .padding(10)
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 2)
-        .redacted(reason: .placeholder)
-        .shimmer()
+        ContentCardSkeleton(.listRow)
     }
 }
 

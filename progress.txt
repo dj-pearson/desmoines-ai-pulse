@@ -1300,3 +1300,100 @@ Verification status:
   IOS-PARITY-* story plugs into: replace the one `destinationView` case with the
   real screen, delete nothing else. Keeps those stories small and isolated.
 ---
+
+## 2026-06-02 — IOS-IA-003 (unified content-card + skeleton system) [awaiting CI build]
+
+Collapsed the app's parallel, visually-divergent card implementations into ONE
+card layer so events, restaurants, attractions (and, soon, articles/hotels/
+deals) look and behave consistently everywhere they appear.
+
+File added:
+- ios/DesMoinesInsider/Views/Components/ContentCard.swift (~620 lines) — the
+  whole unified system:
+  • ContentCardData — a normalized value type (title, image, placeholder
+    icon/tint, optional event category overlay, meta primary/secondary lines,
+    optional date badge, [CardPill], urgency, isFeatured/isPremium/isSponsored,
+    favorite). Models map to it via `Event.cardData` / `Restaurant.cardData` /
+    `Attraction.cardData` extensions (the seam every future content type plugs
+    into — add a `cardData` and it renders in all four variants for free).
+  • ContentCard view with four variants: .featured (260-wide hero, scrim +
+    category overlay), .compact (180-wide rail card), .standard (full-width
+    Events list card w/ date badge), .listRow (horizontal Dining/Attractions/
+    Search row).
+  • CardFavorite enum — `.managed(kind,id,title)` self-toggles via
+    FavoritesService (event/restaurant/attraction) + drives a ToastMessage;
+    `.external(isFavorited,name,onToggle)` defers to a parent that owns the
+    state (used by the Attractions tab, which keeps its own toast).
+  • CardFavoriteButton — one favorite affordance (HeartBurst micro-interaction,
+    overlay vs inline style) shared by every variant.
+  • SponsoredBadge (FTC-labeled "Sponsored" pill, the seam for IOS-ADS-011) +
+    VipGoldBadge premium badge, both overlaid top-leading on the image.
+  • CardDateBadge (ScaledMetric day/month badge).
+  • ContentCardSkeleton(variant:) — a matching shimmer placeholder for EACH of
+    the four variants, so every rail/list shows a skeleton of the right shape
+    while loading (no layout shift, no all-or-nothing spinner).
+
+Files modified (all now thin wrappers that build a `cardData` and delegate —
+public init signatures unchanged so NO call sites changed except where noted):
+- Views/Home/EventCardView.swift (207 -> 24 lines) — ContentCard(.standard).
+- Views/Restaurants/RestaurantCardView.swift (138 -> 27) — ContentCard(.listRow).
+- Views/Home/HomeSections.swift — FeaturedEventCard -> ContentCard(.featured,
+  decorative), CompactRestaurantCard / CompactAttractionCard ->
+  ContentCard(.compact, decorative), EventCardSkeleton ->
+  ContentCardSkeleton(.standard). ~250 lines of duplicated card/skeleton bodies
+  removed.
+- Views/Search/SearchView.swift — AttractionCardView -> ContentCard(.listRow)
+  (search attraction results now also expose the favorite affordance + open
+  status, matching event/restaurant search rows).
+- Views/Attractions/AttractionsView.swift — BrowseAttractionCardView ->
+  ContentCard(.listRow) with `.external` favorite (keeps the screen's existing
+  favoritesService + favoriteToast plumbing intact, signature unchanged);
+  AttractionCardSkeleton -> ContentCardSkeleton(.listRow).
+- Views/Restaurants/RestaurantsView.swift — RestaurantCardSkeleton ->
+  ContentCardSkeleton(.listRow).
+
+Design decisions:
+- Decorative vs standalone: Home rail cards are wrapped in a NavigationLink that
+  owns the tap + VoiceOver label, so they pass `decorative: true` — the card is
+  hidden from VoiceOver AND omits the inline favorite button (avoids a button
+  nested in a link label on a non-interactive rail). List/Search cards are
+  standalone: `.accessibilityElement(children: .contain)` + combined label so
+  the favorite button stays a separately-focusable element (preserves the prior
+  EventCardView/RestaurantCardView a11y behavior exactly).
+- Pills always carry an SF Symbol (FREE/$$, ★ rating, Open/Closed) so colour is
+  never the only differentiator (Differentiate Without Color Alone). Variants
+  cap how many pills show (.featured/.compact show the first; .standard/.listRow
+  show up to 3) so small cards never overflow.
+- Dynamic Type: titles use lineLimit(2) and reflow rather than truncate-to-one;
+  the date badge uses @ScaledMetric. CachedAsyncImage keeps fixed aspect frames
+  so there's no layout shift when images resolve.
+- Rating consolidated to a single "★ 4.8" pill across all surfaces (the old
+  per-screen 5-star strip in RestaurantCardView/BrowseAttractionCardView is gone
+  in favor of the consistent compact pill) — intentional consistency tradeoff.
+
+Verification status:
+- No Swift toolchain locally; xcodebuild gate runs in macOS CI. Static checks
+  pass — balanced delimiters across all 7 touched files; all referenced APIs
+  verified against source (CachedAsyncImage(url:placeholder:), glassCard,
+  HeartBurstView, CategoryBadge(category:size:), VipGoldBadge, PremiumTokens
+  .imageScrim/.elevation4, Skeleton.bar/.block, ToastMessage.success/info/error,
+  FavoritesService.toggleFavorite/toggleRestaurantFavorite/toggleFavoriteAttraction
+  + the is*Favorited readers, Restaurant.displayLocation/ratingText,
+  Attraction.compactCardAccessibilityLabel). No test files reference the card
+  types. project.yml uses directory-based sources so ContentCard.swift is picked
+  up automatically. passes:false until CI is green.
+
+**Learnings / flags for future iterations:**
+- ContentCardData + the `cardData` model extensions are the seam for the
+  remaining parity content types: when IOS-PARITY-002 (Articles), -003 (Hotels)
+  and -010 (Deals) land, give each model a `cardData` and it renders in all four
+  variants with skeletons + badges for free — no new card code.
+- The sponsored badge (SponsoredBadge) + `ContentCardData.isSponsored` are wired
+  but not yet set by any data path; IOS-ADS-011 (sponsored/featured listings)
+  flips `isSponsored = true` on the relevant cards' cardData and the badge +
+  FTC labeling appear automatically.
+- `isPremium`/VipGoldBadge is likewise ready; whichever story introduces
+  VIP-exclusive content cards just sets `isPremium = true`.
+- Rating display changed from a 5-star strip to a single ★-number pill. If
+  product wants the strip back, add a dedicated variant/flag rather than
+  re-forking per screen.

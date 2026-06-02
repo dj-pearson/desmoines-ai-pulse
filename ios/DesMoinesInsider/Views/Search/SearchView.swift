@@ -409,63 +409,13 @@ struct SearchView: View {
 
 // MARK: - Attraction Card (used in search results)
 
+/// IOS-IA-003: thin wrapper over the unified `ContentCard` (`.listRow`) so
+/// search attraction results match the Attractions tab and Home rails.
 struct AttractionCardView: View {
     let attraction: Attraction
 
     var body: some View {
-        HStack(spacing: 14) {
-            CachedAsyncImage(url: attraction.imageUrl) {
-                ZStack {
-                    Rectangle().fill(Color.teal.opacity(0.1))
-                    Image(systemName: attraction.attractionType.icon)
-                        .foregroundStyle(.teal.opacity(0.4))
-                }
-            }
-            .frame(width: 80, height: 80)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(attraction.name)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-
-                HStack(spacing: 6) {
-                    Label(attraction.type, systemImage: attraction.attractionType.icon)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                if let rating = attraction.rating {
-                    HStack(spacing: 3) {
-                        Image(systemName: "star.fill")
-                            .font(.caption2)
-                            .foregroundStyle(.yellow)
-                        Text(String(format: "%.1f", rating))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                if let location = attraction.location {
-                    Text(location)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                }
-            }
-
-            Spacer()
-
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-        }
-        .padding(10)
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 1)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(attraction.name), \(attraction.type)")
+        ContentCard(attraction.cardData, variant: .listRow)
     }
 }
 

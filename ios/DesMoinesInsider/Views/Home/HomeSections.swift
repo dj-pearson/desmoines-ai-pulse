@@ -397,106 +397,27 @@ struct HomeRailEmpty: View {
     }
 }
 
-// MARK: - Cards (moved out of HomeView for reuse across rails)
+// MARK: - Cards (thin wrappers over the unified ContentCard — IOS-IA-003)
+//
+// These rail cards are decorative: each is wrapped in a NavigationLink that
+// owns the tap target + VoiceOver label, so they pass `decorative: true` and
+// omit the inline favorite button.
 
 /// Compact restaurant card for the home feed horizontal scroll.
 struct CompactRestaurantCard: View {
     let restaurant: Restaurant
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            CachedAsyncImage(url: restaurant.imageUrl) {
-                ZStack {
-                    Rectangle().fill(Color.orange.opacity(0.15).gradient)
-                    Image(systemName: "fork.knife")
-                        .font(.title2)
-                        .foregroundStyle(.orange.opacity(0.3))
-                }
-            }
-            .frame(width: 180, height: 110)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-
-            Text(restaurant.name)
-                .font(.subheadline.weight(.semibold))
-                .lineLimit(1)
-
-            HStack(spacing: 6) {
-                if let cuisine = restaurant.cuisine {
-                    Text(cuisine)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                if let price = restaurant.priceRange {
-                    Text(price)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.green)
-                }
-
-                Spacer()
-
-                if let rating = restaurant.rating {
-                    HStack(spacing: 2) {
-                        Image(systemName: "star.fill")
-                            .font(.caption2)
-                            .foregroundStyle(.yellow)
-                        Text(String(format: "%.1f", rating))
-                            .font(.caption2.weight(.medium))
-                    }
-                }
-            }
-        }
-        .frame(width: 180)
-        // Suppress redundant child reads — full label set on the link wrapper.
-        .accessibilityElement(children: .ignore)
-        .accessibilityHidden(true)
+        ContentCard(restaurant.cardData, variant: .compact, decorative: true)
     }
 }
 
-/// Compact attraction card for the home feed horizontal scroll. Mirrors
-/// `CompactRestaurantCard` so the two rails read consistently.
+/// Compact attraction card for the home feed horizontal scroll.
 struct CompactAttractionCard: View {
     let attraction: Attraction
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            CachedAsyncImage(url: attraction.imageUrl) {
-                ZStack {
-                    Rectangle().fill(Color.purple.opacity(0.15).gradient)
-                    Image(systemName: attraction.attractionType.icon)
-                        .font(.title2)
-                        .foregroundStyle(.purple.opacity(0.3))
-                }
-            }
-            .frame(width: 180, height: 110)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-
-            Text(attraction.name)
-                .font(.subheadline.weight(.semibold))
-                .lineLimit(1)
-
-            HStack(spacing: 6) {
-                Text(attraction.attractionType.displayName)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-
-                Spacer()
-
-                if let rating = attraction.rating {
-                    HStack(spacing: 2) {
-                        Image(systemName: "star.fill")
-                            .font(.caption2)
-                            .foregroundStyle(.yellow)
-                        Text(String(format: "%.1f", rating))
-                            .font(.caption2.weight(.medium))
-                    }
-                }
-            }
-        }
-        .frame(width: 180)
-        .accessibilityElement(children: .ignore)
-        .accessibilityHidden(true)
+        ContentCard(attraction.cardData, variant: .compact, decorative: true)
     }
 }
 
@@ -505,132 +426,15 @@ struct FeaturedEventCard: View {
     let event: Event
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Image with scrim for legibility
-            ZStack(alignment: .bottomLeading) {
-                CachedAsyncImage(url: event.imageUrl) {
-                    Rectangle()
-                        .fill(event.eventCategory.color.gradient)
-                }
-                .frame(width: 260, height: 150)
-                .overlay(PremiumTokens.imageScrim)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
-                .glassCard(cornerRadius: 14, material: .regularMaterial, elevation: PremiumTokens.elevation4)
-
-                // Category badge
-                CategoryBadge(category: event.eventCategory)
-                    .padding(10)
-            }
-
-            // Title
-            Text(event.title)
-                .font(.subheadline.weight(.semibold))
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
-
-            // Date & Location
-            HStack(spacing: 4) {
-                if let date = event.parsedDate {
-                    Image(systemName: "calendar")
-                        .font(.caption2)
-                    Text(date.formatted(.dateTime.month(.abbreviated).day()))
-                        .font(.caption)
-                }
-
-                Spacer()
-
-                if event.isFree {
-                    // Uses icon + text so colour alone is not the only differentiator
-                    Label("FREE", systemImage: "ticket")
-                        .font(.caption2.bold())
-                        .foregroundStyle(.green)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.green.opacity(0.15), in: Capsule())
-                }
-            }
-            .foregroundStyle(.secondary)
-        }
-        .frame(width: 260)
-        // Suppress redundant child reads — full label set on the link wrapper.
-        .accessibilityElement(children: .ignore)
-        .accessibilityHidden(true)
+        ContentCard(event.cardData, variant: .featured, decorative: true)
     }
 }
 
-/// Event card skeleton matching `EventCardView` layout, used by the main
-/// events list while loading.
+/// Event card skeleton for the main events list while loading.
+/// Delegates to the unified `ContentCardSkeleton` (`.standard`).
 struct EventCardSkeleton: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Image area with overlays
-            ZStack(alignment: .topTrailing) {
-                RoundedRectangle(cornerRadius: 0)
-                    .fill(Color(.systemGray5))
-                    .frame(height: 180)
-
-                VStack(alignment: .trailing, spacing: 6) {
-                    // Favorite button placeholder
-                    Circle()
-                        .fill(Color(.systemGray4))
-                        .frame(width: 36, height: 36)
-
-                    Spacer()
-
-                    // Date badge placeholder
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color(.systemGray4))
-                        .frame(width: 48, height: 52)
-                }
-                .padding(10)
-
-                // Category badge placeholder
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(Color(.systemGray4))
-                    .frame(width: 70, height: 22)
-                    .position(x: 60, y: 14)
-            }
-
-            // Content area
-            VStack(alignment: .leading, spacing: 8) {
-                // Title
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(Color(.systemGray5))
-                    .frame(height: 18)
-                    .padding(.trailing, 40)
-
-                // Time row
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(Color(.systemGray6))
-                        .frame(width: 12, height: 12)
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color(.systemGray6))
-                        .frame(width: 160, height: 12)
-                }
-
-                // Location row
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(Color(.systemGray6))
-                        .frame(width: 12, height: 12)
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color(.systemGray6))
-                        .frame(width: 120, height: 12)
-                }
-
-                // Price badge
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color(.systemGray6))
-                    .frame(width: 60, height: 22)
-            }
-            .padding(14)
-        }
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 2)
-        .redacted(reason: .placeholder)
-        .shimmer()
+        ContentCardSkeleton(.standard)
     }
 }
 

@@ -259,62 +259,13 @@ struct RestaurantsView: View {
     }
 }
 
-// MARK: - Skeleton (matches RestaurantCardView layout)
+// MARK: - Skeleton
 
+/// IOS-IA-003: delegates to the unified `ContentCardSkeleton` (`.listRow`) so
+/// the loading shape matches the restaurant `.listRow` card exactly.
 private struct RestaurantCardSkeleton: View {
     var body: some View {
-        HStack(spacing: 14) {
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(.systemGray5))
-                .frame(width: 100, height: 100)
-
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color(.systemGray5))
-                        .frame(height: 16)
-                    Spacer()
-                    Circle()
-                        .fill(Color(.systemGray6))
-                        .frame(width: 16, height: 16)
-                }
-
-                HStack(spacing: 8) {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color(.systemGray6))
-                        .frame(width: 70, height: 12)
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color(.systemGray6))
-                        .frame(width: 30, height: 12)
-                }
-
-                HStack(spacing: 3) {
-                    ForEach(0..<5, id: \.self) { _ in
-                        Circle()
-                            .fill(Color(.systemGray6))
-                            .frame(width: 10, height: 10)
-                    }
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color(.systemGray6))
-                        .frame(width: 24, height: 10)
-                }
-
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(Color(.systemGray6))
-                        .frame(width: 9, height: 9)
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color(.systemGray6))
-                        .frame(width: 100, height: 10)
-                }
-            }
-        }
-        .padding(10)
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 2)
-        .redacted(reason: .placeholder)
-        .shimmer()
+        ContentCardSkeleton(.listRow)
     }
 }
 

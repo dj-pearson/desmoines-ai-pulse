@@ -186,7 +186,7 @@
       ],
       "priority": 13,
       "passes": false,
-      "notes": ""
+      "notes": "Implemented 2026-06-02 (awaiting macOS CI xcodebuild gate). Added Views/Components/ContentCard.swift: a single ContentCardData value type + ContentCard view with four variants (.featured/.compact/.standard/.listRow), matching ContentCardSkeleton per variant, a shared CardFavoriteButton (managed + external modes), SponsoredBadge (FTC, seam for IOS-ADS-011) and VipGoldBadge premium affordances, and Event/Restaurant/Attraction.cardData adapters. EventCardView, RestaurantCardView, AttractionCardView (Search), BrowseAttractionCardView, FeaturedEventCard, CompactRestaurantCard, CompactAttractionCard and all four list skeletons are now thin wrappers delegating to ContentCard, eliminating the divergent duplication. Call-site init signatures unchanged. Decorative (rail) vs standalone (list/search) a11y modes preserve prior VoiceOver behavior. Dynamic Type reflow + CachedAsyncImage fixed aspect frames (no layout shift). passes=false until CI green."
     },
     {
       "id": "IOS-IA-004",
