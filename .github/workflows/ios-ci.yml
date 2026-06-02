@@ -73,12 +73,15 @@ jobs:
   version-bump:
     name: Auto Version Bump
     runs-on: ubuntu-latest
-    # Only bump version on push to main (not PRs, not [skip ci])
-    if: >
-      github.event_name == 'push' &&
-      github.ref == 'refs/heads/main' &&
-      !contains(github.event.head_commit.message, '[skip ci]') &&
-      !contains(github.event.head_commit.message, '[version bump]')
+    # Auto version-bump DISABLED. The marketing version and build number are
+    # now managed manually in ios/project.yml and via the release workflow's
+    # `version` / `build_number` inputs, so the version no longer marches ahead
+    # of the build under test. To re-enable automatic patch bumps on push to
+    # main, restore the previous guard:
+    #   github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+    #   !contains(github.event.head_commit.message, '[skip ci]') &&
+    #   !contains(github.event.head_commit.message, '[version bump]')
+    if: false
     outputs:
       new_version: ${{ steps.bump.outputs.new_version }}
       new_build: ${{ steps.bump.outputs.new_build }}
