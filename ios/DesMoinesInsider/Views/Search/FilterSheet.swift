@@ -76,7 +76,8 @@ struct FilterSheet: View {
                     Section {
                         PremiumGate(
                             requiredTier: .insider,
-                            feature: "Distance radius, free events filter, and minimum rating"
+                            feature: "Distance radius, free events filter, and minimum rating",
+                            context: .advancedFilters
                         ) {
                             advancedFiltersSection
                         }

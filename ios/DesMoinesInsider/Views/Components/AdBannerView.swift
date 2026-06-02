@@ -66,7 +66,7 @@ struct AdBannerView: View {
                 .stroke(Color.orange.opacity(0.15), lineWidth: 1)
         )
         .sheet(isPresented: $showSubscription) {
-            SubscriptionView()
+            PaywallView(context: .adFree)
         }
     }
 }

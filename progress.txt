@@ -1484,3 +1484,87 @@ Verification status:
   native search field already shows the query and Clear all clears it. If a
   visible search chip is wanted, each screen's activeChips/activeFiltersBar is
   the single place to add it.
+
+## 2026-06-02 — IOS-SUB-010 (contextual native paywall + per-feature upsell) [awaiting CI build]
+
+Replaced the generic "push the full pricing screen" upsell with a reusable
+contextual paywall that appears at the moment a user hits a locked feature,
+with copy tailored to that feature, a preselected tier, a monthly/annual toggle,
+the required auto-renew disclosure, restore + Terms/Privacy, and per-surface
+conversion analytics.
+
+File added:
+- ios/DesMoinesInsider/Views/Subscription/PaywallView.swift (~443 lines):
+  • PaywallContext — the reusable context value (id used as the analytics key,
+    icon, headline, subheadline, benefit bullets, recommendedTier).
+  • Eight tailored presets covering every surface the AC names: .unlimitedFavorites,
+    .tripPlanner, .insiderTips, .diningTips, .savedSearches, .customAlerts,
+    .advancedFilters, .adFree — plus .generic(tier:feature:) fallback that builds
+    bullets from SubscriptionTier.features.
+  • PaywallView — StoreKit-2-backed custom paywall (NOT Apple's
+    SubscriptionStoreView, because we need to preselect the context's tier and
+    drive the period toggle). Header + benefit checklist + Insider/VIP tier
+    selector (recommended tier preselected, "Current" shown for a tier the user
+    already holds, can't "buy down"), a Monthly/Annual segmented toggle that only
+    appears when >1 period is available, a pinned purchase footer with the live
+    StoreKit displayPrice, the legally-required auto-renew disclosure, and a
+    Restore / Terms / Privacy row. Purchases go through the existing
+    StoreKitService.purchase(); Terms/Privacy are Links to Config.siteURL.
+  • Analytics: present / dismiss / purchase_start / purchase_complete / restore
+    are all logged via AnalyticsService with the context id (a `didConvert` flag
+    stops onDisappear from logging a phantom "dismiss" after a conversion).
+
+Files modified:
+- Services/StoreKitService.swift — additive billing-period API:
+  SubscriptionPeriod enum (.monthly/.annual), product(for:period:),
+  availablePeriods(for:), and a public static rank(_:). availablePeriods is
+  derived from the loaded products, so it reports [.monthly] today and the
+  Annual toggle simply appears once IOS-SUB-012 adds the annual SKUs — no
+  paywall change needed.
+- Services/AnalyticsService.swift — additive trackPaywallPresented/Dismissed/
+  PurchaseStart/PurchaseComplete/Restore(context:…) methods.
+- Views/Components/PremiumGate.swift — added optional `context: PaywallContext?`
+  and now presents PaywallView (context ?? .generic(tier:feature:)) instead of
+  SubscriptionView. Every existing PremiumGate becomes a contextual paywall.
+- Routed the gated feature-hit entry points to the tailored paywall:
+  FilterSheet (.advancedFilters via PremiumGate), AdBannerView (.adFree),
+  EventDetailView insider-tips (.insiderTips), RestaurantDetailView dining-tips
+  (.diningTips), SubscriptionBanner's FavoritesLimitBanner (.unlimitedFavorites).
+
+Design decisions:
+- Gated upsell vs management: feature-hit upsells now use PaywallView; the
+  MANAGEMENT/overview entry points deliberately keep the full SubscriptionView
+  (Settings "Manage subscription", and the Profile SubscriptionBanner CTA) —
+  those want the current-plan badge + cross-platform "you also subscribe on the
+  web" banner, which a focused paywall shouldn't duplicate.
+- Custom StoreKit UI over SubscriptionStoreView: SubscriptionStoreView can't
+  preselect a specific product/tier or inject per-feature headlines, which are
+  the whole point of a contextual paywall. The custom UI carries the required
+  3.1.2 disclosures itself (auto-renew terms, live price, Terms/Privacy, Restore).
+- PremiumGate signature stayed source-compatible: `context` is an optional with
+  a default, added before the trailing `content` closure, so all existing
+  `PremiumGate(requiredTier:feature:){…}` call sites compile unchanged.
+
+Verification status:
+- No Swift toolchain locally; xcodebuild gate runs in macOS CI. Static checks
+  pass — balanced delimiters across all 9 touched files; every referenced symbol
+  verified (StoreKitService.purchase/restorePurchases/currentTier, the new
+  product(for:period:)/availablePeriods/rank, Product.displayPrice/.subscription
+  .subscriptionPeriod.unit, SubscriptionTier.features/displayName, Config.siteURL,
+  AnalyticsService.trackEvent). async purchase()/restore() marked @MainActor since
+  they touch the @MainActor StoreKitService + @State. project.yml directory-based
+  sources auto-include PaywallView.swift. passes:false until CI is green.
+
+**Learnings / flags for future iterations:**
+- IOS-SUB-012 seam: add the annual products to App Store Connect + the product
+  IDs to StoreKitService.{insider,vip}ProductIDs, and the Monthly/Annual toggle
+  + annual pricing light up automatically (availablePeriods is product-derived).
+- IOS-SUB-011 seam: PaywallContext is the "context" the story's planned single
+  PremiumFeature enum should map onto (feature -> required tier -> PaywallContext).
+  The favorites cap, saved-searches/alerts, advanced-filter, and trip-planner
+  quota gates SUB-011 enforces should each present the matching preset here.
+- AnalyticsService is still a local-logging facade (Firebase not yet wired) — the
+  paywall events are logged via AppLogger today; when Firebase lands they flow to
+  real analytics with zero call-site changes.
+- The auto-renew disclosure string lives in PaywallView.autoRenewDisclosure; if
+  legal wants different wording, that's the single source.

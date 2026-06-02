@@ -65,7 +65,7 @@ struct RestaurantDetailView: View {
             FullScreenImageViewer(imageUrl: restaurant.imageUrl, isPresented: $showImageViewer)
         }
         .sheet(isPresented: $showSubscription) {
-            SubscriptionView()
+            PaywallView(context: .diningTips)
         }
     }
 

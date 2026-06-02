@@ -103,6 +103,50 @@ final class StoreKitService {
             .sorted { $0.price < $1.price }
     }
 
+    // MARK: - Billing Periods (IOS-SUB-010)
+
+    /// Billing cadence for a subscription product. Annual SKUs arrive with
+    /// IOS-SUB-012; until then `availablePeriods` reports `[.monthly]` and the
+    /// paywall's period toggle stays hidden automatically.
+    enum SubscriptionPeriod: String, CaseIterable, Identifiable {
+        case monthly, annual
+        var id: String { rawValue }
+        var label: String { self == .monthly ? "Monthly" : "Annual" }
+        var shortSuffix: String { self == .monthly ? "/mo" : "/yr" }
+    }
+
+    /// The product for a tier + billing period, if one is configured in App
+    /// Store Connect. Drives the contextual paywall's tier/period selection.
+    func product(for tier: SubscriptionTier, period: SubscriptionPeriod) -> Product? {
+        pool(for: tier).first { Self.period(of: $0) == period }
+    }
+
+    /// Which billing periods are actually available for a tier (derived from the
+    /// loaded products). Order follows `SubscriptionPeriod.allCases`.
+    func availablePeriods(for tier: SubscriptionTier) -> [SubscriptionPeriod] {
+        let present = Set(pool(for: tier).map { Self.period(of: $0) })
+        return SubscriptionPeriod.allCases.filter { present.contains($0) }
+    }
+
+    private func pool(for tier: SubscriptionTier) -> [Product] {
+        switch tier {
+        case .insider: return insiderProducts
+        case .vip: return vipProducts
+        case .free: return []
+        }
+    }
+
+    /// Maps a product's StoreKit subscription period to our coarse monthly /
+    /// annual bucket (weekly/monthly → monthly; yearly → annual).
+    private static func period(of product: Product) -> SubscriptionPeriod {
+        guard let unit = product.subscription?.subscriptionPeriod.unit else { return .monthly }
+        return unit == .year ? .annual : .monthly
+    }
+
+    /// Coarse rank so callers can tell whether a tier is an upgrade over the
+    /// user's current entitlement. `free < insider < vip`.
+    static func rank(_ tier: SubscriptionTier) -> Int { tierRank(tier) }
+
     // MARK: - Private
 
     @ObservationIgnored private var transactionListener: Task<Void, Never>?

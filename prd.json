@@ -219,7 +219,7 @@
       ],
       "priority": 15,
       "passes": false,
-      "notes": ""
+      "notes": "Implemented 2026-06-02 (awaiting macOS CI xcodebuild gate). Added Views/Subscription/PaywallView.swift: a reusable StoreKit-2-backed contextual paywall driven by a PaywallContext (id/icon/headline/benefits/recommendedTier) with 8 tailored presets — unlimitedFavorites, tripPlanner, insiderTips, diningTips, savedSearches, customAlerts, advancedFilters, adFree — plus a generic(tier:feature:) fallback. Paywall preselects the context's tier (Insider/VIP, shows 'Current' for held tiers, no buy-down), has a Monthly/Annual segmented toggle that appears only when >1 period exists, a pinned footer with live StoreKit displayPrice, the required auto-renew disclosure, and Restore + Terms + Privacy. StoreKitService got additive SubscriptionPeriod + product(for:period:)/availablePeriods(for:)/rank() (period list is product-derived so the Annual toggle lights up automatically when SUB-012 adds annual SKUs). AnalyticsService got trackPaywallPresented/Dismissed/PurchaseStart/PurchaseComplete/Restore(context:) so every lifecycle event is logged with the context id for per-surface conversion. PremiumGate now presents PaywallView (optional context, generic fallback) instead of SubscriptionView; routed gated entry points to tailored contexts: FilterSheet(.advancedFilters), AdBannerView(.adFree), EventDetailView(.insiderTips), RestaurantDetailView(.diningTips), FavoritesLimitBanner(.unlimitedFavorites). Management entry points (Settings manage, Profile upgrade banner) intentionally keep the full SubscriptionView. Monthly/annual toggle infra is in place; annual SKUs themselves land in SUB-012. passes=false until CI green."
     },
     {
       "id": "IOS-SUB-011",
