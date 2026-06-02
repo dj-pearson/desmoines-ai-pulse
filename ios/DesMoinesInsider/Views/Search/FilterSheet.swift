@@ -15,7 +15,7 @@ struct FilterSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     private var hasPremiumAccess: Bool {
-        storeKit.currentTier == .insider || storeKit.currentTier == .vip
+        storeKit.hasFeature(.advancedFilters)
     }
 
     var body: some View {

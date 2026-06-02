@@ -147,6 +147,12 @@ final class StoreKitService {
     /// user's current entitlement. `free < insider < vip`.
     static func rank(_ tier: SubscriptionTier) -> Int { tierRank(tier) }
 
+    /// Whether the current entitlement unlocks a feature (IOS-SUB-011). The
+    /// single iOS equivalent of the web `useSubscription().hasFeature()`.
+    func hasFeature(_ feature: PremiumFeature) -> Bool {
+        Self.tierRank(currentTier) >= Self.tierRank(feature.requiredTier)
+    }
+
     // MARK: - Private
 
     @ObservationIgnored private var transactionListener: Task<Void, Never>?

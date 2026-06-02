@@ -455,7 +455,11 @@ struct CardFavoriteButton: View {
                         ? .info("Removed from saved", icon: "heart")
                         : .success("Saved!", icon: "heart.fill")
                 } catch {
-                    toast = .error(error.localizedDescription, icon: "exclamationmark.triangle")
+                    // The favorites cap shows the upsell paywall app-wide
+                    // (IOS-SUB-011); skip the redundant error toast for it.
+                    if !FavoritesService.isLimitReached(error) {
+                        toast = .error(error.localizedDescription, icon: "exclamationmark.triangle")
+                    }
                 }
             }
         }

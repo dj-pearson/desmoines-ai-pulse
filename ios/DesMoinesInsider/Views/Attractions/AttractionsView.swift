@@ -281,7 +281,9 @@ struct AttractionsView: View {
                 let nowFavorited = try await favoritesService.toggleFavoriteAttraction(attractionId: attraction.id)
                 showToast(nowFavorited ? "Saved \(attraction.name)" : "Removed from saved")
             } catch let error as FavoritesService.FavoritesError {
-                showToast(error.localizedDescription)
+                // Favorites cap presents the upsell paywall app-wide
+                // (IOS-SUB-011) — don't double up with a toast.
+                if case .limitReached = error {} else { showToast(error.localizedDescription) }
             } catch {
                 showToast("Couldn't update favorite")
             }

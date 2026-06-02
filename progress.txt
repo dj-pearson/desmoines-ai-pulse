@@ -1568,3 +1568,91 @@ Verification status:
   real analytics with zero call-site changes.
 - The auto-renew disclosure string lives in PaywallView.autoRenewDisclosure; if
   legal wants different wording, that's the single source.
+
+## 2026-06-02 — IOS-SUB-011 (paywall placement / enforce premium limits) [awaiting CI build]
+
+Centralized the feature→tier map and actually ENFORCED the free favorites cap
+(which was previously broken), wiring it to the IOS-SUB-010 contextual paywall.
+
+Bug fixed (the headline): the favorites cap in FavoritesService was hardcoded to
+`SubscriptionTier.free.maxFavorites`, so it capped EVERY user at 3 — including
+paying Insider/VIP subscribers — AND it only checked events + attractions, never
+restaurants. Now the cap reads the user's ACTUAL tier (StoreKit + backend), is a
+TOTAL across events+restaurants+attractions (matching the web "Save up to 3
+favorites"), and applies to all three add paths.
+
+File added:
+- ios/DesMoinesInsider/Models/PremiumFeature.swift — the single source of truth
+  mirroring web `useSubscription().hasFeature()`: a PremiumFeature enum (15 cases
+  with the same raw keys as web: unlimited_favorites, advanced_filters, ad_free,
+  trip_planner, save_searches, create_alerts, write_reviews, early_access, …,
+  plus VIP-only vip_events/reservation_assistance/sms_alerts/concierge/local_perks),
+  each with `requiredTier` and a `paywallContext` (maps to the right SUB-010
+  preset, generic fallback otherwise). Plus PremiumFeature.QuotaAction
+  (favorites/savedSearches/alerts/tripPlans) with limit(for:)/isWithinLimit/
+  remaining helpers for the count-limited features.
+
+Files modified:
+- Models/AppEnums.swift — added SubscriptionTier.maxSavedSearches / maxAlerts /
+  maxTripPlansPerMonth (free 0/0/0, insider 10/10/5, vip -1/-1/-1) alongside the
+  existing maxFavorites; mirrors the web SubscriptionLimits and the PRD's
+  "Insider 5 trips/mo, VIP unlimited".
+- Services/StoreKitService.swift — added hasFeature(_ feature: PremiumFeature),
+  the iOS equivalent of the web hasFeature().
+- Services/FavoritesService.swift — replaced the hardcoded per-type cap with a
+  unified enforceFavoritesCap() (correct tier + total count, applied to events,
+  restaurants AND attractions), a `totalFavoritesCount`, and an isLimitReached(_:)
+  helper. On cap hit it BOTH throws FavoritesError.limitReached (so callers'
+  existing error paths still work and nothing gets inserted) AND posts a new
+  .favoritesLimitReached notification.
+- Views/MainTabView.swift — one app-level presenter: onReceive(.favoritesLimitReached)
+  → presents PaywallView(context: .unlimitedFavorites). This guarantees the soft
+  gate (FavoritesLimitBanner is already shown on the Saved tab for free users;
+  the 4th-save attempt now triggers the paywall) from EVERY save surface — cards,
+  detail-view hearts, attractions list — without per-call-site sheets.
+- Views/Components/ContentCard.swift (CardFavoriteButton) + Views/Attractions/
+  AttractionsView.swift (toggleFavorite) — suppress the now-redundant error toast
+  on limitReached, since the global paywall already presents.
+- Views/Search/FilterSheet.swift — hasPremiumAccess now routes through
+  storeKit.hasFeature(.advancedFilters) (was an inline tier compare), and the
+  advanced-filters gate already presents PaywallView(.advancedFilters) via the
+  PremiumGate context wired in SUB-010.
+
+Design decisions:
+- Notification-driven single paywall presenter over per-call-site sheets: the
+  favorites toggle is invoked from ~5 surfaces (unified CardFavoriteButton, the
+  attractions external path, both detail-view header hearts). A notification +
+  one MainTabView listener covers all of them (even the ones that `try?`-swallow
+  the error) with one piece of presentation code and no missed surface.
+- Favorites cap is a TOTAL (not per-type): matches the web's single `favorites`
+  limit + the "Save up to 3 favorites" copy, and makes the FavoritesLimitBanner's
+  "N/3 saves used" meaningful. Premium tiers are -1 (unlimited).
+- PremiumFeature raw values are intentionally identical to the web hasFeature()
+  string keys so the two platforms can't drift.
+
+Verification status:
+- No Swift toolchain locally; xcodebuild gate runs in macOS CI. Static checks
+  pass — balanced delimiters across all 8 touched files; the hardcoded
+  `SubscriptionTier.free.maxFavorites` enforcement bug is gone (the only remaining
+  ref is the FavoritesLimitBanner's display of the free cap, which is correct);
+  every referenced symbol verified (StoreKitService.currentTier/rank/tierRank,
+  PaywallContext presets + generic, SubscriptionTier limits, Notification.Name).
+  project.yml directory sources auto-include PremiumFeature.swift. passes:false
+  until CI is green.
+
+**Learnings / flags for future iterations:**
+- IOS-PARITY-001 (Trip Planner) seam: gate entry with storeKit.hasFeature(.tripPlanner),
+  drive the quota meter with PremiumFeature.QuotaAction.tripPlans.remaining(usedThisMonth,
+  for: tier) and present .tripPlanner's paywall when isWithinLimit == false. The
+  monthly-usage COUNT itself still needs a store (Supabase table or local) — that's
+  PARITY-001's job; the limits + gate are ready here.
+- IOS-PARITY-008 (Saved searches / alerts) seam: same pattern with
+  .saveSearches/.createAlerts + QuotaAction.savedSearches/.alerts. Free tier limit
+  is 0, so those features are fully Insider+ gated.
+- Cold-start race (pre-existing-style edge): StoreKitService.currentTier can read
+  .free for a moment on launch before refreshBackendTier() resolves a web/Android
+  entitlement, so a premium user who saves a 4th favorite in that first instant
+  could see the paywall once. It clears on retry after entitlements load; if it
+  proves annoying, gate enforceFavoritesCap() behind "entitlements loaded".
+- write_reviews (IOS-PARITY-009) should call hasFeature(.writeReviews) and present
+  its generic paywall when locked.

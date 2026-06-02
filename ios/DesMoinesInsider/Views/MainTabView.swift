@@ -41,6 +41,11 @@ struct MainTabView: View {
         }
     }
 
+    /// Presents the unlimited-favorites paywall when any save surface hits the
+    /// free cap (IOS-SUB-011). Driven by a notification so there's exactly one
+    /// presenter instead of per-call-site sheets.
+    @State private var showFavoritesPaywall = false
+
     var body: some View {
         Group {
             if sizeClass == .regular {
@@ -55,6 +60,12 @@ struct MainTabView: View {
         .tint(Color.accentColor)
         .onAppear {
             Self.configureTranslucentAppearance()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .favoritesLimitReached)) { _ in
+            showFavoritesPaywall = true
+        }
+        .sheet(isPresented: $showFavoritesPaywall) {
+            PaywallView(context: .unlimitedFavorites)
         }
     }
 

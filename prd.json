@@ -236,7 +236,7 @@
       ],
       "priority": 16,
       "passes": false,
-      "notes": ""
+      "notes": "Implemented 2026-06-02 (awaiting macOS CI xcodebuild gate). Centralized feature->tier mapping + enforced the free favorites cap. Fixed a real bug: FavoritesService capped EVERY user at 3 (hardcoded SubscriptionTier.free.maxFavorites, so paying Insider/VIP were capped) and skipped restaurants entirely. Now enforceFavoritesCap() reads the user's actual tier, is a TOTAL across events+restaurants+attractions (matches web 'Save up to 3'), and applies to all three add paths; premium = unlimited. Added Models/PremiumFeature.swift mirroring web useSubscription().hasFeature() (same raw keys) with requiredTier + paywallContext per feature, plus QuotaAction (favorites/savedSearches/alerts/tripPlans) limit/isWithinLimit/remaining helpers. Added SubscriptionTier.maxSavedSearches/maxAlerts/maxTripPlansPerMonth (free 0/0/0, insider 10/10/5, vip -1) and StoreKitService.hasFeature(_:). On cap hit FavoritesService throws limitReached AND posts .favoritesLimitReached; MainTabView has ONE listener that presents PaywallView(.unlimitedFavorites), so the soft gate fires from every save surface (cards, detail hearts, attractions) without per-site sheets; redundant toasts suppressed. FilterSheet's advanced-filters gate routes via hasFeature(.advancedFilters) + presents PaywallView(.advancedFilters). Saved searches/alerts (PARITY-008) and Trip Planner quota (PARITY-001) are not yet enforceable (their screens don't exist) but their PremiumFeature entries, per-tier limits, and quota helpers are ready as the seam. passes=false until CI green."
     },
     {
       "id": "IOS-SUB-012",

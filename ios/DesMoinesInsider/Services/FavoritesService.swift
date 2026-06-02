@@ -23,6 +23,39 @@ final class FavoritesService {
         return supabase
     }
 
+    // MARK: - Favorites Cap (IOS-SUB-011)
+
+    /// Total saved items across events, restaurants and attractions. The free
+    /// cap (`SubscriptionTier.free.maxFavorites` = 3) is a TOTAL, matching the
+    /// web "Save up to 3 favorites".
+    var totalFavoritesCount: Int {
+        favoriteEventIds.count + favoriteRestaurantIds.count + favoriteAttractionIds.count
+    }
+
+    /// The current user's favorites limit (`-1` = unlimited). Resolved from the
+    /// user's ACTUAL tier (StoreKit + backend), not hardcoded to free — so
+    /// Insider/VIP get unlimited saves.
+    private var favoritesLimit: Int {
+        StoreKitService.shared.currentTier.maxFavorites
+    }
+
+    /// Throws (and broadcasts) when adding one more favorite would exceed the
+    /// free cap. The notification drives the single app-level upsell paywall
+    /// (see MainTabView), so every save surface gets the soft gate for free.
+    private func enforceFavoritesCap() throws {
+        let limit = favoritesLimit
+        guard limit > 0, totalFavoritesCount >= limit else { return }
+        NotificationCenter.default.post(name: .favoritesLimitReached, object: nil)
+        throw FavoritesError.limitReached(max: limit)
+    }
+
+    /// Whether an error thrown by a toggle was the favorites cap, so callers can
+    /// suppress a redundant error toast (the global paywall already shows).
+    static func isLimitReached(_ error: Error) -> Bool {
+        if case FavoritesError.limitReached = error { return true }
+        return false
+    }
+
     // ================================================================
     // MARK: - Event Favorites
     // ================================================================
@@ -76,10 +109,7 @@ final class FavoritesService {
     }
 
     private func addEventFavorite(userId: String, eventId: String) async throws -> Bool {
-        let maxFavorites = SubscriptionTier.free.maxFavorites
-        if maxFavorites > 0 && favoriteEventIds.count >= maxFavorites {
-            throw FavoritesError.limitReached(max: maxFavorites)
-        }
+        try enforceFavoritesCap()
 
         struct InsertRow: Encodable {
             let user_id: String
@@ -218,6 +248,8 @@ final class FavoritesService {
     }
 
     private func addRestaurantFavorite(userId: String, restaurantId: String) async throws -> Bool {
+        try enforceFavoritesCap()
+
         do {
             struct InsertRow: Encodable {
                 let user_id: String
@@ -347,10 +379,7 @@ final class FavoritesService {
     }
 
     private func addAttractionFavorite(userId: String, attractionId: String) async throws -> Bool {
-        let maxFavorites = SubscriptionTier.free.maxFavorites
-        if maxFavorites > 0 && favoriteAttractionIds.count >= maxFavorites {
-            throw FavoritesError.limitReached(max: maxFavorites)
-        }
+        try enforceFavoritesCap()
 
         do {
             struct InsertRow: Encodable {
@@ -502,4 +531,11 @@ final class FavoritesService {
             }
         }
     }
+}
+
+extension Notification.Name {
+    /// Posted when a free user tries to save past the favorites cap. A single
+    /// app-level listener (MainTabView) presents the unlimited-favorites paywall
+    /// so every save surface gets the soft gate without per-call-site code.
+    static let favoritesLimitReached = Notification.Name("favoritesLimitReached")
 }
