@@ -55,22 +55,24 @@ struct SwipeCard: View {
                         .font(.title2.bold())
                         .foregroundStyle(.white)
                         .lineLimit(2)
-                        .multilineTextAlignment(.leading)
+                        .truncationMode(.tail)
+                        .fixedSize(horizontal: false, vertical: true)
 
-                    HStack(spacing: 10) {
-                        Text(item.subtitle)
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(.white.opacity(0.85))
-                        if !item.locationText.isEmpty {
-                            HStack(spacing: 3) {
-                                Image(systemName: "mappin.and.ellipse")
-                                    .font(.caption2)
-                                Text(item.locationText)
-                                    .font(.caption)
-                                    .lineLimit(1)
-                            }
+                    // Subtitle and location on separate full-width lines so
+                    // neither competes for space in an HStack. Keeping them
+                    // independent ensures each truncates cleanly at the tail.
+                    Text(item.subtitle)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+
+                    if !item.locationText.isEmpty {
+                        Label(item.locationText, systemImage: "mappin.and.ellipse")
+                            .font(.caption)
                             .foregroundStyle(.white.opacity(0.75))
-                        }
+                            .lineLimit(1)
+                            .truncationMode(.tail)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

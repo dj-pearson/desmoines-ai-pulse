@@ -67,10 +67,19 @@ enum SwipeItem: Identifiable, Hashable {
         }
     }
 
+    /// Short location label for the swipe card (city / venue only — not the
+    /// full geocoded address string which can be 80+ characters long and
+    /// causes the HStack subtitle row to show mid-string content).
     var locationText: String {
         switch self {
-        case .event(let e): return e.displayLocation
-        case .restaurant(let r): return r.displayLocation
+        case .event(let e):
+            // Events already store a clean [venue, city] display location.
+            return e.displayLocation
+        case .restaurant(let r):
+            // Use only the city; the raw `location` column contains the full
+            // geocoded string ("1234 Main St, Des Moines, IA 50309, USA") which
+            // is far too long for a one-line card label.
+            return r.city ?? ""
         }
     }
 
