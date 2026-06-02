@@ -282,7 +282,7 @@
       ],
       "priority": 19,
       "passes": false,
-      "notes": ""
+      "notes": "Implemented 2026-06-02 (awaiting macOS CI xcodebuild gate). In-app win-back machinery done; discounted-offer config + backend signing documented in ios/RELEASE_ACTIONS.md §3. StoreKitService: SubscriptionRenewalState (none/active/expiringSoon/billingRetry/grace/expired) + refreshRenewalState() reading Product.SubscriptionInfo.status(for:group) (state, renewalInfo.willAutoRenew, transaction.expirationDate), refreshed via updatePurchasedProducts. New SubscriptionStatusBanner (self-contained, dismissible, stacked under OfflineBanner in MainTabView): shows only for states needing attention — expiringSoon/billingRetry/grace deep-link to apps.apple.com/account/subscriptions; expired presents PaywallView(.winBack). Lapsed users see it on next launch (state refreshed at launch). Settings gains a 'Redeem Offer Code' row via .offerCodeRedemption(isPresented:) (iOS 16+). Added .winBack PaywallContext + analytics (trackRenewalBanner action/state, trackOfferCodeRedeem). Did NOT add promotional offers to Products.storekit (they need server-signed signatures to redeem; documented instead). Remaining: ASC offer/code/promo/win-back config + a signing edge function for discounted promotional offers (iOS 18 win-back offers are system-surfaced, target is 17). passes=false until CI green."
     },
     {
       "id": "IOS-ADS-010",

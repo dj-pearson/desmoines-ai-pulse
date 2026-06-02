@@ -51,7 +51,31 @@ supabase functions deploy validate-ios-receipt
 supabase functions deploy appstore-server-notifications-v2
 ```
 
-## 3. Analytics — Firebase not yet wired (IOS-SUB-010)
+## 3. Win-back & promotional offers (IOS-SUB-014) — config + backend signing
+
+The in-app pieces are done: an **offer-code redemption** entry in Settings
+(`.offerCodeRedemption`), a **renewal/win-back banner** (expiring / billing-retry
+/ grace / expired) that deep-links to Apple subscription management or the
+win-back paywall, and analytics. To make the actual *discounted* offers
+redeemable you still need:
+
+1. **App Store Connect:** create the offers on the annual subscriptions —
+   - **Offer codes** (for the Settings redemption sheet) — works as soon as the
+     codes exist; no app change needed.
+   - **Promotional offers** (e.g. "winback50" — 50% off the first year) for
+     lapsed users.
+   - **Win-back offers** (iOS 18+) shown automatically by the App Store.
+2. **Backend signing (promotional offers only):** promotional offers must be
+   redeemed with a server-generated signature passed as
+   `Product.PurchaseOption.promotionalOffer(offerID:signature:)`. Add a Supabase
+   edge function that signs (keyID, nonce, timestamp) with the subscription key,
+   then have the win-back paywall request + apply it. **Until that endpoint
+   exists, the win-back paywall sells the standard product** (still recovers the
+   user, just without the discount).
+3. **iOS 18 win-back offers** need no signing — the system surfaces them. Our
+   deployment target is iOS 17, so they only show for iOS 18+ users.
+
+## 4. Analytics — Firebase not yet wired (IOS-SUB-010)
 
 The contextual paywall logs `paywall_present / dismiss / purchase_start /
 purchase_complete / restore` (each with the surface `context` id) via
@@ -62,7 +86,7 @@ conversion data, complete the Firebase setup described at the top of
 uncomment the `Analytics.logEvent` calls, update `PrivacyInfo.xcprivacy`). No
 call-site changes needed — the events already fire.
 
-## 4. Verify hosted legal pages (IOS-SUB-010)
+## 5. Verify hosted legal pages (IOS-SUB-010)
 
 The paywall links to `https://desmoinesinsider.com/terms` and
 `/privacy-policy` (Apple requires functional Terms/EULA + Privacy links on any

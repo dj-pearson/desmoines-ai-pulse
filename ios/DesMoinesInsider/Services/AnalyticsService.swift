@@ -118,6 +118,17 @@ final class AnalyticsService {
         trackEvent("soft_paywall_present", parameters: ["source": source])
     }
 
+    // MARK: - Win-back / renewal (IOS-SUB-014)
+
+    /// `state`: expiring_soon / billing_retry / grace / expired.
+    func trackRenewalBanner(action: String, state: String) {
+        trackEvent("renewal_banner", parameters: ["action": action, "state": state])
+    }
+
+    func trackOfferCodeRedeem(action: String) {
+        trackEvent("offer_code_redeem", parameters: ["action": action])
+    }
+
     // MARK: - User Properties
 
     func setUserId(_ userId: String?) {

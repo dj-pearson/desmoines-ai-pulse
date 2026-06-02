@@ -134,6 +134,20 @@ extension PaywallContext {
         recommendedTier: .insider
     )
 
+    /// Win-back upsell for lapsed subscribers (IOS-SUB-014).
+    static let winBack = PaywallContext(
+        id: "winback",
+        icon: "arrow.uturn.backward.circle.fill",
+        headline: "We saved your spot",
+        subheadline: "Come back to Des Moines Insider and pick up right where you left off.",
+        benefits: [
+            "Your favorites and saved searches are still here",
+            "Unlimited favorites, AI Trip Planner & ad-free",
+            "Fresh local events added every day",
+        ],
+        recommendedTier: .insider
+    )
+
     static let adFree = PaywallContext(
         id: "ad_free",
         icon: "eye.slash.fill",

@@ -58,6 +58,22 @@ final class StoreKitService {
     /// Google Play on Android) so the iOS UI honors them too.
     private(set) var backendTier: SubscriptionTier = .free
 
+    // MARK: - Renewal state (IOS-SUB-014)
+
+    /// Coarse renewal/lapse state derived from StoreKit's local subscription
+    /// status, used to drive the win-back / update-payment banner.
+    enum SubscriptionRenewalState: Equatable {
+        case none          // no/active-elsewhere subscription, nothing to nudge
+        case active        // subscribed and will auto-renew
+        case expiringSoon  // subscribed but auto-renew is OFF (will lapse)
+        case billingRetry  // payment failed, Apple is retrying (no grace UI)
+        case grace         // in billing grace period (still entitled)
+        case expired       // lapsed/revoked — eligible for win-back
+    }
+
+    private(set) var renewalState: SubscriptionRenewalState = .none
+    private(set) var renewalExpiryDate: Date?
+
     /// Per-platform breakdown of the user's active subscriptions. Used by the
     /// SubscriptionView to surface a banner like "You also have an active VIP
     /// subscription via the website" so users know where to cancel from.
@@ -282,6 +298,54 @@ final class StoreKitService {
         }
 
         purchasedProductIDs = purchased
+        await refreshRenewalState()
+    }
+
+    // MARK: - Renewal State (IOS-SUB-014)
+
+    /// Reads StoreKit's local subscription `Status` for our group and resolves a
+    /// coarse `renewalState` + expiry date. Drives the renewal/win-back banner.
+    func refreshRenewalState() async {
+        let statuses = (try? await Product.SubscriptionInfo.status(for: Self.subscriptionGroupID)) ?? []
+        var resolved: SubscriptionRenewalState = .none
+        var expiry: Date?
+
+        for status in statuses {
+            guard let renewal = try? checkVerified(status.renewalInfo),
+                  let transaction = try? checkVerified(status.transaction) else { continue }
+            if let exp = transaction.expirationDate {
+                if expiry == nil || exp > (expiry ?? .distantPast) { expiry = exp }
+            }
+            let candidate: SubscriptionRenewalState
+            switch status.state {
+            case .subscribed:        candidate = renewal.willAutoRenew ? .active : .expiringSoon
+            case .inBillingRetryPeriod: candidate = .billingRetry
+            case .inGracePeriod:     candidate = .grace
+            case .expired, .revoked: candidate = .expired
+            default:                 candidate = .none
+            }
+            // Keep the most "entitled/positive" state if multiple rows exist.
+            resolved = Self.moreRelevant(resolved, candidate)
+        }
+
+        renewalState = resolved
+        renewalExpiryDate = expiry
+    }
+
+    /// Picks the state we'd rather surface when several subscription rows report
+    /// different states (active > grace > expiringSoon > billingRetry > expired).
+    private static func moreRelevant(_ a: SubscriptionRenewalState, _ b: SubscriptionRenewalState) -> SubscriptionRenewalState {
+        func weight(_ s: SubscriptionRenewalState) -> Int {
+            switch s {
+            case .active: return 5
+            case .grace: return 4
+            case .expiringSoon: return 3
+            case .billingRetry: return 2
+            case .expired: return 1
+            case .none: return 0
+            }
+        }
+        return weight(a) >= weight(b) ? a : b
     }
 
     // MARK: - Transaction Listener

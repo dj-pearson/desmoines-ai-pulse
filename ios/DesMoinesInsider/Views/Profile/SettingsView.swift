@@ -12,6 +12,7 @@ struct SettingsView: View {
     @State private var biometric = BiometricAuthService.shared
     @State private var notifications = LocalNotificationService.shared
     @State private var showSubscription = false
+    @State private var showOfferCodeRedeem = false
     @State private var showDeleteConfirmation = false
     @State private var isDeleting = false
     @State private var errorMessage: String?
@@ -44,6 +45,14 @@ struct SettingsView: View {
                             }
                         } label: {
                             Label("Restore Purchases", systemImage: "arrow.clockwise")
+                        }
+
+                        // Offer-code redemption — win-back / promo codes (IOS-SUB-014)
+                        Button {
+                            AnalyticsService.shared.trackOfferCodeRedeem(action: "open")
+                            showOfferCodeRedeem = true
+                        } label: {
+                            Label("Redeem Offer Code", systemImage: "tag")
                         }
                     }
 
@@ -226,6 +235,15 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showSubscription) {
                 SubscriptionView()
+            }
+            .offerCodeRedemption(isPresented: $showOfferCodeRedeem) { result in
+                switch result {
+                case .success:
+                    AnalyticsService.shared.trackOfferCodeRedeem(action: "success")
+                    Task { await storeKit.refreshRenewalState() }
+                case .failure:
+                    AnalyticsService.shared.trackOfferCodeRedeem(action: "failure")
+                }
             }
             .alert("Delete Account?", isPresented: $showDeleteConfirmation) {
                 Button("Delete", role: .destructive) {

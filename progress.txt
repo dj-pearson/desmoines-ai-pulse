@@ -1791,3 +1791,73 @@ Verification status:
 - Two .sheet modifiers now live on MainTabView's root (favorites isPresented +
   soft-paywall item). Fine on iOS 17; if a third upsell sheet is added, consider
   consolidating into one item-driven enum to avoid sheet-stacking edge cases.
+
+## 2026-06-02 — IOS-SUB-014 (win-back & promotional offers) [awaiting CI build]
+
+Added the in-app machinery to recover lapsing/churned subscribers: a renewal/
+win-back banner, an offer-code redemption entry, the win-back paywall, and
+analytics. The discounted-offer config + backend signing is documented in
+RELEASE_ACTIONS.md (it needs App Store Connect + a signature endpoint).
+
+Files modified:
+- Services/StoreKitService.swift — added SubscriptionRenewalState
+  (none/active/expiringSoon/billingRetry/grace/expired) + renewalState /
+  renewalExpiryDate, computed by refreshRenewalState() which reads StoreKit's
+  local Product.SubscriptionInfo.status(for: group) (state + renewalInfo
+  .willAutoRenew + transaction.expirationDate). Called from
+  updatePurchasedProducts(), so it stays fresh after launch/purchase/restore/
+  transaction updates. moreRelevant() picks the most-entitled state if several
+  rows disagree.
+- Views/Subscription/PaywallView.swift — added a .winBack PaywallContext preset.
+- Services/AnalyticsService.swift — trackRenewalBanner(action:state:) and
+  trackOfferCodeRedeem(action:).
+- Views/MainTabView.swift — the top safe-area inset now stacks OfflineBanner +
+  SubscriptionStatusBanner.
+- Views/Profile/SettingsView.swift — "Redeem Offer Code" row using the
+  `.offerCodeRedemption(isPresented:)` modifier (iOS 16+); success refreshes
+  renewal state. Logs open/success/failure.
+
+File added:
+- Views/Components/SubscriptionStatusBanner.swift — self-contained, dismissible
+  top banner that shows ONLY for states needing attention: expiringSoon
+  (auto-renew off) / billingRetry / grace → deep-link to Apple subscription
+  management (https://apps.apple.com/account/subscriptions via openURL);
+  expired → presents PaywallView(.winBack). Dismiss is per-state (re-appears if
+  the state changes). Logs shown/tap/dismiss with the state key.
+
+Design decisions:
+- Self-contained banner owns its own win-back sheet rather than adding a 3rd
+  sheet to MainTabView's root (avoids sheet-stacking with the favorites +
+  soft-paywall sheets).
+- "Lapsed user on next launch" is handled by the banner appearing whenever
+  renewalState == .expired (refreshed on launch via updatePurchasedProducts),
+  with its "See offer" → win-back paywall — no separate launch-prompt machinery.
+- Renewal state is read from LOCAL StoreKit status (authoritative for this
+  device's purchase). The backend webhook (appstore-server-notifications-v2)
+  already maps billing-retry→past_due / grace→active / EXPIRED→expired for the
+  cross-device/web view; the banner uses the local signal for immediacy.
+- Did NOT add promotional/win-back offers to Products.storekit: a malformed
+  offer block is worse than none, and promotional offers can't be redeemed
+  without a server signature anyway. Configuration is fully documented in
+  RELEASE_ACTIONS.md §3 instead.
+
+Verification status:
+- No Swift toolchain locally; xcodebuild gate runs in macOS CI. Static checks
+  pass — all 6 touched/added files delimiter-balanced; StoreKit APIs verified
+  (Product.SubscriptionInfo.status(for:), Status.state matched against the
+  RenewalState static members via Equatable, RenewalInfo.willAutoRenew,
+  Transaction.expirationDate, .offerCodeRedemption(isPresented:onCompletion:)).
+  project.yml directory sources auto-include SubscriptionStatusBanner.swift.
+  passes:false until CI is green.
+
+**Learnings / flags for future iterations:**
+- Discounted win-back needs backend signing (see RELEASE_ACTIONS §3): add a
+  Supabase function that returns Product.PurchaseOption.promotionalOffer(offerID:
+  signature:) params, then have PaywallView apply it when context == .winBack.
+  Until then the win-back paywall sells the standard product (still recovers the
+  user; just no discount applied in-app).
+- Win-back offers proper (StoreKit `.winBack` offer type) are iOS 18+; our
+  target is 17, so the system-surfaced win-back sheet only appears for iOS 18+
+  users. The in-app banner covers iOS 17.
+- Offer codes work end-to-end as soon as they're created in App Store Connect —
+  no further app change needed (the redemption sheet is wired).

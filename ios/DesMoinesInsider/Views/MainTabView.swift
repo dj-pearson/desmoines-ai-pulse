@@ -59,7 +59,10 @@ struct MainTabView: View {
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
-            OfflineBanner()
+            VStack(spacing: 0) {
+                OfflineBanner()
+                SubscriptionStatusBanner()
+            }
         }
         .tint(Color.accentColor)
         .onAppear {
