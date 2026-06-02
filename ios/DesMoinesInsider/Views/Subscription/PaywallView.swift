@@ -161,6 +161,9 @@ struct PaywallView: View {
     /// Set once a purchase/restore succeeds so `onDisappear` doesn't log a
     /// "dismiss" (abandon) event on top of the conversion.
     @State private var didConvert = false
+    /// Localized "7-day free trial, then …" copy, set only when the selected
+    /// product has an intro offer AND the user is eligible (IOS-SUB-012).
+    @State private var trialCopy: String?
 
     private let analytics = AnalyticsService.shared
 
@@ -197,7 +200,17 @@ struct PaywallView: View {
                         .accessibilityLabel("Dismiss upgrade screen")
                 }
             }
-            .task { await storeKit.loadProducts() }
+            .task {
+                await storeKit.loadProducts()
+                await refreshTrialCopy()
+            }
+            .onChange(of: selectedTier) { _, _ in
+                clampPeriod()
+                Task { await refreshTrialCopy() }
+            }
+            .onChange(of: selectedPeriod) { _, _ in
+                Task { await refreshTrialCopy() }
+            }
             .onAppear {
                 analytics.trackPaywallPresented(context: context.id, tier: selectedTier.rawValue)
             }
@@ -308,25 +321,62 @@ struct PaywallView: View {
         .accessibilityLabel("\(tier.displayName), \(priceText(for: tier))\(isSelected ? ", selected" : "")")
     }
 
-    // MARK: Period toggle
+    // MARK: Period toggle (with annual savings badge — IOS-SUB-012)
 
     private var periodToggle: some View {
-        Picker("Billing period", selection: $selectedPeriod) {
+        HStack(spacing: 10) {
             ForEach(periods) { period in
-                Text(period.label).tag(period)
+                periodButton(period)
             }
         }
-        .pickerStyle(.segmented)
+    }
+
+    private func periodButton(_ period: StoreKitService.SubscriptionPeriod) -> some View {
+        let isSelected = selectedPeriod == period
+        return Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            selectedPeriod = period
+        } label: {
+            VStack(spacing: 3) {
+                Text(period.label)
+                    .font(.subheadline.weight(.semibold))
+                if period == .annual, let pct = annualSavingsPercent {
+                    Text("Save \(pct)%")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(Color.green, in: Capsule())
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(period.label)\(period == .annual && annualSavingsPercent != nil ? ", save \(annualSavingsPercent!) percent" : "")\(isSelected ? ", selected" : "")")
     }
 
     // MARK: Purchase footer (pinned)
 
     private var purchaseFooter: some View {
         VStack(spacing: 8) {
+            if let trialCopy {
+                Label(trialCopy, systemImage: "gift.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.green)
+                    .multilineTextAlignment(.center)
+            }
+
             Button(action: { Task { await purchase() } }) {
                 Group {
                     if isPurchasing {
                         ProgressView().tint(.white)
+                    } else if trialCopy != nil {
+                        Text("Start Free Trial")
                     } else if let product = selectedProduct {
                         Text("Continue — \(product.displayPrice)\(selectedPeriod.shortSuffix)")
                     } else {
@@ -340,7 +390,7 @@ struct PaywallView: View {
                 .foregroundStyle(.white)
             }
             .disabled(!canPurchase || isPurchasing)
-            .accessibilityLabel("Subscribe to \(selectedTier.displayName)")
+            .accessibilityLabel(trialCopy != nil ? "Start free trial of \(selectedTier.displayName)" : "Subscribe to \(selectedTier.displayName)")
 
             Text(autoRenewDisclosure)
                 .font(.caption2)
@@ -378,9 +428,24 @@ struct PaywallView: View {
     }
 
     private var autoRenewDisclosure: String {
-        "Auto-renewing subscription. Your Apple ID is charged at confirmation. "
-            + "It renews automatically unless canceled at least 24 hours before the period ends. "
-            + "Manage or cancel anytime in Settings."
+        let base = "Auto-renewing subscription. It renews automatically unless canceled at least "
+            + "24 hours before the period ends. Manage or cancel anytime in Settings."
+        if trialCopy != nil {
+            return "Your free trial converts to a paid subscription unless canceled before it ends. "
+                + base
+        }
+        return "Your Apple ID is charged at confirmation. " + base
+    }
+
+    /// Annual savings vs paying monthly for a full year, as a whole percent.
+    /// Returns nil unless both monthly and annual products are loaded.
+    private var annualSavingsPercent: Int? {
+        guard let monthly = storeKit.product(for: selectedTier, period: .monthly),
+              let annual = storeKit.product(for: selectedTier, period: .annual) else { return nil }
+        let monthlyCost = (monthly.price as NSDecimalNumber).doubleValue * 12
+        let annualCost = (annual.price as NSDecimalNumber).doubleValue
+        guard monthlyCost > 0, annualCost < monthlyCost else { return nil }
+        return Int((((monthlyCost - annualCost) / monthlyCost) * 100).rounded())
     }
 
     private func priceText(for tier: SubscriptionTier) -> String {
@@ -396,6 +461,35 @@ struct PaywallView: View {
     /// exist for one tier yet).
     private func clampPeriod() {
         if !periods.contains(selectedPeriod) { selectedPeriod = periods.first ?? .monthly }
+    }
+
+    /// Computes trial copy for the selected product, but ONLY when StoreKit says
+    /// the user is eligible (intro offers are one-per-customer). Cleared when
+    /// there's no offer or the user has already used theirs (IOS-SUB-012).
+    @MainActor
+    private func refreshTrialCopy() async {
+        guard let product = selectedProduct,
+              let sub = product.subscription,
+              let offer = sub.introductoryOffer,
+              offer.paymentMode == .freeTrial else {
+            trialCopy = nil
+            return
+        }
+        let eligible = await sub.isEligibleForIntroOffer
+        guard eligible else { trialCopy = nil; return }
+        trialCopy = "\(Self.trialLength(offer.period)) free trial, then \(product.displayPrice)\(selectedPeriod.shortSuffix)"
+    }
+
+    /// Human-readable intro length, e.g. "7-day", "1-month". Weeks are rendered
+    /// in days so a P1W trial reads as the conventional "7-day free trial".
+    private static func trialLength(_ period: Product.SubscriptionPeriod) -> String {
+        switch period.unit {
+        case .day:   return "\(period.value)-day"
+        case .week:  return "\(period.value * 7)-day"
+        case .month: return "\(period.value)-month"
+        case .year:  return "\(period.value)-year"
+        @unknown default: return "free"
+        }
     }
 
     // MARK: - Actions

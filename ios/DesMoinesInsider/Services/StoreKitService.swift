@@ -26,13 +26,25 @@ final class StoreKitService {
     static let insiderMonthlyID = "prod_U4oa7Cpn0bRnuo"
     static let vipMonthlyID = "prod_U4oaGFEy12auTx"
 
+    /// Annual SKUs (IOS-SUB-012). These must be created in App Store Connect in
+    /// the same "Des Moines Insider Premium" group with these exact Product IDs
+    /// (and ~17%-cheaper annual pricing: Insider $49.99/yr, VIP $129.99/yr) and
+    /// a 7-day free-trial introductory offer. The local Products.storekit mirrors
+    /// them so the paywall's monthly/annual toggle + trial work in the simulator.
+    /// Keep the "insider"/"vip" substring so the backend tier-resolver fallback
+    /// matches even if the explicit set is ever out of sync.
+    static let insiderAnnualID = "prod_insider_annual"
+    static let vipAnnualID = "prod_vip_annual"
+
     static let productIDs: Set<String> = [
         insiderMonthlyID,
         vipMonthlyID,
+        insiderAnnualID,
+        vipAnnualID,
     ]
 
-    static let insiderProductIDs: Set<String> = [insiderMonthlyID]
-    static let vipProductIDs: Set<String> = [vipMonthlyID]
+    static let insiderProductIDs: Set<String> = [insiderMonthlyID, insiderAnnualID]
+    static let vipProductIDs: Set<String> = [vipMonthlyID, vipAnnualID]
 
     // MARK: - Published State
 

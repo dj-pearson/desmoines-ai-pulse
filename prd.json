@@ -252,7 +252,7 @@
       ],
       "priority": 17,
       "passes": false,
-      "notes": ""
+      "notes": "Implemented 2026-06-02 (awaiting macOS CI xcodebuild gate). Added annual Insider/VIP SKUs (prod_insider_annual $49.99/yr, prod_vip_annual $129.99/yr ≈ 17% off monthly×12) each with a 7-day free-trial introductoryOffer. StoreKitService gained insiderAnnualID/vipAnnualID in all product-ID sets, so SUB-010's data-driven period helpers now expose [.monthly,.annual] and the paywall toggle appears. Products.storekit mirrors both annual products + free trial for simulator testing. PaywallView: custom Monthly/Annual buttons with a live-computed 'Save N%' badge on annual; refreshTrialCopy() shows '7-day free trial, then $X/yr' ONLY when StoreKit.isEligibleForIntroOffer is true (eligibility fully delegated to StoreKit; purchase() auto-applies the offer for eligible users only), CTA flips to 'Start Free Trial', and the auto-renew disclosure switches to trial->paid language. validate-ios-receipt + appstore-server-notifications-v2 got the annual IDs added to INSIDER/VIP sets; tier already resolves correctly during trial (future expiresDate -> active, tier from product ID). ACTION REQUIRED: create the two annual subs + 7-day trial in App Store Connect with these exact Product IDs (or update the constants). passes=false until CI green."
     },
     {
       "id": "IOS-SUB-013",

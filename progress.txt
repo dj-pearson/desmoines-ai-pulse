@@ -1656,3 +1656,71 @@ Verification status:
   proves annoying, gate enforceFavoritesCap() behind "entitlements loaded".
 - write_reviews (IOS-PARITY-009) should call hasFeature(.writeReviews) and present
   its generic paywall when locked.
+
+## 2026-06-02 — IOS-SUB-012 (annual SKUs + free-trial intro offer) [awaiting CI build]
+
+Added annual Insider/VIP plans with a 7-day free trial, lit up the paywall's
+monthly/annual toggle (built in SUB-010) with a savings badge + trial copy, and
+taught the two App Store receipt/webhook edge functions the new product IDs.
+
+Files modified:
+- Services/StoreKitService.swift — added insiderAnnualID ("prod_insider_annual")
+  and vipAnnualID ("prod_vip_annual") to productIDs / insiderProductIDs /
+  vipProductIDs. The period helpers from SUB-010 (period(of:), availablePeriods)
+  now report [.monthly, .annual], so the paywall toggle appears automatically.
+- Resources/Products.storekit — added the two annual subscriptions (P1Y; $49.99
+  Insider, $129.99 VIP ≈ web's ~17% saving vs monthly×12) each with a free-trial
+  introductoryOffer (paymentMode "free", P1W = 7 days) so the toggle + trial work
+  in the simulator without App Store Connect.
+- Views/Subscription/PaywallView.swift:
+  • Replaced the plain segmented period picker with custom Monthly/Annual buttons;
+    the Annual button shows a "Save N%" badge computed live from the loaded
+    products (annualSavingsPercent: 1 − annual / (monthly×12), rounded).
+  • Trial copy: refreshTrialCopy() reads the selected product's
+    introductoryOffer and, ONLY when StoreKit reports isEligibleForIntroOffer,
+    shows "7-day free trial, then $X/yr". The CTA flips to "Start Free Trial" and
+    the auto-renew disclosure switches to trial→paid conversion language.
+    Re-runs on tier/period change via .onChange.
+- supabase/functions/validate-ios-receipt/index.ts and
+  supabase/functions/appstore-server-notifications-v2/index.ts — added the annual
+  product IDs to INSIDER_PRODUCT_IDS / VIP_PRODUCT_IDS (the ALL set guards reject
+  unknown IDs, so this was required for annual purchases to validate at all).
+
+Why the backend needed so little: during a free trial Apple's transaction has a
+future expiresDate, so validate-ios-receipt already marks it `active` and
+resolveProductTier() keys off the product ID — tier resolves correctly during the
+trial once the annual IDs are known. The webhook's SUBSCRIBED/DID_RENEW →active
+path already covers trial start/convert. The chosen annual IDs also contain
+"insider"/"vip", so even the resolver's substring fallback matches.
+
+Design decisions:
+- Trial on ANNUAL only (per "annual + trial materially lifts LTV"): the intro
+  offer lives on the annual SKUs, nudging the higher-LTV commitment. Monthly can
+  get its own intro the same way later (just add an introductoryOffer block).
+- Eligibility is delegated entirely to StoreKit: we show trial copy only when
+  isEligibleForIntroOffer is true, and product.purchase() auto-applies the offer
+  only for eligible users — so a repeat customer correctly sees normal pricing.
+- Savings % is derived from live product prices (not hardcoded), so it stays
+  correct if pricing changes in App Store Connect.
+
+Verification status:
+- No Swift toolchain locally; xcodebuild gate runs in macOS CI. Static checks
+  pass — Products.storekit is valid JSON with both annual products carrying a
+  free intro offer; PaywallView + StoreKitService delimiter-balanced; both edge
+  functions brace/paren-balanced. StoreKit APIs verified (Product.subscription,
+  SubscriptionInfo.introductoryOffer / isEligibleForIntroOffer (async),
+  SubscriptionOffer.paymentMode == .freeTrial, SubscriptionPeriod.unit/.value).
+  passes:false until CI is green.
+
+**Learnings / flags for future iterations:**
+- ACTION REQUIRED in App Store Connect before release: create the two annual
+  auto-renewable subscriptions in the "Des Moines Insider Premium" group with
+  Product IDs EXACTLY "prod_insider_annual" / "prod_vip_annual" (or update the
+  two StoreKitService constants to match ASC's IDs), set $49.99 / $129.99, and
+  add the 7-day free-trial introductory offer. The IDs are mirrored in
+  Products.storekit + both edge functions; all three must agree with ASC.
+- IOS-SUB-014 (win-back / promotional offers) plugs into the same product model:
+  add winbackOffers/promotional offers in ASC + Products.storekit and surface
+  them in PaywallView next to the intro-offer copy.
+- The savings-badge + trial-copy rendering is generic, so if monthly later gets
+  an intro offer it shows there too with no code change.

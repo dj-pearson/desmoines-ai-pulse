@@ -28,9 +28,9 @@ import { checkRateLimit, addRateLimitHeaders } from '../_shared/rateLimit.ts';
 
 const EXPECTED_BUNDLE_ID = 'com.desmoines.aipulse';
 
-/** Product IDs from App Store Connect. */
-const INSIDER_PRODUCT_IDS = new Set(['prod_U4oa7Cpn0bRnuo']);
-const VIP_PRODUCT_IDS = new Set(['prod_U4oaGFEy12auTx']);
+/** Product IDs from App Store Connect (monthly + annual — IOS-SUB-012). */
+const INSIDER_PRODUCT_IDS = new Set(['prod_U4oa7Cpn0bRnuo', 'prod_insider_annual']);
+const VIP_PRODUCT_IDS = new Set(['prod_U4oaGFEy12auTx', 'prod_vip_annual']);
 const ALL_PRODUCT_IDS = new Set([...INSIDER_PRODUCT_IDS, ...VIP_PRODUCT_IDS]);
 
 /** Apple App Store Server API base URLs. */
