@@ -1861,3 +1861,67 @@ Verification status:
   users. The in-app banner covers iOS 17.
 - Offer codes work end-to-end as soon as they're created in App Store Connect —
   no further app change needed (the redemption sheet is wired).
+
+## 2026-06-02 — IOS-ADS-010 (first-party campaign ad serving) [awaiting CI build]
+
+The app's ad slots now render REAL paid campaigns (not just hard-coded hotel
+affiliate creatives), pulled from the same backend the web uses.
+
+File added:
+- Services/CampaignAdService.swift — @MainActor @Observable service that calls
+  the shared get_active_ads(p_placement_type) RPC (same source as the web's
+  src/hooks/useActiveAds.ts) and maps rows (campaign_id, creative_id, title,
+  description, image_url, link_url, cta_text) to a CampaignCreative. Placement
+  enum: top_banner / featured_spot / below_fold / sponsored_listing. 5-min
+  per-placement cache so scrolling a feed doesn't re-hit the RPC every redraw
+  (the RPC still rotates server-side via ORDER BY random()). First-party only:
+  our Supabase RPC, our creatives — no IDFA, no third-party SDK, ATT untouched.
+
+Files modified:
+- Views/Components/AdBannerView.swift — implements the never-empty fallback
+  chain: (1) live campaign creative → (2) hotel affiliate → (3) the subscription
+  upgrade prompt (house ad, always present). Loads the campaign in .task,
+  renders it via CachedAsyncImage with the FTC "Ad" label, and on tap opens the
+  campaign's link_url in an IN-APP browser (WebViewPage in a sheet, via an
+  Identifiable AdTarget) rather than kicking out to Safari. Still free-tier only.
+- Views/Components/AdSlot.swift — .feed maps to the below_fold campaign
+  placement, .detail to featured_spot.
+
+Design decisions:
+- Mapped the app's two slots to real DB placements: feed→below_fold (the web's
+  in-feed/sidebar slot per the AC's "sidebar->feed"), detail→featured_spot.
+  top_banner + sponsored_listing exist in the enum as seams (sponsored_listing
+  is for IOS-ADS-011); they return empty until campaigns target them, falling
+  back cleanly.
+- House ad = the existing upgrade prompt, which always renders for free users,
+  so a slot is literally never empty even with no campaign AND no affiliate.
+  IOS-ADS-013 can later swap in a richer house creative behind the same step.
+- In-app browser for campaign taps (AC requirement) vs the affiliate's external
+  Link — affiliate links are tracking redirects that belong in Safari; campaign
+  targets are advertiser landing pages we keep in-app.
+
+Verification status:
+- No Swift toolchain locally; xcodebuild gate runs in macOS CI. Static checks
+  pass — 3 files delimiter-balanced; RPC call mirrors the working ForYouService
+  pattern (client.rpc(name, params: Encodable).execute().value -> [Row]);
+  verified get_active_ads signature/columns against
+  supabase/migrations/20260227000000_campaign_notifications_and_lifecycle.sql
+  and the web useActiveAds hook (param p_placement_type). CachedAsyncImage(url:
+  String?), WebViewPage(title:url:), Config.isUITesting, AppLogger.network all
+  verified. AdBannerView is only constructed in AdSlot + its preview.
+  project.yml directory sources auto-include CampaignAdService.swift.
+  passes:false until CI is green.
+
+**Learnings / flags for future iterations:**
+- IOS-ADS-011 (sponsored listings) seam: CampaignAdService.Placement
+  .sponsoredListing + ContentCardData.isSponsored (from IOS-IA-003) are both
+  ready — fetch a sponsored_listing creative and set isSponsored on the injected
+  card.
+- IOS-ADS-012 (native in-feed cards + interstitial): the deterministic AdSlot
+  indices from IOS-IA-001 (HomeRailsView) are the insertion points; AdSlot is
+  the single swap-in.
+- IOS-ADS-013 (house-ad fill): replace AdBannerView.upgradeBanner with the
+  richer house creative; the fallback step already exists.
+- IOS-ADS-014 (ad analytics/viewability): no impression/click tracking yet —
+  add a record-impression/click RPC call in CampaignAdService + a viewability
+  hook on the creative. Intentionally out of scope for ADS-010 (render + tap).

@@ -298,7 +298,7 @@
       ],
       "priority": 20,
       "passes": false,
-      "notes": ""
+      "notes": "Implemented 2026-06-02 (awaiting macOS CI xcodebuild gate). Added Services/CampaignAdService.swift: @MainActor @Observable service calling the shared get_active_ads(p_placement_type) RPC (same source as web useActiveAds) and mapping rows (campaign_id/creative_id/title/description/image_url/link_url/cta_text) to CampaignCreative; Placement enum top_banner/featured_spot/below_fold/sponsored_listing; 5-min per-placement cache. First-party only (our Supabase RPC + creatives) — no IDFA/third-party SDK, ATT untouched. AdBannerView now does the never-empty fallback chain: live campaign creative -> hotel affiliate -> upgrade/house ad (always present); campaign loads in .task, renders via CachedAsyncImage with the FTC 'Ad' label, tap opens link_url in an IN-APP browser (WebViewPage sheet). Free-tier only. AdSlot maps feed->below_fold, detail->featured_spot; top_banner + sponsored_listing are enum seams (sponsored_listing for ADS-011) that fall back cleanly until campaigns target them. House ad = existing upgrade prompt (ADS-013 can swap a richer creative). Impression/click tracking is ADS-014, out of scope here. passes=false until CI green."
     },
     {
       "id": "IOS-ADS-011",
