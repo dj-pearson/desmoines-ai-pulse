@@ -105,6 +105,19 @@ final class AnalyticsService {
         trackEvent("paywall_restore", parameters: ["context": context])
     }
 
+    // MARK: - Onboarding & soft paywall (IOS-SUB-013)
+    //
+    // `action`: shown / start_tapped / skipped — for first-session trial funnel.
+    // `source`: which engagement threshold fired the post-onboarding soft paywall.
+
+    func trackOnboardingTrial(action: String) {
+        trackEvent("onboarding_trial", parameters: ["action": action, "cohort": "onboarding"])
+    }
+
+    func trackSoftPaywall(source: String) {
+        trackEvent("soft_paywall_present", parameters: ["source": source])
+    }
+
     // MARK: - User Properties
 
     func setUserId(_ userId: String?) {

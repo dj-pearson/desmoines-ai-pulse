@@ -124,6 +124,7 @@ final class FavoritesService {
             .execute()
 
         favoriteEventIds.insert(eventId)
+        SoftPaywallService.shared.considerAfterFavorite(totalFavorites: totalFavoritesCount)
         return true
     }
 
@@ -268,6 +269,7 @@ final class FavoritesService {
         }
 
         favoriteRestaurantIds.insert(restaurantId)
+        SoftPaywallService.shared.considerAfterFavorite(totalFavorites: totalFavoritesCount)
         return true
     }
 
@@ -398,6 +400,7 @@ final class FavoritesService {
         }
 
         favoriteAttractionIds.insert(attractionId)
+        SoftPaywallService.shared.considerAfterFavorite(totalFavorites: totalFavoritesCount)
         return true
     }
 

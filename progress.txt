@@ -1724,3 +1724,70 @@ Verification status:
   them in PaywallView next to the intro-offer copy.
 - The savings-badge + trial-copy rendering is generic, so if monthly later gets
   an intro offer it shows there too with no code change.
+
+## 2026-06-02 — IOS-SUB-013 (onboarding trial moment + post-onboarding soft paywall) [awaiting CI build]
+
+Added a first-session trial moment at the end of onboarding and a frequency-
+capped soft paywall that re-appears once the user is engaged.
+
+Files modified:
+- Views/Onboarding/OnboardingView.swift — after the value pages, the last
+  button is now "Continue" (was "Get Started") → a final, skippable trialStep
+  that presents PaywallView(.onboarding, preferredPeriod: .annual) so the 7-day
+  free trial (on the annual SKU) is the headline. "Maybe later" and the paywall's
+  own dismissal both call complete() — one tap, never a hard wall (App
+  Store-safe). Info-page "Skip" still bypasses everything in one tap.
+- Views/Subscription/PaywallView.swift — added an optional `preferredPeriod`
+  init param (default .monthly; onboarding passes .annual) and a `.onboarding`
+  PaywallContext preset (trial-framed copy, Insider recommended).
+- Services/AnalyticsService.swift — trackOnboardingTrial(action:) (shown /
+  start_tapped / skipped, tagged cohort=onboarding) + trackSoftPaywall(source:).
+  The paywall's own present/purchase/restore events already carry context
+  "onboarding", giving the full first-session funnel.
+
+File added:
+- Services/SoftPaywallService.swift — decides when to re-surface a soft upsell:
+  only for free users who finished onboarding, at an engagement threshold (2nd
+  favorite save; plus a considerAfterTripPlannerAttempt() seam for PARITY-001),
+  frequency-capped (≥7-day cooldown, max 3 lifetime). On fire it posts
+  .softPaywallTriggered (with the PaywallContext id); one MainTabView listener
+  presents it — same single-presenter pattern as the favorites cap.
+
+Wiring:
+- Services/FavoritesService.swift — each successful add (event/restaurant/
+  attraction) calls SoftPaywallService.considerAfterFavorite(totalFavorites:).
+- Views/MainTabView.swift — onReceive(.softPaywallTriggered) → sheet(item:)
+  presenting PaywallView for the mapped context (trip_planner → .tripPlanner,
+  else .unlimitedFavorites).
+
+Design decisions:
+- No interest-selection step exists in this app's onboarding (just value pages),
+  so "after interest selection" maps to "after the value pages". Didn't invent an
+  interest picker — out of scope.
+- Anti-nag: showing the onboarding trial calls SoftPaywallService
+  .noteOnboardingUpsellShown(), which seeds the soft-paywall cooldown — so a user
+  who just saw the onboarding trial won't also get a soft paywall on their 2nd
+  save in the same session. Users who Skip onboarding (never saw the trial) are
+  still eligible for the engagement-based soft paywall.
+- Tight window note: the free favorites cap is 3 total, so the soft-paywall
+  favorites threshold is 2 (one nudge before the hard wall at the 4th attempt);
+  they don't collide (different counts) and the cap paywall is separate.
+
+Verification status:
+- No Swift toolchain locally; xcodebuild gate runs in macOS CI. Static checks
+  pass — all 6 touched/added files delimiter-balanced; OnboardingView structure
+  verified (single body → pagingStep/trialStep, pageView intact); PaywallView
+  preferredPeriod wired into @State selectedPeriod; PaywallContext is Identifiable
+  so MainTabView's .sheet(item:) is valid. project.yml directory sources
+  auto-include SoftPaywallService.swift. passes:false until CI is green.
+
+**Learnings / flags for future iterations:**
+- IOS-PARITY-001 (Trip Planner): call SoftPaywallService.shared
+  .considerAfterTripPlannerAttempt() on the first planner attempt for a free
+  user — it's already wired to present .tripPlanner via MainTabView.
+- SoftPaywallService tuning constants (favoritesThreshold 2, cooldownDays 7,
+  maxPresentations 3) are in one place; adjust there if analytics show it's too
+  aggressive or too quiet.
+- Two .sheet modifiers now live on MainTabView's root (favorites isPresented +
+  soft-paywall item). Fine on iOS 17; if a third upsell sheet is added, consider
+  consolidating into one item-driven enum to avoid sheet-stacking edge cases.

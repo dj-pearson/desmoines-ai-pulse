@@ -118,6 +118,22 @@ extension PaywallContext {
         recommendedTier: .insider
     )
 
+    /// First-session onboarding upsell (IOS-SUB-013). Presented with annual
+    /// preselected so the 7-day free trial is the headline moment.
+    static let onboarding = PaywallContext(
+        id: "onboarding",
+        icon: "sparkles",
+        headline: "Try Insider free for 7 days",
+        subheadline: "Start a free trial and unlock the full Des Moines Insider experience. Cancel anytime.",
+        benefits: [
+            "Unlimited saved favorites",
+            "AI Trip Planner itineraries",
+            "Advanced filters & insider tips",
+            "Ad-free browsing",
+        ],
+        recommendedTier: .insider
+    )
+
     static let adFree = PaywallContext(
         id: "ad_free",
         icon: "eye.slash.fill",
@@ -167,10 +183,11 @@ struct PaywallView: View {
 
     private let analytics = AnalyticsService.shared
 
-    init(context: PaywallContext) {
+    init(context: PaywallContext, preferredPeriod: StoreKitService.SubscriptionPeriod = .monthly) {
         self.context = context
         let recommended: SubscriptionTier = context.recommendedTier == .free ? .insider : context.recommendedTier
         _selectedTier = State(initialValue: recommended)
+        _selectedPeriod = State(initialValue: preferredPeriod)
     }
 
     var body: some View {
