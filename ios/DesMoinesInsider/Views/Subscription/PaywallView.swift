@@ -364,31 +364,42 @@ struct PaywallView: View {
 
     private func periodButton(_ period: StoreKitService.SubscriptionPeriod) -> some View {
         let isSelected = selectedPeriod == period
+        // Only the annual button carries a savings badge; computing it here keeps
+        // the layout decision (badge vs. plain caption) in one place.
+        let savings = period == .annual ? annualSavingsPercent : nil
         return Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             selectedPeriod = period
         } label: {
+            // Both buttons use the same two-line structure and a fixed height so
+            // they stay even regardless of which tier is selected or whether the
+            // savings badge is present.
             VStack(spacing: 3) {
                 Text(period.label)
                     .font(.subheadline.weight(.semibold))
-                if period == .annual, let pct = annualSavingsPercent {
-                    Text("Save \(pct)%")
+                if let savings {
+                    Text("Save \(savings)%")
                         .font(.caption2.weight(.bold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 6).padding(.vertical, 2)
                         .background(Color.green, in: Capsule())
+                } else {
+                    Text(period == .annual ? "Billed yearly" : "Billed monthly")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
+            .frame(height: 60)
             .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
                     .strokeBorder(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
             )
+            .contentShape(RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(period.label)\(period == .annual && annualSavingsPercent != nil ? ", save \(annualSavingsPercent!) percent" : "")\(isSelected ? ", selected" : "")")
+        .accessibilityLabel("\(period.label)\(savings != nil ? ", save \(savings!) percent" : "")\(isSelected ? ", selected" : "")")
     }
 
     // MARK: Purchase footer (pinned)
