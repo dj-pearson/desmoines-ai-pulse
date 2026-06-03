@@ -70,6 +70,19 @@ serve(async (req) => {
       });
     }
 
+    // PROD-AUTH-002: require a verified email before a paid checkout, enforced
+    // server-side (not just by the signup UI) so an unverified session cannot
+    // start a subscription.
+    if (!user.email_confirmed_at) {
+      return new Response(
+        JSON.stringify({
+          error: "Please verify your email address before subscribing.",
+          code: "email_verification_required",
+        }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Parse request body
     const body = await req.json();
     const { planId, billingInterval = "monthly" } = body;

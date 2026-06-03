@@ -961,8 +961,8 @@
         "npm run validate passes"
       ],
       "priority": 123,
-      "passes": false,
-      "notes": "VERIFIED PARTIAL: UI shows verify-email screen + resendVerification, and Supabase requires confirmation for a session. MISSING: no server-side email_confirmed_at 403 gate in create-subscription-checkout/create-campaign-checkout."
+      "passes": true,
+      "notes": "DONE (this branch): both paid checkouts now enforce a verified email server-side and return 403 email_verification_required for an unverified session — create-subscription-checkout checks user.email_confirmed_at after getUser; create-campaign-checkout re-reads the user (post securityMiddleware) to confirm. The signup UI already shows the verify-email screen + resendVerification (AUTH-001). Follow-up: an automated test asserting an unverified token gets 403."
     },
     {
       "id": "PROD-AUTH-003",

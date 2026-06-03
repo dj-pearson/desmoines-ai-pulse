@@ -109,6 +109,21 @@ serve(async (req) => {
     // Security passed - user is authenticated, authorized, and owns the campaign
     const user = { id: context.userId!, email: context.email };
 
+    // PROD-AUTH-002: require a verified email before taking payment, enforced
+    // server-side. securityMiddleware validated the JWT; re-read the user to
+    // confirm email verification.
+    const verifyToken = (req.headers.get("Authorization") || "").replace("Bearer ", "");
+    const { data: { user: authedUser } } = await supabase.auth.getUser(verifyToken);
+    if (!authedUser?.email_confirmed_at) {
+      return new Response(
+        JSON.stringify({
+          error: "Please verify your email address before paying.",
+          code: "email_verification_required",
+        }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Get campaign details (ownership already verified by security middleware)
     const { data: campaign, error: campaignError } = await supabase
       .from("campaigns")
