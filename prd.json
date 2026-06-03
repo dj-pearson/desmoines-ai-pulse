@@ -616,6 +616,1743 @@
       "priority": 41,
       "passes": false,
       "notes": ""
+    },
+    {
+      "id": "PROD-SEC-001",
+      "title": "Server-side CSRF protection for state-changing edge function calls",
+      "description": "As a user, I need state-changing requests to be protected from cross-site request forgery so an attacker cannot perform actions on my behalf.",
+      "acceptanceCriteria": [
+        "A CSRF/double-submit token is generated in AuthContext on login and attached to all POST/PUT/DELETE edge function invocations (header or body)",
+        "Edge functions for mutations validate the token against the session before executing; mismatch returns 403",
+        "Read-only/idempotent GET endpoints are exempt and documented as such",
+        "A test proves a forged cross-origin POST without the token is rejected",
+        "npm run validate passes (type-check + lint)"
+      ],
+      "priority": 100,
+      "passes": false,
+      "notes": "Source: security audit. No CSRF token generation/validation found; mutations rely on auth header only. Supabase does not provide CSRF protection automatically."
+    },
+    {
+      "id": "PROD-SEC-002",
+      "title": "Lock Stripe checkout customer email to the authenticated user",
+      "description": "As a paying user, I need checkout to always use my verified account email so no one can attach a subscription/customer to another person's email.",
+      "acceptanceCriteria": [
+        "create-subscription-checkout and create-campaign-checkout derive email exclusively from the verified JWT (user.email), never from the request body",
+        "Any client-supplied email field is ignored or rejected with 400",
+        "A test attempts checkout with a different email than the token and confirms it fails",
+        "npm run validate passes"
+      ],
+      "priority": 101,
+      "passes": false,
+      "notes": "Source: security audit — supabase/functions/create-subscription-checkout/index.ts ~line 147 fetches Stripe customer by an email not locked to the authenticated user (account-takeover/billing-confusion risk)."
+    },
+    {
+      "id": "PROD-SEC-003",
+      "title": "Add Content-Security-Policy via HTTP headers with violation reporting",
+      "description": "As the security owner, I need a strict CSP delivered as an HTTP header so inline-script/XSS risk is contained and violations are observable.",
+      "acceptanceCriteria": [
+        "public/_headers (Cloudflare Pages) sets a Content-Security-Policy header scoped to known script/style/img/connect origins (no broad wildcards on script-src)",
+        "img-src is restricted to self, data:, Supabase storage, and the known CDN(s) instead of 'https: http:'",
+        "A report-to/report-uri directive points at an edge function that logs CSP violations",
+        "Inline scripts in index.html either move to external files or use a nonce compatible with the CSP",
+        "CSP validated with a CSP evaluator and the site still functions (maps, Three.js, GA, Stripe, Supabase)"
+      ],
+      "priority": 102,
+      "passes": false,
+      "notes": "Source: security + SEO/UX + perf audits. CSP currently absent or only referenced in a comment; _headers img-src allows any http/https. index.html has two large inline scripts."
+    },
+    {
+      "id": "PROD-SEC-004",
+      "title": "Enforce persistent (durable) rate limiting on auth, payment, and AI endpoints",
+      "description": "As the platform, I need rate limits that survive cold starts and span instances so abuse cannot bypass limits by hitting fresh workers.",
+      "acceptanceCriteria": [
+        "Audit all 76 edge functions for which call checkRateLimit vs checkRateLimitPersistent; produce a table in notes/docs",
+        "Auth, signup, password-reset, all Stripe, and all AI/LLM endpoints use the database-backed persistent limiter",
+        "Per-tier limits applied (anonymous lower, authenticated higher, admin exempt) with per-endpoint overrides (e.g. signup 10/hr)",
+        "Rate-limit hits are logged with client fingerprint for abuse detection",
+        "npm run validate passes"
+      ],
+      "priority": 103,
+      "passes": false,
+      "notes": "Source: security + ops audits. supabase/functions/_shared/rateLimit.ts has both in-memory and persistent variants; most functions use the non-persistent one. CLAUDE.md notes 100/15min default."
+    },
+    {
+      "id": "PROD-SEC-005",
+      "title": "Harden redirect-URL validation against open redirects (checkout + OAuth)",
+      "description": "As a user, I need post-checkout and post-login redirects to only target our own domain so I cannot be sent to a malicious site.",
+      "acceptanceCriteria": [
+        "A single shared validateReturnUrl/isValidRedirectUrl helper is used by create-subscription-checkout, manage-subscription, create-campaign-checkout, and OAuth callback flows",
+        "Only the configured VITE_SITE_URL origin (and relative paths) are allowed; protocol-relative //evil.com and external origins are rejected",
+        "Unit tests cover: external origin, protocol-relative, query-embedded redirect, and valid relative path",
+        "npm run validate passes"
+      ],
+      "priority": 104,
+      "passes": false,
+      "notes": "Source: security + subscription audits. successUrl built from origin/siteUrl without consistent allowlist; OAuth callback uses window.location.origin; SecurityUtils.isValidRedirectUrl permissiveness unverified."
+    },
+    {
+      "id": "PROD-SEC-006",
+      "title": "Server-side enforcement of admin role for all privileged edge functions",
+      "description": "As the platform, I need admin-only operations verified server-side so client-cached role state cannot grant privilege.",
+      "acceptanceCriteria": [
+        "Every admin/root_admin edge function re-checks the caller's role from the database (or a verified JWT claim), not a client-supplied value",
+        "Endpoints return 401 when unauthenticated and 403 when authenticated-but-unauthorized (distinct codes)",
+        "Admin client-side role cache TTL reduced to <=60s and invalidated on logout",
+        "A test confirms a non-admin token is rejected with 403 on a sampled admin function",
+        "npm run validate passes"
+      ],
+      "priority": 105,
+      "passes": false,
+      "notes": "Source: security audit — AuthContext caches admin role 5 min client-side; some admin endpoints return generic errors without 401/403 distinction."
+    },
+    {
+      "id": "PROD-SEC-007",
+      "title": "Audit logging for all service_role (RLS-bypassing) edge function operations",
+      "description": "As a compliance owner, I need an audit trail whenever an edge function uses the service_role key so privileged mutations are traceable.",
+      "acceptanceCriteria": [
+        "A security_audit_log table records user_id, function name, operation, affected entity/id, and timestamp for every service_role write",
+        "All edge functions that instantiate a service_role client write to this log on mutations",
+        "An admin view can filter the audit log by user and endpoint",
+        "Log writes never block the primary operation (best-effort, errors captured)",
+        "npm run validate passes"
+      ],
+      "priority": 106,
+      "passes": false,
+      "notes": "Source: security audit — multiple functions use SUPABASE_SERVICE_ROLE_KEY with no audit logging. Also satisfies enterprise checklist 'Security Audit Logging'."
+    },
+    {
+      "id": "PROD-SEC-008",
+      "title": "Sanitize all database-sourced HTML before dangerouslySetInnerHTML",
+      "description": "As a user, I need rendered HTML (newsletter previews, feedback replies) sanitized so stored XSS cannot execute even from 'trusted' tables.",
+      "acceptanceCriteria": [
+        "All dangerouslySetInnerHTML call sites pass content through DOMPurify with a restrictive allowlist",
+        "NewsletterCampaignsManager and FeedbackInbox render sanitized HTML and strip script/on*-handlers",
+        "A test injects a <script>/onerror payload via the data layer and confirms it is neutralized on render",
+        "npm run validate passes"
+      ],
+      "priority": 107,
+      "passes": false,
+      "notes": "Source: security audit — NewsletterCampaignsManager.tsx ~line 560 and FeedbackInbox.tsx ~line 657 render DB HTML under a 'trusted admin' assumption; data originates from user-submitted tables."
+    },
+    {
+      "id": "PROD-SEC-009",
+      "title": "SSRF protection on server-side URL fetching (writeups/scrapers)",
+      "description": "As the platform, I need outbound URL fetches in edge functions validated so attackers cannot make the server fetch internal/private resources.",
+      "acceptanceCriteria": [
+        "generate-writeup and other URL-accepting functions validate the target: https only, public DNS only, block localhost/link-local/private CIDR ranges",
+        "An allowlist of expected source domains is enforced where applicable",
+        "Redirects are capped and re-validated per hop",
+        "A test confirms requests to 169.254.169.254, localhost, and 10.x ranges are rejected",
+        "npm run validate passes"
+      ],
+      "priority": 108,
+      "passes": false,
+      "notes": "Source: backend audit — supabase/functions/generate-writeup/index.ts ~line 347 fetches an arbitrary request URL with no host validation."
+    },
+    {
+      "id": "PROD-SEC-010",
+      "title": "Mitigate prompt injection on user-controlled AI inputs",
+      "description": "As the platform, I need user-supplied text feeding LLM prompts to be isolated so prompt-injection cannot exfiltrate secrets or override instructions.",
+      "acceptanceCriteria": [
+        "generate-article, discover-chat, generate-writeup, and personalized-recommendations place user input only in user-role message content, never concatenated into the system prompt",
+        "User fields are length-capped and stripped of control sequences before use",
+        "System prompts instruct the model to ignore embedded instructions in untrusted content",
+        "AI responses are validated/sanitized (length cap, HTML/script strip) before persistence",
+        "npm run validate passes"
+      ],
+      "priority": 109,
+      "passes": false,
+      "notes": "Source: backend audit — generate-article injects topic/targetKeywords directly into the prompt; writeup output stored unvalidated."
+    },
+    {
+      "id": "PROD-SEC-011",
+      "title": "Generic client-facing errors; full detail server-side only",
+      "description": "As the platform, I need edge functions to avoid leaking schema/stack details to clients so internals are not exposed.",
+      "acceptanceCriteria": [
+        "A shared error responder logs full error + a request id server-side and returns a generic message + request id to the client",
+        "No raw Supabase/Postgres/error.message strings are returned to clients across sampled functions (geocode-location, update-event-datetime, scrape-* etc.)",
+        "Common DB errors map to friendly messages (e.g. not-found, conflict)",
+        "npm run validate passes"
+      ],
+      "priority": 110,
+      "passes": false,
+      "notes": "Source: security + backend audits — multiple functions return error.message directly, leaking FK/schema details."
+    },
+    {
+      "id": "PROD-SEC-012",
+      "title": "Tighten permissive RLS policies (USING/WITH CHECK (true))",
+      "description": "As the platform, I need write/insert RLS policies scoped to ownership/role so public clients cannot write arbitrary rows.",
+      "acceptanceCriteria": [
+        "Audit migrations for policies using USING (true) or WITH CHECK (true) on writable tables and list them in notes",
+        "guide_requests insert policy requires non-empty name/email/content and is rate-limited (per CLAUDE.md additive/backward-compatible flow)",
+        "pseo_generation_queue/log policies are scoped to service_role with explicit per-action grants (no blanket FOR ALL)",
+        "newsletter_campaigns enforces user ownership on update/delete even under service_role paths",
+        "A new migration adds the tightened policies additively and is documented as backward-compatible"
+      ],
+      "priority": 111,
+      "passes": false,
+      "notes": "Source: security audit — 20260228000006_create_guide_requests.sql WITH CHECK (true); 20260311000002 pseo tables FOR ALL USING (true) WITH CHECK (true). Follow CLAUDE.md: tightening RLS must not break older clients."
+    },
+    {
+      "id": "PROD-SEC-013",
+      "title": "Fail fast on missing critical config (no placeholder fallbacks)",
+      "description": "As an operator, I need the app and functions to refuse to start with missing required secrets instead of silently using placeholders.",
+      "acceptanceCriteria": [
+        "src/integrations/supabase/client.ts throws a visible startup error (before React mounts) if VITE_SUPABASE_URL/ANON_KEY are missing, instead of using placeholder.supabase.co",
+        "stripe-webhook returns 503 and alerts if STRIPE_WEBHOOK_SECRET is unset; webhooks are never processed unverified",
+        "A startup validateEnv() in main.tsx lists all missing required vars in one clear error and warns on missing optional integrations",
+        "npm run validate passes"
+      ],
+      "priority": 112,
+      "passes": false,
+      "notes": "Source: security + ops audits — client.ts uses placeholder fallbacks; no startup env validation; webhook secret presence only logged."
+    },
+    {
+      "id": "PROD-SEC-014",
+      "title": "Remove hardcoded project/analytics identifiers; source from env",
+      "description": "As an operator, I need project URLs, analytics IDs, and origins read from configuration so environments are portable and rotatable.",
+      "acceptanceCriteria": [
+        "Google Analytics measurement ID is injected via VITE_GA_MEASUREMENT_ID rather than hardcoded in index.html",
+        "Hardcoded Supabase project ref in index.html preconnect/dns-prefetch and _shared/cors.ts fallbacks is replaced by env-driven values",
+        "Remove *.lovable.dev wildcard from CORS allowlist; allow only exact known origins",
+        ".gitignore covers .env.local and .env.*.local",
+        "npm run validate passes"
+      ],
+      "priority": 113,
+      "passes": false,
+      "notes": "Source: security audit — GA G-XGQFFP9BHZ and Supabase ref hardcoded; cors.ts allows *.lovable.dev; .gitignore missing .env.local patterns."
+    },
+    {
+      "id": "PROD-SEC-015",
+      "title": "Secret-scanning and dependency vulnerability scanning in CI",
+      "description": "As the security owner, I need automated secret and dependency scanning so leaked keys and vulnerable packages are caught before release.",
+      "acceptanceCriteria": [
+        "CI runs a secret scanner (e.g. gitleaks/ggshield) on PRs and blocks on findings",
+        "CI runs npm audit (or equivalent) and reports high/critical vulnerabilities",
+        "A documented process exists for triaging and suppressing false positives",
+        "Baseline run is clean or documented exceptions are recorded"
+      ],
+      "priority": 114,
+      "passes": false,
+      "notes": "Source: enterprise checklist (Vulnerability Scanning, Security Testing). .cache_ggshield exists but no enforced CI gate."
+    },
+    {
+      "id": "PROD-SEC-016",
+      "title": "Storage upload virus/malware scanning and content-type validation",
+      "description": "As the platform, I need uploaded files scanned and validated so malicious files cannot be stored or served.",
+      "acceptanceCriteria": [
+        "User uploads (event/profile images, menu uploads) validate MIME type and size before acceptance",
+        "Files are scanned (ClamAV/edge service or provider feature) before being made publicly accessible",
+        "parse-menu-upload and image flows reject files over the documented size limit using content-length",
+        "npm run validate passes"
+      ],
+      "priority": 115,
+      "passes": false,
+      "notes": "Source: enterprise checklist (Virus Scanning HIGH) + backend audit (file-size validation in parse-menu-upload/image-proxy)."
+    },
+    {
+      "id": "PROD-SEC-017",
+      "title": "Account lockout + login activity logging",
+      "description": "As a user, I need accounts protected from brute force and a record of login attempts so credential stuffing is detected and stopped.",
+      "acceptanceCriteria": [
+        "Failed login attempts are tracked durably (DB) per email+IP with lockout after N attempts and a cooldown window",
+        "Rate limiting is enforced server-side (not just the in-memory Map in AuthContext)",
+        "An auth_activity_log records attempts with IP, device/UA, timestamp, and outcome",
+        "Lockout and unlock behavior is covered by a test",
+        "npm run validate passes"
+      ],
+      "priority": 116,
+      "passes": false,
+      "notes": "Source: enterprise checklist (Account Lockout, Login Activity Logging) + security audit (in-memory loginAttempts Map resets per instance/restart)."
+    },
+    {
+      "id": "PROD-SEC-018",
+      "title": "Subresource Integrity / remove unused external CDN script sources",
+      "description": "As the security owner, I need external scripts pinned or removed so a compromised CDN cannot inject code.",
+      "acceptanceCriteria": [
+        "Audit usage of unpkg/cdn.jsdelivr.net; remove from CSP/connect-src if unused",
+        "Any retained external <script> uses an integrity (SRI) hash",
+        "Build verifies no un-pinned third-party scripts are referenced",
+        "npm run validate passes"
+      ],
+      "priority": 117,
+      "passes": false,
+      "notes": "Source: security audit — _headers allows unpkg/jsdelivr without SRI."
+    },
+    {
+      "id": "PROD-SEC-019",
+      "title": "Server-side password complexity enforcement",
+      "description": "As the platform, I need password rules enforced server-side so weak passwords cannot be set by bypassing the UI.",
+      "acceptanceCriteria": [
+        "Signup/password-reset enforce min length and complexity at the server (edge function wrapper or Supabase auth hook), not only client-side",
+        "Weak passwords return a 400 with a clear reason",
+        "Client validation messaging matches the server rules",
+        "npm run validate passes"
+      ],
+      "priority": 118,
+      "passes": false,
+      "notes": "Source: subscription/auth audit + enterprise checklist (Password Complexity HIGH). passwordStrength.ts is client-only."
+    },
+    {
+      "id": "PROD-SEC-020",
+      "title": "Multi-factor authentication for admin accounts",
+      "description": "As an admin, I need MFA so privileged accounts are protected from credential compromise.",
+      "acceptanceCriteria": [
+        "TOTP/authenticator MFA enrollment and challenge flow implemented via Supabase MFA",
+        "MFA is required (enforced) for admin/root_admin roles at login",
+        "Recovery codes and a documented reset path exist",
+        "A non-MFA admin login attempt is rejected",
+        "npm run validate passes"
+      ],
+      "priority": 119,
+      "passes": false,
+      "notes": "Source: enterprise checklist (MFA Critical) + security audit (MFA detection present in AuthContext but no enforcement policy)."
+    },
+    {
+      "id": "PROD-SEC-021",
+      "title": "Configurable session idle timeout + device session management",
+      "description": "As a user, I need idle sessions to expire and a way to review/revoke active devices so a stolen session has limited value.",
+      "acceptanceCriteria": [
+        "Idle timeout logs the user out after a configurable period of inactivity",
+        "Active sessions/devices are listed with last-seen and can be revoked",
+        "Revoking a device invalidates that session",
+        "npm run validate passes"
+      ],
+      "priority": 120,
+      "passes": false,
+      "notes": "Source: enterprise checklist (Session Timeout HIGH, Device Management)."
+    },
+    {
+      "id": "PROD-SEC-022",
+      "title": "Security headers completeness (HSTS, X-Frame-Options, etc.)",
+      "description": "As the security owner, I need a complete set of security response headers so common web attacks are mitigated at the edge.",
+      "acceptanceCriteria": [
+        "_headers sets Strict-Transport-Security, X-Content-Type-Options, X-Frame-Options/frame-ancestors, Referrer-Policy, and Permissions-Policy",
+        "Headers verified live via securityheaders.com-style check achieving at least an A rating",
+        "No functionality (embeds/maps) breaks under the new headers"
+      ],
+      "priority": 121,
+      "passes": false,
+      "notes": "Source: enterprise checklist (Security Headers Critical)."
+    },
+    {
+      "id": "PROD-AUTH-001",
+      "title": "Self-service password reset flow with rate limiting",
+      "description": "As a user who forgot my password, I need a reliable, rate-limited reset flow so I can regain access securely.",
+      "acceptanceCriteria": [
+        "Forgot-password requests a reset email and the reset page validates the token and sets a new password",
+        "Reset requests are rate-limited server-side and do not reveal whether an email exists",
+        "Success and error states (expired/invalid token) are clearly handled",
+        "An E2E test covers request -> email token -> set new password",
+        "npm run validate passes"
+      ],
+      "priority": 122,
+      "passes": false,
+      "notes": "Source: enterprise checklist (Password Reset Security Partial) + auth audit."
+    },
+    {
+      "id": "PROD-AUTH-002",
+      "title": "Enforce email verification before privileged actions",
+      "description": "As the platform, I need unverified accounts blocked from paid/sensitive actions so unverified emails cannot transact.",
+      "acceptanceCriteria": [
+        "Premium checkout and sensitive mutations check email_confirmed_at server-side and return 403 if unverified",
+        "The UI clearly prompts unverified users to verify and offers resend",
+        "A test confirms an unverified session cannot start checkout",
+        "npm run validate passes"
+      ],
+      "priority": 123,
+      "passes": false,
+      "notes": "Source: subscription audit — verification is surfaced in UI but not enforced at the business-logic layer."
+    },
+    {
+      "id": "PROD-AUTH-003",
+      "title": "Robust double-submit prevention on auth forms",
+      "description": "As a user, I need auth buttons to be guaranteed single-submit so rapid clicks don't create duplicate requests.",
+      "acceptanceCriteria": [
+        "Login/signup handlers guard with a synchronous ref flag (not only async isLoading state)",
+        "Buttons show a disabled/spinner state immediately on first click",
+        "A test simulating double-click fires exactly one request",
+        "npm run validate passes"
+      ],
+      "priority": 124,
+      "passes": false,
+      "notes": "Source: subscription/auth audit — Auth.tsx relies on async setIsLoading; a fast double-click can fire twice."
+    },
+    {
+      "id": "PROD-AUTH-004",
+      "title": "Non-enumerable, consistent auth error messaging",
+      "description": "As a user, I need auth errors that don't reveal account existence so attackers can't enumerate registered emails.",
+      "acceptanceCriteria": [
+        "Signup with an existing email and login with a wrong password return generic, consistent messaging",
+        "Disposable-email checking (checkDisposableEmail) is implemented or removed; if kept, it is cached and reliable",
+        "Messaging guides the user (sign in / reset password) without confirming existence",
+        "npm run validate passes"
+      ],
+      "priority": 125,
+      "passes": false,
+      "notes": "Source: subscription/auth audit — duplicate-account messaging may leak existence; checkDisposableEmail is called but implementation unverified."
+    },
+    {
+      "id": "PROD-AUTH-005",
+      "title": "Magic-link / passwordless login option",
+      "description": "As a user, I want a passwordless login option so I can sign in without managing a password.",
+      "acceptanceCriteria": [
+        "Magic-link login implemented via Supabase with clear send/confirm UX",
+        "Rate limited and tied to the same redirect-validation rules",
+        "Works alongside existing email/password and Google OAuth",
+        "npm run validate passes"
+      ],
+      "priority": 126,
+      "passes": false,
+      "notes": "Source: enterprise checklist (Passwordless Authentication)."
+    },
+    {
+      "id": "PROD-SUB-001",
+      "title": "Server-side enforcement of premium entitlements on protected resources",
+      "description": "As the platform, I need premium features enforced server-side so client-only gating cannot be bypassed for premium data or actions.",
+      "acceptanceCriteria": [
+        "All premium edge functions and premium data reads validate the caller's tier from the database (or verified claim) before returning",
+        "A central PremiumFeature->minTier map exists server-side and mirrors the client PremiumGate config",
+        "RLS denies premium-only rows/mutations to free users",
+        "A test confirms a free-tier token cannot call a premium endpoint or read gated data",
+        "npm run validate passes"
+      ],
+      "priority": 127,
+      "passes": false,
+      "notes": "Source: subscription audit (CRITICAL) — PremiumGate and useSubscription gate only on the client; no backend enforcement."
+    },
+    {
+      "id": "PROD-SUB-002",
+      "title": "Idempotent Stripe webhook processing (event-id dedup + constraints)",
+      "description": "As the billing system, I need webhook handling to be idempotent so retried/replayed events don't double-apply.",
+      "acceptanceCriteria": [
+        "A processed_stripe_events table (unique on event id) records and short-circuits duplicate deliveries",
+        "checkout.session.completed, campaign payment, and subscription handlers upsert with unique constraints (e.g. stripe_session_id, stripe_subscription_id) instead of blind insert",
+        "Duplicate delivery of the same event results in exactly one state change and one set of notifications",
+        "A test replays an identical event and asserts no duplication",
+        "Migration is additive/backward-compatible per CLAUDE.md"
+      ],
+      "priority": 128,
+      "passes": false,
+      "notes": "Source: subscription + backend audits — stripe-webhook handlers lack event-id idempotency and unique constraints; replays duplicate subscriptions/notifications."
+    },
+    {
+      "id": "PROD-SUB-003",
+      "title": "Failed-payment grace period and dunning",
+      "description": "As a paying user, I need a grace period and dunning when a payment fails so I'm not abruptly cut off and have a chance to fix it.",
+      "acceptanceCriteria": [
+        "past_due transitions into a grace_period state that retains premium access for a configured window (e.g. 7-14 days)",
+        "useSubscription returns past_due/grace subscriptions and surfaces a 'payment failed' banner instead of silently dropping to free",
+        "Dunning notifications (in-app + email) are sent on day 1/3/7; access is restored immediately on successful retry",
+        "Transition to fully canceled only after the grace window",
+        "npm run validate passes"
+      ],
+      "priority": 129,
+      "passes": false,
+      "notes": "Source: subscription audit — handleInvoicePaymentFailed sets past_due immediately and useSubscription filters status=active, so users lose access mid-session. Also enterprise checklist (Dunning Management)."
+    },
+    {
+      "id": "PROD-SUB-004",
+      "title": "Stripe Customer Portal (self-service subscription management)",
+      "description": "As a subscriber, I need a self-service portal to manage payment method, plan, and cancellation so I don't have to contact support.",
+      "acceptanceCriteria": [
+        "A manage-subscription endpoint creates a Stripe Billing Portal session with a validated return URL",
+        "Profile/subscription UI links to the portal for payment-method, plan change, and cancellation",
+        "Entitlements re-sync from the resulting webhook events",
+        "npm run validate passes"
+      ],
+      "priority": 130,
+      "passes": false,
+      "notes": "Source: enterprise checklist (Customer Subscription Portal HIGH) + subscription audit."
+    },
+    {
+      "id": "PROD-SUB-005",
+      "title": "Cancellation UX with remaining-time clarity and resume",
+      "description": "As a subscriber, I need cancellation to clearly show when access ends and let me resume so I'm not surprised by a charge or loss of access.",
+      "acceptanceCriteria": [
+        "Cancel returns and displays the period-end date ('access until <date>')",
+        "A cancel_at_period_end subscription shows a Resume option and blocks creating a conflicting new checkout (returns 409)",
+        "Upgrades/downgrades during an active period are handled without double-charging",
+        "npm run validate passes"
+      ],
+      "priority": 131,
+      "passes": false,
+      "notes": "Source: subscription audit — cancellation lacks end-date display; new checkout allowed while cancel_at_period_end=true (double-charge risk)."
+    },
+    {
+      "id": "PROD-SUB-006",
+      "title": "Trial expiration funnel (warnings + conversion handling)",
+      "description": "As a trial user, I need reminders before my trial ends and graceful handling at expiry so I can convert intentionally.",
+      "acceptanceCriteria": [
+        "Expiry checks include status=trialing, not only active",
+        "A countdown banner appears in the final 7 days and reminder emails send on day 1/3/5/7",
+        "At trial end without a payment method, premium soft-disables while free features remain available (no dead end)",
+        "npm run validate passes"
+      ],
+      "priority": 132,
+      "passes": false,
+      "notes": "Source: subscription audit — isExpiringSoon ignores trialing; no trial-end notifications."
+    },
+    {
+      "id": "PROD-SUB-007",
+      "title": "Validate plan price IDs against configured environment",
+      "description": "As the billing system, I need price IDs validated against env config so a tampered DB plan cannot charge the wrong amount.",
+      "acceptanceCriteria": [
+        "create-subscription-checkout validates the DB-stored stripe_price_id against env-configured allowed price IDs and rejects mismatches",
+        "Missing/mismatched price IDs log full context server-side and return a clear error",
+        "Test/live mode keys are separated and cross-mode events are rejected",
+        "npm run validate passes"
+      ],
+      "priority": 133,
+      "passes": false,
+      "notes": "Source: subscription audit — price IDs read from DB with no validation; no documented test/live separation."
+    },
+    {
+      "id": "PROD-SUB-008",
+      "title": "Stable idempotency keys for refunds and payment writes",
+      "description": "As the billing system, I need stable idempotency keys so retried refunds/payments are not duplicated.",
+      "acceptanceCriteria": [
+        "process-stripe-refund uses a stable key (e.g. refund_<campaign.id>), not one containing Date.now()",
+        "Refund/payment writes are wrapped so a retry reuses the same key",
+        "A test simulating a retry confirms a single Stripe refund",
+        "npm run validate passes"
+      ],
+      "priority": 134,
+      "passes": false,
+      "notes": "Source: subscription audit — idempotencyKey includes Date.now(), defeating dedup on retry."
+    },
+    {
+      "id": "PROD-SUB-009",
+      "title": "Invoice/receipt generation and billing history",
+      "description": "As a customer, I need downloadable invoices and a billing history so I have records for accounting.",
+      "acceptanceCriteria": [
+        "generate-invoice-pdf exists, enforces ownership, and returns a valid PDF for a payment",
+        "A billing-history view lists payments with status, amount, date, and a download link",
+        "Receipt email is sent on successful payment",
+        "npm run validate passes"
+      ],
+      "priority": 135,
+      "passes": false,
+      "notes": "Source: subscription audit (usePayments calls generate-invoice-pdf, existence unverified) + enterprise checklist (Invoice Generation, Billing History)."
+    },
+    {
+      "id": "PROD-SUB-010",
+      "title": "Record every payment to a durable payments ledger within a transaction",
+      "description": "As a finance owner, I need every payment logged atomically so audit trail and receipts are never lost on partial webhook failure.",
+      "acceptanceCriteria": [
+        "Campaign and subscription payment handlers write a payments row first, then update domain tables, within a transaction or with safe upsert ordering",
+        "Foreign keys to payments use RESTRICT or soft-delete (not SET NULL) so history is preserved",
+        "A simulated failure after the domain update does not lose the payment record",
+        "Migration is additive/backward-compatible"
+      ],
+      "priority": 136,
+      "passes": false,
+      "notes": "Source: subscription audit — handleCampaignPayment updates campaigns without a guaranteed payments-ledger entry; FKs use ON DELETE SET NULL."
+    },
+    {
+      "id": "PROD-SUB-011",
+      "title": "Promo codes / discounts for subscriptions",
+      "description": "As marketing, I want to offer promo codes so we can run acquisition and win-back campaigns.",
+      "acceptanceCriteria": [
+        "Checkout accepts Stripe promotion codes and validates them server-side",
+        "Applied discount is reflected in pricing display and the resulting subscription",
+        "Invalid/expired codes return a clear error",
+        "npm run validate passes"
+      ],
+      "priority": 137,
+      "passes": false,
+      "notes": "Source: enterprise checklist (Promo Codes & Discounts)."
+    },
+    {
+      "id": "PROD-SUB-012",
+      "title": "Self-serve advertiser refund request workflow",
+      "description": "As an advertiser, I want to request a refund on a campaign so I don't have to email support.",
+      "acceptanceCriteria": [
+        "A campaign detail action lets the owner submit a refund request (reason, amount up to paid)",
+        "Requests create a record an admin can one-click approve, triggering process-stripe-refund",
+        "Requester and admin both see status updates",
+        "npm run validate passes"
+      ],
+      "priority": 138,
+      "passes": false,
+      "notes": "Source: subscription audit — refunds are admin-only with no self-serve request path. Also enterprise checklist (Refund Management UI)."
+    },
+    {
+      "id": "PROD-SUB-013",
+      "title": "Tax calculation and display (Stripe Tax)",
+      "description": "As a customer, I need applicable tax calculated and shown so pricing and invoices are accurate and compliant.",
+      "acceptanceCriteria": [
+        "Stripe Tax (or equivalent) is enabled on checkout for subscriptions and campaigns",
+        "Tax is shown at checkout and itemized on invoices/receipts",
+        "Tax handling verified for the primary operating jurisdiction",
+        "npm run validate passes"
+      ],
+      "priority": 139,
+      "passes": false,
+      "notes": "Source: enterprise checklist (Tax Calculation)."
+    },
+    {
+      "id": "PROD-API-001",
+      "title": "Timeouts + circuit breaking on all outbound external calls",
+      "description": "As the platform, I need every outbound call (LLMs, Stripe, scrapers, geocoders) to time out and fail fast so workers aren't exhausted by slow upstreams.",
+      "acceptanceCriteria": [
+        "All edge-function fetches use AbortController with endpoint-appropriate timeouts (e.g. LLM 60s, Stripe 30s, scrape/image 15-45s)",
+        "fetchWithRetry accepts and enforces a timeout (default 30s) with exponential backoff",
+        "A circuit-breaker/short-circuit trips after N consecutive timeouts to a given upstream",
+        "Timeout SLOs per integration documented",
+        "npm run validate passes"
+      ],
+      "priority": 140,
+      "passes": false,
+      "notes": "Source: ops + backend audits — fetch() calls lack timeouts; fetchWithRetry retries 5xx but doesn't bound time."
+    },
+    {
+      "id": "PROD-API-002",
+      "title": "AI cost controls: token budgets, history caps, and per-tier quotas",
+      "description": "As a finance/security owner, I need AI endpoints to bound cost so abuse or runaway prompts cannot create bill shock.",
+      "acceptanceCriteria": [
+        "personalized-recommendations caps feedback history (e.g. last 20) and sets a max token budget",
+        "Per-user/per-tier daily quotas enforced on discover-chat, trip-planner, writeup, and article generation",
+        "A spend tracker records AI usage per user and alerts at a threshold",
+        "Expensive AI results are cached where inputs repeat",
+        "npm run validate passes"
+      ],
+      "priority": 141,
+      "passes": false,
+      "notes": "Source: backend audit — unbounded prompts (full feedback history), no token budgets, no per-user AI quotas; enterprise checklist (AI Usage Analytics)."
+    },
+    {
+      "id": "PROD-API-003",
+      "title": "Authenticate and authorize personalized/user-scoped endpoints by JWT",
+      "description": "As a user, I need user-scoped endpoints to derive identity from my token so others can't fetch my data by passing a userId.",
+      "acceptanceCriteria": [
+        "personalized-recommendations and similar endpoints require an Authorization header and use the JWT subject, rejecting a body-supplied userId that doesn't match",
+        "RLS on the underlying tables is verified to enforce per-user access",
+        "A test confirms requesting another user's id is rejected",
+        "npm run validate passes"
+      ],
+      "priority": 142,
+      "passes": false,
+      "notes": "Source: backend audit — personalized-recommendations accepts arbitrary userId in body with no auth check."
+    },
+    {
+      "id": "PROD-API-004",
+      "title": "Persist favorites, ratings, and reviews via authenticated endpoints",
+      "description": "As a user, I need my favorites/ratings/reviews saved server-side so they sync across devices and survive logout.",
+      "acceptanceCriteria": [
+        "Authenticated create/update/delete endpoints (or direct RLS-guarded table writes) exist for favorites, ratings, and reviews with validation",
+        "Data is scoped to the user via RLS and reflected in the UI optimistically with rollback on error",
+        "Reviews support moderation/flagging hooks",
+        "npm run validate passes"
+      ],
+      "priority": 143,
+      "passes": false,
+      "notes": "Source: backend audit — no backend persistence found for user favorites/ratings/reviews; risk of data loss on refresh/logout."
+    },
+    {
+      "id": "PROD-API-005",
+      "title": "Trip Planner save / update / share persistence",
+      "description": "As a user, I need to save, edit, and share generated itineraries so my trip plans persist and can be shared by link.",
+      "acceptanceCriteria": [
+        "save-trip persists an itinerary to a user_trips table; update-trip edits it; a share token enables read-only shared access",
+        "Shared links render without exposing the owner's account",
+        "Generated itineraries are no longer lost after the response",
+        "npm run validate passes"
+      ],
+      "priority": 144,
+      "passes": false,
+      "notes": "Source: backend audit — generate-itinerary returns in-memory results with no persistence/share."
+    },
+    {
+      "id": "PROD-API-006",
+      "title": "Correct Central-time conversion with DST handling on event ingest",
+      "description": "As a user, I need event times to be correct across DST boundaries so events never display an hour off.",
+      "acceptanceCriteria": [
+        "Scraper/ingest time conversion uses date-fns-tz with America/Chicago rather than manual offset math",
+        "Events store a UTC timestamp; a validation script spot-checks events near DST transitions",
+        "A test asserts correct conversion on the spring-forward and fall-back dates",
+        "npm run validate passes"
+      ],
+      "priority": 145,
+      "passes": false,
+      "notes": "Source: backend + SEO/UX audits — scrape-events offset math breaks on DST; no guarantee all event times are stored in UTC."
+    },
+    {
+      "id": "PROD-API-007",
+      "title": "Reliable scraper dedup via content hash + DB uniqueness",
+      "description": "As the data owner, I need event/restaurant dedup based on a strong fingerprint so duplicates and false-collisions don't pollute the catalog.",
+      "acceptanceCriteria": [
+        "Dedup fingerprint uses a hash (e.g. SHA-256) of normalized title+date+venue+domain, backed by a DB unique constraint",
+        "Recurring-event updates are matched correctly (not dropped as duplicates)",
+        "Ingest is idempotent: re-running a scrape does not create duplicates",
+        "Migration additive/backward-compatible"
+      ],
+      "priority": 146,
+      "passes": false,
+      "notes": "Source: backend audit — scrape-events uses naive string-concat fingerprint prone to collisions."
+    },
+    {
+      "id": "PROD-API-008",
+      "title": "Retry-with-backoff and partial-failure handling in scrapers",
+      "description": "As the data pipeline, I need transient scrape failures retried so a single network hiccup doesn't fail an entire run.",
+      "acceptanceCriteria": [
+        "Outbound scrape fetches retry transient errors (429/5xx/network) with exponential backoff (capped)",
+        "A failure on one source doesn't abort the whole job; per-source results are recorded",
+        "Concurrent runs of the same enrichment use a processing lock to avoid double-processing",
+        "npm run validate passes"
+      ],
+      "priority": 147,
+      "passes": false,
+      "notes": "Source: backend audit — single-attempt fetch in scrape-events; bulk-enhance lacks concurrency lock."
+    },
+    {
+      "id": "PROD-API-009",
+      "title": "Validate AI/extracted JSON against a schema before persisting",
+      "description": "As the data owner, I need extracted structured data validated so malformed AI output isn't written to the database.",
+      "acceptanceCriteria": [
+        "Menu/event/article extraction validates required fields (e.g. non-empty item names, >=N items) before insert; invalid payloads are rejected and logged",
+        "Output length is bounded (truncate/limit) to prevent oversized records",
+        "A test feeds malformed JSON and confirms it is rejected, not silently stored",
+        "npm run validate passes"
+      ],
+      "priority": 148,
+      "passes": false,
+      "notes": "Source: backend audit — parseJsonWithRepair accepts repaired-but-invalid menu JSON; article content has no word/length enforcement."
+    },
+    {
+      "id": "PROD-API-010",
+      "title": "Server-side search/filter with safe LIKE escaping and pagination",
+      "description": "As a user at scale, I need search backed by indexed DB queries with escaped inputs so search is fast and injection/DoS-safe.",
+      "acceptanceCriteria": [
+        "sanitizeLikeInput escapes %, _, and \\ and is unit-tested; api-events/api-restaurants use it",
+        "Search/filter executes in the database (full-text or trigram index) with server-side pagination, not client-side over full tables",
+        "Query statement timeouts bound worst-case cost",
+        "npm run validate passes"
+      ],
+      "priority": 149,
+      "passes": false,
+      "notes": "Source: backend + perf audits — ILIKE sanitization unverified; lists fetch limit:1000 then paginate in memory."
+    },
+    {
+      "id": "PROD-API-011",
+      "title": "Validate request inputs and date ranges across edge functions",
+      "description": "As the platform, I need consistent input validation so malformed requests are rejected early with clear errors.",
+      "acceptanceCriteria": [
+        "All public edge functions run validateInput (schema) before logic and handle OPTIONS/method checks",
+        "generate-itinerary rejects past start dates and out-of-range day counts before fetching data",
+        "Validation failures return 400 with a structured message",
+        "npm run validate passes"
+      ],
+      "priority": 150,
+      "passes": false,
+      "notes": "Source: backend audit — generate-itinerary validates end>start but not past dates; inconsistent validateInput coverage."
+    },
+    {
+      "id": "PROD-API-012",
+      "title": "Consolidate cron/scraper scheduling into versioned migrations with alerting",
+      "description": "As an operator, I need cron jobs defined canonically and monitored so scraping reliability is visible and reproducible.",
+      "acceptanceCriteria": [
+        "All pg_cron schedules are defined in versioned migrations; conflicting/ad-hoc cron SQL at repo root is removed or reconciled",
+        "A cron_jobs/heartbeat table records last_run_at + status; jobs write start/finish",
+        "Failures and overdue jobs (>2x expected interval) trigger an alert (email/Slack)",
+        "Cron log retention is sufficient for debugging (>=30 days)",
+        "Migration additive/backward-compatible"
+      ],
+      "priority": 151,
+      "passes": false,
+      "notes": "Source: backend + ops audits — many loose *.sql cron files at repo root (setup vs simple-cron vs fix-*), hardcoded URLs, silent failure on missing vault secret."
+    },
+    {
+      "id": "PROD-API-013",
+      "title": "Universal soft-delete + cascade integrity for user-linked data",
+      "description": "As the data owner, I need consistent soft-delete and FK cascades so deletions don't orphan related records.",
+      "acceptanceCriteria": [
+        "Content tables (events, restaurants, attractions) and user-linked tables have a consistent is_deleted/deleted_at strategy with RLS filtering deleted rows",
+        "FKs to auth.users are audited; deleting a user cascades or soft-deletes related rows (favorites, ratings, subscriptions, trips)",
+        "A test deletes a user and confirms no orphaned rows remain",
+        "Migration additive/backward-compatible"
+      ],
+      "priority": 152,
+      "passes": false,
+      "notes": "Source: backend audit — inconsistent is_deleted columns; some auth.users FKs lack cascade; orphaned subscriptions/favorites risk."
+    },
+    {
+      "id": "PROD-API-014",
+      "title": "Bounded image proxy/encoding with strict size limits",
+      "description": "As the platform, I need image proxying/encoding bounded so large images can't exhaust function memory.",
+      "acceptanceCriteria": [
+        "image-proxy enforces a documented MAX_IMAGE_SIZE (e.g. 5MB) before base64 encoding and rejects oversized content",
+        "Content-length is checked before download where available",
+        "Outbound image fetch has a timeout",
+        "npm run validate passes"
+      ],
+      "priority": 153,
+      "passes": false,
+      "notes": "Source: backend audit — image-proxy base64 encoding without a verified size cap (memory-overflow risk)."
+    },
+    {
+      "id": "PROD-API-015",
+      "title": "AI content moderation on user-generated and AI-generated content",
+      "description": "As the platform, I need moderation so reviews and AI output don't publish harmful or policy-violating content.",
+      "acceptanceCriteria": [
+        "User reviews and AI-generated articles/writeups pass a moderation check before publish",
+        "Flagged content is held for review with an admin queue",
+        "Moderation decisions are logged",
+        "npm run validate passes"
+      ],
+      "priority": 154,
+      "passes": false,
+      "notes": "Source: enterprise checklist (AI Content Moderation)."
+    },
+    {
+      "id": "PROD-PERF-001",
+      "title": "Clean up all realtime subscriptions on unmount",
+      "description": "As the platform at scale, I need every realtime channel cleaned up so subscriptions don't leak and exhaust connections.",
+      "acceptanceCriteria": [
+        "Every useEffect that calls .subscribe() returns a cleanup that unsubscribes/removes the channel",
+        "Subscription setup is stable (no duplicate channels on re-render)",
+        "A test/lint check verifies unsubscribe is called on unmount for sampled hooks (useEventSocialConnections, FeedbackInbox)",
+        "npm run validate passes"
+      ],
+      "priority": 155,
+      "passes": false,
+      "notes": "Source: perf audit (CRITICAL) — useEventSocialConnections subscribes without cleanup; leaks at concurrency."
+    },
+    {
+      "id": "PROD-PERF-002",
+      "title": "Server-side pagination for events/restaurants/attractions/hotels",
+      "description": "As a user at scale, I need lists paginated in the database so the client never fetches entire tables.",
+      "acceptanceCriteria": [
+        "List hooks use .range()/limit+offset (or cursor) with a sensible default page size (~30) instead of limit:1000",
+        "Total counts come from count queries, not by fetching all rows",
+        "Hotels and other unpaginated lists are paginated",
+        "npm run validate passes"
+      ],
+      "priority": 156,
+      "passes": false,
+      "notes": "Source: perf audit — Restaurants/useRestaurants hard-code limit:1000 and paginate in memory; hotels seed fetched with select *."
+    },
+    {
+      "id": "PROD-PERF-003",
+      "title": "Select only needed columns (stop SELECT * over-fetching)",
+      "description": "As a user on mobile, I need list/detail queries to fetch only required columns so payloads are small and fast.",
+      "acceptanceCriteria": [
+        "List queries select explicit minimal column sets; large text columns (enhanced_description, etc.) are excluded from list views",
+        "Detail pages fetch related items via targeted queries instead of pulling the whole table and filtering in memory",
+        "Payload size for a 100-item list is measurably reduced",
+        "npm run validate passes"
+      ],
+      "priority": 157,
+      "passes": false,
+      "notes": "Source: perf audit — useEvents uses select('*'); EventDetails computes related events client-side from all events."
+    },
+    {
+      "id": "PROD-PERF-004",
+      "title": "Standardize TanStack Query cache config (staleTime/gcTime/refetch)",
+      "description": "As a user, I need sensible caching defaults so navigation is fast and queries don't refetch needlessly.",
+      "acceptanceCriteria": [
+        "A shared queryKeys/config module defines staleTime and gcTime tiers; hooks reference it instead of ad-hoc defaults",
+        "refetchOnMount is disabled for static content (kept for user-specific data); refetchOnWindowFocus tuned intentionally",
+        "Query keys are normalized so identical filters share a cache entry",
+        "npm run validate passes"
+      ],
+      "priority": 158,
+      "passes": false,
+      "notes": "Source: perf audit — refetchOnMount:true broadly; many hooks lack staleTime/gcTime; filter objects create cache misses."
+    },
+    {
+      "id": "PROD-PERF-005",
+      "title": "Add/verify indexes for hot filter and geo columns",
+      "description": "As the database, I need indexes on frequently filtered columns so queries don't full-scan at scale.",
+      "acceptanceCriteria": [
+        "Indexes verified/created for events/restaurants/attractions on category, city, created_at/date, and is_featured (partial) and FKs",
+        "Geospatial index supports proximity search on lat/lng (GiST/earthdistance) for events and restaurants",
+        "EXPLAIN confirms index usage on the common list/proximity queries",
+        "Migrations use CREATE INDEX (CONCURRENTLY where possible) and are additive"
+      ],
+      "priority": 159,
+      "passes": false,
+      "notes": "Source: perf audit — several documented indexes may be missing in actual migrations; no geo index on events; proximity full-scans."
+    },
+    {
+      "id": "PROD-PERF-006",
+      "title": "Optimize RLS role checks to avoid per-row lookups",
+      "description": "As the database, I need role checks in RLS to be cheap so policies don't add O(n) cost to every query.",
+      "acceptanceCriteria": [
+        "Role determination in RLS uses JWT claims or a cached/stable function instead of a per-row table lookup",
+        "Hot policies are reviewed and benchmarked; expensive subqueries removed or indexed",
+        "No measurable per-row regression on list queries",
+        "Migration additive/backward-compatible"
+      ],
+      "priority": 160,
+      "passes": false,
+      "notes": "Source: perf audit — user_has_role_or_higher(auth.uid(),...) called per row in policies."
+    },
+    {
+      "id": "PROD-PERF-007",
+      "title": "Memoize list-item components and stabilize callbacks",
+      "description": "As a user, I need card lists to avoid re-rendering unchanged items so scrolling/filtering stays smooth.",
+      "acceptanceCriteria": [
+        "EventCard/RestaurantCard/AttractionCard wrapped in React.memo with stable props",
+        "onClick/onFavorite callbacks are memoized (useCallback) at the parent",
+        "A profiling check shows unchanged cards no longer re-render on parent updates",
+        "npm run validate passes"
+      ],
+      "priority": 161,
+      "passes": false,
+      "notes": "Source: perf audit — card components not memoized; 30 cards re-render on any parent change."
+    },
+    {
+      "id": "PROD-PERF-008",
+      "title": "Use OptimizedImage with dimensions, lazy loading, and responsive srcset on cards",
+      "description": "As a user, I need card images sized and lazy-loaded so CLS is low and below-fold images don't block load.",
+      "acceptanceCriteria": [
+        "Card images use OptimizedImage with explicit width/height (no layout shift) and loading=lazy below the fold",
+        "Responsive sizes/srcset serve appropriately sized images on mobile",
+        "LCP hero image uses fetchPriority=high; non-LCP images are deferred",
+        "npm run validate passes"
+      ],
+      "priority": 162,
+      "passes": false,
+      "notes": "Source: perf audit — cards use raw <img> without dimensions; OptimizedImage exists but unused in cards."
+    },
+    {
+      "id": "PROD-PERF-009",
+      "title": "Defer and lazy-load the Three.js hero; add placeholder",
+      "description": "As a mobile user, I need the 3D hero deferred behind a placeholder so it doesn't delay LCP.",
+      "acceptanceCriteria": [
+        "Three.js hero is lazy()-imported and rendered only after LCP/idle, with a lightweight gradient/image placeholder behind it",
+        "Building count/shader complexity reduced for low-end devices; respects prefers-reduced-motion",
+        "Throttled-network LCP measurably improves and stays under target",
+        "npm run validate passes"
+      ],
+      "priority": 163,
+      "passes": false,
+      "notes": "Source: perf + SEO/UX audits — HeroCityLite imports Three directly; 200 instanced buildings; no placeholder; motion runs unconditionally."
+    },
+    {
+      "id": "PROD-PERF-010",
+      "title": "Tune caching headers for HTML and API responses",
+      "description": "As the platform, I need cache headers that maximize CDN hits without serving stale JS so pages load fast.",
+      "acceptanceCriteria": [
+        "HTML uses stale-while-revalidate so the CDN can serve while revalidating",
+        "Edge function GET responses set appropriate Cache-Control (e.g. public, max-age + stale-while-revalidate) for list/detail data",
+        "_headers API caching extended from 5m where data tolerates it; ETag/Last-Modified added to cacheable asset/image responses",
+        "Changes verified to not serve stale critical bundles"
+      ],
+      "priority": 164,
+      "passes": false,
+      "notes": "Source: perf audit — index.html max-age=0 (100% misses); /api/* cached only 5m; edge functions set no Cache-Control."
+    },
+    {
+      "id": "PROD-PERF-011",
+      "title": "Optimize and compress committed image assets",
+      "description": "As a user, I need logos/assets served in modern compressed formats so initial load is light.",
+      "acceptanceCriteria": [
+        "Large PNG logos (>100KB) served as WebP/SVG primary with PNG fallback via <picture>",
+        "Oversized committed images are compressed; binary design sources (.psd) and unused large media are removed from the app build path",
+        "Preload covers the actually-served format(s)",
+        "npm run validate passes"
+      ],
+      "priority": 165,
+      "passes": false,
+      "notes": "Source: perf audit — 429-621KB PNG logos with unused WebP variants; index.html preloads WebP only."
+    },
+    {
+      "id": "PROD-PERF-012",
+      "title": "Statement timeouts and query-level timeouts on heavy reads",
+      "description": "As the database, I need bounded query time so a slow query can't lock up resources.",
+      "acceptanceCriteria": [
+        "A statement_timeout is configured for the API role; heavy client queries set a timeout",
+        "Heavy admin/analytics tables (competitor_content, suggestions) use pagination/cursors",
+        "A deliberately slow query is bounded rather than hanging",
+        "Migration additive/backward-compatible"
+      ],
+      "priority": 166,
+      "passes": false,
+      "notes": "Source: perf audit — no query timeouts; unbounded competitor/suggestion queries."
+    },
+    {
+      "id": "PROD-PERF-013",
+      "title": "Font loading with display=swap and preconnect",
+      "description": "As a user, I need fonts to render text immediately so there's no invisible-text delay.",
+      "acceptanceCriteria": [
+        "Web fonts load with font-display: swap and appropriate preconnect/preload",
+        "Critical text renders without FOIT on throttled connections",
+        "No CLS introduced by the font swap (fallback metrics matched where feasible)",
+        "npm run validate passes"
+      ],
+      "priority": 167,
+      "passes": false,
+      "notes": "Source: perf audit — fonts load without swap (FOIT/FOUT)."
+    },
+    {
+      "id": "PROD-PERF-014",
+      "title": "Combine featured/sponsored carousel queries into one",
+      "description": "As a user, I need the homepage carousels to load with fewer round-trips so first paint is faster.",
+      "acceptanceCriteria": [
+        "Featured + sponsored items are fetched in a single query (OR/UNION with ordering) instead of sequential calls",
+        "Result ordering preserves sponsored-first behavior",
+        "Homepage query count is reduced and verified",
+        "npm run validate passes"
+      ],
+      "priority": 168,
+      "passes": false,
+      "notes": "Source: perf audit — useFeaturedEvents/useFeaturedRestaurants run two sequential queries per page load."
+    },
+    {
+      "id": "PROD-PERF-015",
+      "title": "Stale-while-revalidate offline cache when Supabase is unavailable",
+      "description": "As a user, I need cached content served if the backend is briefly down so the site degrades gracefully.",
+      "acceptanceCriteria": [
+        "A service worker (or query persistence) serves last-known content for key reads when the network/DB fails",
+        "A clear, non-blocking 'showing cached data' indicator appears during degradation",
+        "Behavior verified by pointing the client at an unreachable backend",
+        "npm run validate passes"
+      ],
+      "priority": 169,
+      "passes": false,
+      "notes": "Source: perf + SEO/UX audits — all pages fetch live from Supabase; no fallback if DB is down; sw.js referenced but absent."
+    },
+    {
+      "id": "PROD-PERF-016",
+      "title": "Eliminate barrel re-exports on heavy module trees",
+      "description": "As the build, I need named imports on heavy directories so tree-shaking keeps bundles lean.",
+      "acceptanceCriteria": [
+        "export * barrels on heavy areas (e.g. CRM hooks) are replaced with explicit named exports/imports",
+        "Bundle analysis shows reduced inclusion of unused modules",
+        "npm run build:analyze documented before/after",
+        "npm run validate passes"
+      ],
+      "priority": 170,
+      "passes": false,
+      "notes": "Source: perf audit — useCrmDashboard.ts export * pulls entire CRM directory."
+    },
+    {
+      "id": "PROD-SEO-001",
+      "title": "Prerender/SSG critical routes for crawlers",
+      "description": "As the SEO owner, I need key routes served as real HTML so search and AI crawlers index content instead of an empty SPA shell.",
+      "acceptanceCriteria": [
+        "High-value routes (home, /events, /events/today, /events/this-weekend, /restaurants, /attractions, /stay) and detail pages are prerendered/SSG or server-rendered with content in the initial HTML",
+        "Hydration preserves SPA interactivity",
+        "Fetching a route as Googlebot returns meaningful HTML (verified)",
+        "npm run build succeeds with the prerender step"
+      ],
+      "priority": 171,
+      "passes": false,
+      "notes": "Source: SEO audit (CRITICAL) — pure client-rendered SPA; initial HTML is a shell. Likely root cause of crawl issues below."
+    },
+    {
+      "id": "PROD-SEO-002",
+      "title": "Resolve soft-404s and not-indexed pages from Search Console",
+      "description": "As the SEO owner, I need to fix the large set of soft-404 and not-indexed URLs so the site is properly crawled and indexed.",
+      "acceptanceCriteria": [
+        "Soft-404 pages (~208) return proper 200-with-content or genuine 404 status as appropriate; empty/placeholder pages are removed or filled",
+        "Discovered/crawled-not-indexed URLs (~446/~163) are addressed via prerendering, canonicalization, and internal linking",
+        "A Search Console validation is initiated for each fixed category and tracked in notes",
+        "Re-crawl confirms a measurable reduction"
+      ],
+      "priority": 172,
+      "passes": false,
+      "notes": "Source: Critical issues.csv (Soft 404: 208; Discovered-not-indexed: 446; Crawled-not-indexed: 163; duplicate-canonical: 39)."
+    },
+    {
+      "id": "PROD-SEO-003",
+      "title": "Per-route meta tags, canonical, and social cards on every page",
+      "description": "As the SEO owner, I need every route to emit correct title/description/canonical/OG so search and social render correctly.",
+      "acceptanceCriteria": [
+        "All list and detail pages set unique title, meta description, canonical, and OG/Twitter tags via Helmet (serialized when prerendered)",
+        "Social cards validated with the Facebook/Twitter validators on representative pages",
+        "OG image dimensions match declared sizes",
+        "npm run validate passes"
+      ],
+      "priority": 173,
+      "passes": false,
+      "notes": "Source: SEO audit — global OG tags only for homepage; not all detail pages inject dynamic meta; OG image dimensions unverified."
+    },
+    {
+      "id": "PROD-SEO-004",
+      "title": "Canonicalization to eliminate duplicate-content routes",
+      "description": "As the SEO owner, I need duplicate routes canonicalized so Google doesn't split or penalize indexing.",
+      "acceptanceCriteria": [
+        "Hardcoded SEO pages (e.g. /events/free) set self-canonical; filtered equivalents (/events?price=free) set noindex,follow or 301 to the canonical",
+        "Paginated list pages set canonical (and rel next/prev where applicable)",
+        "The 39 duplicate-canonical URLs from Search Console are resolved",
+        "npm run validate passes"
+      ],
+      "priority": 174,
+      "passes": false,
+      "notes": "Source: SEO audit + Critical issues.csv — duplicate content between hardcoded SEO pages and filter params; no canonical on paginated results."
+    },
+    {
+      "id": "PROD-SEO-005",
+      "title": "Dynamic, always-fresh sitemaps with a sitemap index",
+      "description": "As the SEO owner, I need sitemaps that reflect new content immediately so crawlers find events promptly.",
+      "acceptanceCriteria": [
+        "Event/content sitemaps are generated dynamically (live endpoint or on-insert trigger), not only at build time",
+        "A sitemap-index.xml references all category sitemaps and is submitted to Search Console",
+        "lastmod/priority are accurate; robots.txt references the index",
+        "npm run validate passes"
+      ],
+      "priority": 175,
+      "passes": false,
+      "notes": "Source: SEO audit — generate-sitemaps runs pre-build only; new events missing until next build; no sitemap index."
+    },
+    {
+      "id": "PROD-SEO-006",
+      "title": "Structured data (JSON-LD) on all content and programmatic pages",
+      "description": "As the SEO owner, I need schema.org markup on all relevant pages so rich results and AI engines understand content.",
+      "acceptanceCriteria": [
+        "Event/Restaurant/Attraction detail pages emit Event/LocalBusiness/Place JSON-LD; list pages emit ItemList where appropriate",
+        "pSEO catch-all routes inject LocalBusiness/BreadcrumbList; category pages add FAQ schema where relevant",
+        "Markup validated with Google Rich Results Test on representative URLs",
+        "npm run validate passes"
+      ],
+      "priority": 176,
+      "passes": false,
+      "notes": "Source: SEO audit — JSON-LD only on curated pages; pSEO routes and many filter pages lack schema."
+    },
+    {
+      "id": "PROD-SEO-007",
+      "title": "Render GEO fields consistently for AI engines with fallbacks",
+      "description": "As the GEO owner, I need geo_summary/geo_key_facts/geo_faq rendered on all detail pages so generative engines have location context.",
+      "acceptanceCriteria": [
+        "Event/Restaurant/Attraction detail pages render GEO fields in a visible section and in JSON-LD when present",
+        "When GEO fields are null, a deterministic fallback is generated from address/lat-lng so the section is never empty",
+        "An admin view flags content missing GEO data",
+        "npm run validate passes"
+      ],
+      "priority": 177,
+      "passes": false,
+      "notes": "Source: SEO audit — GEO rendering only conditional on RestaurantDetails; events/attractions don't render it; no fallback."
+    },
+    {
+      "id": "PROD-SEO-008",
+      "title": "301 redirect management for changed/old slugs",
+      "description": "As the SEO owner, I need stable URLs with redirects so changed slugs don't become 404s and lose link equity.",
+      "acceptanceCriteria": [
+        "Slugs are immutable after creation, or a redirect map 301s old slugs to current ones",
+        "Public route changes keep a 301 for at least one release cycle (per CLAUDE.md on-disk/URL rules)",
+        "A test verifies an old slug 301s to the new URL",
+        "npm run validate passes"
+      ],
+      "priority": 178,
+      "passes": false,
+      "notes": "Source: SEO audit + enterprise checklist (301 Redirect Management). Event slugs derive from title+date and can 404 on change."
+    },
+    {
+      "id": "PROD-SEO-009",
+      "title": "Verify private routes are non-indexable and non-public",
+      "description": "As the security/SEO owner, I need admin/auth/profile routes blocked from indexing and access so private surfaces don't leak.",
+      "acceptanceCriteria": [
+        "robots.txt disallows /admin, /auth, /profile (verified) and these routes carry noindex",
+        "An automated check confirms admin routes are not server-accessible without auth (no public render of admin data)",
+        "404/NotFound keeps noindex,follow",
+        "npm run validate passes"
+      ],
+      "priority": 179,
+      "passes": false,
+      "notes": "Source: SEO audit — robots disallows private routes but no verification they truly require auth."
+    },
+    {
+      "id": "PROD-SEO-010",
+      "title": "Core Web Vitals monitoring (RUM) dashboard",
+      "description": "As the performance owner, I need real-user CWV data so regressions in LCP/CLS/INP are caught after deploy.",
+      "acceptanceCriteria": [
+        "web-vitals reports LCP/CLS/INP/TTFB to analytics keyed by route",
+        "A dashboard tracks CWV by page over time with targets (LCP<2.5s, CLS<0.1, INP<200ms)",
+        "Alerting on regression beyond threshold",
+        "npm run validate passes"
+      ],
+      "priority": 180,
+      "passes": false,
+      "notes": "Source: SEO/UX audit — web-vitals dependency present but no monitoring/dashboard."
+    },
+    {
+      "id": "PROD-A11Y-001",
+      "title": "Remediate the existing accessibility violation backlog to WCAG 2.1 AA",
+      "description": "As a user with assistive tech, I need the cataloged a11y violations fixed so the site is usable and legally compliant.",
+      "acceptanceCriteria": [
+        "Fix the 300+ axe violations across events, restaurants, attractions, articles, playgrounds, neighborhoods (labels, alt text, ARIA, contrast)",
+        "npm run test:a11y passes with zero critical/serious violations on the covered pages",
+        "Remediation summary recorded",
+        "npm run validate passes"
+      ],
+      "priority": 181,
+      "passes": false,
+      "notes": "Source: ops + SEO/UX audits — TEST_FAILURES_REPORT.md shows 373+ a11y violations; accessibility.spec failing broadly."
+    },
+    {
+      "id": "PROD-A11Y-002",
+      "title": "Skip-to-content link and correct landmark/heading structure",
+      "description": "As a keyboard user, I need a skip link and proper landmarks so I can navigate efficiently.",
+      "acceptanceCriteria": [
+        "A visually-hidden, focusable skip-to-content link precedes the header and targets #main-content",
+        "Each page has one h1 and a logical heading hierarchy; header/nav/main/footer landmarks present",
+        "Verified by keyboard and axe landmark checks",
+        "npm run validate passes"
+      ],
+      "priority": 182,
+      "passes": false,
+      "notes": "Source: SEO/UX audit — no skip link; heading hierarchy inconsistent."
+    },
+    {
+      "id": "PROD-A11Y-003",
+      "title": "Focus management and focus trapping for modals/route changes",
+      "description": "As a keyboard/screen-reader user, I need focus handled on modals and navigation so focus never gets lost behind overlays.",
+      "acceptanceCriteria": [
+        "All modals/dialogs trap focus, return focus to the trigger on close, and close on Escape",
+        "Route changes move focus to main content (already partially wired) and are verified",
+        "A Playwright a11y test covers modal focus isolation (gallery, maps, paywall, upgrade modals)",
+        "npm run validate passes"
+      ],
+      "priority": 183,
+      "passes": false,
+      "notes": "Source: SEO/UX audit — useFocusOnRouteChange exists but modal focus traps untested; focus can escape modals."
+    },
+    {
+      "id": "PROD-A11Y-004",
+      "title": "Accessible interactive controls and form field associations",
+      "description": "As an assistive-tech user, I need real buttons and properly labeled fields so all controls are operable and announced.",
+      "acceptanceCriteria": [
+        "Click handlers on divs are replaced with <button> (or role+tabindex+keyboard handlers); icon buttons have accessible names",
+        "Every form input has an associated label and aria-describedby linking to its error message",
+        "Empty/loading states use role=status / aria-live and semantic headings",
+        "npm run validate passes"
+      ],
+      "priority": 184,
+      "passes": false,
+      "notes": "Source: SEO/UX audit — card icon buttons may be unlabeled divs; not all forms wire aria-describedby; empty states lack live region."
+    },
+    {
+      "id": "PROD-A11Y-005",
+      "title": "Color contrast and touch-target compliance (incl. dark mode)",
+      "description": "As a user, I need sufficient contrast and large enough touch targets so the UI is readable and tappable.",
+      "acceptanceCriteria": [
+        "Text/icon colors meet WCAG AA 4.5:1 (3:1 for large text) in light and dark modes; low-contrast utilities (e.g. neutral-400 on dark) fixed",
+        "Interactive touch targets are at least 44x44px with adequate spacing",
+        "Verified via Lighthouse a11y and a contrast checker on key surfaces",
+        "npm run validate passes"
+      ],
+      "priority": 185,
+      "passes": false,
+      "notes": "Source: SEO/UX audit — footer/muted text contrast risks; some CTAs use sm (36px) targets."
+    },
+    {
+      "id": "PROD-A11Y-006",
+      "title": "Respect prefers-reduced-motion across all animations",
+      "description": "As a motion-sensitive user, I need animations to stop when I request reduced motion so the site is comfortable to use.",
+      "acceptanceCriteria": [
+        "Three.js hero and other JS-driven animations check prefers-reduced-motion (via useReducedMotion) and pause/skip frame updates",
+        "CSS animations already gate on motion-reduce; verify coverage",
+        "Verified with the OS/devtools reduced-motion emulation",
+        "npm run validate passes"
+      ],
+      "priority": 186,
+      "passes": false,
+      "notes": "Source: SEO/UX audit — HeroCityLite shader animation runs unconditionally; useReducedMotion exists but not applied there."
+    },
+    {
+      "id": "PROD-A11Y-007",
+      "title": "Add automated a11y gating to CI",
+      "description": "As the team, I need accessibility tests run on PRs so new violations are caught before merge.",
+      "acceptanceCriteria": [
+        "npm run test:a11y (and mobile a11y) runs in CI on PRs to main/develop",
+        "The check blocks merge on new critical/serious violations",
+        "A baseline/allowlist mechanism is documented for the remediation rollout",
+        "Workflow updated and green"
+      ],
+      "priority": 187,
+      "passes": false,
+      "notes": "Source: ops + SEO/UX audits — pr-checks.yml runs no Playwright/a11y tests."
+    },
+    {
+      "id": "PROD-A11Y-008",
+      "title": "Publish an accessibility statement",
+      "description": "As a user, I need an accessibility statement so I know our commitment and how to report issues.",
+      "acceptanceCriteria": [
+        "An /accessibility page describes conformance target (WCAG 2.1 AA), known limitations, and a contact for issues",
+        "Linked from the footer",
+        "npm run validate passes"
+      ],
+      "priority": 188,
+      "passes": false,
+      "notes": "Source: enterprise checklist (Accessibility Statement)."
+    },
+    {
+      "id": "PROD-UX-001",
+      "title": "Global error boundary with recovery and reporting",
+      "description": "As a user, I need a friendly error screen with recovery so a render error doesn't leave a blank/broken page.",
+      "acceptanceCriteria": [
+        "A top-level error boundary catches render errors, shows a recovery UI (reload/home), and reports to the error tracker",
+        "Route-level boundaries isolate failures to a section where feasible",
+        "A deliberately thrown error renders the boundary, not a white screen",
+        "npm run validate passes"
+      ],
+      "priority": 189,
+      "passes": false,
+      "notes": "Source: SEO/UX audit — RouteErrorBoundary exists but global coverage/reporting should be verified and hardened."
+    },
+    {
+      "id": "PROD-UX-002",
+      "title": "Consistent loading skeletons and empty states across lists",
+      "description": "As a user, I need skeletons and clear empty states so loading feels fast and 'no results' is understandable.",
+      "acceptanceCriteria": [
+        "List/grid pages use skeletons sized to the card (no layout shift) instead of spinners or blank space",
+        "Empty states present a helpful message and next action (clear filters, browse all)",
+        "Verified on throttled connections for key pages",
+        "npm run validate passes"
+      ],
+      "priority": 190,
+      "passes": false,
+      "notes": "Source: SEO/UX audit — cards lack skeletons; flicker on slow networks."
+    },
+    {
+      "id": "PROD-UX-003",
+      "title": "Query retry with backoff and user-facing retry actions",
+      "description": "As a user, I need transient fetch failures retried and a retry button so I'm not stuck on errors.",
+      "acceptanceCriteria": [
+        "Data queries use retry with exponential backoff for transient failures",
+        "Error states render a Retry action and never present a dead end",
+        "Failures are reported to the error tracker",
+        "npm run validate passes"
+      ],
+      "priority": 191,
+      "passes": false,
+      "notes": "Source: SEO/UX audit — detail pages lack retry on error."
+    },
+    {
+      "id": "PROD-UX-004",
+      "title": "Reserve space for inline validation/error messages to prevent CLS",
+      "description": "As a user, I need form/error messaging not to shift layout so the UI feels stable.",
+      "acceptanceCriteria": [
+        "Form fields reserve space (min-height) for error messages; modals/images include dimensions",
+        "Measured CLS on key forms/modals is under 0.1",
+        "npm run validate passes"
+      ],
+      "priority": 192,
+      "passes": false,
+      "notes": "Source: perf + SEO/UX audits — form errors and modal images cause layout shift."
+    },
+    {
+      "id": "PROD-UX-005",
+      "title": "Locale-aware date, time, and currency formatting",
+      "description": "As a user, I need dates/times/prices formatted consistently so information is unambiguous.",
+      "acceptanceCriteria": [
+        "Dates/times display in Central time via date-fns-tz consistently across pages",
+        "Prices format via Intl.NumberFormat (currency) rather than raw strings",
+        "A validation confirms event times match source after timezone handling",
+        "npm run validate passes"
+      ],
+      "priority": 193,
+      "passes": false,
+      "notes": "Source: SEO/UX audit — raw price strings; timezone correctness needs validation."
+    },
+    {
+      "id": "PROD-UX-006",
+      "title": "Breadcrumbs on detail/category pages with schema",
+      "description": "As a user, I need breadcrumbs so I understand where I am and can navigate up easily.",
+      "acceptanceCriteria": [
+        "Detail and category pages render breadcrumbs with BreadcrumbList JSON-LD",
+        "Breadcrumb trails are accurate and keyboard-accessible",
+        "npm run validate passes"
+      ],
+      "priority": 194,
+      "passes": false,
+      "notes": "Source: SEO/UX audit — breadcrumbs inconsistent across pages."
+    },
+    {
+      "id": "PROD-UX-007",
+      "title": "Automated broken-link and dead-button audit in CI",
+      "description": "As a user, I need links and buttons to work so I never hit dead ends; the team needs this enforced.",
+      "acceptanceCriteria": [
+        "links-and-buttons Playwright suite runs in CI and flags broken internal links / no-op buttons",
+        "Existing broken links found by the suite are fixed",
+        "Check is part of the PR pipeline",
+        "Workflow green"
+      ],
+      "priority": 195,
+      "passes": false,
+      "notes": "Source: existing tests/links-and-buttons.spec.ts not gated in CI."
+    },
+    {
+      "id": "PROD-UX-008",
+      "title": "Contact form / lead capture with storage and notifications",
+      "description": "As a visitor, I need a working contact form so I can reach the team; as the business, I need leads captured.",
+      "acceptanceCriteria": [
+        "A contact form writes to a contact_submissions table (RLS-guarded) and notifies via email",
+        "Spam protection (rate limit + honeypot/CAPTCHA) applied",
+        "Submission success/error states are clear",
+        "npm run validate passes"
+      ],
+      "priority": 196,
+      "passes": false,
+      "notes": "Source: enterprise checklist (Contact Form System HIGH)."
+    },
+    {
+      "id": "PROD-OPS-001",
+      "title": "Repair the test suite and run it on Linux CI",
+      "description": "As the team, I need a reliable test suite running in CI so quality is actually enforced.",
+      "acceptanceCriteria": [
+        "Playwright runs headless in Linux CI (no Windows-path/browser-binary failures); flaky non-a11y failures triaged",
+        "Test artifacts/baselines are regenerated in CI, not committed from a developer's Windows machine",
+        "A documented known-failures policy exists if any are temporarily excluded",
+        "npm test (critical projects) runs green in CI"
+      ],
+      "priority": 197,
+      "passes": false,
+      "notes": "Source: ops audit — test-failures.csv shows ~841/2997 failing, many from local Windows paths and missing browsers."
+    },
+    {
+      "id": "PROD-OPS-002",
+      "title": "Gate critical E2E suites in the PR pipeline",
+      "description": "As the team, I need critical E2E checks blocking merges so regressions don't reach production.",
+      "acceptanceCriteria": [
+        "pr-checks.yml runs critical Playwright suites (a11y, mobile-responsive, links, forms) in addition to lint/type-check/unit/build",
+        "Branch rulesets require the E2E status check on PRs to main and develop",
+        "The pipeline completes in a reasonable time (sharding/parallelism as needed)",
+        "Workflow green"
+      ],
+      "priority": 198,
+      "passes": false,
+      "notes": "Source: ops audit — pr-checks.yml runs no Playwright; E2E not gated."
+    },
+    {
+      "id": "PROD-OPS-003",
+      "title": "Production error tracking (Sentry) wired and verified",
+      "description": "As an operator, I need front-end and edge errors captured so production issues are visible.",
+      "acceptanceCriteria": [
+        "Sentry initializes with a required DSN in production; a missing DSN logs a clear startup error",
+        "vite esbuild drop is adjusted so error reporting still works (errors routed to Sentry rather than silently dropped)",
+        "Edge functions report errors to the tracker with request ids",
+        "A test error appears in the dashboard from a staging deploy",
+        "npm run validate passes"
+      ],
+      "priority": 199,
+      "passes": false,
+      "notes": "Source: ops + perf audits — Sentry init is conditional/unverified; vite drops all console.* so prod errors can be invisible. Enterprise checklist (Error Tracking Critical)."
+    },
+    {
+      "id": "PROD-OPS-004",
+      "title": "Structured logging + log aggregation for edge functions",
+      "description": "As an operator, I need structured, queryable logs so I can debug production incidents.",
+      "acceptanceCriteria": [
+        "Edge functions emit structured JSON logs (request id, user id, function, event, status, duration) at a configurable level",
+        "Logs are aggregated/queryable (provider or a logs table) with payment/auth flows fully traced",
+        "Log level is reduced in production (no debug spam)",
+        "npm run validate passes"
+      ],
+      "priority": 200,
+      "passes": false,
+      "notes": "Source: ops + subscription audits — console.* logging only; no structured/aggregated logs; enterprise checklist (Log Aggregation)."
+    },
+    {
+      "id": "PROD-OPS-005",
+      "title": "Health-check endpoint and uptime monitoring with alerting",
+      "description": "As an operator, I need a health endpoint and external monitoring so outages are detected and paged quickly.",
+      "acceptanceCriteria": [
+        "A health-check function verifies Supabase connectivity and returns status/latency",
+        "An external uptime monitor checks the site and health endpoint and alerts on 5xx/down for >5min",
+        "An SLO is documented (e.g. 99.9% uptime, health <500ms)",
+        "npm run validate passes"
+      ],
+      "priority": 201,
+      "passes": false,
+      "notes": "Source: ops audit + enterprise checklist (Uptime Monitoring, Real-Time Alerting)."
+    },
+    {
+      "id": "PROD-OPS-006",
+      "title": "Verified automated database backups + restore drill",
+      "description": "As an operator, I need backups that are automated and proven restorable so data loss is recoverable.",
+      "acceptanceCriteria": [
+        "Automated backups are configured (Supabase scheduled backups + the db:backup script on a schedule)",
+        "A restore drill is performed and documented (restore to a scratch project, verify row counts)",
+        "RTO/RPO targets are documented",
+        "Backup success/failure is monitored and alerts"
+      ],
+      "priority": 202,
+      "passes": false,
+      "notes": "Source: ops audit + enterprise checklist (Backup Automation Critical, Database Backup Verification Critical). db:backup exists but is manual."
+    },
+    {
+      "id": "PROD-OPS-007",
+      "title": "Disaster-recovery plan and incident runbooks",
+      "description": "As an on-call engineer, I need a DR plan and runbooks so incidents have a clear, fast response.",
+      "acceptanceCriteria": [
+        "A DR plan documents failover, data restore, and communication steps with RTO/RPO",
+        "Runbooks exist for: Supabase outage, high error rate/rollback, payment/webhook failure, cron/scraper failure",
+        "Runbooks live in /docs/runbook and are linked from the README",
+        "A tabletop walkthrough is recorded"
+      ],
+      "priority": 203,
+      "passes": false,
+      "notes": "Source: ops audit + enterprise checklist (Disaster Recovery Plan Critical, Incident Response Playbook)."
+    },
+    {
+      "id": "PROD-OPS-008",
+      "title": "Persistent staging environment with QA sign-off",
+      "description": "As the team, I need a stable staging URL so stakeholders can validate before production.",
+      "acceptanceCriteria": [
+        "A persistent staging environment (e.g. staging.desmoinesinsider.com) deploys from develop with its own Supabase project/keys",
+        "Staging uses separate secrets and seeded (non-prod) data",
+        "A QA sign-off step is part of the release flow",
+        "Documented in DEPLOYMENT.md"
+      ],
+      "priority": 204,
+      "passes": false,
+      "notes": "Source: ops audit + enterprise checklist (Staging Environment HIGH) — only per-commit preview URLs exist today."
+    },
+    {
+      "id": "PROD-OPS-009",
+      "title": "Rollback automation and post-deploy validation",
+      "description": "As an operator, I need automated rollback and post-deploy checks so a bad deploy is caught and reverted fast.",
+      "acceptanceCriteria": [
+        "A post-deploy smoke check validates key pages load and critical data is present; failure triggers (or prompts) a rollback",
+        "Rollback procedure is documented and tested (Cloudflare Pages rollback + DB considerations)",
+        "Migration rollback guidance is documented per CLAUDE.md backward-compat rules",
+        "Runbook updated"
+      ],
+      "priority": 205,
+      "passes": false,
+      "notes": "Source: ops audit + enterprise checklist (Rollback Automation HIGH). Cloudflare rollback is currently manual; no post-deploy validation."
+    },
+    {
+      "id": "PROD-OPS-010",
+      "title": "Require PR review on protected branches",
+      "description": "As the team, I need human review required before merging to protected branches so no single actor ships unreviewed code.",
+      "acceptanceCriteria": [
+        "main ruleset requires at least 1 approving review (code-owner review if CODEOWNERS exists)",
+        "release/* and hotfix/* require review consistent with CLAUDE.md",
+        "Ruleset changes committed under .github/rulesets and documented",
+        "Verified that an unreviewed PR cannot merge to main"
+      ],
+      "priority": 206,
+      "passes": false,
+      "notes": "Source: ops audit — main.json has required_approving_review_count: 0."
+    },
+    {
+      "id": "PROD-OPS-011",
+      "title": "CI guard for backward-incompatible DB/API changes",
+      "description": "As the team, I need destructive migrations flagged in CI so we don't break older mobile clients.",
+      "acceptanceCriteria": [
+        "A CI check flags DROP COLUMN/TABLE/TYPE, RENAME, NOT NULL tightening, enum value removal, and RPC arg changes in migrations",
+        "Flagged changes require an explicit deprecation annotation referencing the multi-release flow (per CLAUDE.md)",
+        "MIN_SUPPORTED_APP_VERSION is defined in supabase/functions/_shared and surfaced via a version-check endpoint",
+        "Workflow green"
+      ],
+      "priority": 207,
+      "passes": false,
+      "notes": "Source: ops audit + CLAUDE.md — deprecation flow is documented but unenforced; MIN_SUPPORTED_APP_VERSION not yet implemented in code."
+    },
+    {
+      "id": "PROD-OPS-012",
+      "title": "Centralized environment/secret management and rotation policy",
+      "description": "As an operator, I need a documented secret inventory and rotation so credentials are managed safely across environments.",
+      "acceptanceCriteria": [
+        ".env.example is complete and annotated (required vs optional) for web, edge functions, and scripts",
+        "A documented rotation policy covers Supabase keys, Stripe keys, LLM keys, and mobile signing assets",
+        "Mobile release workflows check signing cert/keystore expiry and warn before expiry",
+        "Separate staging vs prod secrets are documented"
+      ],
+      "priority": 208,
+      "passes": false,
+      "notes": "Source: ops audit + enterprise checklist (Secret Rotation, API Key Rotation). iOS/Android release workflows store base64 secrets with no expiry monitoring."
+    },
+    {
+      "id": "PROD-OPS-013",
+      "title": "Repository hygiene: consolidate loose SQL and archive status docs",
+      "description": "As a maintainer, I need a clean repo so canonical migrations and docs are obvious and onboarding is fast.",
+      "acceptanceCriteria": [
+        "Loose *.sql at the repo root are reconciled into supabase/migrations or removed; a rule forbids SQL outside migrations",
+        "The ~125 historical *.md status files are moved to /docs/archive (keep README, CONTRIBUTING, CLAUDE.md, DEPLOYMENT, etc.)",
+        "Large binary design sources and stray report artifacts are removed or moved to storage/LFS",
+        "Repo root is materially decluttered and documented"
+      ],
+      "priority": 209,
+      "passes": false,
+      "notes": "Source: ops audit — 34 loose .sql + ~125 .md at root + large .psd/report binaries; canonical migrations unclear."
+    },
+    {
+      "id": "PROD-OPS-014",
+      "title": "Feature-flag system for safe rollouts",
+      "description": "As the team, I need feature flags so we can ship dark, do gradual rollouts, and kill-switch features.",
+      "acceptanceCriteria": [
+        "A remote-config/flag mechanism gates new features (web) with per-environment values",
+        "Flags can be toggled without a redeploy and are documented",
+        "At least one in-flight feature is moved behind a flag as a reference",
+        "npm run validate passes"
+      ],
+      "priority": 210,
+      "passes": false,
+      "notes": "Source: enterprise checklist (Feature Flags) — also supports mobile backward-compat per CLAUDE.md."
+    },
+    {
+      "id": "PROD-OPS-015",
+      "title": "Adopt unit testing for critical logic with coverage reporting",
+      "description": "As the team, I need unit tests on critical libs so regressions in money/auth/data logic are caught fast.",
+      "acceptanceCriteria": [
+        "Vitest unit tests cover critical modules: subscription tier resolution, redirect/url validation, like-input sanitization, timezone conversion, password strength, error handler",
+        "Coverage is reported in CI with a baseline threshold that ratchets up",
+        "npm run test:unit:coverage runs in CI and is green",
+        "npm run validate passes"
+      ],
+      "priority": 211,
+      "passes": false,
+      "notes": "Source: ops audit + enterprise checklist (Unit Tests HIGH, Test Coverage Reports). vitest configured; pr-checks runs unit tests but coverage of critical logic is thin."
+    },
+    {
+      "id": "PROD-OPS-016",
+      "title": "Load/stress testing of key endpoints and pages",
+      "description": "As the platform, I need load testing so we know capacity and failure modes before real traffic.",
+      "acceptanceCriteria": [
+        "Load tests exercise search, list, detail, checkout, and AI endpoints at target concurrency",
+        "Results document throughput, p95 latency, and breakpoints; identified bottlenecks become follow-up stories",
+        "A repeatable load-test script/config is committed",
+        "npm run validate passes"
+      ],
+      "priority": 212,
+      "passes": false,
+      "notes": "Source: enterprise checklist (Load/Stress Testing) + perf audit scale concerns (connection pooling, realtime leaks)."
+    },
+    {
+      "id": "PROD-OPS-017",
+      "title": "Verify Supabase connection pooling for the API role",
+      "description": "As the database, I need pooled connections so concurrency doesn't exhaust Postgres connections.",
+      "acceptanceCriteria": [
+        "The API/edge path uses the pooled connection string (PgBouncer/transaction mode) appropriately",
+        "Connection usage is observed under load and stays within limits",
+        "Pooling configuration is documented",
+        "npm run validate passes"
+      ],
+      "priority": 213,
+      "passes": false,
+      "notes": "Source: perf audit — connection-pooling strategy unverified at concurrency."
+    },
+    {
+      "id": "PROD-OPS-018",
+      "title": "Gradual TypeScript strictness rollout enforced in CI",
+      "description": "As the team, I need increasing type-strictness so null-safety bugs are caught at compile time.",
+      "acceptanceCriteria": [
+        "Newly added/modified files are added to tsconfig.strict.json; npm run type-check:strict runs in CI (warn-then-block as coverage grows)",
+        "A documented migration path moves modules into strict mode incrementally",
+        "No new non-strict files are introduced without justification",
+        "npm run validate:strict documented in the contributor guide"
+      ],
+      "priority": 214,
+      "passes": false,
+      "notes": "Source: ops audit + CLAUDE.md — strictNullChecks:false; tsconfig.strict.json exists but unenforced."
+    },
+    {
+      "id": "PROD-COMPLY-001",
+      "title": "Self-service account deletion (GDPR/CCPA right to erasure) on web",
+      "description": "As a user, I need to delete my account and data from the web so my privacy rights are honored.",
+      "acceptanceCriteria": [
+        "An /account/delete page requires re-auth/confirmation and calls a delete-account edge function",
+        "The function removes/anonymizes PII and cascades user-linked data, retaining only legally required financial records",
+        "A confirmation email is sent and a deletion timestamp recorded; hard-purge from backups after a documented retention window",
+        "npm run validate passes"
+      ],
+      "priority": 215,
+      "passes": false,
+      "notes": "Source: subscription + ops audits + enterprise checklist (Account Deletion HIGH). Privacy policy promises erasure but no web flow exists."
+    },
+    {
+      "id": "PROD-COMPLY-002",
+      "title": "Self-service data export (GDPR right to portability)",
+      "description": "As a user, I need to export my data so I can exercise data portability.",
+      "acceptanceCriteria": [
+        "An /account/export page triggers an export-my-data function returning JSON/CSV of profile, favorites, ratings, reviews, trips",
+        "Export is delivered as a download or emailed via Resend and is access-controlled to the requesting user",
+        "Request is rate-limited and logged",
+        "npm run validate passes"
+      ],
+      "priority": 216,
+      "passes": false,
+      "notes": "Source: ops audit + enterprise checklist (Data Export GDPR HIGH)."
+    },
+    {
+      "id": "PROD-COMPLY-003",
+      "title": "Cookie consent that actually gates analytics",
+      "description": "As a visitor, I need analytics to load only after consent so we are GDPR/CCPA compliant.",
+      "acceptanceCriteria": [
+        "GA4/analytics scripts do not load or set cookies until consent is granted (consent mode or deferred load)",
+        "Rejecting analytics results in no tracking (verified in devtools/network)",
+        "Consent choice is persisted and revocable from a settings link",
+        "npm run validate passes"
+      ],
+      "priority": 217,
+      "passes": false,
+      "notes": "Source: ops audit + enterprise checklist (Cookie Consent HIGH). CookieConsentBanner exists but GA loads immediately regardless of choice."
+    },
+    {
+      "id": "PROD-COMPLY-004",
+      "title": "Data retention policy and automated purge",
+      "description": "As a compliance owner, I need documented retention and automated purges so data isn't kept longer than allowed.",
+      "acceptanceCriteria": [
+        "A retention schedule is documented (deleted-user data, logs, analytics, soft-deleted content)",
+        "A scheduled job hard-deletes soft-deleted records past the retention window",
+        "The privacy policy reflects the retention schedule",
+        "Migration/cron additive and documented"
+      ],
+      "priority": 218,
+      "passes": false,
+      "notes": "Source: ops audit — no documented retention/purge for deleted users or logs."
+    },
+    {
+      "id": "PROD-COMPLY-005",
+      "title": "Legal pages and policy completeness review",
+      "description": "As the business, I need complete, current legal pages so the product is launch-ready and compliant.",
+      "acceptanceCriteria": [
+        "Terms of Service, Privacy Policy, and a Data Processing Agreement (for advertisers) are present, current, and linked in the footer",
+        "Policies accurately describe data collected, third parties (Stripe, OpenAI/Anthropic, analytics, email), and user rights",
+        "Sponsored-content/advertising disclosure is clearly labeled per FTC guidance",
+        "npm run validate passes"
+      ],
+      "priority": 219,
+      "passes": false,
+      "notes": "Source: enterprise checklist (Data Processing Agreement) + advertising disclosure across the platform."
+    },
+    {
+      "id": "PROD-CONTENT-001",
+      "title": "Content CMS: draft/publish workflow with rich editor and revisions",
+      "description": "As an editor, I need a CMS so articles/guides can be created, reviewed, scheduled, and revised safely.",
+      "acceptanceCriteria": [
+        "An admin CMS supports a rich-text editor, draft/publish states, scheduled publishing, author attribution, categories/tags, and revision history",
+        "Publishing updates sitemaps and emits correct SEO/structured data",
+        "Access is restricted to authorized roles via RLS",
+        "npm run validate passes"
+      ],
+      "priority": 220,
+      "passes": false,
+      "notes": "Source: enterprise checklist (Full CMS Dashboard, WYSIWYG, Draft/Publish, Scheduled Publishing, Article Revisions — all HIGH/Medium)."
+    },
+    {
+      "id": "PROD-CONTENT-002",
+      "title": "Admin moderation queue for reviews and user submissions",
+      "description": "As an admin, I need a moderation queue so user-generated content is vetted before or shortly after publishing.",
+      "acceptanceCriteria": [
+        "Reviews, event submissions, and guide/contact requests appear in an admin queue with approve/reject/flag actions",
+        "Moderation actions are logged and reversible where appropriate",
+        "Rejected/flagged content is hidden from public views via RLS",
+        "npm run validate passes"
+      ],
+      "priority": 221,
+      "passes": false,
+      "notes": "Source: backend audit (review persistence + moderation) + enterprise checklist."
+    },
+    {
+      "id": "PROD-CONTENT-003",
+      "title": "Admin observability dashboard for AI usage, scrapers, and payments",
+      "description": "As an operator, I need an internal dashboard so AI cost, scraper health, and payment/webhook status are visible.",
+      "acceptanceCriteria": [
+        "A dashboard surfaces AI usage/cost per endpoint, scraper last-run/status/error counts, and recent payment/webhook events",
+        "Failed crons/webhooks are highlighted with links to logs",
+        "Access restricted to admins",
+        "npm run validate passes"
+      ],
+      "priority": 222,
+      "passes": false,
+      "notes": "Source: enterprise checklist (AI Usage Analytics, Automation Monitoring) + ops/backend audits (cron + webhook visibility)."
     }
   ]
 }
