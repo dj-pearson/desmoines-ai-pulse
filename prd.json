@@ -731,8 +731,8 @@
         "npm run validate passes"
       ],
       "priority": 107,
-      "passes": false,
-      "notes": "VERIFIED PARTIAL: securityUtils.sanitizeHTML (DOMPurify, restrictive allowlist) EXISTS but is NOT used by NewsletterCampaignsManager.tsx:560 or FeedbackInbox.tsx:657 (both render DB HTML under a trusted-admin assumption). Remaining = route those two render sites through sanitizeHTML + add an XSS test."
+      "passes": true,
+      "notes": "DONE (this branch): added SecurityUtils.sanitizeRichHTML (DOMPurify USE_PROFILES html, FORBID style; strips script/event-handlers/javascript:/iframe while preserving headings/images/lists/links) and routed both dangerouslySetInnerHTML sites through it — NewsletterCampaignsManager (body preview) and FeedbackInbox (r.body_html, which actually holds BOTH admin replies AND user->admin messages, so the prior trusted-admin assumption was a real stored-XSS vector into an admin browser). Reused the tight sanitizeHTML would have destroyed rich newsletter formatting, hence the separate rich sanitizer. 5 unit tests added (script/onerror/javascript:/style stripped; rich tags preserved); type-check + lint clean."
     },
     {
       "id": "PROD-SEC-009",

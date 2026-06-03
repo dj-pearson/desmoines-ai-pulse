@@ -34,6 +34,28 @@ export class SecurityUtils {
   }
 
   /**
+   * Sanitize RICH HTML (newsletter bodies, message threads) for display.
+   *
+   * Unlike sanitizeHTML's tight allowlist, this preserves common formatting
+   * (headings, images, tables, lists, inline styling) so rich content still
+   * renders, while DOMPurify strips <script>, event-handler attributes,
+   * javascript: URLs, <iframe>, and SVG/MathML vectors. Use this for any
+   * database-sourced HTML rendered via dangerouslySetInnerHTML — including
+   * "trusted admin" content, since those tables can also hold user-submitted
+   * HTML (e.g. feedback replies).
+   */
+  static sanitizeRichHTML(dirty: string): string {
+    if (typeof window === 'undefined') {
+      // SSR/non-DOM fallback: escape rather than risk unsanitized passthrough.
+      return SecurityUtils.sanitizeHTML(dirty);
+    }
+    return DOMPurify.sanitize(dirty, {
+      USE_PROFILES: { html: true },
+      FORBID_TAGS: ['style'],
+    });
+  }
+
+  /**
    * Validate and sanitize user input
    */
   static validateInput(input: unknown, schema: z.ZodSchema): z.SafeParseReturnType<unknown, unknown> {

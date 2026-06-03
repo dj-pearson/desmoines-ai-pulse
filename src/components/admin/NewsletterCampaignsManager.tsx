@@ -41,6 +41,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { handleError } from "@/lib/errorHandler";
+import { SecurityUtils } from "@/lib/securityUtils";
 import { toast } from "sonner";
 
 interface CampaignRow {
@@ -556,8 +557,11 @@ export default function NewsletterCampaignsManager() {
                 )}
                 <div
                   className="prose prose-sm dark:prose-invert max-w-none border-t pt-3"
-                  // body is admin-authored HTML; admins are trusted
-                  dangerouslySetInnerHTML={{ __html: body || "<em>(empty body)</em>" }}
+                  // Sanitize even admin-authored HTML before rendering — defense
+                  // in depth against stored XSS / pasted content (PROD-SEC-008).
+                  dangerouslySetInnerHTML={{
+                    __html: SecurityUtils.sanitizeRichHTML(body || "<em>(empty body)</em>"),
+                  }}
                 />
               </div>
             </TabsContent>
