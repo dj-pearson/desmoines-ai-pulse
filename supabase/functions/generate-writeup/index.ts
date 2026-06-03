@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getAIConfig, getClaudeHeaders, buildClaudeRequest } from "../_shared/aiConfig.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
+import { validateURLForSSRF } from "../_shared/validation.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -339,6 +340,26 @@ serve(async (req) => {
     const claudeApiKey = Deno.env.get("CLAUDE_API");
     if (!claudeApiKey) {
       throw new Error("Claude API key not configured");
+    }
+
+    // SSRF protection: only fetch public http(s) URLs. Blocks localhost,
+    // link-local (169.254.x), and private CIDR ranges so a caller-supplied
+    // `url` cannot make the function reach internal infrastructure.
+    const ssrfCheck = validateURLForSSRF(url, {
+      allowedProtocols: ["http:", "https:"],
+      blockPrivateIPs: true,
+    });
+    if (!ssrfCheck.valid) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: `Invalid source URL: ${ssrfCheck.error}`,
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     console.log(`Starting content extraction from: ${url}`);

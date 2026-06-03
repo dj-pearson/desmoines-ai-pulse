@@ -237,8 +237,9 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 
     <!-- Database: Critical for interactivity (crossorigin needed for fetch/XHR requests) -->
-    <link rel="preconnect" href="https://wtkhfqpmcegzcbngroui.supabase.co" crossorigin />
-    <link rel="dns-prefetch" href="https://wtkhfqpmcegzcbngroui.supabase.co" />
+    <!-- Project URL is injected at build time from VITE_SUPABASE_URL (no hardcoded project ref) -->
+    <link rel="preconnect" href="%VITE_SUPABASE_URL%" crossorigin />
+    <link rel="dns-prefetch" href="%VITE_SUPABASE_URL%" />
 
     <!-- Analytics: Non-critical, DNS prefetch only -->
     <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
@@ -351,6 +352,10 @@
     </script>
 
     <!-- Defer Google Analytics to reduce INP (Interaction to Next Paint) -->
+    <!-- NOTE: this inline script is pinned by a SHA-256 hash in public/_headers
+         CSP script-src. Do NOT env-template it (a templated body changes the
+         served bytes and breaks the hash) — a GA4 measurement id is public, not
+         a secret. If you edit this block, regenerate the hash per _headers. -->
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag() {

@@ -1,0 +1,68 @@
+name: E2E (critical suites)
+
+# PROD-OPS-002 — run the critical Playwright suites on PRs so regressions in
+# accessibility, mobile layout, links/buttons, and forms are visible before merge.
+#
+# ROLLOUT: this is intentionally NON-BLOCKING for now (continue-on-error) because
+# the accessibility suite still has a known violation backlog (PROD-A11Y-001).
+# It provides signal + an uploaded report without freezing merges. Once A11Y-001
+# is remediated, remove `continue-on-error`, drop the report to required, and add
+# this job to the branch ruleset's required status checks (PROD-A11Y-007 / UX-007).
+
+on:
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: Playwright (Chromium desktop + mobile)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      # Use repo secrets when present; fall back to placeholders so the Vite dev
+      # server boots even without backend creds (structural tests still run).
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://placeholder.supabase.co' }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || 'placeholder-anon-key' }}
+      VITE_SITE_URL: ${{ secrets.VITE_SITE_URL || 'https://desmoinesinsider.com' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium + system deps
+        run: npx playwright install --with-deps chromium
+
+      - name: Run critical E2E suites (Chromium only)
+        continue-on-error: true
+        run: >-
+          npx playwright test
+          tests/accessibility.spec.ts
+          tests/links-and-buttons.spec.ts
+          tests/forms.spec.ts
+          tests/mobile-responsive.spec.ts
+          --project=chromium-desktop
+          --project=mobile-chrome
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore

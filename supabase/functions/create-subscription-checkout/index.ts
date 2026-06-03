@@ -70,6 +70,19 @@ serve(async (req) => {
       });
     }
 
+    // PROD-AUTH-002: require a verified email before a paid checkout, enforced
+    // server-side (not just by the signup UI) so an unverified session cannot
+    // start a subscription.
+    if (!user.email_confirmed_at) {
+      return new Response(
+        JSON.stringify({
+          error: "Please verify your email address before subscribing.",
+          code: "email_verification_required",
+        }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Parse request body
     const body = await req.json();
     const { planId, billingInterval = "monthly" } = body;
@@ -129,13 +142,38 @@ serve(async (req) => {
       );
     }
 
-    // Check if user already has an active subscription
+    // Check if user already has an active/trialing subscription
     const { data: existingSubscription } = await supabase
       .from("user_subscriptions")
-      .select("id, stripe_subscription_id, status")
+      .select("id, stripe_subscription_id, status, cancel_at_period_end, plan_id")
       .eq("user_id", user.id)
       .in("status", ["active", "trialing"])
       .single();
+
+    // PROD-SUB-005: prevent double-charging. If the user has a subscription
+    // that is set to cancel at period end, they should RESUME it from the
+    // billing portal rather than buy a second one. If they already hold the
+    // exact plan they're trying to buy, block that too. (Genuine cross-tier
+    // upgrades — a different active plan — are left to proceed for now.)
+    if (existingSubscription?.cancel_at_period_end) {
+      return new Response(
+        JSON.stringify({
+          error:
+            "Your subscription is set to cancel at the end of the period. Please resume it from Manage Subscription instead of buying a new one.",
+          code: "resume_required",
+        }),
+        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    if (existingSubscription && existingSubscription.plan_id === planId) {
+      return new Response(
+        JSON.stringify({
+          error: "You already have an active subscription to this plan.",
+          code: "already_subscribed",
+        }),
+        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // Initialize Stripe
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {

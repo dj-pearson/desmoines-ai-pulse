@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
   resolveHighestSubscription,
+  isSubscriptionEntitled,
+  gracePeriodEnd,
+  GRACE_PERIOD_DAYS,
   type SubscriptionPlan,
   type UserSubscription,
 } from '../useSubscription';
@@ -121,5 +124,62 @@ describe('resolveHighestSubscription (cross-platform sync read-side)', () => {
     const winner = resolveHighestSubscription([web, ios, android]);
     expect(winner?.plan?.name).toBe('vip');
     expect(winner?.platform).toBe('android');
+  });
+});
+
+/**
+ * Payment-failed grace period (PROD-SUB-003).
+ *
+ * A failed renewal must not instantly revoke premium access: past_due rows stay
+ * entitled until current_period_end + GRACE_PERIOD_DAYS, then drop to free.
+ * active/trialing always grant; canceled/paused never do.
+ */
+describe('isSubscriptionEntitled / gracePeriodEnd (grace period)', () => {
+  const now = new Date('2026-05-10T00:00:00Z');
+  const withStatus = (
+    status: UserSubscription['status'],
+    periodEnd: string,
+  ): UserSubscription => ({
+    ...makeRow('web', insiderPlan),
+    status,
+    current_period_end: periodEnd,
+  });
+
+  it('grants access for active subscriptions', () => {
+    expect(isSubscriptionEntitled(withStatus('active', '2026-05-01T00:00:00Z'), now)).toBe(true);
+  });
+
+  it('grants access for trialing subscriptions (fixes trial-reads-as-free)', () => {
+    expect(isSubscriptionEntitled(withStatus('trialing', '2026-05-20T00:00:00Z'), now)).toBe(true);
+  });
+
+  it('never grants access for canceled or paused subscriptions', () => {
+    expect(isSubscriptionEntitled(withStatus('canceled', '2026-06-01T00:00:00Z'), now)).toBe(false);
+    expect(isSubscriptionEntitled(withStatus('paused', '2026-06-01T00:00:00Z'), now)).toBe(false);
+  });
+
+  it('keeps a past_due subscription entitled inside the grace window', () => {
+    // period ended 2026-05-01, +14d grace = 2026-05-15, now is 2026-05-10 → still in grace
+    expect(isSubscriptionEntitled(withStatus('past_due', '2026-05-01T00:00:00Z'), now)).toBe(true);
+  });
+
+  it('drops a past_due subscription after the grace window lapses', () => {
+    // period ended 2026-04-01, +14d grace = 2026-04-15, now is 2026-05-10 → lapsed
+    expect(isSubscriptionEntitled(withStatus('past_due', '2026-04-01T00:00:00Z'), now)).toBe(false);
+  });
+
+  it('treats a past_due row with no period end as lapsed', () => {
+    const row = { ...withStatus('past_due', '2026-05-01T00:00:00Z'), current_period_end: '' as unknown as string };
+    expect(isSubscriptionEntitled(row, now)).toBe(false);
+  });
+
+  it('gracePeriodEnd adds the grace window for past_due but not for active', () => {
+    const periodEnd = '2026-05-01T00:00:00Z';
+    const due = gracePeriodEnd(withStatus('past_due', periodEnd));
+    const active = gracePeriodEnd(withStatus('active', periodEnd));
+    expect(active.toISOString()).toBe(new Date(periodEnd).toISOString());
+    const expected = new Date(periodEnd);
+    expected.setDate(expected.getDate() + GRACE_PERIOD_DAYS);
+    expect(due.toISOString()).toBe(expected.toISOString());
   });
 });

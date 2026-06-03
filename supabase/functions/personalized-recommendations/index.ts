@@ -1,8 +1,9 @@
 /**
- * SECURITY: verify_jwt = false
- * Reason: Serves personalized recommendations without requiring JWT to support both authenticated and anonymous visitors
- * Alternative measures: userId parameter validation, row-level filtering ensures users can only access their own recommendation data
- * Risk level: MEDIUM
+ * SECURITY: verify_jwt = true (gateway) + in-function token validation.
+ * The user id is derived from the verified JWT, never from the request body, so
+ * a caller cannot fetch another user's profile/feedback/recommendations. A body
+ * `userId` that does not match the authenticated user is rejected (403).
+ * (PROD-API-003 — see docs/SECURITY_AUDIT.md #10.)
  */
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -30,16 +31,39 @@ serve(async (req) => {
   }
 
   try {
-    const { userId } = await req.json();
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
-    if (!userId) {
-      return new Response(JSON.stringify({ error: 'User ID is required' }), {
-        status: 400,
+    // Authenticate: the user id MUST come from the verified JWT, never the body.
+    // This endpoint reads user-specific data with the service-role key, so
+    // trusting a body `userId` would let anyone fetch another user's profile,
+    // feedback, and recommendations (PROD-API-003 / docs/SECURITY_AUDIT.md #10).
+    const token = (req.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!token) {
+      return new Response(JSON.stringify({ error: 'Authentication required' }), {
+        status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: 'Invalid authentication' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const userId = user.id;
+
+    // Reject a caller trying to request a different user's data outright,
+    // rather than silently ignoring it.
+    const body = await req.json().catch(() => ({} as { userId?: string }));
+    if (body?.userId && body.userId !== userId) {
+      return new Response(
+        JSON.stringify({ error: 'userId does not match authenticated user' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
 
     // Get user profile and preferences
     const { data: profile } = await supabase

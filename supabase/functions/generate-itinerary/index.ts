@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
 import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
+import { resolveEntitledTier, hasFeatureAccess } from "../_shared/entitlements.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -90,6 +91,24 @@ serve(async (req) => {
 
     if (authError || !user) {
       throw new Error('Authentication required');
+    }
+
+    // PROD-SUB-001: enforce the Trip Planner paywall SERVER-side. The web/iOS
+    // PremiumGate is client-only and bypassable by calling this function
+    // directly, so verify the caller is entitled to the trip_planner feature
+    // (Insider+) here too.
+    const tier = await resolveEntitledTier(supabaseClient, user.id);
+    if (!hasFeatureAccess(tier, 'trip_planner')) {
+      return new Response(
+        JSON.stringify({
+          error: 'Trip Planner is an Insider feature. Please upgrade to continue.',
+          code: 'upgrade_required',
+          feature: 'trip_planner',
+          requiredTier: 'insider',
+          tier,
+        }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
     }
 
     const {

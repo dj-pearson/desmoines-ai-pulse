@@ -31,6 +31,7 @@ import { handleCors, getCorsHeaders, isOriginAllowed } from '../_shared/cors.ts'
 import { checkRateLimit, addRateLimitHeaders } from '../_shared/rateLimit.ts';
 import { getAIConfig } from '../_shared/aiConfig.ts';
 import { sanitizePostgrestPattern } from '../_shared/validation.ts';
+import { resolveEntitledTier } from '../_shared/entitlements.ts';
 
 // ---------------------------------------------------------------------------
 // Tier-gated daily quotas — mirror web /trip-planner gating
@@ -208,21 +209,10 @@ async function execTool(
 // Tier resolution + quota tracking
 // ---------------------------------------------------------------------------
 
-async function resolveTier(supabase: SupabaseLike, userId: string): Promise<'free' | 'insider' | 'vip'> {
-  const { data } = await supabase
-    .from('user_subscriptions')
-    .select('status, plan:subscription_plans(name)')
-    .eq('user_id', userId)
-    .eq('status', 'active');
-
-  let best: 'free' | 'insider' | 'vip' = 'free';
-  for (const row of (data ?? []) as Array<{ plan?: { name?: string } }>) {
-    const name = (row.plan?.name ?? '').toLowerCase();
-    if (name === 'vip') return 'vip';
-    if (name === 'insider') best = 'insider';
-  }
-  return best;
-}
+// Tier resolution uses the shared _shared/entitlements.ts helper so AI quota
+// gating agrees with the rest of the app — including trialing users and the
+// past_due grace window (the old local version only counted status=active,
+// under-throttling trialing/grace users to the free quota).
 
 async function consumeQuota(
   supabase: SupabaseLike,
@@ -443,7 +433,7 @@ serve(async (req) => {
   }
 
   // Tier + per-day quota
-  const tier = await resolveTier(supabase, userId);
+  const tier = await resolveEntitledTier(supabase, userId);
   const quota = await consumeQuota(supabase, userId, tier);
   if (!quota.allowed) {
     return new Response(
