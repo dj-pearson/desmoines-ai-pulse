@@ -5,6 +5,7 @@
  * Risk level: LOW
  */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { errorResponse } from "../_shared/errorResponse.ts";
 
 const NOMINATIM_API = "https://nominatim.openstreetmap.org/search";
 const APP_USER_AGENT = "DesMoinesInsider/1.0 (https://desmoinesinsider.com; mailto:admin@desmoinesinsider.com)";
@@ -107,10 +108,9 @@ serve(async (req) => {
       { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
-    console.error(`Geocoding error:`, error);
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    )
+    return errorResponse(error, corsHeaders, {
+      fn: 'geocode-location',
+      publicMessage: 'Geocoding failed. Please try again.',
+    });
   }
 })

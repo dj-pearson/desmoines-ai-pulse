@@ -776,7 +776,7 @@
       ],
       "priority": 110,
       "passes": false,
-      "notes": "VERIFIED MISSING: multiple functions return error.message to clients (scrape-restaurant-menus:1201, process-campaign-lifecycle:203, personalized-recommendations:277). No shared error responder / request-id. Remaining = build a shared responder that logs server-side + returns generic message+request id."
+      "notes": "IN PROGRESS (this branch): added _shared/errorResponse.ts — logs the FULL error server-side as structured JSON with a generated requestId and returns only a generic message + that id to the client (also a down-payment on OPS-004 structured logging). Migrated personalized-recommendations (was leaking details: error.message) and geocode-location (was returning error.message). REMAINING: migrate the other flagged catch blocks (scrape-restaurant-menus, process-campaign-lifecycle, and any others returning error.message) to errorResponse(); helper is now available for them."
     },
     {
       "id": "PROD-SEC-012",
