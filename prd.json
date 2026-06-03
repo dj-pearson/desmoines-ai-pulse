@@ -1077,7 +1077,7 @@
       ],
       "priority": 131,
       "passes": false,
-      "notes": "VERIFIED PARTIAL: manage-subscription cancel returns period_end + resume exists. MISSING: no 409 guard preventing a new checkout while cancel_at_period_end=true (double-charge window)."
+      "notes": "MOSTLY DONE (this branch): manage-subscription already returns the period-end date + supports Resume; create-subscription-checkout now returns 409 when the user has a cancel_at_period_end subscription (resume_required) or already holds the requested plan (already_subscribed), closing the clearest double-charge paths. REMAINING: genuine cross-tier upgrades/downgrades still create a new subscription instead of using Stripe subscription-update proration (left to proceed since the portal has no upgrade path yet) + show the 409 message nicely on the client (functions.invoke surfaces a generic error today). Kept passes:false until the upgrade-proration flow lands."
     },
     {
       "id": "PROD-SUB-006",
