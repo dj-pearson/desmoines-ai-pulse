@@ -41,14 +41,30 @@ struct RestaurantsView: View {
                             .padding(.top, 40)
                         } else {
                             LazyVStack(spacing: 12) {
-                                ForEach(Array(viewModel.restaurants.enumerated()), id: \.element.id) { index, restaurant in
+                                ForEach(Array(arrangedRestaurants.enumerated()), id: \.element.id) { index, restaurant in
                                     NavigationLink(value: restaurant) {
                                         RestaurantCardView(restaurant: restaurant, toast: $toast)
                                     }
                                     .buttonStyle(.pressableCard)
                                     .entranceAnimation(index: index)
+                                    .onAppear {
+                                        if restaurant.isActivelySponsored {
+                                            AdTrackingService.shared.logSponsoredImpression(listingType: "restaurant", listingId: restaurant.id)
+                                        }
+                                    }
+                                    .simultaneousGesture(TapGesture().onEnded {
+                                        if restaurant.isActivelySponsored {
+                                            AdTrackingService.shared.logSponsoredClick(listingType: "restaurant", listingId: restaurant.id)
+                                        }
+                                    })
                                     .task {
                                         await viewModel.loadMoreIfNeeded(currentItem: restaurant)
+                                    }
+
+                                    // Native in-feed ad card at deterministic
+                                    // indices (IOS-ADS-012); hidden for subscribers.
+                                    if shouldInsertInFeedAd(after: index) {
+                                        AdSlot(.feed)
                                     }
                                 }
 
@@ -265,6 +281,19 @@ struct RestaurantsView: View {
         }
         .padding(12)
         .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    /// Sponsored listings (IOS-ADS-011) pulled to the front of the Dining feed;
+    /// organic order is otherwise preserved.
+    private var arrangedRestaurants: [Restaurant] {
+        SponsoredArranger.arrange(viewModel.restaurants, isSponsored: { $0.isActivelySponsored })
+    }
+
+    /// Native in-feed ad cadence (IOS-ADS-012), driven by the central AdConfig.
+    private func shouldInsertInFeedAd(after index: Int) -> Bool {
+        let position = index + 1
+        guard position >= AdConfig.inFeedFirstSlot else { return false }
+        return (position - AdConfig.inFeedFirstSlot) % AdConfig.inFeedInterval == 0
     }
 }
 

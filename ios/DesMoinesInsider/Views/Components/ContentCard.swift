@@ -125,7 +125,33 @@ struct ContentCard: View {
             case .listRow:  listRow
             }
         }
-        .modifier(CardAccessibility(decorative: decorative, label: data.accessibilityLabel))
+        // IOS-ADS-011: elevated amber ring on sponsored listings (mirrors the
+        // web's `ring-2 ring-amber-400`). The "Sponsored" badge is rendered by
+        // `image(...)` so the treatment is clearly labeled, never disguised.
+        .overlay {
+            if data.isSponsored {
+                RoundedRectangle(cornerRadius: sponsoredCornerRadius)
+                    .strokeBorder(Color.orange.opacity(0.65), lineWidth: 2)
+                    .allowsHitTesting(false)
+            }
+        }
+        .modifier(CardAccessibility(decorative: decorative, label: accessibilityLabel))
+    }
+
+    /// Prefixes "Sponsored" so the paid placement is announced (the visual badge
+    /// is dropped from the combined element on standalone cards).
+    private var accessibilityLabel: String {
+        data.isSponsored ? "Sponsored. \(data.accessibilityLabel)" : data.accessibilityLabel
+    }
+
+    /// Outer corner radius per variant, so the sponsored ring hugs the card edge.
+    private var sponsoredCornerRadius: CGFloat {
+        switch variant {
+        case .featured: return 14
+        case .compact:  return 12
+        case .standard: return 18
+        case .listRow:  return 16
+        }
     }
 
     // MARK: Image
@@ -577,6 +603,7 @@ extension Event {
             favorite: .managed(kind: .event, id: id, title: title),
             accessibilityLabel: eventCardAccessibilityLabel
         )
+        data.isSponsored = isActivelySponsored
         if let date = parsedDate {
             data.metaPrimary = CardMetaLine(
                 icon: "clock",
@@ -630,6 +657,7 @@ extension Restaurant {
             favorite: .managed(kind: .restaurant, id: id, title: name),
             accessibilityLabel: "\(name), \(cuisine ?? "restaurant"), \(ratingText)"
         )
+        data.isSponsored = isActivelySponsored
         if let cuisine, !cuisine.isEmpty {
             data.metaPrimary = CardMetaLine(icon: "fork.knife", text: cuisine)
         }

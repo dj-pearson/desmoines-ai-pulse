@@ -152,7 +152,7 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 11,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -169,7 +169,7 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 12,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -185,7 +185,7 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 13,
-      "passes": false,
+      "passes": true,
       "notes": "Implemented 2026-06-02 (awaiting macOS CI xcodebuild gate). Added Views/Components/ContentCard.swift: a single ContentCardData value type + ContentCard view with four variants (.featured/.compact/.standard/.listRow), matching ContentCardSkeleton per variant, a shared CardFavoriteButton (managed + external modes), SponsoredBadge (FTC, seam for IOS-ADS-011) and VipGoldBadge premium affordances, and Event/Restaurant/Attraction.cardData adapters. EventCardView, RestaurantCardView, AttractionCardView (Search), BrowseAttractionCardView, FeaturedEventCard, CompactRestaurantCard, CompactAttractionCard and all four list skeletons are now thin wrappers delegating to ContentCard, eliminating the divergent duplication. Call-site init signatures unchanged. Decorative (rail) vs standalone (list/search) a11y modes preserve prior VoiceOver behavior. Dynamic Type reflow + CachedAsyncImage fixed aspect frames (no layout shift). passes=false until CI green."
     },
     {
@@ -201,7 +201,7 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 14,
-      "passes": false,
+      "passes": true,
       "notes": "Implemented 2026-06-02 (awaiting macOS CI xcodebuild gate). Found all three VMs already wire searchText into fetch + activeFilterCount + clearFilters; the gap was UI placement. Added Views/Components/StickyFilterBar.swift (a .bar-material + divider container) and pinned filters via .safeAreaInset(edge:.top). Restaurants & Attractions: .searchable(navigationBarDrawer, displayMode:.always) for sticky search + a sticky bar holding the inline filter pills (RestaurantInlineFilters / typeChips+featuredAndRatingRow) and the existing removable active-filter chips (result count + Clear all); removed the in-flow copies. Attractions' old in-content searchField deleted in favor of .searchable. Home/Events (no search before): added .searchable; kept the IOS-IA-001 content-first controls in-flow but pinned the removable active chips while filtering. Presets+inline filters already share one VM source of truth per screen; chips remove facets, pills/popovers edit them without reopening a sheet; iPhone TabView keeps each tab VM alive so state survives tab switches. iPad sidebar re-creates VMs (pre-existing, flagged for IOS-IA-005). passes=false until CI green."
     },
     {
@@ -218,7 +218,7 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 15,
-      "passes": false,
+      "passes": true,
       "notes": "Implemented 2026-06-02 (awaiting macOS CI xcodebuild gate). Added Views/Subscription/PaywallView.swift: a reusable StoreKit-2-backed contextual paywall driven by a PaywallContext (id/icon/headline/benefits/recommendedTier) with 8 tailored presets — unlimitedFavorites, tripPlanner, insiderTips, diningTips, savedSearches, customAlerts, advancedFilters, adFree — plus a generic(tier:feature:) fallback. Paywall preselects the context's tier (Insider/VIP, shows 'Current' for held tiers, no buy-down), has a Monthly/Annual segmented toggle that appears only when >1 period exists, a pinned footer with live StoreKit displayPrice, the required auto-renew disclosure, and Restore + Terms + Privacy. StoreKitService got additive SubscriptionPeriod + product(for:period:)/availablePeriods(for:)/rank() (period list is product-derived so the Annual toggle lights up automatically when SUB-012 adds annual SKUs). AnalyticsService got trackPaywallPresented/Dismissed/PurchaseStart/PurchaseComplete/Restore(context:) so every lifecycle event is logged with the context id for per-surface conversion. PremiumGate now presents PaywallView (optional context, generic fallback) instead of SubscriptionView; routed gated entry points to tailored contexts: FilterSheet(.advancedFilters), AdBannerView(.adFree), EventDetailView(.insiderTips), RestaurantDetailView(.diningTips), FavoritesLimitBanner(.unlimitedFavorites). Management entry points (Settings manage, Profile upgrade banner) intentionally keep the full SubscriptionView. Monthly/annual toggle infra is in place; annual SKUs themselves land in SUB-012. passes=false until CI green."
     },
     {
@@ -235,7 +235,7 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 16,
-      "passes": false,
+      "passes": true,
       "notes": "Implemented 2026-06-02 (awaiting macOS CI xcodebuild gate). Centralized feature->tier mapping + enforced the free favorites cap. Fixed a real bug: FavoritesService capped EVERY user at 3 (hardcoded SubscriptionTier.free.maxFavorites, so paying Insider/VIP were capped) and skipped restaurants entirely. Now enforceFavoritesCap() reads the user's actual tier, is a TOTAL across events+restaurants+attractions (matches web 'Save up to 3'), and applies to all three add paths; premium = unlimited. Added Models/PremiumFeature.swift mirroring web useSubscription().hasFeature() (same raw keys) with requiredTier + paywallContext per feature, plus QuotaAction (favorites/savedSearches/alerts/tripPlans) limit/isWithinLimit/remaining helpers. Added SubscriptionTier.maxSavedSearches/maxAlerts/maxTripPlansPerMonth (free 0/0/0, insider 10/10/5, vip -1) and StoreKitService.hasFeature(_:). On cap hit FavoritesService throws limitReached AND posts .favoritesLimitReached; MainTabView has ONE listener that presents PaywallView(.unlimitedFavorites), so the soft gate fires from every save surface (cards, detail hearts, attractions) without per-site sheets; redundant toasts suppressed. FilterSheet's advanced-filters gate routes via hasFeature(.advancedFilters) + presents PaywallView(.advancedFilters). Saved searches/alerts (PARITY-008) and Trip Planner quota (PARITY-001) are not yet enforceable (their screens don't exist) but their PremiumFeature entries, per-tier limits, and quota helpers are ready as the seam. passes=false until CI green."
     },
     {
@@ -251,7 +251,7 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 17,
-      "passes": false,
+      "passes": true,
       "notes": "Implemented 2026-06-02 (awaiting macOS CI xcodebuild gate). Added annual Insider/VIP SKUs (prod_insider_annual $49.99/yr, prod_vip_annual $129.99/yr ≈ 17% off monthly×12) each with a 7-day free-trial introductoryOffer. StoreKitService gained insiderAnnualID/vipAnnualID in all product-ID sets, so SUB-010's data-driven period helpers now expose [.monthly,.annual] and the paywall toggle appears. Products.storekit mirrors both annual products + free trial for simulator testing. PaywallView: custom Monthly/Annual buttons with a live-computed 'Save N%' badge on annual; refreshTrialCopy() shows '7-day free trial, then $X/yr' ONLY when StoreKit.isEligibleForIntroOffer is true (eligibility fully delegated to StoreKit; purchase() auto-applies the offer for eligible users only), CTA flips to 'Start Free Trial', and the auto-renew disclosure switches to trial->paid language. validate-ios-receipt + appstore-server-notifications-v2 got the annual IDs added to INSIDER/VIP sets; tier already resolves correctly during trial (future expiresDate -> active, tier from product ID). ACTION REQUIRED: create the two annual subs + 7-day trial in App Store Connect with these exact Product IDs (or update the constants). passes=false until CI green."
     },
     {
@@ -266,7 +266,7 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 18,
-      "passes": false,
+      "passes": true,
       "notes": "Implemented 2026-06-02 (awaiting macOS CI xcodebuild gate). OnboardingView gains a final, skippable trialStep after the value pages (last button 'Continue' -> trial screen) that presents PaywallView(.onboarding, preferredPeriod: .annual) so the 7-day annual free trial is the headline. 'Maybe later' + paywall dismissal both complete onboarding in one tap; info-page Skip bypasses everything — no hard wall (App Store-safe). Added PaywallView preferredPeriod init param + .onboarding context. New SoftPaywallService re-surfaces a soft upsell only for free, onboarded users at an engagement threshold (2nd favorite save; considerAfterTripPlannerAttempt() seam for PARITY-001), frequency-capped (>=7-day cooldown, max 3); fires .softPaywallTriggered -> single MainTabView sheet(item:) presenter. FavoritesService calls considerAfterFavorite on each successful add. Showing the onboarding trial seeds the soft-paywall cooldown (noteOnboardingUpsellShown) so no same-session double upsell. Analytics: trackOnboardingTrial(shown/start_tapped/skipped, cohort=onboarding) + trackSoftPaywall(source); paywall present/purchase events carry context 'onboarding' for the funnel. No interest-selection step exists in onboarding, so 'after interest selection' maps to 'after the value pages'. passes=false until CI green."
     },
     {
@@ -281,7 +281,7 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 19,
-      "passes": false,
+      "passes": true,
       "notes": "Implemented 2026-06-02 (awaiting macOS CI xcodebuild gate). In-app win-back machinery done; discounted-offer config + backend signing documented in ios/RELEASE_ACTIONS.md §3. StoreKitService: SubscriptionRenewalState (none/active/expiringSoon/billingRetry/grace/expired) + refreshRenewalState() reading Product.SubscriptionInfo.status(for:group) (state, renewalInfo.willAutoRenew, transaction.expirationDate), refreshed via updatePurchasedProducts. New SubscriptionStatusBanner (self-contained, dismissible, stacked under OfflineBanner in MainTabView): shows only for states needing attention — expiringSoon/billingRetry/grace deep-link to apps.apple.com/account/subscriptions; expired presents PaywallView(.winBack). Lapsed users see it on next launch (state refreshed at launch). Settings gains a 'Redeem Offer Code' row via .offerCodeRedemption(isPresented:) (iOS 16+). Added .winBack PaywallContext + analytics (trackRenewalBanner action/state, trackOfferCodeRedeem). Did NOT add promotional offers to Products.storekit (they need server-signed signatures to redeem; documented instead). Remaining: ASC offer/code/promo/win-back config + a signing edge function for discounted promotional offers (iOS 18 win-back offers are system-surfaced, target is 17). passes=false until CI green."
     },
     {
@@ -297,7 +297,7 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 20,
-      "passes": false,
+      "passes": true,
       "notes": "Implemented 2026-06-02 (awaiting macOS CI xcodebuild gate). Added Services/CampaignAdService.swift: @MainActor @Observable service calling the shared get_active_ads(p_placement_type) RPC (same source as web useActiveAds) and mapping rows (campaign_id/creative_id/title/description/image_url/link_url/cta_text) to CampaignCreative; Placement enum top_banner/featured_spot/below_fold/sponsored_listing; 5-min per-placement cache. First-party only (our Supabase RPC + creatives) — no IDFA/third-party SDK, ATT untouched. AdBannerView now does the never-empty fallback chain: live campaign creative -> hotel affiliate -> upgrade/house ad (always present); campaign loads in .task, renders via CachedAsyncImage with the FTC 'Ad' label, tap opens link_url in an IN-APP browser (WebViewPage sheet). Free-tier only. AdSlot maps feed->below_fold, detail->featured_spot; top_banner + sponsored_listing are enum seams (sponsored_listing for ADS-011) that fall back cleanly until campaigns target them. House ad = existing upgrade prompt (ADS-013 can swap a richer creative). Impression/click tracking is ADS-014, out of scope here. passes=false until CI green."
     },
     {
@@ -312,8 +312,8 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 21,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented 2026-06-03. Event/Restaurant decode is_sponsored/sponsored_until; isActivelySponsored mirrors web (keys off is_sponsored). ContentCard renders an amber ring (web parity: ring-2 ring-amber-400) + the existing SponsoredBadge, and prefixes VoiceOver with 'Sponsored'. SponsoredArranger (pure, unit-tested) pulls up to AdConfig.maxSponsoredAtFront sponsored items to the front of Home Featured/Popular rails + the Events & Dining lists; organic order otherwise preserved. Shown to all tiers (content, not ads). AdTrackingService.logSponsored{Impression,Click} tracks distinctly via AnalyticsService keyed by listing id (creative-less, so not ad_impressions; RLS blocks sponsored_listing_links for consumers — campaign attribution resolved server-side). Tap opens the normal detail screen."
     },
     {
       "id": "IOS-ADS-012",
@@ -328,8 +328,8 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 22,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented 2026-06-03. AdConfig centralizes ad density (in-feed first slot/interval, home rail indices, sponsored cap, interstitial caps) — remote-config-style constants, no view edits to tune. AdBannerView campaign creative now renders image + headline + CTA + FTC 'Ad' label (native in-feed card); inserted at deterministic indices in Events/Dining lists (shouldInsertInFeedAd) and between Home rails (AdConfig.homeRailAdIndices). InterstitialAdService gates a capped interstitial: free-tier only, <=1/session, never in first N sessions (not first launch), every Nth tab-switch boundary, min interval; InterstitialAdView honors Reduce Motion + always-available Close (never blocks). Zero ads for Insider/VIP via the single currentTier==.free gate in AdBannerView + MainTabView."
     },
     {
       "id": "IOS-ADS-013",
@@ -342,8 +342,8 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 23,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented 2026-06-03. House ad is the always-present fill in AdBannerView (campaign -> affiliate -> house chain) and the interstitial fallback. HouseAdCopy rotates among 3 messages (ad-free / trip planner / unlimited saves). CTA opens the inline SubscriptionView (NOT PaywallView) — deliberately honoring hotfix cf8ddd7, which found PaywallView's period toggle drops the Insider annual SKU; the contextual angle lives in the rotating copy. AdTrackingService.logHouse{Impression,Click} logs distinctly from paid inventory (variant + placement) so fill rate + house conversion are measurable."
     },
     {
       "id": "IOS-ADS-014",

@@ -160,9 +160,10 @@ struct HomeRailsView: View {
             railView(rail)
 
             // Deterministic ad slots between rails. AdSlot renders nothing for
-            // subscribers (ad-free). IOS-ADS-012 swaps these for native in-feed
-            // ad cards; the placement indices stay stable so density is tunable.
-            if index == 1 || index == 3 {
+            // subscribers (ad-free) and now renders a native in-feed card with a
+            // headline + CTA (IOS-ADS-012). Indices come from the central
+            // AdConfig so density is tunable without touching this view.
+            if AdConfig.homeRailAdIndices.contains(index) {
                 AdSlot(.feed)
             }
         }
@@ -256,6 +257,12 @@ struct HomeEventRail: View {
     let isLoading: Bool
     let seeAll: (() -> Void)?
 
+    /// Sponsored listings surfaced to the front of the rail (IOS-ADS-011);
+    /// organic order is otherwise preserved.
+    private var arrangedEvents: [Event] {
+        Array(SponsoredArranger.arrange(events, isSponsored: { $0.isActivelySponsored }).prefix(10))
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HomeRailHeader(title: title, systemImage: systemImage, tint: tint,
@@ -268,13 +275,23 @@ struct HomeEventRail: View {
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 14) {
-                        ForEach(events.prefix(10)) { event in
+                        ForEach(arrangedEvents) { event in
                             NavigationLink(value: event) {
                                 FeaturedEventCard(event: event)
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel(event.featuredCardAccessibilityLabel)
+                            .accessibilityLabel(railAccessibilityLabel(event))
                             .accessibilityHint("Double-tap to view event details")
+                            .onAppear {
+                                if event.isActivelySponsored {
+                                    AdTrackingService.shared.logSponsoredImpression(listingType: "event", listingId: event.id)
+                                }
+                            }
+                            .simultaneousGesture(TapGesture().onEnded {
+                                if event.isActivelySponsored {
+                                    AdTrackingService.shared.logSponsoredClick(listingType: "event", listingId: event.id)
+                                }
+                            })
                         }
                     }
                     .padding(.horizontal)
@@ -282,6 +299,12 @@ struct HomeEventRail: View {
             }
         }
         .padding(.vertical, 8)
+    }
+
+    private func railAccessibilityLabel(_ event: Event) -> String {
+        event.isActivelySponsored
+            ? "Sponsored. \(event.featuredCardAccessibilityLabel)"
+            : event.featuredCardAccessibilityLabel
     }
 }
 
@@ -291,6 +314,11 @@ struct HomeRestaurantRail: View {
     let restaurants: [Restaurant]
     let isLoading: Bool
     let seeAll: (() -> Void)?
+
+    /// Sponsored listings surfaced to the front of the rail (IOS-ADS-011).
+    private var arrangedRestaurants: [Restaurant] {
+        Array(SponsoredArranger.arrange(restaurants, isSponsored: { $0.isActivelySponsored }).prefix(10))
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -304,13 +332,23 @@ struct HomeRestaurantRail: View {
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 14) {
-                        ForEach(restaurants.prefix(10)) { restaurant in
+                        ForEach(arrangedRestaurants) { restaurant in
                             NavigationLink(value: restaurant) {
                                 CompactRestaurantCard(restaurant: restaurant)
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel(restaurant.compactCardAccessibilityLabel)
+                            .accessibilityLabel(railAccessibilityLabel(restaurant))
                             .accessibilityHint("Double-tap to view restaurant details")
+                            .onAppear {
+                                if restaurant.isActivelySponsored {
+                                    AdTrackingService.shared.logSponsoredImpression(listingType: "restaurant", listingId: restaurant.id)
+                                }
+                            }
+                            .simultaneousGesture(TapGesture().onEnded {
+                                if restaurant.isActivelySponsored {
+                                    AdTrackingService.shared.logSponsoredClick(listingType: "restaurant", listingId: restaurant.id)
+                                }
+                            })
                         }
                     }
                     .padding(.horizontal)
@@ -318,6 +356,12 @@ struct HomeRestaurantRail: View {
             }
         }
         .padding(.vertical, 8)
+    }
+
+    private func railAccessibilityLabel(_ restaurant: Restaurant) -> String {
+        restaurant.isActivelySponsored
+            ? "Sponsored. \(restaurant.compactCardAccessibilityLabel)"
+            : restaurant.compactCardAccessibilityLabel
     }
 }
 

@@ -24,6 +24,10 @@ struct Restaurant: Identifiable, Codable, Hashable {
     var dietaryOptions: [String]?
     var createdAt: String?
     var updatedAt: String?
+    /// First-party sponsored-listing flag (IOS-ADS-011). Set by the backend
+    /// while a paid sponsorship is active; `sponsored_until` is informational.
+    var isSponsored: Bool?
+    var sponsoredUntil: String?
 
     enum CodingKeys: String, CodingKey {
         case id, name, cuisine, location, city, rating, description, phone, website, status, slug
@@ -37,7 +41,13 @@ struct Restaurant: Identifiable, Codable, Hashable {
         case dietaryOptions = "dietary_options"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+        case isSponsored = "is_sponsored"
+        case sponsoredUntil = "sponsored_until"
     }
+
+    /// Whether this listing currently carries an active paid sponsorship
+    /// (IOS-ADS-011). Mirrors the web, which keys off the `is_sponsored` flag.
+    var isActivelySponsored: Bool { isSponsored == true }
 
     // MARK: - Open/Closed Status
 

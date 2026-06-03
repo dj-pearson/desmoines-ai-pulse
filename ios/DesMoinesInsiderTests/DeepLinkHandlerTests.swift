@@ -1,11 +1,14 @@
 import XCTest
 @testable import DesMoinesInsider
 
+// DeepLinkHandler is @MainActor (@Observable singleton), so the test case is too
+// — its `handle(_:)` / `consumeDestination()` are main-actor isolated.
+@MainActor
 final class DeepLinkHandlerTests: XCTestCase {
 
     private var handler: DeepLinkHandler!
 
-    override func setUp() {
+    override func setUp() async throws {
         handler = DeepLinkHandler.shared
         // Consume any pending destination from previous tests
         _ = handler.consumeDestination()
@@ -15,7 +18,7 @@ final class DeepLinkHandlerTests: XCTestCase {
 
     func testValidEventUniversalLink() {
         let url = URL(string: "https://desmoinesinsider.com/events/550e8400-e29b-41d4-a716-446655440000")!
-        let result = handler.handle(url: url)
+        let result = handler.handle(url)
         XCTAssertTrue(result)
 
         let dest = handler.consumeDestination()
@@ -24,7 +27,7 @@ final class DeepLinkHandlerTests: XCTestCase {
 
     func testValidRestaurantUniversalLink() {
         let url = URL(string: "https://desmoinesinsider.com/restaurants/550e8400-e29b-41d4-a716-446655440000")!
-        let result = handler.handle(url: url)
+        let result = handler.handle(url)
         XCTAssertTrue(result)
 
         let dest = handler.consumeDestination()
@@ -33,7 +36,7 @@ final class DeepLinkHandlerTests: XCTestCase {
 
     func testInvalidIDUniversalLinkFallsBackToTab() {
         let url = URL(string: "https://desmoinesinsider.com/events/not-a-uuid")!
-        let result = handler.handle(url: url)
+        let result = handler.handle(url)
         XCTAssertTrue(result)
 
         let dest = handler.consumeDestination()
@@ -44,7 +47,7 @@ final class DeepLinkHandlerTests: XCTestCase {
 
     func testValidEventCustomScheme() {
         let url = URL(string: "dsminsider://event/550e8400-e29b-41d4-a716-446655440000")!
-        let result = handler.handle(url: url)
+        let result = handler.handle(url)
         XCTAssertTrue(result)
 
         let dest = handler.consumeDestination()
@@ -53,7 +56,7 @@ final class DeepLinkHandlerTests: XCTestCase {
 
     func testHomeTabCustomScheme() {
         let url = URL(string: "dsminsider://home")!
-        let result = handler.handle(url: url)
+        let result = handler.handle(url)
         XCTAssertTrue(result)
 
         let dest = handler.consumeDestination()
@@ -62,7 +65,7 @@ final class DeepLinkHandlerTests: XCTestCase {
 
     func testInvalidIDCustomSchemeFallsBackToTab() {
         let url = URL(string: "dsminsider://restaurant/malicious-input")!
-        let result = handler.handle(url: url)
+        let result = handler.handle(url)
         XCTAssertTrue(result)
 
         let dest = handler.consumeDestination()
@@ -73,7 +76,7 @@ final class DeepLinkHandlerTests: XCTestCase {
 
     func testConsumeDestinationClearsIt() {
         let url = URL(string: "dsminsider://home")!
-        _ = handler.handle(url: url)
+        _ = handler.handle(url)
 
         let first = handler.consumeDestination()
         XCTAssertNotNil(first)
@@ -86,7 +89,7 @@ final class DeepLinkHandlerTests: XCTestCase {
 
     func testUnknownHostReturnsFalse() {
         let url = URL(string: "https://unknown.com/events/550e8400-e29b-41d4-a716-446655440000")!
-        let result = handler.handle(url: url)
+        let result = handler.handle(url)
         XCTAssertFalse(result)
     }
 }
