@@ -1639,8 +1639,8 @@
         "npm run build succeeds with the prerender step"
       ],
       "priority": 171,
-      "passes": false,
-      "notes": "VERIFIED PARTIAL/MISSING (the big one): still a client-rendered SPA — no prerender/SSG plugin or build step in vite.config; only noscript fallback. Likely root cause of soft-404/not-indexed. Remaining: prerender/SSG critical routes."
+      "passes": true,
+      "notes": "DONE (this branch): added scripts/prerender.mjs — a non-fatal post-build step (wired as `vite build && npm run prerender`) that uses the bundled Puppeteer Chromium to render 31 high-value PUBLIC routes (home, /events + all event landing pages, /restaurants[/open-now,/dietary], /attractions, /playgrounds, /stay, /articles, /guides, /weekend, /neighborhoods, /calendar, /deals, /map, /trip-planner, /pricing, etc.) to real dist/<route>/index.html with per-route Helmet <title>/meta + content; the SPA bundle stays in the captured HTML so it still hydrates. Cloudflare Pages serves these static files (functions/_middleware.ts passes them through), so crawlers now get meaningful HTML instead of an empty shell. Verified locally: 31/31 routes render, build exits 0; the step self-guards (logs + exit 0) so a missing/failed Chromium on the build host can never break the deploy. Data-driven detail pages (/events/:slug etc.) are tracked separately in PROD-SEO-011."
     },
     {
       "id": "PROD-SEO-002",
@@ -2353,6 +2353,20 @@
       "priority": 222,
       "passes": false,
       "notes": "VERIFIED PARTIAL: AdminAI page has scraping/cron monitor tabs. MISSING: AI cost-per-endpoint view + payment/webhook events dashboard + failed cron/webhook highlighting."
+    },
+    {
+      "id": "PROD-SEO-011",
+      "title": "Prerender data-driven detail pages (events/restaurants/attractions/articles)",
+      "description": "As the SEO owner, I need detail pages prerendered so individual events/restaurants/attractions/articles return crawlable HTML, not just the landing pages.",
+      "acceptanceCriteria": [
+        "scripts/prerender.mjs enumerates published detail-page slugs from Supabase (or the generated sitemaps) and prerenders them to dist/<path>/index.html",
+        "Generation is bounded/batched (cap + concurrency) so build time stays reasonable, and is incremental where feasible",
+        "Each prerendered detail page includes its Helmet meta + JSON-LD and remains hydratable",
+        "The step stays non-fatal (a failure leaves the SPA build intact) and npm run build still succeeds"
+      ],
+      "priority": 181,
+      "passes": false,
+      "notes": "Follow-up to PROD-SEO-001 (landing/hub routes done). Detail routes are data-driven and potentially thousands, so this needs slug enumeration + batching/concurrency limits; consider prerendering only the top-N by traffic/recency or generating on-demand."
     }
   ]
 }
