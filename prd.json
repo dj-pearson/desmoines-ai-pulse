@@ -2001,7 +2001,7 @@
       ],
       "priority": 197,
       "passes": false,
-      "notes": "Source: ops audit — test-failures.csv shows ~841/2997 failing, many from local Windows paths and missing browsers."
+      "notes": "VERIFIED PARTIAL: Playwright configured + suites exist and run locally, but pr-checks.yml runs only unit/lint/build. Remaining: run suites in Linux CI + known-failures policy (pairs with OPS-002)."
     },
     {
       "id": "PROD-OPS-002",
@@ -2015,7 +2015,7 @@
       ],
       "priority": 198,
       "passes": false,
-      "notes": "Source: ops audit — pr-checks.yml runs no Playwright; E2E not gated."
+      "notes": "VERIFIED MISSING: no Playwright/E2E step in pr-checks.yml and no ruleset requiring an E2E status check. HIGH-leverage (also gates A11Y-007 / UX-007)."
     },
     {
       "id": "PROD-OPS-003",
@@ -2029,8 +2029,8 @@
         "npm run validate passes"
       ],
       "priority": 199,
-      "passes": false,
-      "notes": "Source: ops + perf audits — Sentry init is conditional/unverified; vite drops all console.* so prod errors can be invisible. Enterprise checklist (Error Tracking Critical)."
+      "passes": true,
+      "notes": "VERIFIED DONE: src/lib/sentry.ts initializes Sentry from VITE_SENTRY_DSN; main.tsx calls initSentry() before render and wires Sentry.captureException via errorHandler; .env.example documents the DSN. Residual: require-DSN-in-prod warning is a nice-to-have."
     },
     {
       "id": "PROD-OPS-004",
@@ -2044,7 +2044,7 @@
       ],
       "priority": 200,
       "passes": false,
-      "notes": "Source: ops + subscription audits — console.* logging only; no structured/aggregated logs; enterprise checklist (Log Aggregation)."
+      "notes": "VERIFIED MISSING: edge functions use plain console.log (no JSON/request-id/duration); no aggregation/query layer."
     },
     {
       "id": "PROD-OPS-005",
@@ -2058,7 +2058,7 @@
       ],
       "priority": 201,
       "passes": false,
-      "notes": "Source: ops audit + enterprise checklist (Uptime Monitoring, Real-Time Alerting)."
+      "notes": "VERIFIED MISSING: no health-check edge function, no external uptime monitor, no SLO."
     },
     {
       "id": "PROD-OPS-006",
@@ -2072,7 +2072,7 @@
       ],
       "priority": 202,
       "passes": false,
-      "notes": "Source: ops audit + enterprise checklist (Backup Automation Critical, Database Backup Verification Critical). db:backup exists but is manual."
+      "notes": "VERIFIED PARTIAL: scripts/supabase-backup.ts exists (manual). Remaining: scheduled automated backups, a documented restore drill, RTO/RPO, and backup success/failure alerting."
     },
     {
       "id": "PROD-OPS-007",
@@ -2086,7 +2086,7 @@
       ],
       "priority": 203,
       "passes": false,
-      "notes": "Source: ops audit + enterprise checklist (Disaster Recovery Plan Critical, Incident Response Playbook)."
+      "notes": "VERIFIED PARTIAL: docs/PRODUCTION_RUNBOOK.md covers deploy/rollback/incident basics. Remaining: per-incident runbooks (Supabase outage, payment/webhook failure, cron failure) under docs/runbook + README links."
     },
     {
       "id": "PROD-OPS-008",
@@ -2100,7 +2100,7 @@
       ],
       "priority": 204,
       "passes": false,
-      "notes": "Source: ops audit + enterprise checklist (Staging Environment HIGH) — only per-commit preview URLs exist today."
+      "notes": "VERIFIED MISSING: no persistent staging env (own domain + Supabase project + seeded data) or QA sign-off step; only per-commit previews plus an apply-on-staging-first note."
     },
     {
       "id": "PROD-OPS-009",
@@ -2114,7 +2114,7 @@
       ],
       "priority": 205,
       "passes": false,
-      "notes": "Source: ops audit + enterprise checklist (Rollback Automation HIGH). Cloudflare rollback is currently manual; no post-deploy validation."
+      "notes": "VERIFIED PARTIAL: Cloudflare rollback documented (~1min). Remaining: post-deploy smoke validation that can trigger/prompt rollback + consolidated migration-rollback guidance."
     },
     {
       "id": "PROD-OPS-010",
@@ -2128,7 +2128,7 @@
       ],
       "priority": 206,
       "passes": false,
-      "notes": "Source: ops audit — main.json has required_approving_review_count: 0."
+      "notes": "VERIFIED PARTIAL: main ruleset has thread-resolution + dismiss-stale + merge methods, but required_approving_review_count=0 and no CODEOWNERS. Remaining: require >=1 review on main (and verify release/hotfix)."
     },
     {
       "id": "PROD-OPS-011",
@@ -2142,7 +2142,7 @@
       ],
       "priority": 207,
       "passes": false,
-      "notes": "Source: ops audit + CLAUDE.md — deprecation flow is documented but unenforced; MIN_SUPPORTED_APP_VERSION not yet implemented in code."
+      "notes": "VERIFIED MISSING: no CI guard for destructive migrations (DROP/RENAME/NOT NULL/enum), no deprecation-annotation flow, and MIN_SUPPORTED_APP_VERSION / version-check endpoint not implemented."
     },
     {
       "id": "PROD-OPS-012",
@@ -2156,7 +2156,7 @@
       ],
       "priority": 208,
       "passes": false,
-      "notes": "Source: ops audit + enterprise checklist (Secret Rotation, API Key Rotation). iOS/Android release workflows store base64 secrets with no expiry monitoring."
+      "notes": "VERIFIED PARTIAL: .env.example is comprehensive/annotated and key rotation is noted. Remaining (explicit AC): iOS/Android release workflows do NOT check signing cert/keystore expiry; document staging-vs-prod secret separation."
     },
     {
       "id": "PROD-OPS-013",
@@ -2170,7 +2170,7 @@
       ],
       "priority": 209,
       "passes": false,
-      "notes": "Source: ops audit — 34 loose .sql + ~125 .md at root + large .psd/report binaries; canonical migrations unclear."
+      "notes": "VERIFIED MISSING: ~34 loose *.sql + ~125 historical *.md still at repo root; no docs/archive and no rule forbidding SQL outside migrations."
     },
     {
       "id": "PROD-OPS-014",
@@ -2183,8 +2183,8 @@
         "npm run validate passes"
       ],
       "priority": 210,
-      "passes": false,
-      "notes": "Source: enterprise checklist (Feature Flags) — also supports mobile backward-compat per CLAUDE.md."
+      "passes": true,
+      "notes": "VERIFIED DONE: src/hooks/useFeatureFlag.ts + components/FeatureFlag.tsx implement a Supabase feature_flags remote-config system with per-env values and a 5-min cache; toggling needs no redeploy."
     },
     {
       "id": "PROD-OPS-015",
@@ -2197,8 +2197,8 @@
         "npm run validate passes"
       ],
       "priority": 211,
-      "passes": false,
-      "notes": "Source: ops audit + enterprise checklist (Unit Tests HIGH, Test Coverage Reports). vitest configured; pr-checks runs unit tests but coverage of critical logic is thin."
+      "passes": true,
+      "notes": "VERIFIED DONE: 9 vitest suites in src (incl. new useSubscription + securityUtils tests); vitest.config coverage (v8/lcov); pr-checks.yml runs test:unit --coverage. Coverage threshold ratcheting optional."
     },
     {
       "id": "PROD-OPS-016",
@@ -2212,7 +2212,7 @@
       ],
       "priority": 212,
       "passes": false,
-      "notes": "Source: enterprise checklist (Load/Stress Testing) + perf audit scale concerns (connection pooling, realtime leaks)."
+      "notes": "VERIFIED MISSING: no load/stress test script (k6/Artillery/etc.) or results committed."
     },
     {
       "id": "PROD-OPS-017",
@@ -2226,7 +2226,7 @@
       ],
       "priority": 213,
       "passes": false,
-      "notes": "Source: perf audit — connection-pooling strategy unverified at concurrency."
+      "notes": "VERIFIED PARTIAL: pooler URI referenced (session mode) + docs say pooling handled by Supabase. Remaining: document transaction-mode/limits and verify under load."
     },
     {
       "id": "PROD-OPS-018",
@@ -2240,7 +2240,7 @@
       ],
       "priority": 214,
       "passes": false,
-      "notes": "Source: ops audit + CLAUDE.md — strictNullChecks:false; tsconfig.strict.json exists but unenforced."
+      "notes": "VERIFIED PARTIAL: tsconfig.strict.json exists with ~6 modules + documented path, but type-check:strict is NOT in CI and new non-strict files are not blocked/warned."
     },
     {
       "id": "PROD-COMPLY-001",
@@ -2253,8 +2253,8 @@
         "npm run validate passes"
       ],
       "priority": 215,
-      "passes": false,
-      "notes": "Source: subscription + ops audits + enterprise checklist (Account Deletion HIGH). Privacy policy promises erasure but no web flow exists."
+      "passes": true,
+      "notes": "VERIFIED DONE: supabase/functions/delete-user-account implements two-step (request token then confirm) erasure cascading interactions/favorites/ratings/reviews/subscriptions/profile/auth.users; PrivacyControls.tsx provides UI. Earlier audit claim of missing was wrong."
     },
     {
       "id": "PROD-COMPLY-002",
@@ -2268,7 +2268,7 @@
       ],
       "priority": 216,
       "passes": false,
-      "notes": "Source: ops audit + enterprise checklist (Data Export GDPR HIGH)."
+      "notes": "VERIFIED PARTIAL: PrivacyControls.handleExport() downloads user data JSON client-side. Remaining: a server-side export-my-data fn (email delivery via Resend, rate limit, request logging)."
     },
     {
       "id": "PROD-COMPLY-003",
@@ -2282,7 +2282,7 @@
       ],
       "priority": 217,
       "passes": false,
-      "notes": "Source: ops audit + enterprise checklist (Cookie Consent HIGH). CookieConsentBanner exists but GA loads immediately regardless of choice."
+      "notes": "VERIFIED PARTIAL: CookieConsentBanner is granular (analytics/advertising toggles, GPC, consentLog to consent_records, consent-changed event, hasConsent()), BUT the GA loader in index.html does NOT consult consent so analytics still loads regardless. Remaining: gate/deferred-load GA on hasConsent(). GDPR."
     },
     {
       "id": "PROD-COMPLY-004",
@@ -2296,7 +2296,7 @@
       ],
       "priority": 218,
       "passes": false,
-      "notes": "Source: ops audit — no documented retention/purge for deleted users or logs."
+      "notes": "VERIFIED MISSING: no comprehensive retention schedule and no scheduled purge job for soft-deleted records."
     },
     {
       "id": "PROD-COMPLY-005",
@@ -2309,8 +2309,8 @@
         "npm run validate passes"
       ],
       "priority": 219,
-      "passes": false,
-      "notes": "Source: enterprise checklist (Data Processing Agreement) + advertising disclosure across the platform."
+      "passes": true,
+      "notes": "VERIFIED DONE: PrivacyPolicy, Terms, DataProcessingAgreement, AccessibilityStatement, AffiliateDisclosure (sponsored labeling) pages exist and are linked in Footer; physical address present (CAN-SPAM)."
     },
     {
       "id": "PROD-CONTENT-001",
