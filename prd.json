@@ -1033,8 +1033,8 @@
         "Migration is additive/backward-compatible per CLAUDE.md"
       ],
       "priority": 128,
-      "passes": false,
-      "notes": "Source: subscription + backend audits — stripe-webhook handlers lack event-id idempotency and unique constraints; replays duplicate subscriptions/notifications."
+      "passes": true,
+      "notes": "DONE (this branch): added migration 20260603000000_add_stripe_webhook_idempotency.sql (stripe_webhook_events ledger, RLS-on/no-policies so only service_role touches it) and wired stripe-webhook to skip any event.id already recorded (check-at-start) and record event.id only after the handler succeeds (record-on-success), so a failed event is safely reprocessed on Stripe retry while spaced redeliveries no longer duplicate campaign_notifications. NOTE: payments table was already idempotent via upsert onConflict(stripe_payment_intent_id/stripe_invoice_id); this adds the missing event-level dedup. Follow-up: schedule pruning of ledger rows older than the ~3-day retry window."
     },
     {
       "id": "PROD-SUB-003",
@@ -1415,8 +1415,8 @@
         "npm run validate passes"
       ],
       "priority": 155,
-      "passes": false,
-      "notes": "Source: perf audit (CRITICAL) — useEventSocialConnections subscribes without cleanup; leaks at concurrency."
+      "passes": true,
+      "notes": "ALREADY SATISFIED (verified, no change needed): audited all 5 realtime .subscribe() sites in src/ (useEventSocial, useEventSocialConnections, admin/EventSubmissionsManager, admin/FeedbackInbox, admin/SocialPostQueue). Every one removes its channel(s) in the useEffect cleanup return (useEventSocial pushes all 3 channels to an array and removeChannel()s each). Original audit CRITICAL leak finding was inaccurate. Follow-up (optional): add an eslint rule/test to prevent future .subscribe() without cleanup."
     },
     {
       "id": "PROD-PERF-002",

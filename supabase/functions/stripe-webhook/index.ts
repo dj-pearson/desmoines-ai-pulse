@@ -74,7 +74,26 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Processing Stripe event: ${event.type}`);
+    console.log(`Processing Stripe event: ${event.type} (${event.id})`);
+
+    // IDEMPOTENCY: Stripe delivers events at-least-once and retries on non-2xx.
+    // Skip any event id we have already fully processed so a redelivery does not
+    // re-run side effects (e.g. duplicate campaign_notifications). The id is only
+    // recorded AFTER successful processing below, so a failed/partial event stays
+    // unrecorded and is safely reprocessed on Stripe's retry.
+    const { data: alreadyProcessed } = await supabase
+      .from("stripe_webhook_events")
+      .select("id")
+      .eq("id", event.id)
+      .maybeSingle();
+
+    if (alreadyProcessed) {
+      console.log(`Duplicate Stripe event ${event.id} (${event.type}) — already processed, skipping`);
+      return new Response(JSON.stringify({ received: true, duplicate: true }), {
+        status: 200,
+        headers: responseHeaders,
+      });
+    }
 
     // Handle different event types
     switch (event.type) {
@@ -116,6 +135,18 @@ serve(async (req) => {
 
       default:
         console.log(`Unhandled event type: ${event.type}`);
+    }
+
+    // Record successful processing so future redeliveries of this event are
+    // deduped above. Best-effort: a 23505 means a concurrent delivery already
+    // recorded it (fine); any other failure only risks reprocessing a future
+    // duplicate, never dropping this event.
+    const { error: ledgerError } = await supabase
+      .from("stripe_webhook_events")
+      .insert({ id: event.id, event_type: event.type });
+
+    if (ledgerError && ledgerError.code !== "23505") {
+      console.error("Failed to record processed webhook event:", ledgerError);
     }
 
     return new Response(JSON.stringify({ received: true }), {
