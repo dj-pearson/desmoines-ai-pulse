@@ -176,8 +176,15 @@ serve(async (req) => {
       apiVersion: "2023-10-16",
     });
 
-    // Generate idempotency key to prevent duplicate refunds (SEC-027)
-    const idempotencyKey = `refund_${campaign.stripe_payment_intent_id}_${Date.now()}`;
+    // Generate a STABLE idempotency key to prevent duplicate refunds (SEC-027).
+    // It must NOT include a timestamp: if the edge function times out and the
+    // request is retried, a time-based key would change and Stripe would treat
+    // the retry as a brand-new refund (double refund). Deriving the key from
+    // stable request attributes (payment intent + amount in cents + reason)
+    // makes identical retries collapse to a single Stripe refund, while a
+    // genuinely different refund (different amount/reason) gets its own key.
+    const refundAmountCents = Math.round(refundAmount * 100);
+    const idempotencyKey = `refund_${campaign.stripe_payment_intent_id}_${refundAmountCents}_${refundReason}`;
     console.log(`Processing refund with idempotency key: ${idempotencyKey}`);
 
     // Create refund in Stripe

@@ -643,8 +643,8 @@
         "npm run validate passes"
       ],
       "priority": 101,
-      "passes": false,
-      "notes": "Source: security audit — supabase/functions/create-subscription-checkout/index.ts ~line 147 fetches Stripe customer by an email not locked to the authenticated user (account-takeover/billing-confusion risk)."
+      "passes": true,
+      "notes": "ALREADY SATISFIED (verified, no change needed): both create-subscription-checkout and create-campaign-checkout derive email from the verified JWT (user.email / securityMiddleware context); neither reads an email from the request body, so checkout cannot be attached to another email. (Original audit finding was inaccurate.)"
     },
     {
       "id": "PROD-SEC-003",
@@ -746,8 +746,8 @@
         "npm run validate passes"
       ],
       "priority": 108,
-      "passes": false,
-      "notes": "Source: backend audit — supabase/functions/generate-writeup/index.ts ~line 347 fetches an arbitrary request URL with no host validation."
+      "passes": true,
+      "notes": "DONE (this branch): generate-writeup now calls the existing _shared/validation.ts validateURLForSSRF(url) (https-only, blocks localhost/link-local/private CIDRs and embedded creds) before fetching the caller-supplied url; rejects with 400 on failure."
     },
     {
       "id": "PROD-SEC-010",
@@ -805,7 +805,7 @@
       ],
       "priority": 112,
       "passes": false,
-      "notes": "Source: security + ops audits — client.ts uses placeholder fallbacks; no startup env validation; webhook secret presence only logged."
+      "notes": "PARTIALLY ALREADY SATISFIED (verified): src/lib/env.ts throws on missing required vars in PROD and is imported in main.tsx; stripe-webhook already rejects (500) and never processes events when STRIPE_WEBHOOK_SECRET is missing, and always verifies signatures. REMAINING: reconcile env.ts PROD-throw vs client.ts deliberate no-throw (silent WKWebView white-screen) by rendering a visible DOM error instead of a placeholder client; optionally return 503 + alert (not 500) on missing webhook secret."
     },
     {
       "id": "PROD-SEC-014",
@@ -819,8 +819,8 @@
         "npm run validate passes"
       ],
       "priority": 113,
-      "passes": false,
-      "notes": "Source: security audit — GA G-XGQFFP9BHZ and Supabase ref hardcoded; cors.ts allows *.lovable.dev; .gitignore missing .env.local patterns."
+      "passes": true,
+      "notes": "DONE (this branch): GA measurement id and Supabase project ref removed from hardcoded index.html and injected via Vite %VITE_GA_MEASUREMENT_ID% / %VITE_SUPABASE_URL% (GA guarded to only init on a real G- id). .gitignore already covers .env.local via *.local. DEVIATION: kept the *.lovable.dev CORS allowance because it is already gated to non-production only (cors.ts isOriginAllowed); revisit if previews move off lovable. DEPLOY ACTION: set VITE_GA_MEASUREMENT_ID=G-XGQFFP9BHZ in Cloudflare Pages env or GA stops tracking."
     },
     {
       "id": "PROD-SEC-015",
@@ -1118,8 +1118,8 @@
         "npm run validate passes"
       ],
       "priority": 134,
-      "passes": false,
-      "notes": "Source: subscription audit — idempotencyKey includes Date.now(), defeating dedup on retry."
+      "passes": true,
+      "notes": "DONE (this branch): process-stripe-refund idempotency key changed from refund_<pi>_<Date.now()> to a stable refund_<pi>_<amountCents>_<refundReason>, so a timed-out+retried request no longer creates a duplicate Stripe refund while distinct refunds keep distinct keys."
     },
     {
       "id": "PROD-SUB-009",

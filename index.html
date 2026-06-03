@@ -237,8 +237,9 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 
     <!-- Database: Critical for interactivity (crossorigin needed for fetch/XHR requests) -->
-    <link rel="preconnect" href="https://wtkhfqpmcegzcbngroui.supabase.co" crossorigin />
-    <link rel="dns-prefetch" href="https://wtkhfqpmcegzcbngroui.supabase.co" />
+    <!-- Project URL is injected at build time from VITE_SUPABASE_URL (no hardcoded project ref) -->
+    <link rel="preconnect" href="%VITE_SUPABASE_URL%" crossorigin />
+    <link rel="dns-prefetch" href="%VITE_SUPABASE_URL%" />
 
     <!-- Analytics: Non-critical, DNS prefetch only -->
     <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
@@ -351,32 +352,37 @@
     </script>
 
     <!-- Defer Google Analytics to reduce INP (Interaction to Next Paint) -->
+    <!-- Measurement ID is injected at build time from VITE_GA_MEASUREMENT_ID. -->
+    <!-- If the var is unset, the placeholder stays literal and GA is skipped. -->
     <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag() {
-        dataLayer.push(arguments);
-      }
-      gtag("js", new Date());
-      gtag("config", "G-XGQFFP9BHZ");
+      (function () {
+        var GA_ID = "%VITE_GA_MEASUREMENT_ID%";
+        // Only initialize for a real GA4 id; an unresolved placeholder or empty
+        // value (no env configured) is ignored so GA never loads with a bad id.
+        if (!GA_ID || GA_ID.indexOf("G-") !== 0) return;
 
-      // Load GA after page is interactive
-      if ("requestIdleCallback" in window) {
-        requestIdleCallback(() => {
-          const script = document.createElement("script");
+        window.dataLayer = window.dataLayer || [];
+        function gtag() {
+          dataLayer.push(arguments);
+        }
+        gtag("js", new Date());
+        gtag("config", GA_ID);
+
+        var src = "https://www.googletagmanager.com/gtag/js?id=" + GA_ID;
+        var loadGA = function () {
+          var script = document.createElement("script");
           script.async = true;
-          script.src =
-            "https://www.googletagmanager.com/gtag/js?id=G-XGQFFP9BHZ";
+          script.src = src;
           document.head.appendChild(script);
-        });
-      } else {
-        setTimeout(() => {
-          const script = document.createElement("script");
-          script.async = true;
-          script.src =
-            "https://www.googletagmanager.com/gtag/js?id=G-XGQFFP9BHZ";
-          document.head.appendChild(script);
-        }, 4000);
-      }
+        };
+
+        // Load GA after page is interactive
+        if ("requestIdleCallback" in window) {
+          requestIdleCallback(loadGA);
+        } else {
+          setTimeout(loadGA, 4000);
+        }
+      })();
     </script>
 
     <title>Des Moines Insider: Events, Restaurants & Attractions</title>
