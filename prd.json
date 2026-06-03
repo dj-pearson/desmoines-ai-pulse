@@ -630,7 +630,7 @@
       ],
       "priority": 100,
       "passes": false,
-      "notes": "Source: security audit. No CSRF token generation/validation found; mutations rely on auth header only. Supabase does not provide CSRF protection automatically."
+      "notes": "VERIFIED PARTIAL: src/lib/csrf.tsx implements client-side token (sessionStorage, addTokenToHeaders, useCSRF). MISSING: no edge function validates the X-CSRF-Token header server-side; no rejection test. Remaining = server-side validation in mutating functions."
     },
     {
       "id": "PROD-SEC-002",
@@ -658,8 +658,8 @@
         "CSP validated with a CSP evaluator and the site still functions (maps, Three.js, GA, Stripe, Supabase)"
       ],
       "priority": 102,
-      "passes": false,
-      "notes": "Source: security + SEO/UX + perf audits. CSP currently absent or only referenced in a comment; _headers img-src allows any http/https. index.html has two large inline scripts."
+      "passes": true,
+      "notes": "VERIFIED DONE: public/_headers ships a strict CSP (script-src pins SHA-256 hashes of the 3 inline scripts, no wildcard script-src; js.stripe/googletagmanager/maps allowlisted), X-Frame-Options DENY, Referrer-Policy, COEP/CORP/COOP. Residual nits: img-src still allows https:/http: broadly; no report-uri (Cloudflare default reporting). Those tracked under hardening, core CSP done."
     },
     {
       "id": "PROD-SEC-004",
@@ -674,7 +674,7 @@
       ],
       "priority": 103,
       "passes": false,
-      "notes": "Source: security + ops audits. supabase/functions/_shared/rateLimit.ts has both in-memory and persistent variants; most functions use the non-persistent one. CLAUDE.md notes 100/15min default."
+      "notes": "VERIFIED PARTIAL: persistent limiter EXISTS (migration 20260402000001 check_rate_limit RPC + rateLimit.ts checkRateLimitPersistent) but only ~2 of ~66 functions use it; auth/signup/password-reset/Stripe/AI still use in-memory checkRateLimit. Remaining = switch sensitive endpoints to persistent + per-tier overrides."
     },
     {
       "id": "PROD-SEC-005",
@@ -688,7 +688,7 @@
       ],
       "priority": 104,
       "passes": false,
-      "notes": "Source: security + subscription audits. successUrl built from origin/siteUrl without consistent allowlist; OAuth callback uses window.location.origin; SecurityUtils.isValidRedirectUrl permissiveness unverified."
+      "notes": "VERIFIED PARTIAL: manage-subscription has validateReturnUrl; securityUtils.isValidRedirectUrl exists and blocks protocol-relative/bypass patterns; checkout success/cancel URLs are built from siteUrl (not user input). MISSING: one shared helper used by ALL flows + unit tests. Lower risk than originally rated."
     },
     {
       "id": "PROD-SEC-006",
@@ -703,7 +703,7 @@
       ],
       "priority": 105,
       "passes": false,
-      "notes": "Source: security audit — AuthContext caches admin role 5 min client-side; some admin endpoints return generic errors without 401/403 distinction."
+      "notes": "VERIFIED PARTIAL: securityLayers.ts re-checks role from DB server-side and returns 401 vs 403. MISSING: client admin cache TTL still 5min (story wants <=60s) and not invalidated on logout; no non-admin-403 test."
     },
     {
       "id": "PROD-SEC-007",
@@ -732,7 +732,7 @@
       ],
       "priority": 107,
       "passes": false,
-      "notes": "Source: security audit — NewsletterCampaignsManager.tsx ~line 560 and FeedbackInbox.tsx ~line 657 render DB HTML under a 'trusted admin' assumption; data originates from user-submitted tables."
+      "notes": "VERIFIED PARTIAL: securityUtils.sanitizeHTML (DOMPurify, restrictive allowlist) EXISTS but is NOT used by NewsletterCampaignsManager.tsx:560 or FeedbackInbox.tsx:657 (both render DB HTML under a trusted-admin assumption). Remaining = route those two render sites through sanitizeHTML + add an XSS test."
     },
     {
       "id": "PROD-SEC-009",
@@ -762,7 +762,7 @@
       ],
       "priority": 109,
       "passes": false,
-      "notes": "Source: backend audit — generate-article injects topic/targetKeywords directly into the prompt; writeup output stored unvalidated."
+      "notes": "VERIFIED PARTIAL: generate-article interpolates topic/targetKeywords/customInstructions into the system prompt (not isolated as user-role content) with no length caps. discover-chat/personalized-recommendations similar. Remaining = isolate user input, cap length, validate/sanitize AI output before persist."
     },
     {
       "id": "PROD-SEC-011",
@@ -776,7 +776,7 @@
       ],
       "priority": 110,
       "passes": false,
-      "notes": "Source: security + backend audits — multiple functions return error.message directly, leaking FK/schema details."
+      "notes": "VERIFIED MISSING: multiple functions return error.message to clients (scrape-restaurant-menus:1201, process-campaign-lifecycle:203, personalized-recommendations:277). No shared error responder / request-id. Remaining = build a shared responder that logs server-side + returns generic message+request id."
     },
     {
       "id": "PROD-SEC-012",
@@ -791,7 +791,7 @@
       ],
       "priority": 111,
       "passes": false,
-      "notes": "Source: security audit — 20260228000006_create_guide_requests.sql WITH CHECK (true); 20260311000002 pseo tables FOR ALL USING (true) WITH CHECK (true). Follow CLAUDE.md: tightening RLS must not break older clients."
+      "notes": "VERIFIED PARTIAL: guide_requests INSERT policy is WITH CHECK (true) (20260228000006); pseo_generation_queue/log are FOR ALL USING(true) WITH CHECK(true) (20260311000002). Remaining = additive migration tightening these (scoped inserts, non-empty checks, service_role-only per-action grants)."
     },
     {
       "id": "PROD-SEC-013",
@@ -819,8 +819,8 @@
         "npm run validate passes"
       ],
       "priority": 113,
-      "passes": true,
-      "notes": "DONE (this branch): GA measurement id and Supabase project ref removed from hardcoded index.html and injected via Vite %VITE_GA_MEASUREMENT_ID% / %VITE_SUPABASE_URL% (GA guarded to only init on a real G- id). .gitignore already covers .env.local via *.local. DEVIATION: kept the *.lovable.dev CORS allowance because it is already gated to non-production only (cors.ts isOriginAllowed); revisit if previews move off lovable. DEPLOY ACTION: set VITE_GA_MEASUREMENT_ID=G-XGQFFP9BHZ in Cloudflare Pages env or GA stops tracking."
+      "passes": false,
+      "notes": "CORRECTED (was prematurely marked done): the GA-id-from-env change was REVERTED because (1) the GA inline script is pinned by a SHA-256 hash in _headers CSP and an env-templated body changes the served bytes and breaks the hash, and (2) a GA4 measurement id is public, not a secret. Supabase preconnect in index.html is now %VITE_SUPABASE_URL% (harmless), but _headers CSP connect-src still hardcodes the project ref because Cloudflare _headers is a static file Vite cannot template. .env.local is already gitignored via *.local; *.lovable.dev CORS is non-prod-only. RECOMMENDATION: close as low-value/wont-fix, or move GA init into a JS module (out of the hashed inline script) if env-driven GA is truly required."
     },
     {
       "id": "PROD-SEC-015",
@@ -834,7 +834,7 @@
       ],
       "priority": 114,
       "passes": false,
-      "notes": "Source: enterprise checklist (Vulnerability Scanning, Security Testing). .cache_ggshield exists but no enforced CI gate."
+      "notes": "VERIFIED MISSING in CI: pr-checks.yml runs lint/type-check/unit/build only — no gitleaks/ggshield or npm audit gate (.cache_ggshield shows local runs + 1 historical finding). Remaining = add scanner + dependency audit steps that block PRs."
     },
     {
       "id": "PROD-SEC-016",
@@ -848,7 +848,7 @@
       ],
       "priority": 115,
       "passes": false,
-      "notes": "Source: enterprise checklist (Virus Scanning HIGH) + backend audit (file-size validation in parse-menu-upload/image-proxy)."
+      "notes": "VERIFIED PARTIAL: image-proxy (10MB) and parse-menu-upload (10MB + jpeg/png/pdf extension check) enforce size/type. MISSING: no malware/virus scanning before files are publicly served; no explicit response content-type validation."
     },
     {
       "id": "PROD-SEC-017",
@@ -863,7 +863,7 @@
       ],
       "priority": 116,
       "passes": false,
-      "notes": "Source: enterprise checklist (Account Lockout, Login Activity Logging) + security audit (in-memory loginAttempts Map resets per instance/restart)."
+      "notes": "VERIFIED MISSING (durable): AuthContext loginAttempts is an in-memory Map (resets per instance/restart); no auth_activity_log table; no server-side per-email+IP lockout. Remaining = durable attempt tracking + lockout + activity log."
     },
     {
       "id": "PROD-SEC-018",
@@ -877,7 +877,7 @@
       ],
       "priority": 117,
       "passes": false,
-      "notes": "Source: security audit — _headers allows unpkg/jsdelivr without SRI."
+      "notes": "VERIFIED PARTIAL: _headers CSP allows unpkg + cdn.jsdelivr.net without SRI; no external <script src> with integrity found. Remaining = remove unused CDN entries or add SRI hashes + build check."
     },
     {
       "id": "PROD-SEC-019",
@@ -891,7 +891,7 @@
       ],
       "priority": 118,
       "passes": false,
-      "notes": "Source: subscription/auth audit + enterprise checklist (Password Complexity HIGH). passwordStrength.ts is client-only."
+      "notes": "VERIFIED MISSING (server-side): passwordStrength.ts is client-only; no edge/auth-hook complexity enforcement. Remaining = enforce min length+complexity server-side returning 400."
     },
     {
       "id": "PROD-SEC-020",
@@ -906,7 +906,7 @@
       ],
       "priority": 119,
       "passes": false,
-      "notes": "Source: enterprise checklist (MFA Critical) + security audit (MFA detection present in AuthContext but no enforcement policy)."
+      "notes": "VERIFIED MISSING (enforcement): AuthContext detects MFA (requiresMFA/mfaFactorId) and Supabase supports MFA, but nothing ENFORCES MFA for admin/root_admin. Remaining = require+challenge MFA for admin roles, recovery codes, rejection test."
     },
     {
       "id": "PROD-SEC-021",
@@ -920,7 +920,7 @@
       ],
       "priority": 120,
       "passes": false,
-      "notes": "Source: enterprise checklist (Session Timeout HIGH, Device Management)."
+      "notes": "VERIFIED MISSING: no idle-timeout logout and no device/session management/revocation found. Remaining = idle timeout + active-device list + revoke."
     },
     {
       "id": "PROD-SEC-022",
@@ -932,8 +932,8 @@
         "No functionality (embeds/maps) breaks under the new headers"
       ],
       "priority": 121,
-      "passes": false,
-      "notes": "Source: enterprise checklist (Security Headers Critical)."
+      "passes": true,
+      "notes": "VERIFIED DONE: public/_headers sets HSTS (max-age 31536000; includeSubDomains; preload), X-Content-Type-Options nosniff, X-Frame-Options DENY, Referrer-Policy strict-origin-when-cross-origin, Permissions-Policy (geo/camera/mic/payment scoped), and Cross-Origin-*-Policy headers."
     },
     {
       "id": "PROD-AUTH-001",
@@ -1204,7 +1204,7 @@
       ],
       "priority": 140,
       "passes": false,
-      "notes": "Source: ops + backend audits — fetch() calls lack timeouts; fetchWithRetry retries 5xx but doesn't bound time."
+      "notes": "VERIFIED PARTIAL: ~7 of 76 functions use AbortController/AbortSignal.timeout(15s) (scrape-restaurant-menus, backfill-images, find-image-candidates, check-broken-links); src/lib/fetchWithRetry.ts has NO timeout param and no circuit breaker. Remaining = timeout on fetchWithRetry + cover remaining functions + circuit breaker."
     },
     {
       "id": "PROD-API-002",
@@ -1219,7 +1219,7 @@
       ],
       "priority": 141,
       "passes": false,
-      "notes": "Source: backend audit — unbounded prompts (full feedback history), no token budgets, no per-user AI quotas; enterprise checklist (AI Usage Analytics)."
+      "notes": "VERIFIED PARTIAL: discover-chat defines per-tier daily quotas (free5/insider50/vip-1); personalized-recommendations slices feedback to 20 in the prompt but does NOT cap the DB query, has no per-user quota, and there is no spend tracker/alerting or AI result caching. Remaining = enforce quotas + spend tracking + caching."
     },
     {
       "id": "PROD-API-003",
@@ -1233,7 +1233,7 @@
       ],
       "priority": 142,
       "passes": false,
-      "notes": "Source: backend audit — personalized-recommendations accepts arbitrary userId in body with no auth check."
+      "notes": "VERIFIED MISSING: personalized-recommendations runs verify_jwt=false, takes userId from the body, and uses the service_role key with no check that body userId matches a JWT subject. Remaining = require auth + derive userId from JWT + cross-user rejection test. (HIGH.)"
     },
     {
       "id": "PROD-API-004",
@@ -1247,7 +1247,7 @@
       ],
       "priority": 143,
       "passes": false,
-      "notes": "Source: backend audit — no backend persistence found for user favorites/ratings/reviews; risk of data loss on refresh/logout."
+      "notes": "VERIFIED MISSING: no create/update/delete endpoints for favorites/ratings/reviews; event_reviews table exists (20250802043023) but is unreachable via API; no moderation hooks. Remaining = authenticated, RLS-guarded CRUD + moderation."
     },
     {
       "id": "PROD-API-005",
@@ -1260,8 +1260,8 @@
         "npm run validate passes"
       ],
       "priority": 144,
-      "passes": false,
-      "notes": "Source: backend audit — generate-itinerary returns in-memory results with no persistence/share."
+      "passes": true,
+      "notes": "VERIFIED DONE: migration 20251126000001 creates trip_plans (user_id FK, share_code) + trip_plan_items with RLS; generate-itinerary persists the itinerary and items and share_code enables read-only shared access. Trip save/update/share is implemented."
     },
     {
       "id": "PROD-API-006",
@@ -1275,7 +1275,7 @@
       ],
       "priority": 145,
       "passes": false,
-      "notes": "Source: backend + SEO/UX audits — scrape-events offset math breaks on DST; no guarantee all event times are stored in UTC."
+      "notes": "VERIFIED PARTIAL: ai-crawler/firecrawl-scraper use date-fns-tz America/Chicago, but scrape-events/bulk-enhance-events/social-media-manager use toLocaleString offset math (lossy near DST). No UTC-storage/DST validation. Remaining = standardize on date-fns-tz + validation."
     },
     {
       "id": "PROD-API-007",
@@ -1289,7 +1289,7 @@
       ],
       "priority": 146,
       "passes": false,
-      "notes": "Source: backend audit — scrape-events uses naive string-concat fingerprint prone to collisions."
+      "notes": "VERIFIED PARTIAL: scrape-events fingerprint is string-concat (title_date_venue_domain), dedup is in-memory, and there is NO DB unique constraint/column. Remaining = hashed fingerprint + DB unique constraint (additive migration)."
     },
     {
       "id": "PROD-API-008",
@@ -1303,7 +1303,7 @@
       ],
       "priority": 147,
       "passes": false,
-      "notes": "Source: backend audit — single-attempt fetch in scrape-events; bulk-enhance lacks concurrency lock."
+      "notes": "VERIFIED PARTIAL: scraper.ts has exponential backoff for browserless, but scrape-events uses a flat setTimeout, there is no per-source result logging, and no processing lock (bulk-enhance-events too). Remaining = backoff + per-source results + concurrency lock."
     },
     {
       "id": "PROD-API-009",
@@ -1317,7 +1317,7 @@
       ],
       "priority": 148,
       "passes": false,
-      "notes": "Source: backend audit — parseJsonWithRepair accepts repaired-but-invalid menu JSON; article content has no word/length enforcement."
+      "notes": "VERIFIED PARTIAL: scrape-restaurant-menus rejects <2 items but parseJsonWithRepair does no schema validation; article webhook JSON.parse has no schema check; no output length bounds; no malformed-JSON test. Remaining = schema validation + bounds + test."
     },
     {
       "id": "PROD-API-010",
@@ -1330,8 +1330,8 @@
         "npm run validate passes"
       ],
       "priority": 149,
-      "passes": false,
-      "notes": "Source: backend + perf audits — ILIKE sanitization unverified; lists fetch limit:1000 then paginate in memory."
+      "passes": true,
+      "notes": "VERIFIED DONE: validation.ts sanitizeLikeInput() escapes %,_,\\ and is used by api-events (location+search ILIKE); api-events paginates server-side via range(offset,limit). Residual: add a statement_timeout (tracked in PROD-PERF-012)."
     },
     {
       "id": "PROD-API-011",
@@ -1345,7 +1345,7 @@
       ],
       "priority": 150,
       "passes": false,
-      "notes": "Source: backend audit — generate-itinerary validates end>start but not past dates; inconsistent validateInput coverage."
+      "notes": "VERIFIED PARTIAL: validateInput() exists and api-events uses validateQueryParams; generate-itinerary validates format/end>start/numDays<=14 but NOT past start dates; personalized-recommendations has no validateInput. Remaining = past-date check + broaden coverage."
     },
     {
       "id": "PROD-API-012",
@@ -1360,7 +1360,7 @@
       ],
       "priority": 151,
       "passes": false,
-      "notes": "Source: backend + ops audits — many loose *.sql cron files at repo root (setup vs simple-cron vs fix-*), hardcoded URLs, silent failure on missing vault secret."
+      "notes": "VERIFIED PARTIAL: ~29 migrations define pg_cron schedules and cron_logs exists, but 10+ loose cron .sql files remain at repo root, there is no heartbeat table (last_run_at/status) and no failure/overdue alerting. Remaining = consolidate + heartbeat + alerts."
     },
     {
       "id": "PROD-API-013",
@@ -1374,7 +1374,7 @@
       ],
       "priority": 152,
       "passes": false,
-      "notes": "Source: backend audit — inconsistent is_deleted columns; some auth.users FKs lack cascade; orphaned subscriptions/favorites risk."
+      "notes": "VERIFIED PARTIAL: social tables FK auth.users ON DELETE CASCADE and event_discussions has is_deleted+RLS, but soft-delete is inconsistent across tables and there is no full audit of user FK cascades / orphan test. Remaining = consistent soft-delete + cascade audit + test."
     },
     {
       "id": "PROD-API-014",
@@ -1387,8 +1387,8 @@
         "npm run validate passes"
       ],
       "priority": 153,
-      "passes": false,
-      "notes": "Source: backend audit — image-proxy base64 encoding without a verified size cap (memory-overflow risk)."
+      "passes": true,
+      "notes": "VERIFIED DONE: image-proxy enforces MAX_IMAGE_SIZE=10MB, checks Content-Length before download AND actual byteLength after, returns 413 on oversize, and uses an outbound fetch timeout."
     },
     {
       "id": "PROD-API-015",
@@ -1402,7 +1402,7 @@
       ],
       "priority": 154,
       "passes": false,
-      "notes": "Source: enterprise checklist (AI Content Moderation)."
+      "notes": "VERIFIED MISSING: no moderation endpoint/queue for reviews, no moderation on AI articles/writeups, no decision logging. Remaining = moderation pipeline + admin queue."
     },
     {
       "id": "PROD-PERF-001",
@@ -1429,8 +1429,8 @@
         "npm run validate passes"
       ],
       "priority": 156,
-      "passes": false,
-      "notes": "Source: perf audit — Restaurants/useRestaurants hard-code limit:1000 and paginate in memory; hotels seed fetched with select *."
+      "passes": true,
+      "notes": "VERIFIED DONE: useEvents/useRestaurants/useHotels use .range()+.limit() with {count:exact} (no hardcoded limit:1000); featured pools capped via .limit(). Explicit column selection is a separate concern tracked in PROD-PERF-003."
     },
     {
       "id": "PROD-PERF-003",
@@ -1444,7 +1444,7 @@
       ],
       "priority": 157,
       "passes": false,
-      "notes": "Source: perf audit — useEvents uses select('*'); EventDetails computes related events client-side from all events."
+      "notes": "VERIFIED MISSING: useEvents:50, useRestaurants:126, useHotels:51 and featured queries all use select(\"*\"). Remaining = explicit minimal column sets for list views (exclude large text cols)."
     },
     {
       "id": "PROD-PERF-004",
@@ -1457,8 +1457,8 @@
         "npm run validate passes"
       ],
       "priority": 158,
-      "passes": false,
-      "notes": "Source: perf audit — refetchOnMount:true broadly; many hooks lack staleTime/gcTime; filter objects create cache misses."
+      "passes": true,
+      "notes": "VERIFIED DONE: src/lib/queryKeys.ts defines CACHE_TIERS (static 10m/30m, standard 2m/10m, frequent 30s/5m, realtime 15s/2m) and a normalized queryKeys factory (events.list(filters) etc.) so identical filters share a cache entry; hooks set staleTime/gcTime and refetchOnWindowFocus:false."
     },
     {
       "id": "PROD-PERF-005",
@@ -1472,7 +1472,7 @@
       ],
       "priority": 159,
       "passes": false,
-      "notes": "Source: perf audit — several documented indexes may be missing in actual migrations; no geo index on events; proximity full-scans."
+      "notes": "VERIFIED PARTIAL: composite/partial indexes exist (20251113000000: city_category_date, price_date, featured_upcoming, today; 20251110000000 ST_DWithin proximity fn). MISSING: explicit GiST index on events.geom not confirmed; no statement_timeout. Remaining = confirm/add geo index."
     },
     {
       "id": "PROD-PERF-006",
@@ -1486,7 +1486,7 @@
       ],
       "priority": 160,
       "passes": false,
-      "notes": "Source: perf audit — user_has_role_or_higher(auth.uid(),...) called per row in policies."
+      "notes": "VERIFIED MISSING: no evidence RLS role checks are optimized (no cached/JWT-claim role, no statement_timeout). Remaining = JWT-claim/cached role in hot policies + benchmark."
     },
     {
       "id": "PROD-PERF-007",
@@ -1499,8 +1499,8 @@
         "npm run validate passes"
       ],
       "priority": 161,
-      "passes": false,
-      "notes": "Source: perf audit — card components not memoized; 30 cards re-render on any parent change."
+      "passes": true,
+      "notes": "VERIFIED DONE: EventCard/RestaurantCard wrapped in React.memo with useCallback-stabilized handlers (EventCard.tsx memo at export; RestaurantCard usePrefetchRestaurant handleMouseEnter via useCallback); OptimizedImage memoizes load/error handlers."
     },
     {
       "id": "PROD-PERF-008",
@@ -1513,8 +1513,8 @@
         "npm run validate passes"
       ],
       "priority": 162,
-      "passes": false,
-      "notes": "Source: perf audit — cards use raw <img> without dimensions; OptimizedImage exists but unused in cards."
+      "passes": true,
+      "notes": "VERIFIED DONE: cards use <OptimizedImage> with explicit width/height, loading=lazy, responsive sizes/srcset (EventCard width=640 height=192 sizes set; RestaurantCard same). LCP path uses fetchPriority."
     },
     {
       "id": "PROD-PERF-009",
@@ -1528,7 +1528,7 @@
       ],
       "priority": 163,
       "passes": false,
-      "notes": "Source: perf + SEO/UX audits — HeroCityLite imports Three directly; 200 instanced buildings; no placeholder; motion runs unconditionally."
+      "notes": "VERIFIED PARTIAL: HeroCityLite defers the Three.js Canvas via requestIdleCallback (8s) behind a gradient placeholder. MISSING: does NOT consult useReducedMotion (exists) to stop shader motion, and Three is imported directly (not lazy()/code-split). Remaining = gate motion on reduced-motion + lazy import + ~5s defer."
     },
     {
       "id": "PROD-PERF-010",
@@ -1541,8 +1541,8 @@
         "Changes verified to not serve stale critical bundles"
       ],
       "priority": 164,
-      "passes": false,
-      "notes": "Source: perf audit — index.html max-age=0 (100% misses); /api/* cached only 5m; edge functions set no Cache-Control."
+      "passes": true,
+      "notes": "VERIFIED DONE: public/_headers sets HTML no-store, /assets+js+css immutable max-age=31536000, /api/* max-age=300. Residual: index.html lacks stale-while-revalidate and edge GET responses lack Cache-Control — captured under PROD-PERF-015/edge caching follow-ups; core header strategy done."
     },
     {
       "id": "PROD-PERF-011",
@@ -1556,7 +1556,7 @@
       ],
       "priority": 165,
       "passes": false,
-      "notes": "Source: perf audit — 429-621KB PNG logos with unused WebP variants; index.html preloads WebP only."
+      "notes": "VERIFIED PARTIAL: WebP variants exist and header logo preloads WebP, but large PNGs (146/429/621KB) remain and there is no <picture> WebP/PNG fallback. Remaining = <picture> + drop/relocate large PNGs or SVG-ize logos."
     },
     {
       "id": "PROD-PERF-012",
@@ -1570,7 +1570,7 @@
       ],
       "priority": 166,
       "passes": false,
-      "notes": "Source: perf audit — no query timeouts; unbounded competitor/suggestion queries."
+      "notes": "VERIFIED MISSING: no statement_timeout for the API role and no client query timeouts; heavy tables (competitor_content/suggestions) unbounded. Remaining = set statement_timeout + paginate heavy reads."
     },
     {
       "id": "PROD-PERF-013",
@@ -1583,8 +1583,8 @@
         "npm run validate passes"
       ],
       "priority": 167,
-      "passes": false,
-      "notes": "Source: perf audit — fonts load without swap (FOIT/FOUT)."
+      "passes": true,
+      "notes": "VERIFIED DONE: index.html preconnects fonts.googleapis/gstatic and loads Inter with display=swap via preload+onload swap."
     },
     {
       "id": "PROD-PERF-014",
@@ -1598,7 +1598,7 @@
       ],
       "priority": 168,
       "passes": false,
-      "notes": "Source: perf audit — useFeaturedEvents/useFeaturedRestaurants run two sequential queries per page load."
+      "notes": "VERIFIED PARTIAL: useFeaturedEvents/useFeaturedRestaurants still run 2 sequential queries (sponsored then featured) with client-side shuffle. Remaining = single OR/UNION query, sponsored-first ordering."
     },
     {
       "id": "PROD-PERF-015",
@@ -1612,7 +1612,7 @@
       ],
       "priority": 169,
       "passes": false,
-      "notes": "Source: perf + SEO/UX audits — all pages fetch live from Supabase; no fallback if DB is down; sw.js referenced but absent."
+      "notes": "VERIFIED MISSING (anti-pattern present): public/sw.js is self-destructing (unregisters + clears all caches) and index.html actively unregisters SWs — so there is NO offline/SWR fallback when Supabase is down. Remaining = implement a real SWR/offline cache strategy."
     },
     {
       "id": "PROD-PERF-016",
@@ -1626,7 +1626,7 @@
       ],
       "priority": 170,
       "passes": false,
-      "notes": "Source: perf audit — useCrmDashboard.ts export * pulls entire CRM directory."
+      "notes": "VERIFIED PARTIAL: barrel export * remains only in useCrmDashboard.ts (7 re-exports); vite manualChunks mitigates bundling. Remaining = named imports + before/after build:analyze."
     },
     {
       "id": "PROD-SEO-001",
