@@ -1232,8 +1232,8 @@
         "npm run validate passes"
       ],
       "priority": 142,
-      "passes": false,
-      "notes": "VERIFIED MISSING: personalized-recommendations runs verify_jwt=false, takes userId from the body, and uses the service_role key with no check that body userId matches a JWT subject. Remaining = require auth + derive userId from JWT + cross-user rejection test. (HIGH.)"
+      "passes": true,
+      "notes": "DONE (this branch): personalized-recommendations now derives userId from the verified JWT (supabase.auth.getUser(token)), returns 401 without a valid token, and 403 if a body userId does not match the authenticated user — closing the horizontal-access bug where a body userId was trusted while querying with the service-role key. Also flipped verify_jwt=true in supabase/config.toml for gateway defense-in-depth. No web caller existed (dormant endpoint), and this matches the prescription in docs/SECURITY_AUDIT.md #10. NOTE: error.message is still returned in the 500 path (tracked separately under PROD-SEC-011); AI cost caps tracked under PROD-API-002."
     },
     {
       "id": "PROD-API-004",

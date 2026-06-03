@@ -31,7 +31,8 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.personalized-recommendations]
-verify_jwt = false
+# Accesses user-specific data; user id is derived from the JWT, never the body.
+verify_jwt = true
 
 [functions.geocode-location]
 verify_jwt = false
