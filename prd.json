@@ -1049,7 +1049,7 @@
       ],
       "priority": 129,
       "passes": false,
-      "notes": "Source: subscription audit — handleInvoicePaymentFailed sets past_due immediately and useSubscription filters status=active, so users lose access mid-session. Also enterprise checklist (Dunning Management)."
+      "notes": "IN PROGRESS (this branch): entitlement/read core DONE — useSubscription now queries active+trialing+past_due, derives tier/limits/features from ENTITLED rows only via new exported pure helpers isSubscriptionEntitled()/gracePeriodEnd() (active+trialing always grant; past_due grants until current_period_end+GRACE_PERIOD_DAYS=14; canceled/paused never). A failed renewal no longer instantly drops to free; a beyond-grace row correctly falls to free; trialing users no longer read as free (latent bug fixed). Hook now exposes isPastDue/inGracePeriod/gracePeriodEndsAt for a banner. Access auto-restores on retry (webhook handleInvoicePaymentSucceeded already sets status=active). Unit tests added in __tests__/useSubscription.test.ts (7 grace cases). REMAINING: render a payment-failed banner using the new flags, and dunning notifications (in-app + email day 1/3/7)."
     },
     {
       "id": "PROD-SUB-004",
