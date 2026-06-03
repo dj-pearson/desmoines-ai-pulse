@@ -1864,7 +1864,7 @@
       ],
       "priority": 187,
       "passes": false,
-      "notes": "VERIFIED PARTIAL: a11y suite exists but is NOT in pr-checks.yml and does not block on violations; no baseline/allowlist. Remaining: add gating step (pairs with PROD-OPS-002)."
+      "notes": "IN PROGRESS: the accessibility suite now runs in CI on PRs via e2e.yml (Chromium desktop + mobile). REMAINING: make it blocking (remove continue-on-error) + a baseline/allowlist once the A11Y-001 backlog is remediated."
     },
     {
       "id": "PROD-A11Y-008",
@@ -1973,7 +1973,7 @@
       ],
       "priority": 195,
       "passes": false,
-      "notes": "VERIFIED PARTIAL: tests/links-and-buttons.spec.ts is comprehensive but NOT gated in pr-checks.yml (no Playwright in CI). Remaining: add to CI (pairs with PROD-OPS-002)."
+      "notes": "IN PROGRESS: tests/links-and-buttons.spec.ts now runs in CI on PRs via e2e.yml. REMAINING: fix any broken links it surfaces and make the check blocking/required."
     },
     {
       "id": "PROD-UX-008",
@@ -2001,7 +2001,7 @@
       ],
       "priority": 197,
       "passes": false,
-      "notes": "VERIFIED PARTIAL: Playwright configured + suites exist and run locally, but pr-checks.yml runs only unit/lint/build. Remaining: run suites in Linux CI + known-failures policy (pairs with OPS-002)."
+      "notes": "VERIFIED PARTIAL + PROGRESS: Playwright suites now run in Linux CI via the new e2e.yml (Chromium); they execute headless on ubuntu-latest. REMAINING: regenerate/commit any baselines in CI (not from a dev Windows machine) and a documented known-failures policy."
     },
     {
       "id": "PROD-OPS-002",
@@ -2015,7 +2015,7 @@
       ],
       "priority": 198,
       "passes": false,
-      "notes": "VERIFIED MISSING: no Playwright/E2E step in pr-checks.yml and no ruleset requiring an E2E status check. HIGH-leverage (also gates A11Y-007 / UX-007)."
+      "notes": "IN PROGRESS (this branch): added .github/workflows/e2e.yml running the critical Playwright suites (accessibility, links-and-buttons, forms, mobile-responsive) on PRs to main/develop, Chromium desktop + mobile only (avoids the firefox/webkit binary failures from the old runs), with the dev server auto-started by playwright.config webServer and report uploaded as an artifact. Intentionally continue-on-error (NON-BLOCKING) during the A11Y-001 violation remediation so it gives signal without freezing merges. REMAINING: once A11Y-001 is green, remove continue-on-error and add this job to the branch ruleset required checks."
     },
     {
       "id": "PROD-OPS-003",
