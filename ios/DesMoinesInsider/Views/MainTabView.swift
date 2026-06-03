@@ -50,6 +50,11 @@ struct MainTabView: View {
     /// frequency-capped by SoftPaywallService, presented from one place here.
     @State private var softPaywallContext: PaywallContext?
 
+    /// Frequency-capped interstitial (IOS-ADS-012), free-tier only, evaluated at
+    /// the tab-switch navigation boundary by InterstitialAdService.
+    @State private var storeKit = StoreKitService.shared
+    @State private var showInterstitial = false
+
     var body: some View {
         Group {
             if sizeClass == .regular {
@@ -67,6 +72,19 @@ struct MainTabView: View {
         .tint(Color.accentColor)
         .onAppear {
             Self.configureTranslucentAppearance()
+            InterstitialAdService.shared.noteSessionStart()
+        }
+        .onChange(of: selectedTab) { _, _ in
+            // Major navigation boundary. Free tier only; the service enforces the
+            // session cap, the "not on first sessions" rule and the min interval.
+            guard storeKit.currentTier == .free else { return }
+            if InterstitialAdService.shared.shouldPresentAtBoundary() {
+                InterstitialAdService.shared.markPresented()
+                showInterstitial = true
+            }
+        }
+        .fullScreenCover(isPresented: $showInterstitial) {
+            InterstitialAdView()
         }
         .onReceive(NotificationCenter.default.publisher(for: .favoritesLimitReached)) { _ in
             showFavoritesPaywall = true

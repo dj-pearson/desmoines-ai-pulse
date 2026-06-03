@@ -375,16 +375,30 @@ struct HomeView: View {
                 .padding(.top, 40)
             } else {
                 LazyVStack(spacing: 12) {
-                    ForEach(Array(viewModel.events.enumerated()), id: \.element.id) { index, event in
+                    ForEach(Array(arrangedEvents.enumerated()), id: \.element.id) { index, event in
                         Button {
+                            if event.isActivelySponsored {
+                                AdTrackingService.shared.logSponsoredClick(listingType: "event", listingId: event.id)
+                            }
                             navigationPath.append(event)
                         } label: {
                             EventCardView(event: event, toast: $toast)
                         }
                         .buttonStyle(.pressableCard)
                         .entranceAnimation(index: index)
+                        .onAppear {
+                            if event.isActivelySponsored {
+                                AdTrackingService.shared.logSponsoredImpression(listingType: "event", listingId: event.id)
+                            }
+                        }
                         .task {
                             await viewModel.loadMoreIfNeeded(currentItem: event)
+                        }
+
+                        // Native in-feed ad card at deterministic indices
+                        // (IOS-ADS-012). AdSlot renders nothing for subscribers.
+                        if shouldInsertInFeedAd(after: index) {
+                            AdSlot(.feed)
                         }
                     }
 
@@ -398,6 +412,21 @@ struct HomeView: View {
             }
         }
         .padding(.bottom, 20)
+    }
+
+    /// Sponsored listings (IOS-ADS-011) pulled to the front of the main events
+    /// feed; organic order is otherwise preserved.
+    private var arrangedEvents: [Event] {
+        SponsoredArranger.arrange(viewModel.events, isSponsored: { $0.isActivelySponsored })
+    }
+
+    /// Native in-feed ad cadence (IOS-ADS-012): the first ad appears after
+    /// `inFeedFirstSlot` items, then every `inFeedInterval` thereafter. Indices
+    /// come from the central AdConfig.
+    private func shouldInsertInFeedAd(after index: Int) -> Bool {
+        let position = index + 1
+        guard position >= AdConfig.inFeedFirstSlot else { return false }
+        return (position - AdConfig.inFeedFirstSlot) % AdConfig.inFeedInterval == 0
     }
 
 }
