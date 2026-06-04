@@ -176,44 +176,60 @@ struct MainTabView: View {
 
     // MARK: - iPad Layout (Sidebar + Detail)
 
-    /// iOS requires Binding<SelectionValue?> (optional) for List selection.
-    /// The non-optional overload is macOS-only and would fail to compile on iOS.
-    private var iPadSelectionBinding: Binding<Tab?> {
-        Binding(
-            get: { selectedTab },
-            set: { if let tab = $0 { selectedTab = tab } }
-        )
+    /// Sidebar selection: the 6 primary tabs PLUS the Discover-family
+    /// destinations, all first-class on iPad where there's room (IOS-IA-005).
+    /// Discover, Trip Planner, and Dashboard render in the detail pane rather
+    /// than as a sheet, giving a proper list+detail two-pane.
+    enum SidebarSelection: Hashable {
+        case tab(Tab)
+        case discover
+        case tripPlanner
+        case dashboard
     }
 
-    /// iPad sidebar shows the 6 primary tabs plus a dedicated Discover entry
-    /// (IOS-IA-002). On iPad there's room, so Discover is a first-class sidebar
-    /// item rather than being tucked behind Home as it is on iPhone.
-    @State private var iPadShowDiscover = false
+    @State private var sidebarSelection: SidebarSelection = .tab(.home)
 
     private var iPadLayout: some View {
         NavigationSplitView {
-            List(selection: iPadSelectionBinding) {
-                ForEach(Tab.allCases, id: \.self) { tab in
-                    Label(tab.title, systemImage: tab.icon)
-                        .tag(tab)
+            List(selection: $sidebarSelection) {
+                Section {
+                    ForEach(Tab.allCases, id: \.self) { tab in
+                        Label(tab.title, systemImage: tab.icon)
+                            .tag(SidebarSelection.tab(tab))
+                    }
                 }
 
-                Section {
-                    Button {
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        iPadShowDiscover = true
-                    } label: {
-                        Label("Discover", systemImage: "square.grid.2x2.fill")
-                    }
+                Section("Explore") {
+                    Label("Discover", systemImage: "square.grid.2x2.fill")
+                        .tag(SidebarSelection.discover)
+                    Label("Trip Planner", systemImage: "map.fill")
+                        .tag(SidebarSelection.tripPlanner)
+                    Label("Dashboard", systemImage: "rectangle.stack.person.crop")
+                        .tag(SidebarSelection.dashboard)
                 }
             }
             .navigationTitle("DSM Insider")
             .listStyle(.sidebar)
         } detail: {
-            tabContent(for: selectedTab)
+            detailPane
         }
-        .sheet(isPresented: $iPadShowDiscover) {
-            DiscoverHubView()
+        // Keep the sidebar and `selectedTab` (used by deep links + the
+        // interstitial boundary) in sync, without feedback loops.
+        .onChange(of: sidebarSelection) { _, newValue in
+            if case .tab(let tab) = newValue, tab != selectedTab { selectedTab = tab }
+        }
+        .onChange(of: selectedTab) { _, newTab in
+            if sidebarSelection != .tab(newTab) { sidebarSelection = .tab(newTab) }
+        }
+    }
+
+    @ViewBuilder
+    private var detailPane: some View {
+        switch sidebarSelection {
+        case .tab(let tab): tabContent(for: tab)
+        case .discover: DiscoverHubView()
+        case .tripPlanner: TripPlannerView(ownsNavigationStack: true)
+        case .dashboard: DashboardView(ownsNavigationStack: true)
         }
     }
 

@@ -76,7 +76,7 @@ struct DashboardView: View {
             }
         }
         .sheet(isPresented: $showTripPlanner, onDismiss: { Task { await loadTrips() } }) {
-            TripPlannerView()
+            TripPlannerView(showsCloseButton: true)
         }
         .task { await load() }
         .refreshable { await load() }

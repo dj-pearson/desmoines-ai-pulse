@@ -8,8 +8,12 @@ import SwiftUI
 /// and contextual paywall (IOS-SUB-011). Reachable from the Discover hub and a
 /// Home entry point.
 struct TripPlannerView: View {
-    /// Discover pushes this into its own stack (false); the Home sheet owns one (true).
+    /// Discover pushes this into its own stack (false); the Home sheet / iPad
+    /// detail own one (true).
     var ownsNavigationStack: Bool = true
+    /// Shows a "Close" toolbar button — only when presented modally (Home sheet),
+    /// not when it's a pushed/detail destination.
+    var showsCloseButton: Bool = false
 
     @State private var storeKit = StoreKitService.shared
     @State private var service = TripPlannerService.shared
@@ -58,7 +62,7 @@ struct TripPlannerView: View {
         }
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
-            if ownsNavigationStack {
+            if showsCloseButton {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Close") { dismiss() }
                 }

@@ -86,7 +86,8 @@ struct HomeView: View {
                             restaurantsVM: restaurantsVM,
                             attractionsVM: attractionsVM,
                             weekendVM: weekendVM,
-                            onSeeAll: handleSeeAll
+                            onSeeAll: handleSeeAll,
+                            order: HomeRailOrdering.current()
                         )
                     }
 
@@ -161,7 +162,7 @@ struct HomeView: View {
                 SurpriseMeView()
             }
             .sheet(isPresented: $showTripPlanner) {
-                TripPlannerView()
+                TripPlannerView(showsCloseButton: true)
             }
             .navigationDestination(for: Event.self) { event in
                 EventDetailView(event: event)

@@ -554,8 +554,8 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 37,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "IMPLEMENTED (this session). iPad/large-screen adaptivity. MainTabView iPad NavigationSplitView sidebar now lists the 6 primary tabs PLUS first-class Explore destinations (Discover, Trip Planner, Dashboard) that render in the DETAIL pane (proper list+detail two-pane), replacing the old Discover-as-sheet; sidebar<->selectedTab kept in sync (deep links + interstitial boundary still work, no feedback loop). Discover hub grid is now adaptive (GridItem(.adaptive(minimum:160)) -> 2 cols on iPhone, more on iPad/landscape). Trip Planner gains a showsCloseButton flag so the modal Close only appears in the Home/Dashboard sheet, not in the pushed/detail contexts. UI snapshot tests added (test09/test10) capture the iPad sidebar destinations in BOTH portrait and landscape via the existing Fastlane Snapshot suite (Snapfile already targets iPad Pro 13-inch); they no-op gracefully on iPhone. NOTE/FOLLOW-UP: the Articles reader (IOS-PARITY-002) does not exist yet, so its iPad layout lands with that story; deeper per-list 3-column splits (e.g. Events list+sub-detail inside the detail pane) remain a follow-up beyond the app-level two-pane shipped here."
     },
     {
       "id": "IOS-IA-006",
@@ -569,8 +569,8 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 38,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "IMPLEMENTED (this session). NEW Views/Home/HomeRailOrdering.swift centralizes the [HomeRail] sequence (HomeRailsView already took an order:). Strategy is deterministic, consent-gated (ConsentService.analyticsConsent), and first-party only: it scores each content type from on-device signals (favorites weighted 2x recently-viewed) plus ForYou engagement, then leads with the user most-engaged content type; the For-You rail leads when personalization is active else slots just after the top type. Default-safe: guests / no-consent / no-signal get the canonical HomeRail.allCases order (no regression). A/B-friendly via a single Strategy switch (canonical vs affinityWeighted). HomeView passes order: HomeRailOrdering.current(). Tests: HomeRailOrderingTests covers default/consent/affinity/engagement/determinism."
     },
     {
       "id": "IOS-COMPLY-003",

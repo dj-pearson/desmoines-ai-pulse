@@ -2221,3 +2221,58 @@ RestaurantsService.fetchRestaurant(id:), AttractionsService.fetchAttraction(id:)
 SubscriptionBanner Style.full/.compact; ForYouRail self-contained; Event/Restaurant/
 Attraction/TripPlan all Hashable for DetailTarget). project.yml directory sources
 auto-include the 2 new app files + test.
+
+## 2026-06-04 — IOS-IA-005 + IOS-IA-006 — IOS-IA cluster COMPLETE (6/6) [awaiting CI build]
+
+Closed out the IOS-IA cluster with the two remaining stories. 70/165 stories pass.
+
+### IOS-IA-005 — iPad / large-screen adaptive layouts
+- MainTabView iPad NavigationSplitView: the sidebar now lists the 6 primary tabs
+  PLUS first-class "Explore" destinations (Discover, Trip Planner, Dashboard)
+  that render in the DETAIL pane — a real list+detail two-pane — instead of the
+  old Discover-as-a-sheet. Introduced SidebarSelection enum; sidebar <->
+  selectedTab kept in sync (deep links + the interstitial boundary still fire,
+  guarded against feedback loops).
+- Discover hub grid is adaptive now (GridItem(.adaptive(minimum: 160))) → 2
+  columns on iPhone, more on iPad / landscape.
+- TripPlannerView gained `showsCloseButton` so the modal Close only shows in the
+  Home/Dashboard sheet, not when it's the iPad detail / Discover-push destination.
+- UI snapshot tests test09/test10 capture the iPad sidebar destinations in BOTH
+  portrait and landscape (Fastlane Snapshot suite; Snapfile already targets iPad
+  Pro 13-inch). They no-op gracefully on iPhone. These live in the separate
+  DesMoinesInsiderUITests scheme — NOT the CI unit-test gate — so they can't
+  flake the build.
+- FOLLOW-UP (documented in prd.json): Articles reader iPad layout lands with
+  IOS-PARITY-002; deeper per-list 3-column splits beyond the app-level two-pane
+  are a later refinement.
+
+### IOS-IA-006 — Personalized Home rail ordering
+- NEW Views/Home/HomeRailOrdering.swift — centralizes the [HomeRail] order.
+  Deterministic, consent-gated (ConsentService.analyticsConsent), first-party
+  only: scores each content type from on-device signals (favorites 2x recently-
+  viewed) + ForYou engagement, leads with the most-engaged type; For-You rail
+  leads when personalization is active, else slots just after the top type.
+  Guests / no-consent / no-signal → canonical HomeRail.allCases (no regression).
+  A/B-friendly via one Strategy switch. HomeView passes order: HomeRailOrdering.current().
+- Tests: HomeRailOrderingTests (default / consent / affinity / engagement /
+  favorites-outweigh-views / determinism).
+
+### Codebase Patterns discovered (reusable)
+- iPad SIDEBAR DESTINATIONS: model sidebar selection as an enum {tab(Tab), extras}
+  and render the detail pane via a switch; sync to the existing selectedTab with
+  guarded onChange so deep links keep working.
+- MODAL vs PUSHED: give a screen a `showsCloseButton` flag (separate from
+  ownsNavigationStack) so the same view is reusable as a sheet, a pushed
+  destination, AND a split-view detail pane without a stray Close button.
+- PERSONALIZATION ORDERING: keep it a pure, deterministic function over a
+  Signals struct (testable, A/B-swappable) and read live signals in a thin
+  `current()` — never bake policy into the view.
+
+### Verification
+No Swift toolchain locally (Linux); macOS xcodebuild + xctest gate runs in CI
+(scheme DesMoinesInsider → DesMoinesInsiderTests only; UI snapshot tests are a
+separate scheme). No web/TS files touched. Static checks: all 8 new + modified
+Swift files brace/paren/bracket-balanced; HomeRailsView already accepted `order:`;
+SidebarSelection/Tab Hashable for List selection; ordering algorithm hand-traced
+against every HomeRailOrderingTests assertion. project.yml directory sources
+auto-include the new file + tests.
