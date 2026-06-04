@@ -511,8 +511,8 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 34,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Shipped 2026-06-04. Saved searches + alerts on the saved_searches table: SaveSearchButton in Search (gated to Insider+ via PaywallContext.savedSearches with QuotaAction.savedSearches per-tier limits), a SavedSearchesList managed from the Dashboard (toggle alerts → requests push via PushNotificationService + QuotaAction.alerts limit; delete; tap deep-links to live SavedSearchResultsView). Free users see the feature + contextual paywall. Scheduled new-match delivery is the server job; the app stores the search + alert flag and registers for push. Web build untouched; macOS xcodebuild in CI."
     },
     {
       "id": "IOS-PARITY-009",
@@ -525,8 +525,8 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 35,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Shipped 2026-06-04. Native reviews & ratings via a reusable ReviewsSection embedded on Event/Restaurant/Attraction detail, writing the user_ratings table (upsert onConflict user_id,content_type,content_id; RLS). Reading is free; writing gated to Insider+ via PaywallContext.writeReviews. Star+text composer, author/rating/date display, edit/delete own, and a report affordance → rating_abuse_reports. Web build untouched; macOS xcodebuild in CI."
     },
     {
       "id": "IOS-PARITY-010",
@@ -539,8 +539,8 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 36,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Shipped 2026-06-04. Native Deals (DealsView + DealsService) on the same deals backend as web useDeals, including the recurring fields days_of_week/start_time/end_time rendered as a readable schedule (Mon–Fri · 3:00–6:00 PM) and an active-now check. Category(entity_type)/active-now filters + search; featured deals get the sponsored treatment (IOS-ADS-011); deals with entity_id deep-link to the native listing detail. Discover-hub tile. Web build untouched; macOS xcodebuild in CI."
     },
     {
       "id": "IOS-IA-005",

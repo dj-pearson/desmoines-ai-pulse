@@ -39,6 +39,8 @@ struct RestaurantDetailView: View {
                     .padding(.horizontal)
                 }
 
+                ReviewsSection(contentType: "restaurant", contentId: restaurant.id)
+
                 AdSlot(.feed)
             }
             .frame(maxWidth: .infinity)

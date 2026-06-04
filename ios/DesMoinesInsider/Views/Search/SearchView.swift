@@ -65,6 +65,12 @@ struct SearchView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     micButton
                 }
+                // IOS-PARITY-008 — save the current search (gated to Insider+).
+                if viewModel.hasSearched && !viewModel.searchText.isEmpty {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        SaveSearchButton(query: viewModel.searchText, tab: viewModel.selectedTab.rawValue)
+                    }
+                }
             }
             .disabled(!NetworkMonitor.shared.isConnected && !viewModel.hasSearched)
             .navigationTitle("Search")

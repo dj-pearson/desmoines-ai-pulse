@@ -79,6 +79,19 @@ extension PaywallContext {
         recommendedTier: .insider
     )
 
+    static let writeReviews = PaywallContext(
+        id: "write_reviews",
+        icon: "star.bubble.fill",
+        headline: "Share your take with the city",
+        subheadline: "Write reviews and ratings on events, restaurants, and attractions as an Insider.",
+        benefits: [
+            "Rate & review any place in Des Moines",
+            "Help locals find the best spots",
+            "Your reviews, editable anytime",
+        ],
+        recommendedTier: .insider
+    )
+
     static let savedSearches = PaywallContext(
         id: "saved_searches",
         icon: "bookmark.fill",

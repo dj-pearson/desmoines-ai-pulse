@@ -81,6 +81,7 @@ struct DashboardView: View {
             case .trip(let t): ItineraryDetailView(trip: t)
             }
         }
+        .navigationDestination(for: SavedSearch.self) { SavedSearchResultsView(savedSearch: $0) }
         .sheet(isPresented: $showTripPlanner, onDismiss: { Task { await loadTrips() } }) {
             TripPlannerView(showsCloseButton: true)
         }
@@ -136,12 +137,8 @@ struct DashboardView: View {
 
     private var alertsSection: some View {
         SectionContainer(title: "Saved searches & alerts", systemImage: "bell.fill") {
-            // Populated once IOS-PARITY-008 lands; structured here so the
-            // dashboard is complete and never a dead end.
-            EmptyHint(
-                text: "Save a search to get alerts when new matches are added.",
-                actionTitle: nil, action: nil
-            )
+            // IOS-PARITY-008 — manage saved searches + alerts inline.
+            SavedSearchesList()
         }
     }
 

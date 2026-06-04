@@ -2623,3 +2623,86 @@ Event.city/venue/location; @State(wrappedValue:) parameterized VMs; ContentCard
 variants + toastOverlay). Hub config + neighborhood matching hand-traced against
 every ContentHubTests assertion. project.yml directory sources auto-include the
 new app files + test.
+
+## 2026-06-04 — IOS-PARITY-008/009/010 — IOS-PARITY cluster COMPLETE (10/10) [awaiting CI build]
+
+Closed out the IOS-PARITY cluster with its last three stories. 78/165 stories
+pass. Every Discover-hub tile is now a real native screen (no ComingSoon
+fallbacks remain). Remaining iOS work is the IOS-COMPLY cluster (a11y/offline/
+store-readiness).
+
+### IOS-PARITY-010 — Deals (native, incl. recurring)
+- NEW Models/Deal.swift — decodes the `deals` row incl. DEAL-RECURRING-001
+  fields (days_of_week/start_time/end_time). scheduleText renders consecutive
+  days as a range ("Mon–Fri · 3:00 PM–6:00 PM"), "Daily", or a comma list;
+  isActiveNow(_:calendar:) checks the date window + (recurring) today/time.
+  valueLabel/dealTypeLabel mirror the web getDealTypeLabel.
+- NEW Services/DealsService.swift (actor) — fetchDeals(entityType:) featured-first
+  (+ claimDeal RPC). NEW ViewModels/DealsViewModel.swift — category(entity_type)
+  + active-now + search filtering (client-side over one fetch).
+- NEW Views/Deals/DealsView.swift — value-badge cards with schedule + active-now
+  + sponsored ring (featured = IOS-ADS-011), sticky category/active-now chips,
+  in-feed AdSlot, search; deals with entity_id deep-link to the native listing
+  (DealEntityTarget → Restaurant/Attraction/Event/Hotel detail).
+- Discover hub .deals tile → DealsView (the last tile to go native).
+
+### IOS-PARITY-009 — Reviews & ratings (premium)
+- NEW Models/UserRating.swift (+ ContentRatingAggregate) — decodes user_ratings
+  with the joined author profile; ratingValue/authorName/formattedDate helpers.
+- NEW Services/RatingsService.swift (actor) — fetchRatings (profiles join),
+  fetchAggregate, submitRating (UPSERT onConflict user_id,content_type,content_id
+  = the web behavior), deleteRating, reportRating → rating_abuse_reports.
+- NEW ViewModels/ReviewsViewModel.swift — list + user's own review + aggregate;
+  submit/delete/report; canWriteReviews = StoreKit.hasFeature(.writeReviews).
+- NEW Views/Reviews/ReviewsSection.swift — reusable section + star/text composer.
+  Reading free; writing gated to Insider+ via NEW PaywallContext.writeReviews.
+  Edit/delete own, report others. Embedded on Event/Restaurant/Attraction detail.
+
+### IOS-PARITY-008 — Saved searches + custom alerts (premium + push)
+- NEW Models/SavedSearch.swift — decodes saved_searches; query/tab/alert flag live
+  in the `filters` JSONB (tolerant decode). NEW Services/SavedSearchService.swift
+  (actor) — fetch/create/updateFilters(toggle alert)/delete. NEW ViewModels/
+  SavedSearchesViewModel.swift (shared) — gating via hasFeature(.saveSearches/
+  .createAlerts) + QuotaAction.savedSearches/.alerts per-tier limits; enabling an
+  alert requests push (PushNotificationService).
+- NEW Views/Search/SavedSearchUI.swift — SaveSearchButton (Search toolbar, gated,
+  self-contained name sheet + paywall) + SavedSearchesList (Dashboard manage:
+  alert toggle, delete, tap → results). NEW SavedSearchResultsView — re-runs the
+  query and lists matches (where an alert push deep-links). Dashboard alertsSection
+  now renders the live list; SearchView gains the save button.
+- Server-side: the scheduled new-match alert delivery is a backend job + push;
+  the app stores the saved search + alert flag and registers the device token.
+
+### Codebase Patterns discovered (reusable)
+- UPSERT-ON-CONFLICT for "one row per user/content": mirror the web onConflict
+  key in supabase-swift's upsert(_,onConflict:) so the app and web converge on the
+  same unique constraint instead of read-modify-write.
+- JSONB AS A SCHEMA-LIGHT EXTENSION POINT: store new structured fields (query/tab/
+  alert) inside an existing `filters` jsonb column via a nested Codable with a
+  tolerant decoder — no migration, forward/backward compatible.
+- SELF-CONTAINED GATED ACTION: package a premium action (SaveSearchButton) as one
+  view that owns its VM + sheet + paywall + toast, so hosts just drop it in a
+  toolbar without learning the gating rules.
+- RECURRENCE RENDERING: collapse a weekday set into a range/Daily/list + a 12h
+  time window in the model, keeping the view a dumb label.
+
+### Verification
+No Swift toolchain locally (Linux); macOS xcodebuild + xctest gate runs in CI
+(scheme DesMoinesInsider → DesMoinesInsiderTests). No web/TS files touched.
+Static checks: all new + modified Swift files brace/paren/bracket-balanced
+(comment/string-aware counter, incl. a caught extra-brace in DiscoverHubView's
+now-exhaustive switch). APIs verified against existing usage (supabase-swift v2
+.upsert(_,onConflict:), .insert/.update(Encodable)/.delete().eq, .rpc(_,params:),
+nested-Codable jsonb; StoreKitService.hasFeature + PremiumFeature.QuotaAction
+limits; PushNotificationService.requestPermissionAndRegister; PaywallView(context:)
+incl. the new .writeReviews; ToastMessage factories + .toastOverlay; @State(wrappedValue:)
+parameterized VMs; navigationDestination(item:)/(for:)). Decode contracts verified
+against migrations 20260228000001 + 20260520000015 (deals/recurrence), user_ratings/
+content_rating_aggregates/rating_abuse_reports, and 20250819002500 (saved_searches).
+Schedule/active-now, rating, and saved-search decoding hand-traced against every
+DealsTests/ReviewsTests/SavedSearchTests assertion. project.yml directory sources
+auto-include the new app files + 3 tests.
+
+### IOS-PARITY cluster summary (10/10)
+001 Trip Planner · 002 Articles · 003 Stay/hotels · 004 Weekend · 005 Best Of ·
+006 Content hubs · 007 Dashboard · 008 Saved searches · 009 Reviews · 010 Deals.

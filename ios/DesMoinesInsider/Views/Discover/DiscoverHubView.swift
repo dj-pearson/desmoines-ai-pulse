@@ -200,8 +200,9 @@ enum DiscoverDestination: String, CaseIterable, Identifiable {
         case .neighborhoods:
             // IOS-PARITY-006 — neighborhoods hub.
             NeighborhoodsView(ownsNavigationStack: false)
-        default:
-            ComingSoonView(title: title, systemImage: systemImage, webURL: webURL)
+        case .deals:
+            // IOS-PARITY-010 — native deals (incl. recurring schedules).
+            DealsView(ownsNavigationStack: false)
         }
     }
 }
