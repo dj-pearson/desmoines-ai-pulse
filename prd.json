@@ -495,8 +495,8 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 33,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "IMPLEMENTED (this session). Native User Dashboard (parity with web /dashboard). NEW Views/Dashboard/DashboardView.swift aggregates: subscription status (SubscriptionBanner .full, manage/upgrade -> paywall for free), saved Trip Planner itineraries (TripPlannerService.fetchTrips -> ItineraryDetailView, with Plan-a-trip CTA), favorites overview (FavoritesService per-type counts), saved searches & alerts (structured empty-state section; populated when IOS-PARITY-008 lands), recently viewed (NEW RecentlyViewedService, UserDefaults-backed, recorded from Event/Restaurant/Attraction detail .task; tap fetches by id via EventsService/RestaurantsService/AttractionsService and pushes native detail), and For-You recommendations (reuses ForYouRail). Navigation via .navigationDestination(item:) with a DetailTarget enum so it works whether the screen owns its stack (standalone) or is pushed from Profile (ownsNavigationStack flag). Reachable from Profile (new Dashboard row). Guest state prompts sign-in (AuthView) + compact upgrade banner -> never a dead end. Tests: RecentlyViewedTests (ordering/dedupe/cap). NOTE: saved-searches/alerts section is intentionally an empty state until IOS-PARITY-008."
     },
     {
       "id": "IOS-PARITY-008",

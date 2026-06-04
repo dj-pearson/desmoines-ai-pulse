@@ -51,6 +51,15 @@ struct ProfileView: View {
                 .padding(.vertical, 4)
             }
 
+            // Dashboard — the signed-in home base (IOS-PARITY-007).
+            Section {
+                NavigationLink {
+                    DashboardView(ownsNavigationStack: false)
+                } label: {
+                    Label("Dashboard", systemImage: "rectangle.stack.person.crop")
+                }
+            }
+
             // Subscription Status — prominent upgrade CTA for free users
             Section {
                 SubscriptionBanner(style: .full)

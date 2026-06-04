@@ -78,6 +78,12 @@ struct RestaurantDetailView: View {
         .sheet(isPresented: $showSubscription) {
             PaywallView(context: .diningTips)
         }
+        .task {
+            // IOS-PARITY-007 — feed the Dashboard "Jump back in" rail.
+            RecentlyViewedService.shared.record(
+                type: "restaurant", id: restaurant.id, title: restaurant.name, imageUrl: restaurant.imageUrl
+            )
+        }
     }
 
     // MARK: - Helpers

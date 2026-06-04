@@ -100,6 +100,10 @@ struct EventDetailView: View {
         }
         .task {
             await viewModel.loadEvent(event)
+            // IOS-PARITY-007 — feed the Dashboard "Jump back in" rail.
+            RecentlyViewedService.shared.record(
+                type: "event", id: event.id, title: event.title, imageUrl: event.imageUrl
+            )
         }
     }
 }

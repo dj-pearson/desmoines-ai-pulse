@@ -2175,3 +2175,49 @@ EventKit requestWriteOnlyAccessToEvents matches EventDetailViewModel; decode
 CodingKeys verified against migration 20251126000001 (trip_plans / trip_plan_items
 / get_trip_itinerary) and the generate-itinerary response. project.yml directory
 sources auto-include the 5 new app files + test.
+
+## 2026-06-04 — IOS-PARITY-007 (User Dashboard) [awaiting CI build]
+
+Built the signed-in "home base" that ties together the work from this cluster
+(Trip Planner itineraries) with favorites, recents, and recommendations. 68/165
+stories pass. Next: IOS-PARITY-002.
+
+### What shipped
+- NEW Views/Dashboard/DashboardView.swift — aggregates, in one scroll:
+  • Subscription status (SubscriptionBanner .full → manage/upgrade, paywall for free)
+  • Your itineraries (TripPlannerService.fetchTrips → ItineraryDetailView; Plan-a-trip CTA opens TripPlannerView sheet)
+  • Saved overview (FavoritesService per-type counts: events / dining / places)
+  • Saved searches & alerts (structured empty-state; fills in when IOS-PARITY-008 lands)
+  • Jump back in (recently viewed)
+  • For You (reuses ForYouRail)
+  Guest state prompts sign-in (AuthView) + compact upgrade banner — never a dead end.
+- NEW Services/RecentlyViewedService.swift — UserDefaults-backed (like
+  SearchHistoryService), last 12 items, dedupe-to-front. Recorded from the
+  Event / Restaurant / Attraction detail `.task`. Dashboard taps fetch the full
+  model by id (EventsService/RestaurantsService/AttractionsService singletons)
+  and push the native detail.
+- Navigation uses `.navigationDestination(item:)` + a DetailTarget enum
+  (event/restaurant/attraction/trip) so the screen works both standalone
+  (ownsNavigationStack) and pushed from Profile.
+- ProfileView gains a Dashboard row.
+- NEW DesMoinesInsiderTests/RecentlyViewedTests.swift.
+
+### Codebase Patterns discovered (reusable)
+- AGGREGATOR SCREENS: compose existing self-contained views/services (ForYouRail,
+  SubscriptionBanner, FavoritesService, TripPlannerService) rather than re-fetching;
+  the dashboard is mostly wiring, not new data paths.
+- CROSS-TYPE NAV: a single `DetailTarget` enum + `.navigationDestination(item:)`
+  pushes Event/Restaurant/Attraction/TripPlan details from one screen without
+  registering four `navigationDestination(for:)` handlers.
+- RECENTLY-VIEWED: record from each detail view's `.task`; fetch-by-id on tap so
+  only id+title+image are persisted (small, schema-free).
+
+### Verification
+No Swift toolchain locally (Linux); macOS xcodebuild + xctest gate runs in CI.
+No web/TS files touched. Static checks: all new + modified Swift files
+brace/paren/bracket-balanced; reused APIs verified (FavoritesService
+favoriteEventIds/totalFavoritesCount/loadFavorites; EventsService.fetchEvent(id:),
+RestaurantsService.fetchRestaurant(id:), AttractionsService.fetchAttraction(id:);
+SubscriptionBanner Style.full/.compact; ForYouRail self-contained; Event/Restaurant/
+Attraction/TripPlan all Hashable for DetailTarget). project.yml directory sources
+auto-include the 2 new app files + test.
