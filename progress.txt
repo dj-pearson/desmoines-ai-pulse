@@ -2276,3 +2276,433 @@ Swift files brace/paren/bracket-balanced; HomeRailsView already accepted `order:
 SidebarSelection/Tab Hashable for List selection; ordering algorithm hand-traced
 against every HomeRailOrderingTests assertion. project.yml directory sources
 auto-include the new file + tests.
+
+## 2026-06-04 — IOS-PARITY-002 (Articles / Guides hub + native reader) [awaiting CI build]
+
+Continued the IOS-PARITY cluster (the highest-priority cluster with open
+stories) with the Articles/Guides surface. The Discover hub advertised
+"Articles & Guides" but routed to a ComingSoon web fallback — now it's a fully
+native hub + reader against the same `articles` table the web /articles page
+reads (src/hooks/useArticles.ts). This adds SEO/long-form dwell-time content and
+in-reader ad/affiliate inventory to the app. 71/165 stories pass. Next:
+IOS-PARITY-003.
+
+### What shipped
+- NEW Models/Article.swift — decodes the `articles` table row (snake_case
+  CodingKeys identical to the web shape). Computed: displayCategory (web
+  "General" fallback), displaySummary (excerpt, else a derived lead paragraph
+  with inline markdown stripped), reading time (200-wpm heuristic matching
+  src/pages/ArticleDetails.tsx), tolerant ISO-8601 date parse, webURL, VoiceOver
+  card label, and a `cardData` adapter into the unified ContentCard (IOS-IA-003).
+- NEW Services/ArticlesService.swift (actor, mirrors AttractionsService) —
+  fetchArticles (status='published', search OR-ilike across title/excerpt/
+  category, category filter, published_at→created_at ordering, paginated),
+  fetchArticle(id:)/(slug:), fetchRelated (same category, fail-soft),
+  fetchCategories (distinct, for chips), incrementViewCount (best-effort, parity
+  with web). All reads via withRetry; related/categories/view-count fail soft.
+- NEW ViewModels/ArticlesViewModel.swift — search debounce, single category
+  filter, pagination + loadMoreIfNeeded, refresh; re-indexes the visible set
+  into Spotlight on each refresh.
+- NEW Views/Articles/ArticlesView.swift — list/hub with sticky category chips
+  (StickyFilterBar / IOS-IA-004), unified ContentCard(.listRow) rows, in-feed
+  AdSlot(.feed) after AdConfig.inFeedFirstSlot (free-tier only), skeletons,
+  empty/error/retry states, pull-to-refresh, searchable. ownsNavigationStack
+  flag so it works standalone OR pushed from the Discover hub.
+- NEW Views/Articles/ArticleMarkdownView.swift — native renderer for the GFM
+  markdown the editor emits (web uses ReactMarkdown+remarkGfm). Parses blocks
+  (headings, paragraphs, standalone images, ordered/unordered lists,
+  blockquotes, fenced code, rules); inline bold/italic/code/links via
+  AttributedString(markdown:). Dynamic Type + VoiceOver friendly (headings get
+  .isHeader, images get alt labels) — no fixed font sizes, no WKWebView for body.
+- NEW Views/Articles/ArticleDetailView.swift — the reader: hero image, category/
+  date/reading-time meta, save (bookmark) + share toolbar, body via
+  ArticleMarkdownView with an OpenURLAction that routes web links into an in-app
+  browser (WebViewPage sheet) and hands off mailto:/tel: to the system, a
+  free-tier AdSlot(.detail) inside the reader (IOS-ADS-010/012), and a related
+  rail (compact ContentCards). On appear: records RecentlyViewed ("article"),
+  Spotlight-indexes itself, bumps view_count, loads related.
+- Favorites (Services/FavoritesService.swift): added article saves
+  (favoriteArticleIds, toggleFavoriteArticle, isArticleFavorited,
+  fetchFavoriteArticles) using `user_article_interactions` with a UserDefaults
+  fallback (table not shipped yet — same pattern as restaurants/attractions).
+  DELIBERATELY excluded from the premium favorites CAP and totalFavoritesCount:
+  saving editorial content is always free and shouldn't burn the "3 favorites"
+  gate. Cleared on reset().
+- Spotlight (Services/SpotlightService.swift): indexArticles(_:) with a dedicated
+  domain so guides are searchable from system Spotlight.
+- Dashboard (Views/Dashboard/DashboardView.swift): added a "Guides" saved stat,
+  an .article DetailTarget case, and openRecent article resolution so a
+  recently-viewed guide on "Jump back in" opens the native reader.
+- Discover hub: .articles tile now returns ArticlesView(ownsNavigationStack:
+  false) instead of ComingSoonView; added .navigationDestination(for: Article.self).
+- NEW DesMoinesInsiderTests/ArticlesTests.swift — decode contract (full +
+  minimal rows), reading-time/summary heuristics, card adapter, and the markdown
+  parser (headings/paragraphs/images, bullet+ordered lists, blockquote+rule).
+
+### Codebase Patterns discovered (reusable)
+- NATIVE MARKDOWN: parse the stored GFM into a small block enum and render each
+  block in SwiftUI (AttributedString only for inline syntax) — gives real
+  Dynamic Type / VoiceOver and avoids a WKWebView for body content. Route link
+  taps through a single `.environment(\.openURL, OpenURLAction{…})` so the host
+  decides in-app-browser vs system handoff.
+- FREE-vs-PREMIUM SAVES: not every "save" belongs in the premium favorites cap.
+  Keep editorial saves in a separate id set that's excluded from
+  totalFavoritesCount so the upsell gate stays scoped to listings.
+- SELF-HOSTING DETAIL SCREENS: a detail view that has its own internal links
+  (related rail) declares its OWN `.navigationDestination(for: Model.self)` so it
+  works under item-based hosts (Dashboard) as well as value-based stacks
+  (Discover/list). Benign duplicate-registration when a list also declares it.
+
+### Verification
+No Swift toolchain locally (Linux); macOS xcodebuild + xctest gate runs in CI
+(scheme DesMoinesInsider → DesMoinesInsiderTests). No web/TS files touched.
+Static checks: all 8 new + 4 modified Swift files brace/paren/bracket-balanced
+(comment- and string-aware counter); Supabase query API verified against existing
+usage (.or/.eq/.neq filters, .order(_,ascending:,nullsFirst:) chaining, .range,
+.in, .single, .update(Encodable).eq, withRetry trailing closure); markdown parser
+hand-traced against every ArticlesTests assertion; CodingKeys verified against
+migration 20250825195148 (articles table) and src/hooks/useArticles.ts. project.yml
+directory sources auto-include the new app files + test.
+
+## 2026-06-04 — IOS-PARITY-003 (Where to Stay + affiliate booking) [awaiting CI build]
+
+Continued the IOS-PARITY cluster with the lodging surface — the second revenue
+engine (affiliate, outside Apple's commission) beyond the existing hotel banner.
+The Discover "Where to Stay" tile routed to a ComingSoon web fallback; it's now a
+native browse + detail flow against the same `hotels` table the web /stay page
+reads (src/hooks/useHotels.ts), with a real affiliate Book clickout. 72/165
+stories pass. Next: IOS-PARITY-004.
+
+### What shipped
+- NEW Models/Hotel.swift — decodes the `hotels` row (snake_case CodingKeys
+  matching the web shape). Computed: coordinate, displayArea (area→city
+  fallback), fullAddress, hasAffiliate, bookURL (affiliate_url preferred → website
+  fallback → nil), bookProviderName, affiliatePartnerKey (slugified, for
+  tracking), priceText (price_range → "$X/night"), starText, amenitiesList,
+  galleryImageURLs (hero-first, deduped), webURL, and a `cardData` ContentCard
+  adapter (IOS-IA-003).
+- NEW Services/HotelsService.swift (actor, mirrors AttractionsService + the web
+  useHotels query) — fetchHotels with is_active=true, search OR-ilike, area/
+  price-range `.in` filters, star-rating floor, featured, and a Swift 5.9 switch
+  EXPRESSION for the 5 sort modes (featured/price-low/price-high/rating/name) so
+  we don't name the Postgrest builder types. fetchHotel(id:), fetchAreas()
+  (distinct, fail-soft). Paginated; reads via withRetry.
+- NEW ViewModels/HotelsViewModel.swift — search debounce, multi-select area +
+  price filters, star floor, featured toggle, sort, pagination; re-indexes the
+  visible set into Spotlight on refresh.
+- NEW Views/Stay/HotelsView.swift — browse hub: sticky area chips + price pills +
+  rating menu + active-filter chips (StickyFilterBar / IOS-IA-004), unified
+  ContentCard(.listRow) rows, in-feed AdSlot(.feed), skeleton/empty/error/retry,
+  pull-to-refresh, search, sort menu. ownsNavigationStack flag.
+- NEW Views/Stay/HotelDetailView.swift — paged photo gallery (tap → existing
+  FullScreenImageViewer), star/price/area header, affiliate "Book on <partner>"
+  CTA with FTC-style disclosure that opens the partner in an in-app Safari sheet
+  (SFSafariViewController) — revenue OUTSIDE Apple IAP — plus an amenities grid
+  (icon-mapped), a MapKit map + directions, description, and a free-tier
+  AdSlot(.detail). Records recently-viewed + Spotlight on appear.
+- NEW Views/Components/SafariView.swift — SFSafariViewController UIViewController-
+  Representable for affiliate clickouts (real partner site, its cookies/login,
+  Apple's trusted chrome). Presented via .sheet(item: AdTarget).
+- Affiliate tracking: book() logs AdTrackingService.shared.logAffiliateClick
+  (partner key, placement "hotel_detail") + an AnalyticsService "hotel_book_click"
+  event (IOS-ADS-014 inventory-class accounting).
+- Cross-links: Discover hub .stay tile → HotelsView; ItineraryDetailView (Trip
+  Planner) gains a "Where to stay" section linking into the hub. Spotlight
+  indexHotels; Dashboard .hotel DetailTarget + openRecent resolution;
+  RecentlyViewed "hotel" icon.
+- NEW DesMoinesInsiderTests/HotelsTests.swift — decode (full + minimal rows),
+  bookURL resolution (affiliate-preferred / website-fallback / nil), partner-key
+  slugify, price fallback, card adapter, sort-enum parity.
+
+### Codebase Patterns discovered (reusable)
+- AFFILIATE CLICKOUT: open partner URLs in SFSafariViewController (not WKWebView)
+  so the user gets the real site + login/cookies; log the click to
+  AdTrackingService (affiliate inventory class) BEFORE presenting. Booking stays
+  outside Apple IAP.
+- BOOK-URL RESOLUTION: prefer affiliate_url, fall back to the hotel's own website,
+  else hide the CTA — one computed property keeps the revenue path and the
+  degraded path in one place.
+- SORT WITHOUT NAMING BUILDER TYPES: use a Swift 5.9 `let x = switch …` expression
+  whose branches are Postgrest `.order()` chains, so the transform-builder type is
+  inferred (no fragile PostgrestTransformBuilder annotation across SDK versions).
+
+### Verification
+No Swift toolchain locally (Linux); macOS xcodebuild + xctest gate runs in CI
+(scheme DesMoinesInsider → DesMoinesInsiderTests). No web/TS files touched.
+Static checks: all 8 new + 4 modified Swift files brace/paren/bracket-balanced
+(comment/string-aware counter); APIs verified against existing usage (.or/.eq/.in/
+.gte/.not(_,operator:.is) filters, multi-.order(_,ascending:,nullsFirst:) chaining,
+.range, .single, withRetry; Map(initialPosition:.region) + Marker as in
+TripMapPreview; FullScreenImageViewer(imageUrl:isPresented:) as in Event/Restaurant
+detail; FilterChipView(text:icon:tint:onRemove:); AdTarget .sheet(item:) as in
+SponsoredPickCard; AdTrackingService.logAffiliateClick / AnalyticsService.trackEvent).
+CodingKeys verified against the generated `hotels` Row type and migration
+20260520000000. project.yml directory sources auto-include the new app files + test.
+
+## 2026-06-04 — IOS-PARITY-004 (This Weekend guide) [awaiting CI build]
+
+Continued the IOS-PARITY cluster with the weekend guide — promoting "This
+Weekend" from a Home rail (events filtered to the weekend) into a dedicated
+cross-type curation screen, matching web /weekend. 73/165 stories pass. Next:
+IOS-PARITY-005.
+
+### What shipped
+- NEW Models/WeekendWindow.swift — pure value type computing the Fri–Sun window.
+  Anchors to Friday 00:00 via the same offsetToFriday math as the web
+  EventsThisWeekend.tsx (Sat/Sun resolve to the CURRENT weekend, mid-week to the
+  upcoming one). Exposes friday/saturday/sunday/monday boundaries, a Day enum,
+  `day(for:)` bucketing, and a `rangeLabel` ("June 5 – 7"). Unit-testable
+  (calendar injectable).
+- NEW ViewModels/WeekendViewModel.swift — recomputes the window on refresh
+  ("refreshes by current week"), fetches the weekend's events grouped by day,
+  and pulls featured dining + attractions concurrently. Events are the core
+  (their failure surfaces an error + retry); the featured rails fail soft.
+- NEW Views/Weekend/WeekendView.swift — header (date range + event count),
+  Friday/Saturday/Sunday sections of standard event cards, an in-feed AdSlot,
+  Featured dining + Featured attractions horizontal rails, loading skeletons,
+  empty + error/retry states, pull-to-refresh, and a ShareLink (shareable).
+  ownsNavigationStack flag; declares Event/Restaurant/Attraction destinations.
+- EventsService.fetchEventsInRange(start:end:limit:) — NEW range query that, unlike
+  fetchEvents, does NOT floor at "today", so the whole Fri–Sun window shows even
+  when viewed mid-weekend (web parity).
+- Wiring: Home "This Weekend" rail See-all now pushes HomeDestination.weekend →
+  WeekendView (the deferral the rail's comment called out); Discover hub .weekend
+  tile → WeekendView; the /weekend universal link already routes to
+  .discover(.weekend), so it's deep-linkable into the same screen.
+- NEW DesMoinesInsiderTests/WeekendTests.swift — window starts on a Friday
+  mid-week, Sat/Sun anchor to the current weekend, day bucketing + nil for
+  weekdays, day titles/order. Deterministic via an injected UTC Gregorian calendar.
+
+### Codebase Patterns discovered (reusable)
+- DATE-WINDOW AS A VALUE TYPE: put the weekend (or any rolling window) math in a
+  pure struct with an injectable Calendar + a `now` parameter, so the SwiftUI
+  layer just renders and the math is unit-tested without a clock.
+- RANGE FETCH vs DEFAULT FLOOR: the default events query floors at today; a
+  guide that must show a fixed window (incl. earlier-today/earlier-in-window
+  items) needs a dedicated range method rather than reusing the floored one.
+- CORE vs DECORATIVE LOADS: in an aggregator VM, let the primary query own the
+  error state and let secondary rails fail soft (try?) so one missing rail never
+  blanks the whole screen.
+
+### Verification
+No Swift toolchain locally (Linux); macOS xcodebuild + xctest gate runs in CI
+(scheme DesMoinesInsider → DesMoinesInsiderTests). No web/TS files touched.
+Static checks: all 3 new + 3 modified Swift files brace/paren/bracket-balanced
+(comment/string-aware counter); the weekend date math hand-traced against a known
+calendar (2026-06 anchors: Mon Jun 1 → Fri Jun 5) and every WeekendTests assertion;
+APIs verified against existing usage (EventsService .gte/.lt/.order/.limit + withRetry;
+RestaurantsService/AttractionsService featured queries + response field names;
+ContentCard(_:variant:toast:), ToastMessage + .toastOverlay, ShareLink, HomeDestination
+navigation, DiscoverDestination .weekend slug deep-link). project.yml directory sources
+auto-include the new app files + test.
+
+## 2026-06-04 — IOS-PARITY-005 (Best Of community voting) [awaiting CI build]
+
+Continued the IOS-PARITY cluster with community voting — an engagement +
+account-creation funnel. The Discover "Best Of" tile routed to a ComingSoon web
+fallback; it's now a native voting hub + per-category leaderboard against the
+same voting_categories/votes tables the web /best-of uses (useVoting.ts). 74/165
+stories pass. Next: IOS-PARITY-006.
+
+### What shipped
+- NEW Models/Voting.swift — VotingCategory (snake_case CodingKeys; voteCount is
+  a non-column default set after fetch; lucide→SF Symbol icon map; isVotingOpen),
+  Vote (+ resultKey), VoteResult (display/placeholder + a pure, testable
+  `aggregate([Raw])` ranking helper), VoteNominee.
+- NEW Services/VotingService.swift (actor) — fetchCategories (+ per-category
+  counts), fetchResults (aggregate via VoteResult.aggregate, then enrich
+  restaurant/attraction name+image), fetchUserVote, castVote (delete-then-insert
+  = the web upsert, one vote per category), searchNominees (restaurants +
+  attractions ilike), and fetchWinners (entityId→category map of each category's
+  #1 entity pick, fail-soft).
+- NEW Services/BestOfWinners.swift — @Observable (NOT @MainActor, so the card
+  adapters can read it synchronously from both view bodies and unit tests) cache
+  mapping entityId → winning category name.
+- NEW ViewModels/BestOfViewModel.swift — loads categories; static refreshWinners()
+  warms the badge cache. NEW ViewModels/BestOfCategoryViewModel.swift — results +
+  user vote + nominee search; OPTIMISTIC castVote that snapshots, updates the
+  leaderboard + the user's pick locally, then reverts on failure.
+- NEW Views/BestOf/BestOfView.swift — category list (icon, description, vote
+  count) → leaderboard. NEW Views/BestOf/BestOfCategoryView.swift — voting booth
+  (auth-gated: signed-out users see a "Sign in to vote" funnel to AuthView;
+  signed-in users search nominees or write in), inline vote-error, and a ranked
+  leaderboard (medals, % bars, "Your pick" highlight).
+- Unified card system: ContentCardData gains `awardBadge`; ContentCard renders a
+  gold trophy AwardBadge in the image overlay + announces it in VoiceOver;
+  Restaurant.cardData / Attraction.cardData populate it from BestOfWinners. Cache
+  is warmed on Home load (app-wide badges) and re-warmed after each vote.
+- Discover hub .bestOf tile → BestOfView.
+- NEW DesMoinesInsiderTests/VotingTests.swift — category/vote decode, icon map,
+  voting-open window, aggregation ranking (desc by count, custom entries), result
+  display fallbacks, and the winners-cache round-trip.
+
+### Codebase Patterns discovered (reusable)
+- OPTIMISTIC + REVERT: snapshot the affected state, mutate locally for instant
+  feedback, await the write, and on throw restore the snapshot + set an error
+  that clears on the next attempt — no spinner between tap and leaderboard update.
+- CROSS-CUTTING BADGES FROM A NON-ISOLATED CACHE: when a pure `cardData` adapter
+  (callable from tests + any actor) must reflect server state, read a plain
+  @Observable singleton (NOT @MainActor) so it stays synchronously readable yet
+  still drives SwiftUI re-renders; warm it from a high-traffic screen's .task.
+- PURE AGGREGATION HELPER: lift vote tallying into `VoteResult.aggregate([Raw])`
+  so ranking is unit-tested without the network, and the actor just maps rows in.
+- AUTH AS A SOFT FUNNEL: gate the write, but render a "create account" CTA inline
+  (not an error) so the gate doubles as a signup driver.
+
+### Verification
+No Swift toolchain locally (Linux); macOS xcodebuild + xctest gate runs in CI
+(scheme DesMoinesInsider → DesMoinesInsiderTests). No web/TS files touched.
+Static checks: all 7 new + 3 modified Swift files brace/paren/bracket-balanced
+(comment/string-aware counter); APIs verified against existing usage (.eq/.in/
+.ilike(_,pattern:) [supabase-swift v2]/.delete().eq/.insert(Encodable)/.order/.limit,
+withRetry, AuthService.currentUser?.id.uuidString + isAuthenticated, AuthView push,
+@State(wrappedValue:) for a parameterized @Observable VM, Skeleton.block/bar,
+CachedAsyncImage). CodingKeys verified against migration 20260226000003
+(voting_categories/votes) and useVoting.ts. Aggregation + winners logic hand-traced
+against every VotingTests assertion. project.yml directory sources auto-include the
+new app files + test.
+
+## 2026-06-04 — IOS-PARITY-006 (Content hubs: Music/Sports/Outdoors/Neighborhoods) [awaiting CI build]
+
+Continued the IOS-PARITY cluster with the curated content hubs — replacing the
+ComingSoon web fallbacks for the four Discover tiles with real native screens.
+75/165 stories pass. Next: IOS-PARITY-008 (the cluster's remaining stories are
+008/009/010).
+
+### What shipped
+- NEW Models/ContentHub.swift — config enum for Music/Sports/Outdoors: title,
+  editorial blurb, icon/gradient, event `category` ilike terms, attraction
+  types, section titles, and init?(destination:) so deep links map in.
+- NEW Models/Neighborhood.swift — the curated area catalog (mirrors web
+  /neighborhoods: East Village, WDM, Ankeny, …) with blurb/highlights and a
+  `matches(_ location:)` helper for client-side area filtering.
+- Services: EventsService.fetchEventsByCategoryTerms(_:limit:) (upcoming events
+  whose category OR-matches the hub terms — the web .or(category.ilike…) query)
+  and AttractionsService.fetchAttractions(types:limit:) (`.in("type", …)`,
+  featured first).
+- NEW ViewModels/ContentHubViewModel.swift — loads themed events (spine) +
+  attractions + featured dining concurrently; rails fail soft.
+- NEW ViewModels/NeighborhoodViewModel.swift — fetches broad batches of
+  restaurants/attractions/events and filters by area match; when the user opts
+  into location, sorts the place rails nearest-first (the AC's "nearby in this
+  neighborhood" integration).
+- NEW Views/Hubs/ContentHubView.swift — one generic hub screen: hero + blurb,
+  vertical themed-events list, attractions rail, dining rail, and an in-feed
+  AdSlot. Reuses the unified ContentCard everywhere.
+- NEW Views/Neighborhoods/NeighborhoodsView.swift (area list) +
+  NeighborhoodDetailView.swift (dining/things-to-do/events rails + a
+  "Sort by what's nearby" opt-in that requests location and re-sorts).
+- Discover hub: .music/.sports/.outdoors tiles → ContentHubView(hub:);
+  .neighborhoods → NeighborhoodsView. The /music,/sports,/outdoors,/neighborhoods
+  universal links already route to .discover(...), so the hubs are deep-linkable.
+- NEW DesMoinesInsiderTests/ContentHubTests.swift — Discover→hub mapping, every
+  hub has curation config, faithful event/attraction terms, neighborhood
+  catalog + case-insensitive area matching + unique slugs.
+
+### Codebase Patterns discovered (reusable)
+- CONFIG-DRIVEN SCREENS: model a family of near-identical screens (Music/Sports/
+  Outdoors) as one View + an enum of configs, not N bespoke views — new hubs are
+  a config case, not a new screen.
+- BROAD-FETCH + CLIENT FILTER FOR AREAS: there's no clean server-side
+  neighborhood column, so fetch a capped batch and filter by a model
+  `matches(location:)` helper — keeps the query simple and the matching testable.
+- OPT-IN LOCATION SORT: don't demand location on open; offer a "Sort by what's
+  nearby" button that requests permission then re-sorts, so the screen is useful
+  with or without a fix.
+
+### Verification
+No Swift toolchain locally (Linux); macOS xcodebuild + xctest gate runs in CI
+(scheme DesMoinesInsider → DesMoinesInsiderTests). No web/TS files touched.
+Static checks: all 7 new + 3 modified Swift files brace/paren/bracket-balanced
+(comment/string-aware counter); APIs verified against existing usage (EventsService
+.or/.gte/.order/.limit + withRetry; AttractionsService .in("type")/.order; query
+structs all-defaulted so limit-only init compiles; RestaurantsResponse.restaurants /
+AttractionsResponse.attractions / EventsResponse.events; LocationService.userLocation
++ requestPermission; Restaurant.coordinate/city/location/displayLocation,
+Event.city/venue/location; @State(wrappedValue:) parameterized VMs; ContentCard
+variants + toastOverlay). Hub config + neighborhood matching hand-traced against
+every ContentHubTests assertion. project.yml directory sources auto-include the
+new app files + test.
+
+## 2026-06-04 — IOS-PARITY-008/009/010 — IOS-PARITY cluster COMPLETE (10/10) [awaiting CI build]
+
+Closed out the IOS-PARITY cluster with its last three stories. 78/165 stories
+pass. Every Discover-hub tile is now a real native screen (no ComingSoon
+fallbacks remain). Remaining iOS work is the IOS-COMPLY cluster (a11y/offline/
+store-readiness).
+
+### IOS-PARITY-010 — Deals (native, incl. recurring)
+- NEW Models/Deal.swift — decodes the `deals` row incl. DEAL-RECURRING-001
+  fields (days_of_week/start_time/end_time). scheduleText renders consecutive
+  days as a range ("Mon–Fri · 3:00 PM–6:00 PM"), "Daily", or a comma list;
+  isActiveNow(_:calendar:) checks the date window + (recurring) today/time.
+  valueLabel/dealTypeLabel mirror the web getDealTypeLabel.
+- NEW Services/DealsService.swift (actor) — fetchDeals(entityType:) featured-first
+  (+ claimDeal RPC). NEW ViewModels/DealsViewModel.swift — category(entity_type)
+  + active-now + search filtering (client-side over one fetch).
+- NEW Views/Deals/DealsView.swift — value-badge cards with schedule + active-now
+  + sponsored ring (featured = IOS-ADS-011), sticky category/active-now chips,
+  in-feed AdSlot, search; deals with entity_id deep-link to the native listing
+  (DealEntityTarget → Restaurant/Attraction/Event/Hotel detail).
+- Discover hub .deals tile → DealsView (the last tile to go native).
+
+### IOS-PARITY-009 — Reviews & ratings (premium)
+- NEW Models/UserRating.swift (+ ContentRatingAggregate) — decodes user_ratings
+  with the joined author profile; ratingValue/authorName/formattedDate helpers.
+- NEW Services/RatingsService.swift (actor) — fetchRatings (profiles join),
+  fetchAggregate, submitRating (UPSERT onConflict user_id,content_type,content_id
+  = the web behavior), deleteRating, reportRating → rating_abuse_reports.
+- NEW ViewModels/ReviewsViewModel.swift — list + user's own review + aggregate;
+  submit/delete/report; canWriteReviews = StoreKit.hasFeature(.writeReviews).
+- NEW Views/Reviews/ReviewsSection.swift — reusable section + star/text composer.
+  Reading free; writing gated to Insider+ via NEW PaywallContext.writeReviews.
+  Edit/delete own, report others. Embedded on Event/Restaurant/Attraction detail.
+
+### IOS-PARITY-008 — Saved searches + custom alerts (premium + push)
+- NEW Models/SavedSearch.swift — decodes saved_searches; query/tab/alert flag live
+  in the `filters` JSONB (tolerant decode). NEW Services/SavedSearchService.swift
+  (actor) — fetch/create/updateFilters(toggle alert)/delete. NEW ViewModels/
+  SavedSearchesViewModel.swift (shared) — gating via hasFeature(.saveSearches/
+  .createAlerts) + QuotaAction.savedSearches/.alerts per-tier limits; enabling an
+  alert requests push (PushNotificationService).
+- NEW Views/Search/SavedSearchUI.swift — SaveSearchButton (Search toolbar, gated,
+  self-contained name sheet + paywall) + SavedSearchesList (Dashboard manage:
+  alert toggle, delete, tap → results). NEW SavedSearchResultsView — re-runs the
+  query and lists matches (where an alert push deep-links). Dashboard alertsSection
+  now renders the live list; SearchView gains the save button.
+- Server-side: the scheduled new-match alert delivery is a backend job + push;
+  the app stores the saved search + alert flag and registers the device token.
+
+### Codebase Patterns discovered (reusable)
+- UPSERT-ON-CONFLICT for "one row per user/content": mirror the web onConflict
+  key in supabase-swift's upsert(_,onConflict:) so the app and web converge on the
+  same unique constraint instead of read-modify-write.
+- JSONB AS A SCHEMA-LIGHT EXTENSION POINT: store new structured fields (query/tab/
+  alert) inside an existing `filters` jsonb column via a nested Codable with a
+  tolerant decoder — no migration, forward/backward compatible.
+- SELF-CONTAINED GATED ACTION: package a premium action (SaveSearchButton) as one
+  view that owns its VM + sheet + paywall + toast, so hosts just drop it in a
+  toolbar without learning the gating rules.
+- RECURRENCE RENDERING: collapse a weekday set into a range/Daily/list + a 12h
+  time window in the model, keeping the view a dumb label.
+
+### Verification
+No Swift toolchain locally (Linux); macOS xcodebuild + xctest gate runs in CI
+(scheme DesMoinesInsider → DesMoinesInsiderTests). No web/TS files touched.
+Static checks: all new + modified Swift files brace/paren/bracket-balanced
+(comment/string-aware counter, incl. a caught extra-brace in DiscoverHubView's
+now-exhaustive switch). APIs verified against existing usage (supabase-swift v2
+.upsert(_,onConflict:), .insert/.update(Encodable)/.delete().eq, .rpc(_,params:),
+nested-Codable jsonb; StoreKitService.hasFeature + PremiumFeature.QuotaAction
+limits; PushNotificationService.requestPermissionAndRegister; PaywallView(context:)
+incl. the new .writeReviews; ToastMessage factories + .toastOverlay; @State(wrappedValue:)
+parameterized VMs; navigationDestination(item:)/(for:)). Decode contracts verified
+against migrations 20260228000001 + 20260520000015 (deals/recurrence), user_ratings/
+content_rating_aggregates/rating_abuse_reports, and 20250819002500 (saved_searches).
+Schedule/active-now, rating, and saved-search decoding hand-traced against every
+DealsTests/ReviewsTests/SavedSearchTests assertion. project.yml directory sources
+auto-include the new app files + 3 tests.
+
+### IOS-PARITY cluster summary (10/10)
+001 Trip Planner · 002 Articles · 003 Stay/hotels · 004 Weekend · 005 Best Of ·
+006 Content hubs · 007 Dashboard · 008 Saved searches · 009 Reviews · 010 Deals.

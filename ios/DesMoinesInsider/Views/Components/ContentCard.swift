@@ -83,6 +83,10 @@ struct ContentCardData {
     var isPremium = false
     var isSponsored = false
 
+    /// "Best Of" winner badge label (e.g. "Best Pizza"), shown on the card when
+    /// this entity is the current #1 in a voting category (IOS-PARITY-005).
+    var awardBadge: String?
+
     var favorite: CardFavorite?
 
     /// Full VoiceOver description covering everything visible on the card.
@@ -138,10 +142,13 @@ struct ContentCard: View {
         .modifier(CardAccessibility(decorative: decorative, label: accessibilityLabel))
     }
 
-    /// Prefixes "Sponsored" so the paid placement is announced (the visual badge
-    /// is dropped from the combined element on standalone cards).
+    /// Prefixes "Sponsored" / the award so the paid placement and Best-Of win are
+    /// announced (the visual badges are dropped from the combined element).
     private var accessibilityLabel: String {
-        data.isSponsored ? "Sponsored. \(data.accessibilityLabel)" : data.accessibilityLabel
+        var prefix = ""
+        if data.isSponsored { prefix += "Sponsored. " }
+        if let award = data.awardBadge { prefix += "\(award) winner. " }
+        return prefix + data.accessibilityLabel
     }
 
     /// Outer corner radius per variant, so the sponsored ring hugs the card edge.
@@ -179,6 +186,7 @@ struct ContentCard: View {
                 }
                 if data.isSponsored { SponsoredBadge() }
                 if data.isPremium { VipGoldBadge() }
+                if let award = data.awardBadge { AwardBadge(label: award) }
             }
             .padding(8)
         }
@@ -403,6 +411,34 @@ struct SponsoredBadge: View {
             .background(.ultraThinMaterial, in: Capsule())
             .overlay(Capsule().strokeBorder(Color.white.opacity(0.25), lineWidth: 0.5))
             .accessibilityLabel("Sponsored content")
+    }
+}
+
+// MARK: - Best-Of award badge (IOS-PARITY-005)
+
+/// Small "trophy + category" badge for the current #1 in a Best-Of category.
+/// Overlaid on the card image so wins surface across the unified card system.
+struct AwardBadge: View {
+    let label: String
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "trophy.fill")
+                .font(.system(size: 9, weight: .bold))
+            Text(label)
+                .font(.caption2.weight(.semibold))
+                .lineLimit(1)
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .background(
+            LinearGradient(colors: [Color(red: 0.98, green: 0.75, blue: 0.14),
+                                    Color(red: 0.96, green: 0.55, blue: 0.11)],
+                           startPoint: .leading, endPoint: .trailing),
+            in: Capsule()
+        )
+        .accessibilityLabel("\(label) winner")
     }
 }
 
@@ -658,6 +694,7 @@ extension Restaurant {
             accessibilityLabel: "\(name), \(cuisine ?? "restaurant"), \(ratingText)"
         )
         data.isSponsored = isActivelySponsored
+        data.awardBadge = BestOfWinners.shared.winnerLabel(forEntityId: id)
         if let cuisine, !cuisine.isEmpty {
             data.metaPrimary = CardMetaLine(icon: "fork.knife", text: cuisine)
         }
@@ -686,6 +723,7 @@ extension Attraction {
             favorite: .managed(kind: .attraction, id: id, title: name),
             accessibilityLabel: compactCardAccessibilityLabel
         )
+        data.awardBadge = BestOfWinners.shared.winnerLabel(forEntityId: id)
         data.metaPrimary = CardMetaLine(icon: attractionType.icon, text: attractionType.displayName)
         if let location, !location.isEmpty {
             data.metaSecondary = CardMetaLine(icon: "mappin", text: location)

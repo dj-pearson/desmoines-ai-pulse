@@ -53,6 +53,8 @@ struct EventDetailView: View {
                     .padding(.top, 4)
                 }
 
+                ReviewsSection(contentType: "event", contentId: event.id)
+
                 EventDetailRelated(relatedEvents: viewModel.relatedEvents)
             }
             .frame(maxWidth: .infinity)

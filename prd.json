@@ -421,8 +421,8 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 28,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Shipped 2026-06-04. Native Articles & Guides hub (ArticlesView + ArticlesViewModel) backed by the published `articles` table (same source as web /articles), native markdown reader (ArticleMarkdownView + ArticleDetailView) with in-app browser links, free-tier ad slots (AdSlot feed+detail), Favorites/Dashboard saving, recently-viewed + Spotlight indexing, related rail, Dynamic Type/VoiceOver. Wired into Discover hub. Web build untouched; macOS xcodebuild gate runs in CI."
     },
     {
       "id": "IOS-PARITY-003",
@@ -436,8 +436,8 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 29,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Shipped 2026-06-04. Native Where-to-Stay hub (HotelsView + HotelsViewModel) backed by the active `hotels` table (same source as web /stay) with area/price/star filters + sort; HotelDetailView with photo gallery, amenities, MapKit map, and an affiliate Book CTA opening the partner in SFSafariViewController (SafariView) with clickout tracking via AdTrackingService.logAffiliateClick + AnalyticsService. Wired into Discover hub and an ItineraryDetailView (Trip Planner) cross-link; recently-viewed + Spotlight indexing + Dashboard resolution. Web build untouched; macOS xcodebuild in CI."
     },
     {
       "id": "IOS-PARITY-004",
@@ -450,8 +450,8 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 30,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Shipped 2026-06-04. Native This Weekend guide (WeekendView + WeekendViewModel) grouping the Fri–Sun window's events by day plus featured dining + attractions rails (cross-type curation matching web /weekend). WeekendWindow value type computes the Friday-anchored window (mirrors EventsThisWeekend.tsx offsetToFriday); refreshes by current week. EventsService.fetchEventsInRange added (no today-floor). Surfaced via the Home 'This Weekend' rail See-all (HomeDestination.weekend), the Discover hub tile, and the /weekend deep link; ShareLink for sharing. Web build untouched; macOS xcodebuild in CI."
     },
     {
       "id": "IOS-PARITY-005",
@@ -465,8 +465,8 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 31,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Shipped 2026-06-04. Native Best Of voting (BestOfView + BestOfCategoryView) on the same voting_categories/votes backend as web /best-of. Auth-gated voting with one-per-category rule (delete-then-insert), nominee search + write-in, live leaderboard with ranks/percentages, and OPTIMISTIC vote casting that reverts on failure. Signed-out users get a sign-in funnel. Winner badges surface on the unified ContentCard (awardBadge) via a BestOfWinners cache warmed on Home + after each vote. Wired into the Discover hub. Web build untouched; macOS xcodebuild in CI."
     },
     {
       "id": "IOS-PARITY-006",
@@ -480,8 +480,8 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 32,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Shipped 2026-06-04. Native curated hubs: a generic ContentHubView driven by a ContentHub config (Music/Sports/Outdoors) mixing themed upcoming events + themed attractions + featured dining with editorial blurbs (parity with web /music,/sports,/outdoors), plus a Neighborhoods hub (NeighborhoodsView + NeighborhoodDetailView) that matches dining/attractions/events to each area and integrates device location for nearest-first sorting. EventsService.fetchEventsByCategoryTerms + AttractionsService.fetchAttractions(types:) added. Reuses unified cards + rails; each hub has its own ad slot. Reachable from Discover hub + the /music,/sports,/outdoors,/neighborhoods deep links. Web build untouched; macOS xcodebuild in CI."
     },
     {
       "id": "IOS-PARITY-007",
@@ -511,8 +511,8 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 34,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Shipped 2026-06-04. Saved searches + alerts on the saved_searches table: SaveSearchButton in Search (gated to Insider+ via PaywallContext.savedSearches with QuotaAction.savedSearches per-tier limits), a SavedSearchesList managed from the Dashboard (toggle alerts → requests push via PushNotificationService + QuotaAction.alerts limit; delete; tap deep-links to live SavedSearchResultsView). Free users see the feature + contextual paywall. Scheduled new-match delivery is the server job; the app stores the search + alert flag and registers for push. Web build untouched; macOS xcodebuild in CI."
     },
     {
       "id": "IOS-PARITY-009",
@@ -525,8 +525,8 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 35,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Shipped 2026-06-04. Native reviews & ratings via a reusable ReviewsSection embedded on Event/Restaurant/Attraction detail, writing the user_ratings table (upsert onConflict user_id,content_type,content_id; RLS). Reading is free; writing gated to Insider+ via PaywallContext.writeReviews. Star+text composer, author/rating/date display, edit/delete own, and a report affordance → rating_abuse_reports. Web build untouched; macOS xcodebuild in CI."
     },
     {
       "id": "IOS-PARITY-010",
@@ -539,8 +539,8 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 36,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Shipped 2026-06-04. Native Deals (DealsView + DealsService) on the same deals backend as web useDeals, including the recurring fields days_of_week/start_time/end_time rendered as a readable schedule (Mon–Fri · 3:00–6:00 PM) and an active-now check. Category(entity_type)/active-now filters + search; featured deals get the sponsored treatment (IOS-ADS-011); deals with entity_id deep-link to the native listing detail. Discover-hub tile. Web build untouched; macOS xcodebuild in CI."
     },
     {
       "id": "IOS-IA-005",

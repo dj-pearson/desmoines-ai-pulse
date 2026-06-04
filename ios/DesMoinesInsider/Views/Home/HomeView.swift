@@ -180,6 +180,9 @@ struct HomeView: View {
                     // Pushed within Home's NavigationStack, so the hub borrows
                     // this ambient stack rather than nesting its own.
                     DiscoverHubView(ownsNavigationStack: false)
+                case .weekend:
+                    // IOS-PARITY-004 — the dedicated This Weekend guide.
+                    WeekendView(ownsNavigationStack: false)
                 }
             }
             .task {
@@ -191,6 +194,9 @@ struct HomeView: View {
                 if weekendVM.events.isEmpty {
                     weekendVM.selectedDatePreset = .thisWeekend
                 }
+                // IOS-PARITY-005 — warm the Best-Of winners cache so award
+                // badges surface on cards across the app (fail-soft).
+                await BestOfViewModel.refreshWinners()
             }
             .toastOverlay(message: $toast)
         }
@@ -208,7 +214,9 @@ struct HomeView: View {
         case .featured:
             viewModel.showFeaturedOnly = true
         case .thisWeekend:
-            viewModel.selectedDatePreset = .thisWeekend
+            // IOS-PARITY-004 — deep-link into the dedicated weekend guide
+            // instead of just filtering the events list.
+            navigationPath.append(HomeDestination.weekend)
         case .popularRestaurants, .trendingAttractions:
             navigationPath.append(HomeDestination.attractions)
         case .forYou:
@@ -450,6 +458,7 @@ struct HomeView: View {
 enum HomeDestination: Hashable {
     case attractions
     case discoverHub
+    case weekend
 }
 
 #Preview {

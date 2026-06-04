@@ -135,6 +135,30 @@ actor EventsService {
         )
     }
 
+    // MARK: - Fetch Events in a Date Range (IOS-PARITY-004)
+
+    /// Fetches events whose `date` falls in `[start, end)`, ordered soonest
+    /// first. Unlike `fetchEvents`, this does NOT floor at "today" — the
+    /// "This Weekend" screen shows the whole Fri–Sun window even mid-weekend,
+    /// matching the web `/weekend` curation.
+    func fetchEventsInRange(start: Date, end: Date, limit: Int = 100) async throws -> [Event] {
+        try await withRetry { [self] in
+            let client = try db()
+            let startStr = DateParser.toISO(start)
+            let endStr = DateParser.toISO(end)
+            let events: [Event] = try await client
+                .from("events")
+                .select()
+                .gte("date", value: startStr)
+                .lt("date", value: endStr)
+                .order("date", ascending: true)
+                .limit(limit)
+                .execute()
+                .value
+            return events
+        }
+    }
+
     // MARK: - Fetch Single Event
 
     func fetchEvent(id: String) async throws -> Event {
@@ -148,6 +172,32 @@ actor EventsService {
                 .execute()
                 .value
             return event
+        }
+    }
+
+    // MARK: - Fetch by Category Terms (IOS-PARITY-006 content hubs)
+
+    /// Upcoming events whose `category` matches ANY of the given terms (case-
+    /// insensitive), soonest first. Mirrors the web hubs' `.or(category.ilike…)`
+    /// curation (Music/Sports/Outdoors).
+    func fetchEventsByCategoryTerms(_ terms: [String], limit: Int = 20) async throws -> [Event] {
+        guard !terms.isEmpty else { return [] }
+        return try await withRetry { [self] in
+            let client = try db()
+            let today = DateParser.toISO(Calendar.current.startOfDay(for: Date()))
+            let orClause = terms
+                .map { "category.ilike.%\($0.replacingOccurrences(of: "%", with: "\\%"))%" }
+                .joined(separator: ",")
+            let events: [Event] = try await client
+                .from("events")
+                .select()
+                .gte("date", value: today)
+                .or(orClause)
+                .order("date", ascending: true)
+                .limit(limit)
+                .execute()
+                .value
+            return events
         }
     }
 

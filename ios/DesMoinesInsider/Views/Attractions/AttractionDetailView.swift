@@ -13,6 +13,7 @@ struct AttractionDetailView: View {
                 infoSection
                 actionButtons
                 descriptionSection
+                ReviewsSection(contentType: "attraction", contentId: attraction.id)
             }
             .frame(maxWidth: .infinity)
         }

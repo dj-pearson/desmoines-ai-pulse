@@ -59,6 +59,8 @@ struct DiscoverHubView: View {
         .navigationDestination(for: Event.self) { EventDetailView(event: $0) }
         .navigationDestination(for: Restaurant.self) { RestaurantDetailView(restaurant: $0) }
         .navigationDestination(for: Attraction.self) { AttractionDetailView(attraction: $0) }
+        .navigationDestination(for: Article.self) { ArticleDetailView(article: $0) }
+        .navigationDestination(for: Hotel.self) { HotelDetailView(hotel: $0) }
     }
 }
 
@@ -176,8 +178,31 @@ enum DiscoverDestination: String, CaseIterable, Identifiable {
         case .tripPlanner:
             // IOS-PARITY-001 — native AI Trip Planner (inherits the hub's stack).
             TripPlannerView(ownsNavigationStack: false)
-        default:
-            ComingSoonView(title: title, systemImage: systemImage, webURL: webURL)
+        case .articles:
+            // IOS-PARITY-002 — native Articles & Guides hub + reader.
+            ArticlesView(ownsNavigationStack: false)
+        case .stay:
+            // IOS-PARITY-003 — native Where to Stay (hotels) + affiliate booking.
+            HotelsView(ownsNavigationStack: false)
+        case .weekend:
+            // IOS-PARITY-004 — native This Weekend guide.
+            WeekendView(ownsNavigationStack: false)
+        case .bestOf:
+            // IOS-PARITY-005 — native Best Of community voting.
+            BestOfView(ownsNavigationStack: false)
+        case .music, .sports, .outdoors:
+            // IOS-PARITY-006 — curated content hubs.
+            if let hub = ContentHub(destination: self) {
+                ContentHubView(hub: hub, ownsNavigationStack: false)
+            } else {
+                ComingSoonView(title: title, systemImage: systemImage, webURL: webURL)
+            }
+        case .neighborhoods:
+            // IOS-PARITY-006 — neighborhoods hub.
+            NeighborhoodsView(ownsNavigationStack: false)
+        case .deals:
+            // IOS-PARITY-010 — native deals (incl. recurring schedules).
+            DealsView(ownsNavigationStack: false)
         }
     }
 }

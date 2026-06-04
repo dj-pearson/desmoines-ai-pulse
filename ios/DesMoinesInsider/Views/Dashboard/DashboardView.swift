@@ -24,6 +24,8 @@ struct DashboardView: View {
         case event(Event)
         case restaurant(Restaurant)
         case attraction(Attraction)
+        case article(Article)
+        case hotel(Hotel)
         case trip(TripPlan)
 
         var id: String {
@@ -31,6 +33,8 @@ struct DashboardView: View {
             case .event(let e): return "event-\(e.id)"
             case .restaurant(let r): return "restaurant-\(r.id)"
             case .attraction(let a): return "attraction-\(a.id)"
+            case .article(let a): return "article-\(a.id)"
+            case .hotel(let h): return "hotel-\(h.id)"
             case .trip(let t): return "trip-\(t.id)"
             }
         }
@@ -72,9 +76,12 @@ struct DashboardView: View {
             case .event(let e): EventDetailView(event: e)
             case .restaurant(let r): RestaurantDetailView(restaurant: r)
             case .attraction(let a): AttractionDetailView(attraction: a)
+            case .article(let a): ArticleDetailView(article: a)
+            case .hotel(let h): HotelDetailView(hotel: h)
             case .trip(let t): ItineraryDetailView(trip: t)
             }
         }
+        .navigationDestination(for: SavedSearch.self) { SavedSearchResultsView(savedSearch: $0) }
         .sheet(isPresented: $showTripPlanner, onDismiss: { Task { await loadTrips() } }) {
             TripPlannerView(showsCloseButton: true)
         }
@@ -119,9 +126,10 @@ struct DashboardView: View {
                 favStat("Events", favorites.favoriteEventIds.count, "calendar")
                 favStat("Dining", favorites.favoriteRestaurantIds.count, "fork.knife")
                 favStat("Places", favorites.favoriteAttractionIds.count, "mountain.2.fill")
+                favStat("Guides", favorites.favoriteArticleIds.count, "doc.richtext")
             }
             .padding(.horizontal)
-            if favorites.totalFavoritesCount == 0 {
+            if favorites.totalFavoritesCount == 0 && favorites.favoriteArticleIds.isEmpty {
                 EmptyHint(text: "Tap the heart on any listing to save it here.", actionTitle: nil, action: nil)
             }
         }
@@ -129,12 +137,8 @@ struct DashboardView: View {
 
     private var alertsSection: some View {
         SectionContainer(title: "Saved searches & alerts", systemImage: "bell.fill") {
-            // Populated once IOS-PARITY-008 lands; structured here so the
-            // dashboard is complete and never a dead end.
-            EmptyHint(
-                text: "Save a search to get alerts when new matches are added.",
-                actionTitle: nil, action: nil
-            )
+            // IOS-PARITY-008 — manage saved searches + alerts inline.
+            SavedSearchesList()
         }
     }
 
@@ -265,6 +269,10 @@ struct DashboardView: View {
                     detailTarget = .restaurant(try await RestaurantsService.shared.fetchRestaurant(id: item.itemId))
                 case "attraction":
                     detailTarget = .attraction(try await AttractionsService.shared.fetchAttraction(id: item.itemId))
+                case "article":
+                    detailTarget = .article(try await ArticlesService.shared.fetchArticle(id: item.itemId))
+                case "hotel":
+                    detailTarget = .hotel(try await HotelsService.shared.fetchHotel(id: item.itemId))
                 default:
                     break
                 }

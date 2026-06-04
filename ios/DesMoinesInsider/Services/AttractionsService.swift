@@ -112,4 +112,25 @@ actor AttractionsService {
             .value
         return attraction
     }
+
+    // MARK: - Fetch by Types (IOS-PARITY-006 content hubs)
+
+    /// Attractions whose `type` is one of the given raw values (e.g. Outdoors =
+    /// Park/Garden/Zoo), featured first. Used by the curated content hubs.
+    func fetchAttractions(types: [String], limit: Int = 20) async throws -> [Attraction] {
+        guard !types.isEmpty else { return [] }
+        return try await withRetry { [self] in
+            let client = try db()
+            let attractions: [Attraction] = try await client
+                .from("attractions")
+                .select()
+                .in("type", values: types)
+                .order("is_featured", ascending: false)
+                .order("rating", ascending: false, nullsFirst: false)
+                .limit(limit)
+                .execute()
+                .value
+            return attractions
+        }
+    }
 }
