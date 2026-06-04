@@ -2113,3 +2113,65 @@ generic decode); edge function mirrors discover-chat (cors/rateLimit/entitlement
 `AdsMonetizationTests` locks the cross-platform contracts (inventory-class strings,
 surface keys, SponsoredPick decode, advertise deep-link). project.yml directory
 sources auto-include the 4 new app files + test.
+
+## 2026-06-04 — IOS-PARITY-001 (Native AI Trip Planner) [awaiting CI build]
+
+Started the IOS-PARITY cluster (the next-highest priority cluster) with its
+flagship story. The app advertised "AI Trip Planner" in subscription copy but
+had zero implementation — both a parity gap and a broken promise. Now shipped
+end-to-end against the same backend the web uses. 67/165 stories pass; this also
+CLOSES the Trip Planner seam left by IOS-ADS-015. Next: IOS-PARITY-002.
+
+### What shipped
+- NEW Models/TripPlan.swift — TripPlan / TripPlanItem / TripContentDetails /
+  TripPreferences + form option catalogs. Decodes ALL three backend shapes:
+  trip_plans rows (fetchTrips), the generate-itinerary response `tripPlan`
+  (row + items + tips + packingList), and get_trip_itinerary RPC rows. Mirrors
+  src/hooks/useTripPlanner.ts types so web + iOS read identical data.
+- NEW Services/TripPlannerService.swift — generate (generate-itinerary edge fn),
+  fetchTrips, fetchItems (RPC), tripsThisMonth (quota count off created_at),
+  persistOrder (writes trip_plan_items.order_index), share (flips is_public,
+  returns share_code → /trips/shared/<code>), deleteTrip. Offline pre-check on
+  generate; all reads fail soft.
+- NEW Views/TripPlanner/TripPlannerView.swift — input form (dates, interests
+  chips, party stepper + kids toggle, budget/pace pickers, neighborhood →
+  folded into mustSee so it actually steers generation), quota meter, saved-trip
+  list w/ swipe delete. Gating: StoreKitService.hasFeature(.tripPlanner) then
+  PremiumFeature.QuotaAction.tripPlans.isWithinLimit (Insider 5/mo, VIP
+  unlimited, free locked) → PaywallView(.tripPlanner). Fresh itinerary opens in
+  a fullScreenCover; saved ones push via navigationDestination.
+- NEW Views/TripPlanner/ItineraryDetailView.swift — day-by-day cards, MapKit
+  map preview (best-effort CLGeocoder of stop locations, degrades to hidden),
+  drag-to-reorder within a day (EditMode + persistOrder), Share (UIActivity),
+  Add-to-Calendar (EventKit, one event per timed stop on its computed day),
+  tips + packing list. Loading / offline / error states (IOS-COMPLY-004).
+  Hosts the IOS-ADS-015 .tripPlanner SponsoredPickCard (free-tier, labeled).
+- NEW Views/TripPlanner/TripPlannerHomeCard.swift — Home entry point card.
+- Wiring: DiscoverHubView .tripPlanner now returns TripPlannerView (was
+  ComingSoonView); HomeView gains a TripPlannerHomeCard + sheet.
+- NEW DesMoinesInsiderTests/TripPlannerTests.swift — decode contract (generate
+  response + bare list row), 24h→12h time formatting, quota math.
+
+### Codebase Patterns discovered (reusable)
+- BACKEND PARITY: when porting a web feature, decode the EXACT same tables/RPC/
+  edge-function shapes (snake_case CodingKeys) rather than inventing a mobile
+  DTO — generate-itinerary already saves server-side, so the app never
+  re-implements persistence, it just reads trip_plans / get_trip_itinerary.
+- QUOTA-GATED PREMIUM: gate count-limited features with
+  StoreKitService.hasFeature(_:) AND PremiumFeature.QuotaAction.isWithinLimit,
+  deriving the count from the backing table's created_at — not a local counter.
+- MAP PREVIEW without stored coords: CLGeocoder best-effort + MapCameraPosition
+  .automatic frames markers; hide the section when nothing resolves (offline-safe).
+- A pushed-or-presented screen takes `ownsNavigationStack` (see DiscoverHubView)
+  so the same view works as a hub push and as a Home sheet.
+
+### Verification
+No Swift toolchain locally (Linux); macOS xcodebuild + xctest gate runs in CI.
+No web/TS files touched this story. Static checks: all new + modified Swift files
+brace/paren/bracket-balanced; Supabase query API verified against existing usage
+(.order(_,ascending:), .update(struct).eq().execute(), .delete().eq().execute(),
+.rpc(_,params:)); MapKit Map(position:)+Marker matches the existing MapView;
+EventKit requestWriteOnlyAccessToEvents matches EventDetailViewModel; decode
+CodingKeys verified against migration 20251126000001 (trip_plans / trip_plan_items
+/ get_trip_itinerary) and the generate-itinerary response. project.yml directory
+sources auto-include the 5 new app files + test.

@@ -26,6 +26,8 @@ struct HomeView: View {
     @State private var showDiscover = false
     @State private var showAskPulse = false
     @State private var showSurpriseMe = false
+    /// IOS-PARITY-001 — Home entry point into the native Trip Planner.
+    @State private var showTripPlanner = false
     /// Optional override applied when the user opens DiscoverView via the
     /// "Right Now" ribbon (IOS-DISCOVER-2026-005). Cleared after the sheet
     /// is presented so subsequent toolbar Swipe taps go back to the
@@ -56,6 +58,11 @@ struct HomeView: View {
                         onSurprise: { showSurpriseMe = true }
                     )
                     .padding(.top, 12)
+
+                    // Trip Planner Home entry point (IOS-PARITY-001).
+                    TripPlannerHomeCard { showTripPlanner = true }
+                        .padding(.horizontal)
+                        .padding(.top, 10)
 
                     // Smart Presets — one-tap event scenarios
                     EventSmartPresets(viewModel: viewModel)
@@ -152,6 +159,9 @@ struct HomeView: View {
             }
             .fullScreenCover(isPresented: $showSurpriseMe) {
                 SurpriseMeView()
+            }
+            .sheet(isPresented: $showTripPlanner) {
+                TripPlannerView()
             }
             .navigationDestination(for: Event.self) { event in
                 EventDetailView(event: event)

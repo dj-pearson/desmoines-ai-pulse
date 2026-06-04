@@ -171,7 +171,13 @@ enum DiscoverDestination: String, CaseIterable, Identifiable {
     @ViewBuilder
     var destinationView: some View {
         // Each IOS-PARITY-* story replaces its case here with the native screen.
-        ComingSoonView(title: title, systemImage: systemImage, webURL: webURL)
+        switch self {
+        case .tripPlanner:
+            // IOS-PARITY-001 — native AI Trip Planner (inherits the hub's stack).
+            TripPlannerView(ownsNavigationStack: false)
+        default:
+            ComingSoonView(title: title, systemImage: systemImage, webURL: webURL)
+        }
     }
 }
 
