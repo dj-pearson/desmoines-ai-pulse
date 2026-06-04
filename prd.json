@@ -450,8 +450,8 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 30,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Shipped 2026-06-04. Native This Weekend guide (WeekendView + WeekendViewModel) grouping the Fri–Sun window's events by day plus featured dining + attractions rails (cross-type curation matching web /weekend). WeekendWindow value type computes the Friday-anchored window (mirrors EventsThisWeekend.tsx offsetToFriday); refreshes by current week. EventsService.fetchEventsInRange added (no today-floor). Surfaced via the Home 'This Weekend' rail See-all (HomeDestination.weekend), the Discover hub tile, and the /weekend deep link; ShareLink for sharing. Web build untouched; macOS xcodebuild in CI."
     },
     {
       "id": "IOS-PARITY-005",

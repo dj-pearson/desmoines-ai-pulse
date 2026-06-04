@@ -184,6 +184,9 @@ enum DiscoverDestination: String, CaseIterable, Identifiable {
         case .stay:
             // IOS-PARITY-003 — native Where to Stay (hotels) + affiliate booking.
             HotelsView(ownsNavigationStack: false)
+        case .weekend:
+            // IOS-PARITY-004 — native This Weekend guide.
+            WeekendView(ownsNavigationStack: false)
         default:
             ComingSoonView(title: title, systemImage: systemImage, webURL: webURL)
         }

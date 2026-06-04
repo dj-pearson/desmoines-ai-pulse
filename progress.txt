@@ -2438,3 +2438,60 @@ detail; FilterChipView(text:icon:tint:onRemove:); AdTarget .sheet(item:) as in
 SponsoredPickCard; AdTrackingService.logAffiliateClick / AnalyticsService.trackEvent).
 CodingKeys verified against the generated `hotels` Row type and migration
 20260520000000. project.yml directory sources auto-include the new app files + test.
+
+## 2026-06-04 — IOS-PARITY-004 (This Weekend guide) [awaiting CI build]
+
+Continued the IOS-PARITY cluster with the weekend guide — promoting "This
+Weekend" from a Home rail (events filtered to the weekend) into a dedicated
+cross-type curation screen, matching web /weekend. 73/165 stories pass. Next:
+IOS-PARITY-005.
+
+### What shipped
+- NEW Models/WeekendWindow.swift — pure value type computing the Fri–Sun window.
+  Anchors to Friday 00:00 via the same offsetToFriday math as the web
+  EventsThisWeekend.tsx (Sat/Sun resolve to the CURRENT weekend, mid-week to the
+  upcoming one). Exposes friday/saturday/sunday/monday boundaries, a Day enum,
+  `day(for:)` bucketing, and a `rangeLabel` ("June 5 – 7"). Unit-testable
+  (calendar injectable).
+- NEW ViewModels/WeekendViewModel.swift — recomputes the window on refresh
+  ("refreshes by current week"), fetches the weekend's events grouped by day,
+  and pulls featured dining + attractions concurrently. Events are the core
+  (their failure surfaces an error + retry); the featured rails fail soft.
+- NEW Views/Weekend/WeekendView.swift — header (date range + event count),
+  Friday/Saturday/Sunday sections of standard event cards, an in-feed AdSlot,
+  Featured dining + Featured attractions horizontal rails, loading skeletons,
+  empty + error/retry states, pull-to-refresh, and a ShareLink (shareable).
+  ownsNavigationStack flag; declares Event/Restaurant/Attraction destinations.
+- EventsService.fetchEventsInRange(start:end:limit:) — NEW range query that, unlike
+  fetchEvents, does NOT floor at "today", so the whole Fri–Sun window shows even
+  when viewed mid-weekend (web parity).
+- Wiring: Home "This Weekend" rail See-all now pushes HomeDestination.weekend →
+  WeekendView (the deferral the rail's comment called out); Discover hub .weekend
+  tile → WeekendView; the /weekend universal link already routes to
+  .discover(.weekend), so it's deep-linkable into the same screen.
+- NEW DesMoinesInsiderTests/WeekendTests.swift — window starts on a Friday
+  mid-week, Sat/Sun anchor to the current weekend, day bucketing + nil for
+  weekdays, day titles/order. Deterministic via an injected UTC Gregorian calendar.
+
+### Codebase Patterns discovered (reusable)
+- DATE-WINDOW AS A VALUE TYPE: put the weekend (or any rolling window) math in a
+  pure struct with an injectable Calendar + a `now` parameter, so the SwiftUI
+  layer just renders and the math is unit-tested without a clock.
+- RANGE FETCH vs DEFAULT FLOOR: the default events query floors at today; a
+  guide that must show a fixed window (incl. earlier-today/earlier-in-window
+  items) needs a dedicated range method rather than reusing the floored one.
+- CORE vs DECORATIVE LOADS: in an aggregator VM, let the primary query own the
+  error state and let secondary rails fail soft (try?) so one missing rail never
+  blanks the whole screen.
+
+### Verification
+No Swift toolchain locally (Linux); macOS xcodebuild + xctest gate runs in CI
+(scheme DesMoinesInsider → DesMoinesInsiderTests). No web/TS files touched.
+Static checks: all 3 new + 3 modified Swift files brace/paren/bracket-balanced
+(comment/string-aware counter); the weekend date math hand-traced against a known
+calendar (2026-06 anchors: Mon Jun 1 → Fri Jun 5) and every WeekendTests assertion;
+APIs verified against existing usage (EventsService .gte/.lt/.order/.limit + withRetry;
+RestaurantsService/AttractionsService featured queries + response field names;
+ContentCard(_:variant:toast:), ToastMessage + .toastOverlay, ShareLink, HomeDestination
+navigation, DiscoverDestination .weekend slug deep-link). project.yml directory sources
+auto-include the new app files + test.
