@@ -465,8 +465,8 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 31,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Shipped 2026-06-04. Native Best Of voting (BestOfView + BestOfCategoryView) on the same voting_categories/votes backend as web /best-of. Auth-gated voting with one-per-category rule (delete-then-insert), nominee search + write-in, live leaderboard with ranks/percentages, and OPTIMISTIC vote casting that reverts on failure. Signed-out users get a sign-in funnel. Winner badges surface on the unified ContentCard (awardBadge) via a BestOfWinners cache warmed on Home + after each vote. Wired into the Discover hub. Web build untouched; macOS xcodebuild in CI."
     },
     {
       "id": "IOS-PARITY-006",

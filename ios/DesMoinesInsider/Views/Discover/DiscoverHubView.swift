@@ -187,6 +187,9 @@ enum DiscoverDestination: String, CaseIterable, Identifiable {
         case .weekend:
             // IOS-PARITY-004 — native This Weekend guide.
             WeekendView(ownsNavigationStack: false)
+        case .bestOf:
+            // IOS-PARITY-005 — native Best Of community voting.
+            BestOfView(ownsNavigationStack: false)
         default:
             ComingSoonView(title: title, systemImage: systemImage, webURL: webURL)
         }

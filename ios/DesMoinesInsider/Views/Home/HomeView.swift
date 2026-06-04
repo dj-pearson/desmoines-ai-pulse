@@ -194,6 +194,9 @@ struct HomeView: View {
                 if weekendVM.events.isEmpty {
                     weekendVM.selectedDatePreset = .thisWeekend
                 }
+                // IOS-PARITY-005 — warm the Best-Of winners cache so award
+                // badges surface on cards across the app (fail-soft).
+                await BestOfViewModel.refreshWinners()
             }
             .toastOverlay(message: $toast)
         }

@@ -2495,3 +2495,69 @@ RestaurantsService/AttractionsService featured queries + response field names;
 ContentCard(_:variant:toast:), ToastMessage + .toastOverlay, ShareLink, HomeDestination
 navigation, DiscoverDestination .weekend slug deep-link). project.yml directory sources
 auto-include the new app files + test.
+
+## 2026-06-04 — IOS-PARITY-005 (Best Of community voting) [awaiting CI build]
+
+Continued the IOS-PARITY cluster with community voting — an engagement +
+account-creation funnel. The Discover "Best Of" tile routed to a ComingSoon web
+fallback; it's now a native voting hub + per-category leaderboard against the
+same voting_categories/votes tables the web /best-of uses (useVoting.ts). 74/165
+stories pass. Next: IOS-PARITY-006.
+
+### What shipped
+- NEW Models/Voting.swift — VotingCategory (snake_case CodingKeys; voteCount is
+  a non-column default set after fetch; lucide→SF Symbol icon map; isVotingOpen),
+  Vote (+ resultKey), VoteResult (display/placeholder + a pure, testable
+  `aggregate([Raw])` ranking helper), VoteNominee.
+- NEW Services/VotingService.swift (actor) — fetchCategories (+ per-category
+  counts), fetchResults (aggregate via VoteResult.aggregate, then enrich
+  restaurant/attraction name+image), fetchUserVote, castVote (delete-then-insert
+  = the web upsert, one vote per category), searchNominees (restaurants +
+  attractions ilike), and fetchWinners (entityId→category map of each category's
+  #1 entity pick, fail-soft).
+- NEW Services/BestOfWinners.swift — @Observable (NOT @MainActor, so the card
+  adapters can read it synchronously from both view bodies and unit tests) cache
+  mapping entityId → winning category name.
+- NEW ViewModels/BestOfViewModel.swift — loads categories; static refreshWinners()
+  warms the badge cache. NEW ViewModels/BestOfCategoryViewModel.swift — results +
+  user vote + nominee search; OPTIMISTIC castVote that snapshots, updates the
+  leaderboard + the user's pick locally, then reverts on failure.
+- NEW Views/BestOf/BestOfView.swift — category list (icon, description, vote
+  count) → leaderboard. NEW Views/BestOf/BestOfCategoryView.swift — voting booth
+  (auth-gated: signed-out users see a "Sign in to vote" funnel to AuthView;
+  signed-in users search nominees or write in), inline vote-error, and a ranked
+  leaderboard (medals, % bars, "Your pick" highlight).
+- Unified card system: ContentCardData gains `awardBadge`; ContentCard renders a
+  gold trophy AwardBadge in the image overlay + announces it in VoiceOver;
+  Restaurant.cardData / Attraction.cardData populate it from BestOfWinners. Cache
+  is warmed on Home load (app-wide badges) and re-warmed after each vote.
+- Discover hub .bestOf tile → BestOfView.
+- NEW DesMoinesInsiderTests/VotingTests.swift — category/vote decode, icon map,
+  voting-open window, aggregation ranking (desc by count, custom entries), result
+  display fallbacks, and the winners-cache round-trip.
+
+### Codebase Patterns discovered (reusable)
+- OPTIMISTIC + REVERT: snapshot the affected state, mutate locally for instant
+  feedback, await the write, and on throw restore the snapshot + set an error
+  that clears on the next attempt — no spinner between tap and leaderboard update.
+- CROSS-CUTTING BADGES FROM A NON-ISOLATED CACHE: when a pure `cardData` adapter
+  (callable from tests + any actor) must reflect server state, read a plain
+  @Observable singleton (NOT @MainActor) so it stays synchronously readable yet
+  still drives SwiftUI re-renders; warm it from a high-traffic screen's .task.
+- PURE AGGREGATION HELPER: lift vote tallying into `VoteResult.aggregate([Raw])`
+  so ranking is unit-tested without the network, and the actor just maps rows in.
+- AUTH AS A SOFT FUNNEL: gate the write, but render a "create account" CTA inline
+  (not an error) so the gate doubles as a signup driver.
+
+### Verification
+No Swift toolchain locally (Linux); macOS xcodebuild + xctest gate runs in CI
+(scheme DesMoinesInsider → DesMoinesInsiderTests). No web/TS files touched.
+Static checks: all 7 new + 3 modified Swift files brace/paren/bracket-balanced
+(comment/string-aware counter); APIs verified against existing usage (.eq/.in/
+.ilike(_,pattern:) [supabase-swift v2]/.delete().eq/.insert(Encodable)/.order/.limit,
+withRetry, AuthService.currentUser?.id.uuidString + isAuthenticated, AuthView push,
+@State(wrappedValue:) for a parameterized @Observable VM, Skeleton.block/bar,
+CachedAsyncImage). CodingKeys verified against migration 20260226000003
+(voting_categories/votes) and useVoting.ts. Aggregation + winners logic hand-traced
+against every VotingTests assertion. project.yml directory sources auto-include the
+new app files + test.
