@@ -2276,3 +2276,90 @@ Swift files brace/paren/bracket-balanced; HomeRailsView already accepted `order:
 SidebarSelection/Tab Hashable for List selection; ordering algorithm hand-traced
 against every HomeRailOrderingTests assertion. project.yml directory sources
 auto-include the new file + tests.
+
+## 2026-06-04 — IOS-PARITY-002 (Articles / Guides hub + native reader) [awaiting CI build]
+
+Continued the IOS-PARITY cluster (the highest-priority cluster with open
+stories) with the Articles/Guides surface. The Discover hub advertised
+"Articles & Guides" but routed to a ComingSoon web fallback — now it's a fully
+native hub + reader against the same `articles` table the web /articles page
+reads (src/hooks/useArticles.ts). This adds SEO/long-form dwell-time content and
+in-reader ad/affiliate inventory to the app. 71/165 stories pass. Next:
+IOS-PARITY-003.
+
+### What shipped
+- NEW Models/Article.swift — decodes the `articles` table row (snake_case
+  CodingKeys identical to the web shape). Computed: displayCategory (web
+  "General" fallback), displaySummary (excerpt, else a derived lead paragraph
+  with inline markdown stripped), reading time (200-wpm heuristic matching
+  src/pages/ArticleDetails.tsx), tolerant ISO-8601 date parse, webURL, VoiceOver
+  card label, and a `cardData` adapter into the unified ContentCard (IOS-IA-003).
+- NEW Services/ArticlesService.swift (actor, mirrors AttractionsService) —
+  fetchArticles (status='published', search OR-ilike across title/excerpt/
+  category, category filter, published_at→created_at ordering, paginated),
+  fetchArticle(id:)/(slug:), fetchRelated (same category, fail-soft),
+  fetchCategories (distinct, for chips), incrementViewCount (best-effort, parity
+  with web). All reads via withRetry; related/categories/view-count fail soft.
+- NEW ViewModels/ArticlesViewModel.swift — search debounce, single category
+  filter, pagination + loadMoreIfNeeded, refresh; re-indexes the visible set
+  into Spotlight on each refresh.
+- NEW Views/Articles/ArticlesView.swift — list/hub with sticky category chips
+  (StickyFilterBar / IOS-IA-004), unified ContentCard(.listRow) rows, in-feed
+  AdSlot(.feed) after AdConfig.inFeedFirstSlot (free-tier only), skeletons,
+  empty/error/retry states, pull-to-refresh, searchable. ownsNavigationStack
+  flag so it works standalone OR pushed from the Discover hub.
+- NEW Views/Articles/ArticleMarkdownView.swift — native renderer for the GFM
+  markdown the editor emits (web uses ReactMarkdown+remarkGfm). Parses blocks
+  (headings, paragraphs, standalone images, ordered/unordered lists,
+  blockquotes, fenced code, rules); inline bold/italic/code/links via
+  AttributedString(markdown:). Dynamic Type + VoiceOver friendly (headings get
+  .isHeader, images get alt labels) — no fixed font sizes, no WKWebView for body.
+- NEW Views/Articles/ArticleDetailView.swift — the reader: hero image, category/
+  date/reading-time meta, save (bookmark) + share toolbar, body via
+  ArticleMarkdownView with an OpenURLAction that routes web links into an in-app
+  browser (WebViewPage sheet) and hands off mailto:/tel: to the system, a
+  free-tier AdSlot(.detail) inside the reader (IOS-ADS-010/012), and a related
+  rail (compact ContentCards). On appear: records RecentlyViewed ("article"),
+  Spotlight-indexes itself, bumps view_count, loads related.
+- Favorites (Services/FavoritesService.swift): added article saves
+  (favoriteArticleIds, toggleFavoriteArticle, isArticleFavorited,
+  fetchFavoriteArticles) using `user_article_interactions` with a UserDefaults
+  fallback (table not shipped yet — same pattern as restaurants/attractions).
+  DELIBERATELY excluded from the premium favorites CAP and totalFavoritesCount:
+  saving editorial content is always free and shouldn't burn the "3 favorites"
+  gate. Cleared on reset().
+- Spotlight (Services/SpotlightService.swift): indexArticles(_:) with a dedicated
+  domain so guides are searchable from system Spotlight.
+- Dashboard (Views/Dashboard/DashboardView.swift): added a "Guides" saved stat,
+  an .article DetailTarget case, and openRecent article resolution so a
+  recently-viewed guide on "Jump back in" opens the native reader.
+- Discover hub: .articles tile now returns ArticlesView(ownsNavigationStack:
+  false) instead of ComingSoonView; added .navigationDestination(for: Article.self).
+- NEW DesMoinesInsiderTests/ArticlesTests.swift — decode contract (full +
+  minimal rows), reading-time/summary heuristics, card adapter, and the markdown
+  parser (headings/paragraphs/images, bullet+ordered lists, blockquote+rule).
+
+### Codebase Patterns discovered (reusable)
+- NATIVE MARKDOWN: parse the stored GFM into a small block enum and render each
+  block in SwiftUI (AttributedString only for inline syntax) — gives real
+  Dynamic Type / VoiceOver and avoids a WKWebView for body content. Route link
+  taps through a single `.environment(\.openURL, OpenURLAction{…})` so the host
+  decides in-app-browser vs system handoff.
+- FREE-vs-PREMIUM SAVES: not every "save" belongs in the premium favorites cap.
+  Keep editorial saves in a separate id set that's excluded from
+  totalFavoritesCount so the upsell gate stays scoped to listings.
+- SELF-HOSTING DETAIL SCREENS: a detail view that has its own internal links
+  (related rail) declares its OWN `.navigationDestination(for: Model.self)` so it
+  works under item-based hosts (Dashboard) as well as value-based stacks
+  (Discover/list). Benign duplicate-registration when a list also declares it.
+
+### Verification
+No Swift toolchain locally (Linux); macOS xcodebuild + xctest gate runs in CI
+(scheme DesMoinesInsider → DesMoinesInsiderTests). No web/TS files touched.
+Static checks: all 8 new + 4 modified Swift files brace/paren/bracket-balanced
+(comment- and string-aware counter); Supabase query API verified against existing
+usage (.or/.eq/.neq filters, .order(_,ascending:,nullsFirst:) chaining, .range,
+.in, .single, .update(Encodable).eq, withRetry trailing closure); markdown parser
+hand-traced against every ArticlesTests assertion; CodingKeys verified against
+migration 20250825195148 (articles table) and src/hooks/useArticles.ts. project.yml
+directory sources auto-include the new app files + test.

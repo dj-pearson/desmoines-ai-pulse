@@ -24,6 +24,7 @@ struct DashboardView: View {
         case event(Event)
         case restaurant(Restaurant)
         case attraction(Attraction)
+        case article(Article)
         case trip(TripPlan)
 
         var id: String {
@@ -31,6 +32,7 @@ struct DashboardView: View {
             case .event(let e): return "event-\(e.id)"
             case .restaurant(let r): return "restaurant-\(r.id)"
             case .attraction(let a): return "attraction-\(a.id)"
+            case .article(let a): return "article-\(a.id)"
             case .trip(let t): return "trip-\(t.id)"
             }
         }
@@ -72,6 +74,7 @@ struct DashboardView: View {
             case .event(let e): EventDetailView(event: e)
             case .restaurant(let r): RestaurantDetailView(restaurant: r)
             case .attraction(let a): AttractionDetailView(attraction: a)
+            case .article(let a): ArticleDetailView(article: a)
             case .trip(let t): ItineraryDetailView(trip: t)
             }
         }
@@ -119,9 +122,10 @@ struct DashboardView: View {
                 favStat("Events", favorites.favoriteEventIds.count, "calendar")
                 favStat("Dining", favorites.favoriteRestaurantIds.count, "fork.knife")
                 favStat("Places", favorites.favoriteAttractionIds.count, "mountain.2.fill")
+                favStat("Guides", favorites.favoriteArticleIds.count, "doc.richtext")
             }
             .padding(.horizontal)
-            if favorites.totalFavoritesCount == 0 {
+            if favorites.totalFavoritesCount == 0 && favorites.favoriteArticleIds.isEmpty {
                 EmptyHint(text: "Tap the heart on any listing to save it here.", actionTitle: nil, action: nil)
             }
         }
@@ -265,6 +269,8 @@ struct DashboardView: View {
                     detailTarget = .restaurant(try await RestaurantsService.shared.fetchRestaurant(id: item.itemId))
                 case "attraction":
                     detailTarget = .attraction(try await AttractionsService.shared.fetchAttraction(id: item.itemId))
+                case "article":
+                    detailTarget = .article(try await ArticlesService.shared.fetchArticle(id: item.itemId))
                 default:
                     break
                 }

@@ -59,6 +59,7 @@ struct DiscoverHubView: View {
         .navigationDestination(for: Event.self) { EventDetailView(event: $0) }
         .navigationDestination(for: Restaurant.self) { RestaurantDetailView(restaurant: $0) }
         .navigationDestination(for: Attraction.self) { AttractionDetailView(attraction: $0) }
+        .navigationDestination(for: Article.self) { ArticleDetailView(article: $0) }
     }
 }
 
@@ -176,6 +177,9 @@ enum DiscoverDestination: String, CaseIterable, Identifiable {
         case .tripPlanner:
             // IOS-PARITY-001 — native AI Trip Planner (inherits the hub's stack).
             TripPlannerView(ownsNavigationStack: false)
+        case .articles:
+            // IOS-PARITY-002 — native Articles & Guides hub + reader.
+            ArticlesView(ownsNavigationStack: false)
         default:
             ComingSoonView(title: title, systemImage: systemImage, webURL: webURL)
         }

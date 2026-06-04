@@ -94,6 +94,39 @@ actor SpotlightService {
         }
     }
 
+    // MARK: - Index Articles (IOS-PARITY-002)
+
+    func indexArticles(_ articles: [Article]) async {
+        let items = articles.map { article -> CSSearchableItem in
+            let attributes = CSSearchableItemAttributeSet(contentType: .content)
+            attributes.title = article.title
+            attributes.contentDescription = article.displaySummary
+            attributes.keywords = ([article.displayCategory, "guide", "article"]
+                + (article.tags ?? []))
+                .filter { !$0.isEmpty }
+
+            if let date = article.date {
+                attributes.contentCreationDate = date
+            }
+
+            if let imageUrl = article.featuredImageUrl {
+                attributes.thumbnailURL = URL(string: imageUrl)
+            }
+
+            return CSSearchableItem(
+                uniqueIdentifier: "article-\(article.id)",
+                domainIdentifier: "com.desmoines.aipulse.articles",
+                attributeSet: attributes
+            )
+        }
+
+        do {
+            try await CSSearchableIndex.default().indexSearchableItems(items)
+        } catch {
+            AppLogger.general.error("Spotlight indexing error (articles): \(error.localizedDescription)")
+        }
+    }
+
     // MARK: - Remove
 
     func removeAllItems() async {

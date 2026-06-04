@@ -23,6 +23,7 @@ final class RecentlyViewedService {
             case "event": return "calendar"
             case "restaurant": return "fork.knife"
             case "attraction": return "mountain.2.fill"
+            case "article": return "doc.richtext"
             default: return "mappin.and.ellipse"
             }
         }

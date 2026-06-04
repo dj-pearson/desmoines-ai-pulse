@@ -421,8 +421,8 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 28,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Shipped 2026-06-04. Native Articles & Guides hub (ArticlesView + ArticlesViewModel) backed by the published `articles` table (same source as web /articles), native markdown reader (ArticleMarkdownView + ArticleDetailView) with in-app browser links, free-tier ad slots (AdSlot feed+detail), Favorites/Dashboard saving, recently-viewed + Spotlight indexing, related rail, Dynamic Type/VoiceOver. Wired into Discover hub. Web build untouched; macOS xcodebuild gate runs in CI."
     },
     {
       "id": "IOS-PARITY-003",
