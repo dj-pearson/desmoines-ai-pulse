@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -55,6 +55,7 @@ const PLACEMENT_OPTIONS = (Object.values(PLACEMENT_SPECS) as typeof PLACEMENT_SP
 
 export default function Advertise() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const { user } = useAuth();
   const { createCampaign, createCheckoutSession, isLoading } = useCampaigns();
@@ -71,6 +72,21 @@ export default function Advertise() {
   useEffect(() => {
     fetchRateCard().then(setRateCard);
   }, []);
+
+  // Pre-fill the linked listing when arriving from the in-app "Promote this
+  // listing" entry (IOS-ADS-016): /advertise?listingType=event&listingId=…&listingName=…
+  useEffect(() => {
+    const listingType = searchParams.get("listingType");
+    const listingId = searchParams.get("listingId");
+    const listingName = searchParams.get("listingName");
+    if (
+      (listingType === "event" || listingType === "restaurant") &&
+      listingId &&
+      listingName
+    ) {
+      setLinkedListing({ type: listingType, id: listingId, name: listingName });
+    }
+  }, [searchParams]);
 
   const hasSponsoredListing = selectedPlacements.some(p => p.type === 'sponsored_listing');
 

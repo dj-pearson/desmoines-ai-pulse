@@ -121,6 +121,13 @@ struct ProfileView: View {
                 .disabled(viewModel.isSaving)
             }
 
+            // For Businesses — advertiser-acquisition funnel (IOS-ADS-016).
+            // Opens the web advertiser portal in Safari (not StoreKit) because
+            // this is advertising for a real-world business, not an in-app good.
+            Section("For Businesses") {
+                PromoteListingButton(listing: nil, style: .row)
+            }
+
             // App Section
             Section {
                 Button {

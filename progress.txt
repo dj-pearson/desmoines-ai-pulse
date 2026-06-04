@@ -2030,3 +2030,86 @@ PaywallContext, AffiliateAdBanner(placement:)); ad_impressions/ad_clicks insert
 shape verified against src/integrations/supabase/types.ts; sponsored columns
 verified against migration 20260303000001_add_sponsored_listings.sql. project.yml
 directory sources auto-include the new files + test.
+
+## 2026-06-04 — IOS-ADS-014/015/016 (ad analytics parity, AI-flow sponsored picks, advertiser funnel) — IOS-ADS cluster complete [awaiting CI build]
+
+Completed the highest-priority incomplete cluster (IOS-ADS) by shipping the final
+three stories in priority order. All paid/affiliate/sponsored/house inventory now
+shares one viewability + tracking + offline contract, the AI discovery flows carry
+a server-driven sponsored placement, and business owners have a compliant
+advertiser entry point. 23→26 IOS stories pass (66/165 overall). Next: IOS-PARITY-001.
+
+### IOS-ADS-014 — Ad analytics parity (viewability, dedupe, offline, inventory class)
+- NEW `Views/Components/AdViewabilityModifier.swift`: SwiftUI `.trackAdViewability`
+  modifier (GeometryReader + dwell Task) firing once at >=50% on-screen for >=1s —
+  the IntersectionObserver rule from `src/lib/tracking.ts`, ported. Wired into
+  AdBannerView (campaign creative + house banner) and AffiliateAdBanner so EVERY
+  inventory class counts impressions on the same bar (was: fire-on-appear).
+- `Services/AdTrackingService.swift`:
+  - `AdInventoryClass {paid_campaign, affiliate, sponsored_listing, house_ad}`
+    stamped into every analytics payload; added affiliate impression/click logging.
+  - `shouldShowAd(campaignId:)` mirrors web `shouldShowAd` (<=3/campaign/session
+    in 5min, <=10/signed-in-user/day; errors fail OPEN). AdBannerView gates the
+    campaign impression behind it.
+  - Durable offline queue (UserDefaults `ad_pending_events_v1`, capped at 200):
+    impressions/clicks enqueue when `NetworkMonitor.isConnected` is false OR an
+    insert throws; `flushPendingEvents()` drains best-effort. Paid rows now also
+    carry `date` to match the web insert shape exactly.
+- `Services/NetworkMonitor.swift`: on reconnect, kicks `flushPendingEvents()`.
+- `App/DesMoinesInsiderApp.swift`: also flushes on launch.
+
+### IOS-ADS-015 — Sponsored picks inside Ask Pulse / Surprise Me / Trip Planner
+- NEW `supabase/functions/get-sponsored-pick/index.ts` (+ `[functions.get-sponsored-pick]
+  verify_jwt=false` in config.toml): server owns relevance + labeling. Resolves AT
+  MOST ONE active sponsored listing from `campaigns` (status=active, today within
+  flight — same predicate as `get_active_ads`) joined to `sponsored_listing_links`,
+  with a light `query` ilike match on title/category and a graceful unfiltered
+  fallback. Premium callers (bearer token → `resolveEntitledTier`) get `pick:null`.
+  Public content, so JWT optional; anonymous/free callers eligible. Per-IP rate limited.
+- NEW `Services/SponsoredPickService.swift`: free-tier short-circuit + functions.invoke
+  client; tracks via AdTrackingService under the sponsored_listing class.
+- NEW `Views/Components/SponsoredPickCard.swift`: self-contained labeled card —
+  viewability impression, click → in-app WebViewPage to the canonical listing URL.
+- AskPulseView: after picks load, renders one labeled SponsoredPickCard among picks.
+- SurpriseMeView: every Nth roll (`AdConfig.surpriseMeSponsoredEveryNthRoll`, never
+  the first roll) returns a labeled sponsored reveal instead of an organic pick.
+- AdConfig: `aiFlowMaxSponsored`, `surpriseMeSponsoredEveryNthRoll`.
+- SEAM: the `.tripPlanner` surface is built + ready; its render call-site lands with
+  IOS-PARITY-001 (Trip Planner not yet implemented) — documented honestly, not faked.
+
+### IOS-ADS-016 — In-app "Promote this listing" advertiser funnel
+- NEW `Views/Components/PromoteListing.swift`: `BusinessPromotion` URL builder,
+  `SafariView` (SFSafariViewController wrapper), `PromoteListingButton`. Checkout
+  routes to the web campaign flow (/advertise → create-campaign-checkout/Stripe) in
+  SFSafariViewController — NOT StoreKit — with the App Review rationale (real-world
+  business advertising is not an in-app digital good; Guidelines 3.1.1/3.1.3)
+  written into the code. No native StoreKit purchase UI for advertising.
+- Entry points: Event/Restaurant detail (admin/owner-gated via `AuthService.isAdmin`)
+  and a "For Businesses" row in Profile (all users).
+- WEB `src/pages/Advertise.tsx`: now reads `listingType`/`listingId`/`listingName`
+  query params and pre-fills the ListingPicker (additive, backward-compatible).
+
+### Codebase Patterns discovered (reusable)
+- IMPRESSION VIEWABILITY: prefer `.trackAdViewability { … }` over `.task`/`.onAppear`
+  for any ad/sponsored impression so in-app numbers match the web's 50%/1s rule.
+- OFFLINE TELEMETRY: AdTrackingService owns a durable queue flushed by NetworkMonitor
+  on reconnect + on launch; route new ad event types through it, never fire-and-forget
+  network inserts for billing-relevant events.
+- ADVERTISER (real-world) PURCHASES must use SFSafariViewController → web Stripe, never
+  StoreKit; only consumer subscriptions (IOS-SUB-*) use IAP. Keep that split explicit.
+- SERVER-DRIVEN AD ELIGIBILITY: relevance/labeling/flight rules live in an edge
+  function (get-sponsored-pick), the app only renders + caps cadence.
+
+### Verification
+No Swift toolchain locally (Linux); macOS xcodebuild + xctest gate runs in CI.
+Web gate GREEN for the touched file: `npm run type-check` passes; `npx eslint
+src/pages/Advertise.tsx` → 0 errors (the lone repo lint error is pre-existing in
+src/components/media/VideoPlayer.tsx, untouched). Static Swift checks: all 15
+touched/created files brace/paren/bracket-balanced; Supabase query API verified
+against existing usage (`.eq(_,value:)`, `.gte(_,value:)`, `.functions.invoke`
+generic decode); edge function mirrors discover-chat (cors/rateLimit/entitlements,
+`sanitizePostgrestPattern`); sponsored predicate verified against
+20260227000000 get_active_ads and 20260303000001 sponsored_listing_links. New
+`AdsMonetizationTests` locks the cross-platform contracts (inventory-class strings,
+surface keys, SponsoredPick decode, advertise deep-link). project.yml directory
+sources auto-include the 4 new app files + test.

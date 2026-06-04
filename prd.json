@@ -357,8 +357,8 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 24,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "IMPLEMENTED (this session). Viewability parity: new AdViewabilityModifier (Views/Components/AdViewabilityModifier.swift) fires an impression only at >=50% on-screen for >=1s, matching the web IntersectionObserver in src/lib/tracking.ts; wired into AdBannerView (campaign + house) and AffiliateAdBanner. Dedupe per campaign+creative+session retained. Frequency-cap parity: AdTrackingService.shouldShowAd mirrors web shouldShowAd (<=3/campaign/session/5min, <=10/user/day, fail-open). Inventory class: AdInventoryClass {paid_campaign, affiliate, sponsored_listing, house_ad} stamped into every analytics payload; paid clicks/impressions still posted to ad_impressions/ad_clicks (same tables/columns as web, now incl. date). Offline-safe: durable UserDefaults queue (capped) enqueues impressions/clicks when NetworkMonitor.isConnected is false or an insert fails, flushed on reconnect (NetworkMonitor hook) and on app launch (DesMoinesInsiderApp .task). Tests: AdsMonetizationTests locks the inventory-class contract."
     },
     {
       "id": "IOS-ADS-015",
@@ -373,8 +373,8 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 25,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "IMPLEMENTED (this session). Server-driven sponsored injection: new edge function supabase/functions/get-sponsored-pick (verify_jwt=false in config.toml) resolves at most one eligible sponsored listing from active campaigns + sponsored_listing_links (same active predicate as get_active_ads), with light query relevance; premium tiers get pick:null (re-checked server-side). iOS SponsoredPickService gates free-tier-only and tracks via AdTrackingService (sponsored_listing class). Ask Pulse renders one labeled SponsoredPickCard among picks; Surprise Me returns a labeled sponsored result only on every Nth roll (AdConfig.surpriseMeSponsoredEveryNthRoll, never first roll). All AI-surfaced ads carry a visible Sponsored label, are free-tier only, and share tracking + caps. SEAM: the .tripPlanner surface is built and ready; its render call-site lands with IOS-PARITY-001 (Trip Planner not yet implemented)."
     },
     {
       "id": "IOS-ADS-016",
@@ -388,8 +388,8 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 26,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "IMPLEMENTED (this session). In-app advertiser funnel: new PromoteListing.swift (BusinessPromotion URL builder + SafariView SFSafariViewController wrapper + PromoteListingButton). A Promote affordance shows on Event/Restaurant detail (admin/owner-gated via AuthService.isAdmin) and a For Businesses row in Profile (all users). Checkout opens the existing web campaign flow (/advertise -> create-campaign-checkout/Stripe) in SFSafariViewController, NOT StoreKit, with the App Review rationale documented in code (advertising for a real-world business is not an in-app digital good). Web /advertise now reads listingType/listingId/listingName query params and pre-fills the ListingPicker (src/pages/Advertise.tsx). No native StoreKit purchase UI for advertising. Tests: AdsMonetizationTests covers the deep-link builder."
     },
     {
       "id": "IOS-PARITY-001",

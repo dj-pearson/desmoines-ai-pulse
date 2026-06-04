@@ -38,27 +38,34 @@ struct AdBannerView: View {
                 // 1 + 2: campaign creative if live, otherwise affiliate.
                 if let campaign, campaign.imageUrl != nil {
                     campaignCreative(campaign)
+                        // Impression counts only on real viewability (≥50% for ≥1s)
+                        // AND inside the frequency cap — web parity (IOS-ADS-014).
+                        .trackAdViewability {
+                            Task {
+                                guard await tracking.shouldShowAd(campaignId: campaign.campaignId) else { return }
+                                impressionId = await tracking.logImpression(
+                                    campaignId: campaign.campaignId,
+                                    creativeId: campaign.creativeId,
+                                    placement: campaignPlacement.rawValue
+                                )
+                            }
+                        }
                 } else {
                     AffiliateAdBanner(placement: affiliatePlacement)
                 }
 
                 // 3: house ad — always present, so the slot is never empty.
                 houseBanner
+                    // House fill is logged on viewability too, so house-vs-paid
+                    // impression share is measured on the same bar (IOS-ADS-014).
+                    .trackAdViewability {
+                        tracking.logHouseImpression(variant: house.id, placement: campaignPlacement.rawValue)
+                    }
             }
             .task {
                 guard !didLoadCampaign else { return }
                 didLoadCampaign = true
                 campaign = await campaignService.creative(for: campaignPlacement)
-                if let campaign {
-                    impressionId = await tracking.logImpression(
-                        campaignId: campaign.campaignId,
-                        creativeId: campaign.creativeId,
-                        placement: campaignPlacement.rawValue
-                    )
-                }
-                // The house ad below is shown to every free user; log it as fill
-                // so house-vs-paid impression share is measurable.
-                tracking.logHouseImpression(variant: house.id, placement: campaignPlacement.rawValue)
             }
             .sheet(item: $browseTarget) { target in
                 NavigationStack {

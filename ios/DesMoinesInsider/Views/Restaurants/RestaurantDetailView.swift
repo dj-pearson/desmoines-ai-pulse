@@ -9,6 +9,7 @@ struct RestaurantDetailView: View {
     @State private var showSubscription = false
     @State private var favorites = FavoritesService.shared
     @State private var storeKit = StoreKitService.shared
+    @State private var auth = AuthService.shared
 
     private var hasPremiumAccess: Bool {
         storeKit.currentTier == .insider || storeKit.currentTier == .vip
@@ -27,6 +28,16 @@ struct RestaurantDetailView: View {
                     currentTier: storeKit.currentTier,
                     showSubscription: $showSubscription
                 )
+
+                // "Promote this listing" advertiser funnel (IOS-ADS-016) — admin/
+                // owner-only, opens web campaign checkout in Safari (not StoreKit).
+                if auth.isAdmin {
+                    PromoteListingButton(
+                        listing: .restaurant(id: restaurant.id, name: restaurant.name),
+                        style: .inline
+                    )
+                    .padding(.horizontal)
+                }
 
                 AdSlot(.feed)
             }

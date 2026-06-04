@@ -96,6 +96,9 @@ struct DesMoinesInsiderApp: App {
                 // Prune expired cache entries on launch
                 await QueryCache.shared.pruneExpired()
 
+                // Flush any ad telemetry that queued while offline (IOS-ADS-014).
+                await AdTrackingService.shared.flushPendingEvents()
+
                 // Jailbreak check (soft warning, non-blocking)
                 if JailbreakDetector.isJailbroken {
                     showJailbreakWarning = true

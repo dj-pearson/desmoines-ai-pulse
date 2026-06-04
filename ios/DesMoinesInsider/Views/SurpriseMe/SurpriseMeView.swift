@@ -9,6 +9,9 @@ struct SurpriseMeView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var service = SurpriseMeService.shared
     @State private var pick: SurpriseMeService.Pick?
+    /// On every Nth roll a labeled sponsored result is shown instead (IOS-ADS-015).
+    @State private var sponsoredPick: SponsoredPickService.SponsoredPick?
+    @State private var rollCount = 0
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var revealed = false
@@ -25,6 +28,8 @@ struct SurpriseMeView: View {
 
                 if isLoading {
                     loadingState
+                } else if let sponsoredPick {
+                    sponsoredReveal(for: sponsoredPick)
                 } else if let pick {
                     revealCard(for: pick)
                 } else if let errorMessage {
@@ -119,6 +124,40 @@ struct SurpriseMeView: View {
         }
     }
 
+    /// Labeled sponsored reveal (IOS-ADS-015) — shown occasionally instead of an
+    /// organic pick. "Try another" rolls a fresh (organic) surprise.
+    private func sponsoredReveal(for sponsored: SponsoredPickService.SponsoredPick) -> some View {
+        VStack(spacing: 16) {
+            Spacer(minLength: 0)
+            SponsoredPickCard(pick: sponsored, surface: .surpriseMe)
+                .padding(.horizontal)
+
+            Button {
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                Task {
+                    sponsoredPick = nil
+                    await load(forceOrganic: true)
+                }
+            } label: {
+                Label("Try another", systemImage: "arrow.clockwise")
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .foregroundStyle(.primary)
+                    .font(.subheadline.weight(.semibold))
+            }
+            .padding(.horizontal)
+            .accessibilityHint("Rolls a new surprise pick")
+            Spacer(minLength: 0)
+        }
+        .scaleEffect(revealed ? 1.0 : 0.92)
+        .opacity(revealed ? 1.0 : 0)
+        .onAppear {
+            withAnimation(.spring(response: 0.55, dampingFraction: 0.75)) {
+                revealed = true
+            }
+        }
+    }
+
     private func errorState(_ message: String) -> some View {
         VStack(spacing: 12) {
             Image(systemName: "exclamationmark.triangle.fill")
@@ -152,10 +191,24 @@ struct SurpriseMeView: View {
 
     // MARK: - Actions
 
-    private func load() async {
+    private func load(forceOrganic: Bool = false) async {
         isLoading = true
         errorMessage = nil
         revealed = false
+        sponsoredPick = nil
+        rollCount += 1
+
+        // Every Nth roll, try a labeled sponsored result instead (capped, never
+        // every roll, free-tier only — IOS-ADS-015). Falls through to organic if
+        // nothing is eligible.
+        if !forceOrganic, rollCount % AdConfig.surpriseMeSponsoredEveryNthRoll == 0 {
+            if let sponsored = await SponsoredPickService.shared.pick(for: .surpriseMe) {
+                sponsoredPick = sponsored
+                isLoading = false
+                return
+            }
+        }
+
         do {
             pick = try await service.surprise(at: LocationService.shared.userLocation)
         } catch {
