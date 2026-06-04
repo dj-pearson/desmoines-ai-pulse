@@ -436,8 +436,8 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 29,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Shipped 2026-06-04. Native Where-to-Stay hub (HotelsView + HotelsViewModel) backed by the active `hotels` table (same source as web /stay) with area/price/star filters + sort; HotelDetailView with photo gallery, amenities, MapKit map, and an affiliate Book CTA opening the partner in SFSafariViewController (SafariView) with clickout tracking via AdTrackingService.logAffiliateClick + AnalyticsService. Wired into Discover hub and an ItineraryDetailView (Trip Planner) cross-link; recently-viewed + Spotlight indexing + Dashboard resolution. Web build untouched; macOS xcodebuild in CI."
     },
     {
       "id": "IOS-PARITY-004",

@@ -24,6 +24,7 @@ final class RecentlyViewedService {
             case "restaurant": return "fork.knife"
             case "attraction": return "mountain.2.fill"
             case "article": return "doc.richtext"
+            case "hotel": return "bed.double.fill"
             default: return "mappin.and.ellipse"
             }
         }

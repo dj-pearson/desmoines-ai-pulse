@@ -79,6 +79,17 @@ struct ItineraryDetailView: View {
                         }
                     }
                 }
+
+                // IOS-PARITY-003 cross-link: turn an itinerary into a booking.
+                Section {
+                    NavigationLink {
+                        HotelsView(ownsNavigationStack: false)
+                    } label: {
+                        Label("Where to stay", systemImage: "bed.double.fill")
+                    }
+                } footer: {
+                    Text("Browse hotels near your plans and book your stay.")
+                }
             }
         }
         .environment(\.editMode, $editMode)

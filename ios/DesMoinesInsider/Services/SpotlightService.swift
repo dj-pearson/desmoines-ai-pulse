@@ -127,6 +127,42 @@ actor SpotlightService {
         }
     }
 
+    // MARK: - Index Hotels (IOS-PARITY-003)
+
+    func indexHotels(_ hotels: [Hotel]) async {
+        let items = hotels.map { hotel -> CSSearchableItem in
+            let attributes = CSSearchableItemAttributeSet(contentType: .content)
+            attributes.title = hotel.name
+            attributes.contentDescription = hotel.shortDescription ?? hotel.description
+            attributes.keywords = ([hotel.displayArea, hotel.hotelType ?? "hotel", "hotel", "stay", "lodging"]
+                + (hotel.chainName.map { [$0] } ?? []))
+                .filter { !$0.isEmpty }
+
+            if let location = hotel.area ?? hotel.city {
+                attributes.namedLocation = location
+            }
+            if let coord = hotel.coordinate {
+                attributes.latitude = NSNumber(value: coord.latitude)
+                attributes.longitude = NSNumber(value: coord.longitude)
+            }
+            if let imageUrl = hotel.imageUrl {
+                attributes.thumbnailURL = URL(string: imageUrl)
+            }
+
+            return CSSearchableItem(
+                uniqueIdentifier: "hotel-\(hotel.id)",
+                domainIdentifier: "com.desmoines.aipulse.hotels",
+                attributeSet: attributes
+            )
+        }
+
+        do {
+            try await CSSearchableIndex.default().indexSearchableItems(items)
+        } catch {
+            AppLogger.general.error("Spotlight indexing error (hotels): \(error.localizedDescription)")
+        }
+    }
+
     // MARK: - Remove
 
     func removeAllItems() async {

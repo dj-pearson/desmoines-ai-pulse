@@ -2363,3 +2363,78 @@ usage (.or/.eq/.neq filters, .order(_,ascending:,nullsFirst:) chaining, .range,
 hand-traced against every ArticlesTests assertion; CodingKeys verified against
 migration 20250825195148 (articles table) and src/hooks/useArticles.ts. project.yml
 directory sources auto-include the new app files + test.
+
+## 2026-06-04 — IOS-PARITY-003 (Where to Stay + affiliate booking) [awaiting CI build]
+
+Continued the IOS-PARITY cluster with the lodging surface — the second revenue
+engine (affiliate, outside Apple's commission) beyond the existing hotel banner.
+The Discover "Where to Stay" tile routed to a ComingSoon web fallback; it's now a
+native browse + detail flow against the same `hotels` table the web /stay page
+reads (src/hooks/useHotels.ts), with a real affiliate Book clickout. 72/165
+stories pass. Next: IOS-PARITY-004.
+
+### What shipped
+- NEW Models/Hotel.swift — decodes the `hotels` row (snake_case CodingKeys
+  matching the web shape). Computed: coordinate, displayArea (area→city
+  fallback), fullAddress, hasAffiliate, bookURL (affiliate_url preferred → website
+  fallback → nil), bookProviderName, affiliatePartnerKey (slugified, for
+  tracking), priceText (price_range → "$X/night"), starText, amenitiesList,
+  galleryImageURLs (hero-first, deduped), webURL, and a `cardData` ContentCard
+  adapter (IOS-IA-003).
+- NEW Services/HotelsService.swift (actor, mirrors AttractionsService + the web
+  useHotels query) — fetchHotels with is_active=true, search OR-ilike, area/
+  price-range `.in` filters, star-rating floor, featured, and a Swift 5.9 switch
+  EXPRESSION for the 5 sort modes (featured/price-low/price-high/rating/name) so
+  we don't name the Postgrest builder types. fetchHotel(id:), fetchAreas()
+  (distinct, fail-soft). Paginated; reads via withRetry.
+- NEW ViewModels/HotelsViewModel.swift — search debounce, multi-select area +
+  price filters, star floor, featured toggle, sort, pagination; re-indexes the
+  visible set into Spotlight on refresh.
+- NEW Views/Stay/HotelsView.swift — browse hub: sticky area chips + price pills +
+  rating menu + active-filter chips (StickyFilterBar / IOS-IA-004), unified
+  ContentCard(.listRow) rows, in-feed AdSlot(.feed), skeleton/empty/error/retry,
+  pull-to-refresh, search, sort menu. ownsNavigationStack flag.
+- NEW Views/Stay/HotelDetailView.swift — paged photo gallery (tap → existing
+  FullScreenImageViewer), star/price/area header, affiliate "Book on <partner>"
+  CTA with FTC-style disclosure that opens the partner in an in-app Safari sheet
+  (SFSafariViewController) — revenue OUTSIDE Apple IAP — plus an amenities grid
+  (icon-mapped), a MapKit map + directions, description, and a free-tier
+  AdSlot(.detail). Records recently-viewed + Spotlight on appear.
+- NEW Views/Components/SafariView.swift — SFSafariViewController UIViewController-
+  Representable for affiliate clickouts (real partner site, its cookies/login,
+  Apple's trusted chrome). Presented via .sheet(item: AdTarget).
+- Affiliate tracking: book() logs AdTrackingService.shared.logAffiliateClick
+  (partner key, placement "hotel_detail") + an AnalyticsService "hotel_book_click"
+  event (IOS-ADS-014 inventory-class accounting).
+- Cross-links: Discover hub .stay tile → HotelsView; ItineraryDetailView (Trip
+  Planner) gains a "Where to stay" section linking into the hub. Spotlight
+  indexHotels; Dashboard .hotel DetailTarget + openRecent resolution;
+  RecentlyViewed "hotel" icon.
+- NEW DesMoinesInsiderTests/HotelsTests.swift — decode (full + minimal rows),
+  bookURL resolution (affiliate-preferred / website-fallback / nil), partner-key
+  slugify, price fallback, card adapter, sort-enum parity.
+
+### Codebase Patterns discovered (reusable)
+- AFFILIATE CLICKOUT: open partner URLs in SFSafariViewController (not WKWebView)
+  so the user gets the real site + login/cookies; log the click to
+  AdTrackingService (affiliate inventory class) BEFORE presenting. Booking stays
+  outside Apple IAP.
+- BOOK-URL RESOLUTION: prefer affiliate_url, fall back to the hotel's own website,
+  else hide the CTA — one computed property keeps the revenue path and the
+  degraded path in one place.
+- SORT WITHOUT NAMING BUILDER TYPES: use a Swift 5.9 `let x = switch …` expression
+  whose branches are Postgrest `.order()` chains, so the transform-builder type is
+  inferred (no fragile PostgrestTransformBuilder annotation across SDK versions).
+
+### Verification
+No Swift toolchain locally (Linux); macOS xcodebuild + xctest gate runs in CI
+(scheme DesMoinesInsider → DesMoinesInsiderTests). No web/TS files touched.
+Static checks: all 8 new + 4 modified Swift files brace/paren/bracket-balanced
+(comment/string-aware counter); APIs verified against existing usage (.or/.eq/.in/
+.gte/.not(_,operator:.is) filters, multi-.order(_,ascending:,nullsFirst:) chaining,
+.range, .single, withRetry; Map(initialPosition:.region) + Marker as in
+TripMapPreview; FullScreenImageViewer(imageUrl:isPresented:) as in Event/Restaurant
+detail; FilterChipView(text:icon:tint:onRemove:); AdTarget .sheet(item:) as in
+SponsoredPickCard; AdTrackingService.logAffiliateClick / AnalyticsService.trackEvent).
+CodingKeys verified against the generated `hotels` Row type and migration
+20260520000000. project.yml directory sources auto-include the new app files + test.

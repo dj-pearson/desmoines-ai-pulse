@@ -60,6 +60,7 @@ struct DiscoverHubView: View {
         .navigationDestination(for: Restaurant.self) { RestaurantDetailView(restaurant: $0) }
         .navigationDestination(for: Attraction.self) { AttractionDetailView(attraction: $0) }
         .navigationDestination(for: Article.self) { ArticleDetailView(article: $0) }
+        .navigationDestination(for: Hotel.self) { HotelDetailView(hotel: $0) }
     }
 }
 
@@ -180,6 +181,9 @@ enum DiscoverDestination: String, CaseIterable, Identifiable {
         case .articles:
             // IOS-PARITY-002 — native Articles & Guides hub + reader.
             ArticlesView(ownsNavigationStack: false)
+        case .stay:
+            // IOS-PARITY-003 — native Where to Stay (hotels) + affiliate booking.
+            HotelsView(ownsNavigationStack: false)
         default:
             ComingSoonView(title: title, systemImage: systemImage, webURL: webURL)
         }

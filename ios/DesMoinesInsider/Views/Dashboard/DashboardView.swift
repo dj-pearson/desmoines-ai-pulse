@@ -25,6 +25,7 @@ struct DashboardView: View {
         case restaurant(Restaurant)
         case attraction(Attraction)
         case article(Article)
+        case hotel(Hotel)
         case trip(TripPlan)
 
         var id: String {
@@ -33,6 +34,7 @@ struct DashboardView: View {
             case .restaurant(let r): return "restaurant-\(r.id)"
             case .attraction(let a): return "attraction-\(a.id)"
             case .article(let a): return "article-\(a.id)"
+            case .hotel(let h): return "hotel-\(h.id)"
             case .trip(let t): return "trip-\(t.id)"
             }
         }
@@ -75,6 +77,7 @@ struct DashboardView: View {
             case .restaurant(let r): RestaurantDetailView(restaurant: r)
             case .attraction(let a): AttractionDetailView(attraction: a)
             case .article(let a): ArticleDetailView(article: a)
+            case .hotel(let h): HotelDetailView(hotel: h)
             case .trip(let t): ItineraryDetailView(trip: t)
             }
         }
@@ -271,6 +274,8 @@ struct DashboardView: View {
                     detailTarget = .attraction(try await AttractionsService.shared.fetchAttraction(id: item.itemId))
                 case "article":
                     detailTarget = .article(try await ArticlesService.shared.fetchArticle(id: item.itemId))
+                case "hotel":
+                    detailTarget = .hotel(try await HotelsService.shared.fetchHotel(id: item.itemId))
                 default:
                     break
                 }
