@@ -190,6 +190,16 @@ enum DiscoverDestination: String, CaseIterable, Identifiable {
         case .bestOf:
             // IOS-PARITY-005 — native Best Of community voting.
             BestOfView(ownsNavigationStack: false)
+        case .music, .sports, .outdoors:
+            // IOS-PARITY-006 — curated content hubs.
+            if let hub = ContentHub(destination: self) {
+                ContentHubView(hub: hub, ownsNavigationStack: false)
+            } else {
+                ComingSoonView(title: title, systemImage: systemImage, webURL: webURL)
+            }
+        case .neighborhoods:
+            // IOS-PARITY-006 — neighborhoods hub.
+            NeighborhoodsView(ownsNavigationStack: false)
         default:
             ComingSoonView(title: title, systemImage: systemImage, webURL: webURL)
         }

@@ -2561,3 +2561,65 @@ CachedAsyncImage). CodingKeys verified against migration 20260226000003
 (voting_categories/votes) and useVoting.ts. Aggregation + winners logic hand-traced
 against every VotingTests assertion. project.yml directory sources auto-include the
 new app files + test.
+
+## 2026-06-04 — IOS-PARITY-006 (Content hubs: Music/Sports/Outdoors/Neighborhoods) [awaiting CI build]
+
+Continued the IOS-PARITY cluster with the curated content hubs — replacing the
+ComingSoon web fallbacks for the four Discover tiles with real native screens.
+75/165 stories pass. Next: IOS-PARITY-008 (the cluster's remaining stories are
+008/009/010).
+
+### What shipped
+- NEW Models/ContentHub.swift — config enum for Music/Sports/Outdoors: title,
+  editorial blurb, icon/gradient, event `category` ilike terms, attraction
+  types, section titles, and init?(destination:) so deep links map in.
+- NEW Models/Neighborhood.swift — the curated area catalog (mirrors web
+  /neighborhoods: East Village, WDM, Ankeny, …) with blurb/highlights and a
+  `matches(_ location:)` helper for client-side area filtering.
+- Services: EventsService.fetchEventsByCategoryTerms(_:limit:) (upcoming events
+  whose category OR-matches the hub terms — the web .or(category.ilike…) query)
+  and AttractionsService.fetchAttractions(types:limit:) (`.in("type", …)`,
+  featured first).
+- NEW ViewModels/ContentHubViewModel.swift — loads themed events (spine) +
+  attractions + featured dining concurrently; rails fail soft.
+- NEW ViewModels/NeighborhoodViewModel.swift — fetches broad batches of
+  restaurants/attractions/events and filters by area match; when the user opts
+  into location, sorts the place rails nearest-first (the AC's "nearby in this
+  neighborhood" integration).
+- NEW Views/Hubs/ContentHubView.swift — one generic hub screen: hero + blurb,
+  vertical themed-events list, attractions rail, dining rail, and an in-feed
+  AdSlot. Reuses the unified ContentCard everywhere.
+- NEW Views/Neighborhoods/NeighborhoodsView.swift (area list) +
+  NeighborhoodDetailView.swift (dining/things-to-do/events rails + a
+  "Sort by what's nearby" opt-in that requests location and re-sorts).
+- Discover hub: .music/.sports/.outdoors tiles → ContentHubView(hub:);
+  .neighborhoods → NeighborhoodsView. The /music,/sports,/outdoors,/neighborhoods
+  universal links already route to .discover(...), so the hubs are deep-linkable.
+- NEW DesMoinesInsiderTests/ContentHubTests.swift — Discover→hub mapping, every
+  hub has curation config, faithful event/attraction terms, neighborhood
+  catalog + case-insensitive area matching + unique slugs.
+
+### Codebase Patterns discovered (reusable)
+- CONFIG-DRIVEN SCREENS: model a family of near-identical screens (Music/Sports/
+  Outdoors) as one View + an enum of configs, not N bespoke views — new hubs are
+  a config case, not a new screen.
+- BROAD-FETCH + CLIENT FILTER FOR AREAS: there's no clean server-side
+  neighborhood column, so fetch a capped batch and filter by a model
+  `matches(location:)` helper — keeps the query simple and the matching testable.
+- OPT-IN LOCATION SORT: don't demand location on open; offer a "Sort by what's
+  nearby" button that requests permission then re-sorts, so the screen is useful
+  with or without a fix.
+
+### Verification
+No Swift toolchain locally (Linux); macOS xcodebuild + xctest gate runs in CI
+(scheme DesMoinesInsider → DesMoinesInsiderTests). No web/TS files touched.
+Static checks: all 7 new + 3 modified Swift files brace/paren/bracket-balanced
+(comment/string-aware counter); APIs verified against existing usage (EventsService
+.or/.gte/.order/.limit + withRetry; AttractionsService .in("type")/.order; query
+structs all-defaulted so limit-only init compiles; RestaurantsResponse.restaurants /
+AttractionsResponse.attractions / EventsResponse.events; LocationService.userLocation
++ requestPermission; Restaurant.coordinate/city/location/displayLocation,
+Event.city/venue/location; @State(wrappedValue:) parameterized VMs; ContentCard
+variants + toastOverlay). Hub config + neighborhood matching hand-traced against
+every ContentHubTests assertion. project.yml directory sources auto-include the
+new app files + test.

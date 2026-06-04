@@ -480,8 +480,8 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 32,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Shipped 2026-06-04. Native curated hubs: a generic ContentHubView driven by a ContentHub config (Music/Sports/Outdoors) mixing themed upcoming events + themed attractions + featured dining with editorial blurbs (parity with web /music,/sports,/outdoors), plus a Neighborhoods hub (NeighborhoodsView + NeighborhoodDetailView) that matches dining/attractions/events to each area and integrates device location for nearest-first sorting. EventsService.fetchEventsByCategoryTerms + AttractionsService.fetchAttractions(types:) added. Reuses unified cards + rails; each hub has its own ad slot. Reachable from Discover hub + the /music,/sports,/outdoors,/neighborhoods deep links. Web build untouched; macOS xcodebuild in CI."
     },
     {
       "id": "IOS-PARITY-007",

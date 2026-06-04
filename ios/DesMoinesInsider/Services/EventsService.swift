@@ -175,6 +175,32 @@ actor EventsService {
         }
     }
 
+    // MARK: - Fetch by Category Terms (IOS-PARITY-006 content hubs)
+
+    /// Upcoming events whose `category` matches ANY of the given terms (case-
+    /// insensitive), soonest first. Mirrors the web hubs' `.or(category.ilike…)`
+    /// curation (Music/Sports/Outdoors).
+    func fetchEventsByCategoryTerms(_ terms: [String], limit: Int = 20) async throws -> [Event] {
+        guard !terms.isEmpty else { return [] }
+        return try await withRetry { [self] in
+            let client = try db()
+            let today = DateParser.toISO(Calendar.current.startOfDay(for: Date()))
+            let orClause = terms
+                .map { "category.ilike.%\($0.replacingOccurrences(of: "%", with: "\\%"))%" }
+                .joined(separator: ",")
+            let events: [Event] = try await client
+                .from("events")
+                .select()
+                .gte("date", value: today)
+                .or(orClause)
+                .order("date", ascending: true)
+                .limit(limit)
+                .execute()
+                .value
+            return events
+        }
+    }
+
     // MARK: - Search Events (Fuzzy Fallback)
 
     func fuzzySearchEvents(query: String, limit: Int = 20) async throws -> [Event] {
