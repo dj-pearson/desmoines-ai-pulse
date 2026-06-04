@@ -10,6 +10,7 @@ struct EventDetailView: View {
     @State private var showSubscription = false
     @State private var notifications = LocalNotificationService.shared
     @State private var storeKit = StoreKitService.shared
+    @State private var auth = AuthService.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var hasPremiumAccess: Bool {
@@ -39,6 +40,18 @@ struct EventDetailView: View {
                     currentTier: storeKit.currentTier,
                     onShowSubscription: { showSubscription = true }
                 )
+
+                // "Promote this listing" advertiser funnel (IOS-ADS-016) — shown
+                // to admins/owners who manage listings. Opens the web campaign
+                // checkout in Safari, NOT StoreKit (see PromoteListing.swift).
+                if auth.isAdmin {
+                    PromoteListingButton(
+                        listing: .event(id: event.id, name: event.title),
+                        style: .inline
+                    )
+                    .padding(.horizontal)
+                    .padding(.top, 4)
+                }
 
                 EventDetailRelated(relatedEvents: viewModel.relatedEvents)
             }
@@ -87,6 +100,10 @@ struct EventDetailView: View {
         }
         .task {
             await viewModel.loadEvent(event)
+            // IOS-PARITY-007 — feed the Dashboard "Jump back in" rail.
+            RecentlyViewedService.shared.record(
+                type: "event", id: event.id, title: event.title, imageUrl: event.imageUrl
+            )
         }
     }
 }

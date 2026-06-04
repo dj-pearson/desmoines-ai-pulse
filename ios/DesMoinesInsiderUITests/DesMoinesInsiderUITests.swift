@@ -185,6 +185,32 @@ final class DesMoinesInsiderUITests: XCTestCase {
         }
     }
 
+    /// Screenshot 9 / 10: iPad sidebar destinations (IOS-IA-005) in BOTH
+    /// orientations. On iPhone there's no sidebar, so the sidebar taps are
+    /// skipped and this captures the current screen instead — never fails.
+    func test09_iPadSidebarDestinationsPortrait() throws {
+        XCUIDevice.shared.orientation = .portrait
+        captureSidebar("Discover", name: "09_iPad_Discover_Portrait")
+        captureSidebar("Dashboard", name: "09_iPad_Dashboard_Portrait")
+    }
+
+    func test10_iPadSidebarDestinationsLandscape() throws {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        captureSidebar("Trip Planner", name: "10_iPad_TripPlanner_Landscape")
+        captureSidebar("Discover", name: "10_iPad_Discover_Landscape")
+        XCUIDevice.shared.orientation = .portrait
+    }
+
+    /// Taps a sidebar destination if the iPad sidebar is present, then snapshots.
+    private func captureSidebar(_ label: String, name: String) {
+        let cell = app.cells.staticTexts[label]
+        if cell.waitForExistence(timeout: 3) {
+            cell.tap()
+            waitForContentToLoad()
+        }
+        snapshot(name)
+    }
+
     // MARK: - Helpers
 
     /// Navigate to a tab by name, handling various iOS tab bar layouts.

@@ -27,6 +27,15 @@ enum AdConfig {
     /// pulled to the front of a feed so they never dominate the first screen.
     static let maxSponsoredAtFront = 2
 
+    // MARK: Sponsored picks in AI discovery flows (IOS-ADS-015)
+
+    /// At most this many labeled sponsored picks per AI flow render (Ask Pulse,
+    /// Trip Planner). The AC requires "at most one".
+    static let aiFlowMaxSponsored = 1
+    /// Surprise Me returns a sponsored result only on every Nth roll, so it's
+    /// "occasional, capped, never every roll".
+    static let surpriseMeSponsoredEveryNthRoll = 4
+
     // MARK: Interstitial (IOS-ADS-012) — rare, capped, free-tier only
 
     /// At most this many interstitials per app session.

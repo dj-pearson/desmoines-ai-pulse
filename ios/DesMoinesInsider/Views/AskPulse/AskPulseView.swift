@@ -13,6 +13,8 @@ struct AskPulseView: View {
     @State private var conversation: [AskPulseService.ChatMessage] = []
     @State private var picks: [AskPulseService.Pick] = []
     @State private var followUps: [String] = []
+    /// At most one labeled sponsored pick (IOS-ADS-015), server-eligible + free-tier only.
+    @State private var sponsoredPick: SponsoredPickService.SponsoredPick?
     @State private var isLoading = false
     @State private var errorMessage: String?
     @FocusState private var inputFocused: Bool
@@ -155,6 +157,10 @@ struct AskPulseView: View {
             ForEach(picks) { pick in
                 AskPulsePickCard(pick: pick)
             }
+            // One clearly-labeled sponsored pick among the picks (IOS-ADS-015).
+            if let sponsoredPick {
+                SponsoredPickCard(pick: sponsoredPick, surface: .askPulse)
+            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityValue("\(picks.count) picks")
@@ -229,6 +235,7 @@ struct AskPulseView: View {
         conversation = []
         picks = []
         followUps = []
+        sponsoredPick = nil
         errorMessage = nil
         input = ""
         inputFocused = true
@@ -242,6 +249,7 @@ struct AskPulseView: View {
         input = ""
         isLoading = true
         errorMessage = nil
+        sponsoredPick = nil
 
         do {
             let response = try await AskPulseService.shared.ask(
@@ -250,6 +258,11 @@ struct AskPulseView: View {
             )
             picks = response.picks
             followUps = response.followUpSuggestions
+            // Ask the server for one eligible sponsored pick for this intent
+            // (free-tier only; nil when nothing matches). IOS-ADS-015.
+            if !response.picks.isEmpty {
+                sponsoredPick = await SponsoredPickService.shared.pick(for: .askPulse, query: trimmed)
+            }
             // Add a synthetic assistant turn that summarises the picks. Picks
             // themselves are rendered as cards below the conversation, so the
             // chat bubble just provides screen-reader-friendly framing.

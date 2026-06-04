@@ -32,6 +32,12 @@ struct AttractionDetailView: View {
         .sheet(isPresented: $showShareSheet) {
             ShareSheet(items: [shareText])
         }
+        .task {
+            // IOS-PARITY-007 — feed the Dashboard "Jump back in" rail.
+            RecentlyViewedService.shared.record(
+                type: "attraction", id: attraction.id, title: attraction.name, imageUrl: attraction.imageUrl
+            )
+        }
     }
 
     // MARK: - Hero Image

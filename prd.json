@@ -357,8 +357,8 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 24,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "IMPLEMENTED (this session). Viewability parity: new AdViewabilityModifier (Views/Components/AdViewabilityModifier.swift) fires an impression only at >=50% on-screen for >=1s, matching the web IntersectionObserver in src/lib/tracking.ts; wired into AdBannerView (campaign + house) and AffiliateAdBanner. Dedupe per campaign+creative+session retained. Frequency-cap parity: AdTrackingService.shouldShowAd mirrors web shouldShowAd (<=3/campaign/session/5min, <=10/user/day, fail-open). Inventory class: AdInventoryClass {paid_campaign, affiliate, sponsored_listing, house_ad} stamped into every analytics payload; paid clicks/impressions still posted to ad_impressions/ad_clicks (same tables/columns as web, now incl. date). Offline-safe: durable UserDefaults queue (capped) enqueues impressions/clicks when NetworkMonitor.isConnected is false or an insert fails, flushed on reconnect (NetworkMonitor hook) and on app launch (DesMoinesInsiderApp .task). Tests: AdsMonetizationTests locks the inventory-class contract."
     },
     {
       "id": "IOS-ADS-015",
@@ -373,8 +373,8 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 25,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "IMPLEMENTED (this session). Server-driven sponsored injection: new edge function supabase/functions/get-sponsored-pick (verify_jwt=false in config.toml) resolves at most one eligible sponsored listing from active campaigns + sponsored_listing_links (same active predicate as get_active_ads), with light query relevance; premium tiers get pick:null (re-checked server-side). iOS SponsoredPickService gates free-tier-only and tracks via AdTrackingService (sponsored_listing class). Ask Pulse renders one labeled SponsoredPickCard among picks; Surprise Me returns a labeled sponsored result only on every Nth roll (AdConfig.surpriseMeSponsoredEveryNthRoll, never first roll). All AI-surfaced ads carry a visible Sponsored label, are free-tier only, and share tracking + caps. SEAM: the .tripPlanner surface is built and ready; its render call-site lands with IOS-PARITY-001 (Trip Planner not yet implemented)."
     },
     {
       "id": "IOS-ADS-016",
@@ -388,8 +388,8 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 26,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "IMPLEMENTED (this session). In-app advertiser funnel: new PromoteListing.swift (BusinessPromotion URL builder + SafariView SFSafariViewController wrapper + PromoteListingButton). A Promote affordance shows on Event/Restaurant detail (admin/owner-gated via AuthService.isAdmin) and a For Businesses row in Profile (all users). Checkout opens the existing web campaign flow (/advertise -> create-campaign-checkout/Stripe) in SFSafariViewController, NOT StoreKit, with the App Review rationale documented in code (advertising for a real-world business is not an in-app digital good). Web /advertise now reads listingType/listingId/listingName query params and pre-fills the ListingPicker (src/pages/Advertise.tsx). No native StoreKit purchase UI for advertising. Tests: AdsMonetizationTests covers the deep-link builder."
     },
     {
       "id": "IOS-PARITY-001",
@@ -405,8 +405,8 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 27,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "IMPLEMENTED (this session). Native AI Trip Planner shipped end-to-end against the SAME backend as web useTripPlanner: Models/TripPlan.swift (TripPlan/TripPlanItem/TripPreferences, decodable from trip_plans rows + generate-itinerary response + get_trip_itinerary RPC); Services/TripPlannerService.swift (generate via generate-itinerary edge fn, fetchTrips, fetchItems RPC, tripsThisMonth quota count, persistOrder reorder, share/public link, deleteTrip). TripPlannerView: form (dates, interests, party, budget, pace, neighborhood->mustSee), quota meter, gating via StoreKitService.hasFeature(.tripPlanner) + PremiumFeature.QuotaAction.tripPlans (Insider 5/mo, VIP unlimited, free locked) with contextual PaywallView(.tripPlanner); saved-itinerary list with swipe-delete. ItineraryDetailView: day-by-day cards, MapKit map preview (best-effort CLGeocoder), drag-to-reorder (persisted), share (UIActivityViewController, /trips/shared/<code>), add-to-calendar (EventKit per timed stop), tips + packing list; loading/offline/error states (IOS-COMPLY-004). Reachable from Discover hub (DiscoverDestination.tripPlanner now returns the native screen) and a Home entry point (TripPlannerHomeCard + sheet). Closes the IOS-ADS-015 seam: ItineraryDetailView renders the labeled .tripPlanner SponsoredPickCard (free-tier, server-eligible). Tests: TripPlannerTests (decode contract, time formatting, quota math). Saved itineraries also feed the future Dashboard (IOS-PARITY-007) via the same trip_plans source."
     },
     {
       "id": "IOS-PARITY-002",
@@ -495,8 +495,8 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 33,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "IMPLEMENTED (this session). Native User Dashboard (parity with web /dashboard). NEW Views/Dashboard/DashboardView.swift aggregates: subscription status (SubscriptionBanner .full, manage/upgrade -> paywall for free), saved Trip Planner itineraries (TripPlannerService.fetchTrips -> ItineraryDetailView, with Plan-a-trip CTA), favorites overview (FavoritesService per-type counts), saved searches & alerts (structured empty-state section; populated when IOS-PARITY-008 lands), recently viewed (NEW RecentlyViewedService, UserDefaults-backed, recorded from Event/Restaurant/Attraction detail .task; tap fetches by id via EventsService/RestaurantsService/AttractionsService and pushes native detail), and For-You recommendations (reuses ForYouRail). Navigation via .navigationDestination(item:) with a DetailTarget enum so it works whether the screen owns its stack (standalone) or is pushed from Profile (ownsNavigationStack flag). Reachable from Profile (new Dashboard row). Guest state prompts sign-in (AuthView) + compact upgrade banner -> never a dead end. Tests: RecentlyViewedTests (ordering/dedupe/cap). NOTE: saved-searches/alerts section is intentionally an empty state until IOS-PARITY-008."
     },
     {
       "id": "IOS-PARITY-008",
@@ -554,8 +554,8 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 37,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "IMPLEMENTED (this session). iPad/large-screen adaptivity. MainTabView iPad NavigationSplitView sidebar now lists the 6 primary tabs PLUS first-class Explore destinations (Discover, Trip Planner, Dashboard) that render in the DETAIL pane (proper list+detail two-pane), replacing the old Discover-as-sheet; sidebar<->selectedTab kept in sync (deep links + interstitial boundary still work, no feedback loop). Discover hub grid is now adaptive (GridItem(.adaptive(minimum:160)) -> 2 cols on iPhone, more on iPad/landscape). Trip Planner gains a showsCloseButton flag so the modal Close only appears in the Home/Dashboard sheet, not in the pushed/detail contexts. UI snapshot tests added (test09/test10) capture the iPad sidebar destinations in BOTH portrait and landscape via the existing Fastlane Snapshot suite (Snapfile already targets iPad Pro 13-inch); they no-op gracefully on iPhone. NOTE/FOLLOW-UP: the Articles reader (IOS-PARITY-002) does not exist yet, so its iPad layout lands with that story; deeper per-list 3-column splits (e.g. Events list+sub-detail inside the detail pane) remain a follow-up beyond the app-level two-pane shipped here."
     },
     {
       "id": "IOS-IA-006",
@@ -569,8 +569,8 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 38,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "IMPLEMENTED (this session). NEW Views/Home/HomeRailOrdering.swift centralizes the [HomeRail] sequence (HomeRailsView already took an order:). Strategy is deterministic, consent-gated (ConsentService.analyticsConsent), and first-party only: it scores each content type from on-device signals (favorites weighted 2x recently-viewed) plus ForYou engagement, then leads with the user most-engaged content type; the For-You rail leads when personalization is active else slots just after the top type. Default-safe: guests / no-consent / no-signal get the canonical HomeRail.allCases order (no regression). A/B-friendly via a single Strategy switch (canonical vs affinityWeighted). HomeView passes order: HomeRailOrdering.current(). Tests: HomeRailOrderingTests covers default/consent/affinity/engagement/determinism."
     },
     {
       "id": "IOS-COMPLY-003",

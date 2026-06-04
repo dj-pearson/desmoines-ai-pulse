@@ -34,8 +34,9 @@ struct DiscoverHubView: View {
 
     private var content: some View {
         ScrollView {
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 14),
-                                GridItem(.flexible(), spacing: 14)],
+            // Adaptive columns (IOS-IA-005): 2 across on iPhone, more on iPad /
+            // landscape where there's room — no stretched phone layout.
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 14)],
                       spacing: 14) {
                 ForEach(DiscoverDestination.allCases) { dest in
                     NavigationLink(value: dest) {
@@ -171,7 +172,13 @@ enum DiscoverDestination: String, CaseIterable, Identifiable {
     @ViewBuilder
     var destinationView: some View {
         // Each IOS-PARITY-* story replaces its case here with the native screen.
-        ComingSoonView(title: title, systemImage: systemImage, webURL: webURL)
+        switch self {
+        case .tripPlanner:
+            // IOS-PARITY-001 — native AI Trip Planner (inherits the hub's stack).
+            TripPlannerView(ownsNavigationStack: false)
+        default:
+            ComingSoonView(title: title, systemImage: systemImage, webURL: webURL)
+        }
     }
 }
 

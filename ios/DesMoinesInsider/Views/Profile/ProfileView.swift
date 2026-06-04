@@ -51,6 +51,15 @@ struct ProfileView: View {
                 .padding(.vertical, 4)
             }
 
+            // Dashboard — the signed-in home base (IOS-PARITY-007).
+            Section {
+                NavigationLink {
+                    DashboardView(ownsNavigationStack: false)
+                } label: {
+                    Label("Dashboard", systemImage: "rectangle.stack.person.crop")
+                }
+            }
+
             // Subscription Status — prominent upgrade CTA for free users
             Section {
                 SubscriptionBanner(style: .full)
@@ -119,6 +128,13 @@ struct ProfileView: View {
                 .listRowInsets(EdgeInsets(top: 6, leading: 8, bottom: 6, trailing: 8))
                 .listRowBackground(Color.clear)
                 .disabled(viewModel.isSaving)
+            }
+
+            // For Businesses — advertiser-acquisition funnel (IOS-ADS-016).
+            // Opens the web advertiser portal in Safari (not StoreKit) because
+            // this is advertising for a real-world business, not an in-app good.
+            Section("For Businesses") {
+                PromoteListingButton(listing: nil, style: .row)
             }
 
             // App Section
