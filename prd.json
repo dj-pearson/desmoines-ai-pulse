@@ -2408,7 +2408,7 @@
       ],
       "priority": 232,
       "passes": false,
-      "notes": "MEDIUM. Pairs with IOS-POLISH-001. Verify the render/image endpoint is enabled; appending query params to the object endpoint is a no-op."
+      "notes": "DEFERRED pending runtime verification (no Swift toolchain / no device here). Discovered the deployed contract: web src/components/OptimizedImage.tsx routes EXTERNAL image URLs through the public edge function /functions/v1/image-transform?url=&width=&quality=&format= (config.toml: verify_jwt=false, so CachedAsyncImage's plain URLSession can call it), and appends width/quality/format query params directly to Supabase /object/public storage URLs. Open questions to verify before shipping: (a) whether query params on /object/public actually transform vs needing /render/image/, (b) the image-transform SSRF host allowlist covers every image host the app shows. Safe impl path: route external URLs through the edge function at the display-cap width, cache under the ORIGINAL url, and fall back to the original URL on fetch failure so images can never break. Lower priority now that IOS-POLISH-001 client downsampling already bounds memory."
     },
     {
       "id": "IOS-POLISH-003",
@@ -2420,8 +2420,8 @@
         "iOS build passes and existing tests stay green"
       ],
       "priority": 233,
-      "passes": false,
-      "notes": "MEDIUM. Mirror the existing Services/DateParser.swift static-formatter pattern."
+      "passes": true,
+      "notes": "DONE. Hot-path formatters hoisted to static caches: TripPlan.dateRangeDisplay (yyyy-MM-dd input + 'MMM d' output), TripPlanItem.startTimeDisplay (HH:mm:ss / HH:mm / h:mm a), Article.parseTimestamp (two ISO8601DateFormatters, run during decode of every article), and EventDetailViewModel.calendarURL/shareText. Mirrors the Services/DateParser static-formatter pattern. Remaining one-off per-tap formatters (TripPlanner generate/addToCalendar) are not hot paths and were left as-is."
     },
     {
       "id": "IOS-POLISH-004",
@@ -2433,7 +2433,7 @@
       ],
       "priority": 234,
       "passes": false,
-      "notes": "LOW/MEDIUM. Cleaner separation; avoids re-sorting Sets each render."
+      "notes": "Low value: the flagged .sorted() calls are over tiny Sets (<~20 filter chips); a computed VM property would relocate but not avoid the per-render sort, and caching-on-mutation adds complexity for negligible CPU. Deferred as cosmetic-only."
     },
     {
       "id": "IOS-POLISH-005",

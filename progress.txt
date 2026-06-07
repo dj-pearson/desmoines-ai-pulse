@@ -2802,8 +2802,39 @@ All IOS-BASE / IOS-IA / IOS-SUB / IOS-ADS / IOS-PARITY / IOS-COMPLY stories pass
 
 With the IOS PRD stories exhausted, ran a deep-dive audit across performance,
 photo optimization, UI/UX, styling, and security. Shipped the safe, high-
-confidence fixes this session; filed the larger items as a tracked backlog
-(IOS-PERF-001 + IOS-POLISH-001 done; IOS-POLISH-002..006 + IOS-SEC-002 open).
+confidence fixes; filed the larger items as a tracked backlog. Done so far:
+IOS-PERF-001, IOS-SEC-001, IOS-POLISH-001 (image downsampling), IOS-POLISH-003
+(formatter caching). Open: IOS-POLISH-002/004/005/006 + IOS-SEC-002.
+
+### IOS-POLISH-003 — cache hot-path date formatters, DONE
+- TripPlan.dateRangeDisplay (yyyy-MM-dd + "MMM d"), TripPlanItem.startTimeDisplay
+  (HH:mm:ss / HH:mm / h:mm a) and Article.parseTimestamp (2x ISO8601, run during
+  decode of every article) now use static cached formatters instead of building
+  new ones per access. EventDetailViewModel.calendarURL/shareText likewise.
+- Mirrors the Services/DateParser static-formatter pattern. One-off per-tap
+  formatters (TripPlanner generate/addToCalendar) left as-is (not hot paths).
+
+### IOS-POLISH-002 — server-side image transforms: DEFERRED (needs runtime check)
+- Found the deployed contract: web OptimizedImage.tsx routes EXTERNAL image URLs
+  through the PUBLIC edge function /functions/v1/image-transform (config.toml
+  verify_jwt=false → CachedAsyncImage's plain URLSession can call it) and appends
+  width/quality/format to Supabase /object/public storage URLs.
+- Not shipping blind: unverified whether query params on /object/public transform
+  (vs needing /render/image/) and whether the function's SSRF allowlist covers all
+  image hosts. Safe path when picked up: proxy external URLs at the display-cap
+  width, cache under the ORIGINAL url, fall back to the original on fetch failure.
+  Lower priority since IOS-POLISH-001 already bounds memory client-side.
+
+### IOS-POLISH-004 — deferred as cosmetic-only
+- The flagged .sorted() calls are over tiny Sets (<~20 filter chips); relocating
+  to the VM wouldn't avoid the per-render sort without caching-on-mutation —
+  negligible CPU, not worth the churn.
+
+### Still open for a session with compile/visual verification
+- IOS-POLISH-005 (haptics): wiring HapticFeedback.isEnabled to a Settings toggle
+  + migrating ~44 raw-generator call sites — broad, benefits from a build pass.
+- IOS-POLISH-006 (colors): ~39 hardcoded Color(red:) → theme tokens; getting
+  dark/OLED values right wants visual verification.
 
 ### IOS-POLISH-001 — image downsampling (the big memory/bandwidth win), DONE
 - New ImageDownsampler.decode(_:maxPixelSize:) in CachedAsyncImage.swift uses

@@ -37,19 +37,27 @@ struct TripPlan: Identifiable, Decodable, Hashable {
         case packingList
     }
 
+    // Cached formatters — `dateRangeDisplay` is read on every list/detail render.
+    private static let dayInputFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+    private static let monthDayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM d"
+        return f
+    }()
+
     /// "Jun 6 – Jun 8" style range for list/detail headers.
     var dateRangeDisplay: String {
-        let inFmt = DateFormatter()
-        inFmt.calendar = Calendar(identifier: .gregorian)
-        inFmt.locale = Locale(identifier: "en_US_POSIX")
-        inFmt.dateFormat = "yyyy-MM-dd"
-        let outFmt = DateFormatter()
-        outFmt.dateFormat = "MMM d"
-        guard let s = inFmt.date(from: String(startDate.prefix(10))),
-              let e = inFmt.date(from: String(endDate.prefix(10))) else {
+        guard let s = Self.dayInputFormatter.date(from: String(startDate.prefix(10))),
+              let e = Self.dayInputFormatter.date(from: String(endDate.prefix(10))) else {
             return "\(startDate) – \(endDate)"
         }
-        return "\(outFmt.string(from: s)) – \(outFmt.string(from: e))"
+        return "\(Self.monthDayFormatter.string(from: s)) – \(Self.monthDayFormatter.string(from: e))"
     }
 }
 
@@ -91,20 +99,28 @@ struct TripPlanItem: Identifiable, Decodable, Hashable {
         case contentDetails = "content_details"
     }
 
+    // Cached formatters — `startTimeDisplay` is read per itinerary row.
+    private static func posixFormatter(_ format: String) -> DateFormatter {
+        let f = DateFormatter()
+        f.dateFormat = format
+        f.locale = Locale(identifier: "en_US_POSIX")
+        return f
+    }
+    private static let timeInputFormatter = posixFormatter("HH:mm:ss")
+    private static let timeInputAltFormatter = posixFormatter("HH:mm")
+    private static let timeOutputFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "h:mm a"
+        return f
+    }()
+
     /// "2:30 PM" from a Postgres TIME ("14:30:00"), or nil.
     var startTimeDisplay: String? {
         guard let startTime else { return nil }
-        let inFmt = DateFormatter()
-        inFmt.dateFormat = "HH:mm:ss"
-        inFmt.locale = Locale(identifier: "en_US_POSIX")
-        let alt = DateFormatter()
-        alt.dateFormat = "HH:mm"
-        alt.locale = Locale(identifier: "en_US_POSIX")
-        let date = inFmt.date(from: startTime) ?? alt.date(from: startTime)
+        let date = Self.timeInputFormatter.date(from: startTime)
+            ?? Self.timeInputAltFormatter.date(from: startTime)
         guard let date else { return startTime }
-        let out = DateFormatter()
-        out.dateFormat = "h:mm a"
-        return out.string(from: date)
+        return Self.timeOutputFormatter.string(from: date)
     }
 
     var systemImage: String {
