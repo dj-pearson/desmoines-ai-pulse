@@ -36,8 +36,14 @@ final class CampaignAdService {
         var id: String { creativeId }
 
         var targetURL: URL? {
-            guard let linkUrl, !linkUrl.isEmpty else { return nil }
-            return URL(string: linkUrl)
+            guard let linkUrl, !linkUrl.isEmpty,
+                  let url = URL(string: linkUrl),
+                  // Only open web links. The link_url is backend-controlled, so
+                  // reject anything that isn't http/https (e.g. javascript:,
+                  // file:, custom schemes) before it reaches the in-app browser.
+                  let scheme = url.scheme?.lowercased(),
+                  scheme == "http" || scheme == "https" else { return nil }
+            return url
         }
     }
 

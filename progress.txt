@@ -2797,4 +2797,59 @@ DesMoinesInsiderUITests.swift. No version string was hardcoded in tests.
 
 ### IOS program status
 All IOS-BASE / IOS-IA / IOS-SUB / IOS-ADS / IOS-PARITY / IOS-COMPLY stories pass.
-Remaining prd.json backlog is web/backend (PROD-*) only.
+
+## iOS improvement deep-dive (perf · photo · UI/UX · styling · security)
+
+With the IOS PRD stories exhausted, ran a deep-dive audit across performance,
+photo optimization, UI/UX, styling, and security. Shipped the safe, high-
+confidence fixes this session; filed the larger items as a tracked backlog
+(IOS-PERF-001 done; IOS-POLISH-001..006 + IOS-SEC-002 open).
+
+### Shipped now
+- IOS-PERF-001: MapPreviewSheet raw AsyncImage -> CachedAsyncImage (shared
+  memory+disk cache; no re-fetch on repeated marker taps). MapTimeSlider
+  countPillText + MapViewModel ISO8601 parsers hoisted to static (were
+  re-allocated per render / per slider drag over all pins).
+- IOS-SEC-001: CampaignCreative.targetURL now scheme-allowlists http/https.
+  This was the single HIGH finding — backend-controlled link_url previously
+  became a URL with no validation, reachable by AdBanner/Interstitial in-app
+  browser (javascript:/file:/custom-scheme injection). Consumers already gate
+  on nil targetURL (.disabled / guard let), so rejected links are non-tappable.
+
+### Audit findings → backlog (not yet shipped)
+- IMAGE (HIGH, IOS-POLISH-001): CachedAsyncImage caches the FULL-resolution
+  decoded UIImage in memory (NSCache cost not set, only countLimit 200). Add
+  ImageIO downsampling (CGImageSourceCreateThumbnailAtIndex, cap at screen-scale
+  width) on the network + disk-read paths. Deferred: it's the app's most
+  critical visual component and visual regressions can't be caught by CI on
+  Linux — wants deliberate impl + manual QA.
+- IMAGE (MEDIUM, IOS-POLISH-002): no Supabase Storage transform params; switch
+  thumbnails to the /render/image/ endpoint with width+quality (verify the
+  plan has image transforms enabled; query params on /object/ are a no-op).
+- PERF (MEDIUM, IOS-POLISH-003): TripPlan/Article/EventDetailViewModel/Trip
+  Planner still build DateFormatters in computed props — port to the
+  Services/DateParser static-formatter pattern.
+- PERF (LOW, IOS-POLISH-004): RestaurantsView/AttractionsView/ItineraryDetail
+  call .sorted() on filter Sets in the view body — move to the VM.
+- UX (IOS-POLISH-005): ~44 view files use raw UIImpactFeedbackGenerator instead
+  of the pre-warmed HapticFeedback.shared service the codebase documents as
+  preferred; also wire HapticFeedback.isEnabled to a user Settings toggle.
+- STYLING (IOS-POLISH-006): ~39 hardcoded Color(red:green:blue:) literals in
+  Views/ should move into Color+Theme/PremiumTokens for light/dark/OLED
+  consistency.
+
+### Security: otherwise SECURE
+Secrets are build-injected (generate-secrets.sh), not committed. Tokens in
+Keychain (kSecAttrAccessibleWhenUnlockedThisDeviceOnly). Supabase cert pinning.
+No ATS exceptions. OSLog only (no PII / print). Deep links UUID/host-validated.
+QueryCache uses NSFileProtectionComplete. IAP entitlements resolved against the
+backend user_subscriptions table. Lower-priority hardening tracked in IOS-SEC-002.
+
+### Verification
+No Swift toolchain locally; CI gates the build. Static checks: every edited
+Swift file brace/paren/bracket-balanced (comment/string-aware). CachedAsyncImage
+convenience init(url:) + placeholder closure verified for the MapPreviewSheet
+swap; targetURL nil-handling confirmed at both ad call sites.
+
+Remaining prd.json backlog: web/backend PROD-* plus the IOS-POLISH/IOS-SEC-002
+iOS follow-ups above.

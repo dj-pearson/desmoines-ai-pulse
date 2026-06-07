@@ -2367,6 +2367,126 @@
       "priority": 181,
       "passes": false,
       "notes": "Follow-up to PROD-SEO-001 (landing/hub routes done). Detail routes are data-driven and potentially thousands, so this needs slug enumeration + batching/concurrency limits; consider prerendering only the top-N by traffic/recency or generating on-demand."
+    },
+    {
+      "id": "IOS-PERF-001",
+      "title": "Cache hot-path date formatters + map preview thumbnails (baseline)",
+      "description": "As a user, I need the map time-slider and marker previews to stay smooth so the app feels native.",
+      "acceptanceCriteria": [
+        "MapPreviewSheet uses CachedAsyncImage (shared memory+disk cache) instead of raw AsyncImage",
+        "MapTimeSlider.countPillText reuses a static DateFormatter (not re-allocated per render)",
+        "MapViewModel.refreshEventAnnotations hoists its ISO8601DateFormatters to static",
+        "iOS build passes and existing tests stay green"
+      ],
+      "priority": 230,
+      "passes": true,
+      "notes": "DONE in this session. Recorded as the baseline for the IOS-POLISH performance work below."
+    },
+    {
+      "id": "IOS-POLISH-001",
+      "title": "Downsample images to display size in CachedAsyncImage",
+      "description": "As a user on a metered connection / older device, I need images decoded at display size so the app uses less memory and bandwidth.",
+      "acceptanceCriteria": [
+        "CachedAsyncImage decodes via ImageIO CGImageSourceCreateThumbnailAtIndex with kCGImageSourceThumbnailMaxPixelSize, capped at screen-scale width, on both the network and disk-read paths",
+        "In-memory UIImage footprint for an oversized source image drops to the display-capped size; visual quality is unchanged at the displayed size",
+        "Blur-up thumbnail + crossfade behavior preserved; NSCache cost set to the decoded byte size",
+        "iOS build passes and existing tests stay green"
+      ],
+      "priority": 231,
+      "passes": false,
+      "notes": "HIGH value. Touches the app's most critical visual component — implement deliberately and verify under CI + manual QA (no Swift toolchain on Linux to catch visual regressions)."
+    },
+    {
+      "id": "IOS-POLISH-002",
+      "title": "Request right-sized Supabase Storage images via transform params",
+      "description": "As a user, I need thumbnails to download at thumbnail size, not full resolution, to save bandwidth.",
+      "acceptanceCriteria": [
+        "Confirm Supabase image transformation is enabled for the project's plan before switching endpoints",
+        "Add a URL helper that maps /storage/v1/object/public/... to /storage/v1/render/image/public/... with width+quality for non-hero thumbnails; heroes request ~screen width",
+        "Falls back to the original object URL if transforms are unavailable (no broken images)",
+        "iOS build passes and existing tests stay green"
+      ],
+      "priority": 232,
+      "passes": false,
+      "notes": "MEDIUM. Pairs with IOS-POLISH-001. Verify the render/image endpoint is enabled; appending query params to the object endpoint is a no-op."
+    },
+    {
+      "id": "IOS-POLISH-003",
+      "title": "Cache date formatters in models + remaining view models",
+      "description": "As a user, I need list and detail screens to render without per-row formatter allocation cost.",
+      "acceptanceCriteria": [
+        "TripPlan.dateRangeDisplay/startTimeDisplay, Article timestamp parsing, EventDetailViewModel and TripPlanner/ItineraryDetail formatters reuse static cached formatters (DateParser pattern)",
+        "No DateFormatter/ISO8601DateFormatter is constructed inside a computed property or view body on a hot path",
+        "iOS build passes and existing tests stay green"
+      ],
+      "priority": 233,
+      "passes": false,
+      "notes": "MEDIUM. Mirror the existing Services/DateParser.swift static-formatter pattern."
+    },
+    {
+      "id": "IOS-POLISH-004",
+      "title": "Move per-render filter-set sorting into view models",
+      "description": "As a developer, I want filter chip sorting computed once in the VM, not on every view render.",
+      "acceptanceCriteria": [
+        "RestaurantsView/AttractionsView/ItineraryDetailView expose pre-sorted arrays from their VM instead of calling .sorted() in the body",
+        "iOS build passes and existing tests stay green"
+      ],
+      "priority": 234,
+      "passes": false,
+      "notes": "LOW/MEDIUM. Cleaner separation; avoids re-sorting Sets each render."
+    },
+    {
+      "id": "IOS-POLISH-005",
+      "title": "Standardize haptics on HapticFeedback service + user toggle",
+      "description": "As a user, I want consistent, low-latency haptics and the ability to turn them off.",
+      "acceptanceCriteria": [
+        "View call sites use HapticFeedback.shared semantic methods instead of constructing raw UIImpactFeedbackGenerator/UINotificationFeedbackGenerator (which skip the pre-warmed generators)",
+        "HapticFeedback.isEnabled is wired to a persisted user setting exposed in Settings; disabling it silences app haptics",
+        "iOS build passes and existing tests stay green"
+      ],
+      "priority": 235,
+      "passes": false,
+      "notes": "UX consistency + micro-perf. ~44 view files currently bypass the HapticFeedback abstraction documented as the preferred API."
+    },
+    {
+      "id": "IOS-POLISH-006",
+      "title": "Centralize hardcoded colors into theme tokens",
+      "description": "As a user, I need brand colors to be consistent and correct in light/dark/OLED themes.",
+      "acceptanceCriteria": [
+        "The ~39 hardcoded Color(red:green:blue:) literals in Views/ are replaced by named tokens in Color+Theme/PremiumTokens (brand red, award gold, destructive, etc.)",
+        "Colors resolve correctly in light, dark, and OLED themes",
+        "iOS build passes and existing tests stay green"
+      ],
+      "priority": 236,
+      "passes": false,
+      "notes": "Styling consistency. Establishes one source of truth for brand colors."
+    },
+    {
+      "id": "IOS-SEC-001",
+      "title": "Validate campaign creative target URLs (scheme allowlist)",
+      "description": "As a user, I need backend-supplied ad links to be safe so a compromised/misconfigured creative can't open javascript:/file:/custom-scheme URLs.",
+      "acceptanceCriteria": [
+        "CampaignCreative.targetURL returns nil unless the URL scheme is http or https",
+        "Ad views already gate on targetURL (guard let / .disabled) so a rejected link renders a non-tappable ad rather than crashing",
+        "iOS build passes and existing tests stay green"
+      ],
+      "priority": 240,
+      "passes": true,
+      "notes": "DONE in this session. The one HIGH finding from the iOS security deep-dive: targetURL was URL(string: linkUrl) with no validation in CampaignAdService.swift; now scheme-allowlisted to http/https. AdBannerView/InterstitialAdView already handle nil."
+    },
+    {
+      "id": "IOS-SEC-002",
+      "title": "Defense-in-depth follow-ups from the iOS security audit",
+      "description": "As the security owner, I want the lower-priority hardening recommendations tracked.",
+      "acceptanceCriteria": [
+        "Document a rotation runbook for the Supabase certificate-pinning SPKI hashes ahead of leaf-cert renewal",
+        "Evaluate App Attest / DeviceCheck for sensitive operations",
+        "If WebView ever loads dynamic/untrusted content, add a Content Security Policy",
+        "No regression to the audited-secure areas (Keychain token storage, ATS, structured logging, deep-link UUID validation, QueryCache file protection)"
+      ],
+      "priority": 241,
+      "passes": false,
+      "notes": "From the security deep-dive. The app was otherwise found secure: secrets build-injected (not committed), Keychain with kSecAttrAccessibleWhenUnlockedThisDeviceOnly, cert pinning, no ATS exceptions, OSLog (no PII), UUID-validated deep links, NSFileProtectionComplete cache. These are future hardening, not active vulnerabilities."
     }
   ]
 }
