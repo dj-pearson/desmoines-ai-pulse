@@ -55,6 +55,16 @@ struct MainTabView: View {
     @State private var storeKit = StoreKitService.shared
     @State private var showInterstitial = false
 
+    /// UI-test deep link target for Fastlane Snapshot (IOS-COMPLY-005). Set once
+    /// on launch from `--uiTestScreen` so screenshots can land on Discover, Trip
+    /// Planner, a paywall, or a content hub regardless of device/idiom.
+    @State private var uiTestCover: UITestCover?
+
+    enum UITestCover: String, Identifiable {
+        case discover, tripPlanner, paywall, hub
+        var id: String { rawValue }
+    }
+
     var body: some View {
         Group {
             if sizeClass == .regular {
@@ -73,6 +83,10 @@ struct MainTabView: View {
         .onAppear {
             Self.configureTranslucentAppearance()
             InterstitialAdService.shared.noteSessionStart()
+            // Fastlane Snapshot deep link (IOS-COMPLY-005), UI-test only.
+            if Config.isUITesting, let screen = Config.uiTestScreen {
+                uiTestCover = UITestCover(rawValue: screen)
+            }
         }
         .onChange(of: selectedTab) { _, _ in
             // Major navigation boundary. Free tier only; the service enforces the
@@ -98,6 +112,15 @@ struct MainTabView: View {
         }
         .sheet(item: $softPaywallContext) { ctx in
             PaywallView(context: ctx)
+        }
+        // Fastlane Snapshot screenshot destinations (IOS-COMPLY-005).
+        .fullScreenCover(item: $uiTestCover) { cover in
+            switch cover {
+            case .discover: DiscoverHubView()
+            case .tripPlanner: TripPlannerView(ownsNavigationStack: true)
+            case .paywall: PaywallView(context: .tripPlanner)
+            case .hub: ContentHubView(hub: .music)
+            }
         }
     }
 

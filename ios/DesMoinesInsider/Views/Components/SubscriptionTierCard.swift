@@ -28,6 +28,10 @@ struct SubscriptionTierCard: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    // IOS-COMPLY-003: price is critical content — scale the fixed point size with
+    // Dynamic Type (relative to .largeTitle) so it grows up to AX5 without clipping.
+    @ScaledMetric(relativeTo: .largeTitle) private var priceSize: CGFloat = 34
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header
@@ -48,7 +52,7 @@ struct SubscriptionTierCard: View {
             // Price row with crossfade
             HStack(alignment: .lastTextBaseline, spacing: 6) {
                 Text(price)
-                    .font(.system(size: 34, weight: .heavy))
+                    .font(.system(size: priceSize, weight: .heavy))
                     .contentTransition(.numericText())
                     .animation(
                         reduceMotion ? .linear(duration: 0) : .spring(response: 0.4, dampingFraction: 0.75),

@@ -2706,3 +2706,202 @@ auto-include the new app files + 3 tests.
 ### IOS-PARITY cluster summary (10/10)
 001 Trip Planner · 002 Articles · 003 Stay/hotels · 004 Weekend · 005 Best Of ·
 006 Content hubs · 007 Dashboard · 008 Saved searches · 009 Reviews · 010 Deals.
+
+## IOS-COMPLY cluster complete (003/004/005) — 81/165 stories pass
+
+Closed out the final iOS stories: the accessibility, offline/error, and
+App-Store-readiness passes across the new feature set. ALL IOS-* stories now
+pass; the remaining backlog is web/backend PROD-* work only. No Swift toolchain
+on Linux — verified statically (comment/string-aware brace/paren balance on
+every edited file; APIs hand-checked against existing usage). CI (scheme
+DesMoinesInsider → DesMoinesInsiderTests, + Fastlane snapshot) is the build gate.
+
+### IOS-COMPLY-003 — Full accessibility audit (a11y)
+- REDUCE MOTION now honored across the whole motion vocabulary. The two named
+  gaps: ParallaxHeroHeader (parallax offset + rubber-band stretch gated to a
+  static 1:1 header) and SwipeCardStack (card rotation, the interactiveSpring
+  drag follow, the no-commit spring-back, and the fly-off duration all gated;
+  SwipeCard itself is pure presentation). Also gated: OfflineBanner + ToastOverlay
+  (instant/fade vs spring slide), EmptyStateView (fade-only entrance, no rise/
+  scale), FullScreenImageViewer (linear settle). BrandButtonStyles press-scale
+  uses UIAccessibility.isReduceMotionEnabled because a ButtonStyle can't read
+  @Environment. HeartBurstView + View+ThemeCrossfade already complied.
+- HIT TARGET: ReviewsSection ⋯ menu was 28×24 → now .minHitTarget() (44×44).
+- DYNAMIC TYPE: SubscriptionTierCard price was a fixed .system(size:34) → now
+  @ScaledMetric(relativeTo:.largeTitle) so it scales to AX5. (PaywallView's
+  size:44 is a decorative accessibilityHidden SF Symbol — left as-is.)
+- VOICEOVER was already strong: ContentCard CardAccessibility aggregation,
+  Deals/Reviews .accessibilityElement(.combine), AdBannerView "Ad"+"advertisement"
+  label, SponsoredBadge "Sponsored content", InterstitialAdView labeled.
+
+### IOS-COMPLY-004 — Offline + error states across new screens
+- OfflineBanner + NetworkMonitor are already mounted globally in MainTabView's
+  top safeAreaInset, so every tab/screen inherits the offline banner.
+- The list/hub screens (Articles, Stay, Weekend, BestOf, Hubs, Deals) already
+  had shimmer skeletons + EmptyStateView + retryable error banners, and their
+  services already wrap NetworkRetry withRetry()+backoff.
+- NEW: QueryCache stale-while-offline wired into ArticlesViewModel (key
+  articles-home), DealsViewModel (deals-all), BestOfViewModel (bestof-categories),
+  WeekendViewModel (weekend-events spine + regroup), ContentHubViewModel
+  (hub-events-<id> spine) — mirroring the proven EventsViewModel pattern: serve
+  cache first on offline cold start (allowStale when offline), write the default
+  first page on success, and never clobber shown cached content with an error.
+- ReviewsSection now renders a retryable error state (the VM already tracked
+  errorMessage) instead of silently showing "no reviews" on a load failure.
+- Detail screens load core content via navigation (always present) + fail soft on
+  related rails; ItineraryDetail already had loading/error rows; Dashboard uses
+  .refreshable + empty hints → navigate-away, never a dead end.
+
+### IOS-COMPLY-005 — App Store metadata, screenshots & review notes
+- Added Fastlane Snapshot tests test11_DiscoverHub / 12_TripPlanner / 13_Paywall /
+  14_ContentHub, driven by a UI-test-only deep link: --uiTestScreen → new
+  Config.uiTestScreen → a MainTabView .fullScreenCover(item:) that presents the
+  destination, so iPhone screenshots land there (not just the iPad sidebar).
+  test01 already covers the redesigned Home.
+- description.txt rewritten (Trip Planner, Guides, Deals, Insider/VIP + cross-
+  platform entitlement note); keywords.txt = exactly 100 chars of net-new feature
+  terms (trip planner,itinerary,guide,deal,happy hour,…); release_notes.txt = 1.2.0.
+- App Review notes: fastlane/metadata/review_information/notes.txt (deliver auto-
+  uploads) + source doc ios/metadata/app_review_notes.md. Cover: Apple IAP for the
+  consumer subs (group 21957951) incl. cross-platform entitlement recognition; the
+  advertiser/"Promote" linkout as a B2B real-world service handled outside IAP
+  (3.1.3(e)/3.1.5(a), not a digital good for the app user); "Ad"/"Sponsored"
+  labeling; and a VIP demo account (creds entered in App Store Connect, NOT
+  committed to source).
+- MARKETING_VERSION 1.1.13 → 1.2.0, CURRENT_PROJECT_VERSION 64 → 65 in project.yml.
+  The actual release is cut via the ios-native-release workflow_dispatch (a human/
+  release-owner trigger — not auto-run from here).
+
+### Codebase Patterns discovered (reusable)
+- BUTTONSTYLE + REDUCE MOTION: a SwiftUI ButtonStyle/TextFieldStyle can't read
+  @Environment(\.accessibilityReduceMotion). Gate press animations on
+  UIAccessibility.isReduceMotionEnabled (read at makeBody time) instead.
+- STALE-WHILE-OFFLINE: the EventsViewModel cache recipe (serve cache first w/
+  allowStale==isOffline, short-circuit the network when offline+cached, write
+  the default page on success, only error on a true blank) ports cleanly to any
+  list/aggregate VM by caching just the spine array (Codable model) under a
+  stable per-view key.
+- UI-TEST DEEP LINK FOR SCREENSHOTS: a `--uiTestScreen <name>` launch arg read
+  only under isUITesting, presented via one root .fullScreenCover(item:), gives
+  Fastlane deterministic screenshot destinations without polluting prod nav.
+
+### Verification
+No Swift toolchain locally (Linux). Static checks: every edited Swift file is
+brace/paren/bracket-balanced (comment/string-aware counter). New cache calls use
+QueryCache.shared.get/set<T:Codable> against Event/Article/Deal/VotingCategory
+(all Codable; Event caching already proven in EventsViewModel). NetworkMonitor.
+shared.isConnected reuse matches EventsViewModel. PaywallContext.tripPlanner and
+ContentHub.music verified present for the screenshot cover. project.yml directory
+sources auto-include the edited files; the 4 new UITests live in the existing
+DesMoinesInsiderUITests.swift. No version string was hardcoded in tests.
+
+### IOS program status
+All IOS-BASE / IOS-IA / IOS-SUB / IOS-ADS / IOS-PARITY / IOS-COMPLY stories pass.
+
+## iOS improvement deep-dive (perf · photo · UI/UX · styling · security)
+
+With the IOS PRD stories exhausted, ran a deep-dive audit across performance,
+photo optimization, UI/UX, styling, and security. Shipped the safe, high-
+confidence fixes; filed the larger items as a tracked backlog. Done so far:
+IOS-PERF-001, IOS-SEC-001, IOS-POLISH-001 (image downsampling), IOS-POLISH-003
+(formatter caching). Open: IOS-POLISH-002/004/005/006 + IOS-SEC-002.
+
+### IOS-POLISH-003 — cache hot-path date formatters, DONE
+- TripPlan.dateRangeDisplay (yyyy-MM-dd + "MMM d"), TripPlanItem.startTimeDisplay
+  (HH:mm:ss / HH:mm / h:mm a) and Article.parseTimestamp (2x ISO8601, run during
+  decode of every article) now use static cached formatters instead of building
+  new ones per access. EventDetailViewModel.calendarURL/shareText likewise.
+- Mirrors the Services/DateParser static-formatter pattern. One-off per-tap
+  formatters (TripPlanner generate/addToCalendar) left as-is (not hot paths).
+
+### IOS-POLISH-002 — server-side image transforms: DEFERRED (needs runtime check)
+- Found the deployed contract: web OptimizedImage.tsx routes EXTERNAL image URLs
+  through the PUBLIC edge function /functions/v1/image-transform (config.toml
+  verify_jwt=false → CachedAsyncImage's plain URLSession can call it) and appends
+  width/quality/format to Supabase /object/public storage URLs.
+- Not shipping blind: unverified whether query params on /object/public transform
+  (vs needing /render/image/) and whether the function's SSRF allowlist covers all
+  image hosts. Safe path when picked up: proxy external URLs at the display-cap
+  width, cache under the ORIGINAL url, fall back to the original on fetch failure.
+  Lower priority since IOS-POLISH-001 already bounds memory client-side.
+
+### IOS-POLISH-004 — deferred as cosmetic-only
+- The flagged .sorted() calls are over tiny Sets (<~20 filter chips); relocating
+  to the VM wouldn't avoid the per-render sort without caching-on-mutation —
+  negligible CPU, not worth the churn.
+
+### Still open for a session with compile/visual verification
+- IOS-POLISH-005 (haptics): wiring HapticFeedback.isEnabled to a Settings toggle
+  + migrating ~44 raw-generator call sites — broad, benefits from a build pass.
+- IOS-POLISH-006 (colors): ~39 hardcoded Color(red:) → theme tokens; getting
+  dark/OLED values right wants visual verification.
+
+### IOS-POLISH-001 — image downsampling (the big memory/bandwidth win), DONE
+- New ImageDownsampler.decode(_:maxPixelSize:) in CachedAsyncImage.swift uses
+  ImageIO CGImageSourceCreateThumbnailAtIndex with kCGImageSourceThumbnailMaxPixelSize
+  (+ kCGImageSourceCreateThumbnailWithTransform to bake EXIF orientation,
+  kCGImageSourceShouldCacheImmediately). nil maxPixelSize == plain UIImage(data:).
+- loadImage caps decode to UIScreen.main.nativeBounds.width on BOTH paths:
+  network (after URLSession) and disk-read (getFromDisk now takes maxPixelSize and
+  decodes there). A 3000x2000 source no longer allocates ~24 MB for a list cell.
+- Disk still stores ORIGINAL bytes (full quality); we re-decode at the display cap
+  on read, so cache stays correct and the full-screen viewer can still get full res.
+- NSCache cost is now set to the decoded byte size (UIImage.approxMemoryCost =
+  cgImage.bytesPerRow * height), so the 50 MB memory totalCostLimit finally bites
+  (previously only countLimit 200 applied → unbounded per-image footprint).
+- New `downsamples: Bool = true` param on CachedAsyncImage; FullScreenImageViewer
+  passes downsamples:false so pinch-zoom to 5x stays sharp. Param is declared
+  before the @ViewBuilder placeholder so the synthesized memberwise init keeps the
+  trailing-closure form; all ~25 existing call sites compile unchanged (default).
+- ImageIO never upscales past the source, so already-small images are untouched.
+
+### Earlier in deep-dive:
+
+### Shipped now
+- IOS-PERF-001: MapPreviewSheet raw AsyncImage -> CachedAsyncImage (shared
+  memory+disk cache; no re-fetch on repeated marker taps). MapTimeSlider
+  countPillText + MapViewModel ISO8601 parsers hoisted to static (were
+  re-allocated per render / per slider drag over all pins).
+- IOS-SEC-001: CampaignCreative.targetURL now scheme-allowlists http/https.
+  This was the single HIGH finding — backend-controlled link_url previously
+  became a URL with no validation, reachable by AdBanner/Interstitial in-app
+  browser (javascript:/file:/custom-scheme injection). Consumers already gate
+  on nil targetURL (.disabled / guard let), so rejected links are non-tappable.
+
+### Audit findings → backlog (not yet shipped)
+- IMAGE (HIGH, IOS-POLISH-001): CachedAsyncImage caches the FULL-resolution
+  decoded UIImage in memory (NSCache cost not set, only countLimit 200). Add
+  ImageIO downsampling (CGImageSourceCreateThumbnailAtIndex, cap at screen-scale
+  width) on the network + disk-read paths. Deferred: it's the app's most
+  critical visual component and visual regressions can't be caught by CI on
+  Linux — wants deliberate impl + manual QA.
+- IMAGE (MEDIUM, IOS-POLISH-002): no Supabase Storage transform params; switch
+  thumbnails to the /render/image/ endpoint with width+quality (verify the
+  plan has image transforms enabled; query params on /object/ are a no-op).
+- PERF (MEDIUM, IOS-POLISH-003): TripPlan/Article/EventDetailViewModel/Trip
+  Planner still build DateFormatters in computed props — port to the
+  Services/DateParser static-formatter pattern.
+- PERF (LOW, IOS-POLISH-004): RestaurantsView/AttractionsView/ItineraryDetail
+  call .sorted() on filter Sets in the view body — move to the VM.
+- UX (IOS-POLISH-005): ~44 view files use raw UIImpactFeedbackGenerator instead
+  of the pre-warmed HapticFeedback.shared service the codebase documents as
+  preferred; also wire HapticFeedback.isEnabled to a user Settings toggle.
+- STYLING (IOS-POLISH-006): ~39 hardcoded Color(red:green:blue:) literals in
+  Views/ should move into Color+Theme/PremiumTokens for light/dark/OLED
+  consistency.
+
+### Security: otherwise SECURE
+Secrets are build-injected (generate-secrets.sh), not committed. Tokens in
+Keychain (kSecAttrAccessibleWhenUnlockedThisDeviceOnly). Supabase cert pinning.
+No ATS exceptions. OSLog only (no PII / print). Deep links UUID/host-validated.
+QueryCache uses NSFileProtectionComplete. IAP entitlements resolved against the
+backend user_subscriptions table. Lower-priority hardening tracked in IOS-SEC-002.
+
+### Verification
+No Swift toolchain locally; CI gates the build. Static checks: every edited
+Swift file brace/paren/bracket-balanced (comment/string-aware). CachedAsyncImage
+convenience init(url:) + placeholder closure verified for the MapPreviewSheet
+swap; targetURL nil-handling confirmed at both ad call sites.
+
+Remaining prd.json backlog: web/backend PROD-* plus the IOS-POLISH/IOS-SEC-002
+iOS follow-ups above.

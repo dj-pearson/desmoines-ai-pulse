@@ -65,12 +65,23 @@ final class EventDetailViewModel {
 
     // MARK: - Calendar Integration
 
+    // Cached formatters (reused across calendarURL / shareText access).
+    private static let calendarFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyyMMdd'T'HHmmss"
+        return f
+    }()
+    private static let shareFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .short
+        return f
+    }()
+
     var calendarURL: URL? {
         guard let event, let date = event.parsedDate else { return nil }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyyMMdd'T'HHmmss"
-        let dateStr = formatter.string(from: date)
-        let endDate = formatter.string(from: date.addingTimeInterval(7200)) // 2h default
+        let dateStr = Self.calendarFormatter.string(from: date)
+        let endDate = Self.calendarFormatter.string(from: date.addingTimeInterval(7200)) // 2h default
 
         var components = URLComponents(string: "https://calendar.google.com/calendar/render")!
         components.queryItems = [
@@ -128,10 +139,7 @@ final class EventDetailViewModel {
         guard let event else { return "" }
         var text = "\(event.title)"
         if let date = event.parsedDate {
-            let formatter = DateFormatter()
-            formatter.dateStyle = .medium
-            formatter.timeStyle = .short
-            text += " - \(formatter.string(from: date))"
+            text += " - \(Self.shareFormatter.string(from: date))"
         }
         text += " at \(event.displayLocation)"
         text += "\n\nFound on Des Moines Insider"

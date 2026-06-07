@@ -51,11 +51,17 @@ struct MapTimeSlider: View {
         }
     }
 
+    /// Cached formatter — `countPillText` recomputes on every render while the
+    /// slider is dragged, so avoid re-allocating a DateFormatter each time.
+    private static let pillTimeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "h:mm a EEEE"
+        return f
+    }()
+
     private var countPillText: String {
         guard let mapTime else { return "" }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a EEEE"
-        return "\(eventCount) events + \(restaurantCount) restaurants open at \(formatter.string(from: mapTime))"
+        return "\(eventCount) events + \(restaurantCount) restaurants open at \(Self.pillTimeFormatter.string(from: mapTime))"
     }
 
     private func isActive(_ stop: MapTimeSliderStop) -> Bool {

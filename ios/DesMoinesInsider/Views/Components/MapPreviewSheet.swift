@@ -20,13 +20,10 @@ struct MapPreviewSheet: View {
                 .padding(.top, 8)
 
             HStack(spacing: 12) {
-                AsyncImage(url: imageURL) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFill()
-                    default:
-                        Color(.secondarySystemBackground)
-                    }
+                // Use the shared two-tier cache (memory + disk) so repeated
+                // marker taps don't re-fetch the same thumbnail from the network.
+                CachedAsyncImage(url: imageURL?.absoluteString) {
+                    Color(.secondarySystemBackground)
                 }
                 .frame(width: 64, height: 64)
                 .clipShape(RoundedRectangle(cornerRadius: PremiumTokens.cornerMd))

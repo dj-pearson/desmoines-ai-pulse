@@ -74,6 +74,7 @@ private struct ToastView: View {
 
 struct ToastOverlayModifier: ViewModifier {
     @Binding var message: ToastMessage?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
         content
@@ -81,11 +82,12 @@ struct ToastOverlayModifier: ViewModifier {
                 if let message {
                     ToastView(message: message)
                         .padding(.bottom, 24)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        // Reduce Motion (IOS-COMPLY-003): fade instead of sliding up.
+                        .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
                         .zIndex(100)
                 }
             }
-            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: message)
+            .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.35, dampingFraction: 0.8), value: message)
             .onChange(of: message) { _, newValue in
                 guard newValue != nil else { return }
                 Task { @MainActor in
