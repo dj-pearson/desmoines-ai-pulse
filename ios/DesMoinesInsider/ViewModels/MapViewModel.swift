@@ -234,6 +234,20 @@ final class MapViewModel {
 
     // MARK: - Annotation Refresh
 
+    /// Cached ISO parsers — `refreshEventAnnotations` runs on every map-time
+    /// slider change and parses each event's timestamp, so re-allocating
+    /// ISO8601DateFormatters per refresh (with 100+ pins) is wasteful.
+    private static let isoFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static let isoFormatterFallback: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
     private func refreshEventAnnotations() {
         guard showEvents else {
             if !eventAnnotations.isEmpty { eventAnnotations = [] }
@@ -242,10 +256,6 @@ final class MapViewModel {
         let timeWindow: (Date, Date)? = mapTime.map { t in
             (t.addingTimeInterval(-2 * 3600), t.addingTimeInterval(2 * 3600))
         }
-        let isoFormatter = ISO8601DateFormatter()
-        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let isoFormatterFallback = ISO8601DateFormatter()
-        isoFormatterFallback.formatOptions = [.withInternetDateTime]
         eventAnnotations = events.compactMap { event in
             guard let coord = event.coordinate else { return nil }
             // IOS-DISCOVER-2026-004: filter events to ±2h window when slider
@@ -253,7 +263,7 @@ final class MapViewModel {
             if let (lo, hi) = timeWindow {
                 let candidates = [event.eventStartLocal, event.date].compactMap { $0 }
                 let parsed = candidates.compactMap { s in
-                    isoFormatter.date(from: s) ?? isoFormatterFallback.date(from: s)
+                    Self.isoFormatter.date(from: s) ?? Self.isoFormatterFallback.date(from: s)
                 }
                 guard let when = parsed.first, when >= lo && when <= hi else { return nil }
             }
