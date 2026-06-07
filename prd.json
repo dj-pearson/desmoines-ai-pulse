@@ -585,8 +585,8 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 39,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE: Reduce Motion now honored across the named animations and the rest of the motion vocabulary — ParallaxHeroHeader (offset/stretch gated), SwipeCardStack (rotation + interactiveSpring + spring-back + fly-off gated; SwipeCard is pure presentation), OfflineBanner, ToastOverlay, EmptyStateView (entrance fade-only), BrandButtonStyles (press scale via UIAccessibility.isReduceMotionEnabled since ButtonStyle has no @Environment), FullScreenImageViewer (settle). HeartBurstView + View+ThemeCrossfade already complied. Hit target: ReviewsSection ellipsis menu was 28x24 -> now .minHitTarget() (44x44). Dynamic Type: SubscriptionTierCard price (was fixed .system(size:34)) now @ScaledMetric(relativeTo:.largeTitle); PaywallView size:44 is a decorative accessibilityHidden SF Symbol (no change needed). VoiceOver already solid: ContentCard CardAccessibility aggregation, Deals/Reviews .accessibilityElement(.combine), AdBannerView 'Ad'+advertisement label, SponsoredBadge 'Sponsored content', InterstitialAdView labeled. Color contrast verified in CI/manual (no static tooling on Linux)."
     },
     {
       "id": "IOS-COMPLY-004",
@@ -599,8 +599,8 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 40,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE: OfflineBanner + NetworkMonitor already global in MainTabView (covers every screen). List/hub screens (Articles, Stay, Weekend, BestOf, Hubs, Deals) already had shimmer skeletons + EmptyStateView + retry error banners; services already wrap NetworkRetry withRetry+backoff. NEW: QueryCache stale-while-offline wired into ArticlesViewModel (articles-home), DealsViewModel (deals-all), BestOfViewModel (bestof-categories), WeekendViewModel (weekend-events spine + regroup), ContentHubViewModel (hub-events-<id> spine) — mirroring the proven EventsViewModel/RestaurantsViewModel pattern: serve cached first on offline cold start (allowStale when offline), cache the default first page on success, never clobber cached content with an error. ReviewsSection now renders a retryable error state (VM already tracked errorMessage) instead of silently empty. Detail screens (Article/Hotel) load core content via navigation (always present) and fail soft on the related rail; ItineraryDetail already had loading/error rows; Dashboard uses .refreshable + empty hints (navigate-away, never a dead end)."
     },
     {
       "id": "IOS-COMPLY-005",
@@ -614,8 +614,8 @@
         "iOS build passes (cd ios && xcodegen generate && xcodebuild -scheme DesMoinesInsider build) and existing unit/UI tests stay green"
       ],
       "priority": 41,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE: Added Fastlane Snapshot tests test11_DiscoverHub / test12_TripPlanner / test13_Paywall / test14_ContentHub in DesMoinesInsiderUITests, driven by a new UI-test-only deep link (--uiTestScreen -> Config.uiTestScreen -> MainTabView fullScreenCover) so iPhone screenshots land on these screens, not just the iPad sidebar; existing test01 covers redesigned Home. Updated description.txt (Trip Planner, Guides, Deals, Insider/VIP) + keywords.txt (trip planner,itinerary,guide,deal,happy hour,... = 100 chars) + release_notes.txt (1.2.0). Added App Review notes at fastlane/metadata/review_information/notes.txt (deliver picks up) + source doc ios/metadata/app_review_notes.md covering Apple IAP for consumer subs, the advertiser/'Promote' linkout as a B2B real-world service (3.1.3(e)/3.1.5(a), not a digital good for the user), 'Ad'/'Sponsored' labeling, and the VIP demo account (creds entered in App Store Connect, not committed). Bumped MARKETING_VERSION 1.1.13 -> 1.2.0 and CURRENT_PROJECT_VERSION 64 -> 65 in project.yml. Release is cut via the ios-native-release workflow_dispatch (human-triggered; not auto-run here)."
     },
     {
       "id": "PROD-SEC-001",

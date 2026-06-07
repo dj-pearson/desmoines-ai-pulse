@@ -11,6 +11,8 @@ final class BestOfViewModel {
     private(set) var errorMessage: String?
 
     private let service = VotingService.shared
+    private let cache = QueryCache.shared
+    private static let cacheKey = "bestof-categories"
 
     func loadInitialData() async {
         guard categories.isEmpty else { return }
@@ -20,11 +22,29 @@ final class BestOfViewModel {
     func refresh() async {
         isLoading = true
         errorMessage = nil
+
+        let isOffline = !NetworkMonitor.shared.isConnected
+
+        // Offline cold start: serve cached voting categories (IOS-COMPLY-004).
+        if categories.isEmpty,
+           let cached: [VotingCategory] = await cache.get(Self.cacheKey, allowStale: isOffline) {
+            categories = cached
+            isLoading = false
+        }
+        if isOffline && !categories.isEmpty {
+            isLoading = false
+            await Self.refreshWinners()
+            return
+        }
+
         do {
             categories = try await service.fetchCategories()
+            await cache.set(Self.cacheKey, value: categories)
         } catch {
-            errorMessage = error.localizedDescription
-            categories = []
+            // Keep cached categories on failure; only error on a true blank.
+            if categories.isEmpty {
+                errorMessage = error.localizedDescription
+            }
         }
         isLoading = false
         // Keep the award-badge cache fresh (fail-soft inside the service).

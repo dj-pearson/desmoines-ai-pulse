@@ -1,1 +1,1 @@
-Des Moines,Iowa,events,restaurants,things to do,local guide,attractions,food,concerts,festivals,downtown,nightlife,family,live music,dining
+trip planner,itinerary,guide,deal,happy hour,concert,festival,nightlife,brunch,date night,attraction

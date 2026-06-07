@@ -18,8 +18,12 @@ final class ContentHubViewModel {
     private let eventsService = EventsService.shared
     private let attractionsService = AttractionsService.shared
     private let restaurantsService = RestaurantsService.shared
+    private let cache = QueryCache.shared
 
     init(hub: ContentHub) { self.hub = hub }
+
+    /// Per-hub cache key for the events spine (offline cold start, IOS-COMPLY-004).
+    private var eventsCacheKey: String { "hub-events-\(hub.id)" }
 
     var isEmpty: Bool { events.isEmpty && attractions.isEmpty && dining.isEmpty }
 
@@ -42,12 +46,22 @@ final class ContentHubViewModel {
     }
 
     private func loadEvents() async -> String? {
+        let isOffline = !NetworkMonitor.shared.isConnected
+
+        // Offline cold start: serve the cached events spine (IOS-COMPLY-004).
+        if events.isEmpty,
+           let cached: [Event] = await cache.get(eventsCacheKey, allowStale: isOffline) {
+            events = cached
+        }
+        if isOffline && !events.isEmpty { return nil }
+
         do {
             events = try await eventsService.fetchEventsByCategoryTerms(hub.eventTerms, limit: 20)
+            await cache.set(eventsCacheKey, value: events)
             return nil
         } catch {
-            events = []
-            return error.localizedDescription
+            // Keep cached events on failure; only error when truly blank.
+            return events.isEmpty ? error.localizedDescription : nil
         }
     }
 

@@ -24,6 +24,11 @@ struct SwipeCardStack: View {
     @State private var dragOffset: CGSize = .zero
     @State private var isDismissing = false
 
+    // Reduce Motion (IOS-COMPLY-003): drop the card rotation and the springy
+    // overshoot for users who opt out of motion. The drag itself is direct
+    // manipulation (not suppressed); only the decorative tilt/spring is.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     /// Up to 3 cards; deeper cards aren't rendered to keep the layer count low.
     private var visibleItems: ArraySlice<SwipeItem> {
         items.prefix(3)
@@ -63,9 +68,14 @@ struct SwipeCardStack: View {
                 .scaleEffect(scale(for: index))
                 .offset(y: stackYOffset(for: index))
                 .offset(index == 0 ? dragOffset : .zero)
-                .rotationEffect(index == 0 ? .degrees(rotationDegrees) : .zero)
+                .rotationEffect(index == 0 && !reduceMotion ? .degrees(rotationDegrees) : .zero)
                 .zIndex(Double(visibleItems.count - index))
-                .animation(.interactiveSpring(response: 0.32, dampingFraction: 0.78), value: dragOffset)
+                .animation(
+                    reduceMotion
+                        ? .linear(duration: 0)
+                        : .interactiveSpring(response: 0.32, dampingFraction: 0.78),
+                    value: dragOffset
+                )
                 .gesture(dragGesture(for: item), including: index == 0 ? .gesture : .none)
                 .onTapGesture { if index == 0 { onTap(item) } }
                 .allowsHitTesting(index == 0 && !isDismissing)
@@ -123,8 +133,8 @@ struct SwipeCardStack: View {
                 } else if leftCommitted {
                     commit(item: item, direction: .left, action: onSkip)
                 } else {
-                    // Spring back.
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                    // Spring back (linear snap under Reduce Motion).
+                    withAnimation(reduceMotion ? .linear(duration: 0.1) : .spring(response: 0.4, dampingFraction: 0.7)) {
                         dragOffset = .zero
                     }
                 }
@@ -147,10 +157,12 @@ struct SwipeCardStack: View {
         case .up: HapticFeedback.shared.premiumUnlock()
         }
 
-        withAnimation(.easeOut(duration: 0.28)) {
+        // Reduce Motion: minimize the fly-off travel time (the card must still
+        // leave, but we don't draw out the long kinetic sweep).
+        withAnimation(.easeOut(duration: reduceMotion ? 0.12 : 0.28)) {
             dragOffset = target
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + (reduceMotion ? 0.12 : 0.28)) {
             action(item)
             dragOffset = .zero
             isDismissing = false

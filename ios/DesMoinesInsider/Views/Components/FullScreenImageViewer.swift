@@ -11,10 +11,17 @@ struct FullScreenImageViewer: View {
     @State private var lastOffset: CGSize = .zero
     @State private var dragOffset: CGSize = .zero
     @State private var backgroundOpacity: Double = 1.0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let minScale: CGFloat = 0.5
     private let maxScale: CGFloat = 5.0
     private let dismissThreshold: CGFloat = 150
+
+    /// Settle animation for zoom/pan/dismiss — linear & quick under Reduce Motion
+    /// (IOS-COMPLY-003) so the spring bounce doesn't fire for motion-sensitive users.
+    private var settle: Animation {
+        reduceMotion ? .linear(duration: 0.1) : .spring(duration: 0.3)
+    }
 
     var body: some View {
         GeometryReader { geometry in
@@ -39,7 +46,7 @@ struct FullScreenImageViewer: View {
                             scale = min(max(newScale, minScale), maxScale)
                         }
                         .onEnded { _ in
-                            withAnimation(.spring(duration: 0.3)) {
+                            withAnimation(settle) {
                                 if scale < 1.0 {
                                     scale = 1.0
                                 }
@@ -71,7 +78,7 @@ struct FullScreenImageViewer: View {
                                 if dragOffset.height > dismissThreshold {
                                     dismiss()
                                 } else {
-                                    withAnimation(.spring(duration: 0.3)) {
+                                    withAnimation(settle) {
                                         dragOffset = .zero
                                         backgroundOpacity = 1.0
                                     }
@@ -82,7 +89,7 @@ struct FullScreenImageViewer: View {
                         }
                 )
                 .onTapGesture(count: 2) {
-                    withAnimation(.spring(duration: 0.3)) {
+                    withAnimation(settle) {
                         if scale > 1.0 {
                             scale = 1.0
                             lastScale = 1.0

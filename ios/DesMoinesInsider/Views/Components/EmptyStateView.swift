@@ -12,6 +12,7 @@ struct EmptyStateView: View {
     var secondaryAction: (() -> Void)?
 
     @State private var visible = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 18) {
@@ -32,7 +33,7 @@ struct EmptyStateView: View {
                     .symbolRenderingMode(.hierarchical)
             }
             .accessibilityHidden(true)
-            .scaleEffect(visible ? 1 : 0.85)
+            .scaleEffect((visible || reduceMotion) ? 1 : 0.85)
 
             Text(title)
                 .font(.title3.bold())
@@ -71,8 +72,9 @@ struct EmptyStateView: View {
         .glassCard(cornerRadius: PremiumTokens.cornerXl, material: .ultraThinMaterial, elevation: PremiumTokens.elevation8)
         .padding(.horizontal, 24)
         .opacity(visible ? 1 : 0)
-        .offset(y: visible ? 0 : 16)
-        .animation(PremiumTokens.springSmooth, value: visible)
+        // Reduce Motion (IOS-COMPLY-003): drop the rise/scale entrance; fade only.
+        .offset(y: (visible || reduceMotion) ? 0 : 16)
+        .animation(reduceMotion ? .linear(duration: 0.15) : PremiumTokens.springSmooth, value: visible)
         .onAppear { visible = true }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(title). \(message)")

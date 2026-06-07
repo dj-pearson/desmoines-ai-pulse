@@ -26,6 +26,9 @@ struct ReviewsSection: View {
 
             if viewModel.isLoading && viewModel.reviews.isEmpty {
                 ProgressView().frame(maxWidth: .infinity).padding(.vertical, 8)
+            } else if let error = viewModel.errorMessage, viewModel.reviews.isEmpty {
+                // Retryable error state (IOS-COMPLY-004) — never a dead end.
+                errorRetry(error)
             } else if viewModel.reviews.isEmpty {
                 Text("No reviews yet. Be the first to share your take!")
                     .font(.subheadline)
@@ -103,6 +106,31 @@ struct ReviewsSection: View {
         .accessibilityHint(viewModel.canWriteReviews ? "" : "Insider feature")
     }
 
+    // MARK: - Error / retry
+
+    private func errorRetry(_ error: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.yellow)
+            Text("Couldn't load reviews.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+            Spacer()
+            Button {
+                Task { await viewModel.load() }
+            } label: {
+                Text("Retry").font(.subheadline.bold()).foregroundStyle(Color.accentColor)
+            }
+            .accessibilityLabel("Retry loading reviews")
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Couldn't load reviews. \(error)")
+    }
+
     // MARK: - Review row
 
     private func reviewRow(_ review: UserRating) -> some View {
@@ -123,7 +151,8 @@ struct ReviewsSection: View {
                 } label: {
                     Image(systemName: "ellipsis")
                         .foregroundStyle(.secondary)
-                        .frame(width: 28, height: 24)
+                        // IOS-COMPLY-003: guarantee a 44×44 hit target (was 28×24).
+                        .minHitTarget()
                 }
                 .accessibilityLabel("Review options")
             }

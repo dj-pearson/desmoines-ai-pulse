@@ -78,4 +78,14 @@ enum Config {
 
     /// `true` when the app is launched by XCUITest (Fastlane Snapshot, etc.).
     static let isUITesting: Bool = ProcessInfo.processInfo.arguments.contains("--uitesting")
+
+    /// Optional screen for Fastlane Snapshot to deep-link into for App Store
+    /// screenshots (IOS-COMPLY-005). Passed as `--uiTestScreen <name>`, e.g.
+    /// "discover", "tripPlanner", "paywall", or "hub". Only meaningful under
+    /// `isUITesting`; returns nil when absent.
+    static var uiTestScreen: String? {
+        let args = ProcessInfo.processInfo.arguments
+        guard let idx = args.firstIndex(of: "--uiTestScreen"), idx + 1 < args.count else { return nil }
+        return args[idx + 1]
+    }
 }

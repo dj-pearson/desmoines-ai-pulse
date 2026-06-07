@@ -16,6 +16,8 @@ final class DealsViewModel {
     var searchText = ""
 
     private let service = DealsService.shared
+    private let cache = QueryCache.shared
+    private static let cacheKey = "deals-all"
 
     /// entity_type categories present in the loaded deals (for filter chips).
     var categories: [String] {
@@ -54,11 +56,28 @@ final class DealsViewModel {
     func refresh() async {
         isLoading = true
         errorMessage = nil
+
+        let isOffline = !NetworkMonitor.shared.isConnected
+
+        // Offline cold start: show the last-fetched deals (IOS-COMPLY-004).
+        if allDeals.isEmpty,
+           let cached: [Deal] = await cache.get(Self.cacheKey, allowStale: isOffline) {
+            allDeals = cached
+            isLoading = false
+        }
+        if isOffline && !allDeals.isEmpty {
+            isLoading = false
+            return
+        }
+
         do {
             allDeals = try await service.fetchDeals()
+            await cache.set(Self.cacheKey, value: allDeals)
         } catch {
-            errorMessage = error.localizedDescription
-            allDeals = []
+            // Keep cached deals on failure; only surface an error on a true blank.
+            if allDeals.isEmpty {
+                errorMessage = error.localizedDescription
+            }
         }
         isLoading = false
     }

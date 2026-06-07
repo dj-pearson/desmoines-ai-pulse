@@ -3,6 +3,7 @@ import SwiftUI
 /// Shows an orange banner when offline and a green "Back online" banner on reconnection.
 struct OfflineBanner: View {
     @State private var network = NetworkMonitor.shared
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         if !network.isConnected {
@@ -38,8 +39,10 @@ struct OfflineBanner: View {
         .background(color)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityText)
-        .animation(.spring(duration: 0.35), value: network.isConnected)
-        .animation(.spring(duration: 0.35), value: network.showReconnected)
+        // Reduce Motion (IOS-COMPLY-003): swap the spring slide for an instant
+        // change so the banner doesn't animate in/out for motion-sensitive users.
+        .animation(reduceMotion ? .linear(duration: 0) : .spring(duration: 0.35), value: network.isConnected)
+        .animation(reduceMotion ? .linear(duration: 0) : .spring(duration: 0.35), value: network.showReconnected)
     }
 }
 
