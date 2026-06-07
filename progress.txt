@@ -2803,7 +2803,28 @@ All IOS-BASE / IOS-IA / IOS-SUB / IOS-ADS / IOS-PARITY / IOS-COMPLY stories pass
 With the IOS PRD stories exhausted, ran a deep-dive audit across performance,
 photo optimization, UI/UX, styling, and security. Shipped the safe, high-
 confidence fixes this session; filed the larger items as a tracked backlog
-(IOS-PERF-001 done; IOS-POLISH-001..006 + IOS-SEC-002 open).
+(IOS-PERF-001 + IOS-POLISH-001 done; IOS-POLISH-002..006 + IOS-SEC-002 open).
+
+### IOS-POLISH-001 — image downsampling (the big memory/bandwidth win), DONE
+- New ImageDownsampler.decode(_:maxPixelSize:) in CachedAsyncImage.swift uses
+  ImageIO CGImageSourceCreateThumbnailAtIndex with kCGImageSourceThumbnailMaxPixelSize
+  (+ kCGImageSourceCreateThumbnailWithTransform to bake EXIF orientation,
+  kCGImageSourceShouldCacheImmediately). nil maxPixelSize == plain UIImage(data:).
+- loadImage caps decode to UIScreen.main.nativeBounds.width on BOTH paths:
+  network (after URLSession) and disk-read (getFromDisk now takes maxPixelSize and
+  decodes there). A 3000x2000 source no longer allocates ~24 MB for a list cell.
+- Disk still stores ORIGINAL bytes (full quality); we re-decode at the display cap
+  on read, so cache stays correct and the full-screen viewer can still get full res.
+- NSCache cost is now set to the decoded byte size (UIImage.approxMemoryCost =
+  cgImage.bytesPerRow * height), so the 50 MB memory totalCostLimit finally bites
+  (previously only countLimit 200 applied → unbounded per-image footprint).
+- New `downsamples: Bool = true` param on CachedAsyncImage; FullScreenImageViewer
+  passes downsamples:false so pinch-zoom to 5x stays sharp. Param is declared
+  before the @ViewBuilder placeholder so the synthesized memberwise init keeps the
+  trailing-closure form; all ~25 existing call sites compile unchanged (default).
+- ImageIO never upscales past the source, so already-small images are untouched.
+
+### Earlier in deep-dive:
 
 ### Shipped now
 - IOS-PERF-001: MapPreviewSheet raw AsyncImage -> CachedAsyncImage (shared

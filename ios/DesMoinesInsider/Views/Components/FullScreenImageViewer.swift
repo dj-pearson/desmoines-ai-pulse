@@ -31,8 +31,9 @@ struct FullScreenImageViewer: View {
                     .opacity(backgroundOpacity)
                     .ignoresSafeArea()
 
-                // Image
-                CachedAsyncImage(url: imageUrl) {
+                // Image — full resolution (downsamples:false) so pinch-to-zoom
+                // stays sharp at up to 5x (IOS-POLISH-001).
+                CachedAsyncImage(url: imageUrl, downsamples: false) {
                     ProgressView()
                         .tint(.white)
                 }

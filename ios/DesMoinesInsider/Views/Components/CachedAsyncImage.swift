@@ -1,6 +1,7 @@
 import SwiftUI
 import os
 import CryptoKit
+import ImageIO
 
 /// Async image with two-tier cache: NSCache (memory) + FileManager (disk).
 ///
@@ -9,6 +10,11 @@ import CryptoKit
 /// - Network: placeholder shown while loading
 struct CachedAsyncImage<Placeholder: View>: View {
     let url: String?
+    /// When true (default), images are decoded at most to the device's native
+    /// screen width (IOS-POLISH-001), so we never hold a bitmap larger than we
+    /// can display. Set false for a zoomable full-screen viewer that needs the
+    /// full resolution. Full-quality bytes are always kept on disk regardless.
+    var downsamples: Bool = true
     @ViewBuilder let placeholder: () -> Placeholder
 
     @State private var image: UIImage?
@@ -53,6 +59,10 @@ struct CachedAsyncImage<Placeholder: View>: View {
             return
         }
 
+        // Cap decode size to the device's native width unless full-res is asked
+        // for (zoomable viewer). nil == no downsampling.
+        let maxPixels: CGFloat? = downsamples ? UIScreen.main.nativeBounds.width : nil
+
         // 1. Memory cache (instant)
         if let cached = ImageCache.shared.getFromMemory(urlString) {
             image = cached
@@ -60,9 +70,9 @@ struct CachedAsyncImage<Placeholder: View>: View {
             return
         }
 
-        // 2. Disk cache (fast)
-        if let diskCached = await ImageCache.shared.getFromDisk(urlString) {
-            ImageCache.shared.setMemory(diskCached, for: urlString)
+        // 2. Disk cache (fast) — decode at display size on read
+        if let diskCached = await ImageCache.shared.getFromDisk(urlString, maxPixelSize: maxPixels) {
+            ImageCache.shared.setMemory(diskCached, for: urlString, cost: diskCached.approxMemoryCost)
             image = diskCached
             isLoading = false
             return
@@ -73,14 +83,19 @@ struct CachedAsyncImage<Placeholder: View>: View {
 
         do {
             let (data, response) = try await URLSession.shared.data(from: url)
-            if let uiImage = UIImage(data: data) {
+            // Decode at most to the display cap; keeps the in-memory bitmap small
+            // for oversized source images (a 3000x2000 photo no longer allocates
+            // ~24 MB for a list thumbnail).
+            if let uiImage = ImageDownsampler.decode(data, maxPixelSize: maxPixels) {
                 // Show tiny blurred thumbnail first for progressive feel
                 if thumbnail == nil {
                     thumbnail = Self.generateThumbnail(from: uiImage)
                 }
 
-                ImageCache.shared.setMemory(uiImage, for: urlString)
+                ImageCache.shared.setMemory(uiImage, for: urlString, cost: uiImage.approxMemoryCost)
                 let ttl = Self.cacheTTL(from: response)
+                // Store the ORIGINAL bytes on disk (full quality); we re-decode
+                // at the display cap on read.
                 await ImageCache.shared.setDisk(data, for: urlString, ttl: ttl)
 
                 // Crossfade to full image
@@ -157,13 +172,20 @@ final class ImageCache: @unchecked Sendable {
         memoryCache.object(forKey: key as NSString)
     }
 
-    func setMemory(_ image: UIImage, for key: String) {
-        memoryCache.setObject(image, forKey: key as NSString)
+    func setMemory(_ image: UIImage, for key: String, cost: Int = 0) {
+        if cost > 0 {
+            memoryCache.setObject(image, forKey: key as NSString, cost: cost)
+        } else {
+            memoryCache.setObject(image, forKey: key as NSString)
+        }
     }
 
     // MARK: - Disk
 
-    func getFromDisk(_ key: String) async -> UIImage? {
+    /// Reads a cached image from disk, decoding it at `maxPixelSize` (nil = full
+    /// resolution). The full-quality bytes stay on disk; only the returned
+    /// in-memory bitmap is downsampled.
+    func getFromDisk(_ key: String, maxPixelSize: CGFloat? = nil) async -> UIImage? {
         let fileURL = diskFileURL(for: key)
         let metaURL = diskMetaURL(for: key)
 
@@ -185,7 +207,7 @@ final class ImageCache: @unchecked Sendable {
                 }
 
                 guard let data = try? Data(contentsOf: fileURL),
-                      let image = UIImage(data: data) else {
+                      let image = ImageDownsampler.decode(data, maxPixelSize: maxPixelSize) else {
                     continuation.resume(returning: nil)
                     return
                 }
@@ -268,6 +290,44 @@ final class ImageCache: @unchecked Sendable {
 
 private struct DiskCacheMeta: Codable {
     let expiresAt: Date
+}
+
+// MARK: - Downsampling (IOS-POLISH-001)
+
+/// Decodes image data at a bounded pixel size using ImageIO, so we never hold a
+/// decoded bitmap larger than we can display. Falls back to a plain decode on
+/// any failure (and when `maxPixelSize` is nil, e.g. the zoomable viewer).
+enum ImageDownsampler {
+    static func decode(_ data: Data, maxPixelSize: CGFloat?) -> UIImage? {
+        guard let maxPixelSize, maxPixelSize > 0 else {
+            return UIImage(data: data)
+        }
+        let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) else {
+            return UIImage(data: data)
+        }
+        let thumbOptions: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            // Bake in EXIF orientation so the result is upright.
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            // ImageIO never upscales past the source, so small images are untouched.
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
+        ]
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbOptions as CFDictionary) else {
+            return UIImage(data: data)
+        }
+        return UIImage(cgImage: cgImage)
+    }
+}
+
+private extension UIImage {
+    /// Approximate decoded byte size, used as the NSCache cost so the memory
+    /// cache's totalCostLimit is meaningful.
+    var approxMemoryCost: Int {
+        guard let cg = cgImage else { return 0 }
+        return cg.bytesPerRow * cg.height
+    }
 }
 
 // MARK: - Convenience init without placeholder

@@ -2393,8 +2393,8 @@
         "iOS build passes and existing tests stay green"
       ],
       "priority": 231,
-      "passes": false,
-      "notes": "HIGH value. Touches the app's most critical visual component — implement deliberately and verify under CI + manual QA (no Swift toolchain on Linux to catch visual regressions)."
+      "passes": true,
+      "notes": "DONE in this session. CachedAsyncImage now decodes via ImageIO CGImageSourceCreateThumbnailAtIndex (kCGImageSourceThumbnailMaxPixelSize) capped at UIScreen.main.nativeBounds.width on BOTH the network and disk-read paths; full-quality bytes still stored on disk and re-decoded at the display cap on read. NSCache cost now set to the decoded byte size so the 50MB totalCostLimit is meaningful. EXIF orientation baked in via kCGImageSourceCreateThumbnailWithTransform; ImageIO never upscales so small images are untouched. New `downsamples: Bool = true` param lets FullScreenImageViewer opt out (downsamples:false) to keep pinch-zoom sharp. All other call sites unchanged (param defaults)."
     },
     {
       "id": "IOS-POLISH-002",
