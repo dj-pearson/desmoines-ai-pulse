@@ -16,7 +16,6 @@ import { useFocusOnRouteChange } from "@/hooks/useFocusOnRouteChange";
 import { usePageTracking } from "@/hooks/usePageTracking";
 import { useLocation } from "react-router-dom";
 import { KeyboardShortcutsModal } from "@/components/KeyboardShortcutsModal";
-import { WelcomeModal } from "@/components/WelcomeModal";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import BottomNav from "@/components/BottomNav";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -266,7 +265,6 @@ const KeyboardShortcutsProvider = ({ children }: { children: React.ReactNode }) 
         open={showShortcutsModal}
         onOpenChange={setShowShortcutsModal}
       />
-      <WelcomeModal />
     </div>
   );
 };
