@@ -3032,3 +3032,57 @@ useTripPlanner lints with 0 new findings (pre-existing @ts-ignore warnings only)
   M supabase/functions/analyze-competitor/index.ts
   M supabase/functions/firecrawl-scraper/index.ts
   M src/hooks/useTripPlanner.ts
+
+## 2026-06-12 — WEB-SEC-003 (server-side role assignment + user_roles lockdown + audit) [passes:true]
+
+### The escalation hole
+useUserRole.assignRole() wrote public.user_roles directly from the browser with
+`assigned_by` set client-side. The validate_role_assignment trigger TRUSTS that
+column to decide who's allowed — and (since migration 20251125000001) SKIPS ALL
+validation when assigned_by IS NULL. So a crafted client insert
+({user_id: me, role: 'root_admin', assigned_by: null}) could self-escalate,
+with RLS as the only real backstop.
+
+### Fix — three layers
+1. assign-role edge function (NEW) — the only sanctioned write path:
+   verify caller JWT → confirm caller is admin/root_admin server-side → enforce
+   hierarchy (only root_admin grants admin/root_admin) → block self-role change →
+   write with service client (assigned_by = VERIFIED caller) → audit row with
+   actor/target/old_role/new_role. Returns structured errors.
+2. Migration 20260612000000 (additive) — RLS lockdown on user_roles:
+   - ENABLE RLS (idempotent).
+   - Permissive SELECT policy (own row OR is_admin()) — permissive policies only
+     ADD read access, so existing reads keep working; admins still see all.
+   - RESTRICTIVE deny policies for INSERT/UPDATE/DELETE to authenticated+anon.
+     Restrictive policies are AND-ed, so they override any pre-existing permissive
+     write policy. service_role (edge fn) has BYPASSRLS; SECURITY DEFINER
+     sync_oauth_user_role still inserts fine.
+3. useUserRole.assignRole() → calls the edge function; DEV-gated logging.
+
+### Audit logging (criterion 4)
+New _shared/auditLog.ts (best-effort, never throws). Wired into:
+- delete-user-account → 'account_deletion' (high)
+- bulk-update-restaurants → 'bulk_update_restaurants' (medium)
+- process-stripe-refund already wrote an audit row (unchanged).
+assign-role writes its own role_assignment row (the trigger also logs — harmless
+redundancy, but the edge-fn row additionally captures old_role).
+
+### Backward compat
+iOS/Android never assign roles (verified). The only client write path (web admin)
+was migrated to the edge function in THIS release. grep confirms no other src/
+code writes user_roles. Reads (AuthContext, useAdminAuth, useSecurityContext —
+all own-row; admins via is_admin()) preserved by the SELECT policy.
+
+### Verification
+type-check PASSES; assign-role/auditLog/delete-user-account/bulk-update-restaurants
+parse via esbuild; useUserRole lints with 0 errors (pre-existing console warnings
+only). DB migration not applied locally (no Supabase in container) — written to be
+idempotent and additive per CLAUDE.md.
+
+### Files
+  A supabase/functions/assign-role/index.ts
+  A supabase/functions/_shared/auditLog.ts
+  A supabase/migrations/20260612000000_lock_down_user_roles_writes.sql
+  M supabase/functions/delete-user-account/index.ts
+  M supabase/functions/bulk-update-restaurants/index.ts
+  M src/hooks/useUserRole.ts
