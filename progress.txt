@@ -3130,3 +3130,61 @@ untouched). _headers is copied verbatim to dist; the CSP edit is simple + valid.
   M public/_headers
   M supabase/functions/generate-itinerary/index.ts
   M supabase/functions/personalized-recommendations/index.ts
+
+## 2026-06-12 — WEB-SEC-005 (RLS audit sweep + report + safe fixes) [passes:true]
+
+### Deliverable: scripts/audit-rls.ts + docs/RLS_AUDIT.md
+Static parser over all 220 migrations (chronological, last-wins) extracting
+CREATE POLICY (table/command/roles/USING/WITH CHECK via balanced-paren scan),
+ENABLE/FORCE RLS, and SECURITY DEFINER functions (+ whether search_path pinned).
+Emits a full policy inventory + flagged-findings tables. A hand-maintained
+"Disposition" section records the verdict per finding. Re-runnable + idempotent.
+
+Findings: 496 policies, 29 permissive writes, 4 anon writes, 5 missing-RLS
+(in-migration), 50 unpinned SECURITY DEFINER functions.
+
+### REAL HOLE found + FIXED (migration 20260612000001_rls_audit_fixes.sql)
+8 policies named "Service role can manage …" were written
+`FOR ALL USING(true) WITH CHECK(true)` with NO `TO` clause → defaulted to PUBLIC.
+Because permissive policies are OR-ed, this granted EVERY authenticated (and
+anon) caller full read+write on:
+  user_subscriptions, payments, invoices, usage_events, usage_quotas,
+  pseo_pages, pseo_generation_queue, pseo_generation_log
+…silently nullifying the per-user "Users can view own …" SELECT policies. Any
+logged-in user could read/modify everyone's payment + subscription data.
+
+Fix: scoped each to `TO service_role`. SAFE per CLAUDE.md:
+  - service_role BYPASSES RLS, so Stripe-webhook / edge-function writes unaffected
+    (these policies were redundant for it anyway).
+  - User reads keep working via the separate per-user SELECT policies.
+  - No web/iOS/Android client writes these tables directly → no binary relies on
+    the over-grant.
+
+### search_path pinning (criterion 3)
+Single DO block pins `search_path = public, pg_temp` on EVERY SECURITY DEFINER
+function in public not already pinned — by OID via regprocedure, so overloads are
+handled and nothing is missed. Idempotent + additive (preserves behaviour; these
+fns assume the public schema).
+
+### ACCEPTED (documented in report, no change)
+Insert-only telemetry/intake tables (security_audit_logs, contact_submissions,
+newsletter_subscribers, csp_violation_logs, search_analytics, accessibility_reports,
+guide_requests, rfp_submissions, …) — append-only, no public SELECT, so writes
+without read are by design. Already-service_role-scoped USING(true) policies.
+Intentional anon consent inserts. My own user_roles deny policies.
+
+### ESCALATED (report "Needs human decision")
+profiles, storage.objects, trending_scores, user_analytics, user_reputation have
+policies but no ENABLE RLS captured in a migration — almost certainly enabled
+out-of-band (Supabase dashboard). Flagged to verify live (pg_class.relrowsecurity)
+rather than force-enable blind (force-enabling RLS on profiles could break reads).
+
+### Verification
+type-check PASSES; audit-rls.ts lints 0 errors (2 console warnings, expected for a
+CLI); script idempotent. Migration is standard/idempotent/additive; not applied
+in-container (no Supabase CLI/DB).
+
+### Files
+  A scripts/audit-rls.ts
+  A docs/RLS_AUDIT.md
+  A supabase/migrations/20260612000001_rls_audit_fixes.sql
