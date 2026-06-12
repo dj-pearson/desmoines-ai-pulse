@@ -156,8 +156,8 @@
         "npm run validate passes"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": "Evidence: src/pages/AdminEventSubmissions.tsx + src/components/admin/EventSubmissionsManager.tsx (manual status toggles), event_submissions.status default 'pending', rejection templates already exist in the manager UI."
+      "passes": true,
+      "notes": "DONE (2026-06-12): New triage-event-submission edge function scores each submission — deterministic completeness (title/description length, valid FUTURE date, venue/location, category, image/url) producing 0-100 + reasons[], plus a Claude haiku content-safety check (fails SAFE-pending if the AI errors). Decision: safetyFlag OR score<50 -> AUTO-REJECT with a templated reason + auto_decided; score>=85 AND valid date AND no flag -> AUTO-APPROVE: inserts into events (source='user_submission') + status approved; 50-84 -> stays pending with score+reasons. Submitter notified on auto-decisions via the existing notify-event-submission (event_approved/event_rejected). Additive migration 20260612000004: user_submitted_events gains quality_score/triage_reasons/triaged_at/auto_decided; events gains nullable source. Wired into the submit flow (useUserSubmittedEvents.useSubmitEvent fires triage fire-and-forget after insert). AuthZ: service/API key OR the submission owner OR admin; per-user persistent rate limit bounds Claude cost. Idempotent (only triages pending). Metrics flow through the WEB-AUTO-001 jobRunner ('triage-event-submission', decision/score in metadata). EventSubmissionsManager shows an AI score badge (green/amber/red) + 'auto' tag with reasons on hover, and the pending queue is sorted by quality_score desc. Admin override unchanged (setStatus still works; auto-decisions audit-logged on the row + via notify). Verified: type-check passes, triage parses via esbuild, manager+hook lint 0 errors."
     },
     {
       "id": "WEB-AUTO-003",

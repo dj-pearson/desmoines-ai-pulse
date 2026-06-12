@@ -3389,3 +3389,37 @@ esbuild; JobHealthPanel + AdminSystem lint clean.
   A docs/AUTOMATION_JOBS.md
   M supabase/functions/cleanup-old-events/index.ts
   M src/pages/AdminSystem.tsx
+
+## 2026-06-12 — WEB-AUTO-002 (event submission AI triage) [passes:true]
+
+### triage-event-submission edge function
+- Deterministic completeness score (0-100) + reasons: title/description length,
+  valid FUTURE date, venue/location, category, image/website URLs.
+- Claude haiku content-safety check -> {safe, reasons}; fails SAFE-pending if the
+  AI errors (never auto-rejects on our own failure).
+- Decision: safetyFlag OR score<50 -> AUTO-REJECT (templated reason, auto_decided);
+  score>=85 & valid date & no flag -> AUTO-APPROVE (insert into events with
+  source='user_submission', status approved); 50-84 -> stays pending with score.
+- Submitter notified on auto-decisions via existing notify-event-submission
+  (event_approved / event_rejected).
+- AuthZ: service/API key OR submission owner OR admin; per-user persistent rate
+  limit bounds Claude spend. Idempotent (pending only). Metrics via jobRunner.
+
+### Schema (migration 20260612000004, additive)
+user_submitted_events += quality_score, triage_reasons jsonb, triaged_at,
+auto_decided; events += nullable source (provenance).
+
+### Wiring + UI
+- useSubmitEvent fires triage fire-and-forget after the insert (never blocks UX).
+- EventSubmissionsManager: AI score badge (green>=85 / amber>=50 / red) + reasons
+  on hover + 'auto' tag; pending queue sorted by quality_score desc. Admin
+  approve/reject (setStatus) unchanged.
+
+### Verification
+type-check PASSES; triage parses via esbuild; manager + hook lint 0 errors.
+
+### Files
+  A supabase/migrations/20260612000004_event_submission_triage.sql
+  A supabase/functions/triage-event-submission/index.ts
+  M src/hooks/useUserSubmittedEvents.ts
+  M src/components/admin/EventSubmissionsManager.tsx

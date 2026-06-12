@@ -110,6 +110,14 @@ export function useSubmitEvent() {
         submitterName: user.user_metadata?.full_name || user.email || undefined,
       });
 
+      // AI triage (WEB-AUTO-002): auto-approve clean / auto-reject junk / queue
+      // the ambiguous middle. Fire-and-forget — never block the submit UX.
+      supabase.functions
+        .invoke('triage-event-submission', { body: { submissionId: data.id } })
+        .catch((err) => {
+          if (import.meta.env.DEV) console.error('triage-event-submission failed', err);
+        });
+
       return data;
     },
     onSuccess: () => {

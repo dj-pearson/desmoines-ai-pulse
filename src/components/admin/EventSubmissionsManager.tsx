@@ -96,6 +96,10 @@ interface Submission {
   submitted_at: string;
   created_at: string;
   updated_at: string;
+  // WEB-AUTO-002 AI triage
+  quality_score: number | null;
+  triage_reasons: string[] | null;
+  auto_decided: boolean | null;
 }
 
 type StatusFilter =
@@ -188,6 +192,10 @@ export default function EventSubmissionsManager() {
         );
       }
       if (statusFilter !== "all") q = q.eq("status", statusFilter);
+      // Pending queue: surface the AI-scored ambiguous middle highest-first.
+      if (statusFilter === "pending") {
+        q = q.order("quality_score", { ascending: false, nullsFirst: false });
+      }
       q = q
         .order("submitted_at", { ascending: false })
         .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
@@ -469,7 +477,28 @@ export default function EventSubmissionsManager() {
                         />
                       </TableCell>
                       <TableCell className="max-w-md">
-                        <div className="font-medium truncate">{s.title}</div>
+                        <div className="font-medium truncate flex items-center gap-2">
+                          {s.title}
+                          {typeof s.quality_score === "number" && (
+                            <span
+                              className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                                s.quality_score >= 85
+                                  ? "bg-green-100 text-green-700"
+                                  : s.quality_score >= 50
+                                    ? "bg-amber-100 text-amber-700"
+                                    : "bg-red-100 text-red-700"
+                              }`}
+                              title={(s.triage_reasons ?? []).join(" · ") || "AI quality score"}
+                            >
+                              AI {s.quality_score}
+                            </span>
+                          )}
+                          {s.auto_decided && (
+                            <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] bg-muted text-muted-foreground" title="Decided automatically by AI triage">
+                              auto
+                            </span>
+                          )}
+                        </div>
                         <div className="text-xs text-muted-foreground truncate">
                           {s.description?.slice(0, 80)}
                         </div>
