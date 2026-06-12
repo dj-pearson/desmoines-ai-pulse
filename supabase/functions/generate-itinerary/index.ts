@@ -4,6 +4,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
 import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
 import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
 import { resolveEntitledTier, hasFeatureAccess } from "../_shared/entitlements.ts";
+import { getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
 
 // Monthly trip-planner quota per tier (matches the web useSubscription copy /
 // WEB-FEAT-011). -1 = unlimited. Enforced server-side so the client gate can't
@@ -14,10 +15,13 @@ const TRIP_PLANNER_MONTHLY_QUOTA: Record<'free' | 'insider' | 'vip', number> = {
   vip: -1,
 };
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+// Origin-validated CORS: this endpoint returns a user's private itinerary, so
+// it echoes only an allowlisted Origin (native apps send no Origin and are
+// unaffected — CORS is browser-enforced).
+function corsFor(req: Request): Record<string, string> {
+  const origin = req.headers.get('origin');
+  return getCorsHeaders(origin && isOriginAllowed(origin) ? origin : undefined);
+}
 
 /**
  * AI Trip Planner - Intelligent Itinerary Generator
@@ -73,6 +77,7 @@ interface GeneratedItinerary {
 }
 
 serve(async (req) => {
+  const corsHeaders = corsFor(req);
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }

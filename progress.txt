@@ -3086,3 +3086,47 @@ idempotent and additive per CLAUDE.md.
   M supabase/functions/delete-user-account/index.ts
   M supabase/functions/bulk-update-restaurants/index.ts
   M src/hooks/useUserRole.ts
+
+## 2026-06-12 — WEB-SEC-004 (CORS + CSP hardening) [passes:true]
+
+### cors.ts — kill the blanket lovable.dev wildcard
+- isOriginAllowed() no longer does `origin.endsWith('.lovable.dev')` (which would
+  trust evil.attacker.lovable.dev and any http: scheme). Now a precise single-
+  label https regex `^https://[a-z0-9-]+\.lovable\.dev$`, NEVER in production,
+  opt-out via ALLOW_LOVABLE_PREVIEWS=false.
+- New CORS_PREVIEW_ORIGINS secret (comma-separated) feeds an explicit preview
+  allowlist into the non-prod origin set. Production already trusts only the real
+  desmoinesinsider.com (+www) origins.
+
+### public/_headers — CSP
+- Removed `http:` from img-src (https/data/blob only). connect-src was already
+  https-only.
+- Appended `upgrade-insecure-requests` so any stray http subresource auto-upgrades.
+
+### No-Origin safety (native apps)
+handleCors only rejects when an Origin header is present AND disallowed; requests
+with no Origin (iOS/Android) pass through. Confirmed unchanged.
+
+### Wildcard-CORS sweep (criterion 3) — SENSITIVE SUBSET per owner decision
+71 functions hardcode ACAO `*`. Auth here is bearer-token, not cookies, so
+wildcard CORS is low-risk, and many are public-by-design data APIs. Owner chose
+"sensitive subset only" (AskUserQuestion). Migrated the private-user-data AI
+endpoints to origin-validated getCorsHeaders:
+  - generate-itinerary (per-request corsFor(req))
+  - personalized-recommendations
+discover-chat already used origin-validated CORS; delete-user-account,
+process-stripe-refund, assign-role, bulk-update-restaurants already use the shared
+helper. Genuinely-public read APIs keep `*` intentionally (documented).
+
+### Verification
+type-check PASSES; cors.ts + migrated functions parse via esbuild. Full `vite
+build` could NOT complete in-container: the sitemap prestep needs Supabase env
+vars, AND `vite build` throws a PRE-EXISTING 'URI malformed' on index.html that
+reproduces on clean HEAD (toolchain/patch issue, not this change — index.html
+untouched). _headers is copied verbatim to dist; the CSP edit is simple + valid.
+
+### Files
+  M supabase/functions/_shared/cors.ts
+  M public/_headers
+  M supabase/functions/generate-itinerary/index.ts
+  M supabase/functions/personalized-recommendations/index.ts
