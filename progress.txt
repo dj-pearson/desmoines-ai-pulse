@@ -3188,3 +3188,52 @@ in-container (no Supabase CLI/DB).
   A scripts/audit-rls.ts
   A docs/RLS_AUDIT.md
   A supabase/migrations/20260612000001_rls_audit_fixes.sql
+
+## 2026-06-12 — WEB-SEC-006 (automated brute-force login lockout) [passes:true]
+
+### Gap
+login_attempts (migration 20260402000002) + the check-login-attempt edge
+function existed, but NOTHING called check-login-attempt (grep of src/ = 0). The
+web login used only a client-side in-memory Map throttle in AuthContext —
+bypassable by a refresh or by hitting the API directly.
+
+### Wiring (src/contexts/AuthContext.tsx)
+login() now calls the authoritative server function via a new fail-open
+checkServerLockout() helper:
+  - pre-auth `check` → blocks with the server lockout message if locked,
+  - `record_failure` after an auth error,
+  - `record_success` after success (clears the email's counter).
+Returns null (→ allowed) on any error so a function outage never blocks sign-in.
+The in-memory throttle stays as a fast local layer.
+
+### check-login-attempt enhancements
+- Locks on >10 failures for one EMAIL **or** >5 from one IP within a 10-minute
+  detection window (added IP-keyed counting on the existing client_ip column,
+  queried in parallel with the email count). Lockout lasts 15 minutes from the
+  most recent offending attempt.
+- Hardened client IP: CF-Connecting-IP → X-Real-IP → rightmost XFF (never the
+  spoofable leftmost). Consistent with WEB-SEC-002.
+- Fail-open on DB error preserved.
+- On the transition INTO lockout only (the failure that crosses a threshold):
+  * writes a security_audit_logs row (event_type=account_lockout, severity
+    medium, ip + counts in details),
+  * sends a best-effort notification email to the account owner via Resend +
+    the shared renderEmail template — ONLY when a profile exists for the email
+    (non-enumeration; no email to random addresses; IP-only lockouts notify no
+    one since there's no single owner).
+
+### Non-enumeration + false-positive safety
+- The blocked message is identical regardless of whether the account exists or
+  which signal (email/IP) tripped; Auth.tsx surfaces it via the existing toast.
+- record_success clears the counter. A valid existing session never reaches this
+  path (login() is the unauthenticated sign-in flow only).
+
+### Verification
+type-check PASSES; check-login-attempt parses via esbuild; AuthContext lints 0
+errors. (Note: check-login-attempt isn't in config.toml so it defaults to
+verify_jwt=true — the anon key sent by functions.invoke during login satisfies
+the gateway, so pre-auth calls work.)
+
+### Files
+  M supabase/functions/check-login-attempt/index.ts
+  M src/contexts/AuthContext.tsx

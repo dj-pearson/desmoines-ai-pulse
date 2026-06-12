@@ -94,8 +94,8 @@
         "npm run validate passes"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": "Autonomy-flavored security: detection AND response are automatic, admin only sees the audit trail. Evidence: supabase/migrations/20260402000002_create_login_attempts_table.sql exists with no consumer."
+      "passes": true,
+      "notes": "DONE (2026-06-12): login_attempts truly had no consumer — check-login-attempt existed but was called by NOTHING in src/ (web used only a bypassable in-memory Map throttle in AuthContext). Wired the server-side function into AuthContext.login: pre-auth 'check' (blocks with the server message), 'record_failure' on auth error, 'record_success' on success (resets counter). New checkServerLockout() helper FAILS OPEN (returns null) on any error so an outage never blocks sign-in. Enhanced check-login-attempt: now locks on >10 failures for one EMAIL or >5 from one IP within a 10-min window (added IP-keyed counting via the existing client_ip column), lockout lasts 15 min; hardened IP extraction (CF-Connecting-IP, never the spoofable leftmost XFF); fail-open on DB error preserved. On the transition INTO lockout it writes a security_audit_logs row (event_type=account_lockout) and sends a best-effort notification email to the account owner via Resend + shared renderEmail — ONLY when a profile exists for the email (non-enumerating, no spam to random addresses; IP-only lockouts notify no one). Message is identical regardless of whether the account exists or which signal tripped (non-enumerating); Auth.tsx surfaces it via the existing toast. Valid-session requests never hit this path (login() is unauthenticated-only). Verified: type-check passes; edge fn parses via esbuild; AuthContext lints 0 errors. Evidence was: migration 20260402000002 + no caller."
     },
     {
       "id": "WEB-SEC-007",
