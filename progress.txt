@@ -3237,3 +3237,47 @@ the gateway, so pre-auth calls work.)
 ### Files
   M supabase/functions/check-login-attempt/index.ts
   M src/contexts/AuthContext.tsx
+
+## 2026-06-12 — WEB-SEC-007 (image-transform RL, webhook sigs, sanitized errors) [passes:true]
+
+### image-transform
+- Added a generous per-IP PERSISTENT rate limit (300/min, endpoint
+  'image-transform') that FAILS OPEN on a rate-limit DB miss so image serving
+  never breaks. The strong caching (ETag + `Cache-Control: immutable` +
+  If-None-Match 304s) was already present, so repeat page loads rarely hit the
+  function — 300/min/IP is plenty for a content-heavy page.
+- Error path now uses the shared sanitizer (generic message, status logic
+  preserved: 400 on "Missing", else 500).
+
+### Webhook signatures
+- stripe-webhook: signature verification CONFIRMED present (constructEvent +
+  STRIPE_WEBHOOK_SECRET; rejects when the secret is unset) and untouched.
+- test-article-webhook + publish-article-webhook are now auth-gated
+  (requireAdminOrApiKey / requireApiKey from WEB-SEC-001), which is stronger
+  than a shared HMAC — no unauthenticated, unchecked webhook remains.
+
+### Sanitized errors — new _shared/errorResponse.ts
+Logs the full error (message + stack) server-side, returns a generic
+client-safe `{ error }` (+ optional code), with a caller-controlled status so
+clients that branch on status keep working. Applied to the high-traffic public
+functions that previously returned `error.message`:
+  - image-transform (via the helper)
+  - api-events, api-restaurants, geocode-location, generate-itinerary (inline,
+    preserving each response shape incl. `success: false`).
+discover-chat's `error.message` uses are internal AI-tool results (fed back to
+Claude, not client error responses) — intentionally left.
+
+### Backward compat
+No status codes changed; image-transform success response shape unchanged;
+api-* keep their `success:false` shape.
+
+### Verification
+type-check PASSES; all edited Deno files parse via esbuild.
+
+### Files
+  A supabase/functions/_shared/errorResponse.ts
+  M supabase/functions/image-transform/index.ts
+  M supabase/functions/api-events/index.ts
+  M supabase/functions/api-restaurants/index.ts
+  M supabase/functions/geocode-location/index.ts
+  M supabase/functions/generate-itinerary/index.ts

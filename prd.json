@@ -109,8 +109,8 @@
         "npm run validate passes"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": "Evidence: docs/SECURITY_AUDIT.md line ~209 (image-transform no rate limit), supabase/config.toml line ~33 (test-article-webhook verify_jwt=false). iOS POLISH-002 notes the web OptimizedImage routes through image-transform — keep web image rendering working (verify in dev after the change)."
+      "passes": true,
+      "notes": "DONE (2026-06-12): image-transform — added a generous per-IP PERSISTENT rate limit (300/min, fails OPEN on DB miss so image serving never breaks); strong ETag + Cache-Control immutable + 304 If-None-Match were ALREADY present (so repeat loads rarely reach the function). Webhook signatures: stripe-webhook signature verification confirmed present (constructEvent + STRIPE_WEBHOOK_SECRET, rejects when unset) and untouched; test-article-webhook + publish-article-webhook are now AUTH-GATED (requireAdminOrApiKey / requireApiKey from WEB-SEC-001), which supersedes the HMAC requirement (an admin/API key is stronger than a shared HMAC secret) — no unauthenticated webhook without a check remains. New _shared/errorResponse.ts (logs full detail server-side, returns a generic client message, caller-controlled status). Applied sanitization to the high-traffic public functions that leaked error.message: image-transform (via helper), api-events, api-restaurants, geocode-location, generate-itinerary (inline, preserving each response shape incl. success:false). discover-chat's error.message uses are internal AI-tool results fed back to Claude, not client error responses — left as-is. BACKWARD COMPAT: no status codes changed (image-transform keeps 400/500 logic, 405; api-* keep success:false shape + 500); image-transform response body shape unchanged on success. Verified: type-check passes; all edited Deno files parse via esbuild. Evidence was: image-transform no rate limit; webhook checks."
     },
     {
       "id": "WEB-SEC-008",

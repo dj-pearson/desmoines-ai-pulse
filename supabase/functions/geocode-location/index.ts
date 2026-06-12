@@ -107,9 +107,10 @@ serve(async (req) => {
       { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
+    // Sanitized: full error logged server-side; generic message to clients.
     console.error(`Geocoding error:`, error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: "Geocoding failed" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     )
   }

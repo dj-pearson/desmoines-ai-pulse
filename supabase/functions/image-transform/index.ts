@@ -6,6 +6,8 @@
  */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { validateURLForSSRF } from "../_shared/validation.ts";
+import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
+import { errorResponse } from "../_shared/errorResponse.ts";
 
 // CORS headers for cross-origin requests
 const corsHeaders = {
@@ -231,6 +233,18 @@ serve(async (req) => {
     });
   }
 
+  // Generous per-IP rate limit so a page full of images loads fine (strong
+  // immutable caching + 304s mean repeat loads rarely reach the function), but
+  // the proxy can't be abused as an unbounded transform/bandwidth amplifier.
+  // Fails OPEN on a rate-limit DB miss so image serving never breaks.
+  const rl = await checkRateLimitPersistent(req, {
+    endpoint: "image-transform",
+    windowMs: 60 * 1000,
+    max: 300,
+    message: "Image request rate limit exceeded.",
+  });
+  if (!rl.success && rl.response) return rl.response;
+
   try {
     const url = new URL(req.url);
     const options = parseOptions(url.searchParams);
@@ -262,16 +276,14 @@ serve(async (req) => {
       },
     });
   } catch (error) {
-    console.error("Image transform error:", error);
-
-    const errorMessage =
-      error instanceof Error ? error.message : "Unknown error occurred";
-
-    return new Response(JSON.stringify({ error: errorMessage }), {
-      status: error instanceof Error && error.message.includes("Missing")
-        ? 400
-        : 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    // Sanitized client response (no internal detail); full error logged
+    // server-side. Status logic preserved for backward compat.
+    const isBadRequest = error instanceof Error && error.message.includes("Missing");
+    return errorResponse(error, {
+      status: isBadRequest ? 400 : 500,
+      clientMessage: isBadRequest ? "Invalid image request." : "Image transformation failed.",
+      headers: corsHeaders,
+      logContext: "image-transform",
     });
   }
 });

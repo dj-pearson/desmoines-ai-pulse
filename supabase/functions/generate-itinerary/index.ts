@@ -489,10 +489,11 @@ Return ONLY the JSON object, no additional text.`;
     });
 
   } catch (error) {
+    // Sanitized: full error logged server-side; clients get a generic message.
     console.error('Error in generate-itinerary function:', error);
     return new Response(JSON.stringify({
       success: false,
-      error: error.message
+      error: 'Failed to generate itinerary. Please try again.'
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
