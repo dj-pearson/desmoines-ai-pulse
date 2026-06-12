@@ -2905,3 +2905,77 @@ swap; targetURL nil-handling confirmed at both ad call sites.
 
 Remaining prd.json backlog: web/backend PROD-* plus the IOS-POLISH/IOS-SEC-002
 iOS follow-ups above.
+
+## 2026-06-12 — WEB-SEC-001 (lock down publicly-callable admin/AI edge functions) [passes:true]
+
+Start of the WEB Platform Autonomy & Core Uplift PRD (claude/web-platform-autonomy).
+First story: close the verify_jwt=false admin/AI holes before stacking automation on them.
+
+### What was callable by anyone on the internet
+18 functions ship with verify_jwt=false. 12 were admin/internal tooling that
+ran expensive Claude / Google Places / DB service-role work with NO app-level
+auth — anyone could POST and burn spend or write the DB.
+
+### Fix
+Every admin/internal function now calls requireAdminOrApiKey() (from the
+existing _shared/apiKeyAuth.ts) immediately after the OPTIONS handler, before
+any external call or DB write:
+  ai-crawler, analyze-competitor, bulk-enhance-events, scrape-events,
+  bulk-event-updater, restaurant-opening-scraper, firecrawl-scraper,
+  backfill-coordinates, backfill-all-coordinates-force, populate-playgrounds,
+  extract-catchdesmoines-urls, test-article-webhook.
+(publish-article-webhook + generate-seo-content were already guarded.)
+
+Public-by-design functions left untouched (no shape change):
+  get-sponsored-pick, log-content-metrics, image-transform, geocode-location
+  (geocode-location is called from the PUBLIC LocationAutocomplete component —
+  locking it would break public geocoding; its rate-limit recommendation is
+  WEB-SEC-002 territory).
+
+### Keeping cron alive without rewriting migrations
+pg_cron jobs invoke these with `Authorization: Bearer <service_role_key>`.
+Rather than rewrite every cron migration to inject EDGE_FUNCTION_API_KEY (which
+would need the key wired into pg Vault and risks breaking a live job
+mid-release), requireAdminOrApiKey now ALSO accepts the service-role-key bearer.
+The service-role key is already a full-access secret, so accepting it grants no
+extra privilege — but automation keeps running with zero migration churn.
+Three auth paths accepted: EDGE_FUNCTION_API_KEY, service-role key, or a
+verified admin/root_admin user JWT (the admin web UI; supabase-js auto-attaches
+the signed-in admin's token to functions.invoke).
+
+### SSRF / cost-proxy hardening (the two HIGH functions)
+New _shared/fetchGuard.ts:
+  - isHostAllowed(url): target host must equal/subdomain a DEFAULT_CRAWL_ALLOWLIST
+    domain (known DSM event/venue sources). Runtime override via
+    CRAWLER_DOMAIN_ALLOWLIST (comma-sep) or CRAWLER_ALLOW_ALL=true escape hatch.
+    Applied to ai-crawler (arbitrary request url) and analyze-competitor
+    (competitors.website_url). A leaked key can no longer aim them at internal
+    hosts.
+  - fetchTextWithSizeCap(url, init, maxBytes=10MB): streams + aborts past the
+    cap. analyze-competitor's previously-unbounded `fetch().text()` now uses it.
+
+### Backward compat
+No request/response shapes changed on any 200 path. Public functions and
+cron-invoked paths behave identically. Mobile binaries don't call these admin
+functions (verified: client refs are all admin-only web components).
+
+### Verification
+- node_modules was missing in the container → npm ci (pins TS 5.9.3 / ESLint 9).
+- `npm run type-check` PASSES.
+- All 14 edited Deno files parse clean via `esbuild --loader=ts` (no Deno
+  toolchain in the container).
+- `npm run lint`: 1 error is a PRE-EXISTING @typescript-eslint parser
+  false-positive in src/components/media/VideoPlayer.tsx:587 (untouched by this
+  story; tsc accepts the file, app builds fine). Plus ~3386 pre-existing
+  warnings. This story added zero new lint findings (all changes live under
+  supabase/functions/, outside the Vite/tsc/eslint scope).
+- Note: tsconfig.json carries a baseUrl deprecation that errors only under
+  TS 6.x; the project's pinned TS 5.9 is clean.
+
+### Files
+  M supabase/functions/_shared/apiKeyAuth.ts        (accept service-role bearer)
+  A supabase/functions/_shared/fetchGuard.ts        (allowlist + size cap)
+  M 12 admin function index.ts                       (auth guard; ai-crawler +
+                                                      analyze-competitor also
+                                                      allowlist/size-cap)
+  M docs/SECURITY_AUDIT.md                            (classification + middleware table)

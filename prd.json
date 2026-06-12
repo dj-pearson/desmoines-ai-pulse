@@ -16,8 +16,8 @@
         "npm run validate passes"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Evidence: supabase/config.toml verify_jwt=false entries; docs/SECURITY_AUDIT.md already documents ai-crawler/analyze-competitor as unauthenticated cost-abuse vectors. The scheduled pg_cron jobs that invoke these functions must be updated in the same story to send the new header (check migrations 20250107000003-5 etc. for net.http_post calls) so automation keeps working."
+      "passes": true,
+      "notes": "DONE (2026-06-12): All 12 admin/internal verify_jwt=false functions now call requireAdminOrApiKey() before any work (ai-crawler, analyze-competitor, bulk-enhance-events, scrape-events, bulk-event-updater, restaurant-opening-scraper, firecrawl-scraper, backfill-coordinates, backfill-all-coordinates-force, populate-playgrounds, extract-catchdesmoines-urls, test-article-webhook). publish-article-webhook + generate-seo-content were already guarded. Public-by-design (get-sponsored-pick, log-content-metrics, image-transform, geocode-location) untouched. KEY DECISION: instead of rewriting pg_cron migrations to send a new header (risky mid-release), extended requireAdminOrApiKey to also accept the SUPABASE_SERVICE_ROLE_KEY bearer that cron already sends — same security (it's already a full-access secret), zero migration churn, automation keeps working. New _shared/fetchGuard.ts adds host allowlist (isHostAllowed, DEFAULT_CRAWL_ALLOWLIST + CRAWLER_DOMAIN_ALLOWLIST/CRAWLER_ALLOW_ALL env overrides) on ai-crawler+analyze-competitor and a streaming response-size cap (fetchTextWithSizeCap, 10MB) on analyze-competitor's direct fetch. docs/SECURITY_AUDIT.md updated with classification+middleware table. Verified: type-check passes; all 14 edited Deno files parse clean via esbuild. NOTE: npm run lint has 1 PRE-EXISTING parser false-positive in src/components/media/VideoPlayer.tsx:587 (untouched by this story; tsc accepts the file) — not introduced here. Original evidence: supabase/config.toml verify_jwt=false entries; docs/SECURITY_AUDIT.md."
     },
     {
       "id": "WEB-SEC-002",

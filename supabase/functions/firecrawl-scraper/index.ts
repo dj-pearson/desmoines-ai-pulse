@@ -14,6 +14,7 @@ import { getAIConfig, buildClaudeRequest, buildLightweightClaudeRequest, getClau
 import { validateURLForSSRF } from "../_shared/validation.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
 import { tryDomainAdapter } from "../_shared/domain-adapters/index.ts";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 
 // Marker time for events without specific times (7:31:58 PM Central)
 const NO_TIME_MARKER = "19:31:58";
@@ -433,6 +434,9 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
+
+  const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+  if (authFailure) return authFailure;
 
   // Rate limiting: 10 requests per 15 minutes (SEC-022)
   const rateLimit = checkRateLimit(req, { max: 10, message: 'Scraper rate limit exceeded.' });

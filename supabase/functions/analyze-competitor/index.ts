@@ -9,6 +9,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
 import { checkRateLimit } from "../_shared/rateLimit.ts";
 import { validateURLForSSRF } from "../_shared/validation.ts";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+import { isHostAllowed, fetchTextWithSizeCap } from "../_shared/fetchGuard.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -24,6 +26,10 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+
+  // AUTH: admin JWT, EDGE_FUNCTION_API_KEY, or service-role key only.
+  const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+  if (authFailure) return authFailure;
 
   // Rate limit: 10 AI requests per 15 minutes per client
   const rateLimit = checkRateLimit(req, { max: 10, message: 'AI competitor analysis rate limit exceeded. Please try again later.' });
@@ -107,16 +113,30 @@ async function scrapeCompetitorContent(supabaseClient: any, competitorId?: strin
         continue;
       }
 
-      // Fetch competitor website
-      const response = await fetch(competitor.website_url, {
+      // Allowlist guard: even with a valid key, only fetch known hosts
+      // (configurable via CRAWLER_DOMAIN_ALLOWLIST / CRAWLER_ALLOW_ALL).
+      const hostCheck = isHostAllowed(competitor.website_url);
+      if (!hostCheck.allowed) {
+        console.error(`Host not allowed for ${competitor.name}: ${hostCheck.reason}`);
+        results.push({
+          competitor: competitor.name,
+          success: false,
+          error: `URL rejected: ${hostCheck.reason}`
+        });
+        continue;
+      }
+
+      // Fetch competitor website with a response-size cap so a huge target
+      // can't stream unbounded bandwidth through the function.
+      const fetched = await fetchTextWithSizeCap(competitor.website_url, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (compatible; DesMoinesInsiderBot/1.0)',
         }
       });
 
-      if (!response.ok) continue;
-      
-      const html = await response.text();
+      if (!fetched.ok) continue;
+
+      const html = fetched.text;
       
       // Extract content using basic parsing
       const content = extractContentFromHTML(html, competitor.website_url);

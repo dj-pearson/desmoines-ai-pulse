@@ -109,6 +109,17 @@ export async function requireAdminOrApiKey(
     return null;
   }
 
+  // 1b) Accept the Supabase service-role key as a trusted internal caller.
+  // pg_cron jobs (and other server-to-server callers) authenticate with
+  // `Authorization: Bearer <service_role_key>`. The service-role key is a
+  // secret with full DB access, so accepting it grants no extra privilege —
+  // it keeps scheduled automation working without shipping the shared
+  // EDGE_FUNCTION_API_KEY into every cron migration.
+  const serviceRoleKeyEarly = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (serviceRoleKeyEarly && bearer && timingSafeEqual(bearer, serviceRoleKeyEarly)) {
+    return null;
+  }
+
   // 2) Otherwise try treating the bearer as a user JWT and checking admin role.
   if (!bearer) {
     return new Response(

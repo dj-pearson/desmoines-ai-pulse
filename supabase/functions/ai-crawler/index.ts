@@ -21,6 +21,8 @@ import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/ai
 import { scrapeUrl, scrapeUrls } from "../_shared/scraper.ts";
 import { fetchAndStoreImage as _fetchAndStoreImageShared } from "../_shared/imageStorage.ts";
 import { tryDomainAdapter } from "../_shared/domain-adapters/index.ts";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+import { isHostAllowed } from "../_shared/fetchGuard.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1486,6 +1488,11 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  // AUTH: admin JWT, EDGE_FUNCTION_API_KEY, or service-role key only.
+  // Rejected callers get a 401/403 before any scrape or Claude work runs.
+  const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+  if (authFailure) return authFailure;
+
   try {
     if (req.method !== "POST") {
       return new Response(JSON.stringify({ error: "Method not allowed" }), {
@@ -1522,6 +1529,19 @@ Deno.serve(async (req) => {
         }),
         {
           status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // SSRF / cost-proxy guard: the target host must be on the crawler
+    // allowlist (configurable via CRAWLER_DOMAIN_ALLOWLIST / CRAWLER_ALLOW_ALL).
+    const hostCheck = isHostAllowed(url);
+    if (!hostCheck.allowed) {
+      return new Response(
+        JSON.stringify({ error: "URL not permitted", reason: hostCheck.reason }),
+        {
+          status: 403,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
