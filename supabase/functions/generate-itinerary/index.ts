@@ -2,8 +2,17 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
 import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
-import { checkRateLimit } from "../_shared/rateLimit.ts";
+import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
 import { resolveEntitledTier, hasFeatureAccess } from "../_shared/entitlements.ts";
+
+// Monthly trip-planner quota per tier (matches the web useSubscription copy /
+// WEB-FEAT-011). -1 = unlimited. Enforced server-side so the client gate can't
+// be bypassed by calling the function directly.
+const TRIP_PLANNER_MONTHLY_QUOTA: Record<'free' | 'insider' | 'vip', number> = {
+  free: 0, // free has no trip_planner access at all (gated above)
+  insider: 5,
+  vip: -1,
+};
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -68,12 +77,6 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Rate limit: 10 AI requests per 15 minutes per client
-  const rateLimit = checkRateLimit(req, { max: 10, message: 'AI itinerary rate limit exceeded. Please try again later.' });
-  if (!rateLimit.success) {
-    return rateLimit.response!;
-  }
-
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -109,6 +112,53 @@ serve(async (req) => {
         }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
+    }
+
+    // Persistent, per-user burst limit (survives edge cold starts; keyed by the
+    // verified user id, not a spoofable IP). Generous enough not to interfere
+    // with legitimate use or older iOS clients that retry.
+    const burst = await checkRateLimitPersistent(req, {
+      endpoint: 'generate-itinerary',
+      userId: user.id,
+      windowMs: 15 * 60 * 1000,
+      max: 10,
+      message: 'AI itinerary rate limit exceeded. Please try again later.',
+    });
+    if (!burst.success) return burst.response!;
+
+    // Monthly quota per tier (Insider 5 / VIP unlimited). Counts itineraries
+    // this calendar month from trip_plans (no new table needed). Returns a
+    // structured 429 the web client surfaces as an upgrade prompt.
+    const monthlyQuota = TRIP_PLANNER_MONTHLY_QUOTA[tier];
+    if (monthlyQuota !== -1) {
+      const monthStart = new Date();
+      monthStart.setUTCDate(1);
+      monthStart.setUTCHours(0, 0, 0, 0);
+      const { count: usedThisMonth, error: quotaErr } = await supabaseClient
+        .from('trip_plans')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('ai_generated', true)
+        .gte('created_at', monthStart.toISOString());
+
+      // Fail open on a quota-count error — never block a paying user on our bug.
+      if (quotaErr) {
+        console.warn('[generate-itinerary] monthly quota count failed, allowing:', quotaErr.message);
+      } else if ((usedThisMonth ?? 0) >= monthlyQuota) {
+        return new Response(
+          JSON.stringify({
+            error: `You've used all ${monthlyQuota} trip plans included this month.`,
+            code: 'quota_exceeded',
+            feature: 'trip_planner',
+            tier,
+            limit: monthlyQuota,
+            used: usedThisMonth,
+            requiredTier: tier === 'insider' ? 'vip' : 'insider',
+            upgradeHint: tier === 'insider' ? 'vip' : 'insider',
+          }),
+          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
     }
 
     const {

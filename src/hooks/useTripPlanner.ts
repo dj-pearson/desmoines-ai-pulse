@@ -168,7 +168,23 @@ export function useTripPlanner() {
         body: { startDate, endDate, preferences },
       });
 
-      if (error) throw error;
+      if (error) {
+        // Surface the structured server body for upgrade/quota responses
+        // (403 upgrade_required, 429 quota_exceeded) instead of the generic
+        // "non-2xx" FunctionsHttpError message.
+        const ctx = (error as { context?: Response }).context;
+        if (ctx && typeof ctx.json === 'function') {
+          const body = await ctx.json().catch(() => null) as
+            | { error?: string; code?: string }
+            | null;
+          if (body?.error) {
+            const err = new Error(body.error) as Error & { code?: string };
+            if (body.code) err.code = body.code;
+            throw err;
+          }
+        }
+        throw error;
+      }
       if (!data.success) throw new Error(data.error);
 
       return data;

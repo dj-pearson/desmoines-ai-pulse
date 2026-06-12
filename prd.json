@@ -32,8 +32,8 @@
         "npm run validate passes"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Evidence: _shared/rateLimit.ts lines ~17-59 (memoryStore default, x-forwarded-for trust); checkRateLimitPersistent + check_rate_limit RPC already exist but are mostly unused. Verify which functions iOS calls (discover-chat, generate-itinerary, get-sponsored-pick) and keep their happy-path behavior identical."
+      "passes": true,
+      "notes": "DONE (2026-06-12): _shared/rateLimit.ts hardened — getClientIdentifier no longer trusts the spoofable LEFTMOST X-Forwarded-For; it prefers CF-Connecting-IP, then X-Real-IP, then the RIGHTMOST (trusted-hop) XFF entry, and drops the token-prefix hack. New RateLimitOptions.userId keys limits per verified user (passed only post-auth). Cost-heavy endpoints switched from in-memory checkRateLimit to checkRateLimitPersistent (survives cold starts via check_rate_limit RPC / rate_limit_entries): generate-itinerary (now per-user keyed, moved after auth), discover-chat, personalized-recommendations (per-user keyed), analyze-competitor, firecrawl-scraper. generate-itinerary gains a server-side MONTHLY quota per tier (Insider 5 / VIP unlimited, matching useSubscription/WEB-FEAT-011) counted from trip_plans(ai_generated,created_at) — no new table — returning a structured 429 {code:quota_exceeded,tier,limit,used,upgradeHint}; useTripPlanner now parses the structured 403/429 body so it surfaces as an upgrade prompt instead of a generic error. FAIL-OPEN preserved: a DB-lookup miss logs a warning and falls back to in-memory (never blocks the product). BACKWARD COMPAT: all limits kept at prior values (10/15min burst, 30/15min chat) so older iOS clients are unaffected; no 200-path response shapes changed. Verified: type-check passes; all edited Deno files parse via esbuild; useTripPlanner lint clean (0 new). Evidence was: _shared/rateLimit.ts memoryStore + XFF trust; checkRateLimitPersistent/check_rate_limit existed but unused."
     },
     {
       "id": "WEB-SEC-003",

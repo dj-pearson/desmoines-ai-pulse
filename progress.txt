@@ -2979,3 +2979,56 @@ functions (verified: client refs are all admin-only web components).
                                                       analyze-competitor also
                                                       allowlist/size-cap)
   M docs/SECURITY_AUDIT.md                            (classification + middleware table)
+
+## 2026-06-12 — WEB-SEC-002 (persistent DB-backed rate limiting + per-user AI quotas) [passes:true]
+
+### The two holes
+1. checkRateLimit() was in-memory per-isolate → resets on every edge cold start,
+   so a determined caller barely got throttled.
+2. getClientIdentifier() keyed on the LEFTMOST X-Forwarded-For entry — a
+   client-controlled value — so an attacker could forge a fresh IP per request
+   and evade the limit entirely; and IP-keying let one NAT exhaust everyone.
+
+### _shared/rateLimit.ts
+- New getClientIp(): trusts CF-Connecting-IP (Cloudflare edge in front of
+  Supabase) → X-Real-IP → RIGHTMOST XFF hop. Never the spoofable leftmost.
+- getClientIdentifier(req, userId?): keys `user:<id>` when a verified userId is
+  supplied, else `ip:<trusted-ip>`. Dropped the auth-token-prefix hack.
+- RateLimitOptions.userId added; checkRateLimitPersistent forwards it.
+- Fail-open: on a DB-lookup miss/outage we console.warn and fall back to the
+  in-memory limiter so an RPC outage never breaks the product.
+
+### Endpoint migrations (in-memory → persistent)
+- generate-itinerary: rate limit MOVED after auth and keyed by user_id; added a
+  server-side MONTHLY quota (Insider 5 / VIP unlimited; free already gated to
+  insider+). Counts trip_plans where ai_generated=true and created_at >= month
+  start — no new table. Over quota → 429 {error,code:quota_exceeded,tier,limit,
+  used,requiredTier,upgradeHint}. Quota-count error fails open.
+- discover-chat: per-IP burst now persistent (per-user DAILY quota was already
+  enforced via discover_chat_usage).
+- personalized-recommendations: rate limit moved after auth, keyed by user_id.
+- analyze-competitor, firecrawl-scraper: persistent (admin/IP-keyed).
+
+### Client
+useTripPlanner.generateItinerary now reads error.context.json() and rethrows
+the structured server message (so 403 upgrade_required / 429 quota_exceeded show
+a meaningful upgrade prompt via the existing onError toast instead of the
+generic "non-2xx" FunctionsHttpError text). Full quota meter UI is WEB-FEAT-011.
+
+### Backward compat
+Limits unchanged from prior values (10/15min itinerary+recs+competitor+scraper,
+30/15min chat) so older iOS binaries that retry are unaffected. No 200-path
+response shapes changed. discover-chat/get-sponsored-pick happy paths identical.
+
+### Verification
+type-check PASSES; all 6 edited Deno files parse via esbuild --loader=ts;
+useTripPlanner lints with 0 new findings (pre-existing @ts-ignore warnings only).
+
+### Files
+  M supabase/functions/_shared/rateLimit.ts
+  M supabase/functions/generate-itinerary/index.ts
+  M supabase/functions/discover-chat/index.ts
+  M supabase/functions/personalized-recommendations/index.ts
+  M supabase/functions/analyze-competitor/index.ts
+  M supabase/functions/firecrawl-scraper/index.ts
+  M src/hooks/useTripPlanner.ts

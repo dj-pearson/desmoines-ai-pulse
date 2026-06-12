@@ -7,7 +7,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
-import { checkRateLimit } from "../_shared/rateLimit.ts";
+import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
 import { validateURLForSSRF } from "../_shared/validation.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { isHostAllowed, fetchTextWithSizeCap } from "../_shared/fetchGuard.ts";
@@ -31,8 +31,8 @@ serve(async (req) => {
   const authFailure = await requireAdminOrApiKey(req, corsHeaders);
   if (authFailure) return authFailure;
 
-  // Rate limit: 10 AI requests per 15 minutes per client
-  const rateLimit = checkRateLimit(req, { max: 10, message: 'AI competitor analysis rate limit exceeded. Please try again later.' });
+  // Rate limit: 10 AI requests per 15 minutes per client (persistent)
+  const rateLimit = await checkRateLimitPersistent(req, { endpoint: 'analyze-competitor', max: 10, message: 'AI competitor analysis rate limit exceeded. Please try again later.' });
   if (!rateLimit.success) {
     return rateLimit.response!;
   }

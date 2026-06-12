@@ -12,7 +12,7 @@ import { fromZonedTime } from "https://esm.sh/date-fns-tz@3.2.0";
 import { scrapeUrl, scrapeUrls } from "../_shared/scraper.ts";
 import { getAIConfig, buildClaudeRequest, buildLightweightClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
 import { validateURLForSSRF } from "../_shared/validation.ts";
-import { checkRateLimit } from "../_shared/rateLimit.ts";
+import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
 import { tryDomainAdapter } from "../_shared/domain-adapters/index.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 
@@ -438,8 +438,8 @@ serve(async (req) => {
   const authFailure = await requireAdminOrApiKey(req, corsHeaders);
   if (authFailure) return authFailure;
 
-  // Rate limiting: 10 requests per 15 minutes (SEC-022)
-  const rateLimit = checkRateLimit(req, { max: 10, message: 'Scraper rate limit exceeded.' });
+  // Rate limiting: 10 requests per 15 minutes (SEC-022), persistent across cold starts
+  const rateLimit = await checkRateLimitPersistent(req, { endpoint: 'firecrawl-scraper', max: 10, message: 'Scraper rate limit exceeded.' });
   if (!rateLimit.success && rateLimit.response) {
     return rateLimit.response;
   }
