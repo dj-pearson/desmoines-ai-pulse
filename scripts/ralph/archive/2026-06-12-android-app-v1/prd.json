@@ -1,0 +1,719 @@
+{
+  "project": "Des Moines AI Pulse — Web Platform Autonomy & Core Uplift",
+  "branchName": "claude/web-platform-autonomy",
+  "description": "Deep uplift of the WEB platform across Security, Autonomy, Performance, UX, and Features. The governing theme: the site should run itself — content ingestion, data quality, moderation, publishing, marketing, and ops must not require manual admin touches; humans only handle escalated exceptions. Clusters in priority order: (1) WEB-SEC: close the publicly-callable/cost-abusable edge function holes and harden authz before adding more automation on top of them; (2) WEB-AUTO: build the autonomy control plane (job observability) then convert every manual admin queue (event submissions, data backfills, broken links, dedupe, stale content, articles, newsletters, moderation, creative approval, sitemaps, social, subscription lifecycle) into a self-running pipeline with AI scoring + human-exception escalation; (3) WEB-PERF: query payload + bundle + re-render fixes toward the <500KB / LCP<2.5s budgets; (4) WEB-UX: list-page state, loading/error consistency, a11y; (5) WEB-FEAT: web parity with shipped iOS monetization (contextual paywalls, annual+trial, ads/sponsored) plus engagement loops (saved searches+alerts, guest favorites, personalization). CONSTRAINTS THAT BIND EVERY STORY: follow CLAUDE.md backward-compatibility rules — live iOS/Android binaries call edge functions (get_active_ads, discover-chat, generate-itinerary, image-transform, validate-*-receipt, etc.), so NEVER tighten validation, rename/remove endpoints or fields, or lower rate limits below what shipped clients retry against in a single release; DB changes additive-only per the deprecation flow; console logs wrapped in import.meta.env.DEV; storage via @/lib/safeStorage; errors via @/lib/errorHandler. Ralph picks the highest-priority story with passes:false.",
+  "userStories": [
+    {
+      "id": "WEB-SEC-001",
+      "title": "Lock down publicly-callable admin/AI edge functions (API-key auth + allowlists)",
+      "description": "As the platform owner, I need the verify_jwt=false admin tooling functions (ai-crawler, analyze-competitor, bulk-enhance-events, bulk-event-updater, backfill-images and similar) to stop being callable by anyone on the internet, because they trigger expensive Claude/Google Places API work and service-role DB writes.",
+      "acceptanceCriteria": [
+        "Inventory every function in supabase/config.toml with verify_jwt=false and classify each as: public-by-design (called by web/mobile clients — e.g. image-transform, get-sponsored-pick, version checks, webhooks), or admin/internal tooling",
+        "Every admin/internal tooling function requires a shared-secret header (e.g. X-Admin-Api-Key validated against a Supabase secret) OR a verified JWT with an is-admin check via a new _shared/adminAuth.ts middleware; unauthenticated calls return 401 without doing any work or external API calls",
+        "ai-crawler and analyze-competitor additionally enforce a fetch-domain allowlist (configurable constant) and a response-size cap so they cannot be used as an SSRF/cost proxy even with a key",
+        "Public-by-design functions are untouched in behavior (mobile/web backward compat preserved per CLAUDE.md — no request/response shape changes)",
+        "docs/SECURITY_AUDIT.md updated with the new classification table and which middleware each function uses",
+        "npm run validate passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Evidence: supabase/config.toml verify_jwt=false entries; docs/SECURITY_AUDIT.md already documents ai-crawler/analyze-competitor as unauthenticated cost-abuse vectors. The scheduled pg_cron jobs that invoke these functions must be updated in the same story to send the new header (check migrations 20250107000003-5 etc. for net.http_post calls) so automation keeps working."
+    },
+    {
+      "id": "WEB-SEC-002",
+      "title": "Persistent (DB-backed) rate limiting + per-user quotas on cost-heavy AI endpoints",
+      "description": "As the platform owner, I need rate limits that survive edge-isolate cold starts and are keyed per-user for AI endpoints, because the current in-memory checkRateLimit() resets per instance and IP-keying lets one NAT exhaust everyone (and lets attackers burn Claude spend).",
+      "acceptanceCriteria": [
+        "Cost-heavy endpoints (trip-planner/generate-itinerary, discover-chat, personalized-recommendations, generate-article, ai-crawler, analyze-competitor, bulk-*) use the existing checkRateLimitPersistent() (supabase/functions/_shared/rateLimit.ts) instead of the in-memory checkRateLimit()",
+        "Authenticated AI endpoints key limits by user_id from the verified JWT (fall back to IP only for anonymous-allowed endpoints); getClientIdentifier() stops trusting arbitrary X-Forwarded-For values (use rightmost/CF header)",
+        "Per-user monthly quota checks for tiered AI features are enforced server-side (free/insider/vip limits matching useSubscription web copy), returning 429 with a structured body the web client surfaces as an upgrade prompt",
+        "BACKWARD COMPAT: limits are set at-or-above what shipped iOS binaries can legitimately hit (CLAUDE.md forbids tightening below what old clients retry against); response shapes for existing 200 paths unchanged",
+        "A failed rate-limit DB lookup fails OPEN (request allowed, warning logged) so an outage never breaks the product",
+        "npm run validate passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: _shared/rateLimit.ts lines ~17-59 (memoryStore default, x-forwarded-for trust); checkRateLimitPersistent + check_rate_limit RPC already exist but are mostly unused. Verify which functions iOS calls (discover-chat, generate-itinerary, get-sponsored-pick) and keep their happy-path behavior identical."
+    },
+    {
+      "id": "WEB-SEC-003",
+      "title": "Server-side role assignment + user_roles lockdown + admin audit logging",
+      "description": "As the platform owner, I need role escalation to be impossible from the client: today assignRole() in src/hooks/useUserRole.ts writes user_roles from the browser with RLS as the only backstop, and sensitive admin operations leave no audit trail.",
+      "acceptanceCriteria": [
+        "New assign-role edge function: verifies caller JWT, checks caller is admin/root_admin server-side, validates target+role, writes user_roles with the service client, and inserts an immutable row into security_audit_logs (actor, target, old_role, new_role, timestamp)",
+        "RLS on user_roles denies INSERT/UPDATE/DELETE for non-service roles (additive migration: add the restrictive policy; do NOT drop columns/tables) — verify no legitimate client write path remains before tightening, and stage per CLAUDE.md if one exists",
+        "src/hooks/useUserRole.ts assignRole() calls the edge function instead of writing the table directly; UI behavior unchanged for admins",
+        "Other sensitive admin edge functions (delete-user-account, bulk updaters, refunds) write a security_audit_logs entry with actor + action + resource",
+        "npm run validate passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Evidence: src/hooks/useUserRole.ts lines ~113-136 (client-side assignRole, no role check); admin-home-stats already reads security_audit_logs so the table exists. The iOS app does not assign roles, so this tightening only affects the web admin surface — still verify with a grep for user_roles writes across clients."
+    },
+    {
+      "id": "WEB-SEC-004",
+      "title": "CORS + CSP hardening (remove wildcard staging origins and http: sources)",
+      "description": "As the platform owner, I need the CORS allowlist and CSP to stop trusting things they shouldn't: any *.lovable.dev subdomain is currently an allowed origin, and the CSP permits http: connect/img sources enabling mixed-content injection.",
+      "acceptanceCriteria": [
+        "supabase/functions/_shared/cors.ts: replace the blanket *.lovable.dev suffix match with an explicit list of known preview origins; production allowlist contains only the real site origins",
+        "public/_headers CSP: remove http: from connect-src and img-src (https: only), add upgrade-insecure-requests; verify the site still loads all images/fonts/API calls in a local prod build (npm run build && npm run preview)",
+        "Functions that roll their own 'Access-Control-Allow-Origin: *' are migrated to the shared corsHeaders (grep across supabase/functions/)",
+        "No CORS change breaks the deployed web origin or the mobile apps (native apps don't send Origin — confirm no function denies requests lacking an Origin header)",
+        "npm run validate passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Evidence: _shared/cors.ts lines ~146-149 (lovable.dev suffix allow); public/_headers line ~11 (http: in connect-src). Test with Playwright smoke run against the preview build before marking complete."
+    },
+    {
+      "id": "WEB-SEC-005",
+      "title": "RLS policy audit sweep with written report + fixes for permissive write policies",
+      "description": "As the platform owner, I need confidence that none of the ~528 RLS policies across 142 migrations grants public/anon writes or USING(true) mutations, with a durable report so future audits diff against it.",
+      "acceptanceCriteria": [
+        "A script (scripts/audit-rls.ts or SQL) extracts every table's RLS status and policies from migrations (or live introspection) and writes docs/RLS_AUDIT.md: table, command, role, USING/WITH CHECK condition, verdict",
+        "Every finding of USING(true)/WITH CHECK(true) on INSERT/UPDATE/DELETE, missing-RLS table, or anon write access is either fixed by an ADDITIVE migration or explicitly justified in the report (e.g. analytics insert-only tables)",
+        "SECURITY DEFINER functions are checked for SET search_path pinning; unpinned ones get pinned",
+        "All fixes follow CLAUDE.md: never tighten a policy a shipped mobile binary relies on in one release — flag those for the staged deprecation flow instead of fixing blind",
+        "npm run validate passes and the new migration applies cleanly (supabase db push dry-run or local reset)",
+        "npm run validate passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Read-mostly story: the deliverable is the audit artifact + only the unambiguous fixes. Anything ambiguous goes into the report's 'needs human decision' section — that IS the escalation path, not a blocker."
+    },
+    {
+      "id": "WEB-SEC-006",
+      "title": "Automated brute-force login detection and temporary lockout",
+      "description": "As the platform owner, I need failed-login abuse handled automatically: the login_attempts table exists (migration 20260402000002) but nothing watches it, so credential-stuffing runs unimpeded.",
+      "acceptanceCriteria": [
+        "Auth failure path records to login_attempts (ip, email, timestamp, success=false) via an edge function or existing hook — verify what already writes it and complete the wiring",
+        "A check at login time blocks (returns a 'try again later' state) when >5 failures from one IP or >10 for one email within 10 minutes; lockout expires automatically after 15 minutes",
+        "Lockout events are logged to security_audit_logs; the affected user gets a notification email (via existing Resend/SendGrid plumbing) on email-keyed lockouts",
+        "False-positive safety: successful login resets the counter; lockout never applies to a request presenting a valid existing session",
+        "Web login form surfaces the lockout state with a clear, non-enumerating message (same message whether or not the account exists)",
+        "npm run validate passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Autonomy-flavored security: detection AND response are automatic, admin only sees the audit trail. Evidence: supabase/migrations/20260402000002_create_login_attempts_table.sql exists with no consumer."
+    },
+    {
+      "id": "WEB-SEC-007",
+      "title": "Small hardening bundle: image-transform rate limit, webhook signatures, sanitized errors",
+      "description": "As the platform owner, I want the remaining medium-severity audit items closed: the public image-transform proxy has no rate limit, test-article-webhook validates nothing, and several functions leak internal error details to clients.",
+      "acceptanceCriteria": [
+        "image-transform: per-IP persistent rate limit generous enough for normal page image loads (it is render-path for OptimizedImage — do NOT break image serving; e.g. 300/min/IP), plus strong cache headers (ETag/Cache-Control) so repeat hits don't re-transform",
+        "test-article-webhook (and any other unauthenticated webhook without signature checks) requires an HMAC signature header validated against a secret, with timestamp replay protection; stripe-webhook signature verification confirmed present and untouched",
+        "Shared error responder in _shared/: functions return generic messages to clients (no stack traces, table names, or internal IDs) while logging full detail server-side; applied to the top 10 most-trafficked functions",
+        "BACKWARD COMPAT: no status code an existing client branches on changes; image-transform response shape unchanged",
+        "npm run validate passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "Evidence: docs/SECURITY_AUDIT.md line ~209 (image-transform no rate limit), supabase/config.toml line ~33 (test-article-webhook verify_jwt=false). iOS POLISH-002 notes the web OptimizedImage routes through image-transform — keep web image rendering working (verify in dev after the change)."
+    },
+    {
+      "id": "WEB-SEC-008",
+      "title": "Secrets hygiene: authoritative .env.example, CI secret scanning, rotation runbook",
+      "description": "As the platform owner, I want guardrails so secrets can never land in git and the required-key list is always accurate. (.env is correctly gitignored today — this is prevention, not incident response.)",
+      "acceptanceCriteria": [
+        ".env.example lists every env var the web app and scripts actually read (audit import.meta.env.* and process.env/Deno.env usage) with placeholder values and one-line comments",
+        "CI (GitHub Actions) gains a secret-scanning step (gitleaks or equivalent) that fails the build on detected credentials; verify it passes on the current repo",
+        "A pre-commit guard blocks committing .env / .env.local files",
+        "docs/SECRETS_ROTATION.md documents which secrets exist (Supabase, Stripe, Anthropic/OpenAI, Resend/SendGrid, Google), where each is set, and the rotation steps",
+        "npm run validate passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "Verified during planning: git ls-files shows only .env.example tracked — the audit agent's 'committed secrets' claim was wrong about git, but the local .env does hold a demo account credential, so the runbook should still recommend rotating anything previously shared."
+    },
+    {
+      "id": "WEB-AUTO-001",
+      "title": "Autonomy control plane: cron/job observability, auto-retry, failure alerts",
+      "description": "As the platform owner, I need every scheduled job (pg_cron + edge functions) to log its runs, retry failures, and email me only when something is genuinely stuck — this is the foundation every other WEB-AUTO story plugs into, replacing 'silently broken automation' with self-reporting automation.",
+      "acceptanceCriteria": [
+        "New automation_job_runs table (job_name, started_at, finished_at, status, items_processed, items_failed, error, metadata jsonb) with RLS admin-read",
+        "A _shared/jobRunner.ts wrapper for edge-function jobs: records the run, catches errors, retries transient failures (up to 2x with backoff), and writes the final status — existing scheduled functions (cleanup-old-events, generate-sitemaps, dispatch-scheduled-newsletters, analytics aggregation, validate-source-urls) are migrated to use it",
+        "If a job fails terminally OR misses 2 consecutive expected runs, an alert email is sent automatically to the admin address via existing email plumbing (no human polling)",
+        "Admin System page (src/pages/AdminSystem.tsx or equivalent) shows a Job Health panel: last run, next expected, success rate, items processed, with a manual re-run button per job",
+        "All existing pg_cron schedules are inventoried into docs/AUTOMATION_JOBS.md (name, schedule, function, what it does)",
+        "npm run validate passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "Foundation story — do this FIRST in the AUTO cluster. Evidence of existing-but-unobserved crons: migrations 20250107000003/4/5 (links, coords, cleanup), 20251107000002 (analytics), 20251123000000 (sitemaps), 20260520000012 (newsletters)."
+    },
+    {
+      "id": "WEB-AUTO-002",
+      "title": "Event submission AI triage: auto-approve / queue / auto-reject with notifications",
+      "description": "As the platform owner, I no longer want to manually review every event submission: an AI quality scorer should auto-approve clean submissions, auto-reject junk with a templated reason, and queue only the genuinely ambiguous middle for me.",
+      "acceptanceCriteria": [
+        "New triage-event-submission edge function (invoked on submission, e.g. called by the submit flow or a DB webhook): scores completeness (required fields, date validity/future, plausible venue, description quality) and content safety (Claude moderation prompt), producing quality_score 0-100 + reasons[]",
+        "score >= 85 AND date valid AND no safety flag: submission auto-approved into events with source='user_submission', submitter notified via the existing notify-event-submission plumbing",
+        "score < 50 or safety flag: auto-rejected with the matching rejection-template reason, submitter notified; 50-84: stays pending with the score + reasons visible in EventSubmissionsManager, sorted by score",
+        "Admin override: approving/rejecting a queued item works exactly as today; every auto-decision is recorded (who=system, score, reasons) in the submission row or audit table",
+        "Run metrics (auto-approved/rejected/queued counts) logged through the WEB-AUTO-001 jobRunner",
+        "npm run validate passes"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "Evidence: src/pages/AdminEventSubmissions.tsx + src/components/admin/EventSubmissionsManager.tsx (manual status toggles), event_submissions.status default 'pending', rejection templates already exist in the manager UI."
+    },
+    {
+      "id": "WEB-AUTO-003",
+      "title": "Nightly data-quality self-healing pipeline (coordinates, SEO/GEO fields, images)",
+      "description": "As the platform owner, I want missing data to repair itself: events/restaurants/attractions with missing lat/lng, seo_*/geo_* fields, or image_url should be backfilled automatically every night instead of waiting for me to run scripts.",
+      "acceptanceCriteria": [
+        "A data-quality-heal edge function (scheduled nightly via pg_cron) chains, in order, for each content table: geocode rows with address but no coordinates; generate seo_title/seo_description/geo_summary/geo_key_facts for rows missing them (existing generate-seo-content-style prompts); backfill missing image_url via the existing backfill-images fallback chain — each stage batched (<=25 rows/run/table) to stay inside timeouts",
+        "Idempotent and safe: only fills NULL/empty fields, never overwrites human-entered data; failures flag the row (needs_manual_verification or equivalent) instead of retrying forever",
+        "Runs report through WEB-AUTO-001 jobRunner with per-stage counts; a Data Quality KPI (count of rows missing each field class) is computed and visible in the admin Job Health panel",
+        "Existing manual scripts keep working (scripts/backfill-coordinates.ts etc.) but README/docs note the automated path is primary",
+        "Backlog drains: with the nightly batch size, current missing-field counts reach zero within a bounded number of days (state the math in the PR/progress notes)",
+        "npm run validate passes"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": "Evidence: scripts/backfill-coordinates.ts (manual), supabase/functions/backfill-images (manual offset/dryRun params), get_restaurants_needing_enrichment view (migration 20250107000009), coordinate cron 20250107000004 exists but has no fallback or observability."
+    },
+    {
+      "id": "WEB-AUTO-004",
+      "title": "Broken source-URL auto-repair (detect → re-discover → fix or flag)",
+      "description": "As the platform owner, I want dead event source links fixed without me: the weekly checker already finds 404s, but a human currently has to run the fixer.",
+      "acceptanceCriteria": [
+        "The weekly validate-source-urls cron chains into repair automatically: for each broken URL, attempt re-discovery (search the original source site for the event title via the existing crawler plumbing, then a Wayback Machine lookup as fallback)",
+        "Recovered URL passes a liveness check before the row is updated; before/after recorded in an audit trail",
+        "Unrecoverable: row flagged (e.g. source_url_broken=true + checked_at) and the public detail page stops rendering the dead link (hide or show 'link unavailable') automatically",
+        "Recovery rate + counts logged via WEB-AUTO-001 jobRunner; admin sees flagged events in the existing content management list filtered by the flag",
+        "npm run validate passes"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": "Evidence: supabase/functions/check-broken-links (detects, doesn't write), fix-broken-event-urls (exists, manual invocation), cron migration 20250107000003."
+    },
+    {
+      "id": "WEB-AUTO-005",
+      "title": "Duplicate venue/event detection with auto-link + merge queue",
+      "description": "As the platform owner, I want duplicates (same restaurant scraped twice, same event from two sources) found and merged automatically at high confidence, with only ambiguous pairs escalated.",
+      "acceptanceCriteria": [
+        "Weekly dedupe job: trigram similarity (existing fuzzy_search migration infra) on name + proximity on coordinates (<150m) across restaurants/venues and across events (same title-ish + same start date + same venue)",
+        "Confidence >= 0.9 with matching address/date: auto-merge — keep the richer row, repoint child references (favorites, reviews, sponsored links), mark the loser is_merged/hidden rather than hard-deleting (additive schema, CLAUDE.md-safe)",
+        "Confidence 0.7-0.9: queued to a merge-review table surfaced in the admin dashboard with side-by-side fields and one-click merge/dismiss",
+        "Every merge (auto or manual) is audit-logged and reversible for 30 days (loser row retained)",
+        "Counts logged via WEB-AUTO-001 jobRunner",
+        "npm run validate passes"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": "Evidence: ai-crawler has within-batch dedupe only (~line 1080); no cross-database dedupe exists. Check the fuzzy_search/trigram migration for the available similarity functions before designing."
+    },
+    {
+      "id": "WEB-AUTO-006",
+      "title": "Stale-event lifecycle: soft-hide, archive snapshot, observable cleanup",
+      "description": "As the platform owner, I want past events to age out safely and visibly: today cleanup-old-events hard-deletes on a cron with zero visibility, no recovery window, and no audit.",
+      "acceptanceCriteria": [
+        "cleanup-old-events switches to two-phase: hide events N days after end date (is_hidden or equivalent additive flag — public queries already excluding past events keep working), hard-delete only after a much longer window (e.g. 180 days) with an archive snapshot row (id, title, source_url, dates) written first",
+        "All public list/detail queries verified to exclude hidden rows (grep the hooks); sitemap regeneration excludes them",
+        "Deletion runs report counts through WEB-AUTO-001 jobRunner; the admin Job Health panel shows hidden/deleted/archived counts",
+        "Recovery: un-hiding a row within the window fully restores it; documented in docs/AUTOMATION_JOBS.md",
+        "Schema change is additive only (new flag/table; no drops) per CLAUDE.md",
+        "npm run validate passes"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": "Evidence: supabase/functions/cleanup-old-events + cron 20250107000005 ('0 3 * * *'). Mobile binaries read events — verify the hidden-flag filter lands in the RPC/queries mobile uses too, additively (default false keeps old readers correct)."
+    },
+    {
+      "id": "WEB-AUTO-007",
+      "title": "AI article pipeline: topic selection → draft → quality gate → auto-publish",
+      "description": "As the platform owner, I want fresh local SEO content publishing itself daily: suggest-article-topics and generate-article exist, but a human currently glues them together and clicks publish.",
+      "acceptanceCriteria": [
+        "Scheduled daily pipeline: pick the top topic from suggest-article-topics (deduped against recent articles), call generate-article with local context, then score the draft (word count >= 400, Des Moines relevance, readability, similarity-to-existing < threshold, safety check)",
+        "score >= 80: article row created with status published, published_at set, slug generated, SEO fields populated; 50-79: created as draft in the review queue with score + reasons; < 50: discarded with the attempt logged",
+        "Published articles automatically enter the sitemap (WEB-AUTO-011 path or current generation) and the newsletter content pool",
+        "Cap of 1 auto-published article/day; admin can pause the pipeline via a single config flag (DB row or env) without code changes",
+        "Pipeline runs/score distribution logged via WEB-AUTO-001 jobRunner; AdminContent shows which articles were auto-published (byline/flag)",
+        "npm run validate passes"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": "Evidence: supabase/functions/generate-article + suggest-article-topics exist and are manually invoked; articles.review_status column exists (migration 20251203000001). Keep human-authored article flows untouched."
+    },
+    {
+      "id": "WEB-AUTO-008",
+      "title": "Auto-assembled recurring newsletters (weekly digest) with zero-touch sends",
+      "description": "As the platform owner, I want the weekly digest to write and send itself: dispatch-scheduled-newsletters can send scheduled campaigns, but a human still authors and schedules every campaign.",
+      "acceptanceCriteria": [
+        "New recurring template type (e.g. weekly_digest, Tuesday 9am): a scheduled function assembles content automatically — top upcoming events (next 7 days), trending restaurants, newest article — into the existing newsletter template/campaign machinery",
+        "Pre-send validation gates: recipient segment resolves to > 0 active subscribers, all content links resolve, subject line generated and under length cap; any gate failure aborts the send and alerts via WEB-AUTO-001 (never sends a broken email)",
+        "Sends go through the existing send-newsletter-campaign path so unsubscribe/compliance handling is identical; bounce/complaint webhooks keep working",
+        "Admin can preview next week's digest from the admin UI and pause the recurrence with one toggle; no other touch required for steady-state operation",
+        "Send results (sent/bounced/opened if available) logged via jobRunner",
+        "npm run validate passes"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": "Evidence: supabase/functions/send-newsletter-campaign (send_now/schedule/send_test actions), dispatch-scheduled-newsletters + cron 20260520000012 exist; the missing piece is automated campaign CREATION. Pricing page already promises a weekly digest — this also closes a product-promise gap."
+    },
+    {
+      "id": "WEB-AUTO-009",
+      "title": "AI auto-moderation for user-generated content (reviews, contact, feedback)",
+      "description": "As the platform owner, I want UGC moderated at write time without me: score toxicity/spam automatically, publish the clean majority instantly, and queue only genuine judgment calls.",
+      "acceptanceCriteria": [
+        "A moderate-content edge function (Claude moderation prompt returning toxicity/spam/off-topic scores) is called in the write path for reviews and contact/feedback submissions",
+        "toxicity >= 0.7 or spam >= 0.6: rejected with a polite message (and the row stored flagged-hidden for audit, not silently dropped); 0.5-0.7: stored hidden + queued to a moderation queue; clean: published immediately",
+        "Moderation queue surfaces in the admin dashboard with scores and one-click approve/reject; approve publishes, reject keeps hidden — decisions audit-logged",
+        "Fail-open with flag: if the moderation call errors, content is stored hidden-pending (never lost, never auto-published unmoderated) and the failure is logged via jobRunner",
+        "Latency budget: moderation adds < 2s to the submit path (call it async post-insert if needed, defaulting the row to hidden until scored)",
+        "npm run validate passes"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": "No moderation exists today on review/contact writes (audit found no toxicity checks anywhere). This is a prerequisite quality gate for WEB-FEAT-010 (review composer with photos) — build the seam so photo-bearing reviews route through it too."
+    },
+    {
+      "id": "WEB-AUTO-010",
+      "title": "Campaign creative auto-review (spec + quality + brand-safety checks)",
+      "description": "As an advertiser, I want my creative approved in seconds, not when the admin next logs in; as the owner, I only want to see creatives the checks couldn't clear.",
+      "acceptanceCriteria": [
+        "On campaign_creatives insert: automated checks run — image loads and meets min dimensions/aspect for the placement, target URL is https and resolves (no redirect to disallowed schemes), text fields pass a brand-safety/content check (Claude prompt), advertiser account is in good standing",
+        "All checks pass: is_approved set automatically and campaign proceeds to its normal status flow; any check fails: stays pending with machine-readable failure reasons shown in AdminCampaigns",
+        "Auto-approval decisions audit-logged with check results; admin retains override in both directions",
+        "Auto-approval rate metric logged via WEB-AUTO-001 jobRunner",
+        "BACKWARD COMPAT: campaigns/advertisements table changes additive only; get_active_ads RPC behavior unchanged (iOS reads it)",
+        "npm run validate passes"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": "Evidence: src/pages/AdminCampaigns.tsx (~lines 180-200) shows the manual is_approved toggle; campaigns sit in status='pending_creative' until a human acts. This directly unblocks ad revenue latency."
+    },
+    {
+      "id": "WEB-AUTO-011",
+      "title": "Event-driven sitemap regeneration + search-engine ping (no build required)",
+      "description": "As the platform owner, I want sitemaps to update themselves when content changes: today generation is wired into npm run build and a daily cron, so new content waits up to a day (or a deploy) to be indexable.",
+      "acceptanceCriteria": [
+        "Content changes (insert/update/delete on events/restaurants/attractions/articles) enqueue into a change-queue table via triggers; a scheduled job (every 6h, or on queue depth) regenerates only affected sitemap files via the existing generate-sitemaps edge function path and writes them to storage/route the site serves",
+        "After regeneration: Google ping (sitemaps ping endpoint or Indexing API where applicable) fired automatically; result logged",
+        "Hidden/expired events (WEB-AUTO-006) drop out of sitemaps automatically on the same cycle",
+        "Build-time generation keeps working as a fallback; docs updated to state the event-driven path is primary",
+        "Runs logged via WEB-AUTO-001 jobRunner; failures alert",
+        "npm run validate passes"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": "Evidence: package.json build script runs generate-sitemaps; supabase/functions/generate-sitemaps + cron 20251123000000 exist. Verify how sitemaps are actually served on Cloudflare Pages (static dist vs function) before choosing the write target — public/_routes.json matters here."
+    },
+    {
+      "id": "WEB-AUTO-012",
+      "title": "Daily social media auto-posting (event + restaurant of the day)",
+      "description": "As the platform owner, I want a steady social presence with zero manual posting: social-media-manager exists with time-slot logic but nothing schedules it.",
+      "acceptanceCriteria": [
+        "Scheduled daily: pick the highest-signal upcoming event (and a featured restaurant) not posted in the last 30 days, generate platform-appropriate copy via Claude (length-capped per platform), and post via the existing social-media-manager webhook integrations",
+        "Posted items recorded (platform, content id, timestamp, status) so the no-repeat window works; failures retried once then logged via jobRunner",
+        "Admin can pause per-platform with a config flag and see the posting history in the admin UI",
+        "Copy includes the canonical site URL for the item (deep link), correct date formatting via date-fns-tz (America/Chicago)",
+        "npm run validate passes"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": "Evidence: supabase/functions/social-media-manager has shouldPostNow() (9am events / 10am restaurants) but relies on manual invocation. Check which platform webhooks are actually configured before promising platforms in the UI."
+    },
+    {
+      "id": "WEB-AUTO-013",
+      "title": "Subscription lifecycle automation: dunning, renewal reminders, win-back",
+      "description": "As the business, I want failed payments, expirations, and churn handled by machines: Stripe webhooks update status today, but nobody emails the user, retries dunning, or offers win-backs.",
+      "acceptanceCriteria": [
+        "Stripe webhook events (payment_failed, subscription about to renew, canceled) drive automated emails through existing plumbing: pre-renewal reminder (7 days), payment-failed with update-payment link, and a win-back offer email after cancellation (frequency-capped, one per lapse)",
+        "Dunning ladder implemented via Stripe's smart retries config plus our emails at each state; after final failure the subscription downgrade happens automatically and the user is informed",
+        "All lifecycle transitions recorded in a subscription_events log table (additive) so MRR/churn impact is queryable; surfaced as a panel in the admin dashboard",
+        "Web-only scope: Apple/Google-billed subs are explicitly excluded (their stores own dunning) — guard on platform column",
+        "Emails are compliant (unsubscribe handling for marketing-type win-backs) and logged via jobRunner",
+        "npm run validate passes"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": "Evidence: process-stripe-refund is manual (AdminRefunds.tsx); stripe-webhook exists. user_subscriptions has platform column (iOS work added it) — use it for the exclusion guard."
+    },
+    {
+      "id": "WEB-AUTO-014",
+      "title": "Admin Autonomy Dashboard: one pane of queues, rates, and exceptions",
+      "description": "As the platform owner, the only admin surface I should need daily is a single dashboard answering 'is anything waiting on a human?' — every queue and automation health signal in one place.",
+      "acceptanceCriteria": [
+        "New admin page (or AdminHome upgrade) aggregating: pending event submissions (with AI scores), moderation queue depth, merge-review queue, creative approvals pending, job health (WEB-AUTO-001), data-quality KPIs (WEB-AUTO-003), auto-approval rates per pipeline, and recent automation alerts",
+        "Every queue row deep-links to the existing admin surface to act on it; zero-state is explicit ('Nothing needs you')",
+        "Auto-refreshes (TanStack Query refetchInterval) and is performant (single aggregate edge function or RPC, not 10 client queries)",
+        "Page is admin-gated via ProtectedRoute and lazy-loaded",
+        "npm run validate passes"
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": "Capstone of the AUTO cluster — schedule after the queues it aggregates exist (it can land earlier with sections appearing as pipelines ship, using feature-tolerant queries). admin-home-stats edge function is the natural aggregation point to extend."
+    },
+    {
+      "id": "WEB-PERF-001",
+      "title": "Column-projected list queries (eliminate select('*') on list views)",
+      "description": "As a mobile-network user, I need list pages to fetch only the columns they render: list hooks currently select('*'), dragging seo_*, geo_faq and other heavy text fields into every card payload.",
+      "acceptanceCriteria": [
+        "useEvents/useRestaurants/useAttractions/useHotels list-path queries select an explicit column list (id, name/title, category, image_url, dates, rating, price, lat/lng, the card fields); detail-page queries keep full rows",
+        "Generated Supabase types still typecheck (use satisfies/Pick patterns rather than any)",
+        "Measured payload reduction recorded in the progress notes (network tab before/after on /events and /restaurants, target >= 60% smaller list responses)",
+        "No visual or functional regression on list cards, filters, or sorting (Playwright search/filter suite passes locally)",
+        "npm run validate passes"
+      ],
+      "priority": 23,
+      "passes": false,
+      "notes": "Evidence: src/hooks/useRestaurants.ts:126, useHotels.ts:51, useAttractions.ts:49 all select('*'). Content tables carry seo_keywords/geo_faq/geo_key_facts per CLAUDE.md schema — pure waste on cards."
+    },
+    {
+      "id": "WEB-PERF-002",
+      "title": "Kill wasteful query patterns: trending N+1 and full-table filter options",
+      "description": "As a user, I need trending and filter UI to load instantly: useTrendingContent fires one query per trending item, and filter dropdowns fetch entire table columns to dedupe client-side.",
+      "acceptanceCriteria": [
+        "useTrendingContent batches all item fetches into one .in('id', ids) query per content type (verify src/hooks/useTrendingContent.ts ~lines 76-91 loop is gone); query count on the trending surface drops to <= 3",
+        "Filter options (cuisines, locations, categories) come from a new read-only RPC/view returning DISTINCT values (additive migration), cached client-side with staleTime >= 1h — replacing the full-column fetches in useRestaurants.ts ~407-427 and any sibling hooks",
+        "Filter dropdowns render identical options to before (snapshot/manual diff)",
+        "npm run validate passes"
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": "Two concrete wins flagged with line evidence by the perf audit; both are pure efficiency with zero UX change."
+    },
+    {
+      "id": "WEB-PERF-003",
+      "title": "Defer heavy libraries off the critical path (three.js, recharts, leaflet, fullcalendar)",
+      "description": "As a first-time visitor, I need the homepage interactive fast: heavy visualization libs must load only when (and where) actually used, not ride the initial route.",
+      "acceptanceCriteria": [
+        "Audit which entry chunks contain three.js/recharts/leaflet/fullcalendar (npm run build:analyze before/after, numbers in progress notes); none of them load on first paint of / for a cold visit",
+        "Homepage hero (EnhancedHero / HeroCityLite in src/pages/Index.tsx) renders a static fallback immediately and upgrades to the 3D scene via dynamic import on idle/intersection; mobile can stay static",
+        "Detail-page maps lazy-load on scroll-into-view with a placeholder (location text + 'View map') — applies to Event/Restaurant/Attraction details",
+        "Charts (admin/analytics pages) and calendar views load via lazy() route-level splitting only",
+        "Lighthouse or Playwright perf spec shows improved LCP/TTI on / (record numbers); no CLS regression from fallback swaps",
+        "npm run validate passes"
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": "vite.config.ts already has manualChunks + a removeLazyPreloads transform — verify what it actually strips before changing it; the perf agent suspected modulepreload still pulls vendor chunks early."
+    },
+    {
+      "id": "WEB-PERF-004",
+      "title": "Image CLS elimination + right-sized responsive images",
+      "description": "As a user on a slow connection, I need pages not to jump as images arrive, and thumbnails to download at thumbnail size.",
+      "acceptanceCriteria": [
+        "Every list-card and detail-hero image renders inside a fixed aspect-ratio container (or explicit width/height) — no layout shift on load; CLS < 0.1 on /, /events, /restaurants and one detail page (measure and record)",
+        "OptimizedImage gains srcset/sizes using the image-transform width param so cards fetch card-sized images; hero fetches ~viewport width",
+        "Dialog/modal images (e.g. event quick-view in src/pages/Index.tsx ~797-807) don't prefetch while the dialog is closed",
+        "Fallback path verified: a failed transform falls back to the original URL (never a broken image)",
+        "npm run validate passes"
+      ],
+      "priority": 26,
+      "passes": false,
+      "notes": "Pairs with WEB-SEC-007's image-transform caching. iOS prd POLISH-002 notes document the image-transform contract (verify_jwt=false, ?url=&width=&quality=) — reuse that knowledge."
+    },
+    {
+      "id": "WEB-PERF-005",
+      "title": "Split AuthContext to stop app-wide re-renders",
+      "description": "As a user, I need navigation to stay smooth: AuthContext currently carries one object with ~7 fields, so any auth tick re-renders every useAuth() consumer (header, nav, gates — 50+ components).",
+      "acceptanceCriteria": [
+        "AuthContext split into state and actions contexts (or equivalent memoized selector pattern) so login/logout function identities are stable and consumers re-render only when fields they read change",
+        "useAuth() keeps its existing public API (zero call-site churn) — implemented as a composition of the new contexts",
+        "React DevTools profile (or a render-count test) demonstrates Header/BottomNav no longer re-render on session refresh ticks; numbers in progress notes",
+        "All Playwright auth-related flows pass locally (login, protected routes, premium gates)",
+        "npm run validate passes"
+      ],
+      "priority": 27,
+      "passes": false,
+      "notes": "Evidence: src/contexts/AuthContext.tsx ~87-96. Keep the change mechanical and well-tested — this file is load-bearing for every protected surface."
+    },
+    {
+      "id": "WEB-PERF-006",
+      "title": "TanStack Query cache + retry tuning per data class",
+      "description": "As a returning visitor, I need instant back-navigation and resilient fetches on flaky networks: one-size-fits-all gcTime/retry currently forces refetches and gives up too fast.",
+      "acceptanceCriteria": [
+        "QueryClient defaults (src/main.tsx) tuned: public content lists get staleTime 5-15min + gcTime 30min; user-specific data keeps short staleTime; documented constants, not magic numbers",
+        "retry becomes a function: up to 2 retries with backoff for network/5xx, never for 401/403/404",
+        "Back-navigation to a recently-visited list renders from cache instantly (verify manually, note in progress)",
+        "No staleness bugs introduced on user-mutated data (favorites, reviews use invalidation correctly — spot-check the mutation hooks)",
+        "npm run validate passes"
+      ],
+      "priority": 28,
+      "passes": false,
+      "notes": "Evidence: src/main.tsx ~161-164 (retry: 1, gcTime 5min global)."
+    },
+    {
+      "id": "WEB-PERF-007",
+      "title": "Real-user web-vitals monitoring with automated regression alerts",
+      "description": "As the platform owner, I want performance regressions to report themselves: add RUM web-vitals collection and an automated weekly check, so a bad deploy is caught by machines, not complaints.",
+      "acceptanceCriteria": [
+        "web-vitals library reports LCP/CLS/INP/TTFB from real sessions to a Supabase table (sampled, anonymous, additive schema; respect DNT)",
+        "A weekly scheduled job (WEB-AUTO-001 jobRunner) computes p75 per metric per page-group, compares against the previous week, and alerts (email) if any metric degrades > 20% or breaches budget (LCP 2.5s, CLS 0.1, INP 200ms)",
+        "Admin dashboard panel renders the trend (reuse existing charting, lazy-loaded)",
+        "Collection adds < 3KB to the bundle and never blocks rendering (dynamic import on idle)",
+        "npm run validate passes"
+      ],
+      "priority": 29,
+      "passes": false,
+      "notes": "Autonomy-themed perf: closes the loop so the perf stories above stay won. No web-vitals reporting exists today per the audit."
+    },
+    {
+      "id": "WEB-UX-001",
+      "title": "URL-synced filter state on Events/Restaurants/Attractions",
+      "description": "As a user, I want my filtered view to survive back-navigation and be shareable: filters today are component state only, so back loses everything and links can't carry a filter.",
+      "acceptanceCriteria": [
+        "Search text, category/cuisine, date presets, sort, and page sync to URL search params (useSearchParams) on Events, Restaurants, Attractions list pages — debounced so typing doesn't spam history",
+        "Loading a URL with params applies all filters on mount; back/forward restores prior filter states; Clear-all resets the URL",
+        "Navigating to a detail and back restores the filtered list (URL is the source of truth, replacing any sessionStorage hacks)",
+        "SEO landing routes (/events/today etc.) keep working and compose with extra params",
+        "Playwright search-filters suite extended with a back-button + shareable-URL test; suite passes",
+        "npm run validate passes"
+      ],
+      "priority": 30,
+      "passes": false,
+      "notes": "Top UX-audit finding. Evidence: src/pages/EventsPage.tsx ~102-116, src/pages/Restaurants.tsx ~85-95 (pure useState filters)."
+    },
+    {
+      "id": "WEB-UX-002",
+      "title": "Unified loading/empty/error states with retry across all list pages",
+      "description": "As a user, I should always know whether the page is loading, empty, or broken — and be able to retry — instead of mixed skeletons, missing empty states, and silent failures per page.",
+      "acceptanceCriteria": [
+        "All content list pages (Events, Restaurants, Attractions, Articles, Deals, Hotels) use the shared skeleton components shape-matched to their real cards while loading (no generic spinners), the shared EmptyState (icon + copy + Clear-filters/Browse CTA) when zero results, and a shared error card with a working Retry button (query refetch) on failure",
+        "Skeletons respect prefers-reduced-motion",
+        "Error copy distinguishes offline vs server error where detectable",
+        "Zero-result state differs between 'no content at all' and 'no matches for your filters'",
+        "npm run validate passes"
+      ],
+      "priority": 31,
+      "passes": false,
+      "notes": "Evidence: src/components/ui/loading-skeleton.tsx + empty-state.tsx exist but adoption is inconsistent (EventsPage lacks EmptyState; error handling diverges per page)."
+    },
+    {
+      "id": "WEB-UX-003",
+      "title": "Sticky search bar, persistent filter chips, and visible result counts (mobile-first)",
+      "description": "As a mobile user filtering a long list, I need to see my active filters and the match count without scrolling back up or reopening a sheet.",
+      "acceptanceCriteria": [
+        "Events/Restaurants/Attractions: search + filter trigger stick below the header on scroll (no layout shift when sticking)",
+        "Active filters render as removable chips above results with a 'Clear all'; chips visible at all viewports",
+        "Result count ('N results') visible on mobile (currently hidden md:block on Restaurants) and announced via aria-live",
+        "Closing the mobile filter sheet returns focus to the trigger button (a11y)",
+        "Playwright mobile-responsive suite covers the sticky bar + chips; suite passes",
+        "npm run validate passes"
+      ],
+      "priority": 32,
+      "passes": false,
+      "notes": "Evidence: result count hidden on mobile (src/pages/Restaurants.tsx ~503); filters live in the hero so they scroll away. Mirrors what IOS-IA-004 shipped natively."
+    },
+    {
+      "id": "WEB-UX-004",
+      "title": "Detail-page upgrades: related rail, last-updated badge, named breadcrumbs",
+      "description": "As a user on an event/restaurant/attraction detail page, I want obvious next steps (related content), trust signals (data freshness), and sane breadcrumbs (names, not UUIDs).",
+      "acceptanceCriteria": [
+        "Event/Restaurant/Attraction detail pages render a 'More like this' rail (3-4 cards, same category/area) placed after the primary content — Restaurants already queries relatedRestaurants but never renders it; rail hidden when < 3 matches",
+        "'Updated X ago' badge near the title using updated_at (full timestamp on hover/tap)",
+        "Breadcrumbs show the item name on dynamic routes instead of the raw id (src/components/ui/breadcrumbs.tsx accepts a label override)",
+        "Related-rail clicks tracked so engagement lift is measurable",
+        "npm run validate passes"
+      ],
+      "priority": 33,
+      "passes": false,
+      "notes": "Evidence: RestaurantDetails fetches related but doesn't render; breadcrumbs.tsx ~35-54 derives labels from the pathname."
+    },
+    {
+      "id": "WEB-UX-005",
+      "title": "Keyboard accessibility pass: autocomplete, card actions, focus management",
+      "description": "As a keyboard/screen-reader user, I need search suggestions, card secondary actions, and sheet/dialog flows to be fully operable.",
+      "acceptanceCriteria": [
+        "SearchAutocomplete supports ArrowUp/Down + Enter + Escape with aria-activedescendant and announced selection",
+        "Card secondary actions (favorite, share) are tabbable with explicit aria-labels ('Save {name}'), reachable without entering the card link",
+        "Sheets/dialogs restore focus to their trigger on close across list filter sheets and quick-view modals",
+        "Playwright a11y suite (axe) passes on /, /events, /restaurants, one detail page; new keyboard-path test added",
+        "npm run validate passes"
+      ],
+      "priority": 34,
+      "passes": false,
+      "notes": "Builds on the completed WCAG work in memory (landmarks, touch targets done). Evidence: SearchAutocomplete lacks arrow-key handling; SocialEventCard/RestaurantCard action labels inconsistent."
+    },
+    {
+      "id": "WEB-UX-006",
+      "title": "Centralize category/cuisine colors into theme tokens (dark-mode complete)",
+      "description": "As a user in dark mode, I need consistent, readable category colors; as a developer, one source of truth instead of per-component hardcoded gradients.",
+      "acceptanceCriteria": [
+        "A single CATEGORY_STYLES map (or CSS custom properties) replaces hardcoded gradient/color literals in RestaurantCard (~47-64), SocialEventCard (~52-59), and any sibling components found by grep",
+        "Every token defines light + dark values; contrast >= 4.5:1 for text-bearing badges in both modes",
+        "Visual-regression spec updated/passes for card surfaces",
+        "npm run validate passes"
+      ],
+      "priority": 35,
+      "passes": false,
+      "notes": "Web twin of IOS-POLISH-006. Low risk, high consistency payoff."
+    },
+    {
+      "id": "WEB-FEAT-001",
+      "title": "Contextual paywall modal with per-feature copy (web parity with iOS)",
+      "description": "As the business, I need the web paywall to appear at the moment of feature desire with tailored copy — iOS ships PaywallView with 8 contexts and measurable per-surface conversion; web shows a generic gate.",
+      "acceptanceCriteria": [
+        "Reusable PaywallModal accepting a context (id, headline, benefit bullets, recommended tier) with contexts mirroring iOS: unlimited favorites, trip planner, saved searches, custom alerts, advanced filters, ad-free, insider/dining tips",
+        "PremiumGate and feature-gate call sites present the contextual modal instead of generic copy/redirect to /pricing; checkout proceeds via the existing Stripe flow",
+        "Favorites cap (3 free) enforced on web with the unlimited-favorites context on the 4th save attempt",
+        "Every present/dismiss/checkout-start event logged with context id (existing analytics path) for per-surface conversion measurement",
+        "Modal is accessible (focus trap, Escape, focus restore) and mobile-friendly",
+        "npm run validate passes"
+      ],
+      "priority": 36,
+      "passes": false,
+      "notes": "Mirror iOS IOS-SUB-010/011 (see archived notes in scripts/ralph/archive and git history for the context list + tier mapping). PremiumFeature keys should match the web useSubscription hasFeature() list to stay cross-platform consistent."
+    },
+    {
+      "id": "WEB-FEAT-002",
+      "title": "Annual plans + free trial on web (Stripe)",
+      "description": "As a user, I want a cheaper annual option and a low-risk trial on web — iOS already sells Insider $49.99/yr and VIP $129.99/yr with a 7-day trial; web only offers monthly.",
+      "acceptanceCriteria": [
+        "Pricing page and PaywallModal show a monthly/annual toggle with computed 'Save N%' badge (Insider $49.99/yr, VIP $129.99/yr to match iOS)",
+        "Checkout session supports the annual price IDs; scripts/setup-stripe-products.js extended to create them idempotently (document the one-time run in notes as ACTION REQUIRED if env keys absent)",
+        "7-day trial configured via Stripe trial_period_days for first-time subscribers; subscription status UI shows trial state and renewal date; legally-required renewal copy present",
+        "stripe-webhook handles trialing→active transitions; user_subscriptions tier resolves correctly during trial (matches the cross-platform resolution iOS relies on)",
+        "Tier parity preserved: web annual subscribers sync to mobile via the existing user_subscriptions mechanism",
+        "npm run validate passes"
+      ],
+      "priority": 37,
+      "passes": false,
+      "notes": "Matches iOS IOS-SUB-012 economics. Touches money — keep changes additive and verify webhook idempotency. Flag any Stripe-dashboard manual steps as ACTION REQUIRED in progress notes."
+    },
+    {
+      "id": "WEB-FEAT-003",
+      "title": "Saved searches + alerts with automated nightly digest (promised, unbuilt)",
+      "description": "As an Insider subscriber, I was promised 'saved searches & event alerts' on the pricing page, but the web has no way to save a search or receive alerts — a broken product promise and a retention loop left on the table.",
+      "acceptanceCriteria": [
+        "Search/list pages get a 'Save this search' affordance (free users see the contextual paywall via WEB-FEAT-001; Insider 10 / VIP unlimited limits enforced server-side)",
+        "Dashboard tab lists saved searches with an alerts on/off toggle and delete; saved_searches table additive with RLS owner-only",
+        "Nightly job (WEB-AUTO-001 jobRunner): runs active saved searches against events created since last run, groups per user, sends ONE consolidated email via existing email plumbing with deep links back to the filtered URL (WEB-UX-001 URL-state makes the links possible)",
+        "Email respects unsubscribe/notification preferences; zero matches = no email",
+        "Per-tier limits and alert behavior logged for funnel analysis",
+        "npm run validate passes"
+      ],
+      "priority": 38,
+      "passes": false,
+      "notes": "Depends on WEB-UX-001 (URL filter state for deep links) and pairs with WEB-FEAT-001 gating. iOS PARITY-008 defines the cross-platform shape — keep table/RPC design compatible so the native app can adopt it."
+    },
+    {
+      "id": "WEB-FEAT-004",
+      "title": "First-party campaign ad serving on web with house-ad fill",
+      "description": "As an advertiser, my paid campaign should render on the web (it already renders on iOS); as the business, unsold inventory should sell subscriptions instead of showing nothing.",
+      "acceptanceCriteria": [
+        "Web AdBanner fetches creatives via the existing get_active_ads(placement_type) RPC (same source as iOS CampaignAdService) for top_banner / below_fold / featured_spot placements, cached ~5min",
+        "Fallback chain campaign → affiliate → house ad (rotating 3 messages, CTA opens contextual paywall/pricing) so a slot never renders empty; FTC 'Ad' label on everything; Insider/VIP see zero ads",
+        "Impression/click tracking writes to the same ad_impressions/ad_clicks tables as iOS with viewability rules matching src/lib/tracking.ts thresholds (>=50% visible >=1s, deduped per session)",
+        "House vs paid vs affiliate distinguished in tracking payloads so fill rate is measurable",
+        "Lazy-loaded below the fold (no LCP regression — coordinate with WEB-PERF-003)",
+        "npm run validate passes"
+      ],
+      "priority": 39,
+      "passes": false,
+      "notes": "Web twin of IOS-ADS-010/013/014 — the RPC, tables, and thresholds all exist; web just never consumed them (current AdBanner shows one hardcoded affiliate creative)."
+    },
+    {
+      "id": "WEB-FEAT-005",
+      "title": "Sponsored/featured listings inline in web browse lists",
+      "description": "As an advertiser, my sponsored listing should be visibly boosted in web browse flows like it is in the iOS rails — clearly labeled, never disguised.",
+      "acceptanceCriteria": [
+        "Events/Restaurants/Attractions list queries surface is_sponsored items at the top positions (cap 2) with an amber ring + 'Sponsored' badge matching the iOS treatment; organic order otherwise untouched",
+        "Sponsored impressions/clicks tracked distinctly (sponsored_listing inventory class) via the shared tracking lib",
+        "Shown to all tiers (content, not interruptive ads); VoiceOver/screen-reader text prefixes 'Sponsored'",
+        "Expired sponsorships (sponsored_until past) automatically lose the treatment with no manual cleanup",
+        "npm run validate passes"
+      ],
+      "priority": 40,
+      "passes": false,
+      "notes": "Web twin of IOS-ADS-011; events/restaurants rows already carry is_sponsored/sponsored_until."
+    },
+    {
+      "id": "WEB-FEAT-006",
+      "title": "Guest favorites with signup migration (kill the save-wall)",
+      "description": "As an anonymous visitor, I want to save a few favorites before being asked to sign up; as the business, visitors who invest first convert dramatically better than those hitting an auth wall.",
+      "acceptanceCriteria": [
+        "Unauthenticated users can favorite up to 3 items, stored via @/lib/safeStorage (never raw localStorage), surviving reloads",
+        "Guest cap reached → contextual signup prompt ('Sign up free to keep saving') — not the paywall; favorites UI shows guest count (1/3)",
+        "On signup/login, guest favorites migrate to the user's server favorites automatically (idempotent, deduped) and the local copy clears",
+        "Dashboard/welcome surface acknowledges the migrated favorites",
+        "Conversion events logged (guest-save, wall-hit, signup-from-wall) for funnel measurement",
+        "npm run validate passes"
+      ],
+      "priority": 41,
+      "passes": false,
+      "notes": "Highest-leverage funnel fix from the features audit. Keep the safeStorage schema versioned per CLAUDE.md on-disk-state rules."
+    },
+    {
+      "id": "WEB-FEAT-007",
+      "title": "Recently-viewed rail + personalized home section ordering",
+      "description": "As a returning user, the homepage should reflect what I actually do here — quick resume of recently-viewed items and section ordering driven by my engagement, not a fixed layout.",
+      "acceptanceCriteria": [
+        "Detail-page views record {id, type, timestamp} (signed-in: server table with RLS; guest: safeStorage), capped at 20, pruned > 30 days",
+        "Homepage gains a 'Recently viewed' rail (appears only when >= 3 entries); Dashboard gets the full list with remove",
+        "Home sections render from a data-driven order: users with dominant restaurant engagement see dining-first, etc.; guests/no-signal users keep the canonical order (deterministic, no layout flicker)",
+        "Personalized-cohort flag logged so conversion vs control is measurable",
+        "No CLS from personalization (order computed before first paint of the section list)",
+        "npm run validate passes"
+      ],
+      "priority": 42,
+      "passes": false,
+      "notes": "Web twin of iOS ForYou/IA-006 ordering. Index.tsx already renders ForYouRail + PersonalizedRecommendations — this story makes placement itself data-driven."
+    },
+    {
+      "id": "WEB-FEAT-008",
+      "title": "Dynamic OG-image generation for social shares",
+      "description": "As the business, shared event/restaurant links should render rich branded preview cards (title, date, image) instead of a generic site image — direct social CTR lift with zero ongoing admin work.",
+      "acceptanceCriteria": [
+        "Edge function og-image/:type/:id renders a branded PNG (Satori or canvas: gradient background, truncated title, date/rating badge, thumbnail) for events/restaurants/attractions/articles",
+        "Detail pages' og:image meta points at the function URL; prerender (scripts/prerender.mjs) emits the correct tags for crawler-visible HTML",
+        "Responses cached aggressively (immutable for past events, ~1h for upcoming); function rate-limited per WEB-SEC patterns",
+        "Validated with Twitter/Facebook preview debuggers (record screenshots in PR/progress notes)",
+        "npm run validate passes"
+      ],
+      "priority": 43,
+      "passes": false,
+      "notes": "Self-running marketing infrastructure — fits the autonomy theme. Check how prerender.mjs currently writes meta tags before wiring."
+    },
+    {
+      "id": "WEB-FEAT-009",
+      "title": "Map-first discovery: bounds-aware filtering on DiscoverMap",
+      "description": "As a high-intent user, I want to pan the map and see what's in view — the existing DiscoverMap renders markers but supports no spatial interaction.",
+      "acceptanceCriteria": [
+        "Map moveend captures bounds; a bounds query (RPC or lat/lng range filters) returns counts + items for events/restaurants/attractions in view",
+        "Sidebar/sheet lists in-view results as cards with a live count; layer toggles show/hide each content type's markers",
+        "'Search this area' button refreshes results for the current bounds; selected marker highlights its card and vice-versa",
+        "Mobile: bottom-sheet pattern, map remains usable; Leaflet stays lazy-loaded (WEB-PERF-003)",
+        "npm run validate passes"
+      ],
+      "priority": 44,
+      "passes": false,
+      "notes": "Existing DiscoverMap page is the shell; content tables have lat/lng maintained by geocoding triggers (and WEB-AUTO-003 heals gaps)."
+    },
+    {
+      "id": "WEB-FEAT-010",
+      "title": "Review composer with photo upload, wired through auto-moderation",
+      "description": "As a user, I want to write a rating + review with photos on web; as the owner, all of it flows through the WEB-AUTO-009 moderation pipeline so UGC scales with zero manual review of the clean majority.",
+      "acceptanceCriteria": [
+        "ReviewComposer (star picker, text, up to 3 photos) on Event/Restaurant/Attraction detail pages; auth-gated with a sign-in prompt for guests",
+        "Photos client-resized (< 500KB), uploaded to Supabase Storage with owner-scoped paths/RLS, URLs stored additively on the review row",
+        "Submissions route through moderate-content (WEB-AUTO-009): clean publishes instantly, flagged goes to the queue — user sees 'pending review' state honestly",
+        "Reviews render with author, relative date, stars, text, photo grid (lightbox); owners can edit/delete their own; report button feeds the moderation queue",
+        "npm run validate passes"
+      ],
+      "priority": 45,
+      "passes": false,
+      "notes": "Sequenced after WEB-AUTO-009. RatingSystem + PremiumGate(writeReviews) components exist as the starting seam."
+    },
+    {
+      "id": "WEB-FEAT-011",
+      "title": "Trip Planner web polish: quota meter, contextual paywall, share, reorder, calendar",
+      "description": "As a user, the web Trip Planner should match the native experience: today the form works but lacks the quota meter, contextual upsell, itinerary reorder, share link, and calendar export that iOS ships.",
+      "acceptanceCriteria": [
+        "Quota meter shows tier usage (Insider 5/mo, VIP unlimited; free sees the trip-planner contextual paywall via WEB-FEAT-001) enforced against the same server-side counts as iOS",
+        "Itinerary view: day-by-day sections with reorder (drag or up/down) persisted via the existing trip_plans backend; map preview of stops (lazy Leaflet)",
+        "Share generates the public /trips/shared/<code> link with copy + native share; AddToCalendar exports per-day or whole-trip .ics plus Google Calendar deep-link",
+        "Loading/error/generation-failure states handled with the WEB-UX-002 patterns",
+        "npm run validate passes"
+      ],
+      "priority": 46,
+      "passes": false,
+      "notes": "Backend (generate-itinerary, trip_plans, share codes, get_trip_itinerary RPC) all exists from the iOS build — this is pure web UI adoption. src/hooks/useTripPlanner.ts is the seam."
+    }
+  ]
+}
