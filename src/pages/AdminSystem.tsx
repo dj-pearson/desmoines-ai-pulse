@@ -5,14 +5,17 @@ import AdminNav from "@/components/admin/AdminNav";
 import UserRoleManager from "@/components/UserRoleManager";
 import AdminSystemControls from "@/components/AdminSystemControls";
 import AdminApplicationSettings from "@/components/AdminApplicationSettings";
+import JobHealthPanel from "@/components/admin/JobHealthPanel";
 import {
   Users,
   Server,
   Cog,
+  Activity,
 } from "lucide-react";
 
 const SYSTEM_TABS = [
   { id: "users", label: "User Management", icon: Users },
+  { id: "jobs", label: "Job Health", icon: Activity },
   { id: "system", label: "System Controls", icon: Server },
   { id: "settings", label: "Settings", icon: Cog },
 ];
@@ -69,6 +72,8 @@ export default function AdminSystem() {
 
         {/* Tab Content */}
         {canManageUsers() && activeTab === "users" && <UserRoleManager />}
+
+        {activeTab === "jobs" && <JobHealthPanel />}
 
         {canManageUsers() && activeTab === "system" && <AdminSystemControls />}
 

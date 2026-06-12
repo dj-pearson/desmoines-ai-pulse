@@ -3333,3 +3333,59 @@ JWT scan + live-pattern scan; setup-stripe-products.js only references the
   A .gitleaks.toml
   A .githooks/pre-commit
   A docs/SECRETS_ROTATION.md
+
+## 2026-06-12 — WEB-AUTO-001 (autonomy control plane: job observability) [passes:true]
+
+Foundation for the whole WEB-AUTO cluster. Replaces "silently broken automation"
+with self-reporting automation.
+
+### Schema (migration 20260612000002)
+- automation_job_runs (job_name, started_at, finished_at, status [running/
+  success/failed/partial], items_processed, items_failed, attempts, error,
+  metadata jsonb) + indexes; RLS admin-read (service role writes, bypasses RLS).
+- automation_job_health VIEW: latest run per job + 7-day success/throughput
+  rollup, for the admin panel.
+
+### _shared/jobRunner.ts
+runJob(name, fn, opts): opens a run row, runs fn with a ctx (processed/failed/
+meta counters), retries transient failures (default 2 retries, exponential
+backoff), records the final status + counts + metadata, and emails the admin on
+terminal failure (sendJobAlert → Resend, ADMIN_ALERT_EMAIL/ALERT_EMAIL). Never
+throws — job-infra failure can't crash the function.
+
+### Missed-run alerting
+job-health-watchdog (new fn, scheduled daily 08:00 UTC via migration
+20260612000003): per-job EXPECTED_MAX_AGE_HOURS; alerts when a job hasn't
+SUCCEEDED within ~2 expected intervals (missed two runs) or its latest run
+failed. Auth via requireAdminOrApiKey (cron service-role bearer accepted).
+
+### Admin Job Health panel
+src/components/admin/JobHealthPanel.tsx + new "Job Health" tab in AdminSystem.tsx:
+status badges, last-run age, 7-day success rate, items processed/failed, recent
+errors, auto-refresh (TanStack refetchInterval 30s), and a per-job manual Re-run
+button (invokes the edge function). Reads the automation_job_health view.
+
+### Docs
+docs/AUTOMATION_JOBS.md: full pg_cron inventory (name/schedule/target/purpose/
+observed-status), the runJob how-to, and recovery/manual-rerun notes.
+
+### Migration coverage (honest)
+cleanup-old-events migrated to runJob as the working REFERENCE. The other listed
+functions (generate-sitemaps, dispatch-scheduled-newsletters, analytics,
+validate-source-urls) are marked "planned" in the doc and adopt the same one-line
+wrap in their dedicated stories (WEB-AUTO-003/004/008/011), which already touch
+them — avoids risky large restructures of functions those stories rebuild anyway.
+
+### Verification
+type-check PASSES; jobRunner/job-health-watchdog/cleanup-old-events parse via
+esbuild; JobHealthPanel + AdminSystem lint clean.
+
+### Files
+  A supabase/migrations/20260612000002_create_automation_job_runs.sql
+  A supabase/migrations/20260612000003_schedule_job_health_watchdog.sql
+  A supabase/functions/_shared/jobRunner.ts
+  A supabase/functions/job-health-watchdog/index.ts
+  A src/components/admin/JobHealthPanel.tsx
+  A docs/AUTOMATION_JOBS.md
+  M supabase/functions/cleanup-old-events/index.ts
+  M src/pages/AdminSystem.tsx
