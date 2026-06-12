@@ -28,6 +28,7 @@ const RERUNNABLE: Record<string, string> = {
   "generate-sitemaps": "generate-sitemaps",
   "dispatch-scheduled-newsletters": "dispatch-scheduled-newsletters",
   "job-health-watchdog": "job-health-watchdog",
+  "data-quality-heal": "data-quality-heal",
 };
 
 function statusBadge(status: JobHealthRow["last_status"]) {
@@ -55,9 +56,30 @@ function timeAgo(iso: string | null): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+interface DataQualityKpi {
+  [table: string]: { missingCoords: number; missingSeo: number; missingImage: number };
+}
+
 export default function JobHealthPanel() {
   const { toast } = useToast();
   const [running, setRunning] = useState<string | null>(null);
+
+  // Latest data-quality-heal KPI snapshot (WEB-AUTO-003).
+  const { data: dqKpi } = useQuery({
+    queryKey: ["data-quality-kpi"],
+    queryFn: async (): Promise<DataQualityKpi | null> => {
+      const { data } = await supabase
+        .from("automation_job_runs" as never)
+        .select("metadata")
+        .eq("job_name", "data-quality-heal")
+        .order("started_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const meta = (data as unknown as { metadata?: { kpi?: DataQualityKpi } } | null)?.metadata;
+      return meta?.kpi ?? null;
+    },
+    refetchInterval: 60_000,
+  });
 
   const { data: jobs, isLoading, error, refetch } = useQuery({
     queryKey: ["automation-job-health"],
@@ -172,6 +194,24 @@ export default function JobHealthPanel() {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {dqKpi && Object.keys(dqKpi).length > 0 && (
+        <div className="mt-6">
+          <h3 className="text-sm font-medium mb-2">Data Quality (rows missing fields)</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {Object.entries(dqKpi).map(([table, k]) => (
+              <div key={table} className="rounded-lg border p-3">
+                <div className="text-sm font-medium capitalize mb-1">{table}</div>
+                <div className="text-xs text-muted-foreground space-y-0.5">
+                  <div>Coords: <span className={k.missingCoords > 0 ? "text-amber-600" : "text-green-600"}>{k.missingCoords}</span></div>
+                  <div>SEO: <span className={k.missingSeo > 0 ? "text-amber-600" : "text-green-600"}>{k.missingSeo}</span></div>
+                  <div>Image: <span className={k.missingImage > 0 ? "text-amber-600" : "text-green-600"}>{k.missingImage}</span></div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

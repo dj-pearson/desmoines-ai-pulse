@@ -3423,3 +3423,38 @@ type-check PASSES; triage parses via esbuild; manager + hook lint 0 errors.
   A supabase/functions/triage-event-submission/index.ts
   M src/hooks/useUserSubmittedEvents.ts
   M src/components/admin/EventSubmissionsManager.tsx
+
+## 2026-06-12 — WEB-AUTO-003 (nightly data-quality self-healing) [passes:true]
+
+### data-quality-heal edge function (nightly 02:30 UTC, migration 20260612000006)
+Per content table (events/restaurants/attractions), in order, batched <=25/run:
+1. Geocode rows with address/location but NULL lat/lng (calls geocode-location).
+2. Generate missing seo/geo (delegates to generate-seo-content, batchSize 20).
+3. Backfill missing image_url (delegates to backfill-images).
+Idempotent + safe: only fills NULL fields (.is(col,null)), never overwrites human
+data. Geocode failures increment heal_attempts; after 3 the row is flagged
+needs_manual_verification (additive migration 20260612000005 adds both columns to
+all 3 tables) so it stops retrying forever.
+
+### Observability + KPI
+Wrapped in the WEB-AUTO-001 jobRunner: per-stage counts + a data-quality KPI
+snapshot (rows missing coords/seo/image per table) in run metadata. JobHealthPanel
+renders the KPI as per-table cards (reads the latest heal run's metadata) and the
+job is manually re-runnable.
+
+### Backlog math
+25 geocodes/table/night -> a backlog of N drains in ceil(N/25) nights/table
+(e.g. 500 missing-coord events -> 20 nights). SEO/image delegate to existing
+batch functions (20/batch). Manual scripts (backfill-coordinates.ts) untouched;
+AUTOMATION_JOBS.md notes the automated path is primary.
+
+### Verification
+type-check PASSES; data-quality-heal parses via esbuild (fixed a JSDoc `*/`
+inside `seo_*/...` that prematurely closed the comment); JobHealthPanel lints clean.
+
+### Files
+  A supabase/migrations/20260612000005_data_quality_heal.sql
+  A supabase/migrations/20260612000006_schedule_data_quality_heal.sql
+  A supabase/functions/data-quality-heal/index.ts
+  M src/components/admin/JobHealthPanel.tsx
+  M docs/AUTOMATION_JOBS.md

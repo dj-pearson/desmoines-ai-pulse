@@ -172,8 +172,8 @@
         "npm run validate passes"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": "Evidence: scripts/backfill-coordinates.ts (manual), supabase/functions/backfill-images (manual offset/dryRun params), get_restaurants_needing_enrichment view (migration 20250107000009), coordinate cron 20250107000004 exists but has no fallback or observability."
+      "passes": true,
+      "notes": "DONE (2026-06-12): New data-quality-heal edge function (scheduled nightly 02:30 UTC via migration 20260612000006) chains, per content table (events/restaurants/attractions), in order: (1) geocode rows with address/location but NULL lat/lng by calling geocode-location, (2) generate missing seo/geo via generate-seo-content, (3) backfill missing image_url via backfill-images — each stage batched <=25 rows/run/table. Idempotent + safe: only fills NULL fields (queries .is('latitude'/'seo_title'/'image_url', null)), never overwrites human data; a row failing geocode increments heal_attempts and is flagged needs_manual_verification after 3 attempts (additive migration 20260612000005 adds both columns to all 3 tables) so it stops retrying forever. Wrapped in the WEB-AUTO-001 jobRunner with per-stage counts (geocoded/geocodeFailed/flagged/seoBatches/imageBatches) + a data-quality KPI snapshot (rows missing coords/seo/image per table) in metadata. Admin Job Health panel renders the KPI as a per-table card and data-quality-heal is manually re-runnable. Existing manual scripts (scripts/backfill-coordinates.ts) untouched; AUTOMATION_JOBS.md notes the automated path is primary. BACKLOG MATH: at 25 geocodes/table/night, a backlog of N rows drains in ceil(N/25) nights per table (e.g. 500 missing-coord events -> 20 nights); SEO/image stages delegate to the existing batch functions (20/batch). Verified: type-check passes; data-quality-heal parses via esbuild (fixed a JSDoc */ that closed the comment early); panel lints clean."
     },
     {
       "id": "WEB-AUTO-004",
