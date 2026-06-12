@@ -3281,3 +3281,55 @@ type-check PASSES; all edited Deno files parse via esbuild.
   M supabase/functions/api-restaurants/index.ts
   M supabase/functions/geocode-location/index.ts
   M supabase/functions/generate-itinerary/index.ts
+
+## 2026-06-12 — WEB-SEC-008 (secrets hygiene: .env.example, CI scanning, runbook) [passes:true]
+
+### ⚠️ Real finding (corrects the planning assumption)
+A service_role Supabase JWT is HARD-CODED in 11 historical migrations
+(20250820173146 … 20251004030356) and is therefore public in git history. The
+public anon key sits in a few old debug scripts (lower priority — anon is shipped
+in the browser anyway). Flagged at the top of docs/SECRETS_ROTATION.md as
+"Action required — rotate now." Editing migrations can't unship history; rotating
+the Supabase keys is the only real remediation.
+
+### .env.example
+Audited import.meta.env.* (src) and process.env/Deno.env (scripts) usage. All
+VITE_ vars used in src were already present. Added the missing non-VITE
+script/CLI vars (SUPABASE_URL/ANON_KEY/SERVICE_ROLE_KEY/SERVICE_KEY,
+DATABASE_URL, BACKUP_DIR, USE_PG_DUMP, SITE_URL, PLAYWRIGHT_TEST_BASE_URL) and
+the new WEB-SEC edge secrets (EDGE_FUNCTION_API_KEY, CRAWLER_DOMAIN_ALLOWLIST,
+CRAWLER_ALLOW_ALL, CORS_PREVIEW_ORIGINS, ALLOW_LOVABLE_PREVIEWS, GOOGLE_PLACES_API).
+
+### CI secret scanning
+.github/workflows/pr-checks.yml: new `secret-scan` job runs
+gitleaks/gitleaks-action@v2 (fetch-depth 0) with .gitleaks.toml — default
+ruleset + an allowlist covering ONLY the known historical exposures (the 11
+migrations + anon-key debug scripts + .md/.env.example), so it fails the build on
+NEW secrets without blocking every PR on history we can't unship.
+
+### Pre-commit guard (dependency-free)
+.githooks/pre-commit blocks committing .env/.env.local (allows .env.example) and
+runs `gitleaks protect --staged` if gitleaks is installed locally. Activated by a
+new package.json `prepare` script (`git config core.hooksPath .githooks`) that
+runs on npm install — no husky/devDependency added. TESTED: blocks a staged
+.env, allows a normal file. .gitignore extended (.env.local, .env.*.local).
+
+### docs/SECRETS_ROTATION.md
+Full inventory (Supabase, Stripe, Anthropic/OpenAI, Resend/SendGrid, Google,
+automation controls) with where each is set + rotation steps, the exposed-key
+action list, the prevention summary, and a leak-response checklist.
+
+### Verification
+type-check PASSES; pre-commit hook tested both ways. gitleaks not runnable
+in-container, but the allowlist covers every committed-secret file found via a
+JWT scan + live-pattern scan; setup-stripe-products.js only references the
+`sk_live_` prefix (reads the real key from env), screenshots are binary (skipped).
+
+### Files
+  M .env.example
+  M .gitignore
+  M package.json                       (prepare script)
+  M .github/workflows/pr-checks.yml    (secret-scan job)
+  A .gitleaks.toml
+  A .githooks/pre-commit
+  A docs/SECRETS_ROTATION.md

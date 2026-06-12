@@ -9,6 +9,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  secret-scan:
+    name: Secret Scanning (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # Full history so gitleaks can scan the whole diff range of the PR.
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Fail the build when any secret is detected (default behavior).
+          GITLEAKS_CONFIG: .gitleaks.toml
+
   validate:
     name: Lint, Type Check, Test & Build
     runs-on: ubuntu-latest

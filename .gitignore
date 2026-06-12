@@ -39,6 +39,10 @@ supabase/check_harbour.sql
 supabase/check_urls.sql
 .env
 .env.tmp
+.env.local
+.env.*.local
+.env.development.local
+.env.production.local
 
 # Local DB dumps (scripts/supabase-backup.ts)
 backups/

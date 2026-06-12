@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+#
+# Pre-commit guard (WEB-SEC-008): block committing local env files and obvious
+# secrets. Activated via `core.hooksPath` by the npm `prepare` script.
+set -euo pipefail
+
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+
+# 1) Never allow real env files to be committed (.env.example is fine).
+blocked=$(printf '%s\n' "$staged" | grep -E '(^|/)\.env($|\.local$|\..*\.local$|\.[^/]*$)' | grep -vE '(^|/)\.env\.example$' || true)
+if [ -n "$blocked" ]; then
+  echo "❌ Refusing to commit environment files (they may contain secrets):"
+  printf '   %s\n' $blocked
+  echo "   Remove them from the commit (git restore --staged <file>) or use .env.example for placeholders."
+  exit 1
+fi
+
+# 2) If gitleaks is installed locally, run it on the staged changes as a fast
+#    second line of defense. Skipped silently when gitleaks isn't present (CI
+#    still runs the authoritative scan).
+if command -v gitleaks >/dev/null 2>&1; then
+  if ! gitleaks protect --staged --redact --config .gitleaks.toml >/dev/null 2>&1; then
+    echo "❌ gitleaks detected a potential secret in your staged changes."
+    echo "   Run: gitleaks protect --staged --verbose --config .gitleaks.toml"
+    exit 1
+  fi
+fi
+
+exit 0

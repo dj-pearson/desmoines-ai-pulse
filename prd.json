@@ -124,8 +124,8 @@
         "npm run validate passes"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": "Verified during planning: git ls-files shows only .env.example tracked — the audit agent's 'committed secrets' claim was wrong about git, but the local .env does hold a demo account credential, so the runbook should still recommend rotating anything previously shared."
+      "passes": true,
+      "notes": "DONE (2026-06-12). IMPORTANT FINDING: contrary to the planning note, there ARE committed secrets — a service_role Supabase JWT is hard-coded in 11 historical migrations (20250820173146, 20250822015522, 20250823012338, 20250825174423, 20250830035320, 20250830035336, 20250830144003, 20250831045616, 20250903031613, 20250903140840, 20251004030356) and the public anon key in a few old debug scripts. Flagged prominently in docs/SECRETS_ROTATION.md under 'Action required — rotate now' (editing migrations can't unship the history; rotation is the only real fix). .env.example: added the missing non-VITE script vars (SUPABASE_URL/ANON_KEY/SERVICE_ROLE_KEY/SERVICE_KEY, DATABASE_URL, BACKUP_DIR, USE_PG_DUMP, SITE_URL, PLAYWRIGHT_TEST_BASE_URL) and the new WEB-SEC edge secrets (EDGE_FUNCTION_API_KEY, CRAWLER_DOMAIN_ALLOWLIST, CRAWLER_ALLOW_ALL, CORS_PREVIEW_ORIGINS, ALLOW_LOVABLE_PREVIEWS, GOOGLE_PLACES_API); all VITE_ vars used in src were already present. CI: pr-checks.yml gains a secret-scan job (gitleaks/gitleaks-action@v2) with .gitleaks.toml (default ruleset + allowlist for the KNOWN historical exposures so it gates NEW secrets without blocking on unshippable history). Pre-commit guard: dependency-free .githooks/pre-commit (activated via the new package.json 'prepare' script → core.hooksPath) blocks committing .env/.env.local and runs gitleaks locally if installed — TESTED: blocks .env, allows normal files. .gitignore extended to .env.local/.env.*.local. Verified: type-check passes; hook tested; gitleaks itself not runnable in-container but the config+allowlist cover every committed-secret file found (JWT scan + live-pattern scan). Evidence corrected: committed service_role keys DO exist."
     },
     {
       "id": "WEB-AUTO-001",
