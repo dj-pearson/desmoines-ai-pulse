@@ -318,7 +318,7 @@ export default function EventDetails() {
 
                     {/* Quick Actions Row */}
                     <div className="flex flex-wrap gap-2 pb-2">
-                      {event.source_url && (
+                      {event.source_url && !(event as { source_url_broken?: boolean }).source_url_broken && (
                         <Button asChild size="sm">
                           <a href={event.source_url} target="_blank" rel="noopener noreferrer">
                             <ExternalLink className="h-4 w-4 mr-2" />
@@ -399,7 +399,7 @@ export default function EventDetails() {
                         <h3 className="font-semibold text-sm text-foreground">Area</h3>
                         <p className="text-sm text-muted-foreground">{event.city || 'Des Moines'}, Iowa (Greater Des Moines Area)</p>
                       </div>
-                      {event.source_url && (
+                      {event.source_url && !(event as { source_url_broken?: boolean }).source_url_broken && (
                         <div>
                           <h3 className="font-semibold text-sm text-foreground">More Info</h3>
                           <a

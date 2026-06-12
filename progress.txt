@@ -3458,3 +3458,29 @@ inside `seo_*/...` that prematurely closed the comment); JobHealthPanel lints cl
   A supabase/functions/data-quality-heal/index.ts
   M src/components/admin/JobHealthPanel.tsx
   M docs/AUTOMATION_JOBS.md
+
+## 2026-06-12 — WEB-AUTO-004 (broken source-URL auto-repair) [passes:true]
+
+Enhanced validate-source-urls (weekly cron) to chain detect -> re-discover ->
+verify -> fix-or-flag automatically:
+- Re-discovery: existing findActualEventUrl + AI fallback (unchanged).
+- NEW liveness check (isUrlLive: HEAD->GET, SSRF-guarded, requires 2xx/3xx)
+  before a recovered URL is applied — no dead replacements.
+- NEW Wayback fallback (waybackLookup via archive.org/wayback/available),
+  also liveness-checked, when no live candidate is found.
+- Outcomes flagged: recovered -> source_url_broken=false; unrecoverable ->
+  source_url_broken=true + source_url_checked_at (additive migration
+  20260612000007 + partial index).
+- Public EventDetails hides both "Official Page" link sites when broken.
+- Admin: AdminContent events tab gets a "broken links only" filter.
+- Recovery rate + counts recorded via the WEB-AUTO-001 jobRunner.
+
+Verification: type-check PASSES; validate-source-urls parses via esbuild;
+EventDetails + AdminContent lint 0 errors.
+
+### Files
+  A supabase/migrations/20260612000007_event_source_url_broken.sql
+  M supabase/functions/validate-source-urls/index.ts
+  M src/pages/EventDetails.tsx
+  M src/pages/AdminContent.tsx
+  M docs/AUTOMATION_JOBS.md

@@ -187,8 +187,8 @@
         "npm run validate passes"
       ],
       "priority": 12,
-      "passes": false,
-      "notes": "Evidence: supabase/functions/check-broken-links (detects, doesn't write), fix-broken-event-urls (exists, manual invocation), cron migration 20250107000003."
+      "passes": true,
+      "notes": "DONE (2026-06-12): Enhanced validate-source-urls (the weekly cron) to chain detection -> repair automatically. For each broken aggregator URL it: re-discovers the real URL (existing findActualEventUrl + AI fallback), then NEW: liveness-checks the candidate (isUrlLive, HEAD->GET, SSRF-guarded, 2xx/3xx required) BEFORE applying it, and if none found tries a Wayback Machine snapshot (waybackLookup via archive.org/wayback/available, also liveness-checked). Recovered URLs are updated (before/after already tracked in the updates[] audit + now flagged source_url_broken=false); unrecoverable events are flagged source_url_broken=true + source_url_checked_at (additive migration 20260612000007 adds both columns + a partial index). Public EventDetails page now hides BOTH 'Official Page' link sites when source_url_broken (link-unavailable behavior). Admin: AdminContent events tab gains a 'broken links only' filter. Recovery rate + counts (checked/recovered/flaggedBroken/errors/recoveryRate) recorded via the WEB-AUTO-001 jobRunner. fix-broken-event-urls/check-broken-links untouched. Verified: type-check passes; validate-source-urls parses via esbuild; EventDetails+AdminContent lint 0 errors."
     },
     {
       "id": "WEB-AUTO-005",

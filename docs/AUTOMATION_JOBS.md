@@ -20,7 +20,7 @@ All times UTC. Schedules are cron expressions (`min hour dom mon dow`).
 | `nightly-coordinate-backfill` | `0 2 * * *` | fn `backfill-all-coordinates` | Geocode backfill (2nd pass) | — |
 | `cleanup-old-events-weekly` | weekly | fn `cleanup-old-events` | Purge events past retention + their media | ✅ |
 | `monthly-event-purge` | monthly | fn `cleanup-old-events` | Monthly deep purge | ✅ (same fn) |
-| `validate-source-urls-weekly` | weekly | fn `validate-source-urls` | Detect broken event source URLs | planned |
+| `validate-source-urls-weekly` | weekly | fn `validate-source-urls` | Detect + auto-repair broken event URLs (re-discover, Wayback, flag) | ✅ |
 | `update-trending-scores` | `15 * * * *` | SQL / fn | Recompute trending scores | — |
 | `generate-weekend-guide` | scheduled | fn `generate-weekend-guide` | Build the weekend guide | — |
 | `generate-recurring-event-instances` | `0 8 * * *` | SQL | Materialize recurring event instances | — |

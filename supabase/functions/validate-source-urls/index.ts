@@ -1,11 +1,48 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { validateURLForSSRF } from '../_shared/validation.ts';
+import { runJob } from '../_shared/jobRunner.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+/** Liveness check (WEB-AUTO-004): a recovered URL must resolve 2xx/3xx before
+ * we apply it. SSRF-guarded; treats network/abort as not-live. */
+async function isUrlLive(url: string): Promise<boolean> {
+  if (!validateURLForSSRF(url).valid) return false;
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 8000);
+    let res: Response;
+    try {
+      res = await fetch(url, { method: 'HEAD', redirect: 'follow', signal: ctrl.signal });
+      // Some servers reject HEAD; retry with GET on 405/501.
+      if (res.status === 405 || res.status === 501) {
+        res = await fetch(url, { method: 'GET', redirect: 'follow', signal: ctrl.signal });
+      }
+    } finally {
+      clearTimeout(t);
+    }
+    return res.status >= 200 && res.status < 400;
+  } catch {
+    return false;
+  }
+}
+
+/** Wayback Machine fallback: latest archived snapshot of a dead URL, if any. */
+async function waybackLookup(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(`https://archive.org/wayback/available?url=${encodeURIComponent(url)}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const snap = data?.archived_snapshots?.closest;
+    return snap?.available && snap.url ? snap.url.replace(/^http:/, 'https:') : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Validate and Fix Event Source URLs
@@ -270,6 +307,8 @@ serve(async (req) => {
 
     const updates: Array<{ id: string; title: string; oldUrl: string; newUrl: string }> = [];
     const errors: Array<{ id: string; title: string; error: string }> = [];
+    // WEB-AUTO-004: events whose link we could NOT recover -> flag broken.
+    const unrecovered: string[] = [];
 
     // Process each event
     for (const event of aggregatorEvents) {
@@ -280,24 +319,37 @@ serve(async (req) => {
         // Fallback to AI if enabled and no URL found
         if (!actualUrl && useAI && claudeApiKey) {
           const aiFetchCheck = validateURLForSSRF(event.source_url);
-          if (!aiFetchCheck.valid) {
+          if (aiFetchCheck.valid) {
+            const response = await fetch(event.source_url);
+            if (response.ok) {
+              const html = await response.text();
+              actualUrl = await findUrlWithAI(event, html, claudeApiKey);
+            }
+          } else {
             console.log(`⚠️ SSRF blocked AI fallback fetch: ${event.source_url}`);
-            continue;
           }
-          const response = await fetch(event.source_url);
-          if (response.ok) {
-            const html = await response.text();
-            actualUrl = await findUrlWithAI(event, html, claudeApiKey);
+        }
+
+        // WEB-AUTO-004: a recovered URL must be LIVE before we apply it.
+        if (actualUrl && actualUrl !== event.source_url && !(await isUrlLive(actualUrl))) {
+          console.log(`⚠️ Candidate URL not live, discarding: ${actualUrl}`);
+          actualUrl = null;
+        }
+
+        // WEB-AUTO-004: Wayback Machine fallback when no live candidate found.
+        if (!actualUrl) {
+          const archived = await waybackLookup(event.source_url);
+          if (archived && (await isUrlLive(archived))) {
+            actualUrl = archived;
+            console.log(`🕰️ Recovered via Wayback: ${archived}`);
           }
         }
 
         if (actualUrl && actualUrl !== event.source_url) {
-          updates.push({
-            id: event.id,
-            title: event.title,
-            oldUrl: event.source_url,
-            newUrl: actualUrl
-          });
+          updates.push({ id: event.id, title: event.title, oldUrl: event.source_url, newUrl: actualUrl });
+        } else if (!actualUrl) {
+          // Could not recover a working link for this event.
+          unrecovered.push(event.id);
         }
 
         // Rate limiting - wait 1 second between requests
@@ -337,11 +389,45 @@ serve(async (req) => {
       }
     }
 
+    // WEB-AUTO-004: flag outcomes so the public detail page can hide dead links
+    // and the admin can filter broken events. Recovered -> not broken.
+    const nowIso = new Date().toISOString();
+    const recoveredIds = updates.map((u) => u.id);
+    if (recoveredIds.length > 0) {
+      await supabase
+        .from('events')
+        .update({ source_url_broken: false, source_url_checked_at: nowIso })
+        .in('id', recoveredIds);
+    }
+    let flaggedCount = 0;
+    if (unrecovered.length > 0) {
+      const { error: flagErr } = await supabase
+        .from('events')
+        .update({ source_url_broken: true, source_url_checked_at: nowIso })
+        .in('id', unrecovered);
+      if (!flagErr) flaggedCount = unrecovered.length;
+    }
+
+    // Record the run via the WEB-AUTO-001 jobRunner (recovery rate + counts).
+    await runJob('validate-source-urls', async (ctx) => {
+      ctx.processed(updatedCount);
+      ctx.failed(flaggedCount + errors.length);
+      ctx.meta({
+        checked: aggregatorEvents.length,
+        recovered: updatedCount,
+        flaggedBroken: flaggedCount,
+        errors: errors.length,
+        recoveryRate: aggregatorEvents.length > 0 ? Math.round((updatedCount / aggregatorEvents.length) * 100) : null,
+      });
+      return { updatedCount, flaggedCount };
+    });
+
     const response = {
       success: true,
-      message: `URL validation completed: ${updatedCount} events updated`,
+      message: `URL validation completed: ${updatedCount} events updated, ${flaggedCount} flagged broken`,
       checked: aggregatorEvents.length,
       updated: updatedCount,
+      flaggedBroken: flaggedCount,
       errors: errors.length,
       updates: updates.map(u => ({
         title: u.title,
