@@ -11,6 +11,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import ShareDialog from "@/components/ShareDialog";
 import { FAQSection } from "@/components/FAQSection";
+import { RatingSystem } from "@/components/RatingSystem";
 import { BackToTop } from "@/components/BackToTop";
 import EnhancedAttractionSEO from "@/components/EnhancedAttractionSEO";
 import SEOHead from "@/components/SEOHead";
@@ -650,6 +651,11 @@ export default function AttractionDetails() {
               className="border-0"
             />
           </Card>
+
+          {/* Ratings & Reviews (WEB-FEAT-010) */}
+          <section id="reviews" className="mb-8">
+            <RatingSystem contentType="attraction" contentId={attraction.id} showReviews />
+          </section>
 
           {/* Related Attractions - Same Type (hidden when < 3 matches) */}
           {relatedAttractions && relatedAttractions.length >= 3 && (

@@ -6934,6 +6934,7 @@ export type Database = {
           moderation_reasons: string[] | null
           moderation_scores: Json | null
           moderation_status: string
+          photo_urls: string[] | null
           rating: Database["public"]["Enums"]["rating_value"]
           review_text: string | null
           updated_at: string
@@ -6950,6 +6951,7 @@ export type Database = {
           moderation_reasons?: string[] | null
           moderation_scores?: Json | null
           moderation_status?: string
+          photo_urls?: string[] | null
           rating: Database["public"]["Enums"]["rating_value"]
           review_text?: string | null
           updated_at?: string
@@ -6966,6 +6968,7 @@ export type Database = {
           moderation_reasons?: string[] | null
           moderation_scores?: Json | null
           moderation_status?: string
+          photo_urls?: string[] | null
           rating?: Database["public"]["Enums"]["rating_value"]
           review_text?: string | null
           updated_at?: string

@@ -16,6 +16,7 @@ import RestaurantStatus from "@/components/RestaurantStatus";
 import ShareDialog from "@/components/ShareDialog";
 import RestaurantCard from "@/components/RestaurantCard";
 import { FAQSection } from "@/components/FAQSection";
+import { RatingSystem } from "@/components/RatingSystem";
 import { BackToTop } from "@/components/BackToTop";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import SpeakableSchema from "@/components/schema/SpeakableSchema";
@@ -874,6 +875,11 @@ export default function RestaurantDetails() {
               className="border-0"
             />
           </Card>
+
+          {/* Ratings & Reviews (WEB-FEAT-010) */}
+          <section id="reviews" className="mb-8">
+            <RatingSystem contentType="restaurant" contentId={restaurant.id} showReviews />
+          </section>
 
           {/* Related Restaurants - Same Cuisine (hidden when < 3 matches) */}
           {relatedRestaurants && relatedRestaurants.length >= 3 && (

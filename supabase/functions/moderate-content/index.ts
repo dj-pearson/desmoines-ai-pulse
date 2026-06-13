@@ -19,6 +19,10 @@
  *                                                    (hourly cron + Job Health re-run; admin/service)
  *   { action: 'decision', contentType, id,       -> admin override (approve/reject),
  *     decision }                                     audit-logged (admin/service)
+ *   { action: 'report', contentType: 'review',   -> a logged-in reader reports a
+ *     id, reason? }                                  published review; records the
+ *                                                    report and re-flags into the
+ *                                                    human queue at the threshold
  *
  * Runs under the default verify_jwt=true gateway: anonymous web callers carry the
  * anon-key JWT (passes the gateway); cron carries the service-role bearer. NOT
@@ -38,6 +42,10 @@ const FLAG_TOXICITY = 0.5;
 const FLAG_SPAM = 0.45;
 const MAX_ATTEMPTS = 3;
 const SWEEP_BATCH = 25;
+// WEB-FEAT-010: distinct reporters needed to re-queue an already-approved review.
+// A single report only records (accountability) so one actor can't hide content;
+// crossing the threshold flags it into the existing human moderation queue.
+const REPORT_FLAG_THRESHOLD = 3;
 
 type ContentType = 'review' | 'contact';
 type Decision = 'approved' | 'rejected' | 'flagged' | 'pending';
@@ -245,6 +253,77 @@ Deno.serve(async (req) => {
     });
 
     return json({ success: true, id, moderation_status: newStatus }, 200, corsHeaders);
+  }
+
+  // --- Community report (a logged-in reader flags a published review) -------
+  if (action === 'report') {
+    const contentType = body.contentType as ContentType;
+    const id = body.id as string;
+    const reason = typeof body.reason === 'string' ? body.reason.slice(0, 500) : null;
+    if (contentType !== 'review' || !id) {
+      return json({ error: "contentType 'review' and id are required" }, 400, corsHeaders);
+    }
+
+    // A report must come from a real signed-in user (not anon, not service).
+    const authHeader = req.headers.get('Authorization') || '';
+    const bearer = authHeader.toLowerCase().startsWith('bearer ') ? authHeader.slice(7).trim() : '';
+    let reporterId: string | null = null;
+    if (bearer && bearer !== serviceKey) {
+      const { data: userRes } = await supabase.auth.getUser(bearer);
+      reporterId = userRes?.user?.id ?? null;
+    }
+    if (!reporterId) return json({ error: 'Sign in to report content' }, 401, corsHeaders);
+
+    // Bound abuse/cost; fails open if the limiter DB is unavailable.
+    const rlReport = await checkRateLimitPersistent(req, { endpoint: 'report-content', windowMs: 60_000, max: 20, userId: reporterId });
+    if (!rlReport.success && rlReport.response) return rlReport.response;
+
+    // Don't let someone report their own review.
+    const { data: target } = await supabase
+      .from('user_ratings')
+      .select('id, user_id, moderation_status')
+      .eq('id', id)
+      .maybeSingle();
+    if (!target) return json({ error: 'Content not found' }, 404, corsHeaders);
+    if (target.user_id === reporterId) {
+      return json({ error: "You can't report your own review" }, 400, corsHeaders);
+    }
+
+    // Record the report (idempotent per reporter via the unique constraint).
+    await supabase
+      .from('content_reports')
+      .upsert(
+        { content_type: 'review', content_id: id, reporter_id: reporterId, reason },
+        { onConflict: 'content_type,content_id,reporter_id' },
+      );
+
+    // Re-queue for a human once enough distinct readers report it.
+    const { count } = await supabase
+      .from('content_reports')
+      .select('id', { count: 'exact', head: true })
+      .eq('content_type', 'review')
+      .eq('content_id', id);
+    const reportCount = count ?? 0;
+
+    let flagged = false;
+    if (reportCount >= REPORT_FLAG_THRESHOLD && target.moderation_status === 'approved') {
+      await supabase.from('user_ratings').update({
+        moderation_status: 'flagged',
+        moderation_reasons: [`Re-queued after ${reportCount} community reports`],
+        moderated_at: new Date().toISOString(),
+      }).eq('id', id);
+      flagged = true;
+      await writeAuditLog(supabase, {
+        eventType: 'content_moderation',
+        actorId: reporterId,
+        action: 'review_reported_flagged',
+        resource: `user_ratings:${id}`,
+        ipAddress: auditIp(req),
+        details: { reportCount },
+      });
+    }
+
+    return json({ success: true, reported: true, reportCount, flagged }, 200, corsHeaders);
   }
 
   // --- Batch sweep of pending rows (cron + admin re-run) -------------------

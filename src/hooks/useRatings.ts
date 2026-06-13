@@ -104,7 +104,11 @@ export function useRatings({ contentType, contentId }: UseRatingsProps) {
     }
   };
 
-  const submitRating = async (rating: RatingValue, reviewText?: string) => {
+  const submitRating = async (
+    rating: RatingValue,
+    reviewText?: string,
+    photoUrls?: string[]
+  ) => {
     if (!user) {
       toast({
         title: "Authentication Required",
@@ -121,6 +125,8 @@ export function useRatings({ contentType, contentId }: UseRatingsProps) {
         content_id: contentId,
         rating,
         review_text: reviewText,
+        // WEB-FEAT-010: review photos stored additively on the row.
+        photo_urls: photoUrls && photoUrls.length > 0 ? photoUrls : null,
         // WEB-AUTO-009: new/edited reviews start hidden until auto-moderation clears them.
         moderation_status: "pending",
       };
@@ -238,6 +244,41 @@ export function useRatings({ contentType, contentId }: UseRatingsProps) {
     }
   };
 
+  // WEB-FEAT-010: report a review into the human moderation queue. The
+  // moderate-content edge function records the report and re-flags the row once
+  // enough distinct readers report it (single reports can't hide content).
+  const reportReview = async (ratingId: string, reason?: string) => {
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to report a review",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    try {
+      const { error } = await supabase.functions.invoke("moderate-content", {
+        body: { action: "report", contentType: "review", id: ratingId, reason },
+      });
+      if (error) throw error;
+
+      toast({
+        title: "Report Submitted",
+        description: "Thanks — our team will take a look.",
+      });
+      return true;
+    } catch (error) {
+      if (import.meta.env.DEV) console.error("Error reporting review:", error);
+      toast({
+        title: "Error",
+        description: "Failed to submit report. Please try again.",
+        variant: "destructive",
+      });
+      return false;
+    }
+  };
+
   useEffect(() => {
     fetchRatings();
   }, [contentType, contentId, user]);
@@ -247,6 +288,7 @@ export function useRatings({ contentType, contentId }: UseRatingsProps) {
     submitRating,
     deleteRating,
     voteHelpful,
+    reportReview,
     refetch: fetchRatings,
   };
 }

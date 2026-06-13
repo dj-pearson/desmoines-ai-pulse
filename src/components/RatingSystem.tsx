@@ -1,18 +1,22 @@
 import React, { useState } from "react";
-import { Star, ThumbsUp, ThumbsDown, Flag, Edit, Trash2 } from "lucide-react";
-import { hapticTap } from "@/lib/capacitorUtils";
+import { Link } from "react-router-dom";
+import { ThumbsUp, ThumbsDown, Flag, Edit, Trash2, Clock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
 import { useRatings, useUserReputation } from "@/hooks/useRatings";
 import { useAuth } from "@/hooks/useAuth";
 import { PremiumGate } from "@/components/PremiumGate";
+import { StarRating } from "@/components/reviews/StarRating";
+import { ReviewComposer } from "@/components/reviews/ReviewComposer";
+import { ReviewPhotoGrid } from "@/components/reviews/ReviewPhotoGrid";
 import { Database } from "@/integrations/supabase/types";
-import { format } from "date-fns";
+import { formatDistanceToNow } from "date-fns";
 
 type ContentType = Database["public"]["Enums"]["content_type"];
-type RatingValue = Database["public"]["Enums"]["rating_value"];
+type Rating = Database["public"]["Tables"]["user_ratings"]["Row"] & {
+  profiles?: { first_name?: string | null; last_name?: string | null; user_role?: string | null } | null;
+};
 
 interface RatingSystemProps {
   contentType: ContentType;
@@ -20,45 +24,6 @@ interface RatingSystemProps {
   showReviews?: boolean;
   compact?: boolean;
 }
-
-interface StarRatingProps {
-  rating: number;
-  onRatingChange?: (rating: RatingValue) => void;
-  readonly?: boolean;
-  size?: "sm" | "md" | "lg";
-}
-
-const StarRating: React.FC<StarRatingProps> = ({ 
-  rating, 
-  onRatingChange, 
-  readonly = false,
-  size = "md" 
-}) => {
-  const [hoverRating, setHoverRating] = useState(0);
-  
-  const starSize = size === "sm" ? "h-4 w-4" : size === "lg" ? "h-6 w-6" : "h-5 w-5";
-  
-  return (
-    <div className="flex gap-1">
-      {[1, 2, 3, 4, 5].map((star) => {
-        const isFilled = star <= (hoverRating || rating);
-        return (
-          <Star
-            key={star}
-            className={`${starSize} cursor-pointer transition-colors ${
-              isFilled 
-                ? "fill-yellow-400 text-yellow-400" 
-                : "text-muted-foreground hover:text-yellow-400"
-            } ${readonly ? "cursor-default" : ""}`}
-            onClick={() => { if (!readonly) { hapticTap(); onRatingChange?.(star.toString() as RatingValue); } }}
-            onMouseEnter={() => !readonly && setHoverRating(star)}
-            onMouseLeave={() => !readonly && setHoverRating(0)}
-          />
-        );
-      })}
-    </div>
-  );
-};
 
 const ReputationBadge: React.FC<{ level: string; points: number }> = ({ level, points }) => {
   const getLevelColor = (level: string) => {
@@ -80,6 +45,13 @@ const ReputationBadge: React.FC<{ level: string; points: number }> = ({ level, p
   );
 };
 
+const PendingReviewBadge: React.FC = () => (
+  <Badge variant="outline" className="text-amber-600 border-amber-400">
+    <Clock className="h-3 w-3 mr-1" aria-hidden="true" />
+    Pending review
+  </Badge>
+);
+
 export const RatingSystem: React.FC<RatingSystemProps> = ({
   contentType,
   contentId,
@@ -95,24 +67,21 @@ export const RatingSystem: React.FC<RatingSystemProps> = ({
     submitRating,
     deleteRating,
     voteHelpful,
+    reportReview,
   } = useRatings({ contentType, contentId });
 
   const [showRatingForm, setShowRatingForm] = useState(false);
-  const [selectedRating, setSelectedRating] = useState<RatingValue>("5");
-  const [reviewText, setReviewText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmitRating = async () => {
-    if (!user) return;
-    
-    setIsSubmitting(true);
-    const success = await submitRating(selectedRating, reviewText.trim() || undefined);
-    if (success) {
-      setShowRatingForm(false);
-      setReviewText("");
-      setSelectedRating("5");
-    }
-    setIsSubmitting(false);
+  const handleSubmitRating = async (
+    rating: Database["public"]["Enums"]["rating_value"],
+    reviewText?: string,
+    photoUrls?: string[],
+  ) => {
+    if (!user) return false;
+    const success = await submitRating(rating, reviewText, photoUrls);
+    if (success) setShowRatingForm(false);
+    return success;
   };
 
   const handleDeleteRating = async () => {
@@ -130,6 +99,8 @@ export const RatingSystem: React.FC<RatingSystemProps> = ({
       </Card>
     );
   }
+
+  const ownPending = userRating && userRating.moderation_status !== "approved";
 
   return (
     <div className="space-y-4">
@@ -154,21 +125,21 @@ export const RatingSystem: React.FC<RatingSystemProps> = ({
                   </p>
                 </div>
               </div>
-              
+
               {!compact && (
                 <div className="space-y-2">
                   {[5, 4, 3, 2, 1].map((stars) => {
                     const count = aggregate.rating_distribution?.[stars.toString()] || 0;
-                    const percentage = aggregate.total_ratings > 0 
-                      ? (count / aggregate.total_ratings) * 100 
+                    const percentage = aggregate.total_ratings > 0
+                      ? (count / aggregate.total_ratings) * 100
                       : 0;
-                    
+
                     return (
                       <div key={stars} className="flex items-center gap-2 text-sm">
                         <span className="w-8">{stars}★</span>
                         <div className="flex-1 bg-muted rounded-full h-2">
-                          <div 
-                            className="bg-yellow-400 rounded-full h-2" 
+                          <div
+                            className="bg-yellow-400 rounded-full h-2"
                             style={{ width: `${percentage}%` }}
                           />
                         </div>
@@ -187,14 +158,15 @@ export const RatingSystem: React.FC<RatingSystemProps> = ({
           )}
 
           {/* User Rating Section */}
-          {user && (
+          {user ? (
             <div className="mt-6 pt-4 border-t">
-              {userRating ? (
+              {userRating && !showRatingForm ? (
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium">Your Rating:</span>
                       <StarRating rating={Number(userRating.rating)} readonly size="sm" />
+                      {ownPending && <PendingReviewBadge />}
                     </div>
                     <div className="flex gap-2">
                       <Button
@@ -222,6 +194,14 @@ export const RatingSystem: React.FC<RatingSystemProps> = ({
                       {userRating.review_text}
                     </p>
                   )}
+                  {userRating.photo_urls && userRating.photo_urls.length > 0 && (
+                    <ReviewPhotoGrid photos={userRating.photo_urls} altPrefix="Your" />
+                  )}
+                  {ownPending && (
+                    <p className="text-xs text-muted-foreground">
+                      Your review will appear publicly once it passes a quick automated check.
+                    </p>
+                  )}
                 </div>
               ) : (
                 <PremiumGate
@@ -231,62 +211,40 @@ export const RatingSystem: React.FC<RatingSystemProps> = ({
                   title="Write a Review"
                   description="Share your experiences by writing reviews. Available with Insider."
                 >
-                <div>
-                  {!showRatingForm ? (
-                    <Button onClick={() => setShowRatingForm(true)}>
-                      Rate this {contentType}
-                    </Button>
-                  ) : (
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Your Rating</label>
-                        <StarRating
-                          rating={Number(selectedRating)}
-                          onRatingChange={setSelectedRating}
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Review (Optional)</label>
-                        <Textarea
-                          placeholder={`Share your thoughts about this ${contentType}...`}
-                          value={reviewText}
-                          onChange={(e) => setReviewText(e.target.value)}
-                          rows={3}
-                        />
-                      </div>
-
-                      <div className="flex gap-2">
-                        <Button
-                          onClick={handleSubmitRating}
-                          disabled={isSubmitting}
-                        >
-                          {isSubmitting ? "Submitting..." : "Submit Rating"}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          onClick={() => {
-                            setShowRatingForm(false);
-                            setReviewText("");
-                            setSelectedRating("5");
-                          }}
-                          disabled={isSubmitting}
-                        >
-                          Cancel
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                  <div>
+                    {!showRatingForm ? (
+                      <Button onClick={() => setShowRatingForm(true)}>
+                        {userRating ? "Edit your review" : `Rate this ${contentType}`}
+                      </Button>
+                    ) : (
+                      <ReviewComposer
+                        contentType={contentType}
+                        contentId={contentId}
+                        initialRating={userRating ? (String(userRating.rating) as Database["public"]["Enums"]["rating_value"]) : "5"}
+                        initialText={userRating?.review_text ?? ""}
+                        onSubmit={handleSubmitRating}
+                        onCancel={() => setShowRatingForm(false)}
+                      />
+                    )}
+                  </div>
                 </PremiumGate>
               )}
+            </div>
+          ) : (
+            <div className="mt-6 pt-4 border-t text-center space-y-2">
+              <p className="text-sm text-muted-foreground">
+                Sign in to rate and review this {contentType}.
+              </p>
+              <Button asChild size="sm">
+                <Link to="/auth">Sign in to write a review</Link>
+              </Button>
             </div>
           )}
         </CardContent>
       </Card>
 
       {/* Reviews List */}
-      {showReviews && !compact && ratings.length > 0 && (
+      {showReviews && !compact && ratings.some((r) => r.review_text || (r.photo_urls?.length ?? 0) > 0) && (
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Reviews</CardTitle>
@@ -294,12 +252,13 @@ export const RatingSystem: React.FC<RatingSystemProps> = ({
           <CardContent>
             <div className="space-y-6">
               {ratings
-                .filter(rating => rating.review_text)
+                .filter((rating) => rating.review_text || (rating.photo_urls?.length ?? 0) > 0)
                 .map((rating) => (
-                  <ReviewCard 
-                    key={rating.id} 
-                    rating={rating} 
+                  <ReviewCard
+                    key={rating.id}
+                    rating={rating}
                     onVoteHelpful={voteHelpful}
+                    onReport={reportReview}
                     currentUserId={user?.id}
                   />
                 ))}
@@ -312,44 +271,61 @@ export const RatingSystem: React.FC<RatingSystemProps> = ({
 };
 
 interface ReviewCardProps {
-  rating: any;
+  rating: Rating;
   onVoteHelpful: (ratingId: string, isHelpful: boolean) => Promise<boolean>;
+  onReport: (ratingId: string, reason?: string) => Promise<boolean>;
   currentUserId?: string;
 }
 
-const ReviewCard: React.FC<ReviewCardProps> = ({ rating, onVoteHelpful, currentUserId }) => {
+const ReviewCard: React.FC<ReviewCardProps> = ({ rating, onVoteHelpful, onReport, currentUserId }) => {
   const { reputation } = useUserReputation(rating.user_id);
   const isOwnReview = currentUserId === rating.user_id;
+  const [reported, setReported] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const handleReport = async () => {
+    setBusy(true);
+    const ok = await onReport(rating.id);
+    if (ok) setReported(true);
+    setBusy(false);
+  };
 
   return (
     <div className="space-y-3">
       <div className="flex items-start justify-between">
         <div className="space-y-2">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <StarRating rating={Number(rating.rating)} readonly size="sm" />
             <span className="text-sm text-muted-foreground">
-              {format(new Date(rating.created_at), "MMM d, yyyy")}
+              {formatDistanceToNow(new Date(rating.created_at), { addSuffix: true })}
             </span>
             {reputation && (
-              <ReputationBadge 
-                level={reputation.level} 
-                points={reputation.points} 
+              <ReputationBadge
+                level={reputation.level}
+                points={reputation.points}
               />
             )}
           </div>
           <div className="text-sm font-medium">
-            {rating.profiles?.first_name 
+            {rating.profiles?.first_name
               ? `${rating.profiles.first_name} ${rating.profiles.last_name || ''}`.trim()
               : "Anonymous User"
             }
           </div>
         </div>
       </div>
-      
+
       {rating.review_text && (
         <p className="text-sm leading-relaxed">{rating.review_text}</p>
       )}
-      
+
+      {rating.photo_urls && rating.photo_urls.length > 0 && (
+        <ReviewPhotoGrid
+          photos={rating.photo_urls}
+          altPrefix={rating.profiles?.first_name || "Reviewer"}
+        />
+      )}
+
       {!isOwnReview && (
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">Was this helpful?</span>
@@ -376,8 +352,11 @@ const ReviewCard: React.FC<ReviewCardProps> = ({ rating, onVoteHelpful, currentU
             size="sm"
             className="h-8 px-2 text-red-500"
             aria-label="Report this review"
+            onClick={handleReport}
+            disabled={busy || reported}
           >
-            <Flag className="h-3 w-3" aria-hidden="true" />
+            <Flag className="h-3 w-3 mr-1" aria-hidden="true" />
+            {reported ? "Reported" : "Report"}
           </Button>
         </div>
       )}
