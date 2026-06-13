@@ -924,7 +924,8 @@
         "npm run validate passes (type-check + lint)"
       ],
       "priority": 50,
-      "passes": false
+      "passes": true,
+      "notes": "[DONE 2026-06-13] StickyMobileCTA widened (+playground/+hotel, unified CTAAction icon type, fixes pre-existing share TS error). PlaygroundDetails sticky Directions; HotelDetails sticky Book Now/Call/Find Rooms fallback + Directions; RestaurantDetails Call to Reserve; EventDetails mobile hero capped to h-48 so key info is above the fold."
     },
     {
       "id": "WEB-UX-022",
