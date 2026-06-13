@@ -34,9 +34,10 @@ import {
   Ticket,
   TreePine,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useContentTracking } from "@/hooks/useContentTracking";
+import { useRecentlyViewed } from "@/hooks/useRecentlyViewed";
 import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { NearbyContent } from "@/components/NearbyContent";
@@ -103,6 +104,23 @@ export default function AttractionDetails() {
 
   // Track page view and content interactions
   const { trackShare, trackClick } = useContentTracking(attraction?.id, 'attraction');
+
+  // Record the view for the "Recently viewed" rail / home personalization
+  // (WEB-FEAT-007). Once per attraction id so re-renders don't re-record.
+  const { recordView } = useRecentlyViewed();
+  const recordedViewRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!attraction?.id || recordedViewRef.current === attraction.id) return;
+    recordedViewRef.current = attraction.id;
+    recordView({
+      id: attraction.id,
+      type: "attraction",
+      title: attraction.name,
+      image_url: attraction.image_url ?? undefined,
+      subtitle: attraction.category ?? undefined,
+      path: `/attractions/${createSlug(attraction.name)}`,
+    });
+  }, [attraction, recordView]);
 
   const { data: relatedAttractions } = useQuery({
     queryKey: ["related-attractions", attraction?.type, attraction?.id],

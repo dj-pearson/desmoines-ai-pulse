@@ -41,8 +41,9 @@ import {
   Info,
   Map,
 } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useContentTracking } from "@/hooks/useContentTracking";
+import { useRecentlyViewed } from "@/hooks/useRecentlyViewed";
 import { getRestaurantOpenStatus } from "@/lib/restaurantHours";
 import { buildTransformedSrcSet, HERO_IMAGE_WIDTHS } from "@/lib/imageTransform";
 import { StickyMobileCTA } from "@/components/StickyMobileCTA";
@@ -85,6 +86,23 @@ export default function RestaurantDetails() {
 
   // Track page view and content interactions
   const { trackShare, trackClick } = useContentTracking(restaurant?.id, 'restaurant');
+
+  // Record the view for the "Recently viewed" rail / home personalization
+  // (WEB-FEAT-007). Once per restaurant id so re-renders don't re-record.
+  const { recordView } = useRecentlyViewed();
+  const recordedViewRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!restaurant?.id || recordedViewRef.current === restaurant.id) return;
+    recordedViewRef.current = restaurant.id;
+    recordView({
+      id: restaurant.id,
+      type: "restaurant",
+      title: restaurant.name,
+      image_url: restaurant.image_url ?? undefined,
+      subtitle: restaurant.cuisine ?? undefined,
+      path: `/restaurants/${restaurant.slug || restaurant.id}`,
+    });
+  }, [restaurant, recordView]);
 
   const { data: relatedRestaurants } = useQuery({
     queryKey: ["related-restaurants", restaurant?.cuisine, restaurant?.id],

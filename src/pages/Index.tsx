@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, useMemo, useSyncExternalStore, Fragment, lazy, Suspense } from "react";
 import { Helmet } from "react-helmet-async";
 import { format } from "date-fns";
 import {
@@ -28,6 +28,13 @@ import { SEOEnhancedHead } from "@/components/SEOEnhancedHead";
 import SearchSection from "@/components/SearchSection";
 import { EnhancedHero } from "@/components/EnhancedHero";
 import { ForYouRail } from "@/components/ForYouRail";
+import { useHomeSectionOrder } from "@/hooks/useHomeSectionOrder";
+import { HomeSection } from "@/lib/homeSectionOrder";
+import {
+  subscribeRecentlyViewed,
+  getRecentlyViewedSnapshot,
+  dominantRecentType,
+} from "@/lib/recentlyViewed";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
 import { useHomepageStats } from "@/hooks/useHomepageStats";
 import { BackToTop } from "@/components/BackToTop";
@@ -127,6 +134,29 @@ export default function Index() {
   const { isAuthenticated, user } = useAuth();
   const { preferences, isLoading: preferencesLoading } = useUserPreferences();
   const { eventsToday, restaurantsCount, newThisWeek, isLoading: statsLoading } = useHomepageStats();
+
+  // Data-driven home section ordering (WEB-FEAT-007). Engagement signals are
+  // read synchronously from the recently-viewed store so the order is known
+  // before the first paint of the section list — no CLS, no flicker. The
+  // recently-viewed rail carries the user's DOMINANT content type, so a
+  // dining-dominant visitor sees their dining-heavy rail lead; guests / no-signal
+  // users keep the canonical order (recommendations first).
+  const recentItems = useSyncExternalStore(
+    subscribeRecentlyViewed,
+    getRecentlyViewedSnapshot,
+    getRecentlyViewedSnapshot,
+  );
+  const hasRecentlyViewed = recentItems.length >= 3;
+  const homeSections = useMemo<HomeSection[]>(() => {
+    const dominant = dominantRecentType(recentItems);
+    return [
+      { key: "recommendations", contentType: "event" },
+      { key: "recentlyViewed", contentType: dominant ?? "neutral" },
+      { key: "discover", contentType: "event" },
+      { key: "mostSearched", contentType: "neutral" },
+    ];
+  }, [recentItems]);
+  const { order: homeOrder } = useHomeSectionOrder(homeSections);
 
   // Check if user should see preferences onboarding
   useEffect(() => {
@@ -395,6 +425,54 @@ export default function Index() {
     }
   };
 
+  // Renders a single home section by key — order is decided by homeOrder
+  // (WEB-FEAT-007). The recently-viewed rail only appears once there are >= 3
+  // entries; its absence collapses cleanly (no empty padded slot).
+  const renderHomeSection = (key: string) => {
+    switch (key) {
+      case "recommendations":
+        return (
+          <section className="py-12 bg-muted/30">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <PersonalizedRecommendations limit={6} />
+            </div>
+          </section>
+        );
+      case "recentlyViewed":
+        if (!hasRecentlyViewed) return null;
+        return (
+          <section className="py-8 bg-background">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <RecentlyViewed limit={12} />
+            </div>
+          </section>
+        );
+      case "discover":
+        return isAuthenticated ? (
+          <PersonalizedDashboard onViewEventDetails={handleViewEventDetails} />
+        ) : (
+          <section className="py-8">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="text-center mb-8">
+                <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+                  Discover Amazing Events
+                </h2>
+                <p className="text-lg text-gray-600 dark:text-gray-300">
+                  Find exactly what you're looking for with smart filtering and
+                  recommendations
+                </p>
+              </div>
+              <SmartEventNavigation onViewEventDetails={handleViewEventDetails} />
+            </div>
+          </section>
+        );
+      case "mostSearched":
+        return <MostSearched />;
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background overflow-x-hidden">
       <SEOEnhancedHead
@@ -603,46 +681,10 @@ export default function Index() {
 
         {activeView.type === 'default' && (
           <Suspense fallback={<CardGridSkeleton />}>
-            {/* Recently Viewed Section */}
-            <section className="py-8 bg-background">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <RecentlyViewed limit={8} />
-              </div>
-            </section>
-
-            {/* Personalized Recommendations Section */}
-            <section className="py-12 bg-muted/30">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <PersonalizedRecommendations limit={6} />
-              </div>
-            </section>
-
-            {isAuthenticated ? (
-              <PersonalizedDashboard
-                onViewEventDetails={handleViewEventDetails}
-              />
-            ) : (
-              <>
-                {/* Smart Event Navigation for General Users */}
-                <section className="py-8">
-                  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="text-center mb-8">
-                      <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
-                        Discover Amazing Events
-                      </h2>
-                      <p className="text-lg text-gray-600 dark:text-gray-300">
-                        Find exactly what you're looking for with smart
-                        filtering and recommendations
-                      </p>
-                    </div>
-                    <SmartEventNavigation
-                      onViewEventDetails={handleViewEventDetails}
-                    />
-                  </div>
-                </section>
-              </>
-            )}
-            <MostSearched />
+            {/* Sections render in a data-driven order (WEB-FEAT-007) */}
+            {homeOrder.map((section) => (
+              <Fragment key={section.key}>{renderHomeSection(section.key)}</Fragment>
+            ))}
           </Suspense>
         )}
 

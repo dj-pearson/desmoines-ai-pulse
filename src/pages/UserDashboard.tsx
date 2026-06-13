@@ -41,6 +41,7 @@ import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import EventSubmissionForm from "@/components/EventSubmissionForm";
 import { EmailPreferencesCard } from "@/components/EmailPreferencesCard";
 import { SavedSearchesCard } from "@/components/dashboard/SavedSearchesCard";
+import { RecentlyViewed } from "@/components/RecentlyViewed";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -331,14 +332,32 @@ export default function UserDashboard() {
                     <Plus className="h-4 w-4 mr-2" />
                     Submit New Event
                   </Button>
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     onClick={() => setActiveTab("advertise")}
                     className="w-full sm:w-auto ml-0 sm:ml-2"
                   >
                     <Megaphone className="h-4 w-4 mr-2" />
                     Advertise Your Business
                   </Button>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Recently Viewed (WEB-FEAT-007) — full list with per-item remove */}
+            <div className="mt-6">
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-5 w-5 text-primary" />
+                    <CardTitle>Recently Viewed</CardTitle>
+                  </div>
+                  <CardDescription>
+                    Quickly jump back into events, restaurants and attractions you've explored
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <RecentlyViewed variant="list" limit={20} />
                 </CardContent>
               </Card>
             </div>

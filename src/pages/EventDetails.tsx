@@ -1,5 +1,5 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { Helmet } from "react-helmet-async";
 import { useEvents } from "@/hooks/useEvents";
 import { supabase } from "@/integrations/supabase/client";
@@ -47,6 +47,7 @@ import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { buildTransformedSrcSet, HERO_IMAGE_WIDTHS } from "@/lib/imageTransform";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { useContentTracking } from "@/hooks/useContentTracking";
+import { useRecentlyViewed } from "@/hooks/useRecentlyViewed";
 import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { NearbyContent } from "@/components/NearbyContent";
@@ -100,6 +101,24 @@ export default function EventDetails() {
 
   // Track page view and content interactions
   const { trackShare, trackClick } = useContentTracking(event?.id, 'event');
+
+  // Record the view for the "Recently viewed" rail / home personalization
+  // (WEB-FEAT-007). Once per event id so re-renders don't re-record.
+  const { recordView } = useRecentlyViewed();
+  const recordedViewRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!event?.id || recordedViewRef.current === event.id) return;
+    recordedViewRef.current = event.id;
+    recordView({
+      id: event.id,
+      type: "event",
+      title: event.title,
+      image_url: event.image_url ?? undefined,
+      subtitle: event.category ?? undefined,
+      date: event.date,
+      path: `/events/${createEventSlugWithCentralTime(event.title, event)}`,
+    });
+  }, [event, recordView]);
 
   const relatedEvents = event
     ? events
