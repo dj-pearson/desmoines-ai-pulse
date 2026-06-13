@@ -1,3 +1,13 @@
+/**
+ * EventCard — the denser/legacy event card.
+ *
+ * Primary event LIST pages standardized on SocialEventCard (WEB-UX-009) for a
+ * consistent layout that always shows the event time. EventCard is retained
+ * deliberately for denser, secondary contexts — the related-events rail on
+ * EventDetails, featured/nearby rails, dashboards, and profile lists — where
+ * the social-preview chrome of SocialEventCard would be too heavy. Do not use
+ * it for the main browse/list grids.
+ */
 import {
   Card,
   CardContent,

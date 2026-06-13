@@ -69,9 +69,11 @@ function SocialEventCardComponent({
       const weekday = formatInCentralTime(dateSource, 'EEE');
       const showTime = hasSpecificTime(event);
       const time = showTime ? formatInCentralTime(dateSource, 'h:mm a') : null;
-      return { month, day, weekday, time };
+      // Always provide an explicit time label — never leave the slot blank.
+      const timeLabel = time ? `${time} CT` : 'All day';
+      return { month, day, weekday, time, timeLabel };
     } catch {
-      return { month: 'TBA', day: '--', weekday: '', time: null };
+      return { month: 'TBA', day: '--', weekday: '', time: null, timeLabel: 'Time TBA' };
     }
   };
 
@@ -185,12 +187,10 @@ function SocialEventCardComponent({
           <div className="p-4 space-y-3">
             {/* Event Meta Info */}
             <div className="space-y-1.5">
-              {dateParts.time && (
-                <div className="flex items-center text-sm text-muted-foreground">
-                  <Clock className="h-3.5 w-3.5 mr-2 flex-shrink-0" />
-                  <span>{dateParts.time} CT</span>
-                </div>
-              )}
+              <div className="flex items-center text-sm text-muted-foreground">
+                <Clock className="h-3.5 w-3.5 mr-2 flex-shrink-0" />
+                <span>{dateParts.timeLabel}</span>
+              </div>
               {(event.venue || event.location) && (
                 <div className="flex items-center text-sm text-muted-foreground">
                   <MapPin className="h-3.5 w-3.5 mr-2 flex-shrink-0" />
