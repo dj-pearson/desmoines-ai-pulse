@@ -307,6 +307,58 @@ export function createViewabilityObserver(
 }
 
 /**
+ * Inventory class for a filled ad slot. Lets fill rate be measured per source
+ * (paid campaign vs affiliate vs house) — paid impressions/clicks also write to
+ * the ad_impressions/ad_clicks tables shared with iOS, but those tables require
+ * a real campaign_id/creative_id (FK), so house/affiliate fills are measured via
+ * GA4 events instead.
+ */
+export type AdInventoryClass = 'paid' | 'affiliate' | 'house';
+
+/** Best-effort GA4 (gtag) event dispatch — mirrors src/lib/paywallAnalytics.ts. */
+function sendGtagEvent(event: string, payload: Record<string, unknown>): void {
+  try {
+    if (
+      typeof window !== 'undefined' &&
+      (window as unknown as { gtag?: (...args: unknown[]) => void }).gtag
+    ) {
+      (window as unknown as { gtag: (...args: unknown[]) => void }).gtag(
+        'event',
+        event,
+        payload,
+      );
+    }
+  } catch (err) {
+    logger.error('sendGtagEvent', 'Failed to send gtag event', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+/**
+ * Record that an ad slot was filled, tagged with its inventory class so fill
+ * rate per source (paid / affiliate / house) is measurable. Always best-effort.
+ */
+export function trackAdFill(
+  inventory: AdInventoryClass,
+  placementType: string,
+  extra?: Record<string, unknown>,
+): void {
+  sendGtagEvent('ad_fill', { inventory, placement: placementType, ...extra });
+  logger.debug('trackAdFill', 'ad_fill', { inventory, placement: placementType });
+}
+
+/** Record a click on a filled ad slot, tagged with its inventory class. */
+export function trackAdFillClick(
+  inventory: AdInventoryClass,
+  placementType: string,
+  extra?: Record<string, unknown>,
+): void {
+  sendGtagEvent('ad_fill_click', { inventory, placement: placementType, ...extra });
+  logger.debug('trackAdFillClick', 'ad_fill_click', { inventory, placement: placementType });
+}
+
+/**
  * Get analytics summary for a campaign
  * Aggregates impression and click data
  */

@@ -1,22 +1,84 @@
+import { useEffect } from "react";
 import { useActiveAds } from "@/hooks/useActiveAds";
+import { useAffiliateAd } from "@/hooks/useAffiliateAd";
 import { useAdTracking } from "@/hooks/useAdTracking";
 import { useSubscription } from "@/hooks/useSubscription";
 import { AffiliateAdBanner } from "@/components/AffiliateAdBanner";
+import { HouseAd } from "@/components/HouseAd";
+import { RevealOnVisible } from "@/components/RevealOnVisible";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ExternalLink } from "lucide-react";
 import { openExternalUrl, isCapacitor } from "@/lib/capacitorUtils";
+import { trackAdFill, trackAdFillClick, type AdInventoryClass } from "@/lib/tracking";
+
+type AdPlacement = 'top_banner' | 'featured_spot' | 'below_fold' | 'sidebar';
 
 interface AdBannerProps {
-  placement: 'top_banner' | 'featured_spot' | 'below_fold' | 'sidebar';
+  placement: AdPlacement;
   className?: string;
-  /** Optional fallback content when no ads are available */
+  /** Optional fallback content shown to ad-free (Insider/VIP) members. */
   fallback?: React.ReactNode;
 }
 
+function getAdSizeClasses(placement: AdPlacement): string {
+  switch (placement) {
+    case 'top_banner':
+      return "h-20 md:h-28";
+    case 'featured_spot':
+      return "min-h-[220px] md:min-h-[250px]";
+    case 'below_fold':
+      return "h-20 md:h-28";
+    case 'sidebar':
+      return "w-[160px] min-h-[600px]";
+    default:
+      return "h-24 md:h-28";
+  }
+}
+
+/**
+ * Ad slot with a never-empty fill chain: paid campaign → affiliate → house ad.
+ * Insider/VIP members see zero ads. Top-banner (above the fold) renders
+ * immediately; every other placement defers its fetch + render until it scrolls
+ * near the viewport so it never costs LCP or bandwidth before then.
+ */
 export function AdBanner({ placement, className = "", fallback }: AdBannerProps) {
   const { hasFeature, isLoading: subscriptionLoading } = useSubscription();
+
+  // Insider and VIP members get an ad-free experience.
+  if (hasFeature('ad_free')) {
+    return fallback ? <>{fallback}</> : null;
+  }
+
+  if (subscriptionLoading) {
+    return null;
+  }
+
+  if (placement === 'top_banner') {
+    return <AdBannerContent placement={placement} className={className} />;
+  }
+
+  return (
+    <RevealOnVisible
+      placeholder={
+        <div className={`${getAdSizeClasses(placement)} ${className}`} aria-hidden="true" />
+      }
+    >
+      <AdBannerContent placement={placement} className={className} />
+    </RevealOnVisible>
+  );
+}
+
+/** The resolved ad for a slot, deciding paid vs affiliate vs house fill. */
+function AdBannerContent({
+  placement,
+  className,
+}: {
+  placement: AdPlacement;
+  className: string;
+}) {
   const { ad, isLoading: adLoading } = useActiveAds(placement);
+  const affiliate = useAffiliateAd(placement);
 
   const { adRef, trackClick } = useAdTracking({
     campaignId: ad?.campaign_id || '',
@@ -27,21 +89,47 @@ export function AdBanner({ placement, className = "", fallback }: AdBannerProps)
     viewabilityDuration: 1000,
   });
 
-  // Insider and VIP members get an ad-free experience
-  if (hasFeature('ad_free')) {
-    return fallback ? <>{fallback}</> : null;
-  }
+  // Which inventory class fills the slot (null while the campaign RPC resolves).
+  const inventory: AdInventoryClass | null = adLoading
+    ? null
+    : ad
+      ? 'paid'
+      : affiliate.partner
+        ? 'affiliate'
+        : 'house';
 
-  if (subscriptionLoading || adLoading) {
+  // Record the fill (tagged by source) so fill rate is measurable.
+  useEffect(() => {
+    if (inventory) {
+      trackAdFill(inventory, placement);
+    }
+  }, [inventory, placement]);
+
+  // Brief: still resolving whether a paid campaign exists.
+  if (adLoading) {
     return null;
   }
 
-  if (!ad) {
-    return fallback ? <>{fallback}</> : <AffiliateAdBanner placement={placement} className={className} />;
+  // Affiliate fill.
+  if (!ad && affiliate.partner) {
+    return (
+      <AffiliateAdBanner
+        placement={placement}
+        className={className}
+        onClick={() => trackAdFillClick('affiliate', placement)}
+      />
+    );
   }
 
+  // House fill — never leave the slot empty.
+  if (!ad) {
+    return <HouseAd placement={placement} className={className} />;
+  }
+
+  // Paid campaign fill.
   const handleAdClick = async () => {
     await trackClick();
+    trackAdFillClick('paid', placement);
     if (ad.link_url) {
       if (isCapacitor()) {
         await openExternalUrl(ad.link_url);
@@ -51,25 +139,10 @@ export function AdBanner({ placement, className = "", fallback }: AdBannerProps)
     }
   };
 
-  const getAdSizeClasses = () => {
-    switch (placement) {
-      case 'top_banner':
-        return "h-20 md:h-28";
-      case 'featured_spot':
-        return "min-h-[220px] md:min-h-[250px]";
-      case 'below_fold':
-        return "h-20 md:h-28";
-      case 'sidebar':
-        return "w-[160px] min-h-[600px]";
-      default:
-        return "h-24 md:h-28";
-    }
-  };
-
   return (
     <Card
       ref={adRef}
-      className={`${getAdSizeClasses()} overflow-hidden cursor-pointer hover:shadow-lg transition-shadow relative group ${className}`}
+      className={`${getAdSizeClasses(placement)} overflow-hidden cursor-pointer hover:shadow-lg transition-shadow relative group ${className}`}
       role="complementary"
       aria-label="Sponsored advertisement"
     >

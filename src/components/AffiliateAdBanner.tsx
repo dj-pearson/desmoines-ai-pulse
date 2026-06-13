@@ -5,14 +5,17 @@ import type { AffiliatePlacement } from '@/lib/affiliateAds';
 interface AffiliateAdBannerProps {
   placement: AffiliatePlacement;
   className?: string;
+  /** Fired on click so the parent can track the affiliate fill (fill-rate measurement). */
+  onClick?: () => void;
 }
 
-export function AffiliateAdBanner({ placement, className = '' }: AffiliateAdBannerProps) {
+export function AffiliateAdBanner({ placement, className = '', onClick }: AffiliateAdBannerProps) {
   const { partner, imageUrl, affiliateUrl } = useAffiliateAd(placement);
 
   if (!partner || !imageUrl || !affiliateUrl) return null;
 
   const handleClick = async () => {
+    onClick?.();
     if (isCapacitor()) {
       await openExternalUrl(affiliateUrl);
     } else {
@@ -57,6 +60,8 @@ export function AffiliateAdBanner({ placement, className = '' }: AffiliateAdBann
           if (isCapacitor()) {
             e.preventDefault();
             handleClick();
+          } else {
+            onClick?.();
           }
         }}
         className="block"
