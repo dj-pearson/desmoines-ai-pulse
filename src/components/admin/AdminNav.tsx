@@ -7,6 +7,7 @@ import {
   CreditCard,
   FileText,
   Flame,
+  Gauge,
   HandCoins,
   Hotel,
   Image as ImageIcon,
@@ -109,6 +110,7 @@ const NAV_GROUPS: NavGroup[] = [
     icon: BarChart3,
     minRole: "moderator",
     items: [
+      { label: "Autonomy", href: "/admin/autonomy", icon: Gauge, description: "Is anything waiting on a human?" },
       { label: "Analytics", href: "/admin/analytics-dashboard", icon: BarChart3 },
       { label: "Feedback", href: "/admin/feedback", icon: MessageCircle },
       { label: "Trending tuner", href: "/admin/trending", icon: Flame },

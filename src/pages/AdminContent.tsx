@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import { createLogger } from '@/lib/logger';
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 
@@ -61,8 +62,21 @@ export default function AdminContent() {
   const { userRole } = useAdminAuth();
   useDocumentTitle("Content Management");
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState("events");
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get("tab");
+  const [activeTab, setActiveTab] = useState(
+    CONTENT_TABS.some((t) => t.id === initialTab) ? (initialTab as string) : "events",
+  );
   const [brokenLinksOnly, setBrokenLinksOnly] = useState(false);
+
+  // Deep-link support: keep the active tab in sync with the ?tab= param so
+  // links from the Autonomy dashboard (e.g. ?tab=moderation) land correctly.
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab && CONTENT_TABS.some((t) => t.id === tab)) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
 
   // Search state for each content type
   const [searchTerms, setSearchTerms] = useState({
