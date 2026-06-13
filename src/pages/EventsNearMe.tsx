@@ -1,4 +1,4 @@
-import { useState, lazy, Suspense } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import SEOHead from '@/components/SEOHead';
@@ -11,7 +11,7 @@ import { LoadingSpinner } from '@/components/ui/loading-skeleton';
 import { MapPin, Navigation, Calendar, DollarSign, List, Map as MapIcon, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useEventsNearby, useGeolocation, getDistanceDisplay } from '@/hooks/useProximitySearch';
-import { InteractiveMap, MapLocation } from '@/components/InteractiveMap';
+import type { MapLocation } from '@/components/InteractiveMap';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 
@@ -41,14 +41,19 @@ export default function EventsNearMe() {
 
   const handleRequestLocation = () => {
     requestLocation();
+  };
+
+  // Surface geolocation failures once they resolve (getCurrentPosition is async,
+  // so we can't read locationError synchronously after requestLocation()).
+  useEffect(() => {
     if (locationError) {
       toast({
-        title: 'Location Error',
-        description: locationError,
+        title: 'Location unavailable',
+        description: `${locationError} Showing events across Des Moines instead.`,
         variant: 'destructive',
       });
     }
-  };
+  }, [locationError, toast]);
 
   const mapLocations: MapLocation[] = events.map(event => ({
     id: event.id,
@@ -113,6 +118,20 @@ export default function EventsNearMe() {
                 <Badge variant="secondary" className="ml-2">
                   Accuracy: ±{location.accuracy.toFixed(0)} meters
                 </Badge>
+              )}
+
+              {locationError && (
+                <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm">
+                  <p className="text-destructive font-medium">{locationError}</p>
+                  <p className="text-muted-foreground mt-1">
+                    We're showing events across Des Moines as a fallback. You can
+                    also{' '}
+                    <Link to="/events" className="underline font-medium">
+                      browse all events
+                    </Link>
+                    .
+                  </p>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -271,7 +290,7 @@ export default function EventsNearMe() {
           {/* Map View */}
           {!isLoading && !error && viewMode === 'map' && (
             <Suspense fallback={<LoadingSpinner />}>
-              <InteractiveMap
+              <EventsMap
                 locations={mapLocations}
                 showUserLocation={!!location}
                 userLocation={searchCenter}

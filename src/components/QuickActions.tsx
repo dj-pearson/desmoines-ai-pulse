@@ -5,6 +5,7 @@ import {
   Utensils,
   Sparkles,
   Sun,
+  Navigation,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -137,8 +138,18 @@ export function QuickActions({ className, onAIPlanClick }: QuickActionsProps) {
         />
       </div>
 
-      {/* Secondary CTA */}
-      <div className="text-center mt-6">
+      {/* Secondary CTAs */}
+      <div className="flex flex-wrap items-center justify-center gap-3 mt-6">
+        <Link to="/events/near-me">
+          <Button
+            size="lg"
+            variant="outline"
+            className="bg-white/10 hover:bg-white/20 text-white border-white/30 hover:border-white/40"
+          >
+            <Navigation className="h-4 w-4 mr-2" aria-hidden="true" />
+            Events Near Me
+          </Button>
+        </Link>
         <Link to="/events">
           <Button
             size="lg"
@@ -215,6 +226,19 @@ export function QuickActionsMobile({
           </Button>
         </Link>
       </div>
+
+      {/* Location-based discovery */}
+      <Link to="/events/near-me" className="block">
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-12 w-full gap-2 text-white hover:bg-white/10"
+          aria-label="Find events near me"
+        >
+          <Navigation className="h-4 w-4" aria-hidden="true" />
+          <span className="text-sm">Events Near Me</span>
+        </Button>
+      </Link>
     </div>
   );
 }

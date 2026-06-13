@@ -103,6 +103,7 @@ const RealTimePage = lazyWithRetry(() => import("./components/RealTimePage"));
 const EventsToday = lazyWithRetry(() => import("./pages/EventsToday"));
 const EventsThisWeekend = lazyWithRetry(() => import("./pages/EventsThisWeekend"));
 const EventsByLocation = lazyWithRetry(() => import("./pages/EventsByLocation"));
+const EventsNearMe = lazyWithRetry(() => import("./pages/EventsNearMe"));
 
 // SEO hub pages - new category pages
 const FreeEvents = lazyWithRetry(() => import("./pages/FreeEvents"));
@@ -327,6 +328,8 @@ const App = () => (
               path="/events/this-weekend"
               element={<EventsThisWeekend />}
             />
+            {/* Location-based discovery */}
+            <Route path="/events/near-me" element={<EventsNearMe />} />
             {/* Category SEO hub pages */}
             <Route path="/events/free" element={<FreeEvents />} />
             <Route path="/events/kids" element={<KidsEvents />} />

@@ -66,6 +66,7 @@ export const navigationGroups: Record<string, NavGroup> = {
     href: "/events",
     items: [
       { href: "/events", label: "All Events", icon: Calendar, featured: true },
+      { href: "/events/near-me", label: "Near Me", icon: Navigation, featured: true },
       { href: "/events/today", label: "Today's Events", icon: Calendar },
       { href: "/events/this-weekend", label: "This Weekend", icon: CalendarDays },
       { href: "/events/free", label: "Free Events", icon: Gift },
@@ -119,6 +120,7 @@ export const navigationGroups: Record<string, NavGroup> = {
 
 export const navigationLinks: NavItem[] = [
   { href: "/events", label: "Events", icon: Calendar },
+  { href: "/events/near-me", label: "Near Me", icon: Navigation, priority: true },
   { href: "/events/today", label: "Today's Events", icon: Calendar, priority: true },
   { href: "/events/this-weekend", label: "This Weekend", icon: Calendar, priority: true },
   { href: "/events/free", label: "Free Events", icon: Gift },
