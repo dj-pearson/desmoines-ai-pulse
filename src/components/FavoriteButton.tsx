@@ -11,6 +11,8 @@ interface FavoriteButtonProps {
   size?: "default" | "sm" | "lg" | "icon";
   className?: string;
   showText?: boolean;
+  /** Name of the item being saved — produces a specific label like "Save {name}" for screen readers. */
+  itemName?: string;
 }
 
 export function FavoriteButton({
@@ -19,9 +21,20 @@ export function FavoriteButton({
   size = "icon",
   className,
   showText = false,
+  itemName,
 }: FavoriteButtonProps) {
   const { isFavorited, toggleFavorite, isToggling } = useFavorites();
   const favorited = isFavorited(eventId);
+
+  const ariaLabel = isToggling
+    ? "Updating favorite..."
+    : favorited
+      ? itemName
+        ? `Remove ${itemName} from favorites`
+        : "Remove from favorites"
+      : itemName
+        ? `Save ${itemName}`
+        : "Add to favorites";
 
   return (
     <Button
@@ -36,7 +49,8 @@ export function FavoriteButton({
       }}
       disabled={isToggling}
       className={cn(className)}
-      aria-label={isToggling ? "Updating favorite..." : favorited ? "Remove from favorites" : "Add to favorites"}
+      aria-label={ariaLabel}
+      aria-pressed={favorited}
     >
       {isToggling ? (
         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />

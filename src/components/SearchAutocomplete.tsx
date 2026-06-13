@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useId } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { storage } from '@/lib/safeStorage';
@@ -54,6 +54,11 @@ export function SearchAutocomplete({
   const [activeIndex, setActiveIndex] = useState(-1);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const debouncedValue = useDebouncedValue(value, 300);
+
+  // Stable ids so the input can reference its listbox + active option for screen readers
+  const reactId = useId().replace(/[:]/g, '');
+  const listboxId = `search-listbox-${reactId}`;
+  const optionId = useCallback((idx: number) => `${listboxId}-opt-${idx}`, [listboxId]);
 
   const recentSearches = getRecentSearches(contentType);
 
@@ -213,6 +218,37 @@ export function SearchAutocomplete({
     return () => input.removeEventListener('focus', handleFocus);
   }, [inputRef, hasContent]);
 
+  // Combobox semantics on the (external) input so the listbox + selection are announced
+  const expanded = isOpen && hasContent;
+  useEffect(() => {
+    const input = inputRef?.current;
+    if (!input) return;
+    input.setAttribute('role', 'combobox');
+    input.setAttribute('aria-autocomplete', 'list');
+    input.setAttribute('aria-haspopup', 'listbox');
+    input.setAttribute('aria-controls', listboxId);
+    input.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    return () => {
+      input.removeAttribute('role');
+      input.removeAttribute('aria-autocomplete');
+      input.removeAttribute('aria-haspopup');
+      input.removeAttribute('aria-controls');
+      input.removeAttribute('aria-expanded');
+      input.removeAttribute('aria-activedescendant');
+    };
+  }, [inputRef, listboxId, expanded]);
+
+  // Point aria-activedescendant at the highlighted option so its selection is announced
+  useEffect(() => {
+    const input = inputRef?.current;
+    if (!input) return;
+    if (expanded && activeIndex >= 0) {
+      input.setAttribute('aria-activedescendant', optionId(activeIndex));
+    } else {
+      input.removeAttribute('aria-activedescendant');
+    }
+  }, [inputRef, expanded, activeIndex, optionId]);
+
   const [, forceUpdate] = useState(0);
   const handleClearRecent = useCallback(() => {
     clearRecentSearches(contentType);
@@ -226,6 +262,7 @@ export function SearchAutocomplete({
   return (
     <div
       ref={dropdownRef}
+      id={listboxId}
       className={cn(
         'absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-50 max-h-80 overflow-y-auto',
         className
@@ -255,6 +292,7 @@ export function SearchAutocomplete({
             return (
               <button
                 key={`recent-${search}`}
+                id={optionId(idx)}
                 role="option"
                 aria-selected={activeIndex === idx}
                 className={cn(
@@ -292,6 +330,7 @@ export function SearchAutocomplete({
             return (
               <button
                 key={`suggestion-${suggestion.id}`}
+                id={optionId(idx)}
                 role="option"
                 aria-selected={activeIndex === idx}
                 className={cn(

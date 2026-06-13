@@ -202,10 +202,11 @@ function EventCardComponent({ event, onViewDetails }: EventCardProps) {
               </Button>
             </Link>
 
-            <FavoriteButton eventId={event.id} variant="ghost" size="icon" />
+            <FavoriteButton eventId={event.id} itemName={event.title} variant="ghost" size="icon" />
 
             <ShareDialog
               title={event.title}
+              itemName={event.title}
               description={event.enhanced_description || event.original_description || `Join us for ${event.title}`}
               url={`${window.location.origin}/events/${createEventSlugWithCentralTime(event.title, event)}`}
             />

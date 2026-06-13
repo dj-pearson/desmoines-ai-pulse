@@ -603,6 +603,92 @@ test.describe('Screen Reader Support', () => {
   });
 });
 
+test.describe('WEB-UX-005 - Keyboard accessibility (autocomplete, card actions, detail page)', () => {
+  test('search autocomplete is operable by keyboard with aria-activedescendant', async ({ page }) => {
+    // Seed recent searches so the listbox has deterministic content regardless of DB state
+    await page.addInitScript(() => {
+      window.localStorage.setItem(
+        'recent-searches-events',
+        JSON.stringify(['music festival', 'farmers market', 'jazz night'])
+      );
+    });
+    await page.goto('/events', { waitUntil: 'networkidle' });
+
+    const searchInput = page.locator('input[type="search"]').first();
+    await searchInput.click();
+
+    // The combobox listbox should appear with proper roles
+    const listbox = page.locator('[role="listbox"][aria-label="Search suggestions"]');
+    await expect(listbox).toBeVisible();
+
+    await expect(searchInput).toHaveAttribute('role', 'combobox');
+    await expect(searchInput).toHaveAttribute('aria-expanded', 'true');
+
+    // ArrowDown should highlight an option and announce it via aria-activedescendant
+    await page.keyboard.press('ArrowDown');
+
+    const activeId = await searchInput.getAttribute('aria-activedescendant');
+    expect(activeId, 'aria-activedescendant should reference the highlighted option').toBeTruthy();
+
+    const activeOption = page.locator(`#${activeId}`);
+    await expect(activeOption).toHaveAttribute('role', 'option');
+    await expect(activeOption).toHaveAttribute('aria-selected', 'true');
+
+    // Escape should close the listbox
+    await page.keyboard.press('Escape');
+    await expect(searchInput).toHaveAttribute('aria-expanded', 'false');
+    await expect(listbox).toBeHidden();
+  });
+
+  test('event card secondary actions are labelled and reachable outside the card link', async ({ page }) => {
+    await page.goto('/events', { waitUntil: 'networkidle' });
+
+    const saveButton = page.locator('button[aria-label^="Save "]').first();
+    if ((await saveButton.count()) === 0) {
+      test.skip(true, 'No event cards rendered (no data) — nothing to assert');
+      return;
+    }
+
+    await expect(saveButton).toBeVisible();
+
+    // The action must NOT be nested inside the card's navigation anchor
+    const nestedInsideLink = await saveButton.evaluate((el) => !!el.closest('a'));
+    expect(nestedInsideLink, 'Favorite button should not be nested inside the card link').toBe(false);
+
+    // It must be keyboard focusable
+    await saveButton.focus();
+    const isFocused = await saveButton.evaluate((el) => el === document.activeElement);
+    expect(isFocused, 'Favorite button should be keyboard focusable').toBe(true);
+  });
+
+  test('an event detail page has no critical accessibility violations', async ({ page }) => {
+    await page.goto('/events', { waitUntil: 'networkidle' });
+
+    const cardLink = page.locator('a[aria-label^="View details for"]').first();
+    if ((await cardLink.count()) === 0) {
+      test.skip(true, 'No event cards rendered (no data) — cannot reach a detail page');
+      return;
+    }
+
+    await cardLink.click();
+    await page.waitForLoadState('networkidle');
+
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa'])
+      .analyze();
+
+    const critical = results.violations.filter(
+      (v) => v.impact === 'critical' || v.impact === 'serious'
+    );
+
+    if (critical.length > 0) {
+      console.error('Critical detail-page a11y violations:', critical.map((v) => v.id));
+    }
+
+    expect(critical.length, 'Detail page should have no critical a11y violations').toBe(0);
+  });
+});
+
 test.describe('WCAG 2.4.1 - Main Content Landmark', () => {
   for (const page of pages) {
     test(`${page.name} should have #main-content element`, async ({ page: pw }) => {

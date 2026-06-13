@@ -41,6 +41,8 @@ interface ShareDialogProps {
   className?: string;
   /** Callback fired when a share action is completed (any platform or copy) */
   onShare?: () => void;
+  /** Name of the item being shared — produces a specific label like "Share {name}" for screen readers. */
+  itemName?: string;
 }
 
 export default function ShareDialog({
@@ -50,6 +52,7 @@ export default function ShareDialog({
   trigger,
   className,
   onShare,
+  itemName,
 }: ShareDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -152,8 +155,13 @@ export default function ShareDialog({
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         {trigger || (
-          <Button variant="outline" size="sm" className={className}>
-            <Share2 className="h-4 w-4 mr-2" />
+          <Button
+            variant="outline"
+            size="sm"
+            className={className}
+            aria-label={itemName ? `Share ${itemName}` : undefined}
+          >
+            <Share2 className="h-4 w-4 mr-2" aria-hidden="true" />
             Share
           </Button>
         )}

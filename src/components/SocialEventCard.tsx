@@ -89,8 +89,17 @@ function SocialEventCardComponent({
         featured ? 'md:col-span-2 md:row-span-2' : ''
       }`}
     >
-      <Link to={eventUrl} className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-xl" aria-label={`View details for ${event.title}`}>
-        <CardContent className="p-0">
+      {/* Stretched navigation link: covers the whole card but sits BELOW the secondary
+          actions (z-20 < z-30) so favorite/share are reachable as siblings, not nested
+          interactive elements inside the anchor. */}
+      <Link
+        to={eventUrl}
+        className="absolute inset-0 z-20 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+        aria-label={`View details for ${event.title}`}
+      >
+        <span className="sr-only">View details for {event.title}</span>
+      </Link>
+      <CardContent className="p-0">
           {/* Image Section with Overlay */}
           <div className={`relative overflow-hidden ${featured ? 'h-64 md:h-80' : 'h-52'}`}>
             {event.image_url ? (
@@ -236,10 +245,11 @@ function SocialEventCardComponent({
                 View Details
                 <ArrowRight className="h-4 w-4 ml-1 transition-transform group-hover:translate-x-1" />
               </span>
-              <div className="flex items-center gap-1" onClick={(e) => e.preventDefault()}>
-                <FavoriteButton eventId={event.id} variant="ghost" size="icon" />
+              <div className="relative z-30 flex items-center gap-1">
+                <FavoriteButton eventId={event.id} itemName={event.title} variant="ghost" size="icon" />
                 <ShareDialog
                   title={event.title}
+                  itemName={event.title}
                   description={
                     event.enhanced_description ||
                     event.original_description ||
@@ -251,7 +261,6 @@ function SocialEventCardComponent({
             </div>
           </div>
         </CardContent>
-      </Link>
     </Card>
   );
 }
