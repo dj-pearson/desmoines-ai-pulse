@@ -413,6 +413,13 @@ async function handleSubscriptionDeleted(
     console.error("Failed to update subscription:", error);
     throw error;
   }
+
+  // WEB-AUTO-013: log the cancellation transition so the lifecycle job can
+  // offer a one-per-lapse win-back. Best-effort; web-only.
+  await recordSubscriptionEvent(supabase, subscription.id, {
+    event_type: "canceled",
+    to_status: "canceled",
+  });
 }
 
 /**
@@ -448,6 +455,17 @@ async function handleInvoicePaymentSucceeded(
         status: "active",
       })
       .eq("stripe_subscription_id", invoice.subscription as string);
+  }
+
+  // WEB-AUTO-013: a successful invoice on a previously past_due sub means the
+  // dunning lapse recovered — log it (web-only, best-effort).
+  if (invoice.subscription) {
+    await recordSubscriptionEvent(supabase, invoice.subscription as string, {
+      event_type: "payment_recovered",
+      to_status: "active",
+      amount: (invoice.amount_paid || 0) / 100,
+      currency: invoice.currency || "usd",
+    });
   }
 
   // Log payment to payments table
@@ -497,6 +515,60 @@ async function handleInvoicePaymentFailed(
 
   if (error) {
     console.error("Failed to update subscription after failed payment:", error);
+  }
+
+  // WEB-AUTO-013: log the failed payment so the lifecycle job can escalate the
+  // dunning ladder and eventually downgrade. Best-effort; web-only.
+  await recordSubscriptionEvent(supabase, invoice.subscription as string, {
+    event_type: "payment_failed",
+    to_status: "past_due",
+    amount: (invoice.amount_due || 0) / 100,
+    currency: invoice.currency || "usd",
+    metadata: { attempt_count: invoice.attempt_count ?? null, next_payment_attempt: invoice.next_payment_attempt ?? null },
+  });
+}
+
+/**
+ * WEB-AUTO-013: append a row to subscription_events for an auditable lifecycle
+ * trail. Web-only (Apple/Google subs own their own dunning via the stores).
+ * Best-effort: never throws, so an audit hiccup can't fail the webhook.
+ */
+async function recordSubscriptionEvent(
+  supabase: ReturnType<typeof createClient>,
+  stripeSubscriptionId: string,
+  entry: {
+    event_type: string;
+    from_status?: string;
+    to_status?: string;
+    amount?: number;
+    currency?: string;
+    metadata?: Record<string, unknown>;
+  }
+) {
+  try {
+    const { data: sub } = await supabase
+      .from("user_subscriptions")
+      .select("id, user_id, platform")
+      .eq("stripe_subscription_id", stripeSubscriptionId)
+      .maybeSingle();
+
+    // Only log web subscriptions; stores own mobile dunning.
+    if (!sub || (sub.platform && sub.platform !== "web")) return;
+
+    await supabase.from("subscription_events").insert({
+      user_id: sub.user_id,
+      subscription_id: sub.id,
+      stripe_subscription_id: stripeSubscriptionId,
+      platform: "web",
+      event_type: entry.event_type,
+      from_status: entry.from_status ?? null,
+      to_status: entry.to_status ?? null,
+      amount: entry.amount ?? null,
+      currency: entry.currency ?? "usd",
+      metadata: entry.metadata ?? {},
+    });
+  } catch (e) {
+    console.error("Failed to record subscription_event:", e);
   }
 }
 

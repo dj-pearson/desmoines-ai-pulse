@@ -6,16 +6,19 @@ import UserRoleManager from "@/components/UserRoleManager";
 import AdminSystemControls from "@/components/AdminSystemControls";
 import AdminApplicationSettings from "@/components/AdminApplicationSettings";
 import JobHealthPanel from "@/components/admin/JobHealthPanel";
+import SubscriptionLifecyclePanel from "@/components/admin/SubscriptionLifecyclePanel";
 import {
   Users,
   Server,
   Cog,
   Activity,
+  CreditCard,
 } from "lucide-react";
 
 const SYSTEM_TABS = [
   { id: "users", label: "User Management", icon: Users },
   { id: "jobs", label: "Job Health", icon: Activity },
+  { id: "subscriptions", label: "Subscriptions", icon: CreditCard },
   { id: "system", label: "System Controls", icon: Server },
   { id: "settings", label: "Settings", icon: Cog },
 ];
@@ -52,6 +55,7 @@ export default function AdminSystem() {
               // Hide user management tab if user doesn't have permission
               if (tab.id === "users" && !canManageUsers()) return null;
               if (tab.id === "system" && !canManageUsers()) return null;
+              if (tab.id === "subscriptions" && !canManageUsers()) return null;
               return (
                 <button
                   key={tab.id}
@@ -74,6 +78,8 @@ export default function AdminSystem() {
         {canManageUsers() && activeTab === "users" && <UserRoleManager />}
 
         {activeTab === "jobs" && <JobHealthPanel />}
+
+        {canManageUsers() && activeTab === "subscriptions" && <SubscriptionLifecyclePanel />}
 
         {canManageUsers() && activeTab === "system" && <AdminSystemControls />}
 

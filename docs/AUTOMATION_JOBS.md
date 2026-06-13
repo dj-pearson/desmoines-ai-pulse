@@ -43,6 +43,7 @@ All times UTC. Schedules are cron expressions (`min hour dom mon dow`).
 | **`moderate-content-sweep`** | `15 * * * *` | fn `moderate-content` | **Safety-net: re-moderate any review/contact row stuck `pending` (real-time call failed); cheap when none (WEB-AUTO-009)** | ✅ |
 | **`campaign-creative-review-sweep`** | `35 * * * *` | fn `review-campaign-creative` | **Safety-net: auto-review ad creatives not yet reviewed (real-time call failed); spec/quality/brand-safety/standing checks → auto-approve or hold (WEB-AUTO-010)** | ✅ |
 | **`sitemap-regen-6h`** | `0 */6 * * *` | fn `generate-sitemaps` | **Event-driven sitemap regen: drains `sitemap_change_queue`, regenerates events/restaurants/attractions/articles sitemaps to the `sitemaps` Storage bucket (served fresh by the Pages middleware), pings search engines (WEB-AUTO-011)** | ✅ |
+| **`subscription-lifecycle-daily`** | `0 15 * * *` | fn `subscription-lifecycle` | **Web-sub dunning/renewal/win-back: 7-day renewal reminders, escalating dunning emails on `past_due`, auto-downgrade to Free after the final-failure window, one-per-lapse win-back after cancellation; logs every transition to `subscription_events` (WEB-AUTO-013)** | ✅ |
 
 \* **Observed** = wrapped with `jobRunner` and recording to `automation_job_runs`.
 `✅` done, `planned` = adopts the same one-line wrap as its WEB-AUTO story lands
@@ -384,6 +385,49 @@ SQL helper functions are left defined, additive, only the schedules removed).
 plus a "Run now" button) above the existing realtime post-history queue.
 `social-auto-post` is in the Job Health re-run list (re-run sends `{manual:true}`
 → runs the daily post).
+
+## Subscription lifecycle automation (WEB-AUTO-013)
+
+`subscription-lifecycle` (cron `subscription-lifecycle-daily`, daily 15:00 UTC
+≈ 9–10am Central) handles failed payments, expirations, and churn for **web
+(Stripe) subscriptions** without a human. **Apple/Google-billed subscriptions are
+excluded** — every query is scoped to `platform='web'`; the stores own mobile
+dunning.
+
+**Each run** (wrapped in the WEB-AUTO-001 `runJob`, so it appears in Job Health):
+
+1. **Pause check** — `system_settings` `setting_type='subscription_lifecycle'`
+   (`{ paused }`). Paused → exits clean.
+2. **Stage A — pre-renewal reminders** — web subs (`active`/`trialing`, not set to
+   cancel) whose `current_period_end` falls ~7 days out get a transactional
+   reminder with a manage-subscription link. One per renewal period (gated by a
+   `renewal_reminder_sent` event whose `metadata.period_end` matches).
+3. **Stage B — dunning ladder + downgrade** — for `past_due` web subs, days-past-due
+   is computed from `current_period_end`. Escalating dunning emails fire at day
+   **0 / 3 / 7** (one per run, each with an update-payment link); the 3rd is a
+   final notice. After **day 10** the subscription is **auto-downgraded to Free**
+   (`status='canceled'`, `plan_id=free`) and the user is informed. Stripe smart
+   retries (configured in the Stripe dashboard) drive the actual card re-attempts;
+   a recovered charge logs `payment_recovered` via the webhook.
+4. **Stage C — win-back** — `canceled` web subs whose `canceled_at` is between 1 and
+   14 days ago get **one** marketing win-back email (full CAN-SPAM unsubscribe
+   footer), frequency-capped to one per lapse (gated by a `winback_sent` event
+   since `canceled_at`).
+5. **Metrics** — `ctx.processed`/`ctx.failed` + a `{ renewalReminders, dunningEmails,
+   downgrades, winbacks, emailFailures, skippedNoEmail }` rollup land in
+   `automation_job_runs`.
+
+**Audit trail:** every transition + comm is appended to `subscription_events`
+(additive, append-only). The **`stripe-webhook`** logs `payment_failed`,
+`payment_recovered`, and `canceled` transitions (web-only, best-effort) as they
+happen; the daily job logs `renewal_reminder_sent`, `dunning_email_sent`,
+`downgraded`, and `winback_sent`. This is both the MRR/churn-queryable history and
+the frequency-cap source of truth.
+
+**Admin:** Admin → System → **Subscriptions** tab shows 30-day rollups
+(reminders / failures / dunning / recovered / downgrades / win-backs) + the recent
+event feed, with **Pause/Resume** and **Run now** buttons. `subscription-lifecycle`
+is in the Job Health re-run list (re-run sends `{manual:true}`).
 
 **Backward compat:** additive only (migration `20260612000018`: pause-flag seed +
 cron swap). The existing `social-media-manager` actions (`generate`, `publish`,
