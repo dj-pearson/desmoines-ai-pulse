@@ -35,6 +35,7 @@ All times UTC. Schedules are cron expressions (`min hour dom mon dow`).
 | `auto-trigger-scraping-jobs` / `scraping-jobs-runner` | `*/10-15 * * * *` | SQL/fn | Drive the scraping-jobs queue | — |
 | **`data-quality-heal-nightly`** | `30 2 * * *` | fn `data-quality-heal` | **Geocode + SEO/GEO + image self-heal, <=25 rows/table/run (WEB-AUTO-003)** | ✅ |
 | **`job-health-watchdog-daily`** | `0 8 * * *` | fn `job-health-watchdog` | **Alert on missed/failed observed jobs (WEB-AUTO-001)** | n/a |
+| **`dedupe-content-weekly`** | `15 3 * * 1` | fn `dedupe-content` | **Detect duplicate events/restaurants (trigram + proximity); auto-merge >=90%, queue 70–90% (WEB-AUTO-005)** | ✅ |
 
 \* **Observed** = wrapped with `jobRunner` and recording to `automation_job_runs`.
 `✅` done, `planned` = adopts the same one-line wrap as its WEB-AUTO story lands
@@ -67,3 +68,24 @@ Set `ADMIN_ALERT_EMAIL` (or `ALERT_EMAIL`) + `RESEND_API_KEY` for alerts.
 Each job can be re-run from **Admin → Job Health** (manual trigger), or by
 invoking its edge function directly with the `EDGE_FUNCTION_API_KEY` /
 service-role key. `automation_job_runs` retains history for auditing.
+
+## Duplicate merge — review & reversal (WEB-AUTO-005)
+
+The weekly `dedupe-content` job finds near-duplicate events/restaurants via
+pg_trgm name similarity + haversine proximity (and same-date for events):
+
+- **>= 90% name match** with matching date/proximity → **auto-merged**. The
+  richer row is kept; every child FK (favorites, reviews, sponsored links, …) is
+  repointed to it generically; the loser is marked `is_merged = true` (RETAINED,
+  not deleted) so browse hooks (`useEvents`/`useRestaurants` + the
+  `get_rotated_restaurants` RPC) hide it.
+- **70–90%** (and same-name restaurants within 400m) → queued to
+  `content_merge_candidates`, surfaced under **Admin → Content → Duplicates**
+  with side-by-side cards and one-click Merge / Swap-which-to-keep / Not-a-duplicate.
+- Same-name restaurants with no coordinates or > 400m apart are skipped
+  (franchise guard) — never auto-merged, never queued.
+
+Every merge (auto or manual) writes an immutable `content_merges` audit row.
+**Reversal:** call `unmerge_content(merge_id)` within **30 days** to restore the
+loser row's visibility. (Child rows already repointed to the survivor stay with
+the survivor — moving them back is not auto-reversed.)

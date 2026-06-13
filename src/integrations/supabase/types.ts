@@ -2814,6 +2814,9 @@ export type Database = {
       events: {
         Row: {
           ai_writeup: string | null
+          is_merged: boolean
+          merged_at: string | null
+          merged_into: string | null
           category: string
           city: string | null
           created_at: string | null
@@ -2856,6 +2859,9 @@ export type Database = {
         }
         Insert: {
           ai_writeup?: string | null
+          is_merged?: boolean
+          merged_at?: string | null
+          merged_into?: string | null
           category?: string
           city?: string | null
           created_at?: string | null
@@ -2898,6 +2904,9 @@ export type Database = {
         }
         Update: {
           ai_writeup?: string | null
+          is_merged?: boolean
+          merged_at?: string | null
+          merged_into?: string | null
           category?: string
           city?: string | null
           created_at?: string | null
@@ -4046,6 +4055,9 @@ export type Database = {
       restaurants: {
         Row: {
           ai_writeup: string | null
+          is_merged: boolean
+          merged_at: string | null
+          merged_into: string | null
           city: string | null
           created_at: string | null
           cuisine: string | null
@@ -4088,6 +4100,9 @@ export type Database = {
         }
         Insert: {
           ai_writeup?: string | null
+          is_merged?: boolean
+          merged_at?: string | null
+          merged_into?: string | null
           city?: string | null
           created_at?: string | null
           cuisine?: string | null
@@ -4130,6 +4145,9 @@ export type Database = {
         }
         Update: {
           ai_writeup?: string | null
+          is_merged?: boolean
+          merged_at?: string | null
+          merged_into?: string | null
           city?: string | null
           created_at?: string | null
           cuisine?: string | null

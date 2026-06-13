@@ -29,6 +29,7 @@ const RERUNNABLE: Record<string, string> = {
   "dispatch-scheduled-newsletters": "dispatch-scheduled-newsletters",
   "job-health-watchdog": "job-health-watchdog",
   "data-quality-heal": "data-quality-heal",
+  "dedupe-content": "dedupe-content",
 };
 
 function statusBadge(status: JobHealthRow["last_status"]) {

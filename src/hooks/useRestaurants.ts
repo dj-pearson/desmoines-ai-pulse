@@ -123,7 +123,12 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
         }
       }
 
-      let query = supabase.from("restaurants").select("*", { count: "exact" });
+      // Direct-query path (non-default sorts / dietary). The default popularity
+      // path uses get_rotated_restaurants, which filters is_merged server-side.
+      let query = supabase
+        .from("restaurants")
+        .select("*", { count: "exact" })
+        .neq("is_merged", true); // Hide auto-merged duplicate losers (WEB-AUTO-005)
 
       // Use full-text search with tsvector for better performance and relevance ranking
       if (filters.search) {

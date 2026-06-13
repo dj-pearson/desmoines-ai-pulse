@@ -48,7 +48,8 @@ export function useEvents(filters: EventFilters = {}) {
       let query = supabase
         .from("events")
         .select("*", { count: "exact" })
-        .gte("date", today); // Only today and future events
+        .gte("date", today) // Only today and future events
+        .neq("is_merged", true); // Hide auto-merged duplicate losers (WEB-AUTO-005)
       if (sortBy === "featured") {
         query = query
           .order("is_featured", { ascending: false })
