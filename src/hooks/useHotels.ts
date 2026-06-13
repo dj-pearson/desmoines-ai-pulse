@@ -6,6 +6,52 @@ type Hotel = Database["public"]["Tables"]["hotels"]["Row"];
 type HotelInsert = Database["public"]["Tables"]["hotels"]["Insert"];
 type HotelUpdate = Database["public"]["Tables"]["hotels"]["Update"];
 
+// WEB-PERF-001: list path drops the heavy detail-only fields (seo_*,
+// geo_summary/geo_key_facts/geo_faq) but keeps every operational column the
+// hotel cards AND the admin HotelManager edit sheet read. The hotel DETAIL
+// page uses the dedicated useHotel(slug) hook with its own select('*').
+// `satisfies` validates names against the generated Row type.
+const HOTEL_LIST_COLUMNS = [
+  "id",
+  "name",
+  "slug",
+  "description",
+  "short_description",
+  "address",
+  "city",
+  "state",
+  "zip",
+  "latitude",
+  "longitude",
+  "area",
+  "phone",
+  "email",
+  "website",
+  "affiliate_url",
+  "affiliate_provider",
+  "affiliate_url_updated_at",
+  "image_url",
+  "gallery_urls",
+  "star_rating",
+  "price_range",
+  "avg_nightly_rate",
+  "amenities",
+  "hotel_type",
+  "chain_name",
+  "brand_parent",
+  "google_place_id",
+  "total_rooms",
+  "check_in_time",
+  "check_out_time",
+  "is_featured",
+  "is_active",
+  "sort_order",
+  "created_at",
+  "updated_at",
+] satisfies readonly (keyof Hotel)[];
+
+const HOTEL_LIST_SELECT = HOTEL_LIST_COLUMNS.join(", ");
+
 interface HotelsState {
   hotels: Hotel[];
   isLoading: boolean;
@@ -34,6 +80,12 @@ interface HotelFilters {
   hasAffiliate?: boolean;
   limit?: number;
   offset?: number;
+  /**
+   * WEB-PERF-001: list payloads drop the heavy seo/geo detail fields by
+   * default (all operational columns are retained). Surfaces needing the SEO
+   * fields (ContentTable's SEO column) pass `fullColumns: true` to select('*').
+   */
+  fullColumns?: boolean;
 }
 
 export function useHotels(filters: HotelFilters = {}) {
@@ -48,7 +100,11 @@ export function useHotels(filters: HotelFilters = {}) {
     try {
       setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
-      let query = supabase.from("hotels").select("*", { count: "exact" });
+      let query = supabase
+        .from("hotels")
+        .select(filters.fullColumns ? "*" : HOTEL_LIST_SELECT, {
+          count: "exact",
+        });
 
       // Default to active only
       if (filters.activeOnly !== false) {
@@ -149,7 +205,9 @@ export function useHotels(filters: HotelFilters = {}) {
         );
       }
 
-      const { data, error, count } = await query;
+      // .returns<Hotel[]>() keeps the full Row type for consumers even though
+      // the select string is a runtime-projected column list (no `any`).
+      const { data, error, count } = await query.returns<Hotel[]>();
 
       if (error) {
         throw error;
@@ -185,6 +243,7 @@ export function useHotels(filters: HotelFilters = {}) {
     filters.hasAffiliate,
     filters.limit,
     filters.offset,
+    filters.fullColumns,
   ]);
 
   const createHotel = async (hotel: HotelInsert) => {

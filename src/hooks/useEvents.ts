@@ -6,6 +6,36 @@ type Event = Database["public"]["Tables"]["events"]["Row"];
 type EventInsert = Database["public"]["Tables"]["events"]["Insert"];
 type EventUpdate = Database["public"]["Tables"]["events"]["Update"];
 
+// WEB-PERF-001: the list path fetches only the columns the event cards render,
+// not select('*'). Heavy detail-only fields (seo_*, geo_summary/geo_key_facts/
+// geo_faq, ai_writeup/writeup_*, source_url, geom, search_vector, recurrence_*)
+// are dropped from every list payload. The event DETAIL page (EventDetails.tsx)
+// fetches the full row for the single matched event separately. The `satisfies`
+// guard validates every name against the generated Row type at compile time.
+const EVENT_LIST_COLUMNS = [
+  "id",
+  "title",
+  "category",
+  "city",
+  "location",
+  "venue",
+  "price",
+  "image_url",
+  "date",
+  "created_at",
+  "enhanced_description",
+  "original_description",
+  "event_start_utc",
+  "event_start_local",
+  "event_timezone",
+  "is_enhanced",
+  "is_featured",
+  "latitude",
+  "longitude",
+] satisfies readonly (keyof Event)[];
+
+const EVENT_LIST_SELECT = EVENT_LIST_COLUMNS.join(", ");
+
 interface EventsState {
   events: Event[];
   isLoading: boolean;
@@ -23,6 +53,12 @@ interface EventFilters {
   offset?: number;
   /** Web parity for IOS-DISCOVER-2026-003 — defaults to "soonest". */
   sortBy?: EventSortBy;
+  /**
+   * WEB-PERF-001: list payloads are column-projected to card fields by default.
+   * Admin surfaces that need the heavy detail fields (ContentTable's SEO /
+   * AI-writeup / source columns) pass `fullColumns: true` to select('*').
+   */
+  fullColumns?: boolean;
 }
 
 export function useEvents(filters: EventFilters = {}) {
@@ -47,7 +83,9 @@ export function useEvents(filters: EventFilters = {}) {
       const sortBy: EventSortBy = filters.sortBy ?? "soonest";
       let query = supabase
         .from("events")
-        .select("*", { count: "exact" })
+        .select(filters.fullColumns ? "*" : EVENT_LIST_SELECT, {
+          count: "exact",
+        })
         .gte("date", today) // Only today and future events
         .neq("is_merged", true) // Hide auto-merged duplicate losers (WEB-AUTO-005)
         .neq("is_hidden", true); // Hide soft-hidden stale events (WEB-AUTO-006)
@@ -103,7 +141,9 @@ export function useEvents(filters: EventFilters = {}) {
         );
       }
 
-      let { data, error, count } = await query;
+      // .returns<Event[]>() keeps the full Row type for consumers even though
+      // the select string is a runtime-projected column list (no `any`).
+      let { data, error, count } = await query.returns<Event[]>();
 
       if (error) {
         console.error("useEvents: Database query error:", error);
@@ -220,6 +260,7 @@ export function useEvents(filters: EventFilters = {}) {
     filters.limit,
     filters.offset,
     filters.sortBy,
+    filters.fullColumns,
   ]);
 
   return {

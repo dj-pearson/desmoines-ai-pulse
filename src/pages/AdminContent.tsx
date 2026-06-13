@@ -175,15 +175,28 @@ export default function AdminContent() {
     contentType: null,
   });
 
-  // Data hooks with search filters
-  const events = useEvents({ search: searchTerms.events });
-  const restaurants = useRestaurants({ search: searchTerms.restaurants });
-  const attractions = useAttractions({ search: searchTerms.attractions });
+  // Data hooks with search filters.
+  // fullColumns: ContentTable renders SEO-status / AI-writeup / source columns,
+  // so the admin tables need the heavy detail fields the public lists project
+  // away (WEB-PERF-001).
+  const events = useEvents({ search: searchTerms.events, fullColumns: true });
+  const restaurants = useRestaurants({
+    search: searchTerms.restaurants,
+    fullColumns: true,
+  });
+  const attractions = useAttractions({
+    search: searchTerms.attractions,
+    fullColumns: true,
+  });
   const playgrounds = usePlaygrounds({ search: searchTerms.playgrounds });
   const restaurantOpenings = useRestaurantOpenings({
     search: searchTerms.restaurantOpenings,
   });
-  const hotels = useHotels({ search: searchTerms.hotels, activeOnly: false });
+  const hotels = useHotels({
+    search: searchTerms.hotels,
+    activeOnly: false,
+    fullColumns: true,
+  });
 
   const canManageContent = () =>
     ["moderator", "admin", "root_admin"].includes(userRole);

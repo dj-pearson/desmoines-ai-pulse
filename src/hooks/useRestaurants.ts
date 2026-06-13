@@ -7,6 +7,41 @@ type Restaurant = Database["public"]["Tables"]["restaurants"]["Row"];
 type RestaurantInsert = Database["public"]["Tables"]["restaurants"]["Insert"];
 type RestaurantUpdate = Database["public"]["Tables"]["restaurants"]["Update"];
 
+// WEB-PERF-001: list/direct-query path fetches only card + admin-list columns,
+// not select('*'). Heavy detail-only fields (seo_*, geo_summary/geo_key_facts/
+// geo_faq, ai_writeup/writeup_*, enhanced, source_url, geom, search_vector,
+// data_quality_score) are dropped. The restaurant DETAIL page runs its own
+// select('*') query, and the default popularity path (get_rotated_restaurants)
+// strips the same heavy keys inside the RPC. `satisfies` validates names.
+const RESTAURANT_LIST_COLUMNS = [
+  "id",
+  "slug",
+  "name",
+  "description",
+  "cuisine",
+  "price_range",
+  "location",
+  "city",
+  "rating",
+  "image_url",
+  "phone",
+  "website",
+  "latitude",
+  "longitude",
+  "popularity_score",
+  "is_featured",
+  "is_sponsored",
+  "sponsored_until",
+  "status",
+  "opening",
+  "opening_date",
+  "opening_timeframe",
+  "created_at",
+  "updated_at",
+] satisfies readonly (keyof Restaurant)[];
+
+const RESTAURANT_LIST_SELECT = RESTAURANT_LIST_COLUMNS.join(", ");
+
 interface RestaurantsState {
   restaurants: Restaurant[];
   isLoading: boolean;
@@ -33,6 +68,13 @@ interface RestaurantFilters {
   dietary?: string[];
   limit?: number;
   offset?: number;
+  /**
+   * WEB-PERF-001: list payloads are column-projected to card fields by default
+   * (the rotation RPC strips the same heavy keys). Admin surfaces that need the
+   * heavy detail fields (ContentTable's SEO / AI-writeup / source columns) pass
+   * `fullColumns: true`, which forces the direct select('*') path.
+   */
+  fullColumns?: boolean;
 }
 
 export function useRestaurants(filters: RestaurantFilters = {}) {
@@ -55,7 +97,10 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
       const sortBy = filters.sortBy || "popularity";
       const useRotationRpc =
         sortBy === "popularity" &&
-        (!filters.dietary || filters.dietary.length === 0);
+        (!filters.dietary || filters.dietary.length === 0) &&
+        // The rotation RPC returns column-projected rows; admin callers that
+        // need the heavy detail fields force the direct select('*') path.
+        !filters.fullColumns;
 
       if (useRotationRpc) {
         const limit = filters.limit ?? 1000;
@@ -127,7 +172,9 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
       // path uses get_rotated_restaurants, which filters is_merged server-side.
       let query = supabase
         .from("restaurants")
-        .select("*", { count: "exact" })
+        .select(filters.fullColumns ? "*" : RESTAURANT_LIST_SELECT, {
+          count: "exact",
+        })
         .neq("is_merged", true); // Hide auto-merged duplicate losers (WEB-AUTO-005)
 
       // Use full-text search with tsvector for better performance and relevance ranking
@@ -234,7 +281,9 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
         );
       }
 
-      let { data, error, count } = await query;
+      // .returns<Restaurant[]>() keeps the full Row type for consumers even
+      // though the select string is a runtime-projected column list (no `any`).
+      let { data, error, count } = await query.returns<Restaurant[]>();
 
       if (error) {
         throw error;
@@ -289,6 +338,7 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
     filters.dietary,
     filters.limit,
     filters.offset,
+    filters.fullColumns,
   ]);
 
   const createRestaurant = async (restaurant: RestaurantInsert) => {

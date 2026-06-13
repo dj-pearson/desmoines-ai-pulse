@@ -1,6 +1,8 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
 import { Helmet } from "react-helmet-async";
 import { useEvents } from "@/hooks/useEvents";
+import { supabase } from "@/integrations/supabase/client";
 import { RatingSystem } from "@/components/RatingSystem";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -54,10 +56,40 @@ export default function EventDetails() {
   const navigate = useNavigate();
   const { events, isLoading } = useEvents();
 
-  const event = events.find((e) => {
+  // The list query is column-projected for payload efficiency (WEB-PERF-001),
+  // so it only carries card fields. Resolve the slug against the list to find
+  // the matched event, then fetch its FULL row so detail-only fields
+  // (seo_*, geo_*, ai_writeup, source_url, updated_at) render.
+  const listEvent = events.find((e) => {
     const eventSlug = createEventSlugWithCentralTime(e.title, e);
     return eventSlug === slug;
   });
+
+  const [fullEvent, setFullEvent] = useState<typeof listEvent>(undefined);
+
+  useEffect(() => {
+    const id = listEvent?.id;
+    if (!id) {
+      setFullEvent(undefined);
+      return;
+    }
+    let active = true;
+    supabase
+      .from("events")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (active && data) setFullEvent(data as typeof listEvent);
+      });
+    return () => {
+      active = false;
+    };
+  }, [listEvent?.id]);
+
+  // Render with the full row once loaded; fall back to the card-level row so
+  // the basics paint immediately without a second loading flash.
+  const event = fullEvent ?? listEvent;
 
   // Track page view and content interactions
   const { trackShare } = useContentTracking(event?.id, 'event');

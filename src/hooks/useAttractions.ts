@@ -9,6 +9,36 @@ type Attraction = Database["public"]["Tables"]["attractions"]["Row"];
 type AttractionInsert = Database["public"]["Tables"]["attractions"]["Insert"];
 type AttractionUpdate = Database["public"]["Tables"]["attractions"]["Update"];
 
+// WEB-PERF-001: list path fetches only card + admin-manager columns, not
+// select('*'). Heavy detail-only fields (seo_*, geo_summary/geo_key_facts/
+// geo_faq) are dropped from list payloads. The attraction DETAIL page runs its
+// own select('*') query. `satisfies` validates names against the Row type.
+const ATTRACTION_LIST_COLUMNS = [
+  "id",
+  "name",
+  "type",
+  "image_url",
+  "rating",
+  "location",
+  "description",
+  "is_featured",
+  "is_active",
+  "address",
+  "hours_summary",
+  "hours",
+  "is_indoor",
+  "is_kid_friendly",
+  "is_free",
+  "accessibility_notes",
+  "website",
+  "latitude",
+  "longitude",
+  "created_at",
+  "updated_at",
+] satisfies readonly (keyof Attraction)[];
+
+const ATTRACTION_LIST_SELECT = ATTRACTION_LIST_COLUMNS.join(", ");
+
 interface AttractionsState {
   attractions: Attraction[];
   isLoading: boolean;
@@ -32,6 +62,12 @@ interface AttractionFilters {
   sortBy?: "newest" | "updated" | "alphabetical" | "rating";
   limit?: number;
   offset?: number;
+  /**
+   * WEB-PERF-001: list payloads are column-projected to card + admin-manager
+   * fields by default. Surfaces needing the heavy detail fields (ContentTable's
+   * SEO column) pass `fullColumns: true` to select('*').
+   */
+  fullColumns?: boolean;
 }
 
 export function useAttractions(filters: AttractionFilters = {}) {
@@ -46,7 +82,11 @@ export function useAttractions(filters: AttractionFilters = {}) {
     try {
       setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
-      let query = supabase.from("attractions").select("*", { count: "exact" });
+      let query = supabase
+        .from("attractions")
+        .select(filters.fullColumns ? "*" : ATTRACTION_LIST_SELECT, {
+          count: "exact",
+        });
 
       // Default to active rows only; admin callers can pass false to see all.
       if (filters.activeOnly !== false) {
@@ -112,7 +152,9 @@ export function useAttractions(filters: AttractionFilters = {}) {
         );
       }
 
-      const { data, error, count } = await query;
+      // .returns<Attraction[]>() keeps the full Row type for consumers even
+      // though the select string is a runtime-projected column list (no `any`).
+      const { data, error, count } = await query.returns<Attraction[]>();
 
       if (error) {
         throw error;
@@ -200,6 +242,7 @@ export function useAttractions(filters: AttractionFilters = {}) {
     filters.sortBy,
     filters.limit,
     filters.offset,
+    filters.fullColumns,
   ]);
 
   return {
