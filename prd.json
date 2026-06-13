@@ -932,7 +932,8 @@
         "npm run validate passes (type-check + lint)"
       ],
       "priority": 51,
-      "passes": false
+      "passes": true,
+      "notes": "[DONE 2026-06-13] Dense mobile controls (EventsPage view-toggle/clear, Restaurants clear) now >=44px on mobile via responsive sizing, compact on desktop. Added aria-labels to all icon-only buttons missing an accessible name (user-facing + admin); verified 0 remain. Native buttons are keyboard-operable."
     },
     {
       "id": "WEB-UX-023",
