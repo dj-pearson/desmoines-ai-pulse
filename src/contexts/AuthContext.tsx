@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo, ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useCallback, useMemo, useSyncExternalStore, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { User, Session, AuthChangeEvent } from "@supabase/supabase-js";
 import { SecurityUtils } from "@/lib/securityUtils";
@@ -33,9 +33,54 @@ interface AuthActions {
 
 type AuthContextType = AuthState & AuthActions;
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
-const AuthStateContext = createContext<AuthState | undefined>(undefined);
+/**
+ * External store backing auth state (WEB-PERF-005).
+ *
+ * Auth state lives in a tiny external store instead of `useState`, so consumers
+ * can subscribe to *individual fields* via `useSyncExternalStore` selectors and
+ * re-render only when the field they read actually changes. Crucially, a
+ * `TOKEN_REFRESHED` tick (which only mutates `session`/`user`) no longer
+ * re-renders components that read just `isAuthenticated`/`isAdmin` (Header,
+ * BottomNav, gates). `setState` mirrors React's setter API (value or updater
+ * function) so the existing handler code is unchanged.
+ */
+interface AuthStore {
+  getState: () => AuthState;
+  setState: (updater: AuthState | ((prev: AuthState) => AuthState)) => void;
+  subscribe: (listener: () => void) => () => void;
+}
+
+function createAuthStore(initial: AuthState): AuthStore {
+  let state = initial;
+  const listeners = new Set<() => void>();
+  return {
+    getState: () => state,
+    setState: (updater) => {
+      const next =
+        typeof updater === "function"
+          ? (updater as (prev: AuthState) => AuthState)(state)
+          : updater;
+      if (Object.is(next, state)) return;
+      state = next;
+      listeners.forEach((listener) => listener());
+    },
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+  };
+}
+
+const AuthStoreContext = createContext<AuthStore | undefined>(undefined);
 const AuthActionsContext = createContext<AuthActions | undefined>(undefined);
+
+// Stable, module-scoped selectors so consumers never pass a fresh selector
+// identity into useSyncExternalStore.
+const selectIdentity = (state: AuthState): AuthState => state;
+const selectIsAuthenticated = (state: AuthState): boolean => state.isAuthenticated;
+const selectIsAdmin = (state: AuthState): boolean => state.isAdmin;
 
 // Cache for admin status
 const adminStatusCache = new Map<string, { isAdmin: boolean; timestamp: number }>();
@@ -111,16 +156,24 @@ async function checkServerLockout(
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [authState, setAuthState] = useState<AuthState>({
-    user: null,
-    session: null,
-    isLoading: true,
-    isAuthenticated: false,
-    isAdmin: false,
-    isAdminLoading: false,
-    requiresMFA: false,
-    mfaFactorId: null,
-  });
+  // Auth state lives in an external store (created once per provider) so the
+  // provider itself never re-renders on auth changes — only subscribed leaves do.
+  const storeRef = useRef<AuthStore>();
+  if (!storeRef.current) {
+    storeRef.current = createAuthStore({
+      user: null,
+      session: null,
+      isLoading: true,
+      isAuthenticated: false,
+      isAdmin: false,
+      isAdminLoading: false,
+      requiresMFA: false,
+      mfaFactorId: null,
+    });
+  }
+  const store = storeRef.current;
+  // Same signature as the old useState setter, so handler code is unchanged.
+  const setAuthState = store.setState;
 
   // Track if we're in the middle of a logout to prevent race conditions
   const isLoggingOutRef = useRef(false);
@@ -239,7 +292,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setAuthState(prev => ({ ...prev, isAdmin, isAdminLoading: false }));
       }
     }
-  }, [checkIsAdmin]);
+  }, [checkIsAdmin, setAuthState]);
 
   useEffect(() => {
     log.info('init', 'Initializing auth context');
@@ -302,7 +355,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       subscriptionRef.current = null;
       log.debug('cleanup', 'Auth context cleanup');
     };
-  }, [checkIsAdmin, handleAuthChange]);
+  }, [checkIsAdmin, handleAuthChange, setAuthState]);
 
   // Login with email/password (with attempt throttling)
   const login = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string; requiresMFA?: boolean; factorId?: string }> => {
@@ -370,7 +423,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const message = error instanceof Error ? error.message : "An unexpected error occurred";
       return { success: false, error: message };
     }
-  }, []);
+  }, [setAuthState]);
 
   // Signup with email/password
   const signup = useCallback(async (email: string, password: string, metadata?: Record<string, unknown>): Promise<{ success: boolean; error?: string; needsVerification?: boolean }> => {
@@ -481,7 +534,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setTimeout(() => {
       isLoggingOutRef.current = false;
     }, 500);
-  }, []);
+  }, [setAuthState]);
 
   // Refresh session manually - returns true if successful
   const refreshSession = useCallback(async (): Promise<boolean> => {
@@ -504,7 +557,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       log.error('refreshSession', 'Session refresh exception', { error });
       return false;
     }
-  }, []);
+  }, [setAuthState]);
 
   // Sign in with Google OAuth
   const signInWithGoogle = useCallback(async (redirectTo?: string): Promise<{ success: boolean; error?: string }> => {
@@ -641,16 +694,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Get session expiry timestamp (in seconds since epoch)
+  // Get session expiry timestamp (in seconds since epoch).
+  // Reads the store at call time so the action identity stays stable.
   const getSessionExpiresAt = useCallback((): number | null => {
-    return authState.session?.expires_at || null;
-  }, [authState.session]);
+    return store.getState().session?.expires_at || null;
+  }, [store]);
 
   const requireAdmin = useCallback(() => {
-    if (!authState.isAdmin) {
+    if (!store.getState().isAdmin) {
       throw new Error("Admin access required");
     }
-  }, [authState.isAdmin]);
+  }, [store]);
 
   const actions = useMemo<AuthActions>(() => ({
     login,
@@ -666,32 +720,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     getSessionExpiresAt,
   }), [login, signup, logout, requireAdmin, refreshSession, signInWithGoogle, signInWithApple, resetPassword, updatePassword, resendVerification, getSessionExpiresAt]);
 
-  const combined = useMemo<AuthContextType>(() => ({
-    ...authState,
-    ...actions,
-  }), [authState, actions]);
-
   return (
-    <AuthContext.Provider value={combined}>
-      <AuthStateContext.Provider value={authState}>
-        <AuthActionsContext.Provider value={actions}>
-          {children}
-        </AuthActionsContext.Provider>
-      </AuthStateContext.Provider>
-    </AuthContext.Provider>
+    <AuthStoreContext.Provider value={store}>
+      <AuthActionsContext.Provider value={actions}>
+        {children}
+      </AuthActionsContext.Provider>
+    </AuthStoreContext.Provider>
   );
 }
 
-/** Read-only auth state — components using this won't re-render when action references change */
-export function useAuthState(): AuthState {
-  const context = useContext(AuthStateContext);
-  if (context === undefined) {
-    throw new Error("useAuthState must be used within an AuthProvider");
+function useAuthStore(): AuthStore {
+  const store = useContext(AuthStoreContext);
+  if (store === undefined) {
+    throw new Error("useAuth* must be used within an AuthProvider");
   }
-  return context;
+  return store;
 }
 
-/** Auth actions only — components using this won't re-render on session/state changes */
+/**
+ * Subscribe to a slice of auth state. The component re-renders only when the
+ * selected value changes (compared with `isEqual`, default `Object.is`), so
+ * unrelated auth ticks (e.g. token refresh updating session/user) don't cause
+ * a render. Selector identity may change between renders — values are cached.
+ */
+export function useAuthSelector<T>(
+  selector: (state: AuthState) => T,
+  isEqual: (a: T, b: T) => boolean = Object.is,
+): T {
+  const store = useAuthStore();
+  const lastRef = useRef<{ value: T } | null>(null);
+  const getSnapshot = useCallback(() => {
+    const next = selector(store.getState());
+    const prev = lastRef.current;
+    if (prev && isEqual(prev.value, next)) {
+      return prev.value;
+    }
+    lastRef.current = { value: next };
+    return next;
+  }, [store, selector, isEqual]);
+  return useSyncExternalStore(store.subscribe, getSnapshot, getSnapshot);
+}
+
+/** Read-only auth state — re-renders on any state change (prefer a narrow selector). */
+export function useAuthState(): AuthState {
+  return useAuthSelector(selectIdentity);
+}
+
+/** Auth actions only — stable identities; components using this never re-render on state changes. */
 export function useAuthActions(): AuthActions {
   const context = useContext(AuthActionsContext);
   if (context === undefined) {
@@ -700,12 +775,24 @@ export function useAuthActions(): AuthActions {
   return context;
 }
 
-/** Combined auth state + actions (backward compatible) */
+/** Narrow selector: only re-renders when authentication status flips. */
+export function useIsAuthenticated(): boolean {
+  return useAuthSelector(selectIsAuthenticated);
+}
+
+/** Narrow selector: only re-renders when admin status flips. */
+export function useIsAdmin(): boolean {
+  return useAuthSelector(selectIsAdmin);
+}
+
+/**
+ * Combined auth state + actions (backward compatible).
+ * Re-renders on any state change — prefer `useAuthSelector`/`useAuthActions`
+ * (or the narrow `useIsAuthenticated`/`useIsAdmin`) in hot-path components.
+ */
 export function useAuth(): AuthContextType {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-  return context;
+  const state = useAuthState();
+  const actions = useAuthActions();
+  return useMemo<AuthContextType>(() => ({ ...state, ...actions }), [state, actions]);
 }
 

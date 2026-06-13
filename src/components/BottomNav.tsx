@@ -1,7 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import { Home, Calendar, UtensilsCrossed, Compass, User } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useAuth } from "@/hooks/useAuth";
+import { useIsAuthenticated } from "@/contexts/AuthContext";
 import { prefetchRoute } from "@/lib/prefetch";
 import { hapticTap } from "@/lib/capacitorUtils";
 
@@ -13,7 +13,8 @@ interface NavItem {
 }
 
 export default function BottomNav() {
-  const { isAuthenticated } = useAuth();
+  // Narrow selector: re-renders only when auth status flips (WEB-PERF-005).
+  const isAuthenticated = useIsAuthenticated();
   const location = useLocation();
 
   const navItems: NavItem[] = [

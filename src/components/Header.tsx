@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useAuth } from "@/hooks/useAuth";
+import { useIsAuthenticated, useIsAdmin, useAuthActions } from "@/contexts/AuthContext";
 import { useProfile } from "@/hooks/useProfile";
 import { useGamification } from "@/hooks/useGamification";
 import { useAccessibility } from "@/hooks/useAccessibility";
@@ -15,7 +15,11 @@ import { createLogger } from '@/lib/logger';
 const log = createLogger('Header');
 
 export default function Header() {
-  const { isAuthenticated, isAdmin, logout } = useAuth();
+  // Narrow selectors: Header re-renders only when auth/admin status flips,
+  // not on session-refresh ticks (WEB-PERF-005). Actions are stable.
+  const isAuthenticated = useIsAuthenticated();
+  const isAdmin = useIsAdmin();
+  const { logout } = useAuthActions();
   const { profile } = useProfile();
   const { userLevel, userXP } = useGamification();
   const { announceToScreenReader, useFocusRestore } = useAccessibility();
