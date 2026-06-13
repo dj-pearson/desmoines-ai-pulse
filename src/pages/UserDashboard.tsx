@@ -28,7 +28,8 @@ import {
   Zap,
   Upload,
   BarChart3,
-  DollarSign
+  DollarSign,
+  Bookmark
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserSubmittedEvents, useDeleteEvent } from "@/hooks/useUserSubmittedEvents";
@@ -39,6 +40,7 @@ import { PremiumBadge } from "@/components/PremiumBadge";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import EventSubmissionForm from "@/components/EventSubmissionForm";
 import { EmailPreferencesCard } from "@/components/EmailPreferencesCard";
+import { SavedSearchesCard } from "@/components/dashboard/SavedSearchesCard";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -157,6 +159,10 @@ export default function UserDashboard() {
               <TabsTrigger value="events" className="flex items-center gap-2">
                 <Calendar className="h-4 w-4" />
                 My Events
+              </TabsTrigger>
+              <TabsTrigger value="saved-searches" className="flex items-center gap-2">
+                <Bookmark className="h-4 w-4" />
+                Saved Searches
               </TabsTrigger>
               <TabsTrigger value="advertise" className="flex items-center gap-2">
                 <Megaphone className="h-4 w-4" />
@@ -450,6 +456,11 @@ export default function UserDashboard() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Saved Searches Tab */}
+          <TabsContent value="saved-searches">
+            <SavedSearchesCard />
           </TabsContent>
 
           {/* Advertise Tab */}

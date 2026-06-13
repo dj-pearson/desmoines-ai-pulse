@@ -52,6 +52,7 @@ import { EventInlineFilters } from "@/components/EventInlineFilters";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { SearchAutocomplete, addRecentSearch } from "@/components/SearchAutocomplete";
+import { SaveSearchButton } from "@/components/SaveSearchButton";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
 import { getStringParam, getNumberParam } from "@/lib/urlParams";
 
@@ -799,6 +800,12 @@ export default function EventsPage() {
                   )}
                   {isLoadingLocation ? 'Locating...' : isNearMeActive ? 'Near Me' : 'Near Me'}
                 </Button>
+
+                <SaveSearchButton
+                  tab="events"
+                  query={searchQuery}
+                  className="rounded-full bg-white/10 hover:bg-white/20 text-white border-white/10"
+                />
 
                 <div className="flex items-center rounded-full bg-white/10 p-0.5">
                   <Button

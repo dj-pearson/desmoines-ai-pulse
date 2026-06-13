@@ -42,6 +42,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { StickyFilterBar } from "@/components/ui/sticky-filter-bar";
 import { ActiveFilterChips, type FilterChip } from "@/components/ui/active-filter-chips";
+import { SaveSearchButton } from "@/components/SaveSearchButton";
 import { FAQSection } from "@/components/FAQSection";
 import { BackToTop } from "@/components/BackToTop";
 import { useAnnounce } from "@/hooks/use-announce";
@@ -644,6 +645,13 @@ export default function Restaurants() {
                     </span>
                   )}
                 </p>
+
+                <SaveSearchButton
+                  tab="restaurants"
+                  query={filters.search}
+                  variant="outline"
+                  className="rounded-xl"
+                />
               </div>
             </div>
 
