@@ -22,7 +22,7 @@
 
 import { execSync, spawn } from 'node:child_process';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -145,7 +145,21 @@ async function runIteration() {
       // claude --dangerously-skip-permissions --print < CLAUDE.md
       cmdBin = 'claude';
       cmdArgs = ['--dangerously-skip-permissions', '--print'];
-      input   = existsSync(CLAUDE_MD) ? readFileSync(CLAUDE_MD, 'utf8') : '';
+      const instructions = existsSync(CLAUDE_MD) ? readFileSync(CLAUDE_MD, 'utf8') : '';
+      // Tell the agent which PRD the runner actually resolved, so its
+      // instructions don't hardcode a stale path (root vs scripts/ralph
+      // vs --prd override).  Paths are relative to the agent's cwd.
+      const prdRel      = relative(process.cwd(), PRD_FILE).replace(/\\/g, '/');
+      const progressRel = relative(process.cwd(), PROGRESS_FILE).replace(/\\/g, '/');
+      const runtimeHeader = [
+        '# Ralph Runtime Paths (resolved by the runner — use THESE, ignore any hardcoded path below)',
+        `- PRD file (read stories from here AND write \`passes: true\` here): \`${prdRel}\``,
+        `- Progress log (append here): \`${progressRel}\``,
+        '',
+        '---',
+        '',
+      ].join('\n');
+      input = runtimeHeader + instructions;
     } else {
       // amp --dangerously-allow-all < prompt.md
       cmdBin = 'amp';

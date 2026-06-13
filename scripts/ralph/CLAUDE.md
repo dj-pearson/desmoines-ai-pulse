@@ -4,16 +4,16 @@ You are an autonomous coding agent working on the **Des Moines Insider** project
 
 ## Your Task
 
-1. Read the PRD at `scripts/ralph/prd.json`
-2. Read the progress log at `scripts/ralph/progress.txt` (check Codebase Patterns section first)
+1. Read the PRD at the **PRD file path given in the "Ralph Runtime Paths" header at the top of this prompt** (it may be the repo-root `prd.json`, not `scripts/ralph/prd.json`)
+2. Read the progress log at the **Progress log path** from that same header (check Codebase Patterns section first)
 3. Check you're on the correct branch from PRD `branchName`. If not, check it out or create from main.
 4. Pick the **highest priority** user story where `passes: false`
 5. Implement that single user story
 6. Run quality checks: `npm run type-check && npm run lint`
 7. Update CLAUDE.md files if you discover reusable patterns (see below)
 8. If checks pass, commit ALL changes with message: `feat: [Story ID] - [Story Title]`
-9. Update `scripts/ralph/prd.json` to set `passes: true` for the completed story
-10. Append your progress to `scripts/ralph/progress.txt`
+9. Update the **PRD file** (path from the runtime header) to set `passes: true` for the completed story
+10. Append your progress to the **Progress log** (path from the runtime header)
 
 ## Project Context
 
