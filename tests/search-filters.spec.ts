@@ -394,6 +394,57 @@ test.describe('Search URL Parameters', () => {
   });
 });
 
+test.describe('URL-Synced Filter State (WEB-UX-001)', () => {
+  const searchSelector =
+    'input[type="search"], input[placeholder*="search" i], input[aria-label*="search" i]';
+
+  test('events: filters from a shared URL are applied on mount', async ({ page }) => {
+    await page.goto('/events?q=jazz', { waitUntil: 'networkidle' });
+
+    const searchInput = page.locator(searchSelector).first();
+    await expect(searchInput).toHaveValue(/jazz/i);
+
+    // The shared param must not be stripped on mount.
+    expect(page.url()).toContain('q=jazz');
+  });
+
+  test('events: typing a search is reflected in the URL (debounced)', async ({ page }) => {
+    await page.goto('/events', { waitUntil: 'networkidle' });
+
+    const searchInput = page.locator(searchSelector).first();
+    await searchInput.fill('music');
+
+    // Debounced write — give it a generous window.
+    await expect.poll(() => page.url(), { timeout: 5000 }).toContain('q=music');
+  });
+
+  test('events: filter state survives navigating away and back', async ({ page }) => {
+    await page.goto('/events?q=music', { waitUntil: 'networkidle' });
+    await expect(page.locator(searchSelector).first()).toHaveValue(/music/i);
+
+    // Simulate opening a detail page then returning via the browser back button.
+    await page.goto('/restaurants', { waitUntil: 'networkidle' });
+    await page.goBack({ waitUntil: 'networkidle' });
+
+    expect(page.url()).toContain('q=music');
+    await expect(page.locator(searchSelector).first()).toHaveValue(/music/i);
+  });
+
+  test('restaurants: search + sort from a shared URL apply on mount', async ({ page }) => {
+    await page.goto('/restaurants?q=pizza&sort=rating', { waitUntil: 'networkidle' });
+
+    await expect(page.locator(searchSelector).first()).toHaveValue(/pizza/i);
+    expect(page.url()).toContain('sort=rating');
+  });
+
+  test('attractions: search from a shared URL applies on mount', async ({ page }) => {
+    await page.goto('/attractions?q=museum', { waitUntil: 'networkidle' });
+
+    await expect(page.locator(searchSelector).first()).toHaveValue(/museum/i);
+    expect(page.url()).toContain('q=museum');
+  });
+});
+
 test.describe('Search Accessibility', () => {
   test('search input should have proper ARIA attributes', async ({ page }) => {
     await page.goto('/events', { waitUntil: 'networkidle' });

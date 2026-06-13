@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { AdBanner } from "@/components/AdBanner";
@@ -64,6 +64,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useUrlFilters } from "@/hooks/useUrlFilters";
+import {
+  getStringParam,
+  getArrayParam,
+  getBoolParam,
+  getNumberParam,
+} from "@/lib/urlParams";
 
 // Lazy load map component to prevent react-leaflet bundling issues
 const RestaurantsMap = lazy(() => import("@/components/RestaurantsMap"));
@@ -78,27 +85,45 @@ const sortOptions = [
   { value: "price_high", label: "Price: High-Low", icon: DollarSign },
 ];
 
+// Parse filters out of the URL so shared links / back-navigation restore the
+// view (WEB-UX-001). Mirror of the `managed` map in the Restaurants component.
+function parseRestaurantFilters(params: URLSearchParams): RestaurantFilterOptions {
+  let rating: [number, number] = [0, 5];
+  const ratingStr = params.get("rating");
+  if (ratingStr) {
+    const [min, max] = ratingStr.split("-").map(Number);
+    if (Number.isFinite(min) && Number.isFinite(max)) rating = [min, max];
+  }
+  return {
+    search: getStringParam(params, "q"),
+    cuisine: getArrayParam(params, "cuisine"),
+    priceRange: getArrayParam(params, "price"),
+    rating,
+    location: getArrayParam(params, "location"),
+    sortBy: getStringParam(params, "sort", "popularity") as RestaurantFilterOptions["sortBy"],
+    featuredOnly: getBoolParam(params, "featured"),
+    openNow: getBoolParam(params, "openNow"),
+    tags: getArrayParam(params, "tags"),
+  };
+}
+
 export default function Restaurants() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const [filters, setFilters] = useState<RestaurantFilterOptions>({
-    search: "",
-    cuisine: [],
-    priceRange: [],
-    rating: [0, 5],
-    location: [],
-    sortBy: "popularity",
-    featuredOnly: false,
-    openNow: false,
-    tags: [],
-  });
-  const [viewMode, setViewMode] = useState<"list" | "map">("list");
-  const [searchInput, setSearchInput] = useState("");
+  // Filters initialize from the URL (shareable + back-nav restore, WEB-UX-001).
+  const [searchParams] = useSearchParams();
+  const [filters, setFilters] = useState<RestaurantFilterOptions>(() =>
+    parseRestaurantFilters(searchParams),
+  );
+  const [viewMode, setViewMode] = useState<"list" | "map">(() =>
+    getStringParam(searchParams, "view", "list") === "map" ? "map" : "list",
+  );
+  const [searchInput, setSearchInput] = useState(() => getStringParam(searchParams, "q"));
   const { toast } = useToast();
 
   const ITEMS_PER_PAGE = 30;
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(() => getNumberParam(searchParams, "page", 1));
 
   const { restaurants, isLoading, error, totalCount, refetch } = useRestaurants(filters);
   const filterOptions = useRestaurantFilterOptions();
@@ -127,8 +152,14 @@ export default function Restaurants() {
     ? page * ITEMS_PER_PAGE < restaurants.length
     : page < totalPages;
 
-  // Reset page when filters change
+  // Reset page when filters change — but not on the first render, so a
+  // deep-linked ?page=N from the URL survives mount (WEB-UX-001).
+  const isFirstFilterChange = useRef(true);
   useEffect(() => {
+    if (isFirstFilterChange.current) {
+      isFirstFilterChange.current = false;
+      return;
+    }
     setPage(1);
   }, [filters]);
 
@@ -141,6 +172,33 @@ export default function Restaurants() {
     }, 300);
     return () => clearTimeout(timer);
   }, [searchInput, filters.search]);
+
+  // Keep the URL in sync with the active filters (shareable + back-nav restore).
+  useUrlFilters({
+    managed: {
+      q: filters.search,
+      cuisine: filters.cuisine,
+      price: filters.priceRange,
+      location: filters.location,
+      tags: filters.tags,
+      rating:
+        filters.rating[0] !== 0 || filters.rating[1] !== 5
+          ? `${filters.rating[0]}-${filters.rating[1]}`
+          : undefined,
+      sort: filters.sortBy !== "popularity" ? filters.sortBy : undefined,
+      featured: filters.featuredOnly || undefined,
+      openNow: filters.openNow || undefined,
+      view: viewMode !== "list" ? viewMode : undefined,
+      page: page > 1 ? page : undefined,
+    },
+    apply: (params) => {
+      const parsed = parseRestaurantFilters(params);
+      setFilters(parsed);
+      setSearchInput(parsed.search);
+      setViewMode(getStringParam(params, "view", "list") === "map" ? "map" : "list");
+      setPage(getNumberParam(params, "page", 1));
+    },
+  });
 
   // Announce result count to screen readers
   useEffect(() => {
@@ -749,7 +807,6 @@ export default function Restaurants() {
                       key={cuisine}
                       onClick={() => {
                         setFilters((prev) => ({ ...prev, cuisine: [cuisine] }));
-                        setActiveCuisineQuick('');
                         document.getElementById('all-restaurants-heading')?.scrollIntoView({ behavior: 'smooth' });
                       }}
                       className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border border-gray-200 dark:border-gray-700 bg-white dark:bg-card text-gray-700 dark:text-gray-300 hover:border-[#2D1B69] dark:hover:border-primary hover:bg-[#2D1B69]/5 dark:hover:bg-primary/10 transition-all duration-200 shadow-sm"

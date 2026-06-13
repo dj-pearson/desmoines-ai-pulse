@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, lazy, Suspense, useRef, useMemo } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -51,6 +51,8 @@ import { EventInlineFilters } from "@/components/EventInlineFilters";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { SearchAutocomplete, addRecentSearch } from "@/components/SearchAutocomplete";
+import { useUrlFilters } from "@/hooks/useUrlFilters";
+import { getStringParam, getNumberParam } from "@/lib/urlParams";
 
 // Lazy load heavy map component (includes Leaflet library ~150KB)
 const EventsMap = lazy(() => import("@/components/EventsMap"));
@@ -90,6 +92,41 @@ const DATE_PRESETS = [
   { key: "this-week", label: "This Week", icon: Calendar },
 ] as const;
 
+type EventDateFilter = {
+  start?: Date;
+  end?: Date;
+  mode: "single" | "range" | "preset";
+  preset?: string;
+};
+
+// Build the dateFilter for one of the quick presets. Shared by the preset
+// handler and the URL-restore path (WEB-UX-001) so they stay in sync.
+function buildPresetDateFilter(preset: string): EventDateFilter | null {
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  switch (preset) {
+    case "today":
+      return { mode: "preset", preset: "today", start: today, end: today };
+    case "tomorrow":
+      return { mode: "preset", preset: "tomorrow", start: tomorrow, end: tomorrow };
+    case "this-weekend": {
+      const saturday = new Date(today);
+      saturday.setDate(today.getDate() + (6 - today.getDay()));
+      const sunday = new Date(saturday);
+      sunday.setDate(saturday.getDate() + 1);
+      return { mode: "preset", preset: "this-weekend", start: saturday, end: sunday };
+    }
+    case "this-week": {
+      const endOfWeek = new Date(today);
+      endOfWeek.setDate(today.getDate() + (6 - today.getDay()));
+      return { mode: "preset", preset: "this-week", start: today, end: endOfWeek };
+    }
+    default:
+      return null;
+  }
+}
+
 
 export default function EventsPage() {
   const navigate = useNavigate();
@@ -99,21 +136,24 @@ export default function EventsPage() {
     navigate(`/events/${createEventSlugWithCentralTime(event.title, event as any)}`);
   }, [navigate]);
 
-  const [searchQuery, setSearchQuery] = useState("");
-  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("all");
-  const [dateFilter, setDateFilter] = useState<{
-    start?: Date;
-    end?: Date;
-    mode: "single" | "range" | "preset";
-    preset?: string;
-  } | null>(null);
-  const [activeDatePreset, setActiveDatePreset] = useState<string | null>(null);
-  const [location, setLocation] = useState("any-location");
-  const [priceRange, setPriceRange] = useState("any-price");
-  const [viewMode, setViewMode] = useState("list");
-  const [sortBy, setSortBy] = useState("date_asc");
-  const [page, setPage] = useState(1);
+  // Filters initialize from the URL so shared links and back-navigation land
+  // with the view restored (WEB-UX-001).
+  const [searchParams] = useSearchParams();
+  const initialDatePreset = searchParams.get("date");
+  const [searchQuery, setSearchQuery] = useState(() => getStringParam(searchParams, "q"));
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(() => getStringParam(searchParams, "q"));
+  const [selectedCategory, setSelectedCategory] = useState(() => getStringParam(searchParams, "category", "all"));
+  const [dateFilter, setDateFilter] = useState<EventDateFilter | null>(() =>
+    initialDatePreset ? buildPresetDateFilter(initialDatePreset) : null,
+  );
+  const [activeDatePreset, setActiveDatePreset] = useState<string | null>(() =>
+    initialDatePreset && buildPresetDateFilter(initialDatePreset) ? initialDatePreset : null,
+  );
+  const [location, setLocation] = useState(() => getStringParam(searchParams, "location", "any-location"));
+  const [priceRange, setPriceRange] = useState(() => getStringParam(searchParams, "price", "any-price"));
+  const [viewMode, setViewMode] = useState(() => getStringParam(searchParams, "view", "list"));
+  const [sortBy, setSortBy] = useState(() => getStringParam(searchParams, "sort", "date_asc"));
+  const [page, setPage] = useState(() => getNumberParam(searchParams, "page", 1));
   const EVENTS_PER_PAGE = 30;
   const { toast } = useToast();
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -132,7 +172,6 @@ export default function EventsPage() {
     setLocation("any-location");
     setPriceRange("any-price");
     setIsNearMeActive(false);
-    setShowMobileFilters(false);
     toast({
       title: "Filters Cleared",
       description: "All filters have been reset",
@@ -166,33 +205,37 @@ export default function EventsPage() {
       return;
     }
     setActiveDatePreset(preset);
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(today.getDate() + 1);
-
-    switch (preset) {
-      case "today":
-        setDateFilter({ mode: "preset", preset: "today", start: today, end: today });
-        break;
-      case "tomorrow":
-        setDateFilter({ mode: "preset", preset: "tomorrow", start: tomorrow, end: tomorrow });
-        break;
-      case "this-weekend": {
-        const saturday = new Date(today);
-        saturday.setDate(today.getDate() + (6 - today.getDay()));
-        const sunday = new Date(saturday);
-        sunday.setDate(saturday.getDate() + 1);
-        setDateFilter({ mode: "preset", preset: "this-weekend", start: saturday, end: sunday });
-        break;
-      }
-      case "this-week": {
-        const endOfWeek = new Date(today);
-        endOfWeek.setDate(today.getDate() + (6 - today.getDay()));
-        setDateFilter({ mode: "preset", preset: "this-week", start: today, end: endOfWeek });
-        break;
-      }
-    }
+    setDateFilter(buildPresetDateFilter(preset));
   };
+
+  // Keep the URL in sync with the active filters (shareable + back-nav restore).
+  useUrlFilters({
+    managed: {
+      q: debouncedSearchQuery,
+      category: selectedCategory !== "all" ? selectedCategory : undefined,
+      date: activeDatePreset ?? (dateFilter?.mode === "preset" ? dateFilter.preset : undefined),
+      location: location !== "any-location" ? location : undefined,
+      price: priceRange !== "any-price" ? priceRange : undefined,
+      sort: sortBy !== "date_asc" ? sortBy : undefined,
+      view: viewMode !== "list" ? viewMode : undefined,
+      page: page > 1 ? page : undefined,
+    },
+    apply: (params) => {
+      const q = getStringParam(params, "q");
+      setSearchQuery(q);
+      setDebouncedSearchQuery(q);
+      setSelectedCategory(getStringParam(params, "category", "all"));
+      setLocation(getStringParam(params, "location", "any-location"));
+      setPriceRange(getStringParam(params, "price", "any-price"));
+      setSortBy(getStringParam(params, "sort", "date_asc"));
+      setViewMode(getStringParam(params, "view", "list"));
+      setPage(getNumberParam(params, "page", 1));
+      const preset = params.get("date");
+      const presetFilter = preset ? buildPresetDateFilter(preset) : null;
+      setActiveDatePreset(presetFilter ? preset : null);
+      setDateFilter(presetFilter);
+    },
+  });
 
   const { data: eventsData, isLoading, error, refetch } = useQuery({
     queryKey: [
@@ -370,7 +413,13 @@ export default function EventsPage() {
     return (rawEvents || []).filter((e: any) => e.is_featured).slice(0, 3);
   }, [rawEvents]);
 
-  useEffect(() => { setPage(1); }, [debouncedSearchQuery, selectedCategory, dateFilter, location, priceRange]);
+  // Reset to page 1 when filters change — but not on the first render, so a
+  // deep-linked ?page=N from the URL survives mount (WEB-UX-001).
+  const isFirstFilterChange = useRef(true);
+  useEffect(() => {
+    if (isFirstFilterChange.current) { isFirstFilterChange.current = false; return; }
+    setPage(1);
+  }, [debouncedSearchQuery, selectedCategory, dateFilter, location, priceRange]);
 
   // Announce result count to screen readers after search/filter changes
   useEffect(() => {

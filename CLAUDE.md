@@ -348,6 +348,7 @@ Pre-deploy: `npm run validate && npm test && npm run build`. Rollback via Cloudf
 | Errors | `@/lib/errorHandler` |
 | Storage | `@/lib/safeStorage` |
 | API | Supabase client or Edge Functions |
+| URL-synced list filters | `useUrlFilters` (`@/hooks/useUrlFilters`) + `@/lib/urlParams` — lazy-init state from `useSearchParams()`, pass a `managed` map + mirror `apply` |
 
 ## Key Files
 

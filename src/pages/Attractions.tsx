@@ -32,7 +32,7 @@ import { CardsGridSkeleton } from "@/components/ui/loading-skeleton";
 import { MapPin, Star, Filter, List, Map, SlidersHorizontal, Landmark, ChevronRight, SearchX, X, AlertCircle, ChevronDown, Shuffle } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SortDropdown, ATTRACTION_SORT_OPTIONS } from "@/components/SortDropdown";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Pagination,
   PaginationContent,
@@ -54,6 +54,8 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { useUrlFilters } from "@/hooks/useUrlFilters";
+import { getStringParam, getNumberParam } from "@/lib/urlParams";
 
 // Lazy load map to prevent react-leaflet bundling issues
 const AttractionsMap = lazy(() => import("@/components/AttractionsMap"));
@@ -73,18 +75,20 @@ export default function Attractions() {
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const prefetchAttraction = usePrefetchAttraction();
-  // Filter states
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedType, setSelectedType] = useState("all");
-  const [minRating, setMinRating] = useState("any-rating");
+  // Filter states — initialize from the URL (shareable + back-nav restore,
+  // WEB-UX-001).
+  const [searchParams] = useSearchParams();
+  const [searchQuery, setSearchQuery] = useState(() => getStringParam(searchParams, "q"));
+  const [selectedType, setSelectedType] = useState(() => getStringParam(searchParams, "type", "all"));
+  const [minRating, setMinRating] = useState(() => getStringParam(searchParams, "rating", "any-rating"));
   const [showFilters, setShowFilters] = useState(true); // Show filters by default
   const [showMobileFilters, setShowMobileFilters] = useState(false);
-  const [featuredOnly, setFeaturedOnly] = useState("all");
-  const [sortBy, setSortBy] = useState("rating");
-  const [viewMode, setViewMode] = useState('list');
+  const [featuredOnly, setFeaturedOnly] = useState(() => getStringParam(searchParams, "featured", "all"));
+  const [sortBy, setSortBy] = useState(() => getStringParam(searchParams, "sort", "rating"));
+  const [viewMode, setViewMode] = useState(() => getStringParam(searchParams, "view", "list"));
 
   const ITEMS_PER_PAGE = 30;
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(() => getNumberParam(searchParams, "page", 1));
 
   // Get all attractions first
   const { attractions: allAttractions, isLoading, error } = useAttractions({});
@@ -171,10 +175,38 @@ export default function Attractions() {
     ? page * ITEMS_PER_PAGE < sortedAttractions.length
     : page < totalPages;
 
-  // Reset page when filters change
+  // Reset page when filters change — but not on the first render, so a
+  // deep-linked ?page=N from the URL survives mount (WEB-UX-001).
+  const isFirstFilterChange = useRef(true);
   useEffect(() => {
+    if (isFirstFilterChange.current) {
+      isFirstFilterChange.current = false;
+      return;
+    }
     setPage(1);
   }, [searchQuery, selectedType, minRating, featuredOnly, sortBy]);
+
+  // Keep the URL in sync with the active filters (shareable + back-nav restore).
+  useUrlFilters({
+    managed: {
+      q: searchQuery,
+      type: selectedType !== "all" ? selectedType : undefined,
+      rating: minRating !== "any-rating" ? minRating : undefined,
+      featured: featuredOnly !== "all" ? featuredOnly : undefined,
+      sort: sortBy !== "rating" ? sortBy : undefined,
+      view: viewMode !== "list" ? viewMode : undefined,
+      page: page > 1 ? page : undefined,
+    },
+    apply: (params) => {
+      setSearchQuery(getStringParam(params, "q"));
+      setSelectedType(getStringParam(params, "type", "all"));
+      setMinRating(getStringParam(params, "rating", "any-rating"));
+      setFeaturedOnly(getStringParam(params, "featured", "all"));
+      setSortBy(getStringParam(params, "sort", "rating"));
+      setViewMode(getStringParam(params, "view", "list"));
+      setPage(getNumberParam(params, "page", 1));
+    },
+  });
 
   // Announce result count to screen readers
   useEffect(() => {
