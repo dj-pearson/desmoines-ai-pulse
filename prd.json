@@ -727,7 +727,8 @@
         "npm run validate passes (type-check + lint)"
       ],
       "priority": 36,
-      "passes": false
+      "passes": true,
+      "notes": "[DONE 2026-06-13] Added lazy /events/near-me route (App.tsx); surfaced in Events header nav group + mobile nav links, a BottomNav slot, and home hero QuickActions (desktop+mobile). Geolocation explicit-action-only; fixed async permission-denied handling with toast + fallback banner linking to /events. Map view uses lazy EventsMap. Reuses useProximitySearch / search_events_near_location RPC. Also fixed a pre-existing syntax error in VideoPlayer.tsx that was blocking lint."
     },
     {
       "id": "WEB-UX-008",
