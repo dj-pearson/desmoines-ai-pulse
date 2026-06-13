@@ -289,7 +289,7 @@ export function VideoPlayer({
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-    [togglePlay, toggleMute, toggleFullscreen, toggleCaptions, toggleAudioDesc, skip, handleVolumeChange, volume]
+  }, [togglePlay, toggleMute, toggleFullscreen, toggleCaptions, toggleAudioDesc, skip, handleVolumeChange, volume]);
 
   // Video event handlers
   useEffect(() => {
