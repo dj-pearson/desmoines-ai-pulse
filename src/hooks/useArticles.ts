@@ -24,6 +24,9 @@ export interface Article {
   created_at: string;
   updated_at: string;
   generated_from_suggestion_id?: string;
+  is_auto_published?: boolean;
+  quality_score?: number | null;
+  pipeline_reasons?: string[] | null;
 }
 
 export interface CreateArticleData {

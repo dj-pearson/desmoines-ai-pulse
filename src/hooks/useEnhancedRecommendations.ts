@@ -44,6 +44,7 @@ export function useEnhancedRecommendations(
           .from('events')
           .select('*')
           .gte('date', new Date().toISOString().split('T')[0])
+          .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
           .order('date', { ascending: true })
           .limit(100); // Fetch more to filter
 

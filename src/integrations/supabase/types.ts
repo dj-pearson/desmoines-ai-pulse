@@ -633,7 +633,10 @@ export type Database = {
           featured_image_url: string | null
           generated_from_suggestion_id: string | null
           id: string
+          is_auto_published: boolean
+          pipeline_reasons: string[] | null
           published_at: string | null
+          quality_score: number | null
           seo_description: string | null
           seo_keywords: string[] | null
           seo_title: string | null
@@ -653,7 +656,10 @@ export type Database = {
           featured_image_url?: string | null
           generated_from_suggestion_id?: string | null
           id?: string
+          is_auto_published?: boolean
+          pipeline_reasons?: string[] | null
           published_at?: string | null
+          quality_score?: number | null
           seo_description?: string | null
           seo_keywords?: string[] | null
           seo_title?: string | null
@@ -673,7 +679,10 @@ export type Database = {
           featured_image_url?: string | null
           generated_from_suggestion_id?: string | null
           id?: string
+          is_auto_published?: boolean
+          pipeline_reasons?: string[] | null
           published_at?: string | null
+          quality_score?: number | null
           seo_description?: string | null
           seo_keywords?: string[] | null
           seo_title?: string | null
@@ -2826,16 +2835,21 @@ export type Database = {
           geo_key_facts: string[] | null
           geo_summary: string | null
           geom: unknown
+          hidden_at: string | null
           id: string
           image_url: string | null
           instance_date: string | null
           is_enhanced: boolean | null
           is_featured: boolean | null
+          is_hidden: boolean | null
+          is_merged: boolean | null
           is_recurring: boolean | null
           is_recurring_instance: boolean | null
           latitude: number | null
           location: string
           longitude: number | null
+          merged_at: string | null
+          merged_into: string | null
           original_description: string | null
           price: string | null
           recurrence_end_date: string | null
@@ -2868,11 +2882,13 @@ export type Database = {
           geo_key_facts?: string[] | null
           geo_summary?: string | null
           geom?: unknown
+          hidden_at?: string | null
           id?: string
           image_url?: string | null
           instance_date?: string | null
           is_enhanced?: boolean | null
           is_featured?: boolean | null
+          is_hidden?: boolean | null
           is_recurring?: boolean | null
           is_recurring_instance?: boolean | null
           latitude?: number | null
@@ -2910,11 +2926,13 @@ export type Database = {
           geo_key_facts?: string[] | null
           geo_summary?: string | null
           geom?: unknown
+          hidden_at?: string | null
           id?: string
           image_url?: string | null
           instance_date?: string | null
           is_enhanced?: boolean | null
           is_featured?: boolean | null
+          is_hidden?: boolean | null
           is_recurring?: boolean | null
           is_recurring_instance?: boolean | null
           latitude?: number | null
@@ -4060,11 +4078,14 @@ export type Database = {
           id: string
           image_url: string | null
           is_featured: boolean | null
+          is_merged: boolean | null
           is_sponsored: boolean
           sponsored_until: string | null
           latitude: number | null
           location: string | null
           longitude: number | null
+          merged_at: string | null
+          merged_into: string | null
           name: string
           opening: string | null
           opening_date: string | null

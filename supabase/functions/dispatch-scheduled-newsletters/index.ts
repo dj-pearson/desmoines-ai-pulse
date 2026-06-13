@@ -20,6 +20,7 @@
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { runJob } from "../_shared/jobRunner.ts";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const FROM_ADDRESS =
@@ -185,6 +186,9 @@ serve(async (req) => {
 
     const campaigns = (claimed ?? []) as CampaignRow[];
     if (campaigns.length === 0) {
+      // Nothing due. Return without opening a job-run row — this cron fires
+      // every minute, so logging a run each time would flood the Job Health
+      // panel. A run is only recorded when a batch is actually dispatched.
       return new Response(
         JSON.stringify({ ok: true, dispatched: 0 }),
         {
@@ -194,67 +198,76 @@ serve(async (req) => {
       );
     }
 
-    let totalDelivered = 0;
-    let totalFailed = 0;
-    const perCampaign: Array<{
-      id: string;
-      delivered: number;
-      failed: number;
-      status: "sent" | "failed";
-    }> = [];
+    // WEB-AUTO-008: record the send results (delivered/failed per campaign)
+    // through the WEB-AUTO-001 jobRunner so they surface in the admin Job
+    // Health panel and a terminal failure alerts the admin.
+    const job = await runJob("dispatch-scheduled-newsletters", async (ctx) => {
+      let totalDelivered = 0;
+      let totalFailed = 0;
+      const perCampaign: Array<{
+        id: string;
+        delivered: number;
+        failed: number;
+        status: "sent" | "failed";
+      }> = [];
 
-    for (const campaign of campaigns) {
-      try {
-        const { delivered, failed, errors } = await dispatchCampaign(
-          supabase,
-          campaign,
-        );
-        totalDelivered += delivered;
-        totalFailed += failed;
+      for (const campaign of campaigns) {
+        try {
+          const { delivered, failed, errors } = await dispatchCampaign(
+            supabase,
+            campaign,
+          );
+          totalDelivered += delivered;
+          totalFailed += failed;
 
-        const status = delivered > 0 || failed === 0 ? "sent" : "failed";
-        await supabase
-          .from("newsletter_campaigns")
-          .update({
-            status,
-            sent_at: new Date().toISOString(),
-            delivered,
-            failed,
-            error_message: errors.length > 0
-              ? errors.join(" | ").slice(0, 500)
-              : null,
-          })
-          .eq("id", campaign.id);
+          const status = delivered > 0 || failed === 0 ? "sent" : "failed";
+          await supabase
+            .from("newsletter_campaigns")
+            .update({
+              status,
+              sent_at: new Date().toISOString(),
+              delivered,
+              failed,
+              error_message: errors.length > 0
+                ? errors.join(" | ").slice(0, 500)
+                : null,
+            })
+            .eq("id", campaign.id);
 
-        perCampaign.push({ id: campaign.id, delivered, failed, status });
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : String(err);
-        console.error(`Campaign ${campaign.id} dispatch error:`, message);
-        await supabase
-          .from("newsletter_campaigns")
-          .update({
+          perCampaign.push({ id: campaign.id, delivered, failed, status });
+        } catch (err) {
+          const message =
+            err instanceof Error ? err.message : String(err);
+          console.error(`Campaign ${campaign.id} dispatch error:`, message);
+          await supabase
+            .from("newsletter_campaigns")
+            .update({
+              status: "failed",
+              error_message: message.slice(0, 500),
+            })
+            .eq("id", campaign.id);
+          perCampaign.push({
+            id: campaign.id,
+            delivered: 0,
+            failed: 0,
             status: "failed",
-            error_message: message.slice(0, 500),
-          })
-          .eq("id", campaign.id);
-        perCampaign.push({
-          id: campaign.id,
-          delivered: 0,
-          failed: 0,
-          status: "failed",
-        });
+          });
+        }
       }
-    }
 
-    return new Response(
-      JSON.stringify({
-        ok: true,
+      ctx.processed(totalDelivered);
+      ctx.failed(totalFailed);
+      ctx.meta({ dispatched: campaigns.length, per_campaign: perCampaign });
+      return {
         dispatched: campaigns.length,
         delivered: totalDelivered,
         failed: totalFailed,
         per_campaign: perCampaign,
-      }),
+      };
+    }, { maxAttempts: 1 });
+
+    return new Response(
+      JSON.stringify({ ok: job.ok, ...(job.result ?? {}) }),
       {
         status: 200,
         headers: { "Content-Type": "application/json" },

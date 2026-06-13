@@ -56,7 +56,8 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
         const { data, error } = await supabase
           .from("events")
           .select("category")
-          .gte("date", new Date().toISOString().split("T")[0]);
+          .gte("date", new Date().toISOString().split("T")[0])
+          .neq("is_hidden", true); // Exclude soft-hidden stale events (WEB-AUTO-006)
 
         if (error) throw error;
         const uniqueCategories = [

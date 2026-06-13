@@ -172,6 +172,7 @@ async function fetchListings(
       .from('events')
       .select('id, title, description, location, date, price, category, image_url')
       .gte('date', new Date().toISOString())
+      .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
       .order('date', { ascending: true })
       .limit(12);
 

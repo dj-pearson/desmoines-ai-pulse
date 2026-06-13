@@ -24,13 +24,7 @@ verify_jwt = false
 [functions.log-content-metrics]
 verify_jwt = false
 
-[functions.test-ai-model]
-verify_jwt = true
-
 [functions.publish-article-webhook]
-verify_jwt = false
-
-[functions.test-article-webhook]
 verify_jwt = false
 
 [functions.scrape-events]
@@ -43,19 +37,7 @@ verify_jwt = true
 [functions.geocode-location]
 verify_jwt = false
 
-[functions.bulk-event-updater]
-verify_jwt = false
-
-[functions.backfill-all-coordinates-force]
-verify_jwt = false
-
-[functions.populate-playgrounds]
-verify_jwt = false
-
 [functions.extract-catchdesmoines-urls]
-verify_jwt = false
-
-[functions.backfill-coordinates]
 verify_jwt = false
 
 [functions.generate-seo-content]
@@ -66,3 +48,13 @@ verify_jwt = false
 
 [functions.batch-process-images]
 verify_jwt = true
+
+# Weekly duplicate detection + merge (WEB-AUTO-005). Admin/internal tooling:
+# does its own auth via requireAdminOrApiKey (cron service-role key or admin JWT).
+[functions.dedupe-content]
+verify_jwt = false
+
+# Nightly stale-event lifecycle cleanup (WEB-AUTO-006). Admin/internal tooling:
+# does its own auth via requireAdminOrApiKey (cron service-role key or admin JWT).
+[functions.cleanup-old-events]
+verify_jwt = false

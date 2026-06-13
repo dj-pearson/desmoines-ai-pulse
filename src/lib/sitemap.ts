@@ -59,6 +59,7 @@ export class SitemapGenerator {
       const { data: events, error: eventsError } = await supabase
         .from("events")
         .select("id, title, date, updated_at, created_at")
+        .neq("is_hidden", true) // Exclude soft-hidden stale events (WEB-AUTO-006)
         .order("created_at", { ascending: false });
 
       if (!eventsError && events) {

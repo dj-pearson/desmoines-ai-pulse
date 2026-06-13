@@ -1,3 +1,132 @@
 # Ralph Progress Log
 Started: 2026-06-12T01:18:32.104Z
+
+## Codebase Patterns (read before starting)
+- **PRD lives at repo-root `prd.json`** (branch claude/web-platform-autonomy, == current branch HEAD). NOT scripts/ralph/prd.json. Pick highest-priority story with passes:false.
+- **New DB tables/views/RPCs are NOT added to generated `src/integrations/supabase/types.ts`.** Access them with `supabase.from("name" as never)` / `supabase.rpc("name" as never, {...} as never)` and cast results `as unknown as T[]` (see JobHealthPanel, MergeReviewPanel). BUT when you ADD A COLUMN to an EXISTING table you DO hand-add it to the Row block in types.ts (kept alphabetical) so `.eq()/.select()` stay typed.
+- **Edge function skeleton:** `handleCors`/`getCorsHeaders` from `_shared/cors.ts`, `requireAdminOrApiKey` from `_shared/apiKeyAuth.ts` (accepts X-API-Key, the SERVICE-ROLE bearer that cron sends, OR an admin JWT — so one gate covers cron + admin re-run), `runJob` from `_shared/jobRunner.ts`. Register the fn in `supabase/config.toml` with `verify_jwt = false` so your own auth gate runs. `Deno.serve(async (req)=>{ const c=handleCors(req); if(c) return c; const cors=getCorsHeaders(origin); const fail=await requireAdminOrApiKey(req,cors); if(fail) return fail; ... })`.
+- **jobRunner:** `await runJob('name', async (ctx)=>{ ctx.processed(n); ctx.failed(m); ctx.meta({...}); return summary }, {maxAttempts})`. Returns `{ok,status,result,...}`. `ok=true` even when status==='partial' (ctx.failed>0 but fn didn't throw). Never throws. Counts/metadata land in `automation_job_runs` + the Job Health panel. Add re-runnable jobs to `RERUNNABLE` in JobHealthPanel.tsx.
+- **pg_cron migration pattern:** wrap in `IF EXISTS (SELECT 1 FROM pg_extension WHERE extname='pg_cron')`, `cron.unschedule(name) WHERE EXISTS(... )` then `cron.schedule(name, 'min hour dom mon dow', $cron$ SELECT net.http_post(url := current_setting('app.settings.supabase_url')||'/functions/v1/<fn>', headers := jsonb_build_object('Authorization','Bearer '||current_setting('app.settings.supabase_service_role_key'),'Content-Type','application/json','x-trigger-source','cron')) $cron$)`.
+- **Admin-gated SECURITY DEFINER RPC (callable by BOTH the service-role edge fn and admin users):** pin `SET search_path = public, pg_temp`; gate with `IF auth.uid() IS NOT NULL AND NOT public.is_admin() THEN RAISE EXCEPTION ...` (service role → uid null → allowed; non-admin authenticated → blocked); then `REVOKE ALL ON FUNCTION ... FROM PUBLIC; GRANT EXECUTE ... TO authenticated, service_role`. `public.is_admin()` (no-arg, uses auth.uid()) already exists.
+- **Trigram fuzzy infra:** pg_trgm enabled + GIN indexes on `events(title,venue,location)` and `restaurants(name,cuisine,location)` (migration 20250107000007). Use `a.col % b.col` (index-probing operator) + `similarity(a.col,b.col) >= threshold`. Compute geo distance in plain SQL via haversine (acos/sin/cos/radians) from latitude/longitude — avoids a PostGIS dependency.
+- **Repointing all child FKs generically** (merge/dedupe/delete-with-children): loop `pg_constraint` where `contype='f' AND confrelid=<table>::regclass AND array_length(conkey,1)=1` and the referenced col is `id`; `EXECUTE format('UPDATE public.%I SET %I=$1 WHERE %I=$2', child_table, child_col, child_col)`. Catch `unique_violation OR check_violation` and fall back to a ctid row-by-row move that DELETEs only the genuine collisions.
+- **Admin tabs:** add `{id,label,icon}` to `CONTENT_TABS` (AdminContent.tsx) or `SYSTEM_TABS` (AdminSystem.tsx) + render `{activeTab === "id" && <Panel/>}`. Panels: `useQuery` with `refetchInterval`, admin-gated by RLS `is_admin()` + `useAdminAuth()`.
+- **Favorites are NOT a `favorites` table** — event favorites live in `user_event_interactions (event_id, interaction_type='favorite')`.
+- **Lint:** `npm run lint` (`eslint .`) exits 1 due to a PRE-EXISTING parser false-positive at `src/components/media/VideoPlayer.tsx:587` (',' expected) — tsc accepts the file; it predates these stories. Verify YOUR files with targeted `npx eslint <files>` (warnings like no-console are allowed across the repo; only 0 errors matter).
+- **Deno parse check (no Supabase in container):** `npx esbuild supabase/functions/<fn>/index.ts --bundle --external:https://* --format=esm --platform=neutral --outfile=/dev/null`. Migrations can't be applied locally — write them additive + idempotent (IF NOT EXISTS / CREATE OR REPLACE / guarded DO blocks).
+
+- **Soft-hide lifecycle pattern (is_hidden + hidden_at):** like is_merged but with a re-hide guard. The hide job only sets is_hidden where `hidden_at IS NULL`; restore (`unhide`) sets `is_hidden=false` but LEAVES `hidden_at` populated — so an admin-restored row is permanently skipped by the nightly hide job. Public sweep is small in practice because most event queries already `.gte('date', today)` (hidden ⇒ >N days past ⇒ already excluded); only queries that fetch PAST events (by-id from trending_scores, featured-without-date, the no-date sitemap lib) genuinely needed the filter. When adding `.neq('is_hidden', true)` to a `.single()` fetch, switch it to `.maybeSingle()` — the filter can now legitimately return zero rows and `.single()` throws.
+- **cleanup-old-events was a hole:** it was verify_jwt=true (not in config.toml) with no admin check, so ANY authenticated user could invoke it and trigger deletes. Modernizing a cron/admin edge fn to verify_jwt=false + requireAdminOrApiKey both closes that AND lets the cron service-role bearer + admin-panel JWT through one gate.
+- **archived_events (LIKE events INCLUDING ALL) is now STALE** — events has gained geom/is_merged/merged_*/recurrence_*/instance_date/is_hidden that archived_events lacks, so any `INSERT INTO archived_events SELECT *` (legacy cleanup_old_events) now fails on column mismatch. Prefer a NEW explicit-column snapshot table over `SELECT *` into a LIKE-clone.
+
+---
+## 2026-06-12 - WEB-AUTO-006 (Stale-event lifecycle: soft-hide → archive → purge)
+Replaced the single-phase hard-delete with a two-phase, observable, recoverable lifecycle.
+
+Files added:
+- supabase/migrations/20260612000012_event_lifecycle_columns.sql — additive events.is_hidden (NOT NULL default false) + hidden_at + partial index.
+- supabase/migrations/20260612000013_event_lifecycle_functions.sql — event_archive snapshot table (RLS admin-read) + hide_stale_events / archive_and_purge_events / unhide_stale_event RPCs (search_path-pinned, REVOKE FROM PUBLIC, admin/service-role gated).
+- supabase/migrations/20260612000014_event_lifecycle_cron.sql — retire legacy 'cleanup-old-events-weekly' SQL cron, schedule 'event-lifecycle-cleanup' nightly 04:15 UTC → cleanup-old-events fn.
+
+Files changed:
+- supabase/functions/cleanup-old-events/index.ts — full rewrite: requireAdminOrApiKey gate, phase-1 hide RPC + phase-2 (storage cleanup → archive_and_purge RPC), counts via jobRunner, dryRun + back-compat retentionMonths preserved.
+- src/integrations/supabase/types.ts — is_hidden/hidden_at on events Row/Insert/Update.
+- Public sweep (.neq('is_hidden', true)): src/hooks/useEvents.ts, src/lib/sitemap.ts, src/lib/sitemapEnhanced.ts, supabase/functions/generate-sitemaps/index.ts, src/hooks/useTrending.ts (+ by-id → maybeSingle), src/hooks/usePersonalizedRecommendations.ts, src/hooks/useSmartRecommendations.ts (+ by-id → maybeSingle), src/hooks/useEnhancedRecommendations.ts, src/hooks/useAdvancedSearch.ts, src/components/SearchSection.tsx, src/components/SearchAutocomplete.tsx, src/pseo/components/sections/PseoLiveListings.tsx.
+- src/components/admin/JobHealthPanel.tsx — 'Event Lifecycle' KPI card (hidden/archived/deleted).
+- docs/AUTOMATION_JOBS.md — job row + two-phase/recovery section.
+- prd.json — WEB-AUTO-006 passes:true.
+
+Defaults: hide 30d past date, archive+delete 180d past date (180 ≈ the old 6-month retention, so deletion timing is backward-compatible — just now hidden first + archived first).
+
+Quality: type-check passes; cleanup-old-events + generate-sitemaps parse via esbuild; 12 edited frontend files lint 0 errors (only pre-existing no-console/no-explicit-any/unused-var warnings). Migrations additive/idempotent, not applied in-container.
+
+**Learnings for future iterations:**
+- ⚠️ CONCURRENT EXTERNAL WORKING-TREE CHANGES during this iteration: 11 edge functions were DELETED (backfill-coordinates, backfill-all-coordinates-force, bulk-event-updater, extract-catchdesmoines-urls, populate-playgrounds, generate-sitemap, generate-writeup, restart-web-server, test-ai-model, test-article-webhook, test-google-api) with matching config.toml entry removals, plus 3 pre-existing migration-correctness mods (deals CHECK, contact_submissions is_admin(), rls_audit_fixes to_regclass guard). NONE are mine and several deleted fns were security-gated in WEB-SEC-001, so I did NOT commit them (committing endpoint removals risks backward-compat breaks). My config.toml `[functions.cleanup-old-events] verify_jwt=false` edit is entangled in that same file with the external removals, so I LEFT config.toml UNSTAGED — cleanup-old-events therefore runs under the default verify_jwt=true, which is fine: requireAdminOrApiKey is the authoritative gate (cron service-role bearer + admin JWT both pass; anon/non-admin rejected). Follow-up: register verify_jwt=false once the config.toml churn settles, if X-API-Key-without-JWT callers are needed.
+- The branch named in prd.json (claude/web-platform-autonomy) is STALE — actual work HEAD is on claude/ios-layout-monetization-plan-5IQFu, which is AHEAD of it (contains WEB-AUTO-005). Stay on the current branch; checking out the named branch would lose committed work.
+- Next story WEB-AUTO-007 (AI article pipeline) is the pattern: scheduled fn → suggest-article-topics → generate-article → score → publish/draft/discard, jobRunner-wrapped, with a pause config flag. articles.review_status already exists.
+
+---
+## 2026-06-12 - WEB-AUTO-005 (Duplicate venue/event detection + merge queue)
+Implemented automatic duplicate detection/merge for events + restaurants, with an admin review queue for ambiguous pairs.
+
+Files added:
+- supabase/migrations/20260612000008_dedupe_columns.sql — additive is_merged/merged_into/merged_at on events + restaurants (+ partial indexes). is_merged default false (old readers unaffected); merged_into = plain uuid (no FK) so the repoint loop ignores it.
+- supabase/migrations/20260612000009_dedupe_queue_and_audit.sql — content_merge_candidates (0.7-0.9 review queue, unique pair) + content_merges (immutable audit/reversal log); RLS admin-read only.
+- supabase/migrations/20260612000010_dedupe_functions.sql — find_duplicate_events / find_duplicate_restaurants (trigram self-join + haversine + richness), merge_duplicate_content (dynamic FK repoint + keep-richer + mark-loser + audit + queue-resolve), unmerge_content (30-day reversal), dismiss_merge_candidate. All search_path-pinned, REVOKE FROM PUBLIC, admin/service-role gated.
+- supabase/migrations/20260612000011_dedupe_cron.sql — weekly cron Mon 03:15 UTC → dedupe-content.
+- supabase/functions/dedupe-content/index.ts — orchestrator: calls the finder RPCs, auto-merges high-confidence pairs (events: name>=0.9 + same date + <=150m/no-coords; restaurants: name>=0.9 + <=150m), queues the rest, skips far-apart same-name restaurants (franchise guard), all wrapped in runJob.
+- src/components/admin/MergeReviewPanel.tsx — Duplicates review UI (side-by-side Keep/Remove, confidence + reason chips, Merge / Swap-which-to-keep / Not-a-duplicate, Run-scan).
+
+Files changed:
+- supabase/config.toml — register dedupe-content (verify_jwt=false).
+- src/integrations/supabase/types.ts — add is_merged/merged_at/merged_into to events + restaurants Row.
+- src/hooks/useEvents.ts, src/hooks/useRestaurants.ts — list queries add .neq('is_merged', true) so merged losers drop from browse.
+- src/pages/AdminContent.tsx — new 'Duplicates' tab → MergeReviewPanel.
+- src/components/admin/JobHealthPanel.tsx — dedupe-content added to re-runnable jobs.
+- docs/AUTOMATION_JOBS.md — job row + "Reversing a merge" section.
+- prd.json — WEB-AUTO-005 passes:true.
+
+Quality: `npm run type-check` passes; dedupe-content parses via esbuild; targeted eslint on all edited frontend files = 0 errors (MergeReviewPanel clean). Only lint error repo-wide is the pre-existing VideoPlayer.tsx:587 parser false-positive (untouched).
+
+**Learnings for future iterations:**
+- The dynamic-FK repoint loop (pattern above) is the clean way to "repoint child references" without enumerating ~20 child tables; it auto-covers favorites/reviews/attendance/sponsored and anything added later. Composite FKs (array_length>1) are skipped — fine because content ids are single-col PKs.
+- Restaurants need a HARD proximity gate (identical-name franchises must never auto-merge); events use same-calendar-date as the cheap join-bounding predicate. Build dedupe rules per content type, not one-size-fits-all.
+- merge_duplicate_content also handles the admin path (richer survivor chosen client-side, decided_by='admin') AND resolves the queue row — so the panel just calls the RPC; dismiss needs its own RPC because RLS only grants SELECT on the queue.
+- For WEB-AUTO-006 (stale-event soft-hide): the is_merged/.neq pattern + types.ts column-add is the template for is_hidden; that story owns the FULL public-query sweep (this story only filtered the two primary browse hooks).
+---
+
+## 2026-06-12 - WEB-AUTO-007 (AI article pipeline: topic → draft → quality gate → auto-publish)
+Built the self-running daily local-SEO article pipeline that glues suggest-article-topics + generate-article + a quality gate together with no human in the loop.
+
+Files added:
+- supabase/migrations/20260612000015_ai_article_pipeline.sql — additive articles.is_auto_published(bool default false)/quality_score(int)/pipeline_reasons(text[]) + seeds feature_flags row 'ai_article_pipeline_enabled'=true (the pause toggle).
+- supabase/migrations/20260612000016_ai_article_pipeline_cron.sql — schedule 'ai-article-pipeline-daily' 0 11 * * * → ai-article-pipeline fn (pg_cron pattern).
+- supabase/functions/ai-article-pipeline/index.ts — orchestrator wrapped in runJob: pause-flag check → daily-cap check → pick top deduped topic → generate-article draft → score (wordcount/relevance/readability/uniqueness/SEO + Claude safety) → publish(>=80)/draft-review(50-79)/discard(<50).
+
+Files changed:
+- supabase/functions/generate-article/index.ts — ADDITIVE auth: user-JWT path unchanged (authors as that user); service-role/API-key caller (pipeline) may now generate with author_id=null via requireAdminOrApiKey. No tightening; anon still rejected.
+- src/integrations/supabase/types.ts — is_auto_published/quality_score/pipeline_reasons on articles Row/Insert/Update.
+- src/hooks/useArticles.ts — same 3 fields on the Article interface.
+- src/components/ArticlesManager.tsx — 'AI Auto {score}' badge next to auto-published titles.
+- src/components/admin/JobHealthPanel.tsx — ai-article-pipeline added to RERUNNABLE.
+- docs/AUTOMATION_JOBS.md — job-table row + "AI article pipeline" section (flow, thresholds, pause).
+- prd.json — WEB-AUTO-007 passes:true.
+
+Quality: type-check passes; ai-article-pipeline + generate-article parse via esbuild; edited frontend files lint 0 errors. Migrations additive/idempotent (not applied in-container).
+
+**Learnings for future iterations:**
+- generate-article ALWAYS inserts a draft row (it has no dry/return-only mode), and its insert is the cheapest way to reuse the full SEO prompt. So the pipeline generates the draft first, THEN scores from the returned article.content, then updates (publish/draft) or deletes (discard). Discards do a real insert+delete — acceptable, keeps generate-article untouched in shape.
+- The "additive auth broadening" trick (try auth.getUser(token); if a user, use it; else fall through to requireAdminOrApiKey) is the clean, backward-compat-safe way to let an internal/service caller invoke a function that was previously user-JWT-only WITHOUT breaking the human path. author_id becomes nullable for the non-user caller. Reuse this for any other "make a manual fn schedulable" story.
+- PAUSE FLAG pattern: reuse the existing feature_flags table (flag_key/enabled, public-read + admin-write RLS already there) rather than inventing a config table. Seed the flag enabled=true in the migration; the fn reads it with .maybeSingle() and exits early when enabled===false. This is the template for WEB-AUTO-008/010/012 pause toggles.
+- config.toml STILL has the external uncommitted churn (11 deleted edge fns + entry removals + 3 migration mods + supabase/.temp) from before WEB-AUTO-005/006 — NOT ours. Do NOT git add config.toml or those files; stage only your own files explicitly. New verify_jwt=false fns run fine under the DEFAULT verify_jwt=true because the cron service-role bearer and admin JWT both clear the Supabase gateway and requireAdminOrApiKey is the real gate.
+- Articles consumers key on status==='published' (Articles.tsx, sitemapGenerator) — setting status='published' + published_at is all that's needed for a new article to enter the public site, sitemap, and newsletter pool. No extra wiring.
+- Next story WEB-AUTO-008 (auto weekly digest): send-newsletter-campaign(send_now/schedule) + dispatch-scheduled-newsletters exist; missing piece is automated campaign CREATION (assemble top events/restaurants/newest article → create+schedule a weekly_digest campaign). Use the same jobRunner + feature_flags-pause + pre-send validation-gate pattern.
+---
+
+## 2026-06-12 - WEB-AUTO-008 (Auto-assembled weekly digest newsletter)
+Built the self-running weekly digest: assemble → validation-gate → schedule, sent through the existing dispatch path.
+
+Files added:
+- supabase/migrations/20260612000017_weekly_digest_pipeline.sql — additive newsletter_campaigns.campaign_type (nullable; NULL=manual) + partial index + seeds feature_flags 'weekly_digest_enabled'=true (pause toggle).
+- supabase/migrations/20260612000018_weekly_digest_cron.sql — schedule 'assemble-weekly-digest' Tuesday 14:00 UTC (pg_cron pattern, body action:'assemble').
+- supabase/functions/assemble-weekly-digest/index.ts — orchestrator (requireAdminOrApiKey + runJob): pause check → 6-day idempotency → gather (top events next 7d not hidden/merged, top-rated restaurants, newest published article) → renderEmail (shared CAN-SPAM layout) → pre-send gates (subscribers>0, subject≤120, ≥1 item, links well-formed https under origin) THROW on failure → insert scheduled newsletter_campaigns row (campaign_type='weekly_digest', scheduled_for=now()). Plus action:'preview' (assemble-only, no write) for the admin UI.
+- src/components/admin/WeeklyDigestControls.tsx — admin card: Switch pause toggle (writes feature_flags) + 'Preview next week's digest' (invokes preview, renders sanitized HTML + counts).
+
+Files changed:
+- supabase/functions/dispatch-scheduled-newsletters/index.ts — wrapped the dispatch loop in runJob (delivered/failed per campaign → Job Health), but ONLY when a batch is claimed (fires every minute), maxAttempts:1 (sends not idempotent). Empty path + response shape unchanged.
+- src/components/admin/JobHealthPanel.tsx — assemble-weekly-digest added to RERUNNABLE.
+- src/pages/AdminEmail.tsx — render WeeklyDigestControls above the campaigns table.
+- docs/AUTOMATION_JOBS.md — job rows + 'Weekly digest newsletter' section.
+- prd.json — WEB-AUTO-008 passes:true.
+
+Quality: type-check passes; both edge fns parse via esbuild; WeeklyDigestControls/JobHealthPanel/AdminEmail lint 0 errors. Staged ONLY my files (external churn left unstaged). Migrations additive/idempotent, not applied in-container.
+
+**Learnings for future iterations:**
+- TWO separate "weekly digest" systems exist and must not be confused: (1) send-weekly-digest = PERSONALIZED per-user email (RSVPs/favorites/recs) to registered users via user_email_preferences (Sunday cron). (2) newsletter_campaigns / send-newsletter-campaign / dispatch-scheduled-newsletters = BROADCAST campaigns to newsletter_subscribers. WEB-AUTO-008 is the broadcast one.
+- SCHEDULE-DON'T-SEND pattern to reuse a send path without an admin JWT: instead of calling send-newsletter-campaign (which requires an admin user JWT + role check), insert a newsletter_campaigns row directly with status='scheduled' + scheduled_for=now(). The existing dispatch-scheduled-newsletters cron (every minute, claim_scheduled_newsletter_campaigns RPC, service-role) picks it up and sends through the identical Resend path — so unsubscribe/compliance/webhooks are byte-identical to a manual send, and the scheduled function never needs to impersonate an admin. This is the clean template for any "make an admin-only send automatable" story (e.g. WEB-AUTO-012 social).
+- VALIDATION-GATE-AS-FAILURE: to satisfy "gate failure aborts + alerts via WEB-AUTO-001", just `throw` inside the runJob fn after ctx.meta({aborted,gateFailures}). runJob records status='failed' and fires sendJobAlert. No campaign row is created before the gate, so a failed gate leaves zero side effects.
+- jobRunner on a HIGH-FREQUENCY cron (every minute): do the cheap claim/early-exit OUTSIDE runJob and only enter runJob when there's real work, else you create 1440 automation_job_runs/day and bury the panel. Pattern: claim first → if empty return plain 200 → else runJob the batch.
+- dispatch reuse: dispatch-scheduled-newsletters sends ONE body_html to all recipients (no per-recipient token substitution), so campaign unsubscribe links are the token-less /profile?tab=settings fallback (renderEmail with a generic recipient). That's an existing limitation of the broadcast path, not something to "fix" here.
+- Event detail URLs in emails use /events/${createSlug(title)} (slug derived from title — events have NO slug column); restaurants use /restaurants/${slug||id}; articles use /articles/${slug} (articles DO have a required slug). Mirror createSlug from send-weekly-digest.
+- Next story WEB-AUTO-009 (UGC auto-moderation): no moderation exists on review/contact writes. Build a moderate-content edge fn (Claude toxicity/spam scores) called post-insert (default row hidden until scored), a moderation queue table + admin panel, fail-open-with-flag. Prereq for WEB-FEAT-010 photo reviews — route those through the same seam.
 ---

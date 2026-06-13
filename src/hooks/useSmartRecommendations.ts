@@ -170,7 +170,8 @@ export function useSmartRecommendations() {
       let query = supabase
         .from('events')
         .select('*')
-        .gte('date', new Date().toISOString()); // Future events only
+        .gte('date', new Date().toISOString()) // Future events only
+        .neq('is_hidden', true); // Exclude soft-hidden stale events (WEB-AUTO-006)
 
       // Apply interest-based filtering
       if (preferences.interests.length > 0) {
@@ -223,8 +224,9 @@ export function useSmartRecommendations() {
           .from('events')
           .select('*')
           .eq('id', trendingScore.content_id)
-          .single();
-          
+          .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
+          .maybeSingle();
+
         if (event) {
           eventsToRecommend.push({
             event: event as Event,

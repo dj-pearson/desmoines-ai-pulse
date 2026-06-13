@@ -70,6 +70,7 @@ export function SearchAutocomplete({
           .select('id, title, venue')
           .ilike('title', searchTerm)
           .gte('date', new Date().toISOString())
+          .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
           .limit(5);
         return (data || []).map((e) => ({
           id: e.id,
