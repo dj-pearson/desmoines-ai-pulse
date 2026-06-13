@@ -335,6 +335,24 @@ export default function AdminCampaignDetail() {
                             <p>CTA: "{creative.cta_text}"</p>
                             <p>Size: {creative.dimensions_width}×{creative.dimensions_height}px</p>
                           </div>
+                          {creative.auto_review_status === 'failed' && (
+                            <Alert variant="destructive" className="mt-3">
+                              <AlertCircle className="h-4 w-4" />
+                              <AlertDescription className="text-xs">
+                                <span className="font-semibold">Auto-review held this creative:</span>
+                                <ul className="list-disc list-inside mt-1 space-y-0.5">
+                                  {(creative.auto_review_reasons ?? ['See campaign details']).map((reason, i) => (
+                                    <li key={i}>{reason}</li>
+                                  ))}
+                                </ul>
+                              </AlertDescription>
+                            </Alert>
+                          )}
+                          {!creative.auto_reviewed_at && (
+                            <p className="mt-3 text-xs text-muted-foreground italic">
+                              Automated review in progress…
+                            </p>
+                          )}
                         </div>
                         <div className="flex gap-2">
                           <Button
@@ -388,7 +406,10 @@ export default function AdminCampaignDetail() {
                             <ImageIcon className="h-12 w-12 text-muted-foreground" />
                           </div>
                         )}
-                        <div className="absolute top-2 right-2">
+                        <div className="absolute top-2 right-2 flex gap-1">
+                          {creative.auto_review_status === 'approved' && (
+                            <Badge className="bg-purple-500" title="Approved automatically by AI review">Auto</Badge>
+                          )}
                           <Badge className="bg-green-500">Approved</Badge>
                         </div>
                       </div>

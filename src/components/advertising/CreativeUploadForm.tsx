@@ -132,7 +132,7 @@ export function CreativeUploadForm({
       const imageUrl = await uploadToStorage(uploadedFile!);
 
       // Create creative record
-      const { error: createError } = await supabase
+      const { data: created, error: createError } = await supabase
         .from('campaign_creatives')
         .insert({
           campaign_id: campaignId,
@@ -147,9 +147,20 @@ export function CreativeUploadForm({
           file_type: uploadedFile!.type,
           dimensions_width: imageMetadata?.width,
           dimensions_height: imageMetadata?.height,
-        });
+        })
+        .select('id')
+        .single();
 
       if (createError) throw createError;
+
+      // Fire automated creative review (WEB-AUTO-010) — fire-and-forget. Clean
+      // creatives are auto-approved in seconds; failures stay pending for the
+      // admin with machine-readable reasons. The hourly sweep is the safety net.
+      if (created?.id) {
+        supabase.functions
+          .invoke('review-campaign-creative', { body: { creativeId: created.id } })
+          .catch((err) => log.warn('autoReview', 'Creative auto-review trigger failed', { data: err }));
+      }
 
       // Update campaign status to pending_creative if it's still in pending_payment
       await supabase

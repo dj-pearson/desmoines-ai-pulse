@@ -40,6 +40,7 @@ All times UTC. Schedules are cron expressions (`min hour dom mon dow`).
 | **`auto-article-pipeline-daily`** | `0 13 * * *` | fn `auto-article-pipeline` | **AI article pipeline: topic → draft → quality gate → auto-publish (WEB-AUTO-007)** | ✅ |
 | **`weekly-digest-assemble`** | `0 15 * * 2` | fn `assemble-weekly-digest` | **Auto-assemble the weekly digest (events + restaurants + newest article), gate, and queue it for the existing dispatcher (WEB-AUTO-008)** | ✅ |
 | **`moderate-content-sweep`** | `15 * * * *` | fn `moderate-content` | **Safety-net: re-moderate any review/contact row stuck `pending` (real-time call failed); cheap when none (WEB-AUTO-009)** | ✅ |
+| **`campaign-creative-review-sweep`** | `35 * * * *` | fn `review-campaign-creative` | **Safety-net: auto-review ad creatives not yet reviewed (real-time call failed); spec/quality/brand-safety/standing checks → auto-approve or hold (WEB-AUTO-010)** | ✅ |
 
 \* **Observed** = wrapped with `jobRunner` and recording to `automation_job_runs`.
 `✅` done, `planned` = adopts the same one-line wrap as its WEB-AUTO story lands
@@ -250,3 +251,47 @@ scores + reasons and one-click **Approve** / **Reject** (calls
 author always sees their own, even while pending). RLS is intentionally NOT tightened
 — live iOS/Android binaries read `user_ratings`, so visibility is filtered
 client-side rather than via a policy that would hide reviews from older clients.
+
+## Campaign creative auto-review (WEB-AUTO-010)
+
+`review-campaign-creative` reviews advertiser ad creatives automatically so a clean
+creative is approved in seconds instead of waiting for the next admin login; only
+creatives a check couldn't clear reach a human.
+
+**Real-time (primary path):** `CreativeUploadForm` inserts the creative
+(`is_approved=false`) and fires `review-campaign-creative { creativeId }`
+fire-and-forget. The function runs four checks:
+
+1. **good_standing** — the owning campaign is in a payable/live state (not
+   cancelled / rejected / refunded).
+2. **image** — the image loads (https, 2xx, image content-type) and its stored
+   dimensions match an allowed size for the placement (`sponsored_listing` needs no
+   image — it uses the listing's own).
+3. **url** — the target link is https, resolves (HEAD→GET, redirects followed) and
+   never lands on a disallowed scheme/private host (SSRF guard).
+4. **brand_safety** — Claude scores the title/description/CTA for unsafe / low-quality
+   ad copy.
+
+**Decision:** all checks pass → `is_approved=true` (the same field a human admin sets;
+the campaign then follows its normal status flow — `active` if the start date has
+arrived, else `pending_review`). Any hard failure → the creative **stays pending** with
+machine-readable reasons in `auto_review_reasons` / `auto_review_checks`, shown in the
+**Admin → Campaigns → (campaign) → Creative Review** pending list. **Fail-safe:** if the
+brand-safety AI can't run, the creative is **never** auto-approved — it's left pending
+and retried by the sweep; after 3 attempts it is held for a human.
+
+The single-call path is authorized for the **owning advertiser, an admin, or
+service/API key**, rate-limited (20/min/user), and idempotent (`auto_reviewed_at` is the
+marker — re-calls on a reviewed/approved creative are no-ops).
+
+**Safety-net sweep:** cron `campaign-creative-review-sweep` (hourly at :35) calls
+`{action:'sweep'}`, which auto-reviews up to 25 not-yet-reviewed creatives — catching
+anything whose real-time call failed and draining the manual backlog. Wrapped in
+`jobRunner` (approved/failed/retry counts + `autoApprovalRate` in `automation_job_runs`;
+re-runnable from **Admin → Job Health**). Every terminal auto-decision writes a
+`security_audit_logs` row (`event_type='creative_auto_review'`).
+
+**Admin override** is unchanged — the admin Approve/Reject buttons still work in both
+directions (`useAdminCampaigns.approveCreative` / `rejectCreative`). Serving is
+unaffected: an auto-approved creative is byte-for-byte identical to a human-approved
+one, so `get_active_ads` (read by iOS) behaves exactly as before.

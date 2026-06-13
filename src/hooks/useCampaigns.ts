@@ -52,6 +52,11 @@ export interface CampaignCreative {
   rejection_reason?: string;
   created_at: string;
   updated_at: string;
+  // WEB-AUTO-010: automated creative review
+  auto_reviewed_at?: string | null;
+  auto_review_status?: string | null;
+  auto_review_reasons?: string[] | null;
+  auto_review_checks?: Record<string, { pass: boolean; reason?: string }> | null;
 }
 
 export interface PricingInfo {
