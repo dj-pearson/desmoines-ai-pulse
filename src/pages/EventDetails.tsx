@@ -154,6 +154,13 @@ export default function EventDetails() {
 
   const eventDate = new Date(event.date);
   const isUpcoming = eventDate >= new Date();
+  // Canonical ticket-link guard: only actionable when present AND not flagged
+  // broken (WEB-AUTO link-checker). Use this everywhere a ticket CTA renders.
+  const ticketUrl =
+    event.source_url &&
+    !(event as { source_url_broken?: boolean }).source_url_broken
+      ? event.source_url
+      : null;
   const eventSlug = createEventSlugWithCentralTime(event.title, event);
   const eventUrl = `${BRAND.baseUrl}/events/${eventSlug}`;
   const isFree = !event.price || event.price.toLowerCase().includes('free') || event.price === '$0';
@@ -595,10 +602,10 @@ export default function EventDetails() {
       <StickyMobileCTA
         variant="event"
         primaryAction={
-          event.source_url
+          ticketUrl
             ? {
                 label: "Get Tickets",
-                href: event.source_url,
+                href: ticketUrl,
                 icon: "external",
                 isExternal: true,
               }
@@ -611,7 +618,7 @@ export default function EventDetails() {
             : undefined
         }
         secondaryAction={
-          event.source_url && isUpcoming
+          ticketUrl && isUpcoming
             ? {
                 label: "Add to Calendar",
                 onClick: () => downloadICS(event),
