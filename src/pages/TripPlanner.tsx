@@ -18,7 +18,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
-import { useTripPlanner, TripPlan, TripPlanItem, TripPreferences } from "@/hooks/useTripPlanner";
+import { useTripPlanner, TripPlan, TripPreferences } from "@/hooks/useTripPlanner";
 import { useAuth } from "@/hooks/useAuth";
 import { Link, useNavigate } from "react-router-dom";
 import { format, addDays, differenceInDays } from "date-fns";
@@ -26,35 +26,33 @@ import { EmailCaptureModal } from "@/components/EmailCaptureModal";
 import { FAQSection } from "@/components/FAQSection";
 import { useSubscription } from "@/hooks/useSubscription";
 import { PremiumGate } from "@/components/PremiumGate";
+import { PaywallModal } from "@/components/PaywallModal";
 import { AIDisclosureNotice } from "@/components/AIDisclosureBadge";
+import { ItineraryDays } from "@/components/trip/ItineraryDays";
+import { TripCalendarMenu } from "@/components/trip/TripCalendarMenu";
+import { TripShareDialog } from "@/components/trip/TripShareDialog";
+import { ErrorState } from "@/components/ui/error-state";
+import { Progress } from "@/components/ui/progress";
 import {
   Calendar,
-  MapPin,
   Clock,
   DollarSign,
   Users,
   Sparkles,
   ArrowRight,
-  ChevronDown,
-  ChevronRight,
   Trash2,
-  Edit2,
   Share2,
-  Copy,
   Check,
-  Plus,
   Lightbulb,
   Utensils,
   Music,
   TreePine,
   Palette,
   Baby,
-  Car,
-  Coffee,
   Loader2,
-  ExternalLink,
   AlertCircle,
   Download,
+  Crown,
 } from "lucide-react";
 
 export default function TripPlanner() {
@@ -63,19 +61,24 @@ export default function TripPlanner() {
   const {
     tripPlans,
     isLoadingTrips,
+    tripsError,
+    refetchTrips,
     selectedTrip,
     setSelectedTrip,
     fetchTripDetails,
     generateItinerary,
     isGenerating,
-    updateTrip,
     deleteTrip,
     shareTrip,
+    isSharing,
+    reorderItems,
+    getTripQuota,
     getItemsByDay,
     interests,
     budgetOptions,
     paceOptions,
   } = useTripPlanner();
+  const { tier } = useSubscription();
 
   // Form state
   const [startDate, setStartDate] = useState(format(addDays(new Date(), 7), 'yyyy-MM-dd'));
@@ -88,10 +91,18 @@ export default function TripPlanner() {
   const [childAges, setChildAges] = useState<string>('');
   const [dietaryRestrictions, setDietaryRestrictions] = useState<string[]>([]);
   const [accessibilityNeeds, setAccessibilityNeeds] = useState<string[]>([]);
-  const [expandedDays, setExpandedDays] = useState<Record<number, boolean>>({});
   const [showEmailCapture, setShowEmailCapture] = useState(false);
+  const [reordering, setReordering] = useState(false);
+  const [generationError, setGenerationError] = useState<unknown>(null);
+  const [paywallOpen, setPaywallOpen] = useState(false);
+  const [shareDialog, setShareDialog] = useState<{ url: string; title: string } | null>(null);
 
   const numDays = differenceInDays(new Date(endDate), new Date(startDate)) + 1;
+
+  // Quota meter — mirrors the server-side monthly count (Insider 5 / VIP unlimited).
+  const quota = getTripQuota(tier);
+  // Insider at their monthly cap should upsell to VIP rather than just fail.
+  const atQuotaLimit = quota.atLimit;
 
   const handleGenerateItinerary = async () => {
     if (!user) {
@@ -99,6 +110,13 @@ export default function TripPlanner() {
       return;
     }
 
+    // Out of monthly generations — surface the contextual paywall (upgrade to VIP).
+    if (atQuotaLimit) {
+      setPaywallOpen(true);
+      return;
+    }
+
+    setGenerationError(null);
     const preferences: TripPreferences = {
       interests: selectedInterests,
       budget,
@@ -116,6 +134,14 @@ export default function TripPlanner() {
       setShowEmailCapture(true);
     } catch (error) {
       log.error('generateItinerary', 'Error generating itinerary', { error });
+      // A quota/upgrade response from the server opens the paywall instead of an
+      // error card; everything else surfaces as a retryable generation error.
+      const code = (error as { code?: string })?.code;
+      if (code === 'quota_exceeded' || code === 'upgrade_required') {
+        setPaywallOpen(true);
+      } else {
+        setGenerationError(error);
+      }
     }
   };
 
@@ -126,8 +152,54 @@ export default function TripPlanner() {
     }
   };
 
-  const toggleDay = (day: number) => {
-    setExpandedDays(prev => ({ ...prev, [day]: !prev[day] }));
+  // Make the trip public (if needed) and open the share dialog (copy + native share).
+  const handleShare = async () => {
+    if (!selectedTrip) return;
+    try {
+      let code = selectedTrip.share_code;
+      if (!selectedTrip.is_public || !code) {
+        code = await shareTrip(selectedTrip.id);
+        setSelectedTrip({ ...selectedTrip, is_public: true, share_code: code });
+      }
+      if (!code) return;
+      setShareDialog({
+        url: `${window.location.origin}/trips/shared/${code}`,
+        title: selectedTrip.title,
+      });
+    } catch (error) {
+      log.error('handleShare', 'Failed to share trip', { error });
+    }
+  };
+
+  // Move an itinerary item up/down within its day, persisting the new order.
+  // Applies an optimistic local update; the hook reverts on persist failure.
+  const handleMoveItem = async (item: TripPlanItem, direction: 'up' | 'down') => {
+    if (!selectedTrip?.items) return;
+    const dayItems = selectedTrip.items
+      .filter((i) => i.day_number === item.day_number)
+      .sort((a, b) => a.order_index - b.order_index);
+    const idx = dayItems.findIndex((i) => i.item_id === item.item_id);
+    const swapWith = direction === 'up' ? idx - 1 : idx + 1;
+    if (idx < 0 || swapWith < 0 || swapWith >= dayItems.length) return;
+
+    // Swap order_index between the two adjacent items.
+    const a = dayItems[idx];
+    const b = dayItems[swapWith];
+    const updates = [
+      { item_id: a.item_id, order_index: b.order_index },
+      { item_id: b.item_id, order_index: a.order_index },
+    ];
+    const updatedItems = selectedTrip.items.map((i) => {
+      const u = updates.find((x) => x.item_id === i.item_id);
+      return u ? { ...i, order_index: u.order_index } : i;
+    });
+    setSelectedTrip({ ...selectedTrip, items: updatedItems });
+    setReordering(true);
+    try {
+      await reorderItems({ items: updates });
+    } finally {
+      setReordering(false);
+    }
   };
 
   const toggleInterest = (interest: string) => {
@@ -136,28 +208,6 @@ export default function TripPlanner() {
         ? prev.filter(i => i !== interest)
         : [...prev, interest]
     );
-  };
-
-  const getItemIcon = (itemType: string) => {
-    switch (itemType) {
-      case 'event': return <Music className="h-4 w-4" />;
-      case 'restaurant': return <Utensils className="h-4 w-4" />;
-      case 'attraction': return <MapPin className="h-4 w-4" />;
-      case 'transport': return <Car className="h-4 w-4" />;
-      case 'break': return <Coffee className="h-4 w-4" />;
-      default: return <Calendar className="h-4 w-4" />;
-    }
-  };
-
-  const getItemTypeColor = (itemType: string) => {
-    switch (itemType) {
-      case 'event': return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
-      case 'restaurant': return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200';
-      case 'attraction': return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
-      case 'transport': return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
-      case 'break': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
-      default: return 'bg-gray-100 text-gray-800';
-    }
   };
 
   const interestIcons: Record<string, React.ReactNode> = {
@@ -410,6 +460,67 @@ export default function TripPlanner() {
                 </Card>
               </div>
 
+              {/* Monthly quota meter (Insider 5 / VIP unlimited) */}
+              {user && (
+                <Card>
+                  <CardContent className="pt-6">
+                    {quota.isUnlimited ? (
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <Crown className="h-5 w-5 text-purple-500" />
+                          <span className="font-medium">Unlimited AI trips</span>
+                        </div>
+                        <Badge className="bg-gradient-to-r from-purple-500 to-pink-500">VIP</Badge>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="font-medium">AI trips this month</span>
+                          <span className="text-muted-foreground">
+                            {quota.used} / {quota.limit} used
+                          </span>
+                        </div>
+                        <Progress
+                          value={quota.limit > 0 ? Math.min(100, (quota.used / quota.limit) * 100) : 0}
+                          aria-label={`${quota.used} of ${quota.limit} monthly AI trips used`}
+                        />
+                        {atQuotaLimit ? (
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-1">
+                            <p className="text-sm text-muted-foreground">
+                              You've used all {quota.limit} trips included this month.
+                            </p>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setPaywallOpen(true)}
+                              className="gap-1"
+                            >
+                              <Crown className="h-4 w-4 text-purple-500" />
+                              Upgrade to VIP
+                            </Button>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">
+                            {quota.remaining === 'unlimited' ? '' : `${quota.remaining} remaining this month`}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Generation failure (WEB-UX-002 error state, retryable) */}
+              {generationError ? (
+                <ErrorState
+                  error={generationError}
+                  onRetry={handleGenerateItinerary}
+                  title="Couldn't generate your itinerary"
+                  description="The AI planner had trouble building your trip. This is usually temporary — please try again."
+                  retryLabel="Try again"
+                />
+              ) : null}
+
               {/* Generate Button */}
               <Card className="border-primary/50 bg-gradient-to-r from-primary/5 to-primary/10">
                 <CardContent className="pt-6">
@@ -430,6 +541,11 @@ export default function TripPlanner() {
                         <>
                           <Loader2 className="h-5 w-5 animate-spin" />
                           Generating...
+                        </>
+                      ) : atQuotaLimit ? (
+                        <>
+                          <Crown className="h-5 w-5" />
+                          Upgrade for more trips
                         </>
                       ) : (
                         <>
@@ -487,10 +603,13 @@ export default function TripPlanner() {
                             )}
                           </div>
                         </div>
-                        <div className="flex gap-2">
-                          <Button variant="outline" size="sm" onClick={() => shareTrip(selectedTrip.id)}>
+                        <div className="flex flex-wrap gap-2">
+                          {selectedTrip.items && selectedTrip.items.length > 0 && (
+                            <TripCalendarMenu trip={selectedTrip} items={selectedTrip.items} />
+                          )}
+                          <Button variant="outline" size="sm" onClick={handleShare} disabled={isSharing}>
                             <Share2 className="h-4 w-4 mr-1" />
-                            Share
+                            {isSharing ? 'Sharing…' : 'Share'}
                           </Button>
                           <Button
                             variant="outline"
@@ -505,121 +624,19 @@ export default function TripPlanner() {
                     </CardHeader>
                   </Card>
 
-                  {/* Itinerary Days */}
-                  {selectedTrip.items && selectedTrip.items.length > 0 ? (
-                    <div className="space-y-4">
-                      {Object.entries(getItemsByDay(selectedTrip.items)).map(([day, items]) => {
-                        const dayNum = parseInt(day);
-                        const dayDate = addDays(new Date(selectedTrip.start_date), dayNum - 1);
-                        const isExpanded = expandedDays[dayNum] !== false;
-
-                        return (
-                          <Card key={day}>
-                            <CardHeader
-                              className="cursor-pointer"
-                              onClick={() => toggleDay(dayNum)}
-                            >
-                              <div className="flex items-center justify-between">
-                                <CardTitle className="text-lg flex items-center gap-2">
-                                  {isExpanded ? (
-                                    <ChevronDown className="h-5 w-5" />
-                                  ) : (
-                                    <ChevronRight className="h-5 w-5" />
-                                  )}
-                                  Day {day}: {format(dayDate, 'EEEE, MMMM d')}
-                                </CardTitle>
-                                <Badge variant="secondary">
-                                  {items.length} {items.length === 1 ? 'activity' : 'activities'}
-                                </Badge>
-                              </div>
-                            </CardHeader>
-                            {isExpanded && (
-                              <CardContent>
-                                <div className="space-y-4">
-                                  {items
-                                    .sort((a, b) => a.order_index - b.order_index)
-                                    .map((item, idx) => (
-                                      <div
-                                        key={item.item_id}
-                                        className="flex gap-4 p-4 rounded-lg border bg-card"
-                                      >
-                                        <div className="flex flex-col items-center">
-                                          <div className={`p-2 rounded-full ${getItemTypeColor(item.item_type)}`}>
-                                            {getItemIcon(item.item_type)}
-                                          </div>
-                                          {idx < items.length - 1 && (
-                                            <div className="w-px h-full bg-border mt-2" />
-                                          )}
-                                        </div>
-                                        <div className="flex-1 space-y-2">
-                                          <div className="flex items-start justify-between">
-                                            <div>
-                                              <h4 className="font-medium">{item.title}</h4>
-                                              {item.start_time && (
-                                                <p className="text-sm text-muted-foreground flex items-center gap-1">
-                                                  <Clock className="h-3 w-3" />
-                                                  {item.start_time}
-                                                  {item.end_time && ` - ${item.end_time}`}
-                                                  {item.duration_minutes && (
-                                                    <span className="text-xs">
-                                                      ({item.duration_minutes} min)
-                                                    </span>
-                                                  )}
-                                                </p>
-                                              )}
-                                            </div>
-                                            {item.estimated_cost && (
-                                              <Badge variant="outline">
-                                                {item.estimated_cost}
-                                              </Badge>
-                                            )}
-                                          </div>
-                                          {item.location && (
-                                            <p className="text-sm text-muted-foreground flex items-center gap-1">
-                                              <MapPin className="h-3 w-3" />
-                                              {item.location}
-                                            </p>
-                                          )}
-                                          {item.description && (
-                                            <p className="text-sm">{item.description}</p>
-                                          )}
-                                          {item.ai_reason && (
-                                            <p className="text-sm text-primary/80 italic flex items-start gap-1">
-                                              <Lightbulb className="h-3 w-3 mt-0.5 shrink-0" />
-                                              {item.ai_reason}
-                                            </p>
-                                          )}
-                                          {item.notes && (
-                                            <p className="text-sm text-muted-foreground bg-muted p-2 rounded">
-                                              {item.notes}
-                                            </p>
-                                          )}
-                                          {item.content_details && (
-                                            <Link
-                                              to={`/${item.content_details.type}s/${item.content_details.id}`}
-                                              className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-                                            >
-                                              View details
-                                              <ExternalLink className="h-3 w-3" />
-                                            </Link>
-                                          )}
-                                        </div>
-                                      </div>
-                                    ))}
-                                </div>
-                              </CardContent>
-                            )}
-                          </Card>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <Alert>
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription>
-                        No itinerary items found. Try generating a new itinerary.
-                      </AlertDescription>
-                    </Alert>
+                  {/* Itinerary Days (reorderable) + lazy map preview */}
+                  <ItineraryDays
+                    trip={selectedTrip}
+                    items={selectedTrip.items || []}
+                    getItemsByDay={getItemsByDay}
+                    editable
+                    onMoveItem={handleMoveItem}
+                    reordering={reordering}
+                  />
+                  {selectedTrip.items && selectedTrip.items.length > 0 && (
+                    <p className="text-xs text-muted-foreground text-center">
+                      Use the arrows on each activity to reorder your day. Changes save automatically.
+                    </p>
                   )}
 
                   {/* Tips and Packing List */}
@@ -711,6 +728,8 @@ export default function TripPlanner() {
                     </Card>
                   ))}
                 </div>
+              ) : tripsError ? (
+                <ErrorState error={tripsError} onRetry={() => refetchTrips()} resourceLabel="your trips" />
               ) : tripPlans.length === 0 ? (
                 <Card className="text-center py-12">
                   <CardContent>
@@ -815,6 +834,21 @@ export default function TripPlanner() {
           onOpenChange={setShowEmailCapture}
           source="trip_planner"
         />
+        {/* Contextual paywall — Insider at their monthly cap upsells to VIP. */}
+        <PaywallModal
+          open={paywallOpen}
+          onOpenChange={setPaywallOpen}
+          context="trip_planner"
+          requiredTier="vip"
+        />
+        {shareDialog && (
+          <TripShareDialog
+            open={!!shareDialog}
+            onOpenChange={(open) => !open && setShareDialog(null)}
+            url={shareDialog.url}
+            title={shareDialog.title}
+          />
+        )}
       </div>
     </>
   );

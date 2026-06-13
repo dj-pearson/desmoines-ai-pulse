@@ -121,6 +121,7 @@ const HotelDetails = lazyWithRetry(() => import("./pages/HotelDetails"));
 
 // AI-powered features
 const TripPlanner = lazyWithRetry(() => import("./pages/TripPlanner"));
+const SharedTrip = lazyWithRetry(() => import("./pages/SharedTrip"));
 
 // Curated itineraries
 const ItinerariesPage = lazyWithRetry(() => import("./pages/Itineraries"));
@@ -406,6 +407,7 @@ const App = () => (
             <Route path="/tools/event-promotion-planner" element={<EventPromotionPlanner />} />
             {/* AI-powered features */}
             <Route path="/trip-planner" element={<TripPlanner />} />
+            <Route path="/trips/shared/:code" element={<SharedTrip />} />
             {/* Curated itineraries */}
             <Route path="/itineraries" element={<ItinerariesPage />} />
             <Route path="/itineraries/:slug" element={<ItineraryDetail />} />
