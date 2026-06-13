@@ -954,7 +954,8 @@
         "npm run validate passes (type-check + lint)"
       ],
       "priority": 52,
-      "passes": false
+      "passes": true,
+      "notes": "[DONE 2026-06-13] Deleted RestaurantsPage.tsx (0 importers), EventFilters.tsx (removed the dead allEvents home view + handleViewAllEvents/handleScrapeEvents/scrapeMutation cascade), Hero3D.tsx, Hero3DCityscape.tsx. Confirmed three/@react-three only reachable via lazy HeroCityLite."
     }
   ]
 }
