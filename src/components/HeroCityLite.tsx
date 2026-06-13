@@ -203,31 +203,18 @@ function Scene() {
 }
 
 function HeroCityLiteComponent() {
+    // The heavy dynamic import (vendor-three) is already deferred to browser
+    // idle by EnhancedHero, so by the time this module loads we are past LCP
+    // and can mount the Canvas immediately. The isMounted guard keeps the
+    // WebGL Canvas client-only (never rendered during the first synchronous pass).
     const [isMounted, setIsMounted] = useState(false);
-    const [shouldRender, setShouldRender] = useState(false);
 
     useEffect(() => {
         setIsMounted(true);
-
-        // Defer 3D rendering until well after LCP completes.
-        // requestIdleCallback fires when the main thread is idle, but we also
-        // set a generous timeout so it doesn't block on slow 4G devices.
-        const scheduleRender = () => {
-            if ('requestIdleCallback' in window) {
-                (window as Window & { requestIdleCallback: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback(
-                    () => setShouldRender(true),
-                    { timeout: 8000 } // increased from 3s to 8s to avoid competing with LCP
-                );
-            } else {
-                setTimeout(() => setShouldRender(true), 5000); // increased from 1.5s
-            }
-        };
-
-        scheduleRender();
     }, []);
 
-    // Show placeholder until ready to render 3D
-    if (!isMounted || !shouldRender) {
+    // Show placeholder until mounted client-side
+    if (!isMounted) {
         return (
             <div className="absolute inset-0 w-full h-full z-0 opacity-60 bg-gradient-to-br from-[#020916] via-[#0a0a1a] to-[#1a1a2e]">
                 {/* Gradient placeholder matching the 3D scene colors */}

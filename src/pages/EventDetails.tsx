@@ -1,5 +1,5 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { Helmet } from "react-helmet-async";
 import { useEvents } from "@/hooks/useEvents";
 import { supabase } from "@/integrations/supabase/client";
@@ -49,7 +49,13 @@ import { useContentTracking } from "@/hooks/useContentTracking";
 import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { NearbyContent } from "@/components/NearbyContent";
-import { EventLocationMap } from "@/components/EventLocationMap";
+import { RevealOnVisible } from "@/components/RevealOnVisible";
+
+// Leaflet (+ leaflet CSS) is a heavy vendor chunk — load it only when the map
+// card scrolls into view (RevealOnVisible), never on initial detail-page paint.
+const EventLocationMap = lazy(() =>
+  import("@/components/EventLocationMap").then((m) => ({ default: m.EventLocationMap }))
+);
 
 export default function EventDetails() {
   const { slug } = useParams<{ slug: string }>();
@@ -460,15 +466,30 @@ export default function EventDetails() {
                 {/* Map Card - Leaflet with OSM tiles (iframe embed is blocked by OSM's X-Frame-Options) */}
                 {event.latitude && event.longitude && (
                   <Card className="overflow-hidden shadow-sm">
-                    <div className="h-48 overflow-hidden">
-                      <EventLocationMap
-                        latitude={event.latitude}
-                        longitude={event.longitude}
-                        venue={event.venue}
-                        location={event.location}
-                        className="h-48 w-full"
-                      />
-                    </div>
+                    <RevealOnVisible
+                      className="h-48 overflow-hidden"
+                      placeholder={
+                        <div className="h-48 w-full flex flex-col items-center justify-center gap-1 bg-muted text-muted-foreground">
+                          <MapPin className="h-6 w-6" aria-hidden="true" />
+                          <span className="text-sm font-medium px-4 text-center line-clamp-1">
+                            {event.venue || event.location}
+                          </span>
+                          <span className="text-xs">View map</span>
+                        </div>
+                      }
+                    >
+                      <Suspense
+                        fallback={<div className="h-48 w-full animate-pulse bg-muted" />}
+                      >
+                        <EventLocationMap
+                          latitude={event.latitude}
+                          longitude={event.longitude}
+                          venue={event.venue}
+                          location={event.location}
+                          className="h-48 w-full"
+                        />
+                      </Suspense>
+                    </RevealOnVisible>
                     <CardContent className="p-4">
                       <p className="text-sm font-medium mb-2">{event.venue || event.location}</p>
                       <Button asChild variant="outline" size="sm" className="w-full">

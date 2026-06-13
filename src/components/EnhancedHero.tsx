@@ -1,4 +1,4 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { Brain, MessageSquare, Mic, Sparkles, Users, Star, TrendingUp } from "lucide-react";
 import { Link } from "react-router-dom";
 import { QuickActions, QuickActionsMobile } from "./QuickActions";
@@ -36,6 +36,34 @@ export function EnhancedHero({
 }: EnhancedHeroProps) {
   const isMobile = useMediaQuery("(max-width: 768px)");
   const isNativeApp = isMobileApp();
+
+  // Defer the Three.js dynamic import (vendor-three, ~800KB) until the browser
+  // is idle AFTER first paint, so it never rides the critical path of `/`.
+  // Skipped entirely on mobile widths and in native builds. Gating the import
+  // here (not just the canvas render inside HeroCityLite) is what keeps
+  // vendor-three off the initial load.
+  const [enable3D, setEnable3D] = useState(false);
+  useEffect(() => {
+    if (IS_NATIVE || isMobile) return;
+    const win = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    let idleId: number;
+    let timeoutId: number;
+    if (typeof win.requestIdleCallback === "function") {
+      idleId = win.requestIdleCallback(() => setEnable3D(true), { timeout: 4000 });
+    } else {
+      timeoutId = window.setTimeout(() => setEnable3D(true), 2500);
+    }
+    return () => {
+      if (typeof win.cancelIdleCallback === "function" && idleId !== undefined) {
+        win.cancelIdleCallback(idleId);
+      }
+      if (timeoutId !== undefined) clearTimeout(timeoutId);
+    };
+  }, [isMobile]);
+
   // Compute greeting synchronously to avoid CLS from empty-to-filled text
   const hour = new Date().getHours();
   const greeting = hour < 12
@@ -64,8 +92,10 @@ export function EnhancedHero({
         className
       )}
     >
-      {/* 3D City Background – skip on mobile web (saves 800KB Three.js) and native apps */}
-      {HeroCityLite && !isMobile ? (
+      {/* 3D City Background – skip on mobile web (saves 800KB Three.js) and native
+          apps; on desktop the import is deferred to idle so it stays off the
+          critical path. The static gradient below paints immediately either way. */}
+      {HeroCityLite && !isMobile && enable3D ? (
         <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-[#0a0a1a] via-[#1a1a2e] to-[#2D1B69]" />}>
           <HeroCityLite />
         </Suspense>
