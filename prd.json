@@ -910,7 +910,8 @@
         "npm run validate passes (type-check + lint)"
       ],
       "priority": 49,
-      "passes": false
+      "passes": true,
+      "notes": "[DONE 2026-06-13] New OpenStatusChip (reuses getRestaurantOpenStatus): real status when hours parse, explicit check-hours fallback (link when site known) otherwise. Added to AttractionDetails (real attraction.hours), PlaygroundDetails (replaced hardcoded Dawn to Dusk x2), HotelDetails (fallback link)."
     },
     {
       "id": "WEB-UX-021",
