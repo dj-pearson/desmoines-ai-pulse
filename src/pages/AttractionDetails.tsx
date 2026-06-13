@@ -14,6 +14,7 @@ import { FAQSection } from "@/components/FAQSection";
 import { BackToTop } from "@/components/BackToTop";
 import EnhancedAttractionSEO from "@/components/EnhancedAttractionSEO";
 import SEOHead from "@/components/SEOHead";
+import { getOgImageUrl } from "@/lib/ogImage";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { buildTransformedSrcSet, HERO_IMAGE_WIDTHS } from "@/lib/imageTransform";
 import {
@@ -262,6 +263,7 @@ export default function AttractionDetails() {
         description={attraction.description ? `${attraction.description.slice(0, 160)}` : `Visit ${attraction.name}, a popular ${attraction.type?.toLowerCase()} attraction in ${BRAND.city}, ${BRAND.state}.`}
         type="website"
         imageUrl={attraction.image_url || undefined}
+        ogImageUrl={getOgImageUrl("attraction", attraction.id)}
         url={`/attractions/${attractionSlug}`}
         keywords={[
           attraction.name,

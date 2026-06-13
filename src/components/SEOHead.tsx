@@ -6,6 +6,12 @@ interface SEOHeadProps {
   description: string;
   type?: "website" | "article" | "business" | "event" | "restaurant";
   imageUrl?: string;
+  /**
+   * Dynamic branded OG-card URL (WEB-FEAT-008). When provided, it is used for
+   * og:image / twitter:image; `imageUrl` remains the structured-data/fallback
+   * image. Falls back to `imageUrl` (then the brand default) when omitted.
+   */
+  ogImageUrl?: string;
   url?: string;
   keywords?: string[];
   structuredData?: object;
@@ -28,6 +34,7 @@ export default function SEOHead({
   description,
   type = "website",
   imageUrl,
+  ogImageUrl,
   url,
   keywords = [],
   structuredData,
@@ -43,6 +50,8 @@ export default function SEOHead({
   const fullUrl = url ? getCanonicalUrl(url) : (typeof window !== 'undefined' ? window.location.href : baseUrl);
   const defaultImage = `${baseUrl}${BRAND.ogImage}`;
   const image = imageUrl || defaultImage;
+  // Branded dynamic card for social previews; falls back to the static image.
+  const socialImage = ogImageUrl || image;
 
   // Enhanced title with branding
   const enhancedTitle = title.includes(BRAND.name)
@@ -118,7 +127,7 @@ export default function SEOHead({
       <meta property="og:description" content={description} />
       <meta property="og:type" content={type} />
       <meta property="og:url" content={fullUrl} />
-      <meta property="og:image" content={image} />
+      <meta property="og:image" content={socialImage} />
       <meta property="og:image:width" content="1200" />
       <meta property="og:image:height" content="630" />
       <meta property="og:image:alt" content={title} />
@@ -146,7 +155,7 @@ export default function SEOHead({
       <meta name="twitter:card" content="summary_large_image" />
       <meta name="twitter:title" content={enhancedTitle} />
       <meta name="twitter:description" content={description} />
-      <meta name="twitter:image" content={image} />
+      <meta name="twitter:image" content={socialImage} />
       <meta name="twitter:image:alt" content={title} />
       <meta name="twitter:site" content={BRAND.twitter} />
       <meta name="twitter:creator" content={BRAND.twitter} />

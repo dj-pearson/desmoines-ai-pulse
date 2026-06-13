@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import SEOHead from "@/components/SEOHead";
+import { getOgImageUrl } from "@/lib/ogImage";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import AIWriteup from "@/components/AIWriteup";
@@ -384,6 +385,7 @@ export default function RestaurantDetails() {
         structuredData={restaurantSchema}
         url={`/restaurants/${restaurant.slug || restaurant.id}`}
         imageUrl={restaurant.image_url}
+        ogImageUrl={getOgImageUrl("restaurant", restaurant.id)}
         breadcrumbs={breadcrumbs}
         location={{
           name: restaurant.name,

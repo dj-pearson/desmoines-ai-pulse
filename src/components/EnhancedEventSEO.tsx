@@ -2,6 +2,7 @@ import { Helmet } from "react-helmet-async";
 import { Event } from "@/lib/types";
 import { createEventSlugWithCentralTime, hasSpecificTime, formatEventDate, formatInCentralTime } from "@/lib/timezone";
 import { BRAND } from "@/lib/brandConfig";
+import { getOgImageUrl } from "@/lib/ogImage";
 
 interface EnhancedEventSEOProps {
   event: Event;
@@ -99,6 +100,10 @@ export default function EnhancedEventSEO({
   };
 
   const eventUrl = `${BRAND.baseUrl}/events/${createEventSlugWithCentralTime(event.title, event)}`;
+
+  // Branded dynamic OG card (WEB-FEAT-008); falls back to the raw image.
+  const fallbackImage = event.image_url || `${BRAND.baseUrl}${BRAND.ogImage}`;
+  const socialImage = getOgImageUrl("event", event.id) || fallbackImage;
 
   // Use actual event description for schema (Google penalizes keyword-stuffed descriptions)
   const schemaDescription = event.enhanced_description || event.original_description || `${event.title} - ${event.category} event in ${event.city || BRAND.city}, ${BRAND.state}`;
@@ -272,7 +277,7 @@ export default function EnhancedEventSEO({
       <meta property="og:locality" content={event.city || BRAND.city} />
       <meta property="og:region" content={BRAND.state} />
       <meta property="og:country-name" content="United States" />
-      <meta property="og:image" content={event.image_url || `${BRAND.baseUrl}${BRAND.ogImage}`} />
+      <meta property="og:image" content={socialImage} />
       <meta property="og:image:width" content="1200" />
       <meta property="og:image:height" content="630" />
       <meta property="og:image:alt" content={`${event.title} - ${event.category} event in ${BRAND.city}`} />
@@ -283,7 +288,7 @@ export default function EnhancedEventSEO({
       <meta name="twitter:card" content="summary_large_image" />
       <meta name="twitter:title" content={getOptimizedTitle()} />
       <meta name="twitter:description" content={getGEODescription()} />
-      <meta name="twitter:image" content={event.image_url || `${BRAND.baseUrl}${BRAND.ogImage}`} />
+      <meta name="twitter:image" content={socialImage} />
       <meta name="twitter:site" content={BRAND.twitter} />
 
       {/* Structured Data - Event Schema (primary for Google Events indexing) */}
