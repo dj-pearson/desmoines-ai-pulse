@@ -1,6 +1,7 @@
 import AdminNav from "@/components/admin/AdminNav";
 import NewsletterCampaignsManager from "@/components/admin/NewsletterCampaignsManager";
 import NewsletterSubscribersManager from "@/components/admin/NewsletterSubscribersManager";
+import WeeklyDigestControls from "@/components/admin/WeeklyDigestControls";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 
@@ -18,7 +19,8 @@ export default function AdminEmail() {
           <TabsContent value="subscribers" className="mt-4">
             <NewsletterSubscribersManager />
           </TabsContent>
-          <TabsContent value="campaigns" className="mt-4">
+          <TabsContent value="campaigns" className="mt-4 space-y-4">
+            <WeeklyDigestControls />
             <NewsletterCampaignsManager />
           </TabsContent>
         </Tabs>

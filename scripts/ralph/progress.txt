@@ -102,3 +102,31 @@ Quality: type-check passes; ai-article-pipeline + generate-article parse via esb
 - Articles consumers key on status==='published' (Articles.tsx, sitemapGenerator) — setting status='published' + published_at is all that's needed for a new article to enter the public site, sitemap, and newsletter pool. No extra wiring.
 - Next story WEB-AUTO-008 (auto weekly digest): send-newsletter-campaign(send_now/schedule) + dispatch-scheduled-newsletters exist; missing piece is automated campaign CREATION (assemble top events/restaurants/newest article → create+schedule a weekly_digest campaign). Use the same jobRunner + feature_flags-pause + pre-send validation-gate pattern.
 ---
+
+## 2026-06-12 - WEB-AUTO-008 (Auto-assembled weekly digest newsletter)
+Built the self-running weekly digest: assemble → validation-gate → schedule, sent through the existing dispatch path.
+
+Files added:
+- supabase/migrations/20260612000017_weekly_digest_pipeline.sql — additive newsletter_campaigns.campaign_type (nullable; NULL=manual) + partial index + seeds feature_flags 'weekly_digest_enabled'=true (pause toggle).
+- supabase/migrations/20260612000018_weekly_digest_cron.sql — schedule 'assemble-weekly-digest' Tuesday 14:00 UTC (pg_cron pattern, body action:'assemble').
+- supabase/functions/assemble-weekly-digest/index.ts — orchestrator (requireAdminOrApiKey + runJob): pause check → 6-day idempotency → gather (top events next 7d not hidden/merged, top-rated restaurants, newest published article) → renderEmail (shared CAN-SPAM layout) → pre-send gates (subscribers>0, subject≤120, ≥1 item, links well-formed https under origin) THROW on failure → insert scheduled newsletter_campaigns row (campaign_type='weekly_digest', scheduled_for=now()). Plus action:'preview' (assemble-only, no write) for the admin UI.
+- src/components/admin/WeeklyDigestControls.tsx — admin card: Switch pause toggle (writes feature_flags) + 'Preview next week's digest' (invokes preview, renders sanitized HTML + counts).
+
+Files changed:
+- supabase/functions/dispatch-scheduled-newsletters/index.ts — wrapped the dispatch loop in runJob (delivered/failed per campaign → Job Health), but ONLY when a batch is claimed (fires every minute), maxAttempts:1 (sends not idempotent). Empty path + response shape unchanged.
+- src/components/admin/JobHealthPanel.tsx — assemble-weekly-digest added to RERUNNABLE.
+- src/pages/AdminEmail.tsx — render WeeklyDigestControls above the campaigns table.
+- docs/AUTOMATION_JOBS.md — job rows + 'Weekly digest newsletter' section.
+- prd.json — WEB-AUTO-008 passes:true.
+
+Quality: type-check passes; both edge fns parse via esbuild; WeeklyDigestControls/JobHealthPanel/AdminEmail lint 0 errors. Staged ONLY my files (external churn left unstaged). Migrations additive/idempotent, not applied in-container.
+
+**Learnings for future iterations:**
+- TWO separate "weekly digest" systems exist and must not be confused: (1) send-weekly-digest = PERSONALIZED per-user email (RSVPs/favorites/recs) to registered users via user_email_preferences (Sunday cron). (2) newsletter_campaigns / send-newsletter-campaign / dispatch-scheduled-newsletters = BROADCAST campaigns to newsletter_subscribers. WEB-AUTO-008 is the broadcast one.
+- SCHEDULE-DON'T-SEND pattern to reuse a send path without an admin JWT: instead of calling send-newsletter-campaign (which requires an admin user JWT + role check), insert a newsletter_campaigns row directly with status='scheduled' + scheduled_for=now(). The existing dispatch-scheduled-newsletters cron (every minute, claim_scheduled_newsletter_campaigns RPC, service-role) picks it up and sends through the identical Resend path — so unsubscribe/compliance/webhooks are byte-identical to a manual send, and the scheduled function never needs to impersonate an admin. This is the clean template for any "make an admin-only send automatable" story (e.g. WEB-AUTO-012 social).
+- VALIDATION-GATE-AS-FAILURE: to satisfy "gate failure aborts + alerts via WEB-AUTO-001", just `throw` inside the runJob fn after ctx.meta({aborted,gateFailures}). runJob records status='failed' and fires sendJobAlert. No campaign row is created before the gate, so a failed gate leaves zero side effects.
+- jobRunner on a HIGH-FREQUENCY cron (every minute): do the cheap claim/early-exit OUTSIDE runJob and only enter runJob when there's real work, else you create 1440 automation_job_runs/day and bury the panel. Pattern: claim first → if empty return plain 200 → else runJob the batch.
+- dispatch reuse: dispatch-scheduled-newsletters sends ONE body_html to all recipients (no per-recipient token substitution), so campaign unsubscribe links are the token-less /profile?tab=settings fallback (renderEmail with a generic recipient). That's an existing limitation of the broadcast path, not something to "fix" here.
+- Event detail URLs in emails use /events/${createSlug(title)} (slug derived from title — events have NO slug column); restaurants use /restaurants/${slug||id}; articles use /articles/${slug} (articles DO have a required slug). Mirror createSlug from send-weekly-digest.
+- Next story WEB-AUTO-009 (UGC auto-moderation): no moderation exists on review/contact writes. Build a moderate-content edge fn (Claude toxicity/spam scores) called post-insert (default row hidden until scored), a moderation queue table + admin panel, fail-open-with-flag. Prereq for WEB-FEAT-010 photo reviews — route those through the same seam.
+---

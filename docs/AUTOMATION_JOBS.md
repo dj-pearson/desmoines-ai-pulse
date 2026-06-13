@@ -28,7 +28,8 @@ All times UTC. Schedules are cron expressions (`min hour dom mon dow`).
 | `send-event-reminders-hourly` | `0 * * * *` | fn `send-event-reminders` | Email event reminders | — |
 | `process-event-reminders-direct` | `0 * * * *` | SQL/fn | Direct reminder processing | — |
 | `send-weekly-digest` | `0 8 * * *` | fn `send-weekly-digest` | Weekly digest email | — |
-| `dispatch-scheduled-newsletters` | `* * * * *` | fn `dispatch-scheduled-newsletters` | Send due scheduled campaigns | planned |
+| **`assemble-weekly-digest`** | `0 14 * * 2` | fn `assemble-weekly-digest` | **Auto-assemble + schedule the weekly digest (top events / restaurants / newest article); validation-gated. Pause via `feature_flags.weekly_digest_enabled` (WEB-AUTO-008)** | ✅ |
+| `dispatch-scheduled-newsletters` | `* * * * *` | fn `dispatch-scheduled-newsletters` | Send due scheduled campaigns (now jobRunner-wrapped — logs a run only when a batch is actually dispatched) | ✅ |
 | `aggregate-daily-ad-analytics` | `0 1 * * *` | SQL fn | Roll up ad analytics for the day | planned |
 | `cleanup-security-logs` | `0 2 * * *` | SQL fn | Trim old security logs | — |
 | `cleanup-login-attempts` | (on demand) | SQL fn | Remove login_attempts > 24h (WEB-SEC-006) | — |
@@ -133,3 +134,35 @@ manager.
 **Pausing the pipeline** (no code change): set the `ai_article_pipeline_enabled`
 row in `feature_flags` to `enabled = false`. The next run exits early and records
 `paused: true`. Re-enable to resume. Human-authored article flows are unaffected.
+
+## Weekly digest newsletter (WEB-AUTO-008)
+
+`assemble-weekly-digest` runs every **Tuesday 14:00 UTC** (~9:00 AM Central) and
+writes + schedules the weekly digest with no human in the loop:
+
+1. **Pause check** — `feature_flags.weekly_digest_enabled`. When `false`, the run
+   exits early and records `paused: true`.
+2. **Idempotency** — skips if a `weekly_digest` campaign was already created in the
+   last 6 days, so a duplicate cron firing or a manual re-run is a no-op.
+3. **Assemble** — top upcoming events (next 7 days, not hidden/merged), top-rated
+   restaurants, and the newest published article, wrapped in the shared CAN-SPAM
+   marketing email layout (`_shared/emailLayout.ts`).
+4. **Pre-send validation gates** — recipient segment > 0 active subscribers,
+   subject within the 120-char cap, at least one content item, and every content
+   link a well-formed `https` URL under the site origin. **Any gate failure aborts
+   the run** (no campaign row created) and surfaces as a terminal `jobRunner`
+   failure that **alerts the admin** — a broken email is never scheduled.
+5. **Schedule** — inserts a `newsletter_campaigns` row (`status = 'scheduled'`,
+   `scheduled_for = now()`, `campaign_type = 'weekly_digest'`). The existing
+   `dispatch-scheduled-newsletters` cron (every minute) sends it within ~1 minute
+   through the **identical Resend path**, so unsubscribe/compliance handling and
+   delivery webhooks (opens/bounces/complaints) behave exactly as for a manual send.
+
+Send results (delivered/failed per campaign) are recorded by
+`dispatch-scheduled-newsletters` through the jobRunner and show in **Admin → Job
+Health**; both jobs are re-runnable there.
+
+**Admin controls** (Admin → Email → Campaigns → *Weekly digest*): a one-click
+toggle pauses/resumes the recurrence (writes `weekly_digest_enabled`), and
+**Preview next week's digest** renders the assembled subject + HTML (and content /
+recipient counts) without creating or sending anything.
