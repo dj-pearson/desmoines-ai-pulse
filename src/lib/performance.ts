@@ -54,10 +54,19 @@ export const throttle = <T extends (...args: any[]) => any>(
   };
 };
 
-// Web Vitals tracking - suppress console output to reduce noise
+// Web Vitals tracking. In production this reports anonymous, sampled RUM
+// measurements to the web-vitals-collector edge function (WEB-PERF-007); in dev
+// it just logs. Both are no-ops on the critical path — this runs on idle.
 export const trackWebVitals = () => {
-  if (typeof window !== 'undefined' && 'performance' in window) {
-    // Track Core Web Vitals using dynamic import with modern API
+  if (typeof window === 'undefined' || !('performance' in window)) return;
+
+  // Production RUM reporting (DNT-respecting, sampled, sendBeacon-flushed).
+  import('./webVitals').then(({ initWebVitalsReporting }) => {
+    initWebVitalsReporting();
+  }).catch(() => {});
+
+  // Dev-only console visibility for local debugging.
+  if (import.meta.env.DEV) {
     import('web-vitals').then(({ onCLS, onINP, onFCP, onLCP, onTTFB }) => {
       const logMetric = (metric: unknown) => logger.debug('webVitals', 'metric', { metric });
       onCLS(logMetric);

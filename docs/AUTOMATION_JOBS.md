@@ -44,6 +44,7 @@ All times UTC. Schedules are cron expressions (`min hour dom mon dow`).
 | **`campaign-creative-review-sweep`** | `35 * * * *` | fn `review-campaign-creative` | **Safety-net: auto-review ad creatives not yet reviewed (real-time call failed); spec/quality/brand-safety/standing checks → auto-approve or hold (WEB-AUTO-010)** | ✅ |
 | **`sitemap-regen-6h`** | `0 */6 * * *` | fn `generate-sitemaps` | **Event-driven sitemap regen: drains `sitemap_change_queue`, regenerates events/restaurants/attractions/articles sitemaps to the `sitemaps` Storage bucket (served fresh by the Pages middleware), pings search engines (WEB-AUTO-011)** | ✅ |
 | **`subscription-lifecycle-daily`** | `0 15 * * *` | fn `subscription-lifecycle` | **Web-sub dunning/renewal/win-back: 7-day renewal reminders, escalating dunning emails on `past_due`, auto-downgrade to Free after the final-failure window, one-per-lapse win-back after cancellation; logs every transition to `subscription_events` (WEB-AUTO-013)** | ✅ |
+| **`web-vitals-rollup-weekly`** | `0 16 * * 1` | fn `web-vitals-rollup` | **RUM web-vitals regression watch: computes p75 per metric per page-group for the trailing 7d vs prior 7d, upserts `web_vitals_weekly`, emails on a >20% regression or budget breach (LCP 2.5s / INP 200ms / CLS 0.1), prunes raw samples >90d (WEB-PERF-007)** | ✅ |
 
 \* **Observed** = wrapped with `jobRunner` and recording to `automation_job_runs`.
 `✅` done, `planned` = adopts the same one-line wrap as its WEB-AUTO story lands
@@ -433,3 +434,43 @@ is in the Job Health re-run list (re-run sends `{manual:true}`).
 cron swap). The existing `social-media-manager` actions (`generate`, `publish`,
 `automated_generation_only`, `publish_pending_posts`, `debug`) are unchanged; the
 new action is admin/service gated. No mobile binary calls this function.
+
+## Real-user web-vitals monitoring (WEB-PERF-007)
+
+Closes the loop on the WEB-PERF stories: instead of trusting that a deploy stayed
+fast, real visitor sessions report Core Web Vitals and a weekly job catches any
+regression automatically.
+
+**Collection (client).** `src/lib/webVitals.ts` (`initWebVitalsReporting`, called on
+idle from `lib/lazyInit` → `performance.trackWebVitals`, so it never touches the
+critical path). It is **production + web-only**, **DNT/GPC-respecting**, and **sampled**
+(~25% of eligible sessions). It records LCP / CLS / INP / TTFB / FCP via the
+`web-vitals` library, tags each with a normalized **page-group** (home, event-detail,
+events-list, …) and the connection type, buffers them, and flushes with
+`navigator.sendBeacon` (text/plain Blob → no CORS preflight) on `visibilitychange`
+hidden / `pagehide`. **No PII** is collected.
+
+**Ingest.** `web-vitals-collector` edge fn (`verify_jwt=false`, public-by-design like
+`log-content-metrics` — sendBeacon can't attach an auth header). It strictly
+validates metric/rating/page-group enums + value ranges, caps the batch, and inserts
+into `web_vitals_samples` with the service role. The table is **RLS admin-read only**
+(anon can neither read nor write it).
+
+**Weekly rollup + alerts.** `web-vitals-rollup` (cron `web-vitals-rollup-weekly`,
+Mondays 16:00 UTC ≈ 10–11am Central), wrapped in the WEB-AUTO-001 `runJob`:
+
+1. Calls the `get_web_vitals_p75(since, until)` SECURITY DEFINER RPC for the trailing
+   7-day window and the prior 7-day window (p75 per page-group per metric).
+2. Upserts `web_vitals_weekly` (p75, prev_p75, pct_change, breaches_budget,
+   sample_count) keyed `(week_start, page_group, metric)`.
+3. **Alerts** (`sendJobAlert`, not a job failure) when any metric **regresses > 20%**
+   week-over-week **or breaches budget** — LCP 2500ms, INP 200ms, CLS 0.1.
+4. Prunes `web_vitals_samples` older than **90 days**.
+
+**Admin.** Admin → System → **Web Vitals** tab (`WebVitalsPanel`, lazy-loaded so
+recharts stays out of the page chunk) renders the weekly p75 trend per metric with
+budget reference lines and a page-group selector. `web-vitals-rollup` is in the Job
+Health re-run list (re-run sends `{manual:true}`; the single-purpose job ignores it).
+
+**Backward compat:** additive only (migration `20260612000015`: two new tables, one
+RPC, one cron). No mobile binary touches any of this.

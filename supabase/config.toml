@@ -24,6 +24,11 @@ verify_jwt = false
 [functions.log-content-metrics]
 verify_jwt = false
 
+# WEB-PERF-007: anonymous RUM web-vitals beacon (navigator.sendBeacon can't send
+# an auth header). Public-by-design; validated + admin-read-only table.
+[functions.web-vitals-collector]
+verify_jwt = false
+
 [functions.test-ai-model]
 verify_jwt = true
 

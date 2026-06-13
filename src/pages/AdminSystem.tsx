@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import AdminNav from "@/components/admin/AdminNav";
@@ -7,17 +7,24 @@ import AdminSystemControls from "@/components/AdminSystemControls";
 import AdminApplicationSettings from "@/components/AdminApplicationSettings";
 import JobHealthPanel from "@/components/admin/JobHealthPanel";
 import SubscriptionLifecyclePanel from "@/components/admin/SubscriptionLifecyclePanel";
+import { lazyWithRetry } from "@/lib/lazyLoad";
 import {
   Users,
   Server,
   Cog,
   Activity,
   CreditCard,
+  Gauge,
 } from "lucide-react";
+
+// Lazy-loaded so recharts stays out of the System page's initial chunk and
+// only loads when the Web Vitals tab is opened.
+const WebVitalsPanel = lazyWithRetry(() => import("@/components/admin/WebVitalsPanel"));
 
 const SYSTEM_TABS = [
   { id: "users", label: "User Management", icon: Users },
   { id: "jobs", label: "Job Health", icon: Activity },
+  { id: "vitals", label: "Web Vitals", icon: Gauge },
   { id: "subscriptions", label: "Subscriptions", icon: CreditCard },
   { id: "system", label: "System Controls", icon: Server },
   { id: "settings", label: "Settings", icon: Cog },
@@ -78,6 +85,12 @@ export default function AdminSystem() {
         {canManageUsers() && activeTab === "users" && <UserRoleManager />}
 
         {activeTab === "jobs" && <JobHealthPanel />}
+
+        {activeTab === "vitals" && (
+          <Suspense fallback={<p className="text-sm text-muted-foreground py-8 text-center">Loading web vitals…</p>}>
+            <WebVitalsPanel />
+          </Suspense>
+        )}
 
         {canManageUsers() && activeTab === "subscriptions" && <SubscriptionLifecyclePanel />}
 

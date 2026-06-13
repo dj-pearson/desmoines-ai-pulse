@@ -36,6 +36,7 @@ const RERUNNABLE: Record<string, string> = {
   "review-campaign-creative": "review-campaign-creative",
   "social-auto-post": "social-media-manager",
   "subscription-lifecycle": "subscription-lifecycle",
+  "web-vitals-rollup": "web-vitals-rollup",
 };
 
 function statusBadge(status: JobHealthRow["last_status"]) {
