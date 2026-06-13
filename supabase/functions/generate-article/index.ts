@@ -2,6 +2,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
 import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -44,12 +45,21 @@ serve(async (req) => {
       customInstructions = ''
     }: ArticleGenerationRequest = await req.json();
 
-    // Get user info
+    // Auth: a logged-in user (admin UI "Generate" button) authors the article;
+    // a trusted internal caller (the WEB-AUTO-007 pipeline via service-role key,
+    // or an X-API-Key) may also generate with a null author. Additive — the
+    // existing user-JWT path is unchanged.
     const authHeader = req.headers.get('Authorization');
     const token = authHeader?.replace('Bearer ', '');
-    
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
-    if (authError || !user) throw new Error('Authentication required');
+
+    const { data: { user } } = await supabaseClient.auth.getUser(token ?? '');
+    let authorId: string | null = null;
+    if (user) {
+      authorId = user.id;
+    } else {
+      const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+      if (authFailure) return authFailure;
+    }
 
     console.log(`Generating AI article for topic: ${topic}`);
 
@@ -281,7 +291,7 @@ Write the COMPLETE article from start to finish. No placeholders, no "[Content c
         title: articleData.title,
         content: articleData.content,
         excerpt: articleData.excerpt,
-        author_id: user.id,
+        author_id: authorId,
         status: 'draft',
         category: articleData.category || category,
         tags: articleData.tags || [],

@@ -74,3 +74,31 @@ Quality: `npm run type-check` passes; dedupe-content parses via esbuild; targete
 - merge_duplicate_content also handles the admin path (richer survivor chosen client-side, decided_by='admin') AND resolves the queue row — so the panel just calls the RPC; dismiss needs its own RPC because RLS only grants SELECT on the queue.
 - For WEB-AUTO-006 (stale-event soft-hide): the is_merged/.neq pattern + types.ts column-add is the template for is_hidden; that story owns the FULL public-query sweep (this story only filtered the two primary browse hooks).
 ---
+
+## 2026-06-12 - WEB-AUTO-007 (AI article pipeline: topic → draft → quality gate → auto-publish)
+Built the self-running daily local-SEO article pipeline that glues suggest-article-topics + generate-article + a quality gate together with no human in the loop.
+
+Files added:
+- supabase/migrations/20260612000015_ai_article_pipeline.sql — additive articles.is_auto_published(bool default false)/quality_score(int)/pipeline_reasons(text[]) + seeds feature_flags row 'ai_article_pipeline_enabled'=true (the pause toggle).
+- supabase/migrations/20260612000016_ai_article_pipeline_cron.sql — schedule 'ai-article-pipeline-daily' 0 11 * * * → ai-article-pipeline fn (pg_cron pattern).
+- supabase/functions/ai-article-pipeline/index.ts — orchestrator wrapped in runJob: pause-flag check → daily-cap check → pick top deduped topic → generate-article draft → score (wordcount/relevance/readability/uniqueness/SEO + Claude safety) → publish(>=80)/draft-review(50-79)/discard(<50).
+
+Files changed:
+- supabase/functions/generate-article/index.ts — ADDITIVE auth: user-JWT path unchanged (authors as that user); service-role/API-key caller (pipeline) may now generate with author_id=null via requireAdminOrApiKey. No tightening; anon still rejected.
+- src/integrations/supabase/types.ts — is_auto_published/quality_score/pipeline_reasons on articles Row/Insert/Update.
+- src/hooks/useArticles.ts — same 3 fields on the Article interface.
+- src/components/ArticlesManager.tsx — 'AI Auto {score}' badge next to auto-published titles.
+- src/components/admin/JobHealthPanel.tsx — ai-article-pipeline added to RERUNNABLE.
+- docs/AUTOMATION_JOBS.md — job-table row + "AI article pipeline" section (flow, thresholds, pause).
+- prd.json — WEB-AUTO-007 passes:true.
+
+Quality: type-check passes; ai-article-pipeline + generate-article parse via esbuild; edited frontend files lint 0 errors. Migrations additive/idempotent (not applied in-container).
+
+**Learnings for future iterations:**
+- generate-article ALWAYS inserts a draft row (it has no dry/return-only mode), and its insert is the cheapest way to reuse the full SEO prompt. So the pipeline generates the draft first, THEN scores from the returned article.content, then updates (publish/draft) or deletes (discard). Discards do a real insert+delete — acceptable, keeps generate-article untouched in shape.
+- The "additive auth broadening" trick (try auth.getUser(token); if a user, use it; else fall through to requireAdminOrApiKey) is the clean, backward-compat-safe way to let an internal/service caller invoke a function that was previously user-JWT-only WITHOUT breaking the human path. author_id becomes nullable for the non-user caller. Reuse this for any other "make a manual fn schedulable" story.
+- PAUSE FLAG pattern: reuse the existing feature_flags table (flag_key/enabled, public-read + admin-write RLS already there) rather than inventing a config table. Seed the flag enabled=true in the migration; the fn reads it with .maybeSingle() and exits early when enabled===false. This is the template for WEB-AUTO-008/010/012 pause toggles.
+- config.toml STILL has the external uncommitted churn (11 deleted edge fns + entry removals + 3 migration mods + supabase/.temp) from before WEB-AUTO-005/006 — NOT ours. Do NOT git add config.toml or those files; stage only your own files explicitly. New verify_jwt=false fns run fine under the DEFAULT verify_jwt=true because the cron service-role bearer and admin JWT both clear the Supabase gateway and requireAdminOrApiKey is the real gate.
+- Articles consumers key on status==='published' (Articles.tsx, sitemapGenerator) — setting status='published' + published_at is all that's needed for a new article to enter the public site, sitemap, and newsletter pool. No extra wiring.
+- Next story WEB-AUTO-008 (auto weekly digest): send-newsletter-campaign(send_now/schedule) + dispatch-scheduled-newsletters exist; missing piece is automated campaign CREATION (assemble top events/restaurants/newest article → create+schedule a weekly_digest campaign). Use the same jobRunner + feature_flags-pause + pre-send validation-gate pattern.
+---

@@ -633,7 +633,10 @@ export type Database = {
           featured_image_url: string | null
           generated_from_suggestion_id: string | null
           id: string
+          is_auto_published: boolean
+          pipeline_reasons: string[] | null
           published_at: string | null
+          quality_score: number | null
           seo_description: string | null
           seo_keywords: string[] | null
           seo_title: string | null
@@ -653,7 +656,10 @@ export type Database = {
           featured_image_url?: string | null
           generated_from_suggestion_id?: string | null
           id?: string
+          is_auto_published?: boolean
+          pipeline_reasons?: string[] | null
           published_at?: string | null
+          quality_score?: number | null
           seo_description?: string | null
           seo_keywords?: string[] | null
           seo_title?: string | null
@@ -673,7 +679,10 @@ export type Database = {
           featured_image_url?: string | null
           generated_from_suggestion_id?: string | null
           id?: string
+          is_auto_published?: boolean
+          pipeline_reasons?: string[] | null
           published_at?: string | null
+          quality_score?: number | null
           seo_description?: string | null
           seo_keywords?: string[] | null
           seo_title?: string | null

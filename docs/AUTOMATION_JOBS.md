@@ -36,6 +36,7 @@ All times UTC. Schedules are cron expressions (`min hour dom mon dow`).
 | `auto-trigger-scraping-jobs` / `scraping-jobs-runner` | `*/10-15 * * * *` | SQL/fn | Drive the scraping-jobs queue | — |
 | **`data-quality-heal-nightly`** | `30 2 * * *` | fn `data-quality-heal` | **Geocode + SEO/GEO + image self-heal, <=25 rows/table/run (WEB-AUTO-003)** | ✅ |
 | **`dedupe-content-weekly`** | `15 3 * * 1` | fn `dedupe-content` | **Detect duplicate events/restaurants (trigram + proximity); auto-merge >=0.9, queue 0.7-0.9 to Admin → Content → Duplicates (WEB-AUTO-005)** | ✅ |
+| **`ai-article-pipeline-daily`** | `0 11 * * *` | fn `ai-article-pipeline` | **Daily local-SEO article: pick topic → generate draft → score → publish (≥80) / draft-review (50-79) / discard (<50). Cap 1 auto-publish/day. Pause via `feature_flags.ai_article_pipeline_enabled` (WEB-AUTO-007)** | ✅ |
 | **`job-health-watchdog-daily`** | `0 8 * * *` | fn `job-health-watchdog` | **Alert on missed/failed observed jobs (WEB-AUTO-001)** | n/a |
 
 \* **Observed** = wrapped with `jobRunner` and recording to `automation_job_runs`.
@@ -105,3 +106,30 @@ sets `is_hidden = false` and the event reappears everywhere immediately. Note it
 deliberately **leaves `hidden_at` set** — that's what stops the nightly job from
 re-hiding the restored row. Once an event passes the 180-day delete window it is
 purged regardless of `is_hidden`; restore it before then.
+
+## AI article pipeline (WEB-AUTO-007)
+
+`ai-article-pipeline` runs daily and writes one local-SEO article without a human
+in the loop:
+
+1. **Topic** — calls `suggest-article-topics`, ranks by SEO potential, and picks
+   the top suggestion whose title isn't a near-duplicate of a recent article.
+2. **Draft** — calls `generate-article` with that topic (creates a `draft`).
+3. **Score** — word count (≥400), Des Moines/Iowa relevance, readability,
+   similarity-to-existing, and a Claude content-safety check → `quality_score` 0-100.
+4. **Route** —
+   - **≥ 80 and safe** → `status = published`, `published_at` set, `is_auto_published = true`
+     (enters the public site, sitemap, and newsletter content pool automatically);
+   - **50-79** → kept as a `draft` with `review_status = pending_review` for the
+     admin review queue;
+   - **< 50, too short, too similar, or unsafe** → the draft is **discarded**
+     (deleted), with the attempt + reasons recorded in `automation_job_runs`.
+
+Cap: **1 auto-published article/day**. Score distribution + decision flow through
+the jobRunner and show in **Admin → Job Health** (re-runnable there too).
+Auto-published articles are tagged with an **"AI Auto"** badge in the Articles
+manager.
+
+**Pausing the pipeline** (no code change): set the `ai_article_pipeline_enabled`
+row in `feature_flags` to `enabled = false`. The next run exits early and records
+`paused: true`. Re-enable to resume. Human-authored article flows are unaffected.

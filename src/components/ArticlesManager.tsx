@@ -238,7 +238,22 @@ export default function ArticlesManager() {
                   <TableRow key={article.id}>
                     <TableCell>
                       <div className="max-w-xs">
-                        <div className="font-medium truncate">{article.title}</div>
+                        <div className="font-medium truncate flex items-center gap-1.5">
+                          <span className="truncate">{article.title}</span>
+                          {article.is_auto_published && (
+                            <Badge
+                              variant="secondary"
+                              className="shrink-0 bg-purple-100 text-purple-700"
+                              title={
+                                article.quality_score != null
+                                  ? `Auto-published by the AI pipeline (quality score ${article.quality_score})`
+                                  : "Auto-published by the AI pipeline"
+                              }
+                            >
+                              AI Auto{article.quality_score != null ? ` ${article.quality_score}` : ""}
+                            </Badge>
+                          )}
+                        </div>
                         {article.excerpt && (
                           <div className="text-sm text-muted-foreground truncate">
                             {article.excerpt}
