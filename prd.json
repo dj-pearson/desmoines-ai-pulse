@@ -498,7 +498,7 @@
       ],
       "priority": 32,
       "passes": false,
-      "notes": "Evidence: result count hidden on mobile (src/pages/Restaurants.tsx ~503); filters live in the hero so they scroll away. Mirrors what IOS-IA-004 shipped natively."
+      "notes": "Evidence: result count hidden on mobile (src/pages/Restaurants.tsx ~503); filters live in the hero so they scroll away. Mirrors what IOS-IA-004 shipped natively. [PARTIAL 2026-06-13] Result count now visible on mobile (Restaurants, was hidden md:block); aria-live already announces it. Remaining: sticky search/filter bar, removable chips on Events/Restaurants (Attractions already has them), filter-sheet focus restoration, Playwright mobile suite — need browser verification not available in this container."
     },
     {
       "id": "WEB-UX-004",
