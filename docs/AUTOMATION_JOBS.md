@@ -1,6 +1,6 @@
 # Automation Jobs — pg_cron Inventory
 
-**Last updated:** 2026-06-12 (WEB-AUTO-001)
+**Last updated:** 2026-06-13 (WEB-AUTO-006)
 
 Every scheduled job (pg_cron → edge function or SQL) is listed here. Jobs wrapped
 with `_shared/jobRunner.ts` record each run in `automation_job_runs` and surface
@@ -18,8 +18,9 @@ All times UTC. Schedules are cron expressions (`min hour dom mon dow`).
 | `auto-enrich-restaurants-daily` | `0 3 * * *` | fn `auto-enrich-restaurants` | Fill missing restaurant data | — |
 | `backfill-coordinates-nightly` | `30 4 * * *` | fn `backfill-all-coordinates` | Geocode rows missing lat/lng | — |
 | `nightly-coordinate-backfill` | `0 2 * * *` | fn `backfill-all-coordinates` | Geocode backfill (2nd pass) | — |
-| `cleanup-old-events-weekly` | weekly | fn `cleanup-old-events` | Purge events past retention + their media | ✅ |
-| `monthly-event-purge` | monthly | fn `cleanup-old-events` | Monthly deep purge | ✅ (same fn) |
+| **`event-lifecycle-nightly`** | `0 4 * * *` | fn `cleanup-old-events` | **Two-phase stale-event lifecycle: soft-hide @30d, archive-snapshot + hard-delete @6mo (WEB-AUTO-006)** | ✅ |
+| ~~`cleanup-old-events-weekly`~~ | retired | — | Legacy hard-delete-at-90d (no observability) — **unscheduled by 20260612000012**, replaced by `event-lifecycle-nightly` | — |
+| `monthly-event-purge` | monthly | fn `cleanup-old-events` | Monthly deep purge (same fn, now two-phase) | ✅ (same fn) |
 | `validate-source-urls-weekly` | weekly | fn `validate-source-urls` | Detect + auto-repair broken event URLs (re-discover, Wayback, flag) | ✅ |
 | `update-trending-scores` | `15 * * * *` | SQL / fn | Recompute trending scores | — |
 | `generate-weekend-guide` | scheduled | fn `generate-weekend-guide` | Build the weekend guide | — |
@@ -89,3 +90,39 @@ Every merge (auto or manual) writes an immutable `content_merges` audit row.
 **Reversal:** call `unmerge_content(merge_id)` within **30 days** to restore the
 loser row's visibility. (Child rows already repointed to the survivor stay with
 the survivor — moving them back is not auto-reversed.)
+
+## Stale-event lifecycle — soft-hide, archive, recovery (WEB-AUTO-006)
+
+`cleanup-old-events` (cron `event-lifecycle-nightly`, daily 04:00 UTC) is the
+**primary** path; it replaced the legacy `cleanup-old-events-weekly` SQL cron,
+which hard-deleted at 90 days with no observability or recovery window (the SQL
+function `cleanup_old_events` still exists but is no longer scheduled). Two phases:
+
+1. **Soft-hide** (default **30 days** after the event date): rows are flagged
+   `is_hidden = true` + `hidden_at`. This is **recoverable** and **non-destructive**.
+   Public list/detail queries (`useEvents`, SEO landing pages, `MonthlyEventsPage`)
+   and all three sitemap generators exclude `is_hidden = true`. The flag defaults
+   to `false`, so existing web/mobile readers are unaffected (CLAUDE.md-safe additive).
+2. **Archive + hard-delete** (default **6 months** / ~180 days): a lightweight
+   snapshot (id, title, source_url, category, location, venue, date + full row
+   jsonb) is written to `event_archive_snapshots` **before** any destructive step,
+   then Storage images + `media_assets` are removed and the row + related data are
+   purged via `purge_old_events`. Snapshots are upserted on `event_id` (idempotent).
+
+Hidden/archived/deleted counts flow through the `jobRunner` into `automation_job_runs`
+and render as a **Stale-Event Lifecycle** card in **Admin → Job Health**.
+
+**Recovery within the hide window** (before the 6-month delete) fully restores an
+event — just clear the flag:
+
+```sql
+UPDATE public.events SET is_hidden = false, hidden_at = NULL WHERE id = '<event_id>';
+```
+
+It immediately reappears in browse/detail/sitemaps (no other state was changed).
+After hard-delete only the `event_archive_snapshots` record remains (recreate from
+the stored `snapshot` jsonb if needed).
+
+**Tuning:** invoke `cleanup-old-events` with `{ "hideAfterDays": N, "retentionMonths": M }`
+to override windows, or `{ "dryRun": true }` to preview `wouldHide` / `wouldDelete`
+counts without changing anything.

@@ -45,6 +45,7 @@ export default function MonthlyEventsPage() {
         .select("*")
         .gte("date", format(monthStart, "yyyy-MM-dd"))
         .lte("date", format(monthEnd, "yyyy-MM-dd"))
+        .neq("is_hidden", true) // exclude soft-hidden stale events (WEB-AUTO-006)
         .order("date", { ascending: true })
         .order("time", { ascending: true });
 

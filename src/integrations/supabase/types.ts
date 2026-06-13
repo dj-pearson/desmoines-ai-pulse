@@ -2817,6 +2817,8 @@ export type Database = {
           is_merged: boolean
           merged_at: string | null
           merged_into: string | null
+          is_hidden: boolean
+          hidden_at: string | null
           category: string
           city: string | null
           created_at: string | null
@@ -2862,6 +2864,8 @@ export type Database = {
           is_merged?: boolean
           merged_at?: string | null
           merged_into?: string | null
+          is_hidden?: boolean
+          hidden_at?: string | null
           category?: string
           city?: string | null
           created_at?: string | null
@@ -2907,6 +2911,8 @@ export type Database = {
           is_merged?: boolean
           merged_at?: string | null
           merged_into?: string | null
+          is_hidden?: boolean
+          hidden_at?: string | null
           category?: string
           city?: string | null
           created_at?: string | null

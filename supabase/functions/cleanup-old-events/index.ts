@@ -1,14 +1,34 @@
+/**
+ * cleanup-old-events (WEB-AUTO-006)
+ *
+ * Two-phase stale-event lifecycle, replacing the old hard-delete-on-a-cron:
+ *   Phase 1 (soft-hide):  events whose date is older than HIDE_AFTER_DAYS are
+ *                         flagged is_hidden=true (recoverable -- just clear the
+ *                         flag). Public list/detail queries exclude hidden rows.
+ *   Phase 2 (archive + hard-delete): events older than the (much longer)
+ *                         retention window get a lightweight snapshot written to
+ *                         event_archive_snapshots FIRST, their Storage images +
+ *                         media_assets removed, then the row + related data are
+ *                         purged.
+ *
+ * Runs through the WEB-AUTO-001 jobRunner so hidden/archived/deleted counts land
+ * in automation_job_runs and the admin Job Health panel; terminal failures alert.
+ * Auth: requireAdminOrApiKey (cron service-role bearer + admin JWT pass; the
+ * Job Health "Re-run" button sends an admin JWT + {manual:true}).
+ */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0'
+import { handleCors, getCorsHeaders } from '../_shared/cors.ts'
+import { requireAdminOrApiKey } from '../_shared/apiKeyAuth.ts'
 import { runJob } from '../_shared/jobRunner.ts'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
-
 interface CleanupRequest {
+  /** Days after an event's date before it is soft-hidden. Default 30. */
+  hideAfterDays?: number;
+  /** Months an event is retained before hard-delete (archived first). Default 6 (~180d). */
   retentionMonths?: number;
   dryRun?: boolean;
+  /** Sent by the Job Health re-run button; ignored beyond running the lifecycle. */
+  manual?: boolean;
 }
 
 // Delete all Supabase Storage files associated with the given event IDs,
@@ -22,7 +42,6 @@ async function deleteEventImages(
   const errors: string[] = [];
   let deletedFiles = 0;
 
-  // Fetch all media_assets for these events
   const { data: assets, error: fetchError } = await supabase
     .from('media_assets')
     .select('id, file_path, bucket_id')
@@ -36,11 +55,8 @@ async function deleteEventImages(
   }
 
   if (!assets || assets.length === 0) {
-    console.log('ℹ️ No media_assets found for events being deleted');
     return { deletedFiles, errors };
   }
-
-  console.log(`🗑️ Found ${assets.length} media_assets to clean up`);
 
   // Group by bucket to batch Storage deletions
   const byBucket: Record<string, string[]> = {};
@@ -51,169 +67,187 @@ async function deleteEventImages(
   }
 
   for (const [bucket, filePaths] of Object.entries(byBucket)) {
-    // Supabase Storage remove accepts up to 1000 paths at a time
     const chunkSize = 100;
     for (let i = 0; i < filePaths.length; i += chunkSize) {
       const chunk = filePaths.slice(i, i + chunkSize);
-      const { error: storageError } = await supabase.storage
-        .from(bucket)
-        .remove(chunk);
-
+      const { error: storageError } = await supabase.storage.from(bucket).remove(chunk);
       if (storageError) {
         console.error(`❌ Storage delete error (bucket: ${bucket}):`, storageError.message);
         errors.push(storageError.message);
       } else {
         deletedFiles += chunk.length;
-        console.log(`✅ Deleted ${chunk.length} files from bucket "${bucket}"`);
       }
     }
   }
 
   // Delete the media_assets rows (cascades to image_optimization_queue)
   const assetIds = assets.map((a) => a.id);
-  const { error: deleteError } = await supabase
-    .from('media_assets')
-    .delete()
-    .in('id', assetIds);
-
+  const { error: deleteError } = await supabase.from('media_assets').delete().in('id', assetIds);
   if (deleteError) {
     console.error('❌ Failed to delete media_assets rows:', deleteError.message);
     errors.push(deleteError.message);
-  } else {
-    console.log(`✅ Deleted ${assetIds.length} media_assets rows`);
   }
 
   return { deletedFiles, errors };
 }
 
+// Snapshot rows just before hard-delete so a purged event is never lost without
+// a record. Upsert on event_id keeps it idempotent across re-runs.
+async function snapshotEvents(
+  supabase: ReturnType<typeof createClient>,
+  events: Array<Record<string, unknown>>
+): Promise<{ archived: number; error?: string }> {
+  if (events.length === 0) return { archived: 0 };
+  const rows = events.map((e) => ({
+    event_id: e.id,
+    title: e.title ?? null,
+    source_url: e.source_url ?? null,
+    category: e.category ?? null,
+    location: e.location ?? null,
+    venue: e.venue ?? null,
+    event_date: e.date ?? null,
+    snapshot: e,
+  }));
+  const { error } = await supabase
+    .from('event_archive_snapshots')
+    .upsert(rows, { onConflict: 'event_id' });
+  if (error) {
+    console.error('❌ Failed to write archive snapshots:', error.message);
+    return { archived: 0, error: error.message };
+  }
+  return { archived: rows.length };
+}
+
 Deno.serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+  const corsResponse = handleCors(req);
+  if (corsResponse) return corsResponse;
+  const origin = req.headers.get('origin') || undefined;
+  const corsHeaders = getCorsHeaders(origin);
+
+  const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+  if (authFailure) return authFailure;
+
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  );
+
+  let body: CleanupRequest = {};
+  if (req.method === 'POST') {
+    try {
+      body = await req.json();
+    } catch (_error) {
+      // No / invalid JSON body -> defaults.
+    }
   }
 
-  try {
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
+  const hideAfterDays = body.hideAfterDays ?? 30;
+  const retentionMonths = body.retentionMonths ?? 6;
+  const dryRun = body.dryRun ?? false;
 
-    console.log('🧹 Event cleanup function called');
+  // Phase 1 cutoff (soft-hide): today - hideAfterDays.
+  const hideCutoff = new Date();
+  hideCutoff.setDate(hideCutoff.getDate() - hideAfterDays);
+  const hideCutoffDate = hideCutoff.toISOString().split('T')[0];
 
-    let requestBody: CleanupRequest = {};
-    
-    if (req.method === 'POST') {
-      try {
-        requestBody = await req.json();
-      } catch (_error) {
-        console.log('No JSON body provided, using defaults');
-      }
-    }
+  // Phase 2 cutoff (archive + delete): today - retentionMonths. Matches the
+  // cutoff purge_old_events computes internally so the snapshot set == delete set.
+  const deleteCutoff = new Date();
+  deleteCutoff.setMonth(deleteCutoff.getMonth() - retentionMonths);
+  const deleteCutoffDate = deleteCutoff.toISOString().split('T')[0];
 
-    const { 
-      retentionMonths = 6, 
-      dryRun = false 
-    } = requestBody;
-
-    console.log(`🧹 Running event cleanup - Retention: ${retentionMonths} months, Dry run: ${dryRun}`);
-
-    const cutoffDate = new Date();
-    cutoffDate.setMonth(cutoffDate.getMonth() - retentionMonths);
-
-    if (dryRun) {
-      // Calculate what would be deleted without making changes
-      const { count: eventsToDelete } = await supabase
-        .from('events')
-        .select('id', { count: 'exact', head: true })
-        .lt('date', cutoffDate.toISOString());
-
-      const { count: imagesToDelete } = await supabase
-        .from('media_assets')
-        .select('id', { count: 'exact', head: true })
-        .eq('content_type', 'event');
-
-      console.log(`🧹 DRY RUN: Would delete ${eventsToDelete} events older than ${cutoffDate.toDateString()}`);
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          dryRun: true,
-          retentionMonths,
-          cutoffDate: cutoffDate.toISOString(),
-          eventsToDelete: eventsToDelete || 0,
-          estimatedImagesToDelete: imagesToDelete || 0,
-          message: `Dry run complete. Would delete ${eventsToDelete || 0} events and their associated images.`
-        }),
-        { 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 200 
-        }
-      );
-    }
-
-    // Observed run: records to automation_job_runs, retries transient failures,
-    // alerts on terminal failure (WEB-AUTO-001).
-    const job = await runJob('cleanup-old-events', async (ctx) => {
-      // Fetch IDs of events that will be purged before deleting them
-      const { data: expiredEvents, error: fetchError } = await supabase
-        .from('events')
-        .select('id')
-        .lt('date', cutoffDate.toISOString());
-      if (fetchError) throw new Error(`fetch expired events: ${fetchError.message}`);
-
-      const expiredIds = (expiredEvents || []).map((e) => e.id);
-      console.log(`🧹 Found ${expiredIds.length} expired events to purge`);
-
-      // Delete associated Storage files and media_assets rows first
-      const { deletedFiles, errors: imageErrors } = await deleteEventImages(supabase, expiredIds);
-      if (imageErrors.length > 0) {
-        console.warn(`⚠️ ${imageErrors.length} image cleanup error(s) — proceeding with event purge`);
-        ctx.failed(imageErrors.length);
-      }
-
-      // Execute the actual event cleanup using the database function
-      const { data, error } = await supabase.rpc('purge_old_events', { retention_months: retentionMonths });
-      if (error) throw new Error(`purge_old_events: ${error.message}`);
-
-      ctx.processed(expiredIds.length);
-      ctx.meta({ deletedFiles, retentionMonths, purgedEvents: expiredIds.length });
-      return { result: data, deletedFiles, imageErrors, purgedEvents: expiredIds.length };
-    });
-
-    if (!job.ok) {
-      return new Response(
-        JSON.stringify({ success: false, error: job.error }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-      );
-    }
-
-    const { result, deletedFiles, imageErrors, purgedEvents } = job.result!;
-    console.log('✅ Event cleanup completed:', result);
+  if (dryRun) {
+    const { count: wouldHide } = await supabase
+      .from('events')
+      .select('id', { count: 'exact', head: true })
+      .lt('date', hideCutoffDate)
+      .eq('is_hidden', false);
+    const { count: wouldDelete } = await supabase
+      .from('events')
+      .select('id', { count: 'exact', head: true })
+      .lt('date', deleteCutoffDate);
 
     return new Response(
       JSON.stringify({
         success: true,
+        dryRun: true,
+        hideAfterDays,
         retentionMonths,
-        result,
-        deletedFiles,
-        imageErrors: imageErrors.length > 0 ? imageErrors : undefined,
-        message: `Event cleanup completed. Purged ${purgedEvents} events and ${deletedFiles} image files.`,
+        hideCutoff: hideCutoffDate,
+        deleteCutoff: deleteCutoffDate,
+        wouldHide: wouldHide || 0,
+        wouldDelete: wouldDelete || 0,
+        message: `Dry run: would hide ${wouldHide || 0} events and archive+delete ${wouldDelete || 0}.`,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
+  }
 
-  } catch (error) {
-    console.error('❌ Unexpected error in cleanup function:', error);
-    
+  const job = await runJob('cleanup-old-events', async (ctx) => {
+    // ---- Phase 1: soft-hide stale events (recoverable) ----
+    const { data: hiddenRows, error: hideError } = await supabase
+      .from('events')
+      .update({ is_hidden: true, hidden_at: new Date().toISOString() })
+      .lt('date', hideCutoffDate)
+      .eq('is_hidden', false)
+      .select('id');
+    if (hideError) throw new Error(`hide stale events: ${hideError.message}`);
+    const hidden = hiddenRows?.length ?? 0;
+
+    // ---- Phase 2: archive snapshot -> delete images -> hard-delete ----
+    const { data: expiredEvents, error: fetchError } = await supabase
+      .from('events')
+      .select('*')
+      .lt('date', deleteCutoffDate);
+    if (fetchError) throw new Error(`fetch expired events: ${fetchError.message}`);
+
+    const expired = (expiredEvents || []) as Array<Record<string, unknown>>;
+    const expiredIds = expired.map((e) => e.id as string);
+
+    // Snapshot BEFORE any destructive step.
+    const { archived, error: archiveError } = await snapshotEvents(supabase, expired);
+    if (archiveError) ctx.failed(1);
+
+    const { deletedFiles, errors: imageErrors } = await deleteEventImages(supabase, expiredIds);
+    if (imageErrors.length > 0) {
+      console.warn(`⚠️ ${imageErrors.length} image cleanup error(s) — proceeding with purge`);
+      ctx.failed(imageErrors.length);
+    }
+
+    let deleted = 0;
+    if (expiredIds.length > 0) {
+      const { data, error } = await supabase.rpc('purge_old_events', { retention_months: retentionMonths });
+      if (error) throw new Error(`purge_old_events: ${error.message}`);
+      deleted = (data as { events_deleted?: number } | null)?.events_deleted ?? expiredIds.length;
+    }
+
+    ctx.processed(hidden + deleted);
+    ctx.meta({ hidden, archived, deleted, deletedFiles, hideAfterDays, retentionMonths });
+    return { hidden, archived, deleted, deletedFiles, imageErrors };
+  });
+
+  if (!job.ok) {
     return new Response(
-      JSON.stringify({
-        success: false,
-        error: error.message || 'Unknown error occurred'
-      }),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500 
-      }
+      JSON.stringify({ success: false, error: job.error }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }
+
+  const { hidden, archived, deleted, deletedFiles, imageErrors } = job.result!;
+  console.log(`✅ Lifecycle complete: hid ${hidden}, archived ${archived}, deleted ${deleted}.`);
+
+  return new Response(
+    JSON.stringify({
+      success: true,
+      hideAfterDays,
+      retentionMonths,
+      hidden,
+      archived,
+      deleted,
+      deletedFiles,
+      imageErrors: imageErrors.length > 0 ? imageErrors : undefined,
+      message: `Lifecycle complete. Hid ${hidden} stale events; archived + deleted ${deleted} (and ${deletedFiles} image files).`,
+    }),
+    { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+  );
 });

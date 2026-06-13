@@ -71,6 +71,7 @@ export class EnhancedSitemapGenerator {
         .from("events")
         .select("id, title, date, updated_at, created_at, event_start_utc")
         .gte("date", new Date().toISOString().split("T")[0]!)
+        .neq("is_hidden", true) // exclude soft-hidden stale events (WEB-AUTO-006)
         .order("date", { ascending: true })
         .limit(50000);
 
