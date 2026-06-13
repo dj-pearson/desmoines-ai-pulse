@@ -810,7 +810,8 @@
         "npm run validate passes (type-check + lint)"
       ],
       "priority": 42,
-      "passes": false
+      "passes": true,
+      "notes": "[DONE 2026-06-13] Applied .pb-bottom-nav (pb-20 lg:pb-0) to the shared <main> wrapper in App.tsx so all mobile routes clear the fixed h-16 BottomNav; desktop unaffected (lg:pb-0). Verified no double-padding with existing inner pb usages."
     },
     {
       "id": "WEB-UX-014",
