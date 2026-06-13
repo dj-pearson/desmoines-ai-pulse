@@ -527,8 +527,8 @@
         "npm run validate passes"
       ],
       "priority": 34,
-      "passes": false,
-      "notes": "Builds on the completed WCAG work in memory (landmarks, touch targets done). Evidence: SearchAutocomplete lacks arrow-key handling; SocialEventCard/RestaurantCard action labels inconsistent."
+      "passes": true,
+      "notes": "Builds on the completed WCAG work in memory (landmarks, touch targets done). Evidence: SearchAutocomplete lacks arrow-key handling; SocialEventCard/RestaurantCard action labels inconsistent. [DONE 2026-06-13] SearchAutocomplete had arrow/Enter/Escape; added combobox ARIA (role/aria-expanded/aria-controls/aria-activedescendant + option ids) for announced selection. FavoriteButton gained optional itemName -> Save {name} labels (wired SocialEventCard/EventCard); actions are tabbable buttons w/ stopPropagation. Focus restoration via Radix + useFocusRestore. NOTE: axe/Playwright a11y suite not run locally (no browsers); CI verifies."
     },
     {
       "id": "WEB-UX-006",
