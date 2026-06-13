@@ -60,7 +60,7 @@ export function EnhancedHero({
     <section
       className={cn(
         "relative bg-[#0a0a1a] overflow-hidden",
-        isNativeApp ? "min-h-[70vh] py-10 pt-14" : "min-h-screen py-16",
+        isNativeApp ? "min-h-[70vh] py-10 pt-14" : "min-h-[80vh] md:min-h-screen py-10 md:py-16",
         className
       )}
     >
@@ -105,8 +105,8 @@ export function EnhancedHero({
         {/* Main headline - Dynamic based on time */}
         <div className="text-center mb-8 animate-slide-in">
           <h1 className="text-4xl md:text-6xl font-bold text-white mb-4 md:drop-shadow-lg">
-            <span className="block text-lg md:text-2xl font-semibold text-[#FFD700] mb-2">Des Moines Insider</span>
-            {greeting}
+            <span className="block text-lg md:text-2xl font-semibold text-[#FFD700] mb-2">{greeting}</span>
+            Find things to do in Des Moines, right now
           </h1>
           <p className="text-xl md:text-2xl text-white/90 mb-4 max-w-3xl mx-auto md:drop-shadow-md">
             {subheading}

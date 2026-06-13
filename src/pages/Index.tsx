@@ -17,7 +17,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useEventScraper } from "@/hooks/useSupabase";
 import { Event } from "@/lib/types";
 import { BRAND } from "@/lib/brandConfig";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { openExternalUrl } from "@/lib/capacitorUtils";
 import Header from "@/components/Header";
 import { FAQSection } from "@/components/FAQSection";
@@ -125,6 +125,7 @@ export default function Index() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const { toast } = useToast();
   const { isAuthenticated, user } = useAuth();
+  const navigate = useNavigate();
   const { preferences, isLoading: preferencesLoading } = useUserPreferences();
   const { eventsToday, restaurantsCount, newThisWeek, isLoading: statsLoading } = useHomepageStats();
 
@@ -187,12 +188,8 @@ export default function Index() {
   };
 
   const handleAIPlanClick = () => {
-    // Placeholder for AI Trip Planner (Month 4 feature)
-    // For now, show a toast to indicate coming soon
-    toast({
-      title: "AI Trip Planner Coming Soon!",
-      description: "Our intelligent trip planning feature is currently in development. Stay tuned!",
-    });
+    // Route to the real, shipped AI Trip Planner (no more "coming soon" dead CTA).
+    navigate("/trip-planner");
   };
 
   const scrapeMutation = useEventScraper();

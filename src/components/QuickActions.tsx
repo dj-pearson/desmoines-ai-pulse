@@ -2,10 +2,10 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
   Calendar,
-  Utensils,
   Sparkles,
   Sun,
   Navigation,
+  Clock,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -99,57 +99,52 @@ export function QuickActions({ className, onAIPlanClick }: QuickActionsProps) {
         </p>
       </div>
 
-      {/* Quick Action Grid - Focused on 4 key actions */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 max-w-4xl mx-auto">
-        {/* AI Plan My Night - Featured */}
+      {/* AI Plan My Night — featured, routes to the working /trip-planner */}
+      <div className="max-w-4xl mx-auto mb-3 md:mb-4">
         <QuickAction
           icon={<Sparkles className="h-6 w-6" aria-hidden="true" />}
           label="AI Plan My Night"
-          sublabel="Let AI decide"
+          sublabel="Let AI build your itinerary"
           variant="primary"
           onClick={onAIPlanClick}
+          className="min-h-[88px]"
         />
+      </div>
 
-        {/* Events Today */}
+      {/* Consolidated "right now" action row — every item is a real link */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 max-w-4xl mx-auto">
         <QuickAction
           icon={<Calendar className="h-6 w-6" aria-hidden="true" />}
-          label="Events Today"
-          sublabel="Happening now"
+          label="Today"
+          sublabel="Happening today"
           href="/events/today"
           variant="default"
         />
-
-        {/* This Weekend */}
         <QuickAction
           icon={<Sun className="h-6 w-6" aria-hidden="true" />}
           label="This Weekend"
-          sublabel="Fri-Sun events"
+          sublabel="Fri–Sun events"
           href="/events/this-weekend"
           variant="default"
         />
-
-        {/* Restaurants */}
         <QuickAction
-          icon={<Utensils className="h-6 w-6" aria-hidden="true" />}
-          label="Restaurants"
-          sublabel="Dining & drinks"
-          href="/restaurants"
+          icon={<Navigation className="h-6 w-6" aria-hidden="true" />}
+          label="Near Me"
+          sublabel="Events nearby"
+          href="/events/near-me"
+          variant="default"
+        />
+        <QuickAction
+          icon={<Clock className="h-6 w-6" aria-hidden="true" />}
+          label="Open Now"
+          sublabel="Dining open now"
+          href="/restaurants/open-now"
           variant="default"
         />
       </div>
 
-      {/* Secondary CTAs */}
+      {/* Secondary CTA */}
       <div className="flex flex-wrap items-center justify-center gap-3 mt-6">
-        <Link to="/events/near-me">
-          <Button
-            size="lg"
-            variant="outline"
-            className="bg-white/10 hover:bg-white/20 text-white border-white/30 hover:border-white/40"
-          >
-            <Navigation className="h-4 w-4 mr-2" aria-hidden="true" />
-            Events Near Me
-          </Button>
-        </Link>
         <Link to="/events">
           <Button
             size="lg"
@@ -171,74 +166,44 @@ export function QuickActionsMobile({
 }: QuickActionsProps) {
   return (
     <div className={cn("w-full space-y-3", className)}>
-      {/* Primary Actions - Large buttons */}
-      <div className="grid grid-cols-2 gap-3">
-        <Button
-          size="lg"
-          onClick={onAIPlanClick}
-          className="h-20 bg-gradient-to-r from-[#FFD700] to-[#FFA500] hover:from-[#FFA500] hover:to-[#FFD700] text-[#2D1B69] font-bold shadow-lg"
-          aria-label="AI Plan My Night - Let AI decide your plans"
-        >
-          <div className="flex flex-col items-center gap-1">
-            <Sparkles className="h-5 w-5" aria-hidden="true" />
-            <span className="text-sm">AI Plan My Night</span>
-          </div>
-        </Button>
+      {/* AI Plan My Night — primary, routes to the working /trip-planner */}
+      <Button
+        size="lg"
+        onClick={onAIPlanClick}
+        className="h-16 w-full bg-gradient-to-r from-[#FFD700] to-[#FFA500] hover:from-[#FFA500] hover:to-[#FFD700] text-[#2D1B69] font-bold shadow-lg gap-2"
+        aria-label="AI Plan My Night - build your itinerary"
+      >
+        <Sparkles className="h-5 w-5" aria-hidden="true" />
+        <span className="text-sm">AI Plan My Night</span>
+      </Button>
 
+      {/* Consolidated "right now" row */}
+      <div className="grid grid-cols-2 gap-2">
         <Link to="/events/today">
-          <Button
-            size="lg"
-            variant="outline"
-            className="h-20 w-full bg-white/10 hover:bg-white/20 text-white border-white/30"
-            aria-label="View today's events"
-          >
-            <div className="flex flex-col items-center gap-1">
-              <Calendar className="h-5 w-5" aria-hidden="true" />
-              <span className="text-sm">Events Today</span>
-            </div>
+          <Button size="sm" variant="ghost" className="h-16 w-full flex-col gap-1 text-white hover:bg-white/10" aria-label="View today's events">
+            <Calendar className="h-4 w-4" aria-hidden="true" />
+            <span className="text-xs">Today</span>
           </Button>
         </Link>
-      </div>
-
-      {/* Secondary Actions - Compact */}
-      <div className="grid grid-cols-2 gap-2">
         <Link to="/events/this-weekend">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-16 w-full flex-col gap-1 text-white hover:bg-white/10"
-            aria-label="View weekend events"
-          >
+          <Button size="sm" variant="ghost" className="h-16 w-full flex-col gap-1 text-white hover:bg-white/10" aria-label="View weekend events">
             <Sun className="h-4 w-4" aria-hidden="true" />
             <span className="text-xs">This Weekend</span>
           </Button>
         </Link>
-
-        <Link to="/restaurants">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-16 w-full flex-col gap-1 text-white hover:bg-white/10"
-            aria-label="Browse restaurants"
-          >
-            <Utensils className="h-4 w-4" aria-hidden="true" />
-            <span className="text-xs">Restaurants</span>
+        <Link to="/events/near-me">
+          <Button size="sm" variant="ghost" className="h-16 w-full flex-col gap-1 text-white hover:bg-white/10" aria-label="Find events near me">
+            <Navigation className="h-4 w-4" aria-hidden="true" />
+            <span className="text-xs">Near Me</span>
+          </Button>
+        </Link>
+        <Link to="/restaurants/open-now">
+          <Button size="sm" variant="ghost" className="h-16 w-full flex-col gap-1 text-white hover:bg-white/10" aria-label="Restaurants open now">
+            <Clock className="h-4 w-4" aria-hidden="true" />
+            <span className="text-xs">Open Now</span>
           </Button>
         </Link>
       </div>
-
-      {/* Location-based discovery */}
-      <Link to="/events/near-me" className="block">
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-12 w-full gap-2 text-white hover:bg-white/10"
-          aria-label="Find events near me"
-        >
-          <Navigation className="h-4 w-4" aria-hidden="true" />
-          <span className="text-sm">Events Near Me</span>
-        </Button>
-      </Link>
     </div>
   );
 }
