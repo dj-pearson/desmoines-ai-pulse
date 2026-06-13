@@ -23,6 +23,8 @@ import { usePullToRefresh } from "@/hooks/use-pull-to-refresh";
 import { SortDropdown, EVENT_SORT_OPTIONS } from "@/components/SortDropdown";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
+import { StickyFilterBar } from "@/components/ui/sticky-filter-bar";
+import { ActiveFilterChips, type FilterChip } from "@/components/ui/active-filter-chips";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -495,6 +497,54 @@ export default function EventsPage() {
     isNearMeActive,
   ].filter(Boolean).length;
 
+  // Ref to the inline-filter region so the sticky-bar trigger can reveal it.
+  const filtersRef = useRef<HTMLDivElement>(null);
+  const scrollToFilters = useCallback(() => {
+    filtersRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, []);
+
+  const prettifyToken = (v: string) =>
+    v.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
+  // Removable active-filter chips, visible at all viewports (WEB-UX-003).
+  const activeChips = useMemo<FilterChip[]>(() => {
+    const chips: FilterChip[] = [];
+    if (searchQuery) {
+      chips.push({ key: "search", label: `Search: "${searchQuery}"`, onRemove: () => setSearchQuery("") });
+    }
+    if (selectedCategory !== "all") {
+      chips.push({ key: "category", label: selectedCategory, onRemove: () => setSelectedCategory("all") });
+    }
+    if (dateFilter !== null) {
+      const presetLabel = DATE_PRESETS.find((p) => p.key === (activeDatePreset ?? dateFilter.preset))?.label;
+      chips.push({
+        key: "date",
+        label: presetLabel ? `Date: ${presetLabel}` : "Custom date",
+        onRemove: () => {
+          setDateFilter(null);
+          setActiveDatePreset(null);
+        },
+      });
+    }
+    if (location !== "any-location") {
+      chips.push({ key: "location", label: `Area: ${prettifyToken(location)}`, onRemove: () => setLocation("any-location") });
+    }
+    if (priceRange !== "any-price") {
+      chips.push({ key: "price", label: `Price: ${prettifyToken(priceRange)}`, onRemove: () => setPriceRange("any-price") });
+    }
+    if (isNearMeActive) {
+      chips.push({
+        key: "near-me",
+        label: "Near Me",
+        onRemove: () => {
+          setIsNearMeActive(false);
+          setUserLocation(null);
+        },
+      });
+    }
+    return chips;
+  }, [searchQuery, selectedCategory, dateFilter, activeDatePreset, location, priceRange, isNearMeActive]);
+
   // SEO
   const seoTitle = searchQuery
     ? `"${searchQuery}" Events in Des Moines, Iowa`
@@ -779,7 +829,7 @@ export default function EventsPage() {
               />
 
               {/* Inline Filter Pills - always visible, no hidden panel */}
-              <div className="mt-4">
+              <div ref={filtersRef} className="mt-4 scroll-mt-36">
                 <EventInlineFilters
                   selectedCategory={selectedCategory}
                   onCategoryChange={setSelectedCategory}
@@ -798,6 +848,19 @@ export default function EventsPage() {
             </div>
           </div>
         </section>
+
+        {/* Sticky condensed search + filter trigger + result count (WEB-UX-003) */}
+        <StickyFilterBar
+          searchValue={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchPlaceholder="Search events..."
+          searchAriaLabel="Search events"
+          activeFilterCount={activeFiltersCount}
+          onFilterClick={scrollToFilters}
+          resultCount={events?.length || 0}
+          isLoading={isLoading}
+          resultNoun="event"
+        />
 
         <div ref={pullToRefreshRef} className="container mx-auto px-4 py-6 md:py-8 relative">
           {/* Pull to Refresh */}
@@ -833,6 +896,9 @@ export default function EventsPage() {
 
           {/* Screen reader announcement for result count changes */}
           <div {...regionProps}>{announcement}</div>
+
+          {/* Active filter chips — removable, visible at all viewports (WEB-UX-003) */}
+          <ActiveFilterChips chips={activeChips} onClearAll={handleClearFilters} className="mb-5" />
 
           {/* Results Header */}
           <div className="flex items-center justify-between mb-5">

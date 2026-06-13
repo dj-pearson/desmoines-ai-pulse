@@ -40,6 +40,8 @@ import { useState, lazy, Suspense, useMemo, useCallback, useRef, useEffect } fro
 import { useToast } from "@/hooks/use-toast";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
+import { StickyFilterBar } from "@/components/ui/sticky-filter-bar";
+import { ActiveFilterChips, type FilterChip } from "@/components/ui/active-filter-chips";
 import { FAQSection } from "@/components/FAQSection";
 import { BackToTop } from "@/components/BackToTop";
 import { useAnnounce } from "@/hooks/use-announce";
@@ -242,6 +244,64 @@ export default function Restaurants() {
   }, [filters]);
 
   const hasActiveFilters = getActiveFiltersCount > 0;
+
+  // Ref to the inline-filters region so the sticky-bar Filters trigger can
+  // bring it back into view when it has scrolled away (WEB-UX-003).
+  const filtersRef = useRef<HTMLDivElement>(null);
+  const scrollToFilters = useCallback(() => {
+    filtersRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, []);
+
+  const removeArrayValue = useCallback(
+    (key: "cuisine" | "priceRange" | "location" | "tags", value: string) => {
+      setFilters((prev) => ({
+        ...prev,
+        [key]: (prev[key] as string[]).filter((v) => v !== value),
+      }));
+    },
+    [],
+  );
+
+  // Removable chips shown above the results, visible at all viewports.
+  const activeChips = useMemo<FilterChip[]>(() => {
+    const chips: FilterChip[] = [];
+    if (filters.search) {
+      chips.push({
+        key: "search",
+        label: `Search: "${filters.search}"`,
+        onRemove: () => {
+          setSearchInput("");
+          setFilters((prev) => ({ ...prev, search: "" }));
+        },
+      });
+    }
+    filters.cuisine.forEach((c) =>
+      chips.push({ key: `cuisine-${c}`, label: `Cuisine: ${c}`, onRemove: () => removeArrayValue("cuisine", c) }),
+    );
+    filters.priceRange.forEach((p) =>
+      chips.push({ key: `price-${p}`, label: `Price: ${p}`, onRemove: () => removeArrayValue("priceRange", p) }),
+    );
+    filters.location.forEach((l) =>
+      chips.push({ key: `location-${l}`, label: `Area: ${l}`, onRemove: () => removeArrayValue("location", l) }),
+    );
+    filters.tags.forEach((t) =>
+      chips.push({ key: `tag-${t}`, label: t, onRemove: () => removeArrayValue("tags", t) }),
+    );
+    if (filters.rating[0] !== 0 || filters.rating[1] !== 5) {
+      chips.push({
+        key: "rating",
+        label: `${filters.rating[0]}+ stars`,
+        onRemove: () => setFilters((prev) => ({ ...prev, rating: [0, 5] })),
+      });
+    }
+    if (filters.openNow) {
+      chips.push({ key: "openNow", label: "Open Now", onRemove: () => setFilters((prev) => ({ ...prev, openNow: false })) });
+    }
+    if (filters.featuredOnly) {
+      chips.push({ key: "featured", label: "Featured", onRemove: () => setFilters((prev) => ({ ...prev, featuredOnly: false })) });
+    }
+    return chips;
+  }, [filters, removeArrayValue]);
 
   // Split restaurants for featured section
   const featuredRestaurants = useMemo(
@@ -493,6 +553,23 @@ export default function Restaurants() {
           </div>
         </section>
 
+        {/* Sticky condensed search + filter trigger + result count (WEB-UX-003) */}
+        <StickyFilterBar
+          searchValue={searchInput}
+          onSearchChange={setSearchInput}
+          onClearSearch={() => {
+            setSearchInput("");
+            setFilters((prev) => ({ ...prev, search: "" }));
+          }}
+          searchPlaceholder="Search restaurants..."
+          searchAriaLabel="Search restaurants"
+          activeFilterCount={getActiveFiltersCount}
+          onFilterClick={scrollToFilters}
+          resultCount={totalCount}
+          isLoading={isLoading}
+          resultNoun="restaurant"
+        />
+
         <div className="container mx-auto px-4 py-6 md:py-8">
           <Breadcrumbs
             items={[
@@ -520,7 +597,7 @@ export default function Restaurants() {
             />
 
             {/* Inline Filter Pills - always visible, no hidden panel */}
-            <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div ref={filtersRef} className="flex items-center justify-between gap-3 flex-wrap scroll-mt-36">
               <div className="flex-1 min-w-0">
                 <RestaurantInlineFilters
                   filters={filters}
@@ -569,6 +646,9 @@ export default function Restaurants() {
                 </p>
               </div>
             </div>
+
+            {/* Active filter chips — removable, visible at all viewports (WEB-UX-003) */}
+            <ActiveFilterChips chips={activeChips} onClearAll={handleClearFilters} />
 
             {/* Restaurant Openings Section */}
             <RestaurantOpenings />

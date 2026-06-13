@@ -396,6 +396,56 @@ test.describe('Tablet Viewport Testing', () => {
   }
 });
 
+test.describe('Sticky Filter Bar + Active Filter Chips (WEB-UX-003)', () => {
+  const listPages = ['/events', '/restaurants', '/attractions'];
+
+  for (const path of listPages) {
+    test(`${path} shows the sticky search + filter trigger + result count on mobile`, async ({ page }) => {
+      await page.setViewportSize({ width: 375, height: 667 });
+      await page.goto(path, { waitUntil: 'networkidle' });
+
+      const bar = page.getByTestId('sticky-filter-bar');
+      await expect(bar).toBeVisible();
+
+      // Condensed search field, a filter trigger, and a result count are all present.
+      await expect(bar.locator('input[type="search"]')).toBeVisible();
+      await expect(bar.getByLabel('Open filters')).toBeVisible();
+      await expect(page.getByTestId('sticky-result-count')).toBeVisible();
+    });
+
+    test(`${path} renders a removable chip with Clear all when a filter is active`, async ({ page }) => {
+      await page.setViewportSize({ width: 375, height: 667 });
+      // A search term is data-independent, so the chip always renders.
+      await page.goto(`${path}?q=pizza`, { waitUntil: 'networkidle' });
+
+      const chips = page.getByTestId('active-filter-chips');
+      await expect(chips).toBeVisible();
+      await expect(chips.getByText('Clear all')).toBeVisible();
+
+      // Removing the chip clears the filter and the chip row disappears.
+      await chips.getByRole('button', { name: /Remove filter/ }).first().click();
+      await expect(page.getByTestId('active-filter-chips')).toHaveCount(0);
+    });
+
+    test(`${path} keeps the sticky bar pinned beneath the header after scrolling`, async ({ page }) => {
+      await page.setViewportSize({ width: 375, height: 667 });
+      await page.goto(path, { waitUntil: 'networkidle' });
+
+      await page.evaluate(() => window.scrollTo(0, 1200));
+      await page.waitForTimeout(300);
+
+      const headerBox = await page.locator('header').boundingBox();
+      const barBox = await page.getByTestId('sticky-filter-bar').boundingBox();
+      expect(headerBox).not.toBeNull();
+      expect(barBox).not.toBeNull();
+
+      // The bar pins just below the header, near the top of the viewport.
+      expect(barBox!.y).toBeLessThan(160);
+      expect(barBox!.y).toBeGreaterThanOrEqual(headerBox!.y + headerBox!.height - 4);
+    });
+  }
+});
+
 test.describe('Viewport Meta Tag', () => {
   test('should have proper viewport meta tag', async ({ page }) => {
     await page.goto('/');

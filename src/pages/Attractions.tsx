@@ -32,6 +32,8 @@ import { CardsGridSkeleton } from "@/components/ui/loading-skeleton";
 import { MapPin, Star, Filter, List, Map, SlidersHorizontal, Landmark, ChevronRight, SearchX, X, ChevronDown, Shuffle } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
+import { StickyFilterBar } from "@/components/ui/sticky-filter-bar";
+import { ActiveFilterChips, type FilterChip } from "@/components/ui/active-filter-chips";
 import { SortDropdown, ATTRACTION_SORT_OPTIONS } from "@/components/SortDropdown";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -240,6 +242,41 @@ export default function Attractions() {
     });
   };
 
+  // Filter-trigger refs. On closing the mobile sheet we return focus to whichever
+  // trigger opened it (a11y, WEB-UX-003).
+  const filtersRef = useRef<HTMLDivElement>(null);
+  const heroFilterBtnRef = useRef<HTMLButtonElement>(null);
+  const stickyFilterBtnRef = useRef<HTMLButtonElement>(null);
+  const lastFilterTriggerRef = useRef<HTMLButtonElement | null>(null);
+
+  const handleStickyFilterClick = () => {
+    if (isMobile) {
+      lastFilterTriggerRef.current = stickyFilterBtnRef.current;
+      setShowMobileFilters(true);
+    } else {
+      setShowFilters(true);
+      filtersRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  };
+
+  // Removable active-filter chips, visible at all viewports (WEB-UX-003).
+  const activeChips = useMemo<FilterChip[]>(() => {
+    const chips: FilterChip[] = [];
+    if (searchQuery) {
+      chips.push({ key: "search", label: `Search: "${searchQuery}"`, onRemove: () => setSearchQuery("") });
+    }
+    if (selectedType !== "all") {
+      chips.push({ key: "type", label: `Type: ${selectedType}`, onRemove: () => setSelectedType("all") });
+    }
+    if (minRating !== "any-rating") {
+      chips.push({ key: "rating", label: `Rating: ${minRating}+`, onRemove: () => setMinRating("any-rating") });
+    }
+    if (featuredOnly !== "all") {
+      chips.push({ key: "featured", label: "Featured Only", onRemove: () => setFeaturedOnly("all") });
+    }
+    return chips;
+  }, [searchQuery, selectedType, minRating, featuredOnly]);
+
   const pageTitle = searchQuery
     ? `"${searchQuery}" Attractions in Des Moines`
     : selectedType !== "all"
@@ -343,6 +380,8 @@ export default function Attractions() {
                   <Sheet open={showMobileFilters} onOpenChange={setShowMobileFilters}>
                     <SheetTrigger asChild>
                       <Button
+                        ref={heroFilterBtnRef}
+                        onClick={() => { lastFilterTriggerRef.current = heroFilterBtnRef.current; }}
                         variant="secondary"
                         className="bg-white/20 hover:bg-white/30 text-white border-white/30 h-12 relative"
                       >
@@ -355,7 +394,17 @@ export default function Attractions() {
                         )}
                       </Button>
                     </SheetTrigger>
-                    <SheetContent side="bottom" className="h-[85vh]">
+                    <SheetContent
+                      side="bottom"
+                      className="h-[85vh]"
+                      onCloseAutoFocus={(e) => {
+                        // Return focus to the trigger that opened the sheet (a11y).
+                        if (lastFilterTriggerRef.current) {
+                          e.preventDefault();
+                          lastFilterTriggerRef.current.focus();
+                        }
+                      }}
+                    >
                       <SheetHeader>
                         <SheetTitle className="text-xl">Filter Attractions</SheetTitle>
                       </SheetHeader>
@@ -468,6 +517,20 @@ export default function Attractions() {
         </div>
       </section>
 
+      {/* Sticky condensed search + filter trigger + result count (WEB-UX-003) */}
+      <StickyFilterBar
+        ref={stickyFilterBtnRef}
+        searchValue={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchPlaceholder="Search attractions..."
+        searchAriaLabel="Search attractions"
+        activeFilterCount={getActiveFiltersCount()}
+        onFilterClick={handleStickyFilterClick}
+        resultCount={filteredAttractions.length}
+        isLoading={isLoading}
+        resultNoun="attraction"
+      />
+
       <div className="container mx-auto px-4 py-8">
         <Breadcrumbs
           className="mb-4"
@@ -481,7 +544,7 @@ export default function Attractions() {
 
         {/* Filters Section */}
         {showFilters && (
-          <div className="bg-white rounded-2xl shadow-lg p-6 mb-8 border">
+          <div ref={filtersRef} className="bg-white rounded-2xl shadow-lg p-6 mb-8 border scroll-mt-36">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Type Filter */}
               <div className="space-y-2">
@@ -569,39 +632,9 @@ export default function Attractions() {
           />
         </div>
 
-        {/* Active Filter Badges */}
-        {hasActiveFilters && (
-          <div className="flex flex-wrap items-center gap-2 mb-4">
-            <span className="text-sm text-muted-foreground">Active filters:</span>
-            {searchQuery && (
-              <Badge variant="secondary" className="gap-1 pr-1">
-                Search: &quot;{searchQuery}&quot;
-                <button onClick={() => setSearchQuery("")} className="ml-1 hover:bg-accent rounded-full p-0.5" aria-label={`Remove search filter "${searchQuery}"`}><X className="h-3 w-3" /></button>
-              </Badge>
-            )}
-            {selectedType !== "all" && (
-              <Badge variant="secondary" className="gap-1 pr-1">
-                Type: {selectedType}
-                <button onClick={() => setSelectedType("all")} className="ml-1 hover:bg-accent rounded-full p-0.5" aria-label={`Remove type filter "${selectedType}"`}><X className="h-3 w-3" /></button>
-              </Badge>
-            )}
-            {minRating !== "any-rating" && (
-              <Badge variant="secondary" className="gap-1 pr-1">
-                Rating: {minRating}+
-                <button onClick={() => setMinRating("any-rating")} className="ml-1 hover:bg-accent rounded-full p-0.5" aria-label="Remove rating filter"><X className="h-3 w-3" /></button>
-              </Badge>
-            )}
-            {featuredOnly !== "all" && (
-              <Badge variant="secondary" className="gap-1 pr-1">
-                Featured Only
-                <button onClick={() => setFeaturedOnly("all")} className="ml-1 hover:bg-accent rounded-full p-0.5" aria-label="Remove featured filter"><X className="h-3 w-3" /></button>
-              </Badge>
-            )}
-            <Button variant="ghost" size="sm" onClick={handleClearFilters} className="text-muted-foreground h-7 text-xs">
-              Clear All
-            </Button>
-          </div>
-        )}
+        {/* Active filter chips — removable, visible at all viewports (WEB-UX-003) */}
+        <ActiveFilterChips chips={activeChips} onClearAll={handleClearFilters} className="mb-4" />
+
 
         {viewMode === 'map' ? (
           <AttractionsMap attractions={sortedAttractions} />
