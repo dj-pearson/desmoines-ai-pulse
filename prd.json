@@ -866,7 +866,8 @@
         "npm run validate passes (type-check + lint)"
       ],
       "priority": 46,
-      "passes": false
+      "passes": true,
+      "notes": "[DONE 2026-06-13] PseoRoutePage validates segments against the taxonomy slug set + curated prefixes (things-to-do/nightlife/guide) before the DB lookup (gated via usePseoPage enabled opt). Unknown paths and DB-misses render the real NotFound (noindex 404). Confirmed all nav targets except bare /nightlife have explicit routes, so valid landing pages are unaffected."
     },
     {
       "id": "WEB-UX-018",
