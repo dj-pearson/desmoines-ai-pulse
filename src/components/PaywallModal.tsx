@@ -26,9 +26,22 @@ interface PaywallModalProps {
   requiredTier?: PaywallTier;
 }
 
-const PLAN_PRICE: Record<PaywallTier, string> = {
-  insider: "$4.99",
-  vip: "$12.99",
+type BillingInterval = "monthly" | "yearly";
+
+/** Web prices mirroring iOS (IOS-SUB-012): annual is ~2 months free. */
+const PLAN_PRICING: Record<PaywallTier, { monthly: number; yearly: number }> = {
+  insider: { monthly: 4.99, yearly: 49.99 },
+  vip: { monthly: 12.99, yearly: 129.99 },
+};
+
+const formatPrice = (value: number) => `$${value.toFixed(2)}`;
+
+/** Percent saved by paying yearly vs 12× the monthly price, rounded. */
+const yearlySavingsPercent = (tier: PaywallTier) => {
+  const { monthly, yearly } = PLAN_PRICING[tier];
+  const monthlyTotal = monthly * 12;
+  if (monthlyTotal <= 0) return 0;
+  return Math.round(((monthlyTotal - yearly) / monthlyTotal) * 100);
 };
 
 /**
@@ -48,6 +61,8 @@ export function PaywallModal({
   const ctx = resolvePaywallContext(context);
   const recommended = requiredTier ?? ctx.recommendedTier;
   const [selectedPlan, setSelectedPlan] = useState<PaywallTier>(recommended);
+  const [billingInterval, setBillingInterval] =
+    useState<BillingInterval>("monthly");
 
   // Track whether the modal was closed via a checkout-start so we don't also
   // log a dismiss for the same interaction.
@@ -59,6 +74,7 @@ export function PaywallModal({
   useEffect(() => {
     if (open) {
       setSelectedPlan(recommended);
+      setBillingInterval("monthly");
       checkoutStartedRef.current = false;
       trackPaywallEvent("present", ctx.id, recommended);
     }
@@ -75,7 +91,9 @@ export function PaywallModal({
 
   const handleCheckoutStart = () => {
     checkoutStartedRef.current = true;
-    trackPaywallEvent("checkout_start", ctx.id, selectedPlan);
+    trackPaywallEvent("checkout_start", ctx.id, selectedPlan, {
+      interval: billingInterval,
+    });
     onOpenChange(false);
   };
 
@@ -116,6 +134,48 @@ export function PaywallModal({
             ))}
           </ul>
 
+          {/* Billing interval toggle */}
+          <div
+            className="flex justify-center"
+            role="group"
+            aria-label="Billing interval"
+          >
+            <div className="inline-flex rounded-full border bg-muted p-0.5">
+              <button
+                type="button"
+                onClick={() => setBillingInterval("monthly")}
+                aria-pressed={billingInterval === "monthly"}
+                className={cn(
+                  "rounded-full px-4 py-1 text-sm transition-colors",
+                  billingInterval === "monthly"
+                    ? "bg-background font-semibold shadow-sm"
+                    : "text-muted-foreground",
+                )}
+              >
+                Monthly
+              </button>
+              <button
+                type="button"
+                onClick={() => setBillingInterval("yearly")}
+                aria-pressed={billingInterval === "yearly"}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-full px-4 py-1 text-sm transition-colors",
+                  billingInterval === "yearly"
+                    ? "bg-background font-semibold shadow-sm"
+                    : "text-muted-foreground",
+                )}
+              >
+                Yearly
+                <Badge
+                  variant="secondary"
+                  className="border-0 bg-green-100 px-1.5 text-[10px] text-green-800 dark:bg-green-900/40 dark:text-green-300"
+                >
+                  Save {yearlySavingsPercent(selectedPlan)}%
+                </Badge>
+              </button>
+            </div>
+          </div>
+
           {/* Plan selection */}
           <div className="grid grid-cols-2 gap-3">
             <button
@@ -137,9 +197,13 @@ export function PaywallModal({
                 <span className="font-semibold">Insider</span>
               </div>
               <div className="text-xl font-bold">
-                {PLAN_PRICE.insider}
+                {formatPrice(
+                  billingInterval === "yearly"
+                    ? PLAN_PRICING.insider.yearly
+                    : PLAN_PRICING.insider.monthly,
+                )}
                 <span className="text-sm font-normal text-muted-foreground">
-                  /mo
+                  {billingInterval === "yearly" ? "/yr" : "/mo"}
                 </span>
               </div>
             </button>
@@ -166,9 +230,13 @@ export function PaywallModal({
                 <span className="font-semibold">VIP</span>
               </div>
               <div className="text-xl font-bold">
-                {PLAN_PRICE.vip}
+                {formatPrice(
+                  billingInterval === "yearly"
+                    ? PLAN_PRICING.vip.yearly
+                    : PLAN_PRICING.vip.monthly,
+                )}
                 <span className="text-sm font-normal text-muted-foreground">
-                  /mo
+                  {billingInterval === "yearly" ? "/yr" : "/mo"}
                 </span>
               </div>
             </button>
@@ -185,7 +253,10 @@ export function PaywallModal({
                   : "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600",
               )}
             >
-              <Link to="/pricing" onClick={handleCheckoutStart}>
+              <Link
+                to={`/pricing?plan=${selectedPlan}&billing=${billingInterval}`}
+                onClick={handleCheckoutStart}
+              >
                 Upgrade to {selectedPlan === "vip" ? "VIP" : "Insider"}
               </Link>
             </Button>

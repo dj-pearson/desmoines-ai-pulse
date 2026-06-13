@@ -181,7 +181,12 @@ export default function Pricing() {
   } = useSubscription();
   const { toast } = useToast();
   const { trackFunnelEvent } = useConversionFunnel();
-  const [isYearly, setIsYearly] = useState(false);
+  // Pre-select the annual toggle when arriving from a paywall/auth handoff that
+  // carried ?billing=yearly (PaywallModal CTA, WEB-FEAT-002) so the interval the
+  // user chose isn't lost on the way to checkout.
+  const [isYearly, setIsYearly] = useState(
+    () => searchParams.get("billing") === "yearly",
+  );
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
 
   // Track pricing page view

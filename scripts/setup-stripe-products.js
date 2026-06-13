@@ -73,28 +73,64 @@ const createdIds = {
   vipPriceYearly: null,
 };
 
+// Idempotency: this script is safe to re-run. We key products on their
+// `metadata.tier` and prices on (product, unit_amount, currency, interval) so a
+// second run reuses the existing Stripe objects instead of creating duplicates.
 async function createProduct(name, description, metadata) {
-  console.log(`Creating product: ${name}`);
+  console.log(`Ensuring product: ${name}`);
   if (isDryRun) {
-    console.log('  [DRY RUN] Would create product');
+    console.log('  [DRY RUN] Would find-or-create product');
     return { id: 'prod_DRYRUN_' + name.replace(/\s+/g, '') };
   }
+
+  // Look for an existing active product with the same tier metadata.
+  const tier = metadata && metadata.tier;
+  if (tier) {
+    let existing = null;
+    for await (const product of stripe.products.list({ active: true, limit: 100 })) {
+      if (product.metadata && product.metadata.tier === tier) {
+        existing = product;
+        break;
+      }
+    }
+    if (existing) {
+      console.log(`  Reusing existing product: ${existing.id}`);
+      return existing;
+    }
+  }
+
   const product = await stripe.products.create({
     name,
     description,
     metadata,
   });
-  console.log(`  Product ID: ${product.id}`);
+  console.log(`  Created product: ${product.id}`);
   return product;
 }
 
 async function createPrice(productId, unitAmount, currency, interval, metadata) {
   const amount = (unitAmount / 100).toFixed(2);
-  console.log(`Creating price: $${amount}/${interval}`);
+  console.log(`Ensuring price: $${amount}/${interval}`);
   if (isDryRun) {
-    console.log('  [DRY RUN] Would create price');
+    console.log('  [DRY RUN] Would find-or-create price');
     return { id: 'price_DRYRUN_' + interval };
   }
+
+  // Reuse an existing active recurring price that matches exactly. Stripe
+  // prices are immutable, so an identical amount/currency/interval price on the
+  // same product is interchangeable.
+  for await (const price of stripe.prices.list({ product: productId, active: true, limit: 100 })) {
+    if (
+      price.unit_amount === unitAmount &&
+      price.currency === currency &&
+      price.recurring &&
+      price.recurring.interval === interval
+    ) {
+      console.log(`  Reusing existing price: ${price.id}`);
+      return price;
+    }
+  }
+
   const price = await stripe.prices.create({
     product: productId,
     unit_amount: unitAmount,
@@ -102,7 +138,7 @@ async function createPrice(productId, unitAmount, currency, interval, metadata) 
     recurring: { interval },
     metadata,
   });
-  console.log(`  Price ID: ${price.id}`);
+  console.log(`  Created price: ${price.id}`);
   return price;
 }
 
