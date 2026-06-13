@@ -799,7 +799,8 @@
         "npm run validate passes (type-check + lint)"
       ],
       "priority": 41,
-      "passes": false
+      "passes": true,
+      "notes": "[DONE 2026-06-13] openingHoursSpecification now derived via new getOpeningHoursSpecification() reusing the badge parser; omitted when unparseable. Removed hardcoded postalCode 50309 and unconditional acceptsReservations. Badge + structured data share one parser so they cannot contradict."
     },
     {
       "id": "WEB-UX-013",
