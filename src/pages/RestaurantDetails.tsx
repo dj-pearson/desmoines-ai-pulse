@@ -918,7 +918,7 @@ export default function RestaurantDetails() {
         primaryAction={
           restaurant.phone
             ? {
-                label: "Call Now",
+                label: "Call to Reserve",
                 href: `tel:${restaurant.phone}`,
                 icon: "phone",
               }

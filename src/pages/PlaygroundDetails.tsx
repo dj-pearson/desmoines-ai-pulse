@@ -11,6 +11,7 @@ import Footer from "@/components/Footer";
 import { LazyLocationMap } from "@/components/LazyLocationMap";
 import { getDirectionsUrl } from "@/lib/directions";
 import { OpenStatusChip } from "@/components/OpenStatusChip";
+import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import ShareDialog from "@/components/ShareDialog";
 import { FAQSection } from "@/components/FAQSection";
 import { BackToTop } from "@/components/BackToTop";
@@ -703,6 +704,19 @@ export default function PlaygroundDetails() {
       </div>
       <Footer />
       <BackToTop />
+      <StickyMobileCTA
+        variant="playground"
+        primaryAction={{
+          label: "Directions",
+          href: getDirectionsUrl({
+            latitude: playground.latitude,
+            longitude: playground.longitude,
+            address: `${playground.name} ${playground.location ?? ""}`,
+          }),
+          icon: "directions",
+          isExternal: true,
+        }}
+      />
     </>
   );
 }

@@ -26,6 +26,7 @@ import Footer from "@/components/Footer";
 import { LazyLocationMap } from "@/components/LazyLocationMap";
 import { getDirectionsUrl } from "@/lib/directions";
 import { OpenStatusChip } from "@/components/OpenStatusChip";
+import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 
@@ -428,6 +429,50 @@ export default function HotelDetails() {
 
         <Footer />
       </div>
+
+      <StickyMobileCTA
+        variant="hotel"
+        primaryAction={
+          hotel.source_url
+            ? {
+                label: "Book Now",
+                href: hotel.source_url,
+                icon: "external",
+                isExternal: true,
+              }
+            : hotel.phone
+            ? {
+                label: "Call to Book",
+                href: `tel:${hotel.phone}`,
+                icon: "phone",
+              }
+            : {
+                // No booking link or phone — still give a working action.
+                label: "Find Rooms",
+                href: `https://www.google.com/search?q=${encodeURIComponent(
+                  `${hotel.name} ${hotel.city ?? "Des Moines"} hotel booking`
+                )}`,
+                icon: "external",
+                isExternal: true,
+              }
+        }
+        secondaryAction={
+          hotel.latitude && hotel.longitude
+            ? {
+                label: "Directions",
+                href: getDirectionsUrl({
+                  latitude: hotel.latitude,
+                  longitude: hotel.longitude,
+                  address: fullAddress,
+                }),
+                icon: "directions",
+                isExternal: true,
+              }
+            : hotel.phone
+            ? { label: "Call", href: `tel:${hotel.phone}`, icon: "phone" }
+            : undefined
+        }
+      />
     </>
   );
 }

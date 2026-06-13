@@ -198,7 +198,7 @@ export default function EventDetails() {
 
         {/* Hero Image Section */}
         {event.image_url && (
-          <div className="relative h-64 md:h-80 lg:h-96 overflow-hidden bg-slate-900">
+          <div className="relative h-48 sm:h-64 md:h-80 lg:h-96 overflow-hidden bg-slate-900">
             <img
               src={event.image_url}
               alt={`${event.title} - ${event.category} event in ${event.city || 'Des Moines'}, Iowa`}
