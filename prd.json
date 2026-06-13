@@ -882,7 +882,8 @@
         "npm run validate passes (type-check + lint)"
       ],
       "priority": 47,
-      "passes": false
+      "passes": true,
+      "notes": "[DONE 2026-06-13] EventsPage sort pushed into query (.order by sortBy), newest=created_at, sortBy in queryKey + page-reset; dropped client re-sort. AdvancedSearch: id-based result links, removed Math.random distance + Nearest First option, removed no-op Open Now toggle."
     },
     {
       "id": "WEB-UX-019",
