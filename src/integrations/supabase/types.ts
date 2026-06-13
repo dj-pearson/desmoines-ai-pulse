@@ -6904,6 +6904,11 @@ export type Database = {
           created_at: string
           id: string
           is_verified: boolean | null
+          moderated_at: string | null
+          moderation_attempts: number
+          moderation_reasons: string[] | null
+          moderation_scores: Json | null
+          moderation_status: string
           rating: Database["public"]["Enums"]["rating_value"]
           review_text: string | null
           updated_at: string
@@ -6915,6 +6920,11 @@ export type Database = {
           created_at?: string
           id?: string
           is_verified?: boolean | null
+          moderated_at?: string | null
+          moderation_attempts?: number
+          moderation_reasons?: string[] | null
+          moderation_scores?: Json | null
+          moderation_status?: string
           rating: Database["public"]["Enums"]["rating_value"]
           review_text?: string | null
           updated_at?: string
@@ -6926,6 +6936,11 @@ export type Database = {
           created_at?: string
           id?: string
           is_verified?: boolean | null
+          moderated_at?: string | null
+          moderation_attempts?: number
+          moderation_reasons?: string[] | null
+          moderation_scores?: Json | null
+          moderation_status?: string
           rating?: Database["public"]["Enums"]["rating_value"]
           review_text?: string | null
           updated_at?: string

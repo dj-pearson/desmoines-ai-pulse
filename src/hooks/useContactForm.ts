@@ -64,13 +64,30 @@ export function useContactForm() {
         referrer: typeof document !== 'undefined' ? document.referrer || null : null,
         user_id: user?.id || null,
         user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+        // WEB-AUTO-009: hidden-pending until auto-moderation clears it.
+        moderation_status: 'pending',
       };
 
-      const { error } = await supabase
+      // maybeSingle(): an anonymous insert can't read its own row back under RLS,
+      // so `data` may be null even on success — that's fine, the hourly sweep
+      // moderates anything the real-time call can't reach.
+      const { data, error } = await supabase
         .from('contact_submissions')
-        .insert(submissionData as any);
+        .insert(submissionData as any)
+        .select('id')
+        .maybeSingle();
 
       if (error) throw error;
+
+      // WEB-AUTO-009: auto-moderate (fire-and-forget — never blocks the UX).
+      const newId = (data as { id?: string } | null)?.id;
+      if (newId) {
+        supabase.functions
+          .invoke('moderate-content', { body: { contentType: 'contact', id: newId } })
+          .catch((err) => {
+            if (import.meta.env.DEV) console.error('moderate-content (contact) failed', err);
+          });
+      }
 
       toast.success("Thank you! Your message has been sent successfully. We'll get back to you soon.");
       return true;

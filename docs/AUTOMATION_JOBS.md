@@ -39,6 +39,7 @@ All times UTC. Schedules are cron expressions (`min hour dom mon dow`).
 | **`dedupe-content-weekly`** | `15 3 * * 1` | fn `dedupe-content` | **Detect duplicate events/restaurants (trigram + proximity); auto-merge >=90%, queue 70–90% (WEB-AUTO-005)** | ✅ |
 | **`auto-article-pipeline-daily`** | `0 13 * * *` | fn `auto-article-pipeline` | **AI article pipeline: topic → draft → quality gate → auto-publish (WEB-AUTO-007)** | ✅ |
 | **`weekly-digest-assemble`** | `0 15 * * 2` | fn `assemble-weekly-digest` | **Auto-assemble the weekly digest (events + restaurants + newest article), gate, and queue it for the existing dispatcher (WEB-AUTO-008)** | ✅ |
+| **`moderate-content-sweep`** | `15 * * * *` | fn `moderate-content` | **Safety-net: re-moderate any review/contact row stuck `pending` (real-time call failed); cheap when none (WEB-AUTO-009)** | ✅ |
 
 \* **Observed** = wrapped with `jobRunner` and recording to `automation_job_runs`.
 `✅` done, `planned` = adopts the same one-line wrap as its WEB-AUTO story lands
@@ -211,3 +212,41 @@ flow through `jobRunner` into `automation_job_runs` (re-runnable from **Admin �
 Health**). The actual send result (delivered/failed/opens/bounces) lands on the
 queued `newsletter_campaigns` row and is visible in the **Newsletter campaigns**
 table.
+
+## Content auto-moderation (WEB-AUTO-009)
+
+`moderate-content` AI-moderates user-generated content — reviews (`user_ratings`)
+and contact/feedback (`contact_submissions`) — so the clean majority publishes
+instantly and only genuine judgment calls reach a human.
+
+**Real-time (primary path):** the write hooks (`useRatings.submitRating`,
+`useContactForm.submitContactForm`) insert the row `moderation_status='pending'`
+(hidden) and fire `moderate-content { contentType, id }` fire-and-forget. A Claude
+prompt scores toxicity / spam / off-topic 0.0–1.0:
+
+- `toxicity ≥ 0.7` or `spam ≥ 0.6` → **rejected** (stored + hidden, kept for audit; a
+  rejected contact is also marked `status='spam'`).
+- `toxicity ≥ 0.5` or `spam ≥ 0.45` → **flagged** (hidden + queued for a human).
+- otherwise → **approved** (visible immediately). A review with no text is approved
+  without an AI call.
+
+**Fail-open with flag:** if the AI call errors the row stays `pending` (hidden,
+never auto-published) and is retried by the hourly sweep; after 3 attempts it is
+flagged for a human. The single-call path is **not** admin-gated (triggering
+moderation can only hide/flag, never publish) but is rate-limited (30/min/IP) and
+idempotent (re-calls on a decided row are no-ops).
+
+**Safety-net sweep:** cron `moderate-content-sweep` (hourly at :15) calls
+`{action:'sweep'}`, which re-moderates up to 25 pending rows per table — catching
+anything whose real-time call failed. Wrapped in `jobRunner` (counts of
+approved/rejected/flagged/pending in `automation_job_runs`; re-runnable from
+**Admin → Job Health**).
+
+**Review queue:** **Admin → Content → Moderation** lists flagged/rejected items with
+scores + reasons and one-click **Approve** / **Reject** (calls
+`{action:'decision'}`, which is admin-gated and writes a `security_audit_logs` row).
+
+**Display:** the web review list shows only `moderation_status='approved'` rows (the
+author always sees their own, even while pending). RLS is intentionally NOT tightened
+— live iOS/Android binaries read `user_ratings`, so visibility is filtered
+client-side rather than via a policy that would hide reviews from older clients.

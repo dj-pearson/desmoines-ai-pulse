@@ -17,6 +17,7 @@ import CatchDesmoinUrlExtractor from "@/components/CatchDesmoinUrlExtractor";
 import FixBrokenEventUrls from "@/components/FixBrokenEventUrls";
 import { DomainHighlightManager } from "@/components/DomainHighlightManager";
 import MergeReviewPanel from "@/components/admin/MergeReviewPanel";
+import ModerationQueuePanel from "@/components/admin/ModerationQueuePanel";
 import { Button } from "@/components/ui/button";
 import {
   Calendar,
@@ -29,6 +30,7 @@ import {
   FileText,
   Plus,
   Copy,
+  ShieldCheck,
 } from "lucide-react";
 import { useEvents } from "@/hooks/useEvents";
 import { useRestaurants } from "@/hooks/useRestaurants";
@@ -50,6 +52,7 @@ const CONTENT_TABS = [
   { id: "playgrounds", label: "Playgrounds", icon: Play },
   { id: "venues", label: "Known Venues", icon: MapPin },
   { id: "duplicates", label: "Duplicates", icon: Copy },
+  { id: "moderation", label: "Moderation", icon: ShieldCheck },
   { id: "articles", label: "Articles", icon: FileText },
   { id: "article-editor", label: "New Article", icon: Plus },
 ];
@@ -551,6 +554,8 @@ export default function AdminContent() {
           {activeTab === "venues" && <VenuesManager />}
 
           {activeTab === "duplicates" && <MergeReviewPanel />}
+
+          {activeTab === "moderation" && <ModerationQueuePanel />}
 
           {activeTab === "articles" && <ArticlesManager />}
 

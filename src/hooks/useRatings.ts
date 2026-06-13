@@ -41,8 +41,10 @@ export function useRatings({ contentType, contentId }: UseRatingsProps) {
     try {
       setState(prev => ({ ...prev, isLoading: true, error: null }));
 
-      // Fetch all ratings for this content
-      const { data: ratings, error: ratingsError } = await supabase
+      // Fetch ratings for this content. Only approved reviews are shown publicly
+      // (WEB-AUTO-009 auto-moderation); the author always sees their own, even
+      // while it is pending/flagged, so it doesn't appear to vanish after submit.
+      let ratingsQuery = supabase
         .from("user_ratings")
         .select(`
           *,
@@ -53,8 +55,16 @@ export function useRatings({ contentType, contentId }: UseRatingsProps) {
           )
         `)
         .eq("content_type", contentType)
-        .eq("content_id", contentId)
-        .order("created_at", { ascending: false });
+        .eq("content_id", contentId);
+
+      ratingsQuery = user
+        ? ratingsQuery.or(`moderation_status.eq.approved,user_id.eq.${user.id}`)
+        : ratingsQuery.eq("moderation_status", "approved");
+
+      const { data: ratings, error: ratingsError } = await ratingsQuery.order(
+        "created_at",
+        { ascending: false }
+      );
 
       if (ratingsError) throw ratingsError;
 
@@ -111,6 +121,8 @@ export function useRatings({ contentType, contentId }: UseRatingsProps) {
         content_id: contentId,
         rating,
         review_text: reviewText,
+        // WEB-AUTO-009: new/edited reviews start hidden until auto-moderation clears them.
+        moderation_status: "pending",
       };
 
       const { data, error } = await supabase
@@ -123,9 +135,21 @@ export function useRatings({ contentType, contentId }: UseRatingsProps) {
 
       if (error) throw error;
 
+      // WEB-AUTO-009: auto-moderate the review (fire-and-forget — never blocks the
+      // submit UX). The hourly sweep re-checks anything this call fails to reach.
+      if (data?.id) {
+        supabase.functions
+          .invoke("moderate-content", { body: { contentType: "review", id: data.id } })
+          .catch((err) => {
+            if (import.meta.env.DEV) console.error("moderate-content (review) failed", err);
+          });
+      }
+
       toast({
         title: "Rating Submitted",
-        description: "Thank you for your feedback!",
+        description: reviewText
+          ? "Thanks! Your review will appear after a quick automated check."
+          : "Thank you for your feedback!",
       });
 
       // Refresh ratings to get updated data
