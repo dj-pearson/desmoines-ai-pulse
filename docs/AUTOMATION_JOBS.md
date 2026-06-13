@@ -18,8 +18,9 @@ All times UTC. Schedules are cron expressions (`min hour dom mon dow`).
 | `auto-enrich-restaurants-daily` | `0 3 * * *` | fn `auto-enrich-restaurants` | Fill missing restaurant data | — |
 | `backfill-coordinates-nightly` | `30 4 * * *` | fn `backfill-all-coordinates` | Geocode rows missing lat/lng | — |
 | `nightly-coordinate-backfill` | `0 2 * * *` | fn `backfill-all-coordinates` | Geocode backfill (2nd pass) | — |
-| `cleanup-old-events-weekly` | weekly | fn `cleanup-old-events` | Purge events past retention + their media | ✅ |
-| `monthly-event-purge` | monthly | fn `cleanup-old-events` | Monthly deep purge | ✅ (same fn) |
+| **`event-lifecycle-cleanup`** | `15 4 * * *` | fn `cleanup-old-events` | **Two-phase stale-event lifecycle: soft-hide 30d past date, archive + hard-delete 180d past (WEB-AUTO-006)** | ✅ |
+| ~~`cleanup-old-events-weekly`~~ | retired | SQL `cleanup_old_events()` | Replaced by `event-lifecycle-cleanup` (legacy single-phase hard delete; full-row archive broke on the wider events schema) | — |
+| `monthly-event-purge` | monthly | fn `cleanup-old-events` | Monthly deep purge (same fn) | ✅ (same fn) |
 | `validate-source-urls-weekly` | weekly | fn `validate-source-urls` | Detect + auto-repair broken event URLs (re-discover, Wayback, flag) | ✅ |
 | `update-trending-scores` | `15 * * * *` | SQL / fn | Recompute trending scores | — |
 | `generate-weekend-guide` | scheduled | fn `generate-weekend-guide` | Build the weekend guide | — |
@@ -79,3 +80,28 @@ reappears in listings. Repointed child rows (favorites, reviews, …) stay with 
 survivor — they were genuine duplicates — so reversal un-hides the duplicate
 listing for re-evaluation rather than perfectly reconstructing the pre-merge state.
 Ambiguous pairs queue in **Admin → Content → Duplicates** for one-click merge/dismiss.
+
+### Stale-event lifecycle & recovery (WEB-AUTO-006)
+
+`cleanup-old-events` runs nightly in two phases:
+
+1. **Soft-hide** — events `> 30 days` past their `date` get `is_hidden = true`
+   (+ `hidden_at`). All public list/detail queries and the sitemaps exclude
+   `is_hidden`, so these silently drop out of the site while staying in the DB.
+   (Most public surfaces already only show future events, so this mainly affects
+   any past event still being surfaced.)
+2. **Archive + hard-delete** — events `> 180 days` past their `date` are first
+   snapshotted into `event_archive` (`id, title, source_url, date, location,
+   venue, category, archived_at`), their Storage images removed, then the event
+   and its child rows are deleted. The 180-day window gives a long recovery
+   period before anything is destroyed.
+
+Run counts (`hidden` / `archived` / `deleted`) flow through the jobRunner and
+show in the **Admin → Job Health** "Event Lifecycle" card.
+
+**Recovering a soft-hidden event** (within the 180-day window, before it is
+purged): call `unhide_stale_event('<event_id>')` as an admin/service role. It
+sets `is_hidden = false` and the event reappears everywhere immediately. Note it
+deliberately **leaves `hidden_at` set** — that's what stops the nightly job from
+re-hiding the restored row. Once an event passes the 180-day delete window it is
+purged regardless of `is_hidden`; restore it before then.

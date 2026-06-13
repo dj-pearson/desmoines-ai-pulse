@@ -15,6 +15,36 @@ Started: 2026-06-12T01:18:32.104Z
 - **Lint:** `npm run lint` (`eslint .`) exits 1 due to a PRE-EXISTING parser false-positive at `src/components/media/VideoPlayer.tsx:587` (',' expected) — tsc accepts the file; it predates these stories. Verify YOUR files with targeted `npx eslint <files>` (warnings like no-console are allowed across the repo; only 0 errors matter).
 - **Deno parse check (no Supabase in container):** `npx esbuild supabase/functions/<fn>/index.ts --bundle --external:https://* --format=esm --platform=neutral --outfile=/dev/null`. Migrations can't be applied locally — write them additive + idempotent (IF NOT EXISTS / CREATE OR REPLACE / guarded DO blocks).
 
+- **Soft-hide lifecycle pattern (is_hidden + hidden_at):** like is_merged but with a re-hide guard. The hide job only sets is_hidden where `hidden_at IS NULL`; restore (`unhide`) sets `is_hidden=false` but LEAVES `hidden_at` populated — so an admin-restored row is permanently skipped by the nightly hide job. Public sweep is small in practice because most event queries already `.gte('date', today)` (hidden ⇒ >N days past ⇒ already excluded); only queries that fetch PAST events (by-id from trending_scores, featured-without-date, the no-date sitemap lib) genuinely needed the filter. When adding `.neq('is_hidden', true)` to a `.single()` fetch, switch it to `.maybeSingle()` — the filter can now legitimately return zero rows and `.single()` throws.
+- **cleanup-old-events was a hole:** it was verify_jwt=true (not in config.toml) with no admin check, so ANY authenticated user could invoke it and trigger deletes. Modernizing a cron/admin edge fn to verify_jwt=false + requireAdminOrApiKey both closes that AND lets the cron service-role bearer + admin-panel JWT through one gate.
+- **archived_events (LIKE events INCLUDING ALL) is now STALE** — events has gained geom/is_merged/merged_*/recurrence_*/instance_date/is_hidden that archived_events lacks, so any `INSERT INTO archived_events SELECT *` (legacy cleanup_old_events) now fails on column mismatch. Prefer a NEW explicit-column snapshot table over `SELECT *` into a LIKE-clone.
+
+---
+## 2026-06-12 - WEB-AUTO-006 (Stale-event lifecycle: soft-hide → archive → purge)
+Replaced the single-phase hard-delete with a two-phase, observable, recoverable lifecycle.
+
+Files added:
+- supabase/migrations/20260612000012_event_lifecycle_columns.sql — additive events.is_hidden (NOT NULL default false) + hidden_at + partial index.
+- supabase/migrations/20260612000013_event_lifecycle_functions.sql — event_archive snapshot table (RLS admin-read) + hide_stale_events / archive_and_purge_events / unhide_stale_event RPCs (search_path-pinned, REVOKE FROM PUBLIC, admin/service-role gated).
+- supabase/migrations/20260612000014_event_lifecycle_cron.sql — retire legacy 'cleanup-old-events-weekly' SQL cron, schedule 'event-lifecycle-cleanup' nightly 04:15 UTC → cleanup-old-events fn.
+
+Files changed:
+- supabase/functions/cleanup-old-events/index.ts — full rewrite: requireAdminOrApiKey gate, phase-1 hide RPC + phase-2 (storage cleanup → archive_and_purge RPC), counts via jobRunner, dryRun + back-compat retentionMonths preserved.
+- src/integrations/supabase/types.ts — is_hidden/hidden_at on events Row/Insert/Update.
+- Public sweep (.neq('is_hidden', true)): src/hooks/useEvents.ts, src/lib/sitemap.ts, src/lib/sitemapEnhanced.ts, supabase/functions/generate-sitemaps/index.ts, src/hooks/useTrending.ts (+ by-id → maybeSingle), src/hooks/usePersonalizedRecommendations.ts, src/hooks/useSmartRecommendations.ts (+ by-id → maybeSingle), src/hooks/useEnhancedRecommendations.ts, src/hooks/useAdvancedSearch.ts, src/components/SearchSection.tsx, src/components/SearchAutocomplete.tsx, src/pseo/components/sections/PseoLiveListings.tsx.
+- src/components/admin/JobHealthPanel.tsx — 'Event Lifecycle' KPI card (hidden/archived/deleted).
+- docs/AUTOMATION_JOBS.md — job row + two-phase/recovery section.
+- prd.json — WEB-AUTO-006 passes:true.
+
+Defaults: hide 30d past date, archive+delete 180d past date (180 ≈ the old 6-month retention, so deletion timing is backward-compatible — just now hidden first + archived first).
+
+Quality: type-check passes; cleanup-old-events + generate-sitemaps parse via esbuild; 12 edited frontend files lint 0 errors (only pre-existing no-console/no-explicit-any/unused-var warnings). Migrations additive/idempotent, not applied in-container.
+
+**Learnings for future iterations:**
+- ⚠️ CONCURRENT EXTERNAL WORKING-TREE CHANGES during this iteration: 11 edge functions were DELETED (backfill-coordinates, backfill-all-coordinates-force, bulk-event-updater, extract-catchdesmoines-urls, populate-playgrounds, generate-sitemap, generate-writeup, restart-web-server, test-ai-model, test-article-webhook, test-google-api) with matching config.toml entry removals, plus 3 pre-existing migration-correctness mods (deals CHECK, contact_submissions is_admin(), rls_audit_fixes to_regclass guard). NONE are mine and several deleted fns were security-gated in WEB-SEC-001, so I did NOT commit them (committing endpoint removals risks backward-compat breaks). My config.toml `[functions.cleanup-old-events] verify_jwt=false` edit is entangled in that same file with the external removals, so I LEFT config.toml UNSTAGED — cleanup-old-events therefore runs under the default verify_jwt=true, which is fine: requireAdminOrApiKey is the authoritative gate (cron service-role bearer + admin JWT both pass; anon/non-admin rejected). Follow-up: register verify_jwt=false once the config.toml churn settles, if X-API-Key-without-JWT callers are needed.
+- The branch named in prd.json (claude/web-platform-autonomy) is STALE — actual work HEAD is on claude/ios-layout-monetization-plan-5IQFu, which is AHEAD of it (contains WEB-AUTO-005). Stay on the current branch; checking out the named branch would lose committed work.
+- Next story WEB-AUTO-007 (AI article pipeline) is the pattern: scheduled fn → suggest-article-topics → generate-article → score → publish/draft/discard, jobRunner-wrapped, with a pause config flag. articles.review_status already exists.
+
 ---
 ## 2026-06-12 - WEB-AUTO-005 (Duplicate venue/event detection + merge queue)
 Implemented automatic duplicate detection/merge for events + restaurants, with an admin review queue for ambiguous pairs.

@@ -118,6 +118,7 @@ export function usePersonalizedRecommendations() {
         .from('events')
         .select('*')
         .gte('date', new Date().toISOString().split('T')[0])
+        .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
         .order('date', { ascending: true })
         .limit(10);
 
@@ -323,6 +324,7 @@ export function usePersonalizedRecommendations() {
         .from('events')
         .select('*')
         .eq('is_featured', true)
+        .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
         .limit(4);
 
       return (featuredEvents || []).map(event => ({

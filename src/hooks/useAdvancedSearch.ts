@@ -190,7 +190,8 @@ export function useAdvancedSearch() {
     let query = supabase
       .from('events')
       .select('*')
-      .gte('date', new Date().toISOString());
+      .gte('date', new Date().toISOString())
+      .neq('is_hidden', true); // Exclude soft-hidden stale events (WEB-AUTO-006)
 
     // Apply text search
     if (searchFilters.query) {

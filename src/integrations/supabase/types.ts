@@ -2826,11 +2826,13 @@ export type Database = {
           geo_key_facts: string[] | null
           geo_summary: string | null
           geom: unknown
+          hidden_at: string | null
           id: string
           image_url: string | null
           instance_date: string | null
           is_enhanced: boolean | null
           is_featured: boolean | null
+          is_hidden: boolean | null
           is_merged: boolean | null
           is_recurring: boolean | null
           is_recurring_instance: boolean | null
@@ -2871,11 +2873,13 @@ export type Database = {
           geo_key_facts?: string[] | null
           geo_summary?: string | null
           geom?: unknown
+          hidden_at?: string | null
           id?: string
           image_url?: string | null
           instance_date?: string | null
           is_enhanced?: boolean | null
           is_featured?: boolean | null
+          is_hidden?: boolean | null
           is_recurring?: boolean | null
           is_recurring_instance?: boolean | null
           latitude?: number | null
@@ -2913,11 +2917,13 @@ export type Database = {
           geo_key_facts?: string[] | null
           geo_summary?: string | null
           geom?: unknown
+          hidden_at?: string | null
           id?: string
           image_url?: string | null
           instance_date?: string | null
           is_enhanced?: boolean | null
           is_featured?: boolean | null
+          is_hidden?: boolean | null
           is_recurring?: boolean | null
           is_recurring_instance?: boolean | null
           latitude?: number | null

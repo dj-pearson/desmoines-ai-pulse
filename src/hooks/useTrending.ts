@@ -101,7 +101,8 @@ export function useTrending(config: FallbackConfig = { useRealData: true, minIte
               .from('events')
               .select('*')
               .eq('id', score.content_id)
-              .single();
+              .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
+              .maybeSingle();
             content = event;
             break;
           }
@@ -170,6 +171,7 @@ export function useTrending(config: FallbackConfig = { useRealData: true, minIte
         .from('events')
         .select('*')
         .eq('is_featured', true)
+        .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
         .order('created_at', { ascending: false })
         .limit(6);
 

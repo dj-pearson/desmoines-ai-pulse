@@ -61,6 +61,12 @@ interface DataQualityKpi {
   [table: string]: { missingCoords: number; missingSeo: number; missingImage: number };
 }
 
+interface LifecycleKpi {
+  hidden: number;
+  archived: number;
+  deleted: number;
+}
+
 export default function JobHealthPanel() {
   const { toast } = useToast();
   const [running, setRunning] = useState<string | null>(null);
@@ -78,6 +84,28 @@ export default function JobHealthPanel() {
         .maybeSingle();
       const meta = (data as unknown as { metadata?: { kpi?: DataQualityKpi } } | null)?.metadata;
       return meta?.kpi ?? null;
+    },
+    refetchInterval: 60_000,
+  });
+
+  // Latest stale-event lifecycle counts (WEB-AUTO-006).
+  const { data: lifecycleKpi } = useQuery({
+    queryKey: ["event-lifecycle-kpi"],
+    queryFn: async (): Promise<LifecycleKpi | null> => {
+      const { data } = await supabase
+        .from("automation_job_runs" as never)
+        .select("metadata")
+        .eq("job_name", "cleanup-old-events")
+        .order("started_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const meta = (data as unknown as { metadata?: Partial<LifecycleKpi> } | null)?.metadata;
+      if (!meta) return null;
+      return {
+        hidden: meta.hidden ?? 0,
+        archived: meta.archived ?? 0,
+        deleted: meta.deleted ?? 0,
+      };
     },
     refetchInterval: 60_000,
   });
@@ -212,6 +240,26 @@ export default function JobHealthPanel() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {lifecycleKpi && (
+        <div className="mt-6">
+          <h3 className="text-sm font-medium mb-2">Event Lifecycle (last cleanup run)</h3>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-lg border p-3">
+              <div className="text-xs text-muted-foreground">Soft-hidden</div>
+              <div className="text-lg font-semibold text-amber-600">{lifecycleKpi.hidden}</div>
+            </div>
+            <div className="rounded-lg border p-3">
+              <div className="text-xs text-muted-foreground">Archived</div>
+              <div className="text-lg font-semibold">{lifecycleKpi.archived}</div>
+            </div>
+            <div className="rounded-lg border p-3">
+              <div className="text-xs text-muted-foreground">Deleted</div>
+              <div className="text-lg font-semibold text-destructive">{lifecycleKpi.deleted}</div>
+            </div>
           </div>
         </div>
       )}
