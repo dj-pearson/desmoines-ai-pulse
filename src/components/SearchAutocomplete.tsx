@@ -55,6 +55,9 @@ export function SearchAutocomplete({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const debouncedValue = useDebouncedValue(value, 300);
 
+  const listboxId = `search-listbox-${contentType}`;
+  const optionId = (idx: number) => `${listboxId}-option-${idx}`;
+
   const recentSearches = getRecentSearches(contentType);
 
   const { data: suggestions = [] } = useQuery({
@@ -214,6 +217,33 @@ export function SearchAutocomplete({
     return () => input.removeEventListener('focus', handleFocus);
   }, [inputRef, hasContent]);
 
+  // Wire ARIA combobox semantics onto the parent-owned input so screen readers
+  // announce the active suggestion as the user arrows through them.
+  useEffect(() => {
+    const input = inputRef?.current;
+    if (!input) return;
+    const open = isOpen && hasContent;
+    input.setAttribute('role', 'combobox');
+    input.setAttribute('aria-autocomplete', 'list');
+    input.setAttribute('aria-expanded', String(open));
+    if (open) {
+      input.setAttribute('aria-controls', listboxId);
+    } else {
+      input.removeAttribute('aria-controls');
+    }
+    if (open && activeIndex >= 0) {
+      input.setAttribute('aria-activedescendant', optionId(activeIndex));
+    } else {
+      input.removeAttribute('aria-activedescendant');
+    }
+    return () => {
+      input.removeAttribute('aria-activedescendant');
+      input.removeAttribute('aria-expanded');
+      input.removeAttribute('aria-controls');
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inputRef, isOpen, hasContent, activeIndex]);
+
   const [, forceUpdate] = useState(0);
   const handleClearRecent = useCallback(() => {
     clearRecentSearches(contentType);
@@ -227,6 +257,7 @@ export function SearchAutocomplete({
   return (
     <div
       ref={dropdownRef}
+      id={listboxId}
       className={cn(
         'absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-50 max-h-80 overflow-y-auto',
         className
@@ -256,6 +287,7 @@ export function SearchAutocomplete({
             return (
               <button
                 key={`recent-${search}`}
+                id={optionId(idx)}
                 role="option"
                 aria-selected={activeIndex === idx}
                 className={cn(
@@ -293,6 +325,7 @@ export function SearchAutocomplete({
             return (
               <button
                 key={`suggestion-${suggestion.id}`}
+                id={optionId(idx)}
                 role="option"
                 aria-selected={activeIndex === idx}
                 className={cn(

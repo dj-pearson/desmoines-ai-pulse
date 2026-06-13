@@ -237,7 +237,7 @@ function SocialEventCardComponent({
                 <ArrowRight className="h-4 w-4 ml-1 transition-transform group-hover:translate-x-1" />
               </span>
               <div className="flex items-center gap-1" onClick={(e) => e.preventDefault()}>
-                <FavoriteButton eventId={event.id} variant="ghost" size="icon" />
+                <FavoriteButton eventId={event.id} itemName={event.title} variant="ghost" size="icon" />
                 <ShareDialog
                   title={event.title}
                   description={

@@ -208,7 +208,7 @@ function EventCardComponent({ event, onViewDetails }: EventCardProps) {
               </Button>
             </Link>
 
-            <FavoriteButton eventId={event.id} variant="ghost" size="icon" />
+            <FavoriteButton eventId={event.id} itemName={event.title} variant="ghost" size="icon" />
 
             <ShareDialog
               title={event.title}
