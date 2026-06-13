@@ -48,34 +48,32 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
 
   const { trackSearch } = useAnalytics();
 
-  // Fetch subcategories based on selected category
+  // Fetch subcategories based on selected category.
+  // WEB-PERF-002: distinct categories/cuisines come from DISTINCT-value RPCs
+  // (computed server-side) instead of fetching whole columns and deduping in JS.
   const { data: subcategories } = useQuery({
     queryKey: ["subcategories", category],
-    queryFn: async () => {
+    queryFn: async (): Promise<string[]> => {
       if (category === "Events") {
-        const { data, error } = await supabase
-          .from("events")
-          .select("category")
-          .gte("date", new Date().toISOString().split("T")[0]);
-
+        const { data, error } = await supabase.rpc(
+          "get_event_categories" as never,
+        );
         if (error) throw error;
-        const uniqueCategories = [
-          ...new Set(data.map((event) => event.category)),
-        ].filter(Boolean);
-        return uniqueCategories.sort();
+        return ((data ?? []) as unknown as { category: string }[])
+          .map((r) => r.category)
+          .filter(Boolean);
       } else if (category === "Restaurants") {
-        const { data, error } = await supabase
-          .from("restaurants")
-          .select("cuisine");
-
+        const { data, error } = await supabase.rpc(
+          "get_restaurant_filter_options" as never,
+        );
         if (error) throw error;
-        const uniqueCuisines = [
-          ...new Set(data.map((restaurant) => restaurant.cuisine)),
-        ].filter(Boolean);
-        return uniqueCuisines.sort();
+        const row = ((data ?? []) as unknown as { cuisines: string[] | null }[])[0];
+        return (row?.cuisines ?? []).filter(Boolean);
       }
       return [];
     },
+    staleTime: 60 * 60 * 1000, // 1h — filter options change rarely
+    gcTime: 2 * 60 * 60 * 1000,
     enabled:
       category !== "All" &&
       (category === "Events" || category === "Restaurants"),

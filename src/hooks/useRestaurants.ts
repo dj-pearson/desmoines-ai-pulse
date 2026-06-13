@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 import { getRestaurantRotationSeed } from "@/lib/restaurantRotation";
@@ -407,101 +408,66 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
   };
 }
 
-// Hook to get cuisine counts for "Browse by Cuisine" section
+// Hook to get cuisine counts for "Browse by Cuisine" section.
+// WEB-PERF-002: server-side aggregation via get_cuisine_counts() instead of
+// fetching every restaurant's cuisine column and tallying client-side. Cached
+// for 1h (filter options change rarely).
 export function useCuisineCounts() {
-  const [cuisineCounts, setCuisineCounts] = useState<{ cuisine: string; count: number }[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchCuisineCounts = async () => {
-      try {
-        const { data } = await supabase
-          .from("restaurants")
-          .select("cuisine")
-          .not("cuisine", "is", null);
-
-        if (data) {
-          const counts: Record<string, number> = {};
-          data.forEach((r) => {
-            if (r.cuisine) {
-              counts[r.cuisine] = (counts[r.cuisine] || 0) + 1;
-            }
-          });
-
-          const sorted = Object.entries(counts)
-            .map(([cuisine, count]) => ({ cuisine, count }))
-            .filter((item) => item.count >= 1)
-            .sort((a, b) => b.count - a.count);
-
-          setCuisineCounts(sorted);
-        }
-      } catch {
-        // Silently fail — section just won't render
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchCuisineCounts();
-  }, []);
-
-  return { cuisineCounts, isLoading };
-}
-
-// Utility hook to get available filter options
-export function useRestaurantFilterOptions() {
-  const [options, setOptions] = useState({
-    cuisines: [] as string[],
-    locations: [] as string[],
-    tags: [] as string[],
-    isLoading: true,
+  const { data, isLoading } = useQuery({
+    queryKey: ["cuisine-counts"],
+    queryFn: async (): Promise<{ cuisine: string; count: number }[]> => {
+      const { data, error } = await supabase.rpc("get_cuisine_counts" as never);
+      if (error) throw error;
+      const rows = (data ?? []) as unknown as { cuisine: string; count: number }[];
+      // RPC returns bigint counts as strings via PostgREST — coerce to number.
+      return rows.map((r) => ({ cuisine: r.cuisine, count: Number(r.count) }));
+    },
+    staleTime: 60 * 60 * 1000, // 1h
+    gcTime: 2 * 60 * 60 * 1000,
   });
 
-  useEffect(() => {
-    const fetchFilterOptions = async () => {
-      try {
-        // Get unique cuisines
-        const { data: cuisineData } = await supabase
-          .from("restaurants")
-          .select("cuisine")
-          .not("cuisine", "is", null);
+  return { cuisineCounts: data ?? [], isLoading };
+}
 
-        // Get unique locations from the location column
-        const { data: locationData } = await supabase
-          .from("restaurants")
-          .select("location")
-          .not("location", "is", null);
+// Common restaurant tags (static — not derived from the table).
+const RESTAURANT_TAGS = [
+  "Takeout",
+  "Delivery",
+  "Outdoor Seating",
+  "Family Friendly",
+  "Date Night",
+  "Happy Hour",
+];
 
-        const uniqueCuisines = [
-          ...new Set(cuisineData?.map((r) => r.cuisine).filter(Boolean)),
-        ] as string[];
+// Utility hook to get available filter options.
+// WEB-PERF-002: distinct cuisines + locations come from the
+// get_restaurant_filter_options() RPC (DISTINCT computed in Postgres) instead of
+// pulling every row's cuisine/location columns and deduping client-side. Cached 1h.
+export function useRestaurantFilterOptions() {
+  const { data, isLoading } = useQuery({
+    queryKey: ["restaurant-filter-options"],
+    queryFn: async (): Promise<{ cuisines: string[]; locations: string[] }> => {
+      const { data, error } = await supabase.rpc(
+        "get_restaurant_filter_options" as never,
+      );
+      if (error) throw error;
+      const row = ((data ?? []) as unknown as {
+        cuisines: string[] | null;
+        locations: string[] | null;
+      }[])[0];
+      return {
+        cuisines: (row?.cuisines ?? []).filter(Boolean),
+        locations: (row?.locations ?? []).filter(Boolean),
+      };
+    },
+    staleTime: 60 * 60 * 1000, // 1h
+    gcTime: 2 * 60 * 60 * 1000,
+  });
 
-        // Use the location column for location filtering
-        const uniqueLocations = [
-          ...new Set(locationData?.map((r) => r.location).filter(Boolean)),
-        ] as string[];
-
-        setOptions({
-          cuisines: uniqueCuisines.sort(),
-          locations: uniqueLocations.sort(),
-          tags: [
-            "Takeout",
-            "Delivery",
-            "Outdoor Seating",
-            "Family Friendly",
-            "Date Night",
-            "Happy Hour",
-          ], // Common restaurant tags
-          isLoading: false,
-        });
-      } catch (error) {
-        console.error("Error fetching filter options:", error);
-        setOptions((prev) => ({ ...prev, isLoading: false }));
-      }
-    };
-
-    fetchFilterOptions();
-  }, []);
-
-  return options;
+  return {
+    cuisines: data?.cuisines ?? [],
+    locations: data?.locations ?? [],
+    tags: RESTAURANT_TAGS,
+    isLoading,
+  };
 }

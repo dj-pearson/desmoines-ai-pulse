@@ -88,71 +88,60 @@ export function useTrending(config: FallbackConfig = { useRealData: true, minIte
     }
   };
 
+  // WEB-PERF-002: fetch content in ONE batched query per content type
+  // (.in('id', ids)) instead of one query per trending row (N+1).
   const enrichTrendingWithContent = async (trendingScores: Array<Record<string, unknown>>) => {
-    const enriched = [];
+    const TABLE_BY_TYPE: Record<string, string> = {
+      event: 'events',
+      restaurant: 'restaurants',
+      attraction: 'attractions',
+      playground: 'playgrounds',
+    };
 
+    const idsByType = new Map<string, string[]>();
     for (const score of trendingScores) {
-      let content = null;
-      
-      try {
-        switch (score.content_type) {
-          case 'event': {
-            const { data: event } = await supabase
-              .from('events')
-              .select('*')
-              .eq('id', score.content_id)
-              .single();
-            content = event;
-            break;
-          }
-          case 'restaurant': {
-            const { data: restaurant } = await supabase
-              .from('restaurants')
-              .select('*')
-              .eq('id', score.content_id)
-              .single();
-            content = restaurant;
-            break;
-          }
-          case 'attraction': {
-            const { data: attraction } = await supabase
-              .from('attractions')
-              .select('*')
-              .eq('id', score.content_id)
-              .single();
-            content = attraction;
-            break;
-          }
-          case 'playground': {
-            const { data: playground } = await supabase
-              .from('playgrounds')
-              .select('*')
-              .eq('id', score.content_id)
-              .single();
-            content = playground;
-            break;
-          }
-        }
-
-        if (content) {
-          enriched.push({
-            id: score.id,
-            contentType: score.content_type,
-            contentId: score.content_id,
-            score: score.score,
-            rank: score.rank,
-            views24h: score.views_24h,
-            views7d: score.views_7d,
-            velocityScore: score.velocity_score,
-            content
-          });
-        }
-      } catch (error) {
-        console.error(`Error fetching content for ${score.content_type}:${score.content_id}`, error);
-      }
+      const type = score.content_type as string;
+      const id = score.content_id as string;
+      if (!TABLE_BY_TYPE[type] || !id) continue;
+      const list = idsByType.get(type) ?? [];
+      list.push(id);
+      idsByType.set(type, list);
     }
 
-    return enriched;
+    const contentByKey = new Map<string, Record<string, unknown>>();
+    await Promise.all(
+      Array.from(idsByType.entries()).map(async ([type, ids]) => {
+        try {
+          const { data: rows } = await supabase
+            .from(TABLE_BY_TYPE[type] as never)
+            .select('*')
+            .in('id', ids);
+          (rows as Array<Record<string, unknown>> | null)?.forEach((row) => {
+            contentByKey.set(`${type}:${row.id as string}`, row);
+          });
+        } catch (error) {
+          console.error(`Error fetching content for ${type}`, error);
+        }
+      })
+    );
+
+    return trendingScores
+      .map((score) => {
+        const content = contentByKey.get(`${score.content_type}:${score.content_id}`);
+        if (!content) return null;
+        return {
+          id: score.id,
+          contentType: score.content_type,
+          contentId: score.content_id,
+          score: score.score,
+          rank: score.rank,
+          views24h: score.views_24h,
+          views7d: score.views_7d,
+          velocityScore: score.velocity_score,
+          content,
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null);
   };
 
   const generateFallbackTrending = async (): Promise<TrendingData> => {
