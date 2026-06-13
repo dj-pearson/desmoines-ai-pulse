@@ -23,6 +23,7 @@ import {
   formatInCentralTime,
   hasSpecificTime,
 } from '@/lib/timezone';
+import { getEventCategoryStyle } from '@/lib/categoryColors';
 import { Link } from 'react-router-dom';
 
 interface SocialEventCardProps {
@@ -47,19 +48,7 @@ function SocialEventCardComponent({
   const liveStats = socialData?.liveStats ?? individualFetch.liveStats;
   const attendees = socialData?.attendees ?? individualFetch.attendees;
 
-  const getCategoryStyle = (category: string) => {
-    const c = category.toLowerCase();
-    if (c.includes('music')) return { bg: 'bg-violet-500', text: 'text-violet-500', icon: 'bg-violet-500/10' };
-    if (c.includes('food') || c.includes('drink')) return { bg: 'bg-orange-500', text: 'text-orange-500', icon: 'bg-orange-500/10' };
-    if (c.includes('sport')) return { bg: 'bg-emerald-500', text: 'text-emerald-500', icon: 'bg-emerald-500/10' };
-    if (c.includes('art') || c.includes('culture')) return { bg: 'bg-pink-500', text: 'text-pink-500', icon: 'bg-pink-500/10' };
-    if (c.includes('family') || c.includes('kid')) return { bg: 'bg-sky-500', text: 'text-sky-500', icon: 'bg-sky-500/10' };
-    if (c.includes('outdoor')) return { bg: 'bg-green-500', text: 'text-green-500', icon: 'bg-green-500/10' };
-    if (c.includes('business') || c.includes('network')) return { bg: 'bg-slate-600', text: 'text-slate-600', icon: 'bg-slate-600/10' };
-    return { bg: 'bg-primary', text: 'text-primary', icon: 'bg-primary/10' };
-  };
-
-  const categoryStyle = getCategoryStyle(event.category);
+  const categoryStyle = getEventCategoryStyle(event.category);
 
   const getDateParts = () => {
     try {
@@ -123,7 +112,7 @@ function SocialEventCardComponent({
                 event.image_url ? 'hidden' : 'flex'
               }`}
             >
-              <div className={`rounded-full p-4 ${categoryStyle.icon}`}>
+              <div className={`rounded-full p-4 ${categoryStyle.iconBg}`}>
                 <Calendar className={`h-8 w-8 ${categoryStyle.text}`} />
               </div>
               <span className="text-xs text-muted-foreground mt-1">{event.category}</span>
@@ -135,7 +124,7 @@ function SocialEventCardComponent({
             {/* Date Badge - Calendar Style */}
             <div className="absolute top-3 left-3 z-10">
               <div className="bg-white dark:bg-slate-900 rounded-lg shadow-lg overflow-hidden text-center w-14">
-                <div className={`${categoryStyle.bg} text-white text-[10px] font-bold py-0.5 tracking-wider`}>
+                <div className={`${categoryStyle.solid} ${categoryStyle.onSolid} text-[10px] font-bold py-0.5 tracking-wider`}>
                   {dateParts.month}
                 </div>
                 <div className="py-1">
@@ -170,7 +159,7 @@ function SocialEventCardComponent({
             {/* Bottom Info Overlay */}
             <div className="absolute bottom-0 left-0 right-0 p-4 z-10">
               <div className="flex items-center gap-2 mb-2">
-                <Badge className={`${categoryStyle.bg} text-white border-0 text-[11px] font-medium`}>
+                <Badge className={`${categoryStyle.solid} ${categoryStyle.onSolid} border-0 text-[11px] font-medium`}>
                   {event.category}
                 </Badge>
                 {isFree ? (

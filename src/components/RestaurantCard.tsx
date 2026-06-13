@@ -8,6 +8,7 @@ import { SocialProofBadge } from "@/components/SocialProofBadge";
 import { getRestaurantOpenStatus } from "@/lib/restaurantHours";
 import { SponsoredBadge } from "@/components/SponsoredBadge";
 import { usePrefetchRestaurant } from "@/hooks/usePrefetchDetail";
+import { getCuisineGradient, BRAND_GRADIENT } from "@/lib/categoryColors";
 
 const DIETARY_TAGS = [
   { id: "vegan", label: "Vegan", icon: Leaf, bg: "bg-green-50", text: "text-green-700", keywords: ["vegan"] },
@@ -47,33 +48,6 @@ interface RestaurantCardProps {
   onClick?: () => void;
 }
 
-const cuisineGradients: Record<string, string> = {
-  Italian: "from-red-600 to-orange-500",
-  Mexican: "from-green-600 to-yellow-500",
-  Chinese: "from-red-700 to-amber-500",
-  Japanese: "from-pink-600 to-red-400",
-  Thai: "from-orange-500 to-yellow-400",
-  Indian: "from-orange-600 to-red-500",
-  American: "from-blue-600 to-red-500",
-  French: "from-blue-500 to-indigo-600",
-  Mediterranean: "from-sky-500 to-emerald-400",
-  Korean: "from-rose-500 to-orange-400",
-  Vietnamese: "from-emerald-500 to-lime-400",
-  BBQ: "from-amber-700 to-red-600",
-  Seafood: "from-cyan-500 to-blue-600",
-  Pizza: "from-red-500 to-yellow-500",
-  Steakhouse: "from-stone-700 to-red-800",
-  default: "from-[#2D1B69] to-[#DC143C]",
-};
-
-function getGradient(cuisine?: string): string {
-  if (!cuisine) return cuisineGradients.default;
-  for (const [key, value] of Object.entries(cuisineGradients)) {
-    if (cuisine.toLowerCase().includes(key.toLowerCase())) return value;
-  }
-  return cuisineGradients.default;
-}
-
 function StarRating({ rating }: { rating: number }) {
   const stars = [];
   const fullStars = Math.floor(rating);
@@ -104,7 +78,7 @@ function StarRating({ rating }: { rating: number }) {
 
 function RestaurantCardComponent({ restaurant, variant = "default", onClick }: RestaurantCardProps) {
   const [imageError, setImageError] = useState(false);
-  const gradient = getGradient(restaurant.cuisine);
+  const gradient = getCuisineGradient(restaurant.cuisine);
   const showImage = restaurant.image_url && !imageError;
   const isFeatured = variant === "featured" || restaurant.is_featured;
   const openStatus = useMemo(() => getRestaurantOpenStatus(restaurant.opening), [restaurant.opening]);
@@ -264,7 +238,7 @@ function RestaurantCardComponent({ restaurant, variant = "default", onClick }: R
         </div>
 
         {/* Hover CTA strip */}
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-r from-[#2D1B69] to-[#DC143C] text-white text-center py-2 text-sm font-medium translate-y-full group-hover:translate-y-0 group-focus-within:translate-y-0 transition-transform duration-200">
+        <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-r ${BRAND_GRADIENT} text-white text-center py-2 text-sm font-medium translate-y-full group-hover:translate-y-0 group-focus-within:translate-y-0 transition-transform duration-200`}>
           View Restaurant Details
         </div>
       </article>

@@ -447,6 +447,46 @@ test.describe('Content Layout Issues', () => {
   });
 });
 
+test.describe('Card Surfaces - Centralized Category Colors (WEB-UX-006)', () => {
+  // Verifies the category/cuisine color tokens (src/lib/categoryColors.ts) render
+  // on the actual card surfaces in both light and dark mode without low-contrast
+  // (near-transparent / invisible) text. Contrast math itself is unit-tested in
+  // src/lib/__tests__/categoryColors.test.ts; here we confirm the tokens are wired
+  // onto the live DOM and stay legible after the dark-mode class flip.
+  for (const mode of ['light', 'dark'] as const) {
+    test(`event cards keep legible category badges in ${mode} mode`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: mode });
+      await page.goto('/events', { waitUntil: 'networkidle' });
+      await page.waitForTimeout(1500);
+
+      const cardCount = await page.locator('article, [class*="rounded-2xl"], [class*="rounded-xl"]').count();
+      test.skip(cardCount === 0, 'No cards rendered (no data in this environment)');
+
+      // Collect every small badge-like element and assert none renders fully transparent
+      // text or a transparent-on-transparent surface (the classic dark-mode regression).
+      const invisible = await page.evaluate(() => {
+        const els = Array.from(document.querySelectorAll('span, div, a'));
+        const bad: string[] = [];
+        for (const el of els) {
+          const text = el.textContent?.trim();
+          if (!text || text.length > 24) continue; // badges hold short labels
+          const rect = el.getBoundingClientRect();
+          if (rect.width === 0 || rect.height === 0) continue;
+          const s = getComputedStyle(el);
+          const color = s.color;
+          // Fully transparent text is always a bug regardless of background.
+          if (color === 'rgba(0, 0, 0, 0)' || color === 'transparent') {
+            bad.push(`${el.className} :: ${text.slice(0, 20)}`);
+          }
+        }
+        return bad.slice(0, 5);
+      });
+
+      expect(invisible, `Found badge text with transparent color: ${JSON.stringify(invisible)}`).toHaveLength(0);
+    });
+  }
+});
+
 test.describe('Tab Order and Visual Layout', () => {
   test('tab order should match visual layout on homepage', async ({ page }) => {
     await page.goto('/', { waitUntil: 'networkidle' });

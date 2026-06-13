@@ -34,6 +34,7 @@ import { useState, useEffect, memo, useCallback } from "react";
 import { OptimizedImage } from "@/components/OptimizedImage";
 import { CARD_IMAGE_WIDTHS } from "@/lib/imageTransform";
 import { SponsoredBadge } from "@/components/SponsoredBadge";
+import { getEventCategoryStyle } from "@/lib/categoryColors";
 
 const createSlug = (name: string): string => {
   return name
@@ -82,14 +83,7 @@ function EventCardComponent({ event, onViewDetails }: EventCardProps) {
     onViewDetails(event);
   }, [isAuthenticated, trackInteraction, event, addToRecentlyViewed, trackView, onViewDetails]);
 
-  const getCategoryColor = (category: string) => {
-    const lowerCategory = category.toLowerCase();
-    if (lowerCategory.includes("music")) return "bg-purple-500 text-white";
-    if (lowerCategory.includes("food")) return "bg-orange-500 text-white";
-    if (lowerCategory.includes("sport")) return "bg-green-500 text-white";
-    if (lowerCategory.includes("art")) return "bg-pink-500 text-white";
-    return "bg-primary text-white";
-  };
+  const categoryStyle = getEventCategoryStyle(event.category);
 
   return (
     <Card className={`overflow-hidden hover:shadow-lg transition-all duration-200 hover:scale-[1.02] card-interactive group focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2 ${event.is_sponsored ? 'ring-2 ring-amber-400/60' : ''}`}>
@@ -137,7 +131,7 @@ function EventCardComponent({ event, onViewDetails }: EventCardProps) {
 
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-          <Badge className={getCategoryColor(event.category)}>
+          <Badge className={`${categoryStyle.solid} ${categoryStyle.onSolid}`}>
             {event.category}
           </Badge>
           <div className="flex items-center gap-2">
