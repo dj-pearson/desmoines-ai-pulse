@@ -1,3 +1,46 @@
 # Ralph Progress Log
 Started: 2026-06-12T01:18:32.104Z
+
+## Codebase Patterns (read before starting)
+- **PRD lives at repo-root `prd.json`** (branch claude/web-platform-autonomy, == current branch HEAD). NOT scripts/ralph/prd.json. Pick highest-priority story with passes:false.
+- **New DB tables/views/RPCs are NOT added to generated `src/integrations/supabase/types.ts`.** Access them with `supabase.from("name" as never)` / `supabase.rpc("name" as never, {...} as never)` and cast results `as unknown as T[]` (see JobHealthPanel, MergeReviewPanel). BUT when you ADD A COLUMN to an EXISTING table you DO hand-add it to the Row block in types.ts (kept alphabetical) so `.eq()/.select()` stay typed.
+- **Edge function skeleton:** `handleCors`/`getCorsHeaders` from `_shared/cors.ts`, `requireAdminOrApiKey` from `_shared/apiKeyAuth.ts` (accepts X-API-Key, the SERVICE-ROLE bearer that cron sends, OR an admin JWT — so one gate covers cron + admin re-run), `runJob` from `_shared/jobRunner.ts`. Register the fn in `supabase/config.toml` with `verify_jwt = false` so your own auth gate runs. `Deno.serve(async (req)=>{ const c=handleCors(req); if(c) return c; const cors=getCorsHeaders(origin); const fail=await requireAdminOrApiKey(req,cors); if(fail) return fail; ... })`.
+- **jobRunner:** `await runJob('name', async (ctx)=>{ ctx.processed(n); ctx.failed(m); ctx.meta({...}); return summary }, {maxAttempts})`. Returns `{ok,status,result,...}`. `ok=true` even when status==='partial' (ctx.failed>0 but fn didn't throw). Never throws. Counts/metadata land in `automation_job_runs` + the Job Health panel. Add re-runnable jobs to `RERUNNABLE` in JobHealthPanel.tsx.
+- **pg_cron migration pattern:** wrap in `IF EXISTS (SELECT 1 FROM pg_extension WHERE extname='pg_cron')`, `cron.unschedule(name) WHERE EXISTS(... )` then `cron.schedule(name, 'min hour dom mon dow', $cron$ SELECT net.http_post(url := current_setting('app.settings.supabase_url')||'/functions/v1/<fn>', headers := jsonb_build_object('Authorization','Bearer '||current_setting('app.settings.supabase_service_role_key'),'Content-Type','application/json','x-trigger-source','cron')) $cron$)`.
+- **Admin-gated SECURITY DEFINER RPC (callable by BOTH the service-role edge fn and admin users):** pin `SET search_path = public, pg_temp`; gate with `IF auth.uid() IS NOT NULL AND NOT public.is_admin() THEN RAISE EXCEPTION ...` (service role → uid null → allowed; non-admin authenticated → blocked); then `REVOKE ALL ON FUNCTION ... FROM PUBLIC; GRANT EXECUTE ... TO authenticated, service_role`. `public.is_admin()` (no-arg, uses auth.uid()) already exists.
+- **Trigram fuzzy infra:** pg_trgm enabled + GIN indexes on `events(title,venue,location)` and `restaurants(name,cuisine,location)` (migration 20250107000007). Use `a.col % b.col` (index-probing operator) + `similarity(a.col,b.col) >= threshold`. Compute geo distance in plain SQL via haversine (acos/sin/cos/radians) from latitude/longitude — avoids a PostGIS dependency.
+- **Repointing all child FKs generically** (merge/dedupe/delete-with-children): loop `pg_constraint` where `contype='f' AND confrelid=<table>::regclass AND array_length(conkey,1)=1` and the referenced col is `id`; `EXECUTE format('UPDATE public.%I SET %I=$1 WHERE %I=$2', child_table, child_col, child_col)`. Catch `unique_violation OR check_violation` and fall back to a ctid row-by-row move that DELETEs only the genuine collisions.
+- **Admin tabs:** add `{id,label,icon}` to `CONTENT_TABS` (AdminContent.tsx) or `SYSTEM_TABS` (AdminSystem.tsx) + render `{activeTab === "id" && <Panel/>}`. Panels: `useQuery` with `refetchInterval`, admin-gated by RLS `is_admin()` + `useAdminAuth()`.
+- **Favorites are NOT a `favorites` table** — event favorites live in `user_event_interactions (event_id, interaction_type='favorite')`.
+- **Lint:** `npm run lint` (`eslint .`) exits 1 due to a PRE-EXISTING parser false-positive at `src/components/media/VideoPlayer.tsx:587` (',' expected) — tsc accepts the file; it predates these stories. Verify YOUR files with targeted `npx eslint <files>` (warnings like no-console are allowed across the repo; only 0 errors matter).
+- **Deno parse check (no Supabase in container):** `npx esbuild supabase/functions/<fn>/index.ts --bundle --external:https://* --format=esm --platform=neutral --outfile=/dev/null`. Migrations can't be applied locally — write them additive + idempotent (IF NOT EXISTS / CREATE OR REPLACE / guarded DO blocks).
+
+---
+## 2026-06-12 - WEB-AUTO-005 (Duplicate venue/event detection + merge queue)
+Implemented automatic duplicate detection/merge for events + restaurants, with an admin review queue for ambiguous pairs.
+
+Files added:
+- supabase/migrations/20260612000008_dedupe_columns.sql — additive is_merged/merged_into/merged_at on events + restaurants (+ partial indexes). is_merged default false (old readers unaffected); merged_into = plain uuid (no FK) so the repoint loop ignores it.
+- supabase/migrations/20260612000009_dedupe_queue_and_audit.sql — content_merge_candidates (0.7-0.9 review queue, unique pair) + content_merges (immutable audit/reversal log); RLS admin-read only.
+- supabase/migrations/20260612000010_dedupe_functions.sql — find_duplicate_events / find_duplicate_restaurants (trigram self-join + haversine + richness), merge_duplicate_content (dynamic FK repoint + keep-richer + mark-loser + audit + queue-resolve), unmerge_content (30-day reversal), dismiss_merge_candidate. All search_path-pinned, REVOKE FROM PUBLIC, admin/service-role gated.
+- supabase/migrations/20260612000011_dedupe_cron.sql — weekly cron Mon 03:15 UTC → dedupe-content.
+- supabase/functions/dedupe-content/index.ts — orchestrator: calls the finder RPCs, auto-merges high-confidence pairs (events: name>=0.9 + same date + <=150m/no-coords; restaurants: name>=0.9 + <=150m), queues the rest, skips far-apart same-name restaurants (franchise guard), all wrapped in runJob.
+- src/components/admin/MergeReviewPanel.tsx — Duplicates review UI (side-by-side Keep/Remove, confidence + reason chips, Merge / Swap-which-to-keep / Not-a-duplicate, Run-scan).
+
+Files changed:
+- supabase/config.toml — register dedupe-content (verify_jwt=false).
+- src/integrations/supabase/types.ts — add is_merged/merged_at/merged_into to events + restaurants Row.
+- src/hooks/useEvents.ts, src/hooks/useRestaurants.ts — list queries add .neq('is_merged', true) so merged losers drop from browse.
+- src/pages/AdminContent.tsx — new 'Duplicates' tab → MergeReviewPanel.
+- src/components/admin/JobHealthPanel.tsx — dedupe-content added to re-runnable jobs.
+- docs/AUTOMATION_JOBS.md — job row + "Reversing a merge" section.
+- prd.json — WEB-AUTO-005 passes:true.
+
+Quality: `npm run type-check` passes; dedupe-content parses via esbuild; targeted eslint on all edited frontend files = 0 errors (MergeReviewPanel clean). Only lint error repo-wide is the pre-existing VideoPlayer.tsx:587 parser false-positive (untouched).
+
+**Learnings for future iterations:**
+- The dynamic-FK repoint loop (pattern above) is the clean way to "repoint child references" without enumerating ~20 child tables; it auto-covers favorites/reviews/attendance/sponsored and anything added later. Composite FKs (array_length>1) are skipped — fine because content ids are single-col PKs.
+- Restaurants need a HARD proximity gate (identical-name franchises must never auto-merge); events use same-calendar-date as the cheap join-bounding predicate. Build dedupe rules per content type, not one-size-fits-all.
+- merge_duplicate_content also handles the admin path (richer survivor chosen client-side, decided_by='admin') AND resolves the queue row — so the panel just calls the RPC; dismiss needs its own RPC because RLS only grants SELECT on the queue.
+- For WEB-AUTO-006 (stale-event soft-hide): the is_merged/.neq pattern + types.ts column-add is the template for is_hidden; that story owns the FULL public-query sweep (this story only filtered the two primary browse hooks).
 ---

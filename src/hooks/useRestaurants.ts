@@ -123,7 +123,10 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
         }
       }
 
-      let query = supabase.from("restaurants").select("*", { count: "exact" });
+      let query = supabase
+        .from("restaurants")
+        .select("*", { count: "exact" })
+        .neq("is_merged", true); // Hide rows merged into a duplicate (WEB-AUTO-005)
 
       // Use full-text search with tsvector for better performance and relevance ranking
       if (filters.search) {

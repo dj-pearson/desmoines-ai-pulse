@@ -2831,11 +2831,14 @@ export type Database = {
           instance_date: string | null
           is_enhanced: boolean | null
           is_featured: boolean | null
+          is_merged: boolean | null
           is_recurring: boolean | null
           is_recurring_instance: boolean | null
           latitude: number | null
           location: string
           longitude: number | null
+          merged_at: string | null
+          merged_into: string | null
           original_description: string | null
           price: string | null
           recurrence_end_date: string | null
@@ -4060,11 +4063,14 @@ export type Database = {
           id: string
           image_url: string | null
           is_featured: boolean | null
+          is_merged: boolean | null
           is_sponsored: boolean
           sponsored_until: string | null
           latitude: number | null
           location: string | null
           longitude: number | null
+          merged_at: string | null
+          merged_into: string | null
           name: string
           opening: string | null
           opening_date: string | null

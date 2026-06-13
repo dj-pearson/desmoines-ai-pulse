@@ -34,6 +34,7 @@ All times UTC. Schedules are cron expressions (`min hour dom mon dow`).
 | `daily-social-media-automation` / `social-media-automation-hourly` / `social-media-generation` / `social-media-publishing` | `0/15/30 * * * *` | fn `social-media-manager` | Generate + publish social posts | planned |
 | `auto-trigger-scraping-jobs` / `scraping-jobs-runner` | `*/10-15 * * * *` | SQL/fn | Drive the scraping-jobs queue | — |
 | **`data-quality-heal-nightly`** | `30 2 * * *` | fn `data-quality-heal` | **Geocode + SEO/GEO + image self-heal, <=25 rows/table/run (WEB-AUTO-003)** | ✅ |
+| **`dedupe-content-weekly`** | `15 3 * * 1` | fn `dedupe-content` | **Detect duplicate events/restaurants (trigram + proximity); auto-merge >=0.9, queue 0.7-0.9 to Admin → Content → Duplicates (WEB-AUTO-005)** | ✅ |
 | **`job-health-watchdog-daily`** | `0 8 * * *` | fn `job-health-watchdog` | **Alert on missed/failed observed jobs (WEB-AUTO-001)** | n/a |
 
 \* **Observed** = wrapped with `jobRunner` and recording to `automation_job_runs`.
@@ -67,3 +68,14 @@ Set `ADMIN_ALERT_EMAIL` (or `ALERT_EMAIL`) + `RESEND_API_KEY` for alerts.
 Each job can be re-run from **Admin → Job Health** (manual trigger), or by
 invoking its edge function directly with the `EDGE_FUNCTION_API_KEY` /
 service-role key. `automation_job_runs` retains history for auditing.
+
+### Reversing a merge (WEB-AUTO-005)
+
+Every merge (auto or manual) writes an immutable `content_merges` row and the
+loser row is **retained** (only flagged `is_merged = true`, never deleted). Within
+**30 days** a merge can be reversed by calling `unmerge_content(<merge_id>)`
+(admin or service role): the loser row is restored (`is_merged = false`) and
+reappears in listings. Repointed child rows (favorites, reviews, …) stay with the
+survivor — they were genuine duplicates — so reversal un-hides the duplicate
+listing for re-evaluation rather than perfectly reconstructing the pre-merge state.
+Ambiguous pairs queue in **Admin → Content → Duplicates** for one-click merge/dismiss.
