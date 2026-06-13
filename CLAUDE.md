@@ -349,6 +349,7 @@ Pre-deploy: `npm run validate && npm test && npm run build`. Rollback via Cloudf
 | Storage | `@/lib/safeStorage` |
 | API | Supabase client or Edge Functions |
 | URL-synced list filters | `useUrlFilters` (`@/hooks/useUrlFilters`) + `@/lib/urlParams` — lazy-init state from `useSearchParams()`, pass a `managed` map + mirror `apply` |
+| List loading/empty/error | `CardsGridSkeleton` (`@/components/ui/loading-skeleton`) + `EmptyState` (`@/components/ui/empty-state`) + `ErrorState` (`@/components/ui/error-state`, auto offline-vs-server via `isOfflineError`, built-in Retry). Pattern: `isLoading ? skeleton : error ? <ErrorState onRetry={refetch}/> : empty ? <EmptyState/> : <grid/>`; make the empty state distinguish filtered (SearchX + Clear) from truly-empty |
 
 ## Key Files
 

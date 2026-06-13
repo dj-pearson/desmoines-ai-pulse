@@ -29,8 +29,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CardsGridSkeleton } from "@/components/ui/loading-skeleton";
-import { MapPin, Star, Filter, List, Map, SlidersHorizontal, Landmark, ChevronRight, SearchX, X, AlertCircle, ChevronDown, Shuffle } from "lucide-react";
+import { MapPin, Star, Filter, List, Map, SlidersHorizontal, Landmark, ChevronRight, SearchX, X, ChevronDown, Shuffle } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { SortDropdown, ATTRACTION_SORT_OPTIONS } from "@/components/SortDropdown";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -91,7 +92,7 @@ export default function Attractions() {
   const [page, setPage] = useState(() => getNumberParam(searchParams, "page", 1));
 
   // Get all attractions first
-  const { attractions: allAttractions, isLoading, error } = useAttractions({});
+  const { attractions: allAttractions, isLoading, error, refetch } = useAttractions({});
   const { announce, announcement, regionProps } = useAnnounce();
 
   // Get unique types for filter options
@@ -607,11 +608,11 @@ export default function Attractions() {
         ) : isLoading ? (
           <CardsGridSkeleton count={6} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" label={searchQuery ? `Searching for "${searchQuery}"...` : selectedType !== "all" ? `Loading ${selectedType} attractions...` : "Loading attractions..."} />
         ) : error ? (
-          <EmptyState
-            icon={AlertCircle}
-            title="Unable to load attractions"
-            description="We're having trouble loading attractions. Please check your connection and try again."
-            actions={[{ label: "Try Again", onClick: () => window.location.reload() }]}
+          <ErrorState
+            error={error}
+            resourceLabel="attractions"
+            onRetry={() => refetch()}
+            compact={isMobile}
           />
         ) : sortedAttractions.length === 0 ? (
           <EmptyState

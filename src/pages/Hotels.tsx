@@ -27,8 +27,11 @@ import {
   X,
   Building2,
   MapPin,
+  SearchX,
 } from "lucide-react";
-import { Skeleton } from "@/components/ui/skeleton";
+import { CardsGridSkeleton } from "@/components/ui/loading-skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import AffiliateDisclosureBanner from "@/components/AffiliateDisclosureBanner";
 import Header from "@/components/Header";
@@ -106,7 +109,7 @@ export default function Hotels() {
     }, 300);
   };
 
-  const { hotels, isLoading, totalCount } = useHotels({
+  const { hotels, isLoading, error, refetch, totalCount } = useHotels({
     search: debouncedSearch,
     area: selectedAreas.length > 0 ? selectedAreas : undefined,
     priceRange: selectedPriceRanges.length > 0 ? selectedPriceRanges : undefined,
@@ -418,19 +421,24 @@ export default function Hotels() {
 
               {/* Loading state */}
               {isLoading && (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <div key={i} className="space-y-3">
-                      <Skeleton className="h-48 w-full rounded-lg" />
-                      <Skeleton className="h-4 w-3/4" />
-                      <Skeleton className="h-3 w-1/2" />
-                    </div>
-                  ))}
-                </div>
+                <CardsGridSkeleton
+                  count={6}
+                  className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"
+                  label="Loading hotels..."
+                />
+              )}
+
+              {/* Error state */}
+              {!isLoading && error && (
+                <ErrorState
+                  error={error}
+                  resourceLabel="hotels"
+                  onRetry={() => refetch()}
+                />
               )}
 
               {/* Featured hotels section */}
-              {!isLoading && featuredHotels.length > 0 && !debouncedSearch && activeFilterCount === 0 && (
+              {!isLoading && !error && featuredHotels.length > 0 && !debouncedSearch && activeFilterCount === 0 && (
                 <section className="mb-8">
                   <h2 className="text-xl font-semibold mb-4">Featured Hotels</h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -442,7 +450,7 @@ export default function Hotels() {
               )}
 
               {/* All hotels grid */}
-              {!isLoading && (
+              {!isLoading && !error && (
                 <>
                   {hotels.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -451,16 +459,20 @@ export default function Hotels() {
                       ))}
                     </div>
                   ) : (
-                    <div className="text-center py-16">
-                      <Building2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                      <h3 className="text-lg font-semibold mb-2">No hotels found</h3>
-                      <p className="text-muted-foreground mb-4">
-                        Try adjusting your filters or search terms
-                      </p>
-                      <Button variant="outline" onClick={clearAllFilters}>
-                        Clear All Filters
-                      </Button>
-                    </div>
+                    <EmptyState
+                      icon={debouncedSearch || activeFilterCount > 0 ? SearchX : Building2}
+                      title="No hotels found"
+                      description={
+                        debouncedSearch || activeFilterCount > 0
+                          ? "Try adjusting your filters or search terms to find more hotels."
+                          : "No hotels are listed at the moment. Check back soon!"
+                      }
+                      actions={
+                        debouncedSearch || activeFilterCount > 0
+                          ? [{ label: "Clear All Filters", onClick: clearAllFilters, variant: "outline", icon: X }]
+                          : undefined
+                      }
+                    />
                   )}
                 </>
               )}

@@ -4,9 +4,11 @@ import Footer from '@/components/Footer';
 import { Helmet } from 'react-helmet-async';
 import { useDeals, useClaimDeal } from '@/hooks/useDeals';
 import { DealCard } from '@/components/DealCard';
-import { Skeleton } from '@/components/ui/skeleton';
+import { CardsGridSkeleton } from '@/components/ui/loading-skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
+import { ErrorState } from '@/components/ui/error-state';
 import { Button } from '@/components/ui/button';
-import { Tag } from 'lucide-react';
+import { Tag, SearchX } from 'lucide-react';
 import AffiliateDisclosureBanner from '@/components/AffiliateDisclosureBanner';
 
 const CATEGORIES = [
@@ -20,7 +22,7 @@ const CATEGORIES = [
 
 export default function Deals() {
   const [category, setCategory] = useState('all');
-  const { data: deals, isLoading } = useDeals(category);
+  const { data: deals, isLoading, error, refetch } = useDeals(category);
   const claimDeal = useClaimDeal();
 
   return (
@@ -69,11 +71,17 @@ export default function Deals() {
 
           {/* Deals grid */}
           {isLoading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <Skeleton key={i} className="h-64 rounded-lg" />
-              ))}
-            </div>
+            <CardsGridSkeleton
+              count={6}
+              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
+              label="Loading deals..."
+            />
+          ) : error ? (
+            <ErrorState
+              error={error}
+              resourceLabel="deals"
+              onRetry={() => refetch()}
+            />
           ) : deals && deals.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {deals.map((deal) => (
@@ -85,13 +93,20 @@ export default function Deals() {
               ))}
             </div>
           ) : (
-            <div className="text-center py-16">
-              <Tag className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h2 className="text-xl font-semibold mb-2">No deals available</h2>
-              <p className="text-muted-foreground">
-                Check back soon for new deals and special offers.
-              </p>
-            </div>
+            <EmptyState
+              icon={category !== 'all' ? SearchX : Tag}
+              title={category !== 'all' ? 'No deals in this category' : 'No deals available'}
+              description={
+                category !== 'all'
+                  ? 'Try a different category or browse all current deals.'
+                  : 'Check back soon for new deals and special offers.'
+              }
+              actions={
+                category !== 'all'
+                  ? [{ label: 'View All Deals', onClick: () => setCategory('all'), variant: 'outline' }]
+                  : undefined
+              }
+            />
           )}
         </div>
         <Footer />

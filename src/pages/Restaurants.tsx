@@ -26,7 +26,6 @@ import {
   Utensils,
   X,
   Sparkles,
-  AlertCircle,
   Clock,
   List,
   Map,
@@ -40,6 +39,7 @@ import {
 import { useState, lazy, Suspense, useMemo, useCallback, useRef, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { FAQSection } from "@/components/FAQSection";
 import { BackToTop } from "@/components/BackToTop";
 import { useAnnounce } from "@/hooks/use-announce";
@@ -637,17 +637,10 @@ export default function Restaurants() {
                   label={filters.search ? `Searching for "${filters.search}"...` : filters.cuisine.length > 0 ? `Loading ${filters.cuisine.join(', ')} restaurants...` : "Loading restaurants..."}
                 />
               ) : error ? (
-                <EmptyState
-                  icon={AlertCircle}
-                  title="Unable to load restaurants"
-                  description="We're having trouble loading the restaurant list. Please check your connection and try again."
-                  actions={[
-                    {
-                      label: "Try Again",
-                      onClick: () => refetch(),
-                      variant: "default",
-                    },
-                  ]}
+                <ErrorState
+                  error={error}
+                  resourceLabel="restaurants"
+                  onRetry={() => refetch()}
                 />
               ) : restaurants.length === 0 ? (
                 <EmptyState

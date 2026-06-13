@@ -11,8 +11,6 @@ import {
   SearchX,
   Sparkles,
   Navigation,
-  AlertCircle,
-  RefreshCw,
   Clock,
   Users,
   Ticket,
@@ -24,6 +22,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { usePullToRefresh } from "@/hooks/use-pull-to-refresh";
 import { SortDropdown, EVENT_SORT_OPTIONS } from "@/components/SortDropdown";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -602,12 +601,11 @@ export default function EventsPage() {
         <div className="min-h-screen bg-background">
           <Header />
           <div className="container mx-auto px-4 py-16">
-            <EmptyState
-              icon={AlertCircle}
-              title="Unable to Load Events"
-              description="We're having trouble loading the events list. This might be a temporary issue."
-              actions={[
-                { label: "Try Again", onClick: () => refetch(), icon: RefreshCw },
+            <ErrorState
+              error={error}
+              resourceLabel="events"
+              onRetry={() => refetch()}
+              secondaryActions={[
                 { label: "Go Home", onClick: () => navigate("/"), variant: "outline" as const },
               ]}
             />
