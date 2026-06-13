@@ -499,8 +499,8 @@ export default function Restaurants() {
                   </SelectContent>
                 </Select>
 
-                {/* Results count */}
-                <p className="text-sm text-muted-foreground whitespace-nowrap hidden md:block">
+                {/* Results count — visible at all viewports (WEB-UX-003) */}
+                <p className="text-sm text-muted-foreground whitespace-nowrap">
                   {isLoading ? (
                     "Searching..."
                   ) : (
