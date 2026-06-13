@@ -714,6 +714,233 @@
       "priority": 46,
       "passes": false,
       "notes": "Backend (generate-itinerary, trip_plans, share codes, get_trip_itinerary RPC) all exists from the iOS build — this is pure web UI adoption. src/hooks/useTripPlanner.ts is the seam."
+    },
+    {
+      "id": "WEB-UX-007",
+      "title": "Route and surface a one-tap \"Near Me\" experience (events-near-me is built but unreachable)",
+      "description": "As a visitor on the go, I need to reach \"events near me\" in one tap, because the core product promise is location-based discovery yet the fully-built EventsNearMe page (useEventsNearby, useGeolocation, radius slider, list/map toggle) has no route in App.tsx and no link in any nav surface — it is dead/orphaned.",
+      "acceptanceCriteria": [
+        "Add a route for src/pages/EventsNearMe.tsx (e.g. /events/near-me) in src/App.tsx, lazy-loaded with the same Suspense pattern as sibling routes",
+        "Surface \"Near Me\" as a one-tap entry: in the Events nav group (header), on the home hero \"right now\" row, and as/near a BottomNav slot on mobile",
+        "Geolocation is requested only on explicit user action (no auto-prompt on load); a clear permission-denied fallback routes to /events with a message",
+        "Reuse the existing useProximitySearch / search_events_near_location RPC — do not introduce a parallel implementation",
+        "npm run validate passes (type-check + lint)"
+      ],
+      "priority": 36,
+      "passes": false
+    },
+    {
+      "id": "WEB-UX-008",
+      "title": "Mount the natural-language (NLP) search — NLPSearchBar + nlp-search are built/deployed but never rendered",
+      "description": "As a user, I want to type \"free things to do this weekend with kids\" and get results, because the homepage copy advertises conversational search and the full stack (NLPSearchBar.tsx, useNLPSearch, deployed nlp-search edge function with sub-second timing) exists but is mounted nowhere — the homepage uses the plain keyword SearchSection instead.",
+      "acceptanceCriteria": [
+        "Render NLPSearchBar as the primary input on the home hero (with example chips from NLP_SEARCH_EXAMPLES) and make the structured SearchSection a secondary/fallback below it",
+        "Point the /search route at an NLP-driven results experience; keep the advanced/structured filters available as a refine step (and not behind a hard paywall for the basic NLP query)",
+        "Result cards link by id consistent with app routes (/{type}/{id}), matching NLPSearchBar's existing pattern — no slug-based 404s",
+        "If the nlp-search function errors, fall back gracefully to keyword search with a visible notice",
+        "npm run validate passes (type-check + lint)"
+      ],
+      "priority": 37,
+      "passes": false
+    },
+    {
+      "id": "WEB-UX-009",
+      "title": "Standardize every event list on SocialEventCard and always show the event time",
+      "description": "As a user scanning events, I need every list (main and SEO sub-pages) to use the same scannable card and to always show the time, because /events uses the modern SocialEventCard while EventsToday/ThisWeekend/Free/Kids/DateNight use the busy legacy EventCard, and the time is omitted whenever a specific time isn't parsed — and time is the #1 decision factor.",
+      "acceptanceCriteria": [
+        "All event list pages (EventsToday, EventsThisWeekend, FreeEvents, KidsEvents, DateNightEvents, EventsByLocation) render SocialEventCard instead of the legacy EventCard",
+        "SocialEventCard always renders a time slot: the parsed time when known, otherwise an explicit \"All day\" / \"Time TBA\" fallback (never silently blank)",
+        "Legacy EventCard.tsx is removed, or kept only for a denser related-events rail with a code comment explaining why",
+        "Card tap targets are unambiguous (single primary navigation target; favorite/share use stopPropagation)",
+        "npm run validate passes (type-check + lint)"
+      ],
+      "priority": 38,
+      "passes": false
+    },
+    {
+      "id": "WEB-UX-010",
+      "title": "Fix broken & missing \"Save\" (favorite) controls on detail pages and browse cards",
+      "description": "As a user, I need the Save control to actually work everywhere, because RestaurantDetails/AttractionDetails/PlaygroundDetails render a static Save button with no onClick (dead control), and RestaurantCard / Attractions cards have no favorite button at all, so saving while browsing only works for events.",
+      "acceptanceCriteria": [
+        "Replace the static Save <Button> on RestaurantDetails, AttractionDetails, PlaygroundDetails (and HotelDetails if present) with the working FavoriteButton component",
+        "Add a FavoriteButton as a top-right image overlay on RestaurantCard and the Attractions card, with stopPropagation so it does not trigger card navigation",
+        "useFavorites supports the relevant content types (extend with a content-type arg if it is currently events-only), persisting consistently",
+        "Saved state is reflected (filled heart) on return visits; a toast confirms save/unsave",
+        "npm run validate passes (type-check + lint)"
+      ],
+      "priority": 39,
+      "passes": false
+    },
+    {
+      "id": "WEB-UX-011",
+      "title": "Stop ticket/official-link CTAs from pointing at known-broken event URLs",
+      "description": "As a mobile user, I need the prominent \"Get Tickets\" action to never lead to a dead page, because EventDetails' in-page button guards on source_url_broken but the StickyMobileCTA (the dominant mobile action) only checks source_url — so it can render a Get Tickets button to a URL already flagged broken.",
+      "acceptanceCriteria": [
+        "StickyMobileCTA treats source_url as actionable only when source_url && !source_url_broken; otherwise it falls through to the existing \"Add to Calendar\" primary action",
+        "Audit other event ticket/official-link CTAs for the same missing guard and apply it consistently",
+        "When the URL is broken/absent, the UI shows a sensible alternative (Add to Calendar / Directions) rather than a dead link",
+        "npm run validate passes (type-check + lint)"
+      ],
+      "priority": 40,
+      "passes": false
+    },
+    {
+      "id": "WEB-UX-012",
+      "title": "Replace fabricated restaurant hours & structured data with parsed real values",
+      "description": "As a user (and for SEO trust), I need restaurant hours/structured data to be accurate, because RestaurantDetails hardcodes openingHoursSpecification to 11:00–22:00 for all seven days whenever an opening string merely exists, and also hardcodes acceptsReservations:true and postalCode:\"50309\" — Google can surface these false hours in rich results, sending users to closed restaurants.",
+      "acceptanceCriteria": [
+        "openingHoursSpecification is derived from the same parser that powers the visible RestaurantStatus (lib/restaurantHours / getRestaurantOpenStatus); when hours can't be parsed, the spec is omitted rather than fabricated",
+        "Remove the hardcoded postalCode and only emit acceptsReservations when actually known",
+        "The on-page \"Open Now\" badge and the structured data never contradict each other",
+        "npm run validate passes (type-check + lint)"
+      ],
+      "priority": 41,
+      "passes": false
+    },
+    {
+      "id": "WEB-UX-013",
+      "title": "Fix mobile bottom-nav overlap so footers and bottom CTAs aren't hidden",
+      "description": "As a mobile user, I need the last ~64px of every page to be tappable, because BottomNav is a fixed h-16 bar but nothing reserves space for it — the .pb-bottom-nav utility exists in index.css yet is used in zero components, so footer links and bottom CTAs (e.g. \"Load More\") sit behind the nav.",
+      "acceptanceCriteria": [
+        "Apply bottom-nav clearance (pb-bottom-nav / pb-20 lg:pb-0) once at a shared level — the <main> wrapper in App.tsx and/or PageLayout — so all mobile routes clear the fixed BottomNav",
+        "Verify on full-page routes that render their own Footer (e.g. EventsNearMe) that the footer's final block is fully visible/tappable on mobile",
+        "No regression on desktop (clearance is mobile-only)",
+        "npm run validate passes (type-check + lint)"
+      ],
+      "priority": 42,
+      "passes": false
+    },
+    {
+      "id": "WEB-UX-014",
+      "title": "Home hero: lead with the value prop, one \"right now\" row, and fix the dead primary CTA",
+      "description": "As a first-time visitor, I need the hero to instantly say what the site does and give me real one-tap actions, because the H1 is a generic time-of-day greeting, the loudest primary CTA \"AI Plan My Night\" only fires a \"Coming Soon\" toast (while a real /trip-planner exists), and the today/this-weekend/near-me shortcuts are duplicated across two clusters with no \"near me\".",
+      "acceptanceCriteria": [
+        "H1 states the value prop (e.g. \"Find things to do in Des Moines, right now\"); the time-aware greeting is demoted to eyebrow/subheading",
+        "A single consolidated \"right now\" action row: Today | This Weekend | Near Me | Open Now (each a real working link; \"New This Week\" points to a filtered route)",
+        "\"AI Plan My Night\" routes to the working /trip-planner (or is demoted out of the primary slot) — no dead primary CTA",
+        "Reduce the stacked hero/marketing height so real browsable content is reachable within ~1–1.5 viewports on mobile",
+        "npm run validate passes (type-check + lint)"
+      ],
+      "priority": 43,
+      "passes": false
+    },
+    {
+      "id": "WEB-UX-015",
+      "title": "Show real content first on the home page (progressive load, events not gated on slowest query)",
+      "description": "As a visitor, I want to see actual events as fast as possible, because AllInclusiveDashboard gates the whole grid on events||restaurants||attractions||playgrounds loading (slowest of four), ForYouRail returns null (layout shift) while loading, and a full AI-features marketing wall renders above the first real event.",
+      "acceptanceCriteria": [
+        "Render events as soon as the events query resolves; let the other tabs/sections fill in progressively instead of blocking on the slowest query",
+        "ForYouRail shows a skeleton row while loading instead of returning null (no collapse/shift)",
+        "Reorder the homepage so the real content dashboard appears immediately after the hero/For-You rail, with the AI-capabilities marketing section demoted below it",
+        "npm run validate passes (type-check + lint)"
+      ],
+      "priority": 44,
+      "passes": false
+    },
+    {
+      "id": "WEB-UX-016",
+      "title": "Rationalize top-nav IA and surface orphaned discovery hubs",
+      "description": "As a user, I need predictable navigation, because the header has ~6 overlapping groups with duplicate destinations (This Weekend/Today/Visitor Guide appear twice pointing at different pages), high-intent hubs /deals and /map are reachable only by typing the URL, and the mobile BottomNav has no search/near-me while \"Explore\" means two different things.",
+      "acceptanceCriteria": [
+        "Collapse the header into ~4 unambiguous groups (e.g. Events, Eat & Drink, Explore, Plan); pick one canonical URL per concept and 301-redirect the duplicate(s)",
+        "Add Deals and Map into the navigation (header Explore group and/or footer); evaluate Map as a BottomNav candidate",
+        "Replace one low-value BottomNav tab with Search or Near Me, and resolve the \"Explore\" label collision between the BottomNav tab and the header group",
+        "Consume the existing priority flag in navigationConfig for surfacing top tasks; add active-state styling to desktop group triggers",
+        "npm run validate passes (type-check + lint)"
+      ],
+      "priority": 45,
+      "passes": false
+    },
+    {
+      "id": "WEB-UX-017",
+      "title": "Constrain the pSEO catch-all routes to restore real 404s",
+      "description": "As both a user and for SEO, unknown URLs should 404, because App.tsx registers /:seg1 and /:seg1/:seg2 catch-alls to the pSEO page before the NotFound route, so any typo or stale link renders a thin pSEO page instead of a 404 — hiding broken internal links and risking soft-404 indexing.",
+      "acceptanceCriteria": [
+        "The pSEO route validates seg1/seg2 against the known pSEO taxonomy (or an explicit prefix allowlist like the existing /things-to-do/* and /nightlife/* handling)",
+        "Unmatched single/double-segment paths render the real NotFound page with a 404 status signal",
+        "Known pSEO pages continue to render unchanged (no regression to valid landing pages)",
+        "npm run validate passes (type-check + lint)"
+      ],
+      "priority": 46,
+      "passes": false
+    },
+    {
+      "id": "WEB-UX-018",
+      "title": "Fix search/sort result correctness (full-set event sort + real distances/links on /search)",
+      "description": "As a user, I need sorting and distances to be truthful, because EventsPage sorts only the already-fetched page in memory (and its \"newest\" comparator is a bug producing Invalid Date), while AdvancedSearch assigns distance = Math.random()*radius, sorts \"Nearest First\" on that noise, and builds slug-based result links that 404.",
+      "acceptanceCriteria": [
+        "Event sort is pushed into the Supabase query (.order keyed off sortBy) and resets to page 1 on change; the \"newest\" option sorts by created_at",
+        "AdvancedSearch distances come from the real proximity RPC (useEventsNearby/useRestaurantsNearby); remove the Math.random fallback and disable \"Nearest First\" until real coordinates exist",
+        "AdvancedSearch result links use ids consistent with app routes (no slug 404s); the no-op \"Open Now\" toggle is wired to real hours or hidden",
+        "npm run validate passes (type-check + lint)"
+      ],
+      "priority": 47,
+      "passes": false
+    },
+    {
+      "id": "WEB-UX-019",
+      "title": "Add a map embed and precise one-tap Directions to restaurant/attraction/playground/hotel detail",
+      "description": "As a user, I need an exact map and Directions on every place detail, because only EventDetails renders a map and a precise maps/dir destination — Restaurant/Attraction/Playground use a fuzzy maps/search text query (which can resolve to the wrong pin) and render no map, and Hotel has neither despite having an address.",
+      "acceptanceCriteria": [
+        "Reuse EventLocationMap (or equivalent) on RestaurantDetails, AttractionDetails, PlaygroundDetails when latitude/longitude exist; HotelDetails gets at least a Directions link from its address",
+        "Directions links use https://www.google.com/maps/dir/?api=1&destination=<lat>,<lng> for an exact destination (fall back to address text only when coordinates are missing)",
+        "Map sections are lazy-loaded and have a sized placeholder to avoid layout shift",
+        "npm run validate passes (type-check + lint)"
+      ],
+      "priority": 48,
+      "passes": false
+    },
+    {
+      "id": "WEB-UX-020",
+      "title": "Surface open-now / hours on attractions, playgrounds, and hotels",
+      "description": "As a user deciding where to go now, I need hours/open status on every place, because only RestaurantDetails shows real-time open status — AttractionDetails shows no hours, PlaygroundDetails hardcodes \"Dawn to Dusk\", and Hotel hours are buried, forcing users off-site for top-of-mind info.",
+      "acceptanceCriteria": [
+        "Render an \"Open now / Closed / Today's hours\" chip in the hero/stat area of AttractionDetails, PlaygroundDetails, and HotelDetails when structured hours exist",
+        "When no structured hours exist, show an explicit \"Check official site for hours\" link instead of silence or a hardcoded value",
+        "Replace the hardcoded PlaygroundDetails \"Dawn to Dusk\" with real data or the explicit fallback",
+        "npm run validate passes (type-check + lint)"
+      ],
+      "priority": 49,
+      "passes": false
+    },
+    {
+      "id": "WEB-UX-021",
+      "title": "Detail-page mobile actions: sticky CTA on playground/hotel, Reserve/Book CTAs, event key-info above the fold",
+      "description": "As a mobile user, I need the primary action always reachable and the key info first, because PlaygroundDetails/HotelDetails have no StickyMobileCTA, restaurants advertise reservations but expose no Reserve CTA (and hotels without a bookUrl show price with no way to act), and the EventDetails tall hero pushes when/where/price below the first viewport.",
+      "acceptanceCriteria": [
+        "Add StickyMobileCTA to PlaygroundDetails (primary Directions) and HotelDetails (primary Book Now, secondary Call/Directions), widening its variant union as needed",
+        "Add a Reserve CTA to RestaurantDetails when a reservation URL/phone exists (labelled \"Call to Reserve\" for tel: fallback); ensure hotels without bookUrl still have a working action (search/book fallback or prominent phone)",
+        "EventDetails surfaces the H1 + date/venue/price chips within the first mobile viewport (overlay on hero or cap mobile hero height)",
+        "npm run validate passes (type-check + lint)"
+      ],
+      "priority": 50,
+      "passes": false
+    },
+    {
+      "id": "WEB-UX-022",
+      "title": "Mobile touch targets and accessible names on icon-only buttons",
+      "description": "As a mobile and assistive-tech user, I need controls I can hit and that announce themselves, because several dense controls are below the 44px target (EventsPage view-toggle/clear are h-8 w-8) and many of the 47 size=\"icon\" buttons (notably in admin/CRM/media) have no aria-label, exposing no accessible name.",
+      "acceptanceCriteria": [
+        "Interactive icon buttons in dense mobile clusters have a >=44x44px hit area (e.g. h-10 w-10 or hit-slop), keeping the glyph visually small; desktop stays compact via responsive sizing",
+        "Every size=\"icon\" / icon-only button has an aria-label (or visually-hidden text); prioritize user-facing surfaces, then admin tools",
+        "A quick keyboard pass confirms these controls are reachable and operable (complements WEB-UX-005)",
+        "npm run validate passes (type-check + lint)"
+      ],
+      "priority": 51,
+      "passes": false
+    },
+    {
+      "id": "WEB-UX-023",
+      "title": "Remove orphaned/duplicate components that mislead edits to the browse experience",
+      "description": "As a maintainer (and for AI agents like Ralph), I need dead duplicates gone so edits land on the live code, because RestaurantsPage.tsx (525 lines, not routed — /restaurants uses Restaurants.tsx) and the stale EventFilters.tsx (hardcoded categories, no-op date filter, rendered on the home embed) duplicate live functionality, and unimported Hero3D/Hero3DCityscape keep a heavy Three.js dep reachable.",
+      "acceptanceCriteria": [
+        "Delete (or clearly mark as orphaned) src/pages/RestaurantsPage.tsx after confirming no route/import references it",
+        "Retire EventFilters.tsx in favor of EventInlineFilters (or link the home \"View All Events\" straight to /events) so the home embed no longer ships stale options / a no-op date filter",
+        "Remove unimported Hero3D.tsx and Hero3DCityscape.tsx (HeroCityLite is the only one used) and confirm @react-three/* is only reachable via the lazy hero chunk",
+        "npm run validate passes (type-check + lint)"
+      ],
+      "priority": 52,
+      "passes": false
     }
   ]
 }

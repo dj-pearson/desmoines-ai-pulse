@@ -63,24 +63,14 @@ CREATE POLICY "Users can view own submissions" ON contact_submissions
   FOR SELECT USING (auth.uid() = user_id);
 
 -- 3. Admins can view all submissions
+-- Uses the canonical is_admin() helper (checks user_roles + profiles.user_role)
+-- rather than profiles.role, which has since been removed from the schema.
 CREATE POLICY "Admins can view all submissions" ON contact_submissions
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM profiles
-      WHERE profiles.id = auth.uid()
-      AND profiles.role = 'admin'
-    )
-  );
+  FOR SELECT USING (is_admin());
 
 -- 4. Admins can update submissions
 CREATE POLICY "Admins can update submissions" ON contact_submissions
-  FOR UPDATE USING (
-    EXISTS (
-      SELECT 1 FROM profiles
-      WHERE profiles.id = auth.uid()
-      AND profiles.role = 'admin'
-    )
-  );
+  FOR UPDATE USING (is_admin());
 
 -- Trigger to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_contact_submissions_updated_at()

@@ -7,16 +7,15 @@ ALTER TABLE public.deals
   ADD COLUMN IF NOT EXISTS end_time TIME;
 
 -- Enforce that every entry in days_of_week is a valid abbreviation.
--- CHECK constraint runs the array through an unnest+IN to catch typos.
+-- CHECK constraints can't contain subqueries, so use the array-containment
+-- operator (<@): every element of days_of_week must be in the allowed set.
+-- Empty array passes; NULL is handled by the explicit IS NULL branch.
 DO $$ BEGIN
   ALTER TABLE public.deals
     ADD CONSTRAINT deals_days_of_week_valid
     CHECK (
       days_of_week IS NULL
-      OR NOT EXISTS (
-        SELECT 1 FROM unnest(days_of_week) AS d
-        WHERE d NOT IN ('mon','tue','wed','thu','fri','sat','sun')
-      )
+      OR days_of_week <@ ARRAY['mon','tue','wed','thu','fri','sat','sun']::TEXT[]
     );
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;

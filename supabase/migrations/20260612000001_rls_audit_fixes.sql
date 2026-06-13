@@ -39,6 +39,10 @@ DECLARE
 BEGIN
   FOREACH t IN ARRAY tables LOOP
     parts := string_to_array(t, ':');
+    -- Skip tables that don't exist in this environment (e.g. payments /
+    -- invoices / pseo_* may not be provisioned everywhere). We tighten the
+    -- over-grant wherever the table is actually present and ignore the rest.
+    CONTINUE WHEN to_regclass('public.' || parts[1]) IS NULL;
     -- Drop the over-permissive policy if present.
     EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', parts[2], parts[1]);
     -- Recreate scoped to service_role (explicit intent; service_role also
@@ -71,6 +75,15 @@ BEGIN
     JOIN pg_namespace n ON n.oid = p.pronamespace
     WHERE n.nspname = 'public'
       AND p.prosecdef = true
+      -- Only functions we own. Extension-provided SECURITY DEFINER functions
+      -- (e.g. PostGIS st_estimatedextent) are owned by another role and can't
+      -- be altered by the migration role — skip them rather than error.
+      AND pg_get_userbyid(p.proowner) = current_user
+      -- Belt-and-suspenders: never touch functions owned by an extension.
+      AND NOT EXISTS (
+        SELECT 1 FROM pg_depend d
+        WHERE d.objid = p.oid AND d.deptype = 'e'
+      )
       AND NOT EXISTS (
         SELECT 1
         FROM unnest(coalesce(p.proconfig, ARRAY[]::text[])) cfg
