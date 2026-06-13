@@ -757,7 +757,8 @@
         "npm run validate passes (type-check + lint)"
       ],
       "priority": 38,
-      "passes": false
+      "passes": true,
+      "notes": "[DONE 2026-06-13] All 6 event list pages now use SocialEventCard. SocialEventCard always shows a time slot (parsed time CT / All day / Time TBA). EventCard kept for denser related/dashboard rails with an explanatory header comment. Single Link nav target; favorite/share stopPropagation."
     },
     {
       "id": "WEB-UX-010",
