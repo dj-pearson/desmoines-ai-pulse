@@ -842,7 +842,8 @@
         "npm run validate passes (type-check + lint)"
       ],
       "priority": 44,
-      "passes": false
+      "passes": true,
+      "notes": "[DONE 2026-06-13] AllInclusiveDashboard gates only on eventsLoading (not slowest of 4); ForYouRail shows skeleton row while loading (no shift); homepage reordered so content dashboard renders right after the For-You rail with AI marketing demoted below."
     },
     {
       "id": "WEB-UX-016",
