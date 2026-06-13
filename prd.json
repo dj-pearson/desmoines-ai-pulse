@@ -784,7 +784,8 @@
         "npm run validate passes (type-check + lint)"
       ],
       "priority": 40,
-      "passes": false
+      "passes": true,
+      "notes": "[DONE 2026-06-13] Added canonical ticketUrl guard (source_url && !source_url_broken) in EventDetails and used it for StickyMobileCTA primary+secondary actions; broken/absent URL falls through to Add to Calendar. Audited all source_url usages — EventDetails sticky CTA was the only user-facing event ticket CTA missing the guard (schema/SEO emit JSON-LD not CTAs; restaurant menu link has no broken-flag)."
     },
     {
       "id": "WEB-UX-012",
