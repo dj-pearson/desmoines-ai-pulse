@@ -8,6 +8,8 @@ import { Separator } from "@/components/ui/separator";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { LazyLocationMap } from "@/components/LazyLocationMap";
+import { getDirectionsUrl } from "@/lib/directions";
 import ShareDialog from "@/components/ShareDialog";
 import { FAQSection } from "@/components/FAQSection";
 import { BackToTop } from "@/components/BackToTop";
@@ -329,7 +331,7 @@ export default function PlaygroundDetails() {
             <div className="flex flex-wrap gap-3 p-4 md:p-6 bg-gray-50 border-b">
               {playground.location && (
                 <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(playground.name + " " + playground.location)}`}
+                  href={getDirectionsUrl({ latitude: playground.latitude, longitude: playground.longitude, address: `${playground.name} ${playground.location}` })}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
@@ -403,7 +405,7 @@ export default function PlaygroundDetails() {
                           <p className="text-gray-900 font-medium">{playground.location}</p>
                           <p className="text-sm text-gray-500">{BRAND.city}, {BRAND.state}</p>
                           <a
-                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(playground.name + " " + playground.location)}`}
+                            href={getDirectionsUrl({ latitude: playground.latitude, longitude: playground.longitude, address: `${playground.name} ${playground.location}` })}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center text-sm text-[#2D1B69] hover:underline mt-1"
@@ -412,6 +414,17 @@ export default function PlaygroundDetails() {
                             Get Directions
                           </a>
                         </div>
+                      </div>
+                    )}
+                    {playground.latitude && playground.longitude && (
+                      <div className="overflow-hidden rounded-xl">
+                        <LazyLocationMap
+                          latitude={playground.latitude}
+                          longitude={playground.longitude}
+                          venue={playground.name}
+                          location={playground.location}
+                          className="h-48 w-full"
+                        />
                       </div>
                     )}
                     <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">

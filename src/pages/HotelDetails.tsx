@@ -17,11 +17,14 @@ import {
   ExternalLink,
   ChevronRight,
   ArrowLeft,
+  Navigation,
 } from "lucide-react";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import AffiliateDisclosureBanner from "@/components/AffiliateDisclosureBanner";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { LazyLocationMap } from "@/components/LazyLocationMap";
+import { getDirectionsUrl } from "@/lib/directions";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 
@@ -328,8 +331,33 @@ export default function HotelDetails() {
                       {hotel.area && (
                         <Badge variant="outline" className="mt-1 text-xs">{hotel.area}</Badge>
                       )}
+                      <a
+                        href={getDirectionsUrl({
+                          latitude: hotel.latitude,
+                          longitude: hotel.longitude,
+                          address: fullAddress,
+                        })}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center text-sm text-primary hover:underline mt-1"
+                      >
+                        <Navigation className="h-3.5 w-3.5 mr-1" />
+                        Directions
+                      </a>
                     </div>
                   </div>
+
+                  {hotel.latitude && hotel.longitude && (
+                    <div className="overflow-hidden rounded-lg">
+                      <LazyLocationMap
+                        latitude={hotel.latitude}
+                        longitude={hotel.longitude}
+                        venue={hotel.name}
+                        location={fullAddress}
+                        className="h-48 w-full"
+                      />
+                    </div>
+                  )}
 
                   {/* Phone */}
                   {hotel.phone && (

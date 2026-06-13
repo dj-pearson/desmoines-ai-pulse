@@ -44,6 +44,8 @@ import {
 import { useState, useMemo } from "react";
 import { useContentTracking } from "@/hooks/useContentTracking";
 import { getRestaurantOpenStatus, getOpeningHoursSpecification } from "@/lib/restaurantHours";
+import { LazyLocationMap } from "@/components/LazyLocationMap";
+import { getDirectionsUrl } from "@/lib/directions";
 import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { NearbyContent } from "@/components/NearbyContent";
@@ -527,7 +529,7 @@ export default function RestaurantDetails() {
               )}
               {restaurant.location && (
                 <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(restaurant.name + " " + restaurant.location)}`}
+                  href={getDirectionsUrl({ latitude: restaurant.latitude, longitude: restaurant.longitude, address: `${restaurant.name} ${restaurant.location}` })}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
@@ -644,7 +646,7 @@ export default function RestaurantDetails() {
                           <p className="text-gray-900 font-medium">{restaurant.location}</p>
                           <p className="text-sm text-gray-500">{cityName}, Iowa</p>
                           <a
-                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(restaurant.name + " " + restaurant.location)}`}
+                            href={getDirectionsUrl({ latitude: restaurant.latitude, longitude: restaurant.longitude, address: `${restaurant.name} ${restaurant.location}` })}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center text-sm text-[#2D1B69] hover:underline mt-1"
@@ -653,6 +655,17 @@ export default function RestaurantDetails() {
                             Get Directions
                           </a>
                         </div>
+                      </div>
+                    )}
+                    {restaurant.latitude && restaurant.longitude && (
+                      <div className="overflow-hidden rounded-xl">
+                        <LazyLocationMap
+                          latitude={restaurant.latitude}
+                          longitude={restaurant.longitude}
+                          venue={restaurant.name}
+                          location={restaurant.location}
+                          className="h-48 w-full"
+                        />
                       </div>
                     )}
                     {restaurant.phone && (
@@ -922,7 +935,7 @@ export default function RestaurantDetails() {
           restaurant.location
             ? {
                 label: "Directions",
-                href: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(restaurant.name + " " + restaurant.location)}`,
+                href: getDirectionsUrl({ latitude: restaurant.latitude, longitude: restaurant.longitude, address: `${restaurant.name} ${restaurant.location}` }),
                 icon: "directions",
                 isExternal: true,
               }

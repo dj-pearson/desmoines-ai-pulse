@@ -9,6 +9,8 @@ import { Separator } from "@/components/ui/separator";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { LazyLocationMap } from "@/components/LazyLocationMap";
+import { getDirectionsUrl } from "@/lib/directions";
 import ShareDialog from "@/components/ShareDialog";
 import { FAQSection } from "@/components/FAQSection";
 import { BackToTop } from "@/components/BackToTop";
@@ -386,7 +388,7 @@ export default function AttractionDetails() {
               )}
               {attraction.location && (
                 <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(attraction.name + " " + attraction.location)}`}
+                  href={getDirectionsUrl({ latitude: attraction.latitude, longitude: attraction.longitude, address: `${attraction.name} ${attraction.location}` })}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
@@ -455,7 +457,7 @@ export default function AttractionDetails() {
                           <p className="text-gray-900 font-medium">{attraction.location}</p>
                           <p className="text-sm text-gray-500">{BRAND.city}, {BRAND.state}</p>
                           <a
-                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(attraction.name + " " + attraction.location)}`}
+                            href={getDirectionsUrl({ latitude: attraction.latitude, longitude: attraction.longitude, address: `${attraction.name} ${attraction.location}` })}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center text-sm text-[#2D1B69] hover:underline mt-1"
@@ -464,6 +466,17 @@ export default function AttractionDetails() {
                             Get Directions
                           </a>
                         </div>
+                      </div>
+                    )}
+                    {attraction.latitude && attraction.longitude && (
+                      <div className="overflow-hidden rounded-xl">
+                        <LazyLocationMap
+                          latitude={attraction.latitude}
+                          longitude={attraction.longitude}
+                          venue={attraction.name}
+                          location={attraction.location}
+                          className="h-48 w-full"
+                        />
                       </div>
                     )}
                     {attraction.website && (
@@ -745,7 +758,7 @@ export default function AttractionDetails() {
           attraction.location
             ? {
                 label: "Get Directions",
-                href: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(attraction.name + " " + attraction.location)}`,
+                href: getDirectionsUrl({ latitude: attraction.latitude, longitude: attraction.longitude, address: `${attraction.name} ${attraction.location}` }),
                 icon: "directions",
                 isExternal: true,
               }
