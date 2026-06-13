@@ -38,6 +38,7 @@ All times UTC. Schedules are cron expressions (`min hour dom mon dow`).
 | **`data-quality-heal-nightly`** | `30 2 * * *` | fn `data-quality-heal` | **Geocode + SEO/GEO + image self-heal, <=25 rows/table/run (WEB-AUTO-003)** | ✅ |
 | **`dedupe-content-weekly`** | `15 3 * * 1` | fn `dedupe-content` | **Detect duplicate events/restaurants (trigram + proximity); auto-merge >=0.9, queue 0.7-0.9 to Admin → Content → Duplicates (WEB-AUTO-005)** | ✅ |
 | **`ai-article-pipeline-daily`** | `0 11 * * *` | fn `ai-article-pipeline` | **Daily local-SEO article: pick topic → generate draft → score → publish (≥80) / draft-review (50-79) / discard (<50). Cap 1 auto-publish/day. Pause via `feature_flags.ai_article_pipeline_enabled` (WEB-AUTO-007)** | ✅ |
+| **`moderate-content-sweep`** | `*/15 * * * *` | fn `moderate-content` | **Re-moderate reviews stuck in `pending` (fail-open safety net for the inline review path); ≤25/run. Pause via `feature_flags.content_moderation_enabled` (WEB-AUTO-009)** | ✅ |
 | **`job-health-watchdog-daily`** | `0 8 * * *` | fn `job-health-watchdog` | **Alert on missed/failed observed jobs (WEB-AUTO-001)** | n/a |
 
 \* **Observed** = wrapped with `jobRunner` and recording to `automation_job_runs`.
@@ -166,3 +167,45 @@ Health**; both jobs are re-runnable there.
 toggle pauses/resumes the recurrence (writes `weekly_digest_enabled`), and
 **Preview next week's digest** renders the assembled subject + HTML (and content /
 recipient counts) without creating or sending anything.
+
+## UGC auto-moderation (WEB-AUTO-009)
+
+`moderate-content` scores user-generated content (reviews in `user_ratings`,
+contact/feedback in `contact_submissions`) for toxicity / spam / off-topic with
+Claude, and writes one `content_moderation` row per item (scores + verdict +
+admin override). Each content table carries a `moderation_status` visibility gate.
+
+**Verdict bands:** toxicity ≥ 0.7 **or** spam ≥ 0.6 → `rejected` (hidden); toxicity
+0.5-0.7 / spam 0.4-0.6 / off-topic ≥ 0.7 → `flagged` (hidden, queued); otherwise
+→ `approved` (visible). A failed AI call → `error`: the row stays **hidden-pending**
+and is surfaced for an admin (fail-open with flag — content is never lost or
+auto-published unmoderated).
+
+**Write-path wiring:**
+- **Reviews** are inserted with `moderation_status = 'pending'` (hidden) and the
+  web client invokes `moderate-content` inline with the author's JWT, so the
+  author gets an immediate, polite verdict. A bare star rating (no review text)
+  is inserted `approved`.
+- **Contact submissions** (usually anonymous, so they can't call the auth-gated
+  function from the browser) are enqueued **server-side** by an `AFTER INSERT`
+  trigger (`enqueue_contact_moderation`) via `pg_net` with the service-role
+  bearer — no anonymous caller ever reaches Claude. Contact intake is admin-only,
+  so rows are **not** held pending; moderation only demotes spam (sets
+  `moderation_status = 'rejected'` **and** `status = 'spam'` so the FeedbackInbox
+  spam filter catches it).
+
+**Sweep / recovery:** `moderate-content-sweep` (every 15 min, ≤25/run) re-moderates
+any review left in `pending` (e.g. the inline call failed). Counts flow through the
+jobRunner; the job is re-runnable from **Admin → Job Health** (which sends
+`manual: true` → a sweep).
+
+**Admin queue** (Admin → Content → *Moderation*): every flagged / rejected /
+pending / error item with its scores + reasons + excerpt, with one-click
+**Approve & publish** or **Keep hidden**. Decisions call the `decide_moderation`
+RPC (admin/service only), which updates the queue row (recording `decided_by`) and
+the content table's `moderation_status` atomically.
+
+**Pausing** (no code change): set `feature_flags.content_moderation_enabled` to
+`enabled = false`. While paused, moderation **trusts everything through** —
+pending content is force-approved (so nothing gets stuck hidden) rather than
+scored. Re-enable to resume.

@@ -11,6 +11,7 @@ import ContentTable from "@/components/ContentTable";
 import ArticlesManager from "@/components/ArticlesManager";
 import VenuesManager from "@/components/admin/VenuesManager";
 import MergeReviewPanel from "@/components/admin/MergeReviewPanel";
+import ModerationQueuePanel from "@/components/admin/ModerationQueuePanel";
 import GooglePlacesRestaurantTools from "@/components/GooglePlacesRestaurantTools";
 import GooglePlacesHotelTools from "@/components/GooglePlacesHotelTools";
 import { RestaurantBulkUpdaterSimple } from "@/components/RestaurantBulkUpdaterSimple";
@@ -29,6 +30,7 @@ import {
   FileText,
   Plus,
   GitMerge,
+  ShieldAlert,
 } from "lucide-react";
 import { useEvents } from "@/hooks/useEvents";
 import { useRestaurants } from "@/hooks/useRestaurants";
@@ -50,6 +52,7 @@ const CONTENT_TABS = [
   { id: "playgrounds", label: "Playgrounds", icon: Play },
   { id: "venues", label: "Known Venues", icon: MapPin },
   { id: "duplicates", label: "Duplicates", icon: GitMerge },
+  { id: "moderation", label: "Moderation", icon: ShieldAlert },
   { id: "articles", label: "Articles", icon: FileText },
   { id: "article-editor", label: "New Article", icon: Plus },
 ];
@@ -551,6 +554,8 @@ export default function AdminContent() {
           {activeTab === "venues" && <VenuesManager />}
 
           {activeTab === "duplicates" && <MergeReviewPanel />}
+
+          {activeTab === "moderation" && <ModerationQueuePanel />}
 
           {activeTab === "articles" && <ArticlesManager />}
 
