@@ -6,12 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { FileText, Plus, Edit, Trash2, Eye, Calendar, User, Search, Send, LayoutDashboard } from "lucide-react";
+import { FileText, Plus, Edit, Trash2, Eye, Calendar, User, Search, Send, LayoutDashboard, Bot, Pause, Play } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { ArticleWebhookConfig } from "./ArticleWebhookConfig";
 import { supabase } from "@/integrations/supabase/client";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('ArticlesManager');
@@ -19,6 +19,38 @@ const log = createLogger('ArticlesManager');
 export default function ArticlesManager() {
   const { articles, loading, error, deleteArticle, publishArticle, loadArticles } = useArticles();
   const [searchTerm, setSearchTerm] = useState("");
+  const queryClient = useQueryClient();
+
+  // Auto-article pipeline pause flag (WEB-AUTO-007). Single DB config row.
+  const { data: pipelineSetting } = useQuery({
+    queryKey: ["article-pipeline-setting"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("system_settings")
+        .select("settings")
+        .eq("setting_type", "article_pipeline")
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+  const pipelinePaused = !!(pipelineSetting?.settings as { paused?: boolean } | null)?.paused;
+
+  const togglePipelineMutation = useMutation({
+    mutationFn: async (paused: boolean) => {
+      const { error } = await supabase
+        .from("system_settings")
+        .update({ settings: { paused }, updated_at: new Date().toISOString() })
+        .eq("setting_type", "article_pipeline");
+      if (error) throw error;
+      return paused;
+    },
+    onSuccess: (paused) => {
+      queryClient.invalidateQueries({ queryKey: ["article-pipeline-setting"] });
+      toast.success(paused ? "Auto-article pipeline paused" : "Auto-article pipeline resumed");
+    },
+    onError: (err: Error) => toast.error(`Failed to update pipeline: ${err.message}`),
+  });
 
   // Load all articles (including drafts) for admin management
   useEffect(() => {
@@ -159,6 +191,18 @@ export default function ArticlesManager() {
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={() => togglePipelineMutation.mutate(!pipelinePaused)}
+                disabled={togglePipelineMutation.isPending}
+                title="AI auto-article pipeline (WEB-AUTO-007) — daily topic → draft → quality gate → auto-publish"
+              >
+                {pipelinePaused ? (
+                  <><Play className="h-4 w-4 mr-2" />Resume AI Pipeline</>
+                ) : (
+                  <><Pause className="h-4 w-4 mr-2" />Pause AI Pipeline</>
+                )}
+              </Button>
               <Button asChild variant="outline">
                 <Link to="/admin/cms">
                   <LayoutDashboard className="h-4 w-4 mr-2" />
@@ -238,7 +282,23 @@ export default function ArticlesManager() {
                   <TableRow key={article.id}>
                     <TableCell>
                       <div className="max-w-xs">
-                        <div className="font-medium truncate">{article.title}</div>
+                        <div className="font-medium truncate flex items-center gap-1.5">
+                          {article.title}
+                          {article.auto_generated && (
+                            <Badge
+                              variant="outline"
+                              className="text-purple-600 border-purple-300 shrink-0"
+                              title={
+                                (article.generation_reasons?.length
+                                  ? `AI auto-generated. ${article.generation_reasons.join("; ")}`
+                                  : "AI auto-generated")
+                              }
+                            >
+                              <Bot className="h-3 w-3 mr-1" />
+                              AI{typeof article.quality_score === "number" ? ` ${article.quality_score}` : ""}
+                            </Badge>
+                          )}
+                        </div>
                         {article.excerpt && (
                           <div className="text-sm text-muted-foreground truncate">
                             {article.excerpt}

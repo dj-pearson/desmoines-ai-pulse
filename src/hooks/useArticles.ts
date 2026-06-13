@@ -24,6 +24,10 @@ export interface Article {
   created_at: string;
   updated_at: string;
   generated_from_suggestion_id?: string;
+  auto_generated?: boolean;
+  quality_score?: number;
+  generation_reasons?: string[];
+  generation_topic?: string;
 }
 
 export interface CreateArticleData {

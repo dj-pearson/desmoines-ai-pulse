@@ -643,6 +643,10 @@ export type Database = {
           title: string
           updated_at: string
           view_count: number | null
+          auto_generated: boolean
+          quality_score: number | null
+          generation_reasons: string[] | null
+          generation_topic: string | null
         }
         Insert: {
           author_id?: string | null
@@ -663,6 +667,10 @@ export type Database = {
           title: string
           updated_at?: string
           view_count?: number | null
+          auto_generated?: boolean
+          quality_score?: number | null
+          generation_reasons?: string[] | null
+          generation_topic?: string | null
         }
         Update: {
           author_id?: string | null
@@ -683,6 +691,10 @@ export type Database = {
           title?: string
           updated_at?: string
           view_count?: number | null
+          auto_generated?: boolean
+          quality_score?: number | null
+          generation_reasons?: string[] | null
+          generation_topic?: string | null
         }
         Relationships: [
           {

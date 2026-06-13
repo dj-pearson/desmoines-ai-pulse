@@ -37,6 +37,7 @@ All times UTC. Schedules are cron expressions (`min hour dom mon dow`).
 | **`data-quality-heal-nightly`** | `30 2 * * *` | fn `data-quality-heal` | **Geocode + SEO/GEO + image self-heal, <=25 rows/table/run (WEB-AUTO-003)** | ✅ |
 | **`job-health-watchdog-daily`** | `0 8 * * *` | fn `job-health-watchdog` | **Alert on missed/failed observed jobs (WEB-AUTO-001)** | n/a |
 | **`dedupe-content-weekly`** | `15 3 * * 1` | fn `dedupe-content` | **Detect duplicate events/restaurants (trigram + proximity); auto-merge >=90%, queue 70–90% (WEB-AUTO-005)** | ✅ |
+| **`auto-article-pipeline-daily`** | `0 13 * * *` | fn `auto-article-pipeline` | **AI article pipeline: topic → draft → quality gate → auto-publish (WEB-AUTO-007)** | ✅ |
 
 \* **Observed** = wrapped with `jobRunner` and recording to `automation_job_runs`.
 `✅` done, `planned` = adopts the same one-line wrap as its WEB-AUTO story lands
@@ -126,3 +127,42 @@ the stored `snapshot` jsonb if needed).
 **Tuning:** invoke `cleanup-old-events` with `{ "hideAfterDays": N, "retentionMonths": M }`
 to override windows, or `{ "dryRun": true }` to preview `wouldHide` / `wouldDelete`
 counts without changing anything.
+
+## AI article pipeline (WEB-AUTO-007)
+
+`auto-article-pipeline` (cron `auto-article-pipeline-daily`, daily 13:00 UTC) writes
+fresh local-SEO articles with zero manual touches:
+
+1. **Topic** — Claude suggests 6 locally-relevant topics; the pipeline drops any
+   that duplicate a recent article slug or score ≥0.7 Jaccard against the last 100
+   titles, then picks the highest `seo_potential`.
+2. **Draft** — Claude generates a full markdown article with Des Moines local
+   context (same strategy as the manual `generate-article`, which is left untouched
+   for human-authored flows).
+3. **Quality gate** (0–100 + reasons): word count ≥400, Des Moines/Iowa relevance,
+   title similarity-to-existing, readability (words/sentence), SEO completeness, plus
+   a Claude **safety check**.
+4. **Decision**: `≥80` → **published** (`status=published`, `published_at`, slug auto-
+   generated, `review_status=approved`); `50–79` → **draft** in the review queue
+   (`review_status=pending_review`); `<50` or unsafe → **discarded** (attempt logged,
+   no row written). The safety check **fails safe** — if it can't complete, the draft
+   is held, never auto-published.
+
+**Daily cap:** at most **1 auto-published article/day**; a high-scoring draft created
+after the cap is reached is queued as a draft instead.
+
+**Pause without code changes:** flip the single `system_settings` row
+(`setting_type='article_pipeline'`) — toggle it from **Admin → Articles → Pause AI
+Pipeline**, or via SQL:
+
+```sql
+UPDATE public.system_settings
+SET settings = '{"paused": true}'::jsonb
+WHERE setting_type = 'article_pipeline';
+```
+
+Published articles automatically enter the sitemap (`generate-sitemap` selects
+`status='published'`) and the published-article pool the newsletter draws from.
+Auto-generated rows show an **AI {score}** badge in the Admin → Articles table; run
+metrics + the score/decision distribution flow through `jobRunner` into
+`automation_job_runs` (re-runnable from **Admin → Job Health**).
