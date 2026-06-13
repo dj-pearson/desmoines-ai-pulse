@@ -153,6 +153,52 @@ function parseOpeningText(opening: string): TimeRange[] | null {
   return ranges.length > 0 ? ranges : null;
 }
 
+/** Schema.org day-of-week names, indexed by JS getDay() (0 = Sunday). */
+const SCHEMA_DAY_NAMES = [
+  'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',
+] as const;
+
+/** Format minutes-since-midnight as schema.org HH:MM (clamps midnight to 23:59). */
+function minutesToClock(minutes: number): string {
+  const m = Math.min(Math.max(minutes, 0), 24 * 60 - 1);
+  const hh = Math.floor(m / 60);
+  const mm = m % 60;
+  return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+}
+
+export interface OpeningHoursSpecification {
+  '@type': 'OpeningHoursSpecification';
+  dayOfWeek: string[];
+  opens: string;
+  closes: string;
+}
+
+/**
+ * Convert the free-form `opening` text into schema.org OpeningHoursSpecification
+ * entries using the SAME parser that powers the on-page open/closed badge, so
+ * the structured data can never contradict the visible status. Returns null
+ * when hours can't be parsed (or the place is always closed) — callers should
+ * then omit the spec rather than fabricate hours.
+ */
+export function getOpeningHoursSpecification(
+  opening: string | null | undefined
+): OpeningHoursSpecification[] | null {
+  if (!opening || !opening.trim()) return null;
+  const ranges = parseOpeningText(opening);
+  if (!ranges || ranges.length === 0) return null;
+  const specs = ranges
+    .filter((r) => r.days.size > 0)
+    .map((r) => ({
+      '@type': 'OpeningHoursSpecification' as const,
+      dayOfWeek: Array.from(r.days)
+        .sort((a, b) => a - b)
+        .map((d) => SCHEMA_DAY_NAMES[d]),
+      opens: minutesToClock(r.openMinutes),
+      closes: minutesToClock(r.closeMinutes),
+    }));
+  return specs.length > 0 ? specs : null;
+}
+
 /**
  * Split a comma-separated string into day-based segments.
  * e.g. "Mon-Fri 11am-10pm, Sat-Sun 10am-11pm" → ["Mon-Fri 11am-10pm", "Sat-Sun 10am-11pm"]

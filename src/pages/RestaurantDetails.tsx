@@ -43,7 +43,7 @@ import {
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useContentTracking } from "@/hooks/useContentTracking";
-import { getRestaurantOpenStatus } from "@/lib/restaurantHours";
+import { getRestaurantOpenStatus, getOpeningHoursSpecification } from "@/lib/restaurantHours";
 import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { NearbyContent } from "@/components/NearbyContent";
@@ -263,7 +263,6 @@ export default function RestaurantDetails() {
       streetAddress: restaurant.location,
       addressLocality: cityName,
       addressRegion: "Iowa",
-      postalCode: "50309",
       addressCountry: "US",
     },
     ...(restaurant.phone && { telephone: restaurant.phone }),
@@ -285,14 +284,11 @@ export default function RestaurantDetails() {
       latitude: restaurant.latitude || 41.5868,
       longitude: restaurant.longitude || -93.6250,
     },
-    openingHoursSpecification: restaurant.opening ? [
-      "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"
-    ].map((day) => ({
-      "@type": "OpeningHoursSpecification",
-      dayOfWeek: day,
-      opens: "11:00",
-      closes: "22:00",
-    })) : undefined,
+    // Derived from the same parser as the visible open/closed badge; omitted
+    // entirely when the free-form hours can't be parsed (no fabricated hours).
+    ...(getOpeningHoursSpecification(restaurant.opening)
+      ? { openingHoursSpecification: getOpeningHoursSpecification(restaurant.opening) }
+      : {}),
     paymentAccepted: "Cash, Credit Card, Debit Card",
     currenciesAccepted: "USD",
     hasMenu: {
@@ -301,7 +297,6 @@ export default function RestaurantDetails() {
       name: `${restaurant.name} Menu`,
       url: `https://desmoinespulse.com/restaurants/${restaurant.slug || restaurant.id}#menu`,
     },
-    acceptsReservations: true,
     areaServed: {
       "@type": "City",
       name: "Des Moines",
