@@ -1,4 +1,3 @@
-import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
@@ -151,13 +150,10 @@ export function useFavorites() {
       return { success: true, needsUpgrade: false };
     }
 
-    // If adding, check limits
+    // If adding, check limits. On the cap, return needsUpgrade so the caller
+    // can present the contextual unlimited-favorites paywall (WEB-FEAT-001);
+    // the modal is now the single messaging surface (no redundant toast here).
     if (!canAddFavorite()) {
-      toast({
-        title: "Favorites Limit Reached",
-        description: `Free accounts can save up to ${limits.favorites} favorites. Upgrade to Insider for unlimited saves!`,
-        variant: "destructive",
-      });
       return { success: false, needsUpgrade: true };
     }
 

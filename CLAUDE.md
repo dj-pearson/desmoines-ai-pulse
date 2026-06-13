@@ -342,6 +342,7 @@ Pre-deploy: `npm run validate && npm test && npm run build`. Rollback via Cloudf
 | Forms | React Hook Form + Zod |
 | Auth | `useAuth()` from `AuthContext` |
 | Premium gates | `PremiumGate` + `useSubscription()` |
+| Contextual paywall | `PaywallModal` (`@/components/PaywallModal`, prop `context="<feature-id>"`) — per-feature copy from `@/lib/paywallContexts` (`resolvePaywallContext`), conversion logged via `trackPaywallEvent` (`@/lib/paywallAnalytics`, gtag/GA4). `UpgradeModal` is a back-compat wrapper over it (maps `feature`→`context`), so `PremiumGate`/`PremiumButton` already show contextual copy. Favorites cap: `useFavorites.toggleFavorite` returns `{success, needsUpgrade}` → open `PaywallModal context="unlimited_favorites"` |
 | Styling | Tailwind utility classes |
 | Icons | Lucide React |
 | Dates | date-fns / date-fns-tz |
