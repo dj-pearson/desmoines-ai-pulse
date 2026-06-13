@@ -83,6 +83,33 @@ function resetLoginAttempts(email: string) {
   loginAttempts.delete(email.toLowerCase());
 }
 
+interface ServerLockoutResult {
+  allowed: boolean;
+  lockoutSeconds?: number;
+  attemptsRemaining?: number;
+  message?: string;
+}
+
+/**
+ * Server-side brute-force lockout check (WEB-SEC-006). Authoritative across
+ * devices/refreshes. Returns null (treated as allowed) on any failure so an
+ * outage never blocks legitimate sign-in.
+ */
+async function checkServerLockout(
+  email: string,
+  action: 'check' | 'record_failure' | 'record_success',
+): Promise<ServerLockoutResult | null> {
+  try {
+    const { data, error } = await supabase.functions.invoke('check-login-attempt', {
+      body: { email, action },
+    });
+    if (error) return null;
+    return data as ServerLockoutResult;
+  } catch {
+    return null;
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [authState, setAuthState] = useState<AuthState>({
     user: null,
@@ -280,7 +307,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Login with email/password (with attempt throttling)
   const login = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string; requiresMFA?: boolean; factorId?: string }> => {
     try {
-      // Check throttle before attempting
+      // Fast local throttle (defense in depth; bypassable so not authoritative).
       const throttle = checkLoginThrottle(email);
       if (!throttle.allowed) {
         const minutes = Math.ceil((throttle.retryAfterSec || 60) / 60);
@@ -288,11 +315,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, error: `Too many login attempts. Please try again in ${minutes} minute${minutes === 1 ? '' : 's'}.` };
       }
 
+      // Authoritative SERVER-side brute-force lockout (cross-device, survives
+      // refreshes). Fails open if the function is unreachable.
+      const serverLock = await checkServerLockout(email, 'check');
+      if (serverLock && !serverLock.allowed) {
+        log.warn('login', 'Server lockout active', { email });
+        return { success: false, error: serverLock.message || 'Too many sign-in attempts. Please try again later.' };
+      }
+
       log.info('login', 'Attempting login', { email });
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
       if (error) {
         recordFailedLogin(email);
+        void checkServerLockout(email, 'record_failure');
         log.error('login', 'Login error', { message: error.message });
         return { success: false, error: error.message };
       }
@@ -326,6 +362,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       resetLoginAttempts(email);
+      void checkServerLockout(email, 'record_success');
       log.info('login', 'Login successful');
       return { success: !!data.session };
     } catch (error: unknown) {

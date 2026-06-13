@@ -1,0 +1,180 @@
+/**
+ * jobRunner — observability wrapper for scheduled edge-function jobs
+ * (WEB-AUTO-001). Records each run in automation_job_runs, retries transient
+ * failures with backoff, and alerts the admin on terminal failure.
+ *
+ *   const result = await runJob('cleanup-old-events', async (ctx) => {
+ *     // ... do work ...
+ *     ctx.processed(deleted);          // count items processed
+ *     ctx.failed(skipped);             // count items that failed
+ *     return { deleted, skipped };     // stored in metadata
+ *   });
+ *
+ * The wrapper never throws — a job-infra failure must not crash the function.
+ */
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+export interface JobContext {
+  /** Add to the items-processed counter. */
+  processed: (n: number) => void;
+  /** Add to the items-failed counter. */
+  failed: (n: number) => void;
+  /** Merge keys into the run's metadata jsonb. */
+  meta: (m: Record<string, unknown>) => void;
+}
+
+export interface RunJobOptions {
+  /** Max attempts on transient failure (default 3 = 1 try + 2 retries). */
+  maxAttempts?: number;
+  /** Base backoff in ms (default 1000; doubles each retry). */
+  backoffMs?: number;
+  /** Classify an error as transient (retryable). Default: retry everything. */
+  isTransient?: (err: unknown) => boolean;
+  /** Admin alert email override (else ADMIN_ALERT_EMAIL / ALERT_EMAIL secret). */
+  alertEmail?: string;
+}
+
+export interface JobResult<T> {
+  ok: boolean;
+  status: 'success' | 'failed' | 'partial';
+  runId: string | null;
+  result?: T;
+  error?: string;
+  itemsProcessed: number;
+  itemsFailed: number;
+  attempts: number;
+}
+
+function serviceClient() {
+  const url = Deno.env.get('SUPABASE_URL');
+  const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (!url || !key) return null;
+  return createClient(url, key);
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+export async function runJob<T>(
+  jobName: string,
+  fn: (ctx: JobContext) => Promise<T>,
+  options: RunJobOptions = {},
+): Promise<JobResult<T>> {
+  const { maxAttempts = 3, backoffMs = 1000, isTransient = () => true } = options;
+  const supabase = serviceClient();
+
+  let itemsProcessed = 0;
+  let itemsFailed = 0;
+  let metadata: Record<string, unknown> = {};
+  const ctx: JobContext = {
+    processed: (n) => { itemsProcessed += n; },
+    failed: (n) => { itemsFailed += n; },
+    meta: (m) => { metadata = { ...metadata, ...m }; },
+  };
+
+  // Open the run row (best-effort).
+  let runId: string | null = null;
+  if (supabase) {
+    try {
+      const { data } = await supabase
+        .from('automation_job_runs')
+        .insert({ job_name: jobName, status: 'running' })
+        .select('id')
+        .single();
+      runId = data?.id ?? null;
+    } catch (err) {
+      console.error(`[jobRunner:${jobName}] failed to open run row:`, err);
+    }
+  }
+
+  let attempt = 0;
+  let lastError: unknown;
+  let result: T | undefined;
+
+  while (attempt < maxAttempts) {
+    attempt++;
+    try {
+      result = await fn(ctx);
+      lastError = undefined;
+      break;
+    } catch (err) {
+      lastError = err;
+      console.error(`[jobRunner:${jobName}] attempt ${attempt}/${maxAttempts} failed:`, err);
+      if (attempt >= maxAttempts || !isTransient(err)) break;
+      await sleep(backoffMs * Math.pow(2, attempt - 1));
+    }
+  }
+
+  const failedTerminally = lastError !== undefined;
+  const status: JobResult<T>['status'] = failedTerminally
+    ? 'failed'
+    : itemsFailed > 0
+      ? 'partial'
+      : 'success';
+  const errorMsg = failedTerminally
+    ? (lastError instanceof Error ? lastError.message : String(lastError))
+    : null;
+
+  // Close the run row (best-effort).
+  if (supabase && runId) {
+    try {
+      await supabase
+        .from('automation_job_runs')
+        .update({
+          finished_at: new Date().toISOString(),
+          status,
+          items_processed: itemsProcessed,
+          items_failed: itemsFailed,
+          attempts: attempt,
+          error: errorMsg,
+          metadata,
+        })
+        .eq('id', runId);
+    } catch (err) {
+      console.error(`[jobRunner:${jobName}] failed to close run row:`, err);
+    }
+  }
+
+  // Alert on terminal failure (best-effort; never throws).
+  if (failedTerminally) {
+    await sendJobAlert(jobName, `Job "${jobName}" failed after ${attempt} attempt(s): ${errorMsg}`, options.alertEmail);
+  }
+
+  return {
+    ok: !failedTerminally,
+    status,
+    runId,
+    result,
+    error: errorMsg ?? undefined,
+    itemsProcessed,
+    itemsFailed,
+    attempts: attempt,
+  };
+}
+
+/**
+ * Best-effort admin alert email via Resend. Shared by runJob (terminal failure)
+ * and the missed-run watchdog.
+ */
+export async function sendJobAlert(jobName: string, message: string, alertEmail?: string): Promise<void> {
+  try {
+    const to =
+      alertEmail || Deno.env.get('ADMIN_ALERT_EMAIL') || Deno.env.get('ALERT_EMAIL');
+    const resendKey = Deno.env.get('RESEND_API_KEY');
+    if (!to || !resendKey) {
+      console.warn(`[jobRunner] alert not sent for "${jobName}" (missing ADMIN_ALERT_EMAIL or RESEND_API_KEY): ${message}`);
+      return;
+    }
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${resendKey}` },
+      body: JSON.stringify({
+        from: 'Des Moines Insider Automation <automation@desmoinesinsider.com>',
+        to: [to],
+        subject: `⚠️ Automation alert: ${jobName}`,
+        text: `${message}\n\nSee the Admin → Job Health panel for details.`,
+      }),
+    });
+  } catch (err) {
+    console.error(`[jobRunner] failed to send alert for "${jobName}":`, err);
+  }
+}

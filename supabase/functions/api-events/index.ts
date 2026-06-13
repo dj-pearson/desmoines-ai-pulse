@@ -231,10 +231,12 @@ serve(async (req) => {
   } catch (error) {
     console.error("API Error:", error);
 
+    // Sanitized: never return internal error detail to clients (full error is
+    // logged above). Shape (success:false) + status preserved for backward compat.
     const errorResponse = new Response(
       JSON.stringify({
         success: false,
-        error: error instanceof Error ? error.message : "Internal server error",
+        error: "Internal server error",
       }),
       {
         headers: { "Content-Type": "application/json" },

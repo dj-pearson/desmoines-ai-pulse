@@ -24,6 +24,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
+import { writeAuditLog, auditIp } from "../_shared/auditLog.ts";
 
 const TOKEN_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
 
@@ -230,6 +231,17 @@ serve(async (req) => {
       }
 
       console.log(`Successfully deleted account for user: ${userId}`);
+
+      await writeAuditLog(supabase, {
+        eventType: "account_deletion",
+        actorId: userId,
+        action: "delete_account",
+        resource: "profiles",
+        severity: "high",
+        ipAddress: auditIp(req),
+        userAgent: req.headers.get("user-agent"),
+        details: { target_user_id: userId },
+      });
 
       return new Response(
         JSON.stringify({ success: true }),

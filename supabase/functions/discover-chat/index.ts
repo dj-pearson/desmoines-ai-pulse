@@ -28,7 +28,7 @@
 import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import { handleCors, getCorsHeaders, isOriginAllowed } from '../_shared/cors.ts';
-import { checkRateLimit, addRateLimitHeaders } from '../_shared/rateLimit.ts';
+import { checkRateLimitPersistent, addRateLimitHeaders } from '../_shared/rateLimit.ts';
 import { getAIConfig } from '../_shared/aiConfig.ts';
 import { sanitizePostgrestPattern } from '../_shared/validation.ts';
 import { resolveEntitledTier } from '../_shared/entitlements.ts';
@@ -374,8 +374,10 @@ serve(async (req) => {
     });
   }
 
-  // Rate limit (per-IP, defense in depth on top of per-user quota)
-  const rl = checkRateLimit(req, {
+  // Rate limit (per-IP burst, persistent across cold starts; defense in depth
+  // on top of the per-user daily quota enforced below).
+  const rl = await checkRateLimitPersistent(req, {
+    endpoint: 'discover-chat',
     windowMs: 15 * 60 * 1000,
     max: 30,
     message: 'Too many discover-chat requests. Please slow down.',

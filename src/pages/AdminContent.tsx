@@ -56,6 +56,7 @@ export default function AdminContent() {
   useDocumentTitle("Content Management");
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("events");
+  const [brokenLinksOnly, setBrokenLinksOnly] = useState(false);
 
   // Search state for each content type
   const [searchTerms, setSearchTerms] = useState({
@@ -388,9 +389,23 @@ export default function AdminContent() {
               <CatchDesmoinUrlExtractor />
               <FixBrokenEventUrls />
               <DomainHighlightManager />
+              <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={brokenLinksOnly}
+                  onChange={(e) => setBrokenLinksOnly(e.target.checked)}
+                />
+                Show only events with broken source links (WEB-AUTO-004)
+              </label>
               <ContentTable
                 type="event"
-                items={events.events}
+                items={
+                  brokenLinksOnly
+                    ? events.events.filter(
+                        (e) => (e as { source_url_broken?: boolean }).source_url_broken,
+                      )
+                    : events.events
+                }
                 isLoading={events.isLoading}
                 totalCount={events.events.length}
                 searchValue={inputValues.events}

@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
 import { requireApiKey } from "../_shared/apiKeyAuth.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
+import { writeAuditLog, auditIp } from "../_shared/auditLog.ts";
 
 interface GooglePlaceDetails {
   id: string;
@@ -403,6 +404,16 @@ serve(async (req) => {
     }
 
     console.log('Bulk update completed:', response)
+
+    await writeAuditLog(supabase, {
+      eventType: "admin_action",
+      actorId: null, // API-key/cron triggered; no end-user actor
+      action: "bulk_update_restaurants",
+      resource: "restaurants",
+      severity: "medium",
+      ipAddress: auditIp(req),
+      details: { processed: restaurants.length, updated: updatedCount, errors: errors.length },
+    });
 
     return new Response(
       JSON.stringify(response),

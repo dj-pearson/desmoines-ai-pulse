@@ -116,21 +116,29 @@ export function useUserRole(user?: User | null) {
     }
 
     try {
-      const { data, error } = await supabase
-        .from("user_roles")
-        .upsert({
-          user_id: targetUserId,
-          role,
-          assigned_by: user.id,
-        })
-        .select()
-        .single();
+      // Role assignment is server-authoritative: the assign-role edge function
+      // verifies the caller is admin/root_admin, enforces the hierarchy, writes
+      // with the service role, and records an audit log. Direct client writes to
+      // user_roles are blocked by RLS.
+      const { data, error } = await supabase.functions.invoke("assign-role", {
+        body: { targetUserId, role },
+      });
 
-      if (error) throw error;
+      if (error) {
+        // Surface the structured server error message when present.
+        const ctx = (error as { context?: Response }).context;
+        if (ctx && typeof ctx.json === "function") {
+          const body = (await ctx.json().catch(() => null)) as { error?: string } | null;
+          if (body?.error) throw new Error(body.error);
+        }
+        throw error;
+      }
 
       return data;
     } catch (error) {
-      console.error("Error assigning role:", error);
+      if (import.meta.env.DEV) {
+        console.error("Error assigning role:", error);
+      }
       throw error;
     }
   };

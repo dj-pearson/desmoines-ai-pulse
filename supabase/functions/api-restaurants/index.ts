@@ -163,9 +163,10 @@ serve(async (req) => {
   } catch (error) {
     console.error("Error in api-restaurants:", error);
 
+    // Sanitized: full error logged above; clients get a generic message.
     const response = new Response(
       JSON.stringify({
-        error: error instanceof Error ? error.message : "Internal server error",
+        error: "Internal server error",
       }),
       {
         status: 500,

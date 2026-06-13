@@ -2905,3 +2905,582 @@ swap; targetURL nil-handling confirmed at both ad call sites.
 
 Remaining prd.json backlog: web/backend PROD-* plus the IOS-POLISH/IOS-SEC-002
 iOS follow-ups above.
+
+## 2026-06-12 — WEB-SEC-001 (lock down publicly-callable admin/AI edge functions) [passes:true]
+
+Start of the WEB Platform Autonomy & Core Uplift PRD (claude/web-platform-autonomy).
+First story: close the verify_jwt=false admin/AI holes before stacking automation on them.
+
+### What was callable by anyone on the internet
+18 functions ship with verify_jwt=false. 12 were admin/internal tooling that
+ran expensive Claude / Google Places / DB service-role work with NO app-level
+auth — anyone could POST and burn spend or write the DB.
+
+### Fix
+Every admin/internal function now calls requireAdminOrApiKey() (from the
+existing _shared/apiKeyAuth.ts) immediately after the OPTIONS handler, before
+any external call or DB write:
+  ai-crawler, analyze-competitor, bulk-enhance-events, scrape-events,
+  bulk-event-updater, restaurant-opening-scraper, firecrawl-scraper,
+  backfill-coordinates, backfill-all-coordinates-force, populate-playgrounds,
+  extract-catchdesmoines-urls, test-article-webhook.
+(publish-article-webhook + generate-seo-content were already guarded.)
+
+Public-by-design functions left untouched (no shape change):
+  get-sponsored-pick, log-content-metrics, image-transform, geocode-location
+  (geocode-location is called from the PUBLIC LocationAutocomplete component —
+  locking it would break public geocoding; its rate-limit recommendation is
+  WEB-SEC-002 territory).
+
+### Keeping cron alive without rewriting migrations
+pg_cron jobs invoke these with `Authorization: Bearer <service_role_key>`.
+Rather than rewrite every cron migration to inject EDGE_FUNCTION_API_KEY (which
+would need the key wired into pg Vault and risks breaking a live job
+mid-release), requireAdminOrApiKey now ALSO accepts the service-role-key bearer.
+The service-role key is already a full-access secret, so accepting it grants no
+extra privilege — but automation keeps running with zero migration churn.
+Three auth paths accepted: EDGE_FUNCTION_API_KEY, service-role key, or a
+verified admin/root_admin user JWT (the admin web UI; supabase-js auto-attaches
+the signed-in admin's token to functions.invoke).
+
+### SSRF / cost-proxy hardening (the two HIGH functions)
+New _shared/fetchGuard.ts:
+  - isHostAllowed(url): target host must equal/subdomain a DEFAULT_CRAWL_ALLOWLIST
+    domain (known DSM event/venue sources). Runtime override via
+    CRAWLER_DOMAIN_ALLOWLIST (comma-sep) or CRAWLER_ALLOW_ALL=true escape hatch.
+    Applied to ai-crawler (arbitrary request url) and analyze-competitor
+    (competitors.website_url). A leaked key can no longer aim them at internal
+    hosts.
+  - fetchTextWithSizeCap(url, init, maxBytes=10MB): streams + aborts past the
+    cap. analyze-competitor's previously-unbounded `fetch().text()` now uses it.
+
+### Backward compat
+No request/response shapes changed on any 200 path. Public functions and
+cron-invoked paths behave identically. Mobile binaries don't call these admin
+functions (verified: client refs are all admin-only web components).
+
+### Verification
+- node_modules was missing in the container → npm ci (pins TS 5.9.3 / ESLint 9).
+- `npm run type-check` PASSES.
+- All 14 edited Deno files parse clean via `esbuild --loader=ts` (no Deno
+  toolchain in the container).
+- `npm run lint`: 1 error is a PRE-EXISTING @typescript-eslint parser
+  false-positive in src/components/media/VideoPlayer.tsx:587 (untouched by this
+  story; tsc accepts the file, app builds fine). Plus ~3386 pre-existing
+  warnings. This story added zero new lint findings (all changes live under
+  supabase/functions/, outside the Vite/tsc/eslint scope).
+- Note: tsconfig.json carries a baseUrl deprecation that errors only under
+  TS 6.x; the project's pinned TS 5.9 is clean.
+
+### Files
+  M supabase/functions/_shared/apiKeyAuth.ts        (accept service-role bearer)
+  A supabase/functions/_shared/fetchGuard.ts        (allowlist + size cap)
+  M 12 admin function index.ts                       (auth guard; ai-crawler +
+                                                      analyze-competitor also
+                                                      allowlist/size-cap)
+  M docs/SECURITY_AUDIT.md                            (classification + middleware table)
+
+## 2026-06-12 — WEB-SEC-002 (persistent DB-backed rate limiting + per-user AI quotas) [passes:true]
+
+### The two holes
+1. checkRateLimit() was in-memory per-isolate → resets on every edge cold start,
+   so a determined caller barely got throttled.
+2. getClientIdentifier() keyed on the LEFTMOST X-Forwarded-For entry — a
+   client-controlled value — so an attacker could forge a fresh IP per request
+   and evade the limit entirely; and IP-keying let one NAT exhaust everyone.
+
+### _shared/rateLimit.ts
+- New getClientIp(): trusts CF-Connecting-IP (Cloudflare edge in front of
+  Supabase) → X-Real-IP → RIGHTMOST XFF hop. Never the spoofable leftmost.
+- getClientIdentifier(req, userId?): keys `user:<id>` when a verified userId is
+  supplied, else `ip:<trusted-ip>`. Dropped the auth-token-prefix hack.
+- RateLimitOptions.userId added; checkRateLimitPersistent forwards it.
+- Fail-open: on a DB-lookup miss/outage we console.warn and fall back to the
+  in-memory limiter so an RPC outage never breaks the product.
+
+### Endpoint migrations (in-memory → persistent)
+- generate-itinerary: rate limit MOVED after auth and keyed by user_id; added a
+  server-side MONTHLY quota (Insider 5 / VIP unlimited; free already gated to
+  insider+). Counts trip_plans where ai_generated=true and created_at >= month
+  start — no new table. Over quota → 429 {error,code:quota_exceeded,tier,limit,
+  used,requiredTier,upgradeHint}. Quota-count error fails open.
+- discover-chat: per-IP burst now persistent (per-user DAILY quota was already
+  enforced via discover_chat_usage).
+- personalized-recommendations: rate limit moved after auth, keyed by user_id.
+- analyze-competitor, firecrawl-scraper: persistent (admin/IP-keyed).
+
+### Client
+useTripPlanner.generateItinerary now reads error.context.json() and rethrows
+the structured server message (so 403 upgrade_required / 429 quota_exceeded show
+a meaningful upgrade prompt via the existing onError toast instead of the
+generic "non-2xx" FunctionsHttpError text). Full quota meter UI is WEB-FEAT-011.
+
+### Backward compat
+Limits unchanged from prior values (10/15min itinerary+recs+competitor+scraper,
+30/15min chat) so older iOS binaries that retry are unaffected. No 200-path
+response shapes changed. discover-chat/get-sponsored-pick happy paths identical.
+
+### Verification
+type-check PASSES; all 6 edited Deno files parse via esbuild --loader=ts;
+useTripPlanner lints with 0 new findings (pre-existing @ts-ignore warnings only).
+
+### Files
+  M supabase/functions/_shared/rateLimit.ts
+  M supabase/functions/generate-itinerary/index.ts
+  M supabase/functions/discover-chat/index.ts
+  M supabase/functions/personalized-recommendations/index.ts
+  M supabase/functions/analyze-competitor/index.ts
+  M supabase/functions/firecrawl-scraper/index.ts
+  M src/hooks/useTripPlanner.ts
+
+## 2026-06-12 — WEB-SEC-003 (server-side role assignment + user_roles lockdown + audit) [passes:true]
+
+### The escalation hole
+useUserRole.assignRole() wrote public.user_roles directly from the browser with
+`assigned_by` set client-side. The validate_role_assignment trigger TRUSTS that
+column to decide who's allowed — and (since migration 20251125000001) SKIPS ALL
+validation when assigned_by IS NULL. So a crafted client insert
+({user_id: me, role: 'root_admin', assigned_by: null}) could self-escalate,
+with RLS as the only real backstop.
+
+### Fix — three layers
+1. assign-role edge function (NEW) — the only sanctioned write path:
+   verify caller JWT → confirm caller is admin/root_admin server-side → enforce
+   hierarchy (only root_admin grants admin/root_admin) → block self-role change →
+   write with service client (assigned_by = VERIFIED caller) → audit row with
+   actor/target/old_role/new_role. Returns structured errors.
+2. Migration 20260612000000 (additive) — RLS lockdown on user_roles:
+   - ENABLE RLS (idempotent).
+   - Permissive SELECT policy (own row OR is_admin()) — permissive policies only
+     ADD read access, so existing reads keep working; admins still see all.
+   - RESTRICTIVE deny policies for INSERT/UPDATE/DELETE to authenticated+anon.
+     Restrictive policies are AND-ed, so they override any pre-existing permissive
+     write policy. service_role (edge fn) has BYPASSRLS; SECURITY DEFINER
+     sync_oauth_user_role still inserts fine.
+3. useUserRole.assignRole() → calls the edge function; DEV-gated logging.
+
+### Audit logging (criterion 4)
+New _shared/auditLog.ts (best-effort, never throws). Wired into:
+- delete-user-account → 'account_deletion' (high)
+- bulk-update-restaurants → 'bulk_update_restaurants' (medium)
+- process-stripe-refund already wrote an audit row (unchanged).
+assign-role writes its own role_assignment row (the trigger also logs — harmless
+redundancy, but the edge-fn row additionally captures old_role).
+
+### Backward compat
+iOS/Android never assign roles (verified). The only client write path (web admin)
+was migrated to the edge function in THIS release. grep confirms no other src/
+code writes user_roles. Reads (AuthContext, useAdminAuth, useSecurityContext —
+all own-row; admins via is_admin()) preserved by the SELECT policy.
+
+### Verification
+type-check PASSES; assign-role/auditLog/delete-user-account/bulk-update-restaurants
+parse via esbuild; useUserRole lints with 0 errors (pre-existing console warnings
+only). DB migration not applied locally (no Supabase in container) — written to be
+idempotent and additive per CLAUDE.md.
+
+### Files
+  A supabase/functions/assign-role/index.ts
+  A supabase/functions/_shared/auditLog.ts
+  A supabase/migrations/20260612000000_lock_down_user_roles_writes.sql
+  M supabase/functions/delete-user-account/index.ts
+  M supabase/functions/bulk-update-restaurants/index.ts
+  M src/hooks/useUserRole.ts
+
+## 2026-06-12 — WEB-SEC-004 (CORS + CSP hardening) [passes:true]
+
+### cors.ts — kill the blanket lovable.dev wildcard
+- isOriginAllowed() no longer does `origin.endsWith('.lovable.dev')` (which would
+  trust evil.attacker.lovable.dev and any http: scheme). Now a precise single-
+  label https regex `^https://[a-z0-9-]+\.lovable\.dev$`, NEVER in production,
+  opt-out via ALLOW_LOVABLE_PREVIEWS=false.
+- New CORS_PREVIEW_ORIGINS secret (comma-separated) feeds an explicit preview
+  allowlist into the non-prod origin set. Production already trusts only the real
+  desmoinesinsider.com (+www) origins.
+
+### public/_headers — CSP
+- Removed `http:` from img-src (https/data/blob only). connect-src was already
+  https-only.
+- Appended `upgrade-insecure-requests` so any stray http subresource auto-upgrades.
+
+### No-Origin safety (native apps)
+handleCors only rejects when an Origin header is present AND disallowed; requests
+with no Origin (iOS/Android) pass through. Confirmed unchanged.
+
+### Wildcard-CORS sweep (criterion 3) — SENSITIVE SUBSET per owner decision
+71 functions hardcode ACAO `*`. Auth here is bearer-token, not cookies, so
+wildcard CORS is low-risk, and many are public-by-design data APIs. Owner chose
+"sensitive subset only" (AskUserQuestion). Migrated the private-user-data AI
+endpoints to origin-validated getCorsHeaders:
+  - generate-itinerary (per-request corsFor(req))
+  - personalized-recommendations
+discover-chat already used origin-validated CORS; delete-user-account,
+process-stripe-refund, assign-role, bulk-update-restaurants already use the shared
+helper. Genuinely-public read APIs keep `*` intentionally (documented).
+
+### Verification
+type-check PASSES; cors.ts + migrated functions parse via esbuild. Full `vite
+build` could NOT complete in-container: the sitemap prestep needs Supabase env
+vars, AND `vite build` throws a PRE-EXISTING 'URI malformed' on index.html that
+reproduces on clean HEAD (toolchain/patch issue, not this change — index.html
+untouched). _headers is copied verbatim to dist; the CSP edit is simple + valid.
+
+### Files
+  M supabase/functions/_shared/cors.ts
+  M public/_headers
+  M supabase/functions/generate-itinerary/index.ts
+  M supabase/functions/personalized-recommendations/index.ts
+
+## 2026-06-12 — WEB-SEC-005 (RLS audit sweep + report + safe fixes) [passes:true]
+
+### Deliverable: scripts/audit-rls.ts + docs/RLS_AUDIT.md
+Static parser over all 220 migrations (chronological, last-wins) extracting
+CREATE POLICY (table/command/roles/USING/WITH CHECK via balanced-paren scan),
+ENABLE/FORCE RLS, and SECURITY DEFINER functions (+ whether search_path pinned).
+Emits a full policy inventory + flagged-findings tables. A hand-maintained
+"Disposition" section records the verdict per finding. Re-runnable + idempotent.
+
+Findings: 496 policies, 29 permissive writes, 4 anon writes, 5 missing-RLS
+(in-migration), 50 unpinned SECURITY DEFINER functions.
+
+### REAL HOLE found + FIXED (migration 20260612000001_rls_audit_fixes.sql)
+8 policies named "Service role can manage …" were written
+`FOR ALL USING(true) WITH CHECK(true)` with NO `TO` clause → defaulted to PUBLIC.
+Because permissive policies are OR-ed, this granted EVERY authenticated (and
+anon) caller full read+write on:
+  user_subscriptions, payments, invoices, usage_events, usage_quotas,
+  pseo_pages, pseo_generation_queue, pseo_generation_log
+…silently nullifying the per-user "Users can view own …" SELECT policies. Any
+logged-in user could read/modify everyone's payment + subscription data.
+
+Fix: scoped each to `TO service_role`. SAFE per CLAUDE.md:
+  - service_role BYPASSES RLS, so Stripe-webhook / edge-function writes unaffected
+    (these policies were redundant for it anyway).
+  - User reads keep working via the separate per-user SELECT policies.
+  - No web/iOS/Android client writes these tables directly → no binary relies on
+    the over-grant.
+
+### search_path pinning (criterion 3)
+Single DO block pins `search_path = public, pg_temp` on EVERY SECURITY DEFINER
+function in public not already pinned — by OID via regprocedure, so overloads are
+handled and nothing is missed. Idempotent + additive (preserves behaviour; these
+fns assume the public schema).
+
+### ACCEPTED (documented in report, no change)
+Insert-only telemetry/intake tables (security_audit_logs, contact_submissions,
+newsletter_subscribers, csp_violation_logs, search_analytics, accessibility_reports,
+guide_requests, rfp_submissions, …) — append-only, no public SELECT, so writes
+without read are by design. Already-service_role-scoped USING(true) policies.
+Intentional anon consent inserts. My own user_roles deny policies.
+
+### ESCALATED (report "Needs human decision")
+profiles, storage.objects, trending_scores, user_analytics, user_reputation have
+policies but no ENABLE RLS captured in a migration — almost certainly enabled
+out-of-band (Supabase dashboard). Flagged to verify live (pg_class.relrowsecurity)
+rather than force-enable blind (force-enabling RLS on profiles could break reads).
+
+### Verification
+type-check PASSES; audit-rls.ts lints 0 errors (2 console warnings, expected for a
+CLI); script idempotent. Migration is standard/idempotent/additive; not applied
+in-container (no Supabase CLI/DB).
+
+### Files
+  A scripts/audit-rls.ts
+  A docs/RLS_AUDIT.md
+  A supabase/migrations/20260612000001_rls_audit_fixes.sql
+
+## 2026-06-12 — WEB-SEC-006 (automated brute-force login lockout) [passes:true]
+
+### Gap
+login_attempts (migration 20260402000002) + the check-login-attempt edge
+function existed, but NOTHING called check-login-attempt (grep of src/ = 0). The
+web login used only a client-side in-memory Map throttle in AuthContext —
+bypassable by a refresh or by hitting the API directly.
+
+### Wiring (src/contexts/AuthContext.tsx)
+login() now calls the authoritative server function via a new fail-open
+checkServerLockout() helper:
+  - pre-auth `check` → blocks with the server lockout message if locked,
+  - `record_failure` after an auth error,
+  - `record_success` after success (clears the email's counter).
+Returns null (→ allowed) on any error so a function outage never blocks sign-in.
+The in-memory throttle stays as a fast local layer.
+
+### check-login-attempt enhancements
+- Locks on >10 failures for one EMAIL **or** >5 from one IP within a 10-minute
+  detection window (added IP-keyed counting on the existing client_ip column,
+  queried in parallel with the email count). Lockout lasts 15 minutes from the
+  most recent offending attempt.
+- Hardened client IP: CF-Connecting-IP → X-Real-IP → rightmost XFF (never the
+  spoofable leftmost). Consistent with WEB-SEC-002.
+- Fail-open on DB error preserved.
+- On the transition INTO lockout only (the failure that crosses a threshold):
+  * writes a security_audit_logs row (event_type=account_lockout, severity
+    medium, ip + counts in details),
+  * sends a best-effort notification email to the account owner via Resend +
+    the shared renderEmail template — ONLY when a profile exists for the email
+    (non-enumeration; no email to random addresses; IP-only lockouts notify no
+    one since there's no single owner).
+
+### Non-enumeration + false-positive safety
+- The blocked message is identical regardless of whether the account exists or
+  which signal (email/IP) tripped; Auth.tsx surfaces it via the existing toast.
+- record_success clears the counter. A valid existing session never reaches this
+  path (login() is the unauthenticated sign-in flow only).
+
+### Verification
+type-check PASSES; check-login-attempt parses via esbuild; AuthContext lints 0
+errors. (Note: check-login-attempt isn't in config.toml so it defaults to
+verify_jwt=true — the anon key sent by functions.invoke during login satisfies
+the gateway, so pre-auth calls work.)
+
+### Files
+  M supabase/functions/check-login-attempt/index.ts
+  M src/contexts/AuthContext.tsx
+
+## 2026-06-12 — WEB-SEC-007 (image-transform RL, webhook sigs, sanitized errors) [passes:true]
+
+### image-transform
+- Added a generous per-IP PERSISTENT rate limit (300/min, endpoint
+  'image-transform') that FAILS OPEN on a rate-limit DB miss so image serving
+  never breaks. The strong caching (ETag + `Cache-Control: immutable` +
+  If-None-Match 304s) was already present, so repeat page loads rarely hit the
+  function — 300/min/IP is plenty for a content-heavy page.
+- Error path now uses the shared sanitizer (generic message, status logic
+  preserved: 400 on "Missing", else 500).
+
+### Webhook signatures
+- stripe-webhook: signature verification CONFIRMED present (constructEvent +
+  STRIPE_WEBHOOK_SECRET; rejects when the secret is unset) and untouched.
+- test-article-webhook + publish-article-webhook are now auth-gated
+  (requireAdminOrApiKey / requireApiKey from WEB-SEC-001), which is stronger
+  than a shared HMAC — no unauthenticated, unchecked webhook remains.
+
+### Sanitized errors — new _shared/errorResponse.ts
+Logs the full error (message + stack) server-side, returns a generic
+client-safe `{ error }` (+ optional code), with a caller-controlled status so
+clients that branch on status keep working. Applied to the high-traffic public
+functions that previously returned `error.message`:
+  - image-transform (via the helper)
+  - api-events, api-restaurants, geocode-location, generate-itinerary (inline,
+    preserving each response shape incl. `success: false`).
+discover-chat's `error.message` uses are internal AI-tool results (fed back to
+Claude, not client error responses) — intentionally left.
+
+### Backward compat
+No status codes changed; image-transform success response shape unchanged;
+api-* keep their `success:false` shape.
+
+### Verification
+type-check PASSES; all edited Deno files parse via esbuild.
+
+### Files
+  A supabase/functions/_shared/errorResponse.ts
+  M supabase/functions/image-transform/index.ts
+  M supabase/functions/api-events/index.ts
+  M supabase/functions/api-restaurants/index.ts
+  M supabase/functions/geocode-location/index.ts
+  M supabase/functions/generate-itinerary/index.ts
+
+## 2026-06-12 — WEB-SEC-008 (secrets hygiene: .env.example, CI scanning, runbook) [passes:true]
+
+### ⚠️ Real finding (corrects the planning assumption)
+A service_role Supabase JWT is HARD-CODED in 11 historical migrations
+(20250820173146 … 20251004030356) and is therefore public in git history. The
+public anon key sits in a few old debug scripts (lower priority — anon is shipped
+in the browser anyway). Flagged at the top of docs/SECRETS_ROTATION.md as
+"Action required — rotate now." Editing migrations can't unship history; rotating
+the Supabase keys is the only real remediation.
+
+### .env.example
+Audited import.meta.env.* (src) and process.env/Deno.env (scripts) usage. All
+VITE_ vars used in src were already present. Added the missing non-VITE
+script/CLI vars (SUPABASE_URL/ANON_KEY/SERVICE_ROLE_KEY/SERVICE_KEY,
+DATABASE_URL, BACKUP_DIR, USE_PG_DUMP, SITE_URL, PLAYWRIGHT_TEST_BASE_URL) and
+the new WEB-SEC edge secrets (EDGE_FUNCTION_API_KEY, CRAWLER_DOMAIN_ALLOWLIST,
+CRAWLER_ALLOW_ALL, CORS_PREVIEW_ORIGINS, ALLOW_LOVABLE_PREVIEWS, GOOGLE_PLACES_API).
+
+### CI secret scanning
+.github/workflows/pr-checks.yml: new `secret-scan` job runs
+gitleaks/gitleaks-action@v2 (fetch-depth 0) with .gitleaks.toml — default
+ruleset + an allowlist covering ONLY the known historical exposures (the 11
+migrations + anon-key debug scripts + .md/.env.example), so it fails the build on
+NEW secrets without blocking every PR on history we can't unship.
+
+### Pre-commit guard (dependency-free)
+.githooks/pre-commit blocks committing .env/.env.local (allows .env.example) and
+runs `gitleaks protect --staged` if gitleaks is installed locally. Activated by a
+new package.json `prepare` script (`git config core.hooksPath .githooks`) that
+runs on npm install — no husky/devDependency added. TESTED: blocks a staged
+.env, allows a normal file. .gitignore extended (.env.local, .env.*.local).
+
+### docs/SECRETS_ROTATION.md
+Full inventory (Supabase, Stripe, Anthropic/OpenAI, Resend/SendGrid, Google,
+automation controls) with where each is set + rotation steps, the exposed-key
+action list, the prevention summary, and a leak-response checklist.
+
+### Verification
+type-check PASSES; pre-commit hook tested both ways. gitleaks not runnable
+in-container, but the allowlist covers every committed-secret file found via a
+JWT scan + live-pattern scan; setup-stripe-products.js only references the
+`sk_live_` prefix (reads the real key from env), screenshots are binary (skipped).
+
+### Files
+  M .env.example
+  M .gitignore
+  M package.json                       (prepare script)
+  M .github/workflows/pr-checks.yml    (secret-scan job)
+  A .gitleaks.toml
+  A .githooks/pre-commit
+  A docs/SECRETS_ROTATION.md
+
+## 2026-06-12 — WEB-AUTO-001 (autonomy control plane: job observability) [passes:true]
+
+Foundation for the whole WEB-AUTO cluster. Replaces "silently broken automation"
+with self-reporting automation.
+
+### Schema (migration 20260612000002)
+- automation_job_runs (job_name, started_at, finished_at, status [running/
+  success/failed/partial], items_processed, items_failed, attempts, error,
+  metadata jsonb) + indexes; RLS admin-read (service role writes, bypasses RLS).
+- automation_job_health VIEW: latest run per job + 7-day success/throughput
+  rollup, for the admin panel.
+
+### _shared/jobRunner.ts
+runJob(name, fn, opts): opens a run row, runs fn with a ctx (processed/failed/
+meta counters), retries transient failures (default 2 retries, exponential
+backoff), records the final status + counts + metadata, and emails the admin on
+terminal failure (sendJobAlert → Resend, ADMIN_ALERT_EMAIL/ALERT_EMAIL). Never
+throws — job-infra failure can't crash the function.
+
+### Missed-run alerting
+job-health-watchdog (new fn, scheduled daily 08:00 UTC via migration
+20260612000003): per-job EXPECTED_MAX_AGE_HOURS; alerts when a job hasn't
+SUCCEEDED within ~2 expected intervals (missed two runs) or its latest run
+failed. Auth via requireAdminOrApiKey (cron service-role bearer accepted).
+
+### Admin Job Health panel
+src/components/admin/JobHealthPanel.tsx + new "Job Health" tab in AdminSystem.tsx:
+status badges, last-run age, 7-day success rate, items processed/failed, recent
+errors, auto-refresh (TanStack refetchInterval 30s), and a per-job manual Re-run
+button (invokes the edge function). Reads the automation_job_health view.
+
+### Docs
+docs/AUTOMATION_JOBS.md: full pg_cron inventory (name/schedule/target/purpose/
+observed-status), the runJob how-to, and recovery/manual-rerun notes.
+
+### Migration coverage (honest)
+cleanup-old-events migrated to runJob as the working REFERENCE. The other listed
+functions (generate-sitemaps, dispatch-scheduled-newsletters, analytics,
+validate-source-urls) are marked "planned" in the doc and adopt the same one-line
+wrap in their dedicated stories (WEB-AUTO-003/004/008/011), which already touch
+them — avoids risky large restructures of functions those stories rebuild anyway.
+
+### Verification
+type-check PASSES; jobRunner/job-health-watchdog/cleanup-old-events parse via
+esbuild; JobHealthPanel + AdminSystem lint clean.
+
+### Files
+  A supabase/migrations/20260612000002_create_automation_job_runs.sql
+  A supabase/migrations/20260612000003_schedule_job_health_watchdog.sql
+  A supabase/functions/_shared/jobRunner.ts
+  A supabase/functions/job-health-watchdog/index.ts
+  A src/components/admin/JobHealthPanel.tsx
+  A docs/AUTOMATION_JOBS.md
+  M supabase/functions/cleanup-old-events/index.ts
+  M src/pages/AdminSystem.tsx
+
+## 2026-06-12 — WEB-AUTO-002 (event submission AI triage) [passes:true]
+
+### triage-event-submission edge function
+- Deterministic completeness score (0-100) + reasons: title/description length,
+  valid FUTURE date, venue/location, category, image/website URLs.
+- Claude haiku content-safety check -> {safe, reasons}; fails SAFE-pending if the
+  AI errors (never auto-rejects on our own failure).
+- Decision: safetyFlag OR score<50 -> AUTO-REJECT (templated reason, auto_decided);
+  score>=85 & valid date & no flag -> AUTO-APPROVE (insert into events with
+  source='user_submission', status approved); 50-84 -> stays pending with score.
+- Submitter notified on auto-decisions via existing notify-event-submission
+  (event_approved / event_rejected).
+- AuthZ: service/API key OR submission owner OR admin; per-user persistent rate
+  limit bounds Claude spend. Idempotent (pending only). Metrics via jobRunner.
+
+### Schema (migration 20260612000004, additive)
+user_submitted_events += quality_score, triage_reasons jsonb, triaged_at,
+auto_decided; events += nullable source (provenance).
+
+### Wiring + UI
+- useSubmitEvent fires triage fire-and-forget after the insert (never blocks UX).
+- EventSubmissionsManager: AI score badge (green>=85 / amber>=50 / red) + reasons
+  on hover + 'auto' tag; pending queue sorted by quality_score desc. Admin
+  approve/reject (setStatus) unchanged.
+
+### Verification
+type-check PASSES; triage parses via esbuild; manager + hook lint 0 errors.
+
+### Files
+  A supabase/migrations/20260612000004_event_submission_triage.sql
+  A supabase/functions/triage-event-submission/index.ts
+  M src/hooks/useUserSubmittedEvents.ts
+  M src/components/admin/EventSubmissionsManager.tsx
+
+## 2026-06-12 — WEB-AUTO-003 (nightly data-quality self-healing) [passes:true]
+
+### data-quality-heal edge function (nightly 02:30 UTC, migration 20260612000006)
+Per content table (events/restaurants/attractions), in order, batched <=25/run:
+1. Geocode rows with address/location but NULL lat/lng (calls geocode-location).
+2. Generate missing seo/geo (delegates to generate-seo-content, batchSize 20).
+3. Backfill missing image_url (delegates to backfill-images).
+Idempotent + safe: only fills NULL fields (.is(col,null)), never overwrites human
+data. Geocode failures increment heal_attempts; after 3 the row is flagged
+needs_manual_verification (additive migration 20260612000005 adds both columns to
+all 3 tables) so it stops retrying forever.
+
+### Observability + KPI
+Wrapped in the WEB-AUTO-001 jobRunner: per-stage counts + a data-quality KPI
+snapshot (rows missing coords/seo/image per table) in run metadata. JobHealthPanel
+renders the KPI as per-table cards (reads the latest heal run's metadata) and the
+job is manually re-runnable.
+
+### Backlog math
+25 geocodes/table/night -> a backlog of N drains in ceil(N/25) nights/table
+(e.g. 500 missing-coord events -> 20 nights). SEO/image delegate to existing
+batch functions (20/batch). Manual scripts (backfill-coordinates.ts) untouched;
+AUTOMATION_JOBS.md notes the automated path is primary.
+
+### Verification
+type-check PASSES; data-quality-heal parses via esbuild (fixed a JSDoc `*/`
+inside `seo_*/...` that prematurely closed the comment); JobHealthPanel lints clean.
+
+### Files
+  A supabase/migrations/20260612000005_data_quality_heal.sql
+  A supabase/migrations/20260612000006_schedule_data_quality_heal.sql
+  A supabase/functions/data-quality-heal/index.ts
+  M src/components/admin/JobHealthPanel.tsx
+  M docs/AUTOMATION_JOBS.md
+
+## 2026-06-12 — WEB-AUTO-004 (broken source-URL auto-repair) [passes:true]
+
+Enhanced validate-source-urls (weekly cron) to chain detect -> re-discover ->
+verify -> fix-or-flag automatically:
+- Re-discovery: existing findActualEventUrl + AI fallback (unchanged).
+- NEW liveness check (isUrlLive: HEAD->GET, SSRF-guarded, requires 2xx/3xx)
+  before a recovered URL is applied — no dead replacements.
+- NEW Wayback fallback (waybackLookup via archive.org/wayback/available),
+  also liveness-checked, when no live candidate is found.
+- Outcomes flagged: recovered -> source_url_broken=false; unrecoverable ->
+  source_url_broken=true + source_url_checked_at (additive migration
+  20260612000007 + partial index).
+- Public EventDetails hides both "Official Page" link sites when broken.
+- Admin: AdminContent events tab gets a "broken links only" filter.
+- Recovery rate + counts recorded via the WEB-AUTO-001 jobRunner.
+
+Verification: type-check PASSES; validate-source-urls parses via esbuild;
+EventDetails + AdminContent lint 0 errors.
+
+### Files
+  A supabase/migrations/20260612000007_event_source_url_broken.sql
+  M supabase/functions/validate-source-urls/index.ts
+  M src/pages/EventDetails.tsx
+  M src/pages/AdminContent.tsx
+  M docs/AUTOMATION_JOBS.md

@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0'
+import { runJob } from '../_shared/jobRunner.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -150,66 +151,55 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Fetch IDs of events that will be purged before deleting them
-    const { data: expiredEvents, error: fetchError } = await supabase
-      .from('events')
-      .select('id')
-      .lt('date', cutoffDate.toISOString());
+    // Observed run: records to automation_job_runs, retries transient failures,
+    // alerts on terminal failure (WEB-AUTO-001).
+    const job = await runJob('cleanup-old-events', async (ctx) => {
+      // Fetch IDs of events that will be purged before deleting them
+      const { data: expiredEvents, error: fetchError } = await supabase
+        .from('events')
+        .select('id')
+        .lt('date', cutoffDate.toISOString());
+      if (fetchError) throw new Error(`fetch expired events: ${fetchError.message}`);
 
-    if (fetchError) {
-      console.error('❌ Failed to fetch expired event IDs:', fetchError.message);
+      const expiredIds = (expiredEvents || []).map((e) => e.id);
+      console.log(`🧹 Found ${expiredIds.length} expired events to purge`);
+
+      // Delete associated Storage files and media_assets rows first
+      const { deletedFiles, errors: imageErrors } = await deleteEventImages(supabase, expiredIds);
+      if (imageErrors.length > 0) {
+        console.warn(`⚠️ ${imageErrors.length} image cleanup error(s) — proceeding with event purge`);
+        ctx.failed(imageErrors.length);
+      }
+
+      // Execute the actual event cleanup using the database function
+      const { data, error } = await supabase.rpc('purge_old_events', { retention_months: retentionMonths });
+      if (error) throw new Error(`purge_old_events: ${error.message}`);
+
+      ctx.processed(expiredIds.length);
+      ctx.meta({ deletedFiles, retentionMonths, purgedEvents: expiredIds.length });
+      return { result: data, deletedFiles, imageErrors, purgedEvents: expiredIds.length };
+    });
+
+    if (!job.ok) {
       return new Response(
-        JSON.stringify({ success: false, error: fetchError.message }),
+        JSON.stringify({ success: false, error: job.error }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
 
-    const expiredIds = (expiredEvents || []).map((e) => e.id);
-    console.log(`🧹 Found ${expiredIds.length} expired events to purge`);
-
-    // Delete associated Storage files and media_assets rows first
-    const { deletedFiles, errors: imageErrors } = await deleteEventImages(supabase, expiredIds);
-
-    if (imageErrors.length > 0) {
-      console.warn(`⚠️ ${imageErrors.length} image cleanup error(s) — proceeding with event purge`);
-    }
-
-    // Execute the actual event cleanup using the database function
-    const { data, error } = await supabase.rpc('purge_old_events', {
-      retention_months: retentionMonths
-    });
-
-    if (error) {
-      console.error('❌ Error running cleanup:', error);
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: error.message,
-          deletedFiles,
-          imageErrors,
-        }),
-        { 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 500 
-        }
-      );
-    }
-
-    console.log('✅ Event cleanup completed:', data);
+    const { result, deletedFiles, imageErrors, purgedEvents } = job.result!;
+    console.log('✅ Event cleanup completed:', result);
 
     return new Response(
       JSON.stringify({
         success: true,
         retentionMonths,
-        result: data,
+        result,
         deletedFiles,
         imageErrors: imageErrors.length > 0 ? imageErrors : undefined,
-        message: `Event cleanup completed. Purged ${expiredIds.length} events and ${deletedFiles} image files.`,
+        message: `Event cleanup completed. Purged ${purgedEvents} events and ${deletedFiles} image files.`,
       }),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200 
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
 
   } catch (error) {
