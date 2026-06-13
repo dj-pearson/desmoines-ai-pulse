@@ -104,7 +104,7 @@ export default function AttractionDetails() {
   });
 
   // Track page view and content interactions
-  const { trackShare } = useContentTracking(attraction?.id, 'attraction');
+  const { trackShare, trackClick } = useContentTracking(attraction?.id, 'attraction');
 
   const { data: relatedAttractions } = useQuery({
     queryKey: ["related-attractions", attraction?.type, attraction?.id],
@@ -635,8 +635,8 @@ export default function AttractionDetails() {
             />
           </Card>
 
-          {/* Related Attractions - Same Type */}
-          {relatedAttractions && relatedAttractions.length > 0 && (
+          {/* Related Attractions - Same Type — hidden when fewer than 3 matches */}
+          {relatedAttractions && relatedAttractions.length >= 3 && (
             <section className="mb-8" aria-labelledby="related-heading">
               <h2 id="related-heading" className="text-2xl font-bold text-gray-900 mb-2">
                 More {attraction.type} Attractions in {BRAND.city}
@@ -644,7 +644,7 @@ export default function AttractionDetails() {
               <p className="text-gray-600 mb-6">
                 Explore other {attraction.type?.toLowerCase()} attractions in the {BRAND.region}
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5" onClick={trackClick}>
                 {relatedAttractions.map((related) => (
                   <Link
                     key={related.id}

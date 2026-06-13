@@ -60,7 +60,7 @@ export default function EventDetails() {
   });
 
   // Track page view and content interactions
-  const { trackShare } = useContentTracking(event?.id, 'event');
+  const { trackShare, trackClick } = useContentTracking(event?.id, 'event');
 
   const relatedEvents = event
     ? events
@@ -527,8 +527,8 @@ export default function EventDetails() {
             {/* Hotel Callout */}
             <EventHotelCallout eventId={event.id} eventArea={event.city || undefined} />
 
-            {/* Related Events Section */}
-            {relatedEvents.length > 0 && (
+            {/* Related Events Section — hidden when fewer than 3 matches */}
+            {relatedEvents.length >= 3 && (
               <section className="mt-12 pt-8 border-t">
                 <div className="flex items-center justify-between mb-6">
                   <div>
@@ -544,7 +544,7 @@ export default function EventDetails() {
                     <ChevronRight className="h-4 w-4 ml-1" />
                   </Button>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5" onClick={trackClick}>
                   {relatedEvents.map((relatedEvent) => (
                     <EventCard
                       key={relatedEvent.id}

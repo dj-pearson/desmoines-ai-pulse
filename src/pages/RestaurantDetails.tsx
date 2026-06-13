@@ -85,7 +85,7 @@ export default function RestaurantDetails() {
   });
 
   // Track page view and content interactions
-  const { trackShare } = useContentTracking(restaurant?.id, 'restaurant');
+  const { trackShare, trackClick } = useContentTracking(restaurant?.id, 'restaurant');
 
   const { data: relatedRestaurants } = useQuery({
     queryKey: ["related-restaurants", restaurant?.cuisine, restaurant?.id],
@@ -848,8 +848,8 @@ export default function RestaurantDetails() {
             />
           </Card>
 
-          {/* Related Restaurants - Same Cuisine */}
-          {relatedRestaurants && relatedRestaurants.length > 0 && (
+          {/* Related Restaurants - Same Cuisine — hidden when fewer than 3 matches */}
+          {relatedRestaurants && relatedRestaurants.length >= 3 && (
             <section className="mb-8" aria-labelledby="related-heading">
               <h2 id="related-heading" className="text-2xl font-bold text-gray-900 mb-2">
                 More {restaurant.cuisine} Restaurants in Des Moines
@@ -857,7 +857,7 @@ export default function RestaurantDetails() {
               <p className="text-gray-600 mb-6">
                 Explore other {restaurant.cuisine} dining options near {cityName}
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5" onClick={trackClick}>
                 {relatedRestaurants.map((related) => (
                   <RestaurantCard
                     key={related.id}
