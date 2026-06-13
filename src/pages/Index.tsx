@@ -25,6 +25,7 @@ import SEOHead from "@/components/SEOHead";
 import SEOStructure from "@/components/SEOStructure";
 import { SEOEnhancedHead } from "@/components/SEOEnhancedHead";
 import SearchSection from "@/components/SearchSection";
+import { NLPSearchBar } from "@/components/NLPSearchBar";
 import { EnhancedHero } from "@/components/EnhancedHero";
 import { ForYouRail } from "@/components/ForYouRail";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
@@ -441,6 +442,29 @@ export default function Index() {
           onAIPlanClick={handleAIPlanClick}
         />
 
+        {/* Primary: natural-language (NLP) search */}
+        <section className="border-b bg-gradient-to-b from-background to-muted/20 py-8">
+          <div className="mx-auto max-w-3xl px-4">
+            <div className="mb-4 text-center">
+              <h2 className="text-xl font-bold sm:text-2xl">
+                Just describe what you're looking for
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Try "free things to do this weekend with kids" — our AI understands plain language.
+              </p>
+            </div>
+            <NLPSearchBar
+              placeholder="Search naturally, like 'Family dinner under $50 near downtown Saturday'"
+              showExamples
+              showResults
+            />
+          </div>
+        </section>
+
+        {/* Secondary: structured filter search */}
+        <div className="bg-muted/10 py-2 text-center text-sm text-muted-foreground">
+          Prefer to filter by category, date, and price?
+        </div>
         <SearchSection onSearch={handleSearch} />
 
         {/* For You / Trending rail — IOS-DISCOVER-2026-002 web parity */}

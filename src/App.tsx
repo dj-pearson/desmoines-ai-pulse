@@ -97,6 +97,7 @@ const GuidesPage = lazyWithRetry(() => import("./pages/GuidesPage"));
 const MonthlyEventsPage = lazyWithRetry(() => import("./pages/MonthlyEventsPage"));
 const EventsSegmentHandler = lazyWithRetry(() => import("./components/EventsSegmentHandler"));
 const AdvancedSearchPage = lazyWithRetry(() => import("./components/AdvancedSearchPage"));
+const SearchResults = lazyWithRetry(() => import("./pages/SearchResults"));
 const RealTimePage = lazyWithRetry(() => import("./components/RealTimePage"));
 
 // SEO-focused time-sensitive pages
@@ -398,7 +399,8 @@ const App = () => (
               element={<BusinessPartnership />}
             />
             <Route path="/business" element={<BusinessHub />} />
-            <Route path="/search" element={<AdvancedSearchPage />} />
+            <Route path="/search" element={<SearchResults />} />
+            <Route path="/search/advanced" element={<AdvancedSearchPage />} />
             <Route path="/guides" element={<GuidesPage />} />
             <Route path="/real-time" element={<RealTimePage />} />
             {/* Lead magnet tools */}
