@@ -5,6 +5,7 @@ import { useAuth } from "./useAuth";
 import { useToast } from "./use-toast";
 import { useGamification } from "./useGamification";
 import { useSubscription } from "./useSubscription";
+import { STALE_TIME } from "@/lib/queryConfig";
 
 export function useFavorites() {
   const { user } = useAuth();
@@ -29,6 +30,10 @@ export function useFavorites() {
       return data.map(item => item.event_id);
     },
     enabled: !!user,
+    // User-specific data: keep fresh (the longer global content default would
+    // be wrong here). Mutations also invalidate this key, forcing an immediate
+    // refetch on the user's own add/remove regardless of staleTime.
+    staleTime: STALE_TIME.USER,
   });
 
   const favoritesQueryKey = ["favorites", user?.id];

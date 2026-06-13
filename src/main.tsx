@@ -5,6 +5,7 @@ import { HelmetProvider } from "react-helmet-async";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { initSentry, Sentry } from "@/lib/sentry";
 import { initErrorTracking } from "@/lib/errorHandler";
+import { STALE_TIME, GC_TIME, smartRetry, queryRetryDelay } from "@/lib/queryConfig";
 import '@/lib/env'; // Validate environment variables at startup
 
 import App from "./App";
@@ -154,14 +155,22 @@ if (Array.isArray((window as any).__earlyErrors) && (window as any).__earlyError
   }
 }
 
-// Optimized query client with minimal configuration for faster TTI
+// Query client tuned per data class — see src/lib/queryConfig.ts.
+// The global default favors the dominant case (public content browsing):
+// long staleTime so back-navigation is instant, and a generous gcTime so a
+// recently-visited list renders from cache without a refetch flash.
+// User-specific hooks (favorites, dashboards, admin queues) override
+// staleTime with STALE_TIME.USER to stay fresh; their mutations also
+// invalidateQueries, which forces an immediate refetch regardless of staleTime.
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: 1,
+      // Retry transient failures with backoff; never retry 401/403/404 etc.
+      retry: smartRetry,
+      retryDelay: queryRetryDelay,
       refetchOnWindowFocus: false,
-      staleTime: 60 * 1000,
-      gcTime: 5 * 60 * 1000,
+      staleTime: STALE_TIME.CONTENT,
+      gcTime: GC_TIME.DEFAULT,
       // Use "always" so queries fire even if Capacitor's Network plugin
       // hasn't reported online status yet. "online" can silently block
       // all queries until a network status event arrives.
