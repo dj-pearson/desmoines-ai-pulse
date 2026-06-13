@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { ImageOff } from "lucide-react";
+import {
+  DEFAULT_IMAGE_WIDTHS,
+  buildTransformedSrcSet,
+} from "@/lib/imageTransform";
 
 // Default responsive breakpoints for srcset generation
-const DEFAULT_WIDTHS = [320, 640, 768, 1024, 1280, 1536, 1920];
-
-// Supabase storage URL pattern for transformation
-const SUPABASE_STORAGE_PATTERN = /supabase\.co\/storage\/v1\/object\/public/;
+const DEFAULT_WIDTHS = [...DEFAULT_IMAGE_WIDTHS];
 
 export interface OptimizedImageProps {
   src: string;
@@ -58,54 +59,16 @@ function supportsAVIF(): boolean {
 }
 
 /**
- * Generate srcset for responsive images
- */
-function generateSrcSet(src: string, widths: number[]): string {
-  return widths.map((w) => `${src} ${w}w`).join(", ");
-}
-
-/**
- * Get transformed image URL via edge function
- */
-function getTransformedUrl(
-  src: string,
-  options: { width?: number; format?: string; quality?: number }
-): string {
-  const { width, format, quality } = options;
-
-  // If it's a Supabase storage URL, use the transform API
-  if (SUPABASE_STORAGE_PATTERN.test(src)) {
-    const url = new URL(src);
-    if (width) url.searchParams.set("width", String(width));
-    if (format) url.searchParams.set("format", format);
-    if (quality) url.searchParams.set("quality", String(quality));
-    return url.toString();
-  }
-
-  // For external URLs, use our image proxy edge function
-  const proxyUrl = new URL(
-    `${import.meta.env.VITE_SUPABASE_URL || ""}/functions/v1/image-transform`
-  );
-  proxyUrl.searchParams.set("url", src);
-  if (width) proxyUrl.searchParams.set("width", String(width));
-  if (format) proxyUrl.searchParams.set("format", format);
-  if (quality) proxyUrl.searchParams.set("quality", String(quality));
-
-  return proxyUrl.toString();
-}
-
-/**
- * Generate srcset with transformed URLs
+ * Generate srcset with transformed URLs (routes through the image-transform
+ * edge function so the browser fetches an appropriately-sized image).
  */
 function generateTransformedSrcSet(
   src: string,
   widths: number[],
   format?: string,
   quality?: number
-): string {
-  return widths
-    .map((w) => `${getTransformedUrl(src, { width: w, format, quality })} ${w}w`)
-    .join(", ");
+): string | undefined {
+  return buildTransformedSrcSet(src, widths, { format, quality });
 }
 
 /**
@@ -145,6 +108,10 @@ export default function OptimizedImage({
 }: OptimizedImageProps) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [error, setError] = useState(false);
+  // When a transformed srcset candidate fails to load, drop the srcset and
+  // retry the untouched original `src` before giving up to the placeholder —
+  // a failed transform must degrade to the original URL, never a broken image.
+  const [transformFailed, setTransformFailed] = useState(false);
   const [isInView, setIsInView] = useState(priority);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -152,15 +119,17 @@ export default function OptimizedImage({
   const webpSupported = useMemo(() => enableWebP && supportsWebP(), [enableWebP]);
   const avifSupported = useMemo(() => enableAVIF && supportsAVIF(), [enableAVIF]);
 
-  // Generate srcset if not provided
+  // Generate srcset if not provided. Suppressed once a transform has failed so
+  // the browser falls back to the plain original `src`.
   const computedSrcSet = useMemo(() => {
+    if (transformFailed) return undefined;
     if (srcSet) return srcSet;
     if (!useTransformApi) return undefined;
 
     // Determine format based on browser support
     const format = avifSupported ? "avif" : webpSupported ? "webp" : undefined;
     return generateTransformedSrcSet(src, transformWidths, format, quality);
-  }, [src, srcSet, useTransformApi, transformWidths, avifSupported, webpSupported, quality]);
+  }, [src, srcSet, useTransformApi, transformWidths, avifSupported, webpSupported, quality, transformFailed]);
 
   // Intersection Observer for lazy loading
   useEffect(() => {
@@ -193,10 +162,18 @@ export default function OptimizedImage({
   }, [onLoad]);
 
   const handleError = useCallback(() => {
+    // First failure with an active transform: drop the srcset/picture sources
+    // and retry the original URL. Only escalate to the error placeholder if the
+    // untouched original also fails.
+    if ((useTransformApi || srcSet) && !transformFailed) {
+      setTransformFailed(true);
+      setIsLoaded(false);
+      return;
+    }
     setError(true);
     setIsLoaded(false);
     onError?.();
-  }, [onError]);
+  }, [onError, useTransformApi, srcSet, transformFailed]);
 
   // Determine the image source (fallback to placeholder on error)
   const imageSrc = error && fallbackSrc ? fallbackSrc : src;
@@ -210,7 +187,7 @@ export default function OptimizedImage({
 
   // Generate picture element sources for modern formats
   const renderPictureSources = () => {
-    if (!useTransformApi || error) return null;
+    if (!useTransformApi || error || transformFailed) return null;
 
     const sources = [];
 

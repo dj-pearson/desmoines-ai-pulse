@@ -36,6 +36,10 @@ const MAX_HEIGHT = 2160;
 // Cache duration in seconds (1 week)
 const CACHE_DURATION = 604800;
 
+// Skip in-process resize for very large payloads to avoid edge-isolate OOM —
+// the original bytes are returned untouched (cached) instead.
+const MAX_RESIZE_BYTES = 12 * 1024 * 1024;
+
 interface TransformOptions {
   url: string;
   width?: number;
@@ -146,21 +150,59 @@ function getContentType(format: string): string {
 }
 
 /**
- * Fetch and transform the image
- * Note: In a production environment, you would use a proper image processing
- * library like Sharp (in Node.js) or an image CDN service.
- *
- * This basic implementation proxies images and adds caching headers.
- * For full transformation support, consider:
- * - Cloudflare Image Resizing
- * - Imgix
- * - Cloudinary
- * - Using a separate worker with image processing capabilities
+ * Resize JPEG/PNG bytes to a target width using ImageScript (pure WASM, no
+ * native deps). Never upscales. Fully guarded: any decode/encode/load failure
+ * (unsupported format, corrupt bytes, lib load error) returns null so the
+ * caller serves the ORIGINAL bytes — resizing is best-effort, never a hard
+ * dependency of the render path.
+ */
+async function resizeImage(
+  buffer: ArrayBuffer,
+  originalContentType: string,
+  targetWidth?: number
+): Promise<{ buffer: ArrayBuffer; contentType: string } | null> {
+  if (!targetWidth) return null;
+  if (buffer.byteLength > MAX_RESIZE_BYTES) return null;
+
+  const isPng = originalContentType.includes("png");
+  const isJpeg =
+    originalContentType.includes("jpeg") || originalContentType.includes("jpg");
+  // ImageScript reliably decodes JPEG/PNG only — skip anything else.
+  if (!isPng && !isJpeg) return null;
+
+  try {
+    const { Image } = await import(
+      "https://deno.land/x/imagescript@1.2.15/mod.ts"
+    );
+    // Image.decode handles still JPEG/PNG (throws on unsupported/animated).
+    const image = await Image.decode(new Uint8Array(buffer));
+    if (image.width <= targetWidth) return null; // never upscale
+
+    image.resize(targetWidth, Image.RESIZE_AUTO);
+
+    const out = isPng
+      ? await image.encode() // PNG (lossless)
+      : await image.encodeJPEG(82);
+
+    return {
+      buffer: out.buffer.slice(out.byteOffset, out.byteOffset + out.byteLength),
+      contentType: isPng ? "image/png" : "image/jpeg",
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch the source image and resize it to the requested width when possible.
+ * Resizing is best-effort (ImageScript, JPEG/PNG, never upscales); on any
+ * failure the original bytes are returned with caching headers so the proxy
+ * always serves a valid image.
  */
 async function fetchAndTransformImage(
   options: TransformOptions
 ): Promise<{ buffer: ArrayBuffer; contentType: string }> {
-  const { url, format, width, height } = options;
+  const { url, format, width } = options;
 
   // Fetch the original image
   const response = await fetch(url, {
@@ -178,10 +220,14 @@ async function fetchAndTransformImage(
   const originalContentType = response.headers.get("content-type") || "image/jpeg";
   const buffer = await response.arrayBuffer();
 
-  // Determine output format
+  // Best-effort real resize (right-sizes card/hero images). Falls back to the
+  // original bytes on any failure or unsupported format.
+  const resized = await resizeImage(buffer, originalContentType, width);
+  if (resized) return resized;
+
+  // Determine output format for the pass-through (original) bytes
   let outputFormat = format;
   if (!outputFormat) {
-    // Infer from original content type
     if (originalContentType.includes("png")) {
       outputFormat = "png";
     } else if (originalContentType.includes("webp")) {
@@ -192,23 +238,6 @@ async function fetchAndTransformImage(
       outputFormat = "jpeg";
     }
   }
-
-  // For now, return the original image with appropriate headers
-  // In production, you would process the image here using Sharp or similar
-  //
-  // Example with Sharp (if available):
-  // const sharp = await import('sharp');
-  // let image = sharp(buffer);
-  // if (width || height) {
-  //   image = image.resize(width, height, { fit: options.fit || 'cover' });
-  // }
-  // if (options.blur) {
-  //   image = image.blur(options.blur);
-  // }
-  // if (options.grayscale) {
-  //   image = image.grayscale();
-  // }
-  // const output = await image.toFormat(outputFormat, { quality: options.quality }).toBuffer();
 
   return {
     buffer,

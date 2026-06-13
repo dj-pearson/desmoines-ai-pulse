@@ -44,6 +44,7 @@ import {
 import { useState, useMemo } from "react";
 import { useContentTracking } from "@/hooks/useContentTracking";
 import { getRestaurantOpenStatus } from "@/lib/restaurantHours";
+import { buildTransformedSrcSet, HERO_IMAGE_WIDTHS } from "@/lib/imageTransform";
 import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { NearbyContent } from "@/components/NearbyContent";
@@ -437,11 +438,22 @@ export default function RestaurantDetails() {
               {showImage ? (
                 <img
                   src={restaurant.image_url}
+                  srcSet={buildTransformedSrcSet(restaurant.image_url!, HERO_IMAGE_WIDTHS)}
+                  sizes="100vw"
                   alt={`${restaurant.name} - ${restaurant.cuisine || "Restaurant"} in ${cityName}, Iowa`}
                   className="absolute inset-0 w-full h-full object-cover"
                   loading="eager"
                   decoding="async"
-                  onError={() => setImageError(true)}
+                  onError={(e) => {
+                    const target = e.currentTarget;
+                    // Failed transform → retry the untouched original before
+                    // falling back to the gradient header.
+                    if (target.srcset) {
+                      target.srcset = "";
+                      return;
+                    }
+                    setImageError(true);
+                  }}
                 />
               ) : (
                 <div className="absolute inset-0 bg-gradient-to-br from-[#2D1B69] via-[#5B2D8E] to-[#DC143C]">

@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { ChefHat, Star, MapPin, Flame, Sparkles, Leaf, Wheat } from "lucide-react";
 import { memo, useState, useMemo, useCallback } from "react";
 import { OptimizedImage } from "@/components/OptimizedImage";
+import { CARD_IMAGE_WIDTHS } from "@/lib/imageTransform";
 import { SocialProofBadge } from "@/components/SocialProofBadge";
 import { getRestaurantOpenStatus } from "@/lib/restaurantHours";
 import { SponsoredBadge } from "@/components/SponsoredBadge";
@@ -140,6 +141,9 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
               className="transition-transform duration-200 group-hover:scale-105 object-cover"
               containerClassName="absolute inset-0"
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+              useTransformApi
+              enableWebP={false}
+              transformWidths={[...CARD_IMAGE_WIDTHS]}
               onError={() => setImageError(true)}
             />
           ) : (

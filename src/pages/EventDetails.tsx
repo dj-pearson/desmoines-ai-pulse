@@ -44,6 +44,7 @@ import {
 import { downloadICS, getGoogleCalendarUrl } from "@/lib/calendar";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
+import { buildTransformedSrcSet, HERO_IMAGE_WIDTHS } from "@/lib/imageTransform";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { useContentTracking } from "@/hooks/useContentTracking";
 import { StickyMobileCTA } from "@/components/StickyMobileCTA";
@@ -232,12 +233,19 @@ export default function EventDetails() {
           <div className="relative h-64 md:h-80 lg:h-96 overflow-hidden bg-slate-900">
             <img
               src={event.image_url}
+              srcSet={buildTransformedSrcSet(event.image_url, HERO_IMAGE_WIDTHS)}
+              sizes="100vw"
               alt={`${event.title} - ${event.category} event in ${event.city || 'Des Moines'}, Iowa`}
               className="w-full h-full object-cover opacity-60"
               loading="eager"
               decoding="async"
               onError={(e) => {
-                const target = e.target as HTMLImageElement;
+                const target = e.currentTarget;
+                // Failed transform → retry the untouched original before hiding.
+                if (target.srcset) {
+                  target.srcset = "";
+                  return;
+                }
                 target.parentElement!.style.display = 'none';
               }}
             />

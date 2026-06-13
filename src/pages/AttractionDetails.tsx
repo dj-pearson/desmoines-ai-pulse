@@ -15,6 +15,7 @@ import { BackToTop } from "@/components/BackToTop";
 import EnhancedAttractionSEO from "@/components/EnhancedAttractionSEO";
 import SEOHead from "@/components/SEOHead";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
+import { buildTransformedSrcSet, HERO_IMAGE_WIDTHS } from "@/lib/imageTransform";
 import {
   MapPin,
   Star,
@@ -314,11 +315,22 @@ export default function AttractionDetails() {
               {showImage ? (
                 <img
                   src={attraction.image_url}
+                  srcSet={buildTransformedSrcSet(attraction.image_url!, HERO_IMAGE_WIDTHS)}
+                  sizes="100vw"
                   alt={`${attraction.name} - ${attraction.type} in ${BRAND.city}, ${BRAND.state}`}
                   className="absolute inset-0 w-full h-full object-cover"
                   loading="eager"
                   decoding="async"
-                  onError={() => setImageError(true)}
+                  onError={(e) => {
+                    const target = e.currentTarget;
+                    // Failed transform → retry the untouched original before
+                    // falling back to the gradient header.
+                    if (target.srcset) {
+                      target.srcset = "";
+                      return;
+                    }
+                    setImageError(true);
+                  }}
                 />
               ) : (
                 <div className="absolute inset-0 bg-gradient-to-br from-[#2D1B69] via-[#5B2D8E] to-[#DC143C]">

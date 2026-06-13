@@ -17,6 +17,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useEventScraper } from "@/hooks/useSupabase";
 import { Event } from "@/lib/types";
 import { BRAND } from "@/lib/brandConfig";
+import { buildTransformedSrcSet, CARD_IMAGE_WIDTHS } from "@/lib/imageTransform";
 import { Link } from "react-router-dom";
 import { openExternalUrl } from "@/lib/capacitorUtils";
 import Header from "@/components/Header";
@@ -792,16 +793,25 @@ export default function Index() {
               </DialogHeader>
 
               <div className="space-y-4">
-                {selectedEvent.image_url && (
+                {/* Gate on open so the dialog image is never prefetched while
+                    the dialog is closed; right-sized via the transform proxy. */}
+                {showEventDetails && selectedEvent.image_url && (
                   <div className="overflow-hidden rounded-lg">
                     <img
                       src={selectedEvent.image_url}
+                      srcSet={buildTransformedSrcSet(selectedEvent.image_url, CARD_IMAGE_WIDTHS)}
+                      sizes="(max-width: 672px) 100vw, 672px"
                       alt={selectedEvent.title}
                       className="w-full h-48 sm:h-64 object-cover"
                       loading="lazy"
                       decoding="async"
                       onError={(e) => {
-                        const target = e.target as HTMLImageElement;
+                        const target = e.currentTarget;
+                        // Failed transform → retry the untouched original before hiding.
+                        if (target.srcset) {
+                          target.srcset = "";
+                          return;
+                        }
                         target.style.display = "none";
                       }}
                     />

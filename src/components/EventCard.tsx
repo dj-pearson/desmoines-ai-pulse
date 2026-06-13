@@ -32,6 +32,7 @@ import {
 import { Link } from "react-router-dom";
 import { useState, useEffect, memo, useCallback } from "react";
 import { OptimizedImage } from "@/components/OptimizedImage";
+import { CARD_IMAGE_WIDTHS } from "@/lib/imageTransform";
 import { SponsoredBadge } from "@/components/SponsoredBadge";
 
 const createSlug = (name: string): string => {
@@ -104,6 +105,9 @@ function EventCardComponent({ event, onViewDetails }: EventCardProps) {
             containerClassName="w-full h-48"
             aspectRatio="640/192"
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            useTransformApi
+            enableWebP={false}
+            transformWidths={[...CARD_IMAGE_WIDTHS]}
             onError={() => setImageError(true)}
           />
         ) : (

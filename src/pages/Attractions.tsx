@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/pagination";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { OptimizedImage } from "@/components/OptimizedImage";
+import { CARD_IMAGE_WIDTHS } from "@/lib/imageTransform";
 import { SearchAutocomplete, addRecentSearch } from "@/components/SearchAutocomplete";
 import { usePrefetchAttraction } from "@/hooks/usePrefetchDetail";
 import {
@@ -626,6 +627,9 @@ export default function Attractions() {
                         className="transition-transform duration-200 hover:scale-105 object-cover"
                         containerClassName="aspect-video overflow-hidden"
                         sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                        useTransformApi
+                        enableWebP={false}
+                        transformWidths={[...CARD_IMAGE_WIDTHS]}
                       />
                     ) : (
                       <div className="aspect-video bg-gradient-to-br from-[#2D1B69] to-[#DC143C] flex items-center justify-center" role="img" aria-label={`No image available for ${attraction.name}`}>

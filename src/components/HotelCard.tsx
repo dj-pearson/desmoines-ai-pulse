@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Star, MapPin, Wifi, Car, Coffee, Dumbbell, PawPrint, Building2, ExternalLink } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
+import { buildTransformedSrcSet, CARD_IMAGE_WIDTHS } from "@/lib/imageTransform";
 
 type Hotel = Database["public"]["Tables"]["hotels"]["Row"];
 
@@ -60,12 +61,19 @@ export default function HotelCard({ hotel, variant = "default", showBookButton =
           {hotel.image_url ? (
             <img
               src={hotel.image_url}
+              srcSet={buildTransformedSrcSet(hotel.image_url, CARD_IMAGE_WIDTHS)}
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
               alt={hotel.name}
               width={640}
               height={192}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
               loading="lazy"
               decoding="async"
+              onError={(e) => {
+                const target = e.currentTarget;
+                // Failed transform → retry the untouched original.
+                if (target.srcset) target.srcset = "";
+              }}
             />
           ) : (
             <div className={`w-full h-full bg-gradient-to-br ${getGradient(hotel.hotel_type)} flex items-center justify-center`} role="img" aria-label={`No image available for ${hotel.name}`}>
