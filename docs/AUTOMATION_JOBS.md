@@ -38,6 +38,7 @@ All times UTC. Schedules are cron expressions (`min hour dom mon dow`).
 | **`job-health-watchdog-daily`** | `0 8 * * *` | fn `job-health-watchdog` | **Alert on missed/failed observed jobs (WEB-AUTO-001)** | n/a |
 | **`dedupe-content-weekly`** | `15 3 * * 1` | fn `dedupe-content` | **Detect duplicate events/restaurants (trigram + proximity); auto-merge >=90%, queue 70–90% (WEB-AUTO-005)** | ✅ |
 | **`auto-article-pipeline-daily`** | `0 13 * * *` | fn `auto-article-pipeline` | **AI article pipeline: topic → draft → quality gate → auto-publish (WEB-AUTO-007)** | ✅ |
+| **`weekly-digest-assemble`** | `0 15 * * 2` | fn `assemble-weekly-digest` | **Auto-assemble the weekly digest (events + restaurants + newest article), gate, and queue it for the existing dispatcher (WEB-AUTO-008)** | ✅ |
 
 \* **Observed** = wrapped with `jobRunner` and recording to `automation_job_runs`.
 `✅` done, `planned` = adopts the same one-line wrap as its WEB-AUTO story lands
@@ -166,3 +167,47 @@ Published articles automatically enter the sitemap (`generate-sitemap` selects
 Auto-generated rows show an **AI {score}** badge in the Admin → Articles table; run
 metrics + the score/decision distribution flow through `jobRunner` into
 `automation_job_runs` (re-runnable from **Admin → Job Health**).
+
+## Auto-assembled weekly digest (WEB-AUTO-008)
+
+`assemble-weekly-digest` (cron `weekly-digest-assemble`, Tuesdays 15:00 UTC ≈
+9–10am Central) writes and queues the weekly newsletter with zero manual touches:
+
+1. **Pause check** — reads `system_settings` (`setting_type='weekly_digest'`); if
+   `paused`, the run exits clean without queuing.
+2. **De-dupe** — at most one auto digest per 6 days (a `newsletter_campaigns` row
+   with `campaign_type='weekly_digest'` created in the window), so a double cron
+   firing or a manual re-run can't send two.
+3. **Assemble** — top upcoming events (next 7 days, hidden/merged excluded),
+   trending restaurants (featured then highest-rated), and the newest published
+   article. Internal links are built from existing DB rows (event slug replicates
+   `createEventSlugWithCentralTime`, restaurant/article use their `slug`), so they
+   resolve by construction.
+4. **Pre-send gates** — recipient segment resolves to **> 0** active subscribers,
+   **at least one event** is present, every link carries a non-empty slug, and the
+   generated subject is under the **120-char** cap. **Any hard gate failure aborts
+   the send (no campaign created) and the `jobRunner` raises an admin alert** — a
+   broken/empty digest never goes out.
+5. **Queue** — a `status='scheduled'` `newsletter_campaigns` row (`scheduled_for=now`,
+   segment = all active subscribers) is inserted, so the existing
+   `dispatch-scheduled-newsletters` worker (runs every minute) sends it. Unsubscribe,
+   CAN-SPAM footer, delivery tracking, and bounce/complaint webhooks are therefore
+   **identical to a human-composed campaign**.
+
+**Preview** next week's digest anytime from **Admin → Newsletter campaigns →
+Automated weekly digest → Preview next** (calls the function with
+`{action:'preview'}` — assembles + runs gates, renders the email, sends nothing).
+
+**Pause without code changes:** **Admin → Newsletter campaigns → Pause**, or via SQL:
+
+```sql
+UPDATE public.system_settings
+SET settings = '{"paused": true}'::jsonb
+WHERE setting_type = 'weekly_digest';
+```
+
+Assembly/queue metrics (recipient count, content counts, subject, gate outcome)
+flow through `jobRunner` into `automation_job_runs` (re-runnable from **Admin → Job
+Health**). The actual send result (delivered/failed/opens/bounces) lands on the
+queued `newsletter_campaigns` row and is visible in the **Newsletter campaigns**
+table.

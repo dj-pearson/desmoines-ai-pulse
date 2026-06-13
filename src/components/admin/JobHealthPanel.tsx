@@ -31,6 +31,7 @@ const RERUNNABLE: Record<string, string> = {
   "data-quality-heal": "data-quality-heal",
   "dedupe-content": "dedupe-content",
   "auto-article-pipeline": "auto-article-pipeline",
+  "assemble-weekly-digest": "assemble-weekly-digest",
 };
 
 function statusBadge(status: JobHealthRow["last_status"]) {

@@ -2,10 +2,14 @@ import { useEffect, useState } from "react";
 import {
   CalendarClock,
   CheckCircle2,
+  Eye,
   Loader2,
   Mail,
+  Pause,
+  Play,
   Plus,
   Send,
+  Sparkles,
   XCircle,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -125,6 +129,99 @@ export default function NewsletterCampaignsManager() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  // WEB-AUTO-008: automated weekly digest controls (pause flag + preview).
+  const [digestPaused, setDigestPaused] = useState<boolean | null>(null);
+  const [digestBusy, setDigestBusy] = useState(false);
+  const [digestPreviewOpen, setDigestPreviewOpen] = useState(false);
+  const [digestPreviewLoading, setDigestPreviewLoading] = useState(false);
+  const [digestPreview, setDigestPreview] = useState<{
+    subject: string;
+    body_html: string;
+    recipient_count: number;
+    gates_passed: boolean;
+    gate_reasons: string[];
+    counts: { events: number; restaurants: number; article: number };
+  } | null>(null);
+
+  async function loadDigestSetting() {
+    try {
+      const { data, error } = await supabase
+        .from("system_settings")
+        .select("settings")
+        .eq("setting_type", "weekly_digest")
+        .maybeSingle();
+      if (error) throw error;
+      setDigestPaused(
+        Boolean((data?.settings as { paused?: boolean } | null)?.paused),
+      );
+    } catch (err) {
+      handleError(err, {
+        component: "NewsletterCampaignsManager",
+        action: "loadDigestSetting",
+      });
+    }
+  }
+
+  async function toggleDigestPause() {
+    const next = !digestPaused;
+    setDigestBusy(true);
+    try {
+      const { error } = await supabase
+        .from("system_settings")
+        .update({ settings: { paused: next }, updated_at: new Date().toISOString() })
+        .eq("setting_type", "weekly_digest");
+      if (error) throw error;
+      setDigestPaused(next);
+      toast.success(next ? "Weekly digest paused" : "Weekly digest resumed");
+    } catch (err) {
+      handleError(err, {
+        component: "NewsletterCampaignsManager",
+        action: "toggleDigestPause",
+      });
+      toast.error("Failed to update digest setting");
+    } finally {
+      setDigestBusy(false);
+    }
+  }
+
+  async function previewDigest() {
+    setDigestPreviewOpen(true);
+    setDigestPreviewLoading(true);
+    setDigestPreview(null);
+    try {
+      const { data, error } = await supabase.functions.invoke<{
+        ok: boolean;
+        subject: string;
+        body_html: string;
+        recipient_count: number;
+        gates_passed: boolean;
+        gate_reasons: string[];
+        counts: { events: number; restaurants: number; article: number };
+      }>("assemble-weekly-digest", { body: { action: "preview" } });
+      if (error) throw error;
+      if (data?.ok) {
+        setDigestPreview({
+          subject: data.subject,
+          body_html: data.body_html,
+          recipient_count: data.recipient_count,
+          gates_passed: data.gates_passed,
+          gate_reasons: data.gate_reasons ?? [],
+          counts: data.counts,
+        });
+      } else {
+        toast.error("Failed to build digest preview");
+      }
+    } catch (err) {
+      handleError(err, {
+        component: "NewsletterCampaignsManager",
+        action: "previewDigest",
+      });
+      toast.error("Failed to build digest preview");
+    } finally {
+      setDigestPreviewLoading(false);
+    }
+  }
+
   async function load() {
     setLoading(true);
     try {
@@ -150,6 +247,7 @@ export default function NewsletterCampaignsManager() {
 
   useEffect(() => {
     load();
+    loadDigestSetting();
   }, []);
 
   function resetForm() {
@@ -292,7 +390,60 @@ export default function NewsletterCampaignsManager() {
   }
 
   return (
-    <Card>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Sparkles className="h-5 w-5 text-purple-500" />
+                Automated weekly digest
+              </CardTitle>
+              <CardDescription>
+                Assembles top events, trending restaurants &amp; the newest
+                article every Tuesday and sends itself — no touch required.
+                {digestPaused === true && (
+                  <span className="ml-1 font-medium text-amber-600">
+                    Currently paused.
+                  </span>
+                )}
+              </CardDescription>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={previewDigest}
+                disabled={digestPreviewLoading}
+              >
+                {digestPreviewLoading ? (
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                ) : (
+                  <Eye className="h-4 w-4 mr-1" />
+                )}
+                Preview next
+              </Button>
+              <Button
+                size="sm"
+                variant={digestPaused ? "default" : "outline"}
+                onClick={toggleDigestPause}
+                disabled={digestBusy || digestPaused === null}
+              >
+                {digestBusy ? (
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                ) : digestPaused ? (
+                  <Play className="h-4 w-4 mr-1" />
+                ) : (
+                  <Pause className="h-4 w-4 mr-1" />
+                )}
+                {digestPaused ? "Resume" : "Pause"}
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+      </Card>
+
+      <Card>
       <CardHeader className="pb-4">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -601,6 +752,86 @@ export default function NewsletterCampaignsManager() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
+      </Card>
+
+      <Dialog
+        open={digestPreviewOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDigestPreviewOpen(false);
+            setDigestPreview(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Next weekly digest preview</DialogTitle>
+            <DialogDescription>
+              Assembled live from current content. This is exactly what will be
+              queued on the next run — nothing is sent from here.
+            </DialogDescription>
+          </DialogHeader>
+
+          {digestPreviewLoading ? (
+            <div className="flex items-center justify-center py-16 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin mr-2" />
+              Assembling…
+            </div>
+          ) : digestPreview ? (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                {digestPreview.gates_passed ? (
+                  <Badge
+                    variant="outline"
+                    className="gap-1 border-green-500 text-green-600"
+                  >
+                    <CheckCircle2 className="h-3 w-3" />
+                    Pre-send gates passed
+                  </Badge>
+                ) : (
+                  <Badge
+                    variant="outline"
+                    className="gap-1 border-red-500 text-red-600"
+                  >
+                    <XCircle className="h-3 w-3" />
+                    Gates failed — would not send
+                  </Badge>
+                )}
+                <span className="text-muted-foreground">
+                  {digestPreview.recipient_count.toLocaleString()} recipients ·{" "}
+                  {digestPreview.counts.events} events ·{" "}
+                  {digestPreview.counts.restaurants} restaurants ·{" "}
+                  {digestPreview.counts.article} article
+                </span>
+              </div>
+              {!digestPreview.gates_passed &&
+                digestPreview.gate_reasons.length > 0 && (
+                  <ul className="text-xs text-red-600 list-disc pl-5">
+                    {digestPreview.gate_reasons.map((r, i) => (
+                      <li key={i}>{r}</li>
+                    ))}
+                  </ul>
+                )}
+              <div>
+                <div className="text-xs text-muted-foreground mb-1">Subject</div>
+                <div className="font-semibold mb-3">{digestPreview.subject}</div>
+              </div>
+              {/* Digest HTML is system-generated (escapeHtml'd in the edge fn),
+                  but sanitize before rendering as defense in depth. */}
+              <div
+                className="rounded-md border p-2 bg-background"
+                dangerouslySetInnerHTML={{
+                  __html: SecurityUtils.sanitizeRichHTML(digestPreview.body_html),
+                }}
+              />
+            </div>
+          ) : (
+            <div className="py-16 text-center text-sm text-muted-foreground">
+              No preview available.
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
