@@ -467,6 +467,17 @@ export default function Index() {
         {/* For You / Trending rail — IOS-DISCOVER-2026-002 web parity */}
         <ForYouRail />
 
+        {/* All-Inclusive Dashboard — real content first, before marketing (WEB-UX-015) */}
+        <div data-dashboard="all-inclusive">
+          <Suspense fallback={<DashboardSkeleton />}>
+            <AllInclusiveDashboard
+              onViewEventDetails={handleViewEventDetails}
+              filters={searchFilters}
+              onClearFilters={handleClearFilters}
+            />
+          </Suspense>
+        </div>
+
         {/* Top Banner Ad Placement */}
         <div className="py-4 bg-muted/10">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -609,17 +620,6 @@ export default function Index() {
             </div>
           </div>
         </section>
-
-        {/* All-Inclusive Dashboard */}
-        <div data-dashboard="all-inclusive">
-          <Suspense fallback={<DashboardSkeleton />}>
-            <AllInclusiveDashboard
-              onViewEventDetails={handleViewEventDetails}
-              filters={searchFilters}
-              onClearFilters={handleClearFilters}
-            />
-          </Suspense>
-        </div>
 
         {activeView.type === 'default' && (
           <Suspense fallback={<CardGridSkeleton />}>
