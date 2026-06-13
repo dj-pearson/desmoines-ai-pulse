@@ -43,6 +43,8 @@ interface RestaurantCardProps {
     created_at?: string;
   };
   variant?: "default" | "compact" | "featured";
+  /** Optional click handler (e.g. related-rail engagement tracking). Fires before navigation. */
+  onClick?: () => void;
 }
 
 const cuisineGradients: Record<string, string> = {
@@ -100,7 +102,7 @@ function StarRating({ rating }: { rating: number }) {
   return <div className="flex items-center gap-0.5">{stars}</div>;
 }
 
-function RestaurantCardComponent({ restaurant, variant = "default" }: RestaurantCardProps) {
+function RestaurantCardComponent({ restaurant, variant = "default", onClick }: RestaurantCardProps) {
   const [imageError, setImageError] = useState(false);
   const gradient = getGradient(restaurant.cuisine);
   const showImage = restaurant.image_url && !imageError;
@@ -124,6 +126,7 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
       className="group block focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-2xl"
       aria-label={`View ${restaurant.name} - ${restaurant.cuisine || "Restaurant"} in ${restaurant.city || "Des Moines"}`}
       onMouseEnter={handleMouseEnter}
+      onClick={onClick}
     >
       <article
         className={`relative h-full rounded-2xl overflow-hidden border bg-card transition-all duration-200 group-hover:shadow-xl group-hover:-translate-y-1.5 ${

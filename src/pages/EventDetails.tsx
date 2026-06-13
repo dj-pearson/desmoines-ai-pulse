@@ -99,7 +99,7 @@ export default function EventDetails() {
   const event = fullEvent ?? listEvent;
 
   // Track page view and content interactions
-  const { trackShare } = useContentTracking(event?.id, 'event');
+  const { trackShare, trackClick } = useContentTracking(event?.id, 'event');
 
   const relatedEvents = event
     ? events
@@ -295,9 +295,12 @@ export default function EventDetails() {
                     </div>
 
                     {/* Title */}
-                    <h1 className="text-2xl md:text-3xl lg:text-4xl font-extrabold text-foreground mb-4 leading-tight" itemProp="name">
+                    <h1 className="text-2xl md:text-3xl lg:text-4xl font-extrabold text-foreground mb-3 leading-tight" itemProp="name">
                       {event.title}
                     </h1>
+
+                    {/* Data freshness — near the title for trust */}
+                    <LastUpdatedBadge updatedAt={event.updated_at} className="mb-4" />
 
                     {/* Key Details Row */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
@@ -581,8 +584,8 @@ export default function EventDetails() {
             {/* Hotel Callout */}
             <EventHotelCallout eventId={event.id} eventArea={event.city || undefined} />
 
-            {/* Related Events Section */}
-            {relatedEvents.length > 0 && (
+            {/* Related Events Section (hidden when < 3 matches) */}
+            {relatedEvents.length >= 3 && (
               <section className="mt-12 pt-8 border-t">
                 <div className="flex items-center justify-between mb-6">
                   <div>
@@ -604,6 +607,7 @@ export default function EventDetails() {
                       key={relatedEvent.id}
                       event={relatedEvent}
                       onViewDetails={() => {
+                        trackClick();
                         navigate(`/events/${createEventSlugWithCentralTime(relatedEvent.title, relatedEvent)}`);
                       }}
                     />
@@ -631,6 +635,7 @@ export default function EventDetails() {
                       key={nearbyEvent.id}
                       event={nearbyEvent}
                       onViewDetails={() => {
+                        trackClick();
                         navigate(`/events/${createEventSlugWithCentralTime(nearbyEvent.title, nearbyEvent)}`);
                       }}
                     />
@@ -646,8 +651,6 @@ export default function EventDetails() {
               excludeId={event.id}
             />
           </div>
-
-          <LastUpdatedBadge updatedAt={event.updated_at} className="mt-6 justify-center" />
         </div>
 
         <Footer />

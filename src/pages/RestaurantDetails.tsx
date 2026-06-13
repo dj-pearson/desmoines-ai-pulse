@@ -84,7 +84,7 @@ export default function RestaurantDetails() {
   });
 
   // Track page view and content interactions
-  const { trackShare } = useContentTracking(restaurant?.id, 'restaurant');
+  const { trackShare, trackClick } = useContentTracking(restaurant?.id, 'restaurant');
 
   const { data: relatedRestaurants } = useQuery({
     queryKey: ["related-restaurants", restaurant?.cuisine, restaurant?.id],
@@ -591,6 +591,9 @@ export default function RestaurantDetails() {
             </nav>
 
             <CardContent className="p-6 md:p-10">
+              {/* Data freshness — near the title for trust */}
+              <LastUpdatedBadge updatedAt={restaurant.updated_at} className="mb-6" />
+
               {/* Key Stats Grid */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                 <div className="text-center p-4 bg-amber-50 rounded-2xl border border-amber-100">
@@ -852,8 +855,8 @@ export default function RestaurantDetails() {
             />
           </Card>
 
-          {/* Related Restaurants - Same Cuisine */}
-          {relatedRestaurants && relatedRestaurants.length > 0 && (
+          {/* Related Restaurants - Same Cuisine (hidden when < 3 matches) */}
+          {relatedRestaurants && relatedRestaurants.length >= 3 && (
             <section className="mb-8" aria-labelledby="related-heading">
               <h2 id="related-heading" className="text-2xl font-bold text-gray-900 mb-2">
                 More {restaurant.cuisine} Restaurants in Des Moines
@@ -867,6 +870,7 @@ export default function RestaurantDetails() {
                     key={related.id}
                     restaurant={related}
                     variant="compact"
+                    onClick={trackClick}
                   />
                 ))}
               </div>
@@ -888,6 +892,7 @@ export default function RestaurantDetails() {
                     key={nearby.id}
                     restaurant={nearby}
                     variant="compact"
+                    onClick={trackClick}
                   />
                 ))}
               </div>
@@ -911,8 +916,6 @@ export default function RestaurantDetails() {
             </Link>
           </div>
         </div>
-
-        <LastUpdatedBadge updatedAt={restaurant.updated_at} className="mt-6 justify-center" />
       </div>
       <Footer />
       <BackToTop />

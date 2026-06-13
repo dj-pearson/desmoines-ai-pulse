@@ -31,9 +31,18 @@ export function LastUpdatedBadge({ updatedAt, className = "" }: LastUpdatedBadge
 
   const daysSinceUpdate = (Date.now() - new Date(updatedAt).getTime()) / (1000 * 60 * 60 * 24);
   const isRecent = daysSinceUpdate <= 7;
+  // Full, exact timestamp surfaced on hover/tap (native title tooltip).
+  const fullTimestamp = new Date(updatedAt).toLocaleString(undefined, {
+    dateStyle: "full",
+    timeStyle: "short",
+  });
 
   return (
-    <div className={`flex items-center gap-1.5 text-xs text-muted-foreground ${className}`}>
+    <time
+      dateTime={updatedAt}
+      title={`Last updated: ${fullTimestamp}`}
+      className={`flex items-center gap-1.5 text-xs text-muted-foreground ${className}`}
+    >
       {isRecent ? (
         <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />
       ) : (
@@ -41,8 +50,8 @@ export function LastUpdatedBadge({ updatedAt, className = "" }: LastUpdatedBadge
       )}
       <span>
         {isRecent && <span className="text-emerald-600 font-medium">Verified</span>}
-        {isRecent ? " · " : ""}Last updated: {getRelativeTime(updatedAt)}
+        {isRecent ? " · " : ""}Updated {getRelativeTime(updatedAt)}
       </span>
-    </div>
+    </time>
   );
 }

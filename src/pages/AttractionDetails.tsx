@@ -102,7 +102,7 @@ export default function AttractionDetails() {
   });
 
   // Track page view and content interactions
-  const { trackShare } = useContentTracking(attraction?.id, 'attraction');
+  const { trackShare, trackClick } = useContentTracking(attraction?.id, 'attraction');
 
   const { data: relatedAttractions } = useQuery({
     queryKey: ["related-attractions", attraction?.type, attraction?.id],
@@ -417,6 +417,9 @@ export default function AttractionDetails() {
             </div>
 
             <CardContent className="p-6 md:p-10">
+              {/* Data freshness — near the title for trust */}
+              <LastUpdatedBadge updatedAt={attraction.updated_at} className="mb-6" />
+
               {/* Key Stats Grid */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                 <div className="text-center p-4 bg-amber-50 rounded-2xl border border-amber-100">
@@ -628,8 +631,8 @@ export default function AttractionDetails() {
             />
           </Card>
 
-          {/* Related Attractions - Same Type */}
-          {relatedAttractions && relatedAttractions.length > 0 && (
+          {/* Related Attractions - Same Type (hidden when < 3 matches) */}
+          {relatedAttractions && relatedAttractions.length >= 3 && (
             <section className="mb-8" aria-labelledby="related-heading">
               <h2 id="related-heading" className="text-2xl font-bold text-gray-900 mb-2">
                 More {attraction.type} Attractions in {BRAND.city}
@@ -643,6 +646,7 @@ export default function AttractionDetails() {
                     key={related.id}
                     to={`/attractions/${createSlug(related.name)}`}
                     className="block"
+                    onClick={trackClick}
                   >
                     <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1 rounded-2xl overflow-hidden">
                       {related.image_url ? (
@@ -693,6 +697,7 @@ export default function AttractionDetails() {
                     key={nearby.id}
                     to={`/attractions/${createSlug(nearby.name)}`}
                     className="block"
+                    onClick={trackClick}
                   >
                     <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1 rounded-2xl overflow-hidden">
                       {nearby.image_url ? (
@@ -745,8 +750,6 @@ export default function AttractionDetails() {
             </Link>
           </div>
         </div>
-
-        <LastUpdatedBadge updatedAt={attraction.updated_at} className="mt-6 justify-center" />
       </div>
       <Footer />
       <BackToTop />
