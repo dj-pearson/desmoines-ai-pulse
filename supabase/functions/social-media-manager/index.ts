@@ -2,6 +2,8 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.43.1";
 import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+import { runJob, type JobContext } from "../_shared/jobRunner.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -190,7 +192,36 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const requestBody = await req.json();
-    const { action, contentType, subjectType, postId, triggerSource } = requestBody;
+    const { action, contentType, subjectType, postId, triggerSource, manual } = requestBody;
+
+    // WEB-AUTO-012: daily auto-post — the single cron-driven path that picks the
+    // highest-signal upcoming event + a featured restaurant (no-repeat 30 days),
+    // generates copy, and publishes via the configured webhooks. Admin/service
+    // gated; wrapped in the WEB-AUTO-001 jobRunner. The Job Health "Re-run"
+    // button invokes this fn with { manual: true } (no action) — treat that as
+    // the safe default so a manual re-run does the daily post.
+    if (action === "daily_auto_post" || (manual === true && !action)) {
+      const authFail = await requireAdminOrApiKey(req, corsHeaders);
+      if (authFail) return authFail;
+
+      const jobResult = await runJob(
+        "social-auto-post",
+        (ctx) => runDailyAutoPost(supabase, claudeApiKey, ctx),
+      );
+
+      return new Response(
+        JSON.stringify({
+          success: jobResult.ok,
+          automated: true,
+          daily_auto_post: true,
+          status: jobResult.status,
+          result: jobResult.result,
+          error: jobResult.error,
+          timestamp: new Date().toISOString(),
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     console.log(
       "Social Media Manager - Action:",
@@ -920,4 +951,368 @@ Make it detailed and engaging for Facebook/LinkedIn. Include compelling details,
     selectedContent,
     webhook_results: webhookResults,
   };
+}
+
+// ===========================================================================
+// WEB-AUTO-012 — daily auto-post pipeline
+// ===========================================================================
+
+/**
+ * Format a timestamp as a human-readable Central-Time (America/Chicago) label
+ * for inclusion in social copy. This is the Deno-side equivalent of the web
+ * app's date-fns-tz formatInTimeZone (edge functions can't import src/, and
+ * Intl.DateTimeFormat is the robust built-in for IANA-zone formatting).
+ */
+function formatCentralDate(src: string | null | undefined): string {
+  if (!src) return "";
+  try {
+    return new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Chicago",
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(new Date(src));
+  } catch {
+    return "";
+  }
+}
+
+/** Higher = more newsworthy. Prefers featured/enhanced events with imagery,
+ * and gives sooner events a small recency boost. */
+function eventSignal(e: Record<string, any>): number {
+  let s = 0;
+  if (e.is_featured) s += 100;
+  if (e.is_enhanced) s += 20;
+  if (e.image_url) s += 15;
+  const desc = e.enhanced_description || e.original_description || e.geo_summary || "";
+  if (typeof desc === "string" && desc.length > 120) s += 10;
+  const days = (new Date(e.event_start_utc || e.date).getTime() - Date.now()) / 86400000;
+  if (days >= 0 && days <= 14) s += Math.max(0, 14 - days);
+  return s;
+}
+
+/** Higher = more featured/better-rated restaurant. */
+function restaurantSignal(r: Record<string, any>): number {
+  let s = 0;
+  if (r.is_featured) s += 100;
+  if (typeof r.rating === "number") s += r.rating * 5;
+  if (r.image_url) s += 10;
+  return s;
+}
+
+/** Pick the highest-signal item of the given type not in the no-repeat set. */
+async function selectHighestSignalContent(
+  supabase: any,
+  contentType: string,
+  recentIds: Set<string>,
+): Promise<Record<string, any> | null> {
+  if (contentType === "event") {
+    const { data } = await supabase
+      .from("events")
+      .select("*")
+      .gte("date", new Date().toISOString())
+      .neq("is_hidden", true)
+      .neq("is_merged", true)
+      .order("date", { ascending: true })
+      .limit(100);
+    const candidates = (data || []).filter((e: any) => !recentIds.has(e.id));
+    if (candidates.length === 0) return null;
+    candidates.sort((a: any, b: any) => eventSignal(b) - eventSignal(a));
+    return candidates[0];
+  }
+  if (contentType === "restaurant") {
+    const { data } = await supabase
+      .from("restaurants")
+      .select("*")
+      .neq("is_merged", true)
+      .limit(100);
+    const candidates = (data || []).filter((r: any) => !recentIds.has(r.id));
+    if (candidates.length === 0) return null;
+    candidates.sort((a: any, b: any) => restaurantSignal(b) - restaurantSignal(a));
+    return candidates[0];
+  }
+  return null;
+}
+
+/** POST the combined payload to each webhook, retrying a failed webhook once. */
+async function publishToWebhooks(
+  webhookUrls: string[],
+  payload: Record<string, unknown>,
+): Promise<Array<Record<string, unknown>>> {
+  const tryPost = async (url: string) => {
+    try {
+      const r = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      return { url, success: r.ok, status: r.status };
+    } catch (error) {
+      return { url, success: false, error: (error as Error).message };
+    }
+  };
+  const results: Array<Record<string, unknown>> = [];
+  for (const url of webhookUrls) {
+    let res = await tryPost(url);
+    if (!res.success) {
+      const retry = await tryPost(url);
+      res = { ...retry, retried: true };
+    }
+    results.push(res);
+  }
+  return results;
+}
+
+/** Generate short (Twitter/Threads) + long (Facebook/LinkedIn) copy that
+ * includes the canonical deep link and a Central-time date for events. */
+async function generatePostCopy(
+  claudeApiKey: string,
+  contentType: string,
+  subjectType: string,
+  content: Record<string, any>,
+  contentUrl: string,
+  dateLabel: string,
+): Promise<{ shortContent: string; longContent: string; shortPrompt: string; longPrompt: string }> {
+  const title = content.title || content.name;
+  const description =
+    content.enhanced_description ||
+    content.original_description ||
+    content.description ||
+    content.geo_summary ||
+    "";
+  const subjectLabel = subjectType.replace(/_/g, " ");
+  const detailLines = [
+    `Title: ${title}`,
+    `Description: ${description}`,
+    `Location: ${content.location || ""}`,
+    contentType === "event" && dateLabel ? `When (Central Time): ${dateLabel}` : "",
+    contentType === "event" ? `Venue: ${content.venue || ""}` : "",
+    contentType === "restaurant" ? `Cuisine: ${content.cuisine || ""}` : "",
+    `Link: ${contentUrl}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const shortPrompt = `Create a compelling social media post (UNDER 240 characters total, including the link) for ${subjectLabel} featuring this ${contentType}:
+
+${detailLines}
+
+Make it engaging, add 1-2 relevant hashtags, include a call to action, and end with the link. Keep it under 240 characters for Twitter/Threads.`;
+
+  const longPrompt = `Create a detailed social media post (200-500 characters) for ${subjectLabel} featuring this ${contentType}:
+
+${detailLines}
+
+Make it detailed and engaging for Facebook/LinkedIn with storytelling and a strong call to action. Include the link.`;
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const config = await getAIConfig(supabaseUrl, supabaseServiceKey);
+  const headers = await getClaudeHeaders(claudeApiKey, supabaseUrl, supabaseServiceKey);
+
+  const callClaude = async (prompt: string, maxTokens: number): Promise<string> => {
+    const body = await buildClaudeRequest([{ role: "user", content: prompt }], {
+      supabaseUrl,
+      supabaseKey: supabaseServiceKey,
+      customMaxTokens: maxTokens,
+    });
+    const resp = await fetch(config.api_endpoint, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) {
+      const errorData = await resp.json().catch(() => ({}));
+      throw new Error(`Claude API error: ${errorData.error?.message || resp.statusText}`);
+    }
+    const data = await resp.json();
+    if (!data.content?.[0]?.text) {
+      throw new Error("Invalid response format from Claude API");
+    }
+    return data.content[0].text.trim();
+  };
+
+  const shortContent = await callClaude(shortPrompt, 300);
+  const longContent = await callClaude(longPrompt, 500);
+  return { shortContent, longContent, shortPrompt, longPrompt };
+}
+
+/** Select, generate, publish, and record one subject (event or restaurant). */
+async function postOneSubject(
+  supabase: any,
+  claudeApiKey: string,
+  contentType: string,
+  subjectType: string,
+  webhookUrls: string[],
+  activePlatforms: string[],
+): Promise<Record<string, unknown> | null> {
+  // 30-day no-repeat window: skip content already POSTED in the last 30 days.
+  const since30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const { data: recentPosts } = await supabase
+    .from("social_media_posts")
+    .select("content_id")
+    .eq("content_type", contentType)
+    .eq("status", "posted")
+    .gte("posted_at", since30);
+  const recentIds = new Set(
+    (recentPosts || []).map((p: any) => p.content_id).filter(Boolean),
+  );
+
+  const selected = await selectHighestSignalContent(supabase, contentType, recentIds);
+  if (!selected) return null;
+
+  const title = selected.title || selected.name;
+  const contentUrl = generateContentUrl(contentType, selected);
+  const dateLabel =
+    contentType === "event" ? formatCentralDate(selected.event_start_utc || selected.date) : "";
+
+  const { shortContent, longContent, shortPrompt, longPrompt } = await generatePostCopy(
+    claudeApiKey,
+    contentType,
+    subjectType,
+    selected,
+    contentUrl,
+    dateLabel,
+  );
+
+  const payload = {
+    content_formats: {
+      twitter_threads: { content: shortContent, platforms: ["twitter", "threads"] },
+      facebook_linkedin: { content: longContent, platforms: ["facebook", "linkedin"] },
+    },
+    title,
+    url: contentUrl,
+    subject_type: subjectType,
+    content_type: contentType,
+    metadata: { content_data: selected, auto_post: true },
+  };
+
+  const webhookResults = webhookUrls.length
+    ? await publishToWebhooks(webhookUrls, payload)
+    : [];
+  const anySuccess = webhookResults.some((r) => r.success);
+  // No webhooks configured -> nothing to send: keep the generated copy as a
+  // draft so an admin can wire a webhook and publish it. Otherwise the status
+  // reflects whether at least one webhook accepted the post.
+  const status = webhookUrls.length === 0 ? "draft" : anySuccess ? "posted" : "failed";
+  const nowIso = new Date().toISOString();
+
+  const { error: insertError } = await supabase.from("social_media_posts").insert([
+    {
+      content_type: contentType,
+      content_id: selected.id,
+      subject_type: subjectType,
+      platform_type: "combined",
+      post_content: JSON.stringify({
+        twitter_threads: shortContent,
+        facebook_linkedin: longContent,
+      }),
+      post_title: title,
+      content_url: contentUrl,
+      webhook_urls: webhookUrls,
+      ai_prompt_used: `Short: ${shortPrompt}\n\nLong: ${longPrompt}`,
+      status,
+      posted_at: status === "posted" ? nowIso : null,
+      last_attempt_at: nowIso,
+      error_message:
+        status === "failed"
+          ? "All webhooks failed after one retry"
+          : status === "draft"
+            ? "No active webhooks configured"
+            : null,
+      metadata: {
+        ...payload.metadata,
+        automated_auto_post: true,
+        generation_timestamp: nowIso,
+        platforms: activePlatforms,
+        webhook_results: webhookResults,
+      },
+    },
+  ]);
+  if (insertError) {
+    console.error("Failed to record auto-post row:", insertError);
+  }
+
+  return {
+    type: contentType,
+    content_id: selected.id,
+    title,
+    url: contentUrl,
+    status,
+    platforms: activePlatforms,
+    webhook_results: webhookResults,
+  };
+}
+
+/** Daily auto-post orchestrator: pause check -> per-subject post -> metrics. */
+async function runDailyAutoPost(
+  supabase: any,
+  claudeApiKey: string,
+  ctx: JobContext,
+): Promise<Record<string, unknown>> {
+  // 1. Pause flags (admin-toggleable). settings = { paused, paused_platforms[] }.
+  const { data: setting } = await supabase
+    .from("system_settings")
+    .select("settings")
+    .eq("setting_type", "social_auto_post")
+    .maybeSingle();
+  const settings = (setting?.settings || {}) as Record<string, unknown>;
+  const paused = settings.paused === true;
+  const pausedPlatforms: string[] = Array.isArray(settings.paused_platforms)
+    ? (settings.paused_platforms as string[])
+    : [];
+
+  if (paused) {
+    ctx.meta({ paused: true });
+    return { paused: true, posted: [] };
+  }
+
+  // 2. Active webhooks, excluding any paused platform.
+  const { data: webhooks } = await supabase
+    .from("social_media_webhooks")
+    .select("webhook_url, platform")
+    .eq("is_active", true);
+  const usable = (webhooks || []).filter(
+    (w: any) => !pausedPlatforms.includes(w.platform),
+  );
+  const webhookUrls = usable.map((w: any) => w.webhook_url);
+  const activePlatforms = Array.from(new Set(usable.map((w: any) => w.platform)));
+
+  // 3. Post the event of the day + the featured restaurant.
+  const posted: Array<Record<string, unknown>> = [];
+  let postedCount = 0;
+  let failedCount = 0;
+
+  for (const subject of [
+    { contentType: "event", subjectType: "event_of_the_day" },
+    { contentType: "restaurant", subjectType: "restaurant_of_the_day" },
+  ]) {
+    try {
+      const outcome = await postOneSubject(
+        supabase,
+        claudeApiKey,
+        subject.contentType,
+        subject.subjectType,
+        webhookUrls,
+        activePlatforms,
+      );
+      if (!outcome) {
+        posted.push({ type: subject.contentType, skipped: "no eligible content" });
+        continue;
+      }
+      posted.push(outcome);
+      if (outcome.status === "posted") postedCount++;
+      else failedCount++;
+    } catch (error) {
+      failedCount++;
+      posted.push({ type: subject.contentType, error: (error as Error).message });
+    }
+  }
+
+  ctx.processed(postedCount);
+  ctx.failed(failedCount);
+  ctx.meta({ posted, activePlatforms, pausedPlatforms, paused: false });
+  return { posted, postedCount, failedCount, activePlatforms, pausedPlatforms };
 }

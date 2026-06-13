@@ -32,7 +32,8 @@ All times UTC. Schedules are cron expressions (`min hour dom mon dow`).
 | `aggregate-daily-ad-analytics` | `0 1 * * *` | SQL fn | Roll up ad analytics for the day | planned |
 | `cleanup-security-logs` | `0 2 * * *` | SQL fn | Trim old security logs | — |
 | `cleanup-login-attempts` | (on demand) | SQL fn | Remove login_attempts > 24h (WEB-SEC-006) | — |
-| `daily-social-media-automation` / `social-media-automation-hourly` / `social-media-generation` / `social-media-publishing` | `0/15/30 * * * *` | fn `social-media-manager` | Generate + publish social posts | planned |
+| ~~`social-media-generation` / `social-media-publishing` / `daily-social-media-automation`~~ | retired | — | **Retired by `20260612000018` (replaced by `social-auto-post-daily`)** | ✖ |
+| **`social-auto-post-daily`** | `0 14 * * *` | fn `social-media-manager` (`action:daily_auto_post`) | **Daily auto-post: highest-signal upcoming event + featured restaurant (no-repeat 30d), AI copy with deep link + Central-time date, publish via configured webhooks with 1 retry; pause/per-platform flag (WEB-AUTO-012)** | ✅ |
 | `auto-trigger-scraping-jobs` / `scraping-jobs-runner` | `*/10-15 * * * *` | SQL/fn | Drive the scraping-jobs queue | — |
 | **`data-quality-heal-nightly`** | `30 2 * * *` | fn `data-quality-heal` | **Geocode + SEO/GEO + image self-heal, <=25 rows/table/run (WEB-AUTO-003)** | ✅ |
 | **`job-health-watchdog-daily`** | `0 8 * * *` | fn `job-health-watchdog` | **Alert on missed/failed observed jobs (WEB-AUTO-001)** | n/a |
@@ -343,3 +344,48 @@ No code change / deploy required.
 cron are all additive (migration `20260612000017`). The function is auth-gated with
 `requireAdminOrApiKey` (admin JWT for the UI / Job Health re-run, the service-role
 bearer for cron); it is not called by any mobile binary.
+
+## Daily social auto-posting (WEB-AUTO-012)
+
+`social-media-manager` (action `daily_auto_post`, cron `social-auto-post-daily`,
+daily 14:00 UTC ≈ 9am Central) is now the single observable path for the daily
+social presence. It **replaced** the legacy hourly crons (`social-media-generation`
++ `social-media-publishing`, migration `20250903031613`) which drafted at 9am/6pm
+and published separately with NO observability, RANDOM selection, a 7-day window,
+and no pause switch — those are unscheduled by migration `20260612000018` (their
+SQL helper functions are left defined, additive, only the schedules removed).
+
+**Each run** (wrapped in the WEB-AUTO-001 `runJob`, so it appears in Job Health):
+
+1. **Pause check** — reads `system_settings` `setting_type='social_auto_post'`
+   (`{ paused, paused_platforms[] }`). Global pause → exits clean.
+2. **Webhook selection** — active `social_media_webhooks`, excluding any platform
+   in `paused_platforms`.
+3. For the **event of the day** and the **restaurant of the day**:
+   - **No-repeat 30 days** — skips content `posted` in the last 30 days
+     (`social_media_posts` where `status='posted'` and `posted_at >= now()-30d`).
+   - **Highest-signal selection** — events scored by featured/enhanced/image/desc
+     + a soonest-first recency boost; restaurants by featured + rating + image.
+     (Hidden/merged events and merged restaurants are excluded.)
+   - **AI copy** — short (Twitter/Threads, ≤240 chars) + long (Facebook/LinkedIn)
+     via the shared `aiConfig` Claude helpers; both include the canonical deep link
+     (`/events/<central-slug>` or `/restaurants/<slug>`) and, for events, a
+     Central-time (America/Chicago) date label.
+   - **Publish + retry** — POSTs the combined payload to each webhook, retrying a
+     failed webhook **once**; records a `social_media_posts` row with
+     `platform_type`, `content_id`, `posted_at`, `status` (`posted`/`failed`/
+     `draft` when no webhook is configured), `error_message`, and per-webhook
+     results in metadata.
+4. **Metrics** — `ctx.processed`/`ctx.failed` + metadata (`posted[]`,
+   `activePlatforms`, `pausedPlatforms`) land in `automation_job_runs`.
+
+**Admin:** Admin → Social → Post queue shows the **Daily auto-posting** card
+(global pause + per-platform toggles limited to platforms with an active webhook,
+plus a "Run now" button) above the existing realtime post-history queue.
+`social-auto-post` is in the Job Health re-run list (re-run sends `{manual:true}`
+→ runs the daily post).
+
+**Backward compat:** additive only (migration `20260612000018`: pause-flag seed +
+cron swap). The existing `social-media-manager` actions (`generate`, `publish`,
+`automated_generation_only`, `publish_pending_posts`, `debug`) are unchanged; the
+new action is admin/service gated. No mobile binary calls this function.
