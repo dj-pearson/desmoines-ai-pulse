@@ -322,7 +322,7 @@ export default function Restaurants() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 text-gray-400 hover:text-gray-600"
+                      className="h-11 w-11 sm:h-8 sm:w-8 text-gray-400 hover:text-gray-600"
                       onClick={() => {
                         setSearchInput("");
                         setFilters((prev) => ({ ...prev, search: "" }));

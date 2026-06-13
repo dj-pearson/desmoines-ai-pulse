@@ -95,6 +95,7 @@ export function RecentlyViewed({
                   variant="ghost"
                   size="icon"
                   className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                  aria-label="Remove from recently viewed"
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -194,6 +195,7 @@ export function RecentlyViewed({
                   variant="ghost"
                   size="icon"
                   className="opacity-0 group-hover:opacity-100 transition-opacity"
+                  aria-label="Remove from recently viewed"
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();

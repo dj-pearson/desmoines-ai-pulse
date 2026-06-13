@@ -639,7 +639,7 @@ export default function EventsPage() {
                       variant="ghost"
                       size="sm"
                       onClick={() => setSearchQuery("")}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 p-0 text-white/60 hover:text-white hover:bg-white/10"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 h-11 w-11 sm:h-8 sm:w-8 p-0 text-white/60 hover:text-white hover:bg-white/10"
                       aria-label="Clear search"
                     >
                       <X className="h-4 w-4" />
@@ -708,7 +708,7 @@ export default function EventsPage() {
                     onClick={() => setViewMode("list")}
                     variant="ghost"
                     size="icon"
-                    className={`h-8 w-8 rounded-full ${viewMode === "list" ? "bg-white/20 text-white" : "text-white/50 hover:text-white hover:bg-white/10"}`}
+                    className={`h-11 w-11 sm:h-8 sm:w-8 rounded-full ${viewMode === "list" ? "bg-white/20 text-white" : "text-white/50 hover:text-white hover:bg-white/10"}`}
                     aria-label="List view"
                   >
                     <List className="h-4 w-4" />
@@ -717,7 +717,7 @@ export default function EventsPage() {
                     onClick={() => setViewMode("map")}
                     variant="ghost"
                     size="icon"
-                    className={`h-8 w-8 rounded-full ${viewMode === "map" ? "bg-white/20 text-white" : "text-white/50 hover:text-white hover:bg-white/10"}`}
+                    className={`h-11 w-11 sm:h-8 sm:w-8 rounded-full ${viewMode === "map" ? "bg-white/20 text-white" : "text-white/50 hover:text-white hover:bg-white/10"}`}
                     aria-label="Map view"
                   >
                     <Map className="h-4 w-4" />
