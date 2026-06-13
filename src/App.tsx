@@ -285,7 +285,7 @@ const App = () => (
             <Sonner />
             <AccessibilityWidget />
             <RouteErrorBoundary>
-            <main id="main-content" tabIndex={-1}>
+            <main id="main-content" tabIndex={-1} className="pb-bottom-nav">
             <Suspense fallback={<PageLoader />}>
             <Routes>
             <Route path="/" element={<Index />} />
