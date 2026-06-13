@@ -895,7 +895,8 @@
         "npm run validate passes (type-check + lint)"
       ],
       "priority": 48,
-      "passes": false
+      "passes": true,
+      "notes": "[DONE 2026-06-13] New getDirectionsUrl (maps/dir destination=lat,lng, address fallback) + LazyLocationMap (lazy leaflet + sized placeholder, no CLS). Map embedded on Restaurant/Attraction/Playground/Hotel details when coords exist; all Directions links now use exact coordinates; HotelDetails gained a Directions link from its address."
     },
     {
       "id": "WEB-UX-020",
