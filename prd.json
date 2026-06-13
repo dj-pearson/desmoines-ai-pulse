@@ -481,8 +481,8 @@
         "npm run validate passes"
       ],
       "priority": 31,
-      "passes": false,
-      "notes": "Evidence: src/components/ui/loading-skeleton.tsx + empty-state.tsx exist but adoption is inconsistent (EventsPage lacks EmptyState; error handling diverges per page)."
+      "passes": true,
+      "notes": "Evidence: src/components/ui/loading-skeleton.tsx + empty-state.tsx exist but adoption is inconsistent (EventsPage lacks EmptyState; error handling diverges per page). [DONE 2026-06-13] New shared ErrorState (offline/server detection + query-refetch Retry). Articles/Deals/Hotels/Attractions/Restaurants standardized on shape-matched CardsGridSkeleton + shared EmptyState (no-content vs filtered) + ErrorState; EventsPage already compliant. Skeletons respect prefers-reduced-motion via base Skeleton."
     },
     {
       "id": "WEB-UX-003",
