@@ -357,17 +357,10 @@ export function useAdvancedSearch() {
     })) || [];
   };
 
-  const filterByLocation = (results: SearchResult[], searchFilters: AdvancedSearchFilters): SearchResult[] => {
-    if (searchFilters.location === 'Near Me' && userLocation) {
-      return results.filter(result => {
-        // This would need actual lat/lng data for each result
-        // For now, return all results with distance calculation if available
-        return true;
-      }).map(result => ({
-        ...result,
-        distance: Math.random() * searchFilters.radius // Placeholder distance
-      }));
-    }
+  const filterByLocation = (results: SearchResult[], _searchFilters: AdvancedSearchFilters): SearchResult[] => {
+    // Real per-result coordinates aren't available in this aggregated result set,
+    // so we no longer fabricate distances (was Math.random). Distance-based
+    // filtering/sorting is disabled until a proximity RPC backs it (WEB-UX-018).
     return results;
   };
 

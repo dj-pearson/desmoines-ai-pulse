@@ -203,6 +203,7 @@ export default function EventsPage() {
       location,
       priceRange,
       page,
+      sortBy,
       isNearMeActive,
       userLocation,
     ],
@@ -244,9 +245,27 @@ export default function EventsPage() {
       let query = supabase
         .from("events")
         .select("id, title, date, location, category, image_url, price, venue, is_featured, event_start_utc, event_start_local, city, latitude, longitude, enhanced_description, original_description", { count: 'exact' })
-        .gte("date", new Date().toISOString().split("T")[0])
-        .order("date", { ascending: true })
-        .range((page - 1) * EVENTS_PER_PAGE, page * EVENTS_PER_PAGE - 1);
+        .gte("date", new Date().toISOString().split("T")[0]);
+
+      // Push the active sort into the query so it covers the full result set,
+      // not just the current page (WEB-UX-018). 'newest' = recently added.
+      switch (sortBy) {
+        case "date_desc":
+          query = query.order("date", { ascending: false });
+          break;
+        case "newest":
+          query = query.order("created_at", { ascending: false });
+          break;
+        case "title_asc":
+          query = query.order("title", { ascending: true });
+          break;
+        case "date_asc":
+        default:
+          query = query.order("date", { ascending: true });
+          break;
+      }
+
+      query = query.range((page - 1) * EVENTS_PER_PAGE, page * EVENTS_PER_PAGE - 1);
 
       if (debouncedSearchQuery) {
         query = query.textSearch('search_vector', debouncedSearchQuery, {
@@ -343,26 +362,9 @@ export default function EventsPage() {
   });
 
   const rawEvents = eventsData?.events || [];
-  const priceFilteredEvents = filterEventsByPrice(rawEvents, priceRange);
-  const events = useMemo(() => {
-    const sorted = [...priceFilteredEvents];
-    switch (sortBy) {
-      case "date_desc":
-        sorted.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        break;
-      case "newest":
-        sorted.sort((a, b) => new Date(b.id > a.id ? 1 : -1));
-        break;
-      case "title_asc":
-        sorted.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
-        break;
-      case "date_asc":
-      default:
-        sorted.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-        break;
-    }
-    return sorted;
-  }, [priceFilteredEvents, sortBy]);
+  // The query already returns the page in the correct sort order (WEB-UX-018),
+  // so we only apply the client-side price filter here — no re-sorting.
+  const events = filterEventsByPrice(rawEvents, priceRange);
   const totalCount = eventsData?.totalCount || 0;
   const hasMore = totalCount > page * EVENTS_PER_PAGE;
 
@@ -370,7 +372,7 @@ export default function EventsPage() {
     return (rawEvents || []).filter((e: any) => e.is_featured).slice(0, 3);
   }, [rawEvents]);
 
-  useEffect(() => { setPage(1); }, [debouncedSearchQuery, selectedCategory, dateFilter, location, priceRange]);
+  useEffect(() => { setPage(1); }, [debouncedSearchQuery, selectedCategory, dateFilter, location, priceRange, sortBy]);
 
   // Announce result count to screen readers after search/filter changes
   useEffect(() => {

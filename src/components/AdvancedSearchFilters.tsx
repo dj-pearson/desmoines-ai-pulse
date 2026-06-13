@@ -223,7 +223,7 @@ export function AdvancedSearchFilters({
   const sortOptions = [
     { value: 'relevance', label: 'Most Relevant' },
     { value: 'rating', label: 'Highest Rated' },
-    { value: 'distance', label: 'Nearest First' },
+    // 'Nearest First' disabled until real per-result coordinates back it (WEB-UX-018)
     { value: 'price_low', label: 'Price: Low to High' },
     { value: 'price_high', label: 'Price: High to Low' },
     { value: 'newest', label: 'Newest First' },
@@ -425,14 +425,7 @@ export function AdvancedSearchFilters({
         <div className="space-y-4">
           <Label>Quick Options</Label>
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="open-now" className="text-sm">Open Now</Label>
-              <Switch
-                id="open-now"
-                checked={filters.openNow}
-                onCheckedChange={(checked) => updateFilters({ openNow: checked })}
-              />
-            </div>
+            {/* 'Open Now' toggle removed — it had no backing hours filter (WEB-UX-018) */}
             <div className="flex items-center justify-between">
               <Label htmlFor="featured-only" className="text-sm">Featured Only</Label>
               <Switch
