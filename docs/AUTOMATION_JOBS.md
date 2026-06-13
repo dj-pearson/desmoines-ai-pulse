@@ -41,11 +41,12 @@ All times UTC. Schedules are cron expressions (`min hour dom mon dow`).
 | **`weekly-digest-assemble`** | `0 15 * * 2` | fn `assemble-weekly-digest` | **Auto-assemble the weekly digest (events + restaurants + newest article), gate, and queue it for the existing dispatcher (WEB-AUTO-008)** | ✅ |
 | **`moderate-content-sweep`** | `15 * * * *` | fn `moderate-content` | **Safety-net: re-moderate any review/contact row stuck `pending` (real-time call failed); cheap when none (WEB-AUTO-009)** | ✅ |
 | **`campaign-creative-review-sweep`** | `35 * * * *` | fn `review-campaign-creative` | **Safety-net: auto-review ad creatives not yet reviewed (real-time call failed); spec/quality/brand-safety/standing checks → auto-approve or hold (WEB-AUTO-010)** | ✅ |
+| **`sitemap-regen-6h`** | `0 */6 * * *` | fn `generate-sitemaps` | **Event-driven sitemap regen: drains `sitemap_change_queue`, regenerates events/restaurants/attractions/articles sitemaps to the `sitemaps` Storage bucket (served fresh by the Pages middleware), pings search engines (WEB-AUTO-011)** | ✅ |
 
 \* **Observed** = wrapped with `jobRunner` and recording to `automation_job_runs`.
 `✅` done, `planned` = adopts the same one-line wrap as its WEB-AUTO story lands
-(WEB-AUTO-003 data-quality, -004 URL repair, -008 newsletter, -011 sitemaps, -012
-social). `—` = not yet observed.
+(WEB-AUTO-003 data-quality, -004 URL repair, -008 newsletter, -012 social).
+`—` = not yet observed.
 
 ## How to observe a job
 
@@ -295,3 +296,50 @@ re-runnable from **Admin → Job Health**). Every terminal auto-decision writes 
 directions (`useAdminCampaigns.approveCreative` / `rejectCreative`). Serving is
 unaffected: an auto-approved creative is byte-for-byte identical to a human-approved
 one, so `get_active_ads` (read by iOS) behaves exactly as before.
+
+## Event-driven sitemap regeneration (WEB-AUTO-011)
+
+Sitemaps used to refresh only at `npm run build` (deploy) — new/edited content could
+wait a day (or a deploy) to become indexable. `generate-sitemaps` (cron
+`sitemap-regen-6h`, every 6 hours) is now the **primary, no-deploy path**; build-time
+generation (`scripts/generate-dynamic-sitemaps.ts`, run by `npm run build`) remains as
+the **fallback**.
+
+**How it flows:**
+
+1. **Enqueue** — AFTER INSERT/UPDATE/DELETE triggers on `events`, `restaurants`,
+   `attractions`, and `articles` insert a row into `sitemap_change_queue`
+   (`enqueue_sitemap_change()`, SECURITY DEFINER, never blocks the underlying write).
+2. **Regenerate** — every 6h the job snapshots the unprocessed queue (to report which
+   content types changed), regenerates the events / restaurants / attractions / articles
+   sitemaps + the index, and **uploads them to the public `sitemaps` Storage bucket**
+   (`upsert`). Hidden (`is_hidden`) / merged (`is_merged`) / past events and
+   non-`published` articles are excluded automatically — so WEB-AUTO-006 stale events
+   drop out on the same cycle. Event URLs use the Central-time slug
+   (`title-YYYY-MM-DD`) so they resolve in `EventDetails`.
+3. **Serve fresh** — the Cloudflare Pages middleware (`functions/_middleware.ts`) serves
+   `/sitemap.xml`, `/sitemap-events.xml`, `/sitemap-restaurants.xml`,
+   `/sitemap-attractions.xml`, `/sitemap-articles.xml` from the Storage bucket; on ANY
+   error it falls back to the build-time static file in `dist/`. Other sitemap files
+   (`sitemap-static` / `-playgrounds` / `-guides`) stay build-time-generated and are
+   served statically (the index references them).
+4. **Ping** — after a successful write the job pings Google + Bing
+   (`/ping?sitemap=…`, best-effort, status logged). Google deprecated its
+   unauthenticated ping endpoint in 2023, so this is only a nudge — Google Search
+   Console / Bing Webmaster Tools remain the authoritative submission path.
+5. **Observe** — wrapped in `jobRunner` (`generated` counts, `storageWritten`, `ping`
+   statuses, `affectedTypes`, `queueProcessed` in `automation_job_runs`; re-runnable
+   from **Admin → Job Health**). If no file is written to Storage the run fails
+   terminally so the watchdog alerts (the static fallback still serves, but the
+   event-driven path needs attention).
+
+**Pause:** flip the `system_settings` row `setting_type='sitemap_regen'`
+(`{"paused": true}`) — the job then skips regeneration (the static files keep serving).
+No code change / deploy required.
+
+**Backward compat:** the JSON response keeps the shape `SEOTools.tsx` reads
+(`success`, `generated.{main_urls,events_urls,restaurants_urls,total_urls}`,
+`sitemaps.main`); new keys are additive. The bucket, table, triggers, pause flag, and
+cron are all additive (migration `20260612000017`). The function is auth-gated with
+`requireAdminOrApiKey` (admin JWT for the UI / Job Health re-run, the service-role
+bearer for cron); it is not called by any mobile binary.
