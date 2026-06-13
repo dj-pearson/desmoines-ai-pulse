@@ -1223,6 +1223,10 @@ export type Database = {
       }
       campaign_creatives: {
         Row: {
+          auto_review_checks: Json | null
+          auto_review_reasons: Json
+          auto_review_status: string | null
+          auto_reviewed_at: string | null
           campaign_id: string
           created_at: string
           cta_text: string | null
@@ -1243,6 +1247,10 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          auto_review_checks?: Json | null
+          auto_review_reasons?: Json
+          auto_review_status?: string | null
+          auto_reviewed_at?: string | null
           campaign_id: string
           created_at?: string
           cta_text?: string | null
@@ -1263,6 +1271,10 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          auto_review_checks?: Json | null
+          auto_review_reasons?: Json
+          auto_review_status?: string | null
+          auto_reviewed_at?: string | null
           campaign_id?: string
           created_at?: string
           cta_text?: string | null

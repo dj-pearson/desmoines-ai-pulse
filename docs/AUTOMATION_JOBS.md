@@ -39,6 +39,7 @@ All times UTC. Schedules are cron expressions (`min hour dom mon dow`).
 | **`dedupe-content-weekly`** | `15 3 * * 1` | fn `dedupe-content` | **Detect duplicate events/restaurants (trigram + proximity); auto-merge >=0.9, queue 0.7-0.9 to Admin → Content → Duplicates (WEB-AUTO-005)** | ✅ |
 | **`ai-article-pipeline-daily`** | `0 11 * * *` | fn `ai-article-pipeline` | **Daily local-SEO article: pick topic → generate draft → score → publish (≥80) / draft-review (50-79) / discard (<50). Cap 1 auto-publish/day. Pause via `feature_flags.ai_article_pipeline_enabled` (WEB-AUTO-007)** | ✅ |
 | **`moderate-content-sweep`** | `*/15 * * * *` | fn `moderate-content` | **Re-moderate reviews stuck in `pending` (fail-open safety net for the inline review path); ≤25/run. Pause via `feature_flags.content_moderation_enabled` (WEB-AUTO-009)** | ✅ |
+| **`review-creative-sweep`** | `*/30 * * * *` | fn `review-campaign-creative` | **Re-review ad creatives stuck in `pending`/`error` (fail-safe net for the on-insert trigger); ≤25/run. Pause via `feature_flags.campaign_creative_autoreview_enabled` (WEB-AUTO-010)** | ✅ |
 | **`job-health-watchdog-daily`** | `0 8 * * *` | fn `job-health-watchdog` | **Alert on missed/failed observed jobs (WEB-AUTO-001)** | n/a |
 
 \* **Observed** = wrapped with `jobRunner` and recording to `automation_job_runs`.
@@ -209,3 +210,51 @@ the content table's `moderation_status` atomically.
 `enabled = false`. While paused, moderation **trusts everything through** —
 pending content is force-approved (so nothing gets stuck hidden) rather than
 scored. Re-enable to resume.
+
+## Campaign creative auto-review (WEB-AUTO-010)
+
+`review-campaign-creative` reviews advertiser ad creatives so approval happens in
+seconds instead of "when the admin next logs in". On each `campaign_creatives`
+insert an `AFTER INSERT` trigger (`enqueue_creative_autoreview`) calls the
+function server-side via `pg_net` with the service-role bearer (the advertiser's
+browser never invokes the SSRF-/AI-capable function directly).
+
+**Four checks** (recorded in `campaign_creatives.auto_review_checks`):
+
+1. **image** — loads, is an image, matches one of the placement's allowed
+   dimensions, under the placement size cap (`sponsored_listing` skips — it has
+   no uploaded creative).
+2. **target_url** — `link_url` is `https`, SSRF-guarded (no localhost / private /
+   metadata hosts), and resolves with no scheme downgrade after redirects.
+3. **brand_safety** — Claude rates the title/description/CTA; flags hate, adult,
+   illegal, weapons, gambling, scams, crypto/get-rich-quick, deceptive clickbait.
+4. **advertiser_standing** — the advertiser has fewer than 3 rejected creatives in
+   the last 90 days (a pattern of rejections routes to manual review).
+
+**Verdict** → `auto_review_status`:
+
+- **passed** — all checks cleared → `is_approved = true` (the public-serving gate
+  `get_active_ads` reads, UNCHANGED — iOS/web ad serving unaffected) and the
+  campaign advances to its normal status (`active` if the start date has passed,
+  else `pending_review`), exactly like a manual approval. `reviewed_by` stays
+  NULL to mark a system decision (shown as an **Auto** badge).
+- **failed** — a deterministic check failed → stays pending, machine-readable
+  reasons surfaced in **Admin → Campaigns → (campaign) → Creative Review**.
+- **error** — a check couldn't be evaluated (e.g. AI down) → stays pending for a
+  human. **Fail-SAFE:** uncertainty NEVER auto-approves an unreviewed ad.
+
+**Admin override** (both directions) is unchanged — the existing Approve / Reject
+buttons toggle `is_approved`; auto-review only pre-fills the decision and explains it.
+
+**Auto-approval rate** + per-verdict counts flow through the jobRunner
+(`review-campaign-creative` job); re-runnable from **Admin → Job Health** (sends
+`manual: true` → a sweep).
+
+**Sweep / recovery:** `review-creative-sweep` (every 30 min, ≤25/run) re-reviews
+any creative left in `pending`/`error` (e.g. the trigger enqueue failed or the AI
+was down).
+
+**Pausing** (no code change): set `feature_flags.campaign_creative_autoreview_enabled`
+to `enabled = false`. Unlike the UGC moderation gate, a paused creative gate does
+**NOT** trust-through — creatives are left `pending` for fully manual review
+(auto-approving unreviewed ads would be unsafe). Re-enable to resume.

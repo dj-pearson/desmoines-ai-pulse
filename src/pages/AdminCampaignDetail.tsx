@@ -12,8 +12,59 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Check, X, DollarSign, Calendar, User, Image as ImageIcon, ExternalLink, AlertCircle } from "lucide-react";
+import { ArrowLeft, Check, X, DollarSign, Calendar, User, Image as ImageIcon, ExternalLink, AlertCircle, Sparkles, ShieldAlert, Clock } from "lucide-react";
 import { CampaignCreative } from "@/hooks/useCampaigns";
+
+/**
+ * WEB-AUTO-010: shows the automated-review verdict + machine-readable reasons
+ * for a creative. is_approved remains the gate; this only explains the decision.
+ */
+function AutoReviewStatus({ creative }: { creative: CampaignCreative }) {
+  const status = creative.auto_review_status;
+  if (!status || status === 'passed') return null;
+
+  const reasons = creative.auto_review_reasons ?? [];
+  const config = {
+    failed: {
+      icon: ShieldAlert,
+      label: "Auto-review failed",
+      className: "border-red-200 bg-red-50 text-red-800",
+      note: "Automated checks flagged issues. Resolve below or approve manually to override.",
+    },
+    error: {
+      icon: AlertCircle,
+      label: "Auto-review error",
+      className: "border-amber-200 bg-amber-50 text-amber-800",
+      note: "A check couldn't be evaluated automatically — please review manually.",
+    },
+    pending: {
+      icon: Clock,
+      label: "Awaiting auto-review",
+      className: "border-blue-200 bg-blue-50 text-blue-800",
+      note: "Automated review hasn't completed yet (or is paused).",
+    },
+  }[status];
+
+  if (!config) return null;
+  const Icon = config.icon;
+
+  return (
+    <div className={`rounded-md border p-3 mb-4 text-sm ${config.className}`}>
+      <div className="flex items-center gap-2 font-medium">
+        <Icon className="h-4 w-4" />
+        {config.label}
+      </div>
+      <p className="text-xs mt-1 opacity-80">{config.note}</p>
+      {reasons.length > 0 && (
+        <ul className="list-disc list-inside mt-2 space-y-0.5 text-xs">
+          {reasons.map((reason, i) => (
+            <li key={i}>{reason}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 export default function AdminCampaignDetail() {
   const { campaignId } = useParams<{ campaignId: string }>();
@@ -336,6 +387,7 @@ export default function AdminCampaignDetail() {
                             <p>Size: {creative.dimensions_width}×{creative.dimensions_height}px</p>
                           </div>
                         </div>
+                        <AutoReviewStatus creative={creative} />
                         <div className="flex gap-2">
                           <Button
                             className="flex-1"
@@ -388,7 +440,13 @@ export default function AdminCampaignDetail() {
                             <ImageIcon className="h-12 w-12 text-muted-foreground" />
                           </div>
                         )}
-                        <div className="absolute top-2 right-2">
+                        <div className="absolute top-2 right-2 flex gap-1">
+                          {creative.auto_review_status === 'passed' && !creative.reviewed_by && (
+                            <Badge className="bg-violet-500">
+                              <Sparkles className="h-3 w-3 mr-1" />
+                              Auto
+                            </Badge>
+                          )}
                           <Badge className="bg-green-500">Approved</Badge>
                         </div>
                       </div>

@@ -50,6 +50,11 @@ export interface CampaignCreative {
   reviewed_by?: string;
   reviewed_at?: string;
   rejection_reason?: string;
+  /** WEB-AUTO-010 automated review: null (legacy) | pending | passed | failed | error */
+  auto_review_status?: 'pending' | 'passed' | 'failed' | 'error' | null;
+  auto_review_reasons?: string[];
+  auto_review_checks?: Record<string, unknown> | null;
+  auto_reviewed_at?: string | null;
   created_at: string;
   updated_at: string;
 }
