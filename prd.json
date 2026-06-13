@@ -828,7 +828,8 @@
         "npm run validate passes (type-check + lint)"
       ],
       "priority": 43,
-      "passes": false
+      "passes": true,
+      "notes": "[DONE 2026-06-13] H1 value prop + greeting demoted to eyebrow; AI Plan My Night now navigates to /trip-planner (no dead CTA); QuickActions consolidated to Today|This Weekend|Near Me|Open Now (desktop+mobile, all real links); mobile hero capped to 80vh."
     },
     {
       "id": "WEB-UX-015",
