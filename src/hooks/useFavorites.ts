@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
@@ -5,6 +6,23 @@ import { useToast } from "./use-toast";
 import { useGamification } from "./useGamification";
 import { useSubscription } from "./useSubscription";
 import { STALE_TIME } from "@/lib/queryConfig";
+import {
+  GUEST_FAVORITES_CAP,
+  addGuestFavorite,
+  getGuestFavorites,
+  getGuestFavoritesSnapshot,
+  isGuestFavorited,
+  removeGuestFavorite,
+  subscribeGuestFavorites,
+} from "@/lib/guestFavorites";
+import { trackGuestFavoriteEvent } from "@/lib/guestFavoritesAnalytics";
+
+/** Result of a favorite toggle. `needsSignup` is the guest save-wall (WEB-FEAT-006). */
+export interface ToggleFavoriteResult {
+  success: boolean;
+  needsUpgrade: boolean;
+  needsSignup: boolean;
+}
 
 export function useFavorites() {
   const { user } = useAuth();
@@ -13,8 +31,17 @@ export function useFavorites() {
   const { awardPoints } = useGamification();
   const { canPerformAction, getRemainingQuota, isPremium, limits } = useSubscription();
 
-  // Fetch user's favorited events
-  const { data: favoritedEvents = [], isLoading } = useQuery({
+  // Guest (unauthenticated) favorites live in safeStorage and are surfaced via
+  // an external store so they survive reloads and stay in sync across buttons.
+  const guestFavoritedEvents = useSyncExternalStore(
+    subscribeGuestFavorites,
+    getGuestFavoritesSnapshot,
+    getGuestFavoritesSnapshot,
+  );
+  const isGuest = !user;
+
+  // Fetch the signed-in user's favorited events
+  const { data: userFavoritedEvents = [], isLoading: isUserLoading } = useQuery({
     queryKey: ["favorites", user?.id],
     queryFn: async () => {
       if (!user) return [];
@@ -34,6 +61,10 @@ export function useFavorites() {
     // refetch on the user's own add/remove regardless of staleTime.
     staleTime: STALE_TIME.USER,
   });
+
+  // Unified favorites list: signed-in → server; guest → local store.
+  const favoritedEvents = isGuest ? guestFavoritedEvents : userFavoritedEvents;
+  const isLoading = isGuest ? false : isUserLoading;
 
   const favoritesQueryKey = ["favorites", user?.id];
 
@@ -123,42 +154,55 @@ export function useFavorites() {
     },
   });
 
-  // Check if user can add more favorites
+  // Check if the current visitor can add more favorites
   const canAddFavorite = (): boolean => {
-    return canPerformAction("favorite", favoritedEvents.length);
+    if (isGuest) return guestFavoritedEvents.length < GUEST_FAVORITES_CAP;
+    return canPerformAction("favorite", userFavoritedEvents.length);
   };
 
-  // Get remaining favorites quota
-  const remainingFavorites = getRemainingQuota("favorite", favoritedEvents.length);
+  // Get remaining favorites quota (guests: capped at the guest allowance)
+  const remainingFavorites = isGuest
+    ? Math.max(0, GUEST_FAVORITES_CAP - guestFavoritedEvents.length)
+    : getRemainingQuota("favorite", userFavoritedEvents.length);
 
-  // Toggle favorite
-  const toggleFavorite = (eventId: string): { success: boolean; needsUpgrade: boolean } => {
-    if (!user) {
-      toast({
-        title: "Login Required",
-        description: "Please log in to save favorites",
-        variant: "destructive",
-      });
-      return { success: false, needsUpgrade: false };
+  // Toggle favorite. Returns flags the caller uses to surface the right prompt:
+  //   needsSignup → guest hit the save cap (WEB-FEAT-006 contextual signup)
+  //   needsUpgrade → signed-in free user hit their cap (WEB-FEAT-001 paywall)
+  const toggleFavorite = (eventId: string): ToggleFavoriteResult => {
+    // Guest path: no auth wall up-front — save locally up to the cap.
+    if (isGuest) {
+      if (isGuestFavorited(eventId)) {
+        removeGuestFavorite(eventId);
+        return { success: true, needsUpgrade: false, needsSignup: false };
+      }
+      const { added, atCap } = addGuestFavorite(eventId);
+      if (atCap) {
+        trackGuestFavoriteEvent("wall_hit", { saved: GUEST_FAVORITES_CAP });
+        return { success: false, needsUpgrade: false, needsSignup: true };
+      }
+      if (added) {
+        trackGuestFavoriteEvent("guest_save", { count: getGuestFavorites().length });
+      }
+      return { success: true, needsUpgrade: false, needsSignup: false };
     }
 
-    const isFavorited = favoritedEvents.includes(eventId);
+    const alreadyFavorited = userFavoritedEvents.includes(eventId);
 
     // If removing, always allow
-    if (isFavorited) {
+    if (alreadyFavorited) {
       removeFavoriteMutation.mutate(eventId);
-      return { success: true, needsUpgrade: false };
+      return { success: true, needsUpgrade: false, needsSignup: false };
     }
 
     // If adding, check limits. On the cap, return needsUpgrade so the caller
     // can present the contextual unlimited-favorites paywall (WEB-FEAT-001);
     // the modal is now the single messaging surface (no redundant toast here).
     if (!canAddFavorite()) {
-      return { success: false, needsUpgrade: true };
+      return { success: false, needsUpgrade: true, needsSignup: false };
     }
 
     addFavoriteMutation.mutate(eventId);
-    return { success: true, needsUpgrade: false };
+    return { success: true, needsUpgrade: false, needsSignup: false };
   };
 
   // Check if an event is favorited
@@ -176,6 +220,10 @@ export function useFavorites() {
     canAddFavorite: canAddFavorite(),
     remainingFavorites,
     isPremium,
-    favoritesLimit: limits.favorites,
+    favoritesLimit: isGuest ? GUEST_FAVORITES_CAP : limits.favorites,
+    // Guest save-wall fields (WEB-FEAT-006)
+    isGuest,
+    guestCount: guestFavoritedEvents.length,
+    guestCap: GUEST_FAVORITES_CAP,
   };
 }

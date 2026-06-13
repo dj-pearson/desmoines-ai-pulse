@@ -22,6 +22,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { AccessibilityProvider } from "@/contexts/AccessibilityContext";
 import { AccessibilityWidget } from "@/components/AccessibilityWidget";
 import { SessionManager } from "@/components/auth/SessionManager";
+import { GuestFavoriteMigrator } from "@/components/GuestFavoriteMigrator";
 import { OfflineBanner } from "@/components/OfflineBanner";
 
 /**
@@ -277,6 +278,7 @@ const App = () => (
       <ScrollToTopOnNavigate />
       <AuthProvider>
         <SessionManager />
+        <GuestFavoriteMigrator />
         <OfflineBanner />
         <ErrorBoundary>
           <KeyboardShortcutsProvider>

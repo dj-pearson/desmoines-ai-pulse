@@ -44,6 +44,7 @@ import { SavedSearchesCard } from "@/components/dashboard/SavedSearchesCard";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { consumeMigratedFavoritesNotice } from "@/lib/guestFavorites";
 
 export default function UserDashboard() {
   const [activeTab, setActiveTab] = useState("overview");
@@ -65,6 +66,18 @@ export default function UserDashboard() {
       setActiveTab(tabParam);
     }
   }, [searchParams]);
+
+  // Acknowledge guest favorites that were just migrated into this account
+  // (WEB-FEAT-006). One-shot — consuming the notice clears it.
+  useEffect(() => {
+    const migrated = consumeMigratedFavoritesNotice();
+    if (migrated > 0) {
+      toast.success(
+        `We saved your ${migrated} favorite${migrated === 1 ? "" : "s"} to your account`,
+        { id: "guest-fav-migrated" },
+      );
+    }
+  }, []);
 
   const getStatusIcon = (status: string) => {
     switch (status) {

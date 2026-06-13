@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { hapticTap } from "@/lib/capacitorUtils";
 import { toast } from "sonner";
 import { PaywallModal } from "@/components/PaywallModal";
+import { GuestSignupPrompt } from "@/components/GuestSignupPrompt";
 
 interface FavoriteButtonProps {
   eventId: string;
@@ -25,9 +26,11 @@ export function FavoriteButton({
   showText = false,
   itemName,
 }: FavoriteButtonProps) {
-  const { isFavorited, toggleFavorite, isToggling } = useFavorites();
+  const { isFavorited, toggleFavorite, isToggling, isGuest, guestCount, guestCap } =
+    useFavorites();
   const favorited = isFavorited(eventId);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [showSignup, setShowSignup] = useState(false);
 
   const ariaLabel = isToggling
     ? "Updating favorite..."
@@ -55,11 +58,25 @@ export function FavoriteButton({
             setShowPaywall(true);
             return;
           }
+          // Guest hit the save cap → contextual signup prompt (WEB-FEAT-006).
+          if (result.needsSignup) {
+            setShowSignup(true);
+            return;
+          }
           if (result.success) {
-            toast.success(
-              wasFavorited ? "Removed from favorites" : "Added to favorites",
-              { id: `fav-${eventId}` },
-            );
+            if (isGuest && !wasFavorited) {
+              // Show the running guest count so the visitor sees the limit
+              // (guestCount is the pre-save value, so +1 is the new total).
+              toast.success(
+                `Saved ${guestCount + 1}/${guestCap} — sign up free to keep saving`,
+                { id: `fav-${eventId}` },
+              );
+            } else {
+              toast.success(
+                wasFavorited ? "Removed from favorites" : "Added to favorites",
+                { id: `fav-${eventId}` },
+              );
+            }
           }
         }}
         disabled={isToggling}
@@ -87,6 +104,11 @@ export function FavoriteButton({
         open={showPaywall}
         onOpenChange={setShowPaywall}
         context="unlimited_favorites"
+      />
+      <GuestSignupPrompt
+        open={showSignup}
+        onOpenChange={setShowSignup}
+        savedCount={guestCount}
       />
     </>
   );
