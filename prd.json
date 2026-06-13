@@ -512,8 +512,8 @@
         "npm run validate passes"
       ],
       "priority": 33,
-      "passes": false,
-      "notes": "Evidence: RestaurantDetails fetches related but doesn't render; breadcrumbs.tsx ~35-54 derives labels from the pathname."
+      "passes": true,
+      "notes": "Evidence: RestaurantDetails fetches related but doesn't render; breadcrumbs.tsx ~35-54 derives labels from the pathname. [DONE 2026-06-13] Related rails (Event/Restaurant/Attraction) already rendered with LastUpdatedBadge + named breadcrumbs; tightened visibility to >=3 matches and added trackClick (delegated) on each rail grid for engagement measurement."
     },
     {
       "id": "WEB-UX-005",
