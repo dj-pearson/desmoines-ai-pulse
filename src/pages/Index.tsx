@@ -14,7 +14,6 @@ import { createEventSlugWithCentralTime } from "@/lib/timezone";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { useEventScraper } from "@/hooks/useSupabase";
 import { Event } from "@/lib/types";
 import { BRAND } from "@/lib/brandConfig";
 import { Link, useNavigate } from "react-router-dom";
@@ -41,7 +40,6 @@ const AllInclusiveDashboard = lazy(() => import("@/components/AllInclusiveDashbo
 const PersonalizedDashboard = lazy(() => import("@/components/PersonalizedDashboard"));
 const SmartEventNavigation = lazy(() => import("@/components/SmartEventNavigation"));
 const MostSearched = lazy(() => import("@/components/MostSearched"));
-const EventFilters = lazy(() => import("@/components/EventFilters"));
 const GEOContent = lazy(() => import("@/components/GEOContent"));
 const Newsletter = lazy(() => import("@/components/Newsletter"));
 const EventSocialHub = lazy(() => import("@/components/EventSocialHub").then(m => ({ default: m.EventSocialHub })));
@@ -106,7 +104,6 @@ export default function Index() {
   // Consolidated view state: which secondary view is active
   const [activeView, setActiveView] = useState<
     | { type: 'default' }
-    | { type: 'allEvents' }
     | { type: 'socialHub'; eventId: string }
   >({ type: 'default' });
   const [searchFilters, setSearchFilters] = useState<{
@@ -192,7 +189,6 @@ export default function Index() {
     navigate("/trip-planner");
   };
 
-  const scrapeMutation = useEventScraper();
 
   // WebSite Schema
   const structuredData = {
@@ -357,31 +353,8 @@ export default function Index() {
     setShowEventDetails(true);
   };
 
-  const handleViewAllEvents = () => {
-    setActiveView({ type: 'allEvents' });
-  };
-
   const handleViewSocial = (eventId: string) => {
     setActiveView({ type: 'socialHub', eventId });
-  };
-
-  const handleScrapeEvents = () => {
-    scrapeMutation.mutate(undefined, {
-      onSuccess: () => {
-        toast({
-          title: "Events Updated!",
-          description: "Latest events have been scraped and enhanced with AI.",
-        });
-      },
-      onError: (error: Error) => {
-        toast({
-          title: "Scraping Failed",
-          description:
-            error.message || "Failed to scrape events. Please try again.",
-          variant: "destructive",
-        });
-      },
-    });
   };
 
   const formatEventDate = (date: string | Date) => {
@@ -688,33 +661,6 @@ export default function Index() {
           </Suspense>
         )}
 
-        {activeView.type === 'allEvents' && (
-          <Suspense fallback={<DashboardSkeleton />}>
-            <div className="py-8">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-8">
-                <div className="flex items-center justify-between">
-                  <Button
-                    variant="outline"
-                    onClick={() => setActiveView({ type: 'default' })}
-                  >
-                    ← Back to Smart Discovery
-                  </Button>
-                  <Button
-                    onClick={handleScrapeEvents}
-                    disabled={scrapeMutation.isPending}
-                    className="bg-accent hover:bg-green-700 text-white"
-                  >
-                    <Sparkles className="h-4 w-4 mr-2" />
-                    {scrapeMutation.isPending ? "Updating..." : "Update Events"}
-                  </Button>
-                </div>
-              </div>
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <EventFilters onViewEventDetails={handleViewEventDetails} />
-              </div>
-            </div>
-          </Suspense>
-        )}
 
         {/* GEO-optimized content section */}
         <Suspense fallback={<SectionLoader />}>
