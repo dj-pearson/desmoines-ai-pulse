@@ -25,6 +25,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { LazyLocationMap } from "@/components/LazyLocationMap";
 import { getDirectionsUrl } from "@/lib/directions";
+import { OpenStatusChip } from "@/components/OpenStatusChip";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 
@@ -344,6 +345,13 @@ export default function HotelDetails() {
                         <Navigation className="h-3.5 w-3.5 mr-1" />
                         Directions
                       </a>
+                      <div className="mt-2">
+                        <OpenStatusChip
+                          hours={null}
+                          website={hotel.source_url}
+                          fallbackLabel="Check hotel site for hours & check-in"
+                        />
+                      </div>
                     </div>
                   </div>
 

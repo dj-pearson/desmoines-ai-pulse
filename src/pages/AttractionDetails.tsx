@@ -11,6 +11,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { LazyLocationMap } from "@/components/LazyLocationMap";
 import { getDirectionsUrl } from "@/lib/directions";
+import { OpenStatusChip } from "@/components/OpenStatusChip";
 import ShareDialog from "@/components/ShareDialog";
 import { FAQSection } from "@/components/FAQSection";
 import { BackToTop } from "@/components/BackToTop";
@@ -377,7 +378,12 @@ export default function AttractionDetails() {
             </div>
 
             {/* Quick Actions Bar */}
-            <div className="flex flex-wrap gap-3 p-4 md:p-6 bg-gray-50 border-b">
+            <div className="flex flex-wrap items-center gap-3 p-4 md:p-6 bg-gray-50 border-b">
+              <OpenStatusChip
+                hours={attraction.hours}
+                website={attraction.website}
+                className="self-center"
+              />
               {attraction.website && (
                 <a href={attraction.website} target="_blank" rel="noopener noreferrer">
                   <Button className="bg-[#2D1B69] hover:bg-[#2D1B69]/90 text-white rounded-xl">

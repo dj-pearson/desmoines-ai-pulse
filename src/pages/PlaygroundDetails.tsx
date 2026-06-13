@@ -10,6 +10,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { LazyLocationMap } from "@/components/LazyLocationMap";
 import { getDirectionsUrl } from "@/lib/directions";
+import { OpenStatusChip } from "@/components/OpenStatusChip";
 import ShareDialog from "@/components/ShareDialog";
 import { FAQSection } from "@/components/FAQSection";
 import { BackToTop } from "@/components/BackToTop";
@@ -433,7 +434,7 @@ export default function PlaygroundDetails() {
                     </div>
                     <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
                       <span className="text-gray-600">Hours</span>
-                      <span className="text-gray-900 text-sm font-medium">Dawn to Dusk</span>
+                      <OpenStatusChip hours={null} fallbackLabel="Check local park listings" />
                     </div>
                   </div>
                 </div>
@@ -558,7 +559,7 @@ export default function PlaygroundDetails() {
                   <div className="space-y-3">
                     <div>
                       <h3 className="font-semibold text-sm text-gray-900">Hours</h3>
-                      <p className="text-sm text-gray-600">Dawn to Dusk, daily</p>
+                      <OpenStatusChip hours={null} fallbackLabel="Check local park listings for hours" className="mt-1" />
                     </div>
                     <div>
                       <h3 className="font-semibold text-sm text-gray-900">Area</h3>
