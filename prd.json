@@ -742,7 +742,8 @@
         "npm run validate passes (type-check + lint)"
       ],
       "priority": 37,
-      "passes": false
+      "passes": true,
+      "notes": "[DONE 2026-06-13] Home hero now leads with NLPSearchBar (primary) + example chips; structured SearchSection demoted to labeled secondary. /search points to new NLP-driven SearchResults page (reads ?q=, runs nlp-search, links results by id /{type}/{id}). Advanced filters preserved as refine step at /search/advanced, no paywall on basic NLP query. Graceful keyword fallback (useEvents/useRestaurants/useAttractions search, mounted only on error) with visible notice; NLPSearchBar dropdown also shows keyword-fallback link on error."
     },
     {
       "id": "WEB-UX-009",
