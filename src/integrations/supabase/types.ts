@@ -737,6 +737,9 @@ export type Database = {
           geo_summary: string | null
           geo_key_facts: string[] | null
           geo_faq: Json | null
+          // Sponsored listings (WEB-FEAT-005)
+          is_sponsored: boolean
+          sponsored_until: string | null
         }
         Insert: {
           created_at?: string | null
@@ -767,6 +770,8 @@ export type Database = {
           geo_summary?: string | null
           geo_key_facts?: string[] | null
           geo_faq?: Json | null
+          is_sponsored?: boolean
+          sponsored_until?: string | null
         }
         Update: {
           created_at?: string | null
@@ -797,6 +802,8 @@ export type Database = {
           geo_summary?: string | null
           geo_key_facts?: string[] | null
           geo_faq?: Json | null
+          is_sponsored?: boolean
+          sponsored_until?: string | null
         }
         Relationships: []
       }

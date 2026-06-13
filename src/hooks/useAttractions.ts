@@ -22,6 +22,8 @@ const ATTRACTION_LIST_COLUMNS = [
   "location",
   "description",
   "is_featured",
+  "is_sponsored",
+  "sponsored_until",
   "is_active",
   "address",
   "hours_summary",

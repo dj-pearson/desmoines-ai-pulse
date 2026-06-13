@@ -313,7 +313,7 @@ export function createViewabilityObserver(
  * a real campaign_id/creative_id (FK), so house/affiliate fills are measured via
  * GA4 events instead.
  */
-export type AdInventoryClass = 'paid' | 'affiliate' | 'house';
+export type AdInventoryClass = 'paid' | 'affiliate' | 'house' | 'sponsored_listing';
 
 /** Best-effort GA4 (gtag) event dispatch — mirrors src/lib/paywallAnalytics.ts. */
 function sendGtagEvent(event: string, payload: Record<string, unknown>): void {
@@ -356,6 +356,51 @@ export function trackAdFillClick(
 ): void {
   sendGtagEvent('ad_fill_click', { inventory, placement: placementType, ...extra });
   logger.debug('trackAdFillClick', 'ad_fill_click', { inventory, placement: placementType });
+}
+
+/** Content surface a sponsored listing can appear on. */
+export type SponsoredListingType = 'event' | 'restaurant' | 'attraction';
+
+/**
+ * Record that a sponsored listing was shown in a browse list. Tagged with the
+ * 'sponsored_listing' inventory class so its impressions/clicks are measured
+ * distinctly from paid/house/affiliate ad slots (WEB-FEAT-005). Always
+ * best-effort — sponsored listings are first-party content, not campaign ads, so
+ * they don't write to the ad_impressions FK tables.
+ */
+export function trackSponsoredListingImpression(
+  itemType: SponsoredListingType,
+  itemId: string,
+  extra?: Record<string, unknown>,
+): void {
+  sendGtagEvent('sponsored_listing_impression', {
+    inventory: 'sponsored_listing',
+    item_type: itemType,
+    item_id: itemId,
+    ...extra,
+  });
+  logger.debug('trackSponsoredListingImpression', 'sponsored_listing_impression', {
+    item_type: itemType,
+    item_id: itemId,
+  });
+}
+
+/** Record a click-through on a sponsored listing. */
+export function trackSponsoredListingClick(
+  itemType: SponsoredListingType,
+  itemId: string,
+  extra?: Record<string, unknown>,
+): void {
+  sendGtagEvent('sponsored_listing_click', {
+    inventory: 'sponsored_listing',
+    item_type: itemType,
+    item_id: itemId,
+    ...extra,
+  });
+  logger.debug('trackSponsoredListingClick', 'sponsored_listing_click', {
+    item_type: itemType,
+    item_id: itemId,
+  });
 }
 
 /**

@@ -24,6 +24,9 @@ import {
   hasSpecificTime,
 } from '@/lib/timezone';
 import { getEventCategoryStyle } from '@/lib/categoryColors';
+import { SponsoredBadge } from '@/components/SponsoredBadge';
+import { isActivelySponsored } from '@/lib/sponsoredListings';
+import { useSponsoredTracking } from '@/hooks/useSponsoredTracking';
 import { Link } from 'react-router-dom';
 
 interface SocialEventCardProps {
@@ -72,19 +75,27 @@ function SocialEventCardComponent({
   const isLive = liveStats && liveStats.total_checkins > 0;
   const attendeeCount = attendees?.length || liveStats?.current_attendees || 0;
 
+  // Sponsored treatment is expiry-aware (WEB-FEAT-005): a lapsed sponsored_until
+  // window automatically loses the badge/ring with no manual cleanup.
+  const sponsored = isActivelySponsored(event);
+  const { ref: sponsoredRef, trackClick: trackSponsoredClick } =
+    useSponsoredTracking<HTMLDivElement>(sponsored, 'event', event.id);
+
   return (
     <Card
-      className={`group relative overflow-hidden border-0 shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-card ${
-        featured ? 'md:col-span-2 md:row-span-2' : ''
-      }`}
+      ref={sponsoredRef}
+      className={`group relative overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-card ${
+        sponsored ? 'ring-2 ring-amber-400/60 border-0' : 'border-0'
+      } ${featured ? 'md:col-span-2 md:row-span-2' : ''}`}
     >
       {/* Stretched navigation link: covers the whole card but sits BELOW the secondary
           actions (z-20 < z-30) so favorite/share are reachable as siblings, not nested
           interactive elements inside the anchor. */}
       <Link
         to={eventUrl}
+        onClick={trackSponsoredClick}
         className="absolute inset-0 z-20 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-        aria-label={`View details for ${event.title}`}
+        aria-label={`${sponsored ? 'Sponsored: ' : ''}View details for ${event.title}`}
       >
         <span className="sr-only">View details for {event.title}</span>
       </Link>
@@ -136,6 +147,7 @@ function SocialEventCardComponent({
 
             {/* Top Right Badges */}
             <div className="absolute top-3 right-3 z-10 flex flex-col gap-1.5 items-end">
+              {sponsored && <SponsoredBadge />}
               {isLive && (
                 <Badge className="bg-green-500 text-white border-0 shadow-lg text-[10px] px-2 animate-pulse">
                   <TrendingUp className="h-3 w-3 mr-1" />

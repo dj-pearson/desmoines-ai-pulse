@@ -59,6 +59,9 @@ import {
 } from "@/components/ui/sheet";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
 import { getStringParam, getNumberParam } from "@/lib/urlParams";
+import { SponsoredBadge } from "@/components/SponsoredBadge";
+import { promoteSponsored, isActivelySponsored } from "@/lib/sponsoredListings";
+import { useSponsoredTracking } from "@/hooks/useSponsoredTracking";
 
 // Lazy load map to prevent react-leaflet bundling issues
 const AttractionsMap = lazy(() => import("@/components/AttractionsMap"));
@@ -69,6 +72,115 @@ const createSlug = (name: string): string => {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 };
+
+interface AttractionListCardProps {
+  attraction: {
+    id: string;
+    name: string;
+    type: string;
+    image_url?: string | null;
+    rating?: number | null;
+    location?: string | null;
+    description?: string | null;
+    is_featured?: boolean | null;
+    is_sponsored?: boolean | null;
+    sponsored_until?: string | null;
+  };
+  onPrefetch: (slug: string) => void;
+}
+
+// Browse-list attraction card. Extracted so it can host the sponsored-listing
+// viewability/click tracking hook (WEB-FEAT-005). Sponsored treatment is
+// expiry-aware: a lapsed sponsored_until window drops the badge/ring with no
+// manual cleanup.
+function AttractionListCard({ attraction, onPrefetch }: AttractionListCardProps) {
+  const slug = createSlug(attraction.name);
+  const sponsored = isActivelySponsored(attraction);
+  const { ref: sponsoredRef, trackClick } = useSponsoredTracking<HTMLAnchorElement>(
+    sponsored,
+    "attraction",
+    attraction.id,
+  );
+
+  return (
+    <Link
+      ref={sponsoredRef}
+      to={`/attractions/${slug}`}
+      className="block"
+      onMouseEnter={() => onPrefetch(slug)}
+      onClick={trackClick}
+      aria-label={`${sponsored ? "Sponsored: " : ""}${attraction.name}`}
+    >
+      <Card
+        className={`h-full hover:shadow-lg transition-all duration-200 hover:-translate-y-1 rounded-2xl overflow-hidden ${
+          sponsored ? "ring-2 ring-amber-400/60" : ""
+        }`}
+      >
+        <div className="relative">
+          {attraction.image_url ? (
+            <OptimizedImage
+              src={attraction.image_url}
+              alt={`${attraction.name} - ${attraction.type} in Des Moines`}
+              width={640}
+              height={360}
+              className="transition-transform duration-200 hover:scale-105 object-cover"
+              containerClassName="aspect-video overflow-hidden"
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+              useTransformApi
+              enableWebP={false}
+              transformWidths={[...CARD_IMAGE_WIDTHS]}
+            />
+          ) : (
+            <div className="aspect-video bg-gradient-to-br from-[#2D1B69] to-[#DC143C] flex items-center justify-center" role="img" aria-label={`No image available for ${attraction.name}`}>
+              <Landmark className="h-12 w-12 text-white/40" />
+            </div>
+          )}
+          {sponsored && (
+            <div className="absolute top-3 left-3 z-10">
+              <SponsoredBadge />
+            </div>
+          )}
+        </div>
+        <CardContent className="p-5">
+          <div className="flex items-center justify-between mb-2">
+            <Badge
+              variant="outline"
+              className="bg-[#2D1B69]/10 text-[#2D1B69] text-xs"
+            >
+              <Landmark className="h-3 w-3 mr-1" />
+              {attraction.type}
+            </Badge>
+            {!sponsored && attraction.is_featured && (
+              <Badge className="bg-[#DC143C] text-white text-xs">Featured</Badge>
+            )}
+          </div>
+          <h3 className="font-semibold text-lg line-clamp-2 mb-2">
+            {attraction.name}
+          </h3>
+          <div className="space-y-2 text-sm text-muted-foreground">
+            {attraction.rating && (
+              <div className="flex items-center gap-2">
+                <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                <span>{attraction.rating}/5</span>
+              </div>
+            )}
+            {attraction.location && (
+              <div className="flex items-center gap-2">
+                <MapPin className="h-4 w-4" />
+                <span className="line-clamp-1">{attraction.location}</span>
+              </div>
+            )}
+          </div>
+          {attraction.description && (
+            <p className="text-sm text-muted-foreground line-clamp-2 mt-2">
+              {attraction.description}
+            </p>
+          )}
+        </CardContent>
+      </Card>
+    </Link>
+  );
+}
 
 export default function Attractions() {
   const navigate = useNavigate();
@@ -155,7 +267,9 @@ export default function Attractions() {
         sorted.sort((a, b) => (b.rating || 0) - (a.rating || 0));
         break;
     }
-    return sorted;
+    // Float up to 2 actively-sponsored attractions to the top; organic order
+    // otherwise untouched (WEB-FEAT-005).
+    return promoteSponsored(sorted);
   }, [filteredAttractions, sortBy]);
 
   const handleSurpriseMe = () => {
@@ -677,69 +791,11 @@ export default function Attractions() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {paginatedAttractions.map((attraction) => (
-                <Link
+                <AttractionListCard
                   key={attraction.id}
-                  to={`/attractions/${createSlug(attraction.name)}`}
-                  className="block"
-                  onMouseEnter={() => prefetchAttraction(createSlug(attraction.name))}
-                >
-                  <Card className="h-full hover:shadow-lg transition-all duration-200 hover:-translate-y-1 rounded-2xl overflow-hidden">
-                    {attraction.image_url ? (
-                      <OptimizedImage
-                        src={attraction.image_url}
-                        alt={`${attraction.name} - ${attraction.type} in Des Moines`}
-                        width={640}
-                        height={360}
-                        className="transition-transform duration-200 hover:scale-105 object-cover"
-                        containerClassName="aspect-video overflow-hidden"
-                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                        useTransformApi
-                        enableWebP={false}
-                        transformWidths={[...CARD_IMAGE_WIDTHS]}
-                      />
-                    ) : (
-                      <div className="aspect-video bg-gradient-to-br from-[#2D1B69] to-[#DC143C] flex items-center justify-center" role="img" aria-label={`No image available for ${attraction.name}`}>
-                        <Landmark className="h-12 w-12 text-white/40" />
-                      </div>
-                    )}
-                    <CardContent className="p-5">
-                      <div className="flex items-center justify-between mb-2">
-                        <Badge
-                          variant="outline"
-                          className="bg-[#2D1B69]/10 text-[#2D1B69] text-xs"
-                        >
-                          <Landmark className="h-3 w-3 mr-1" />
-                          {attraction.type}
-                        </Badge>
-                        {attraction.is_featured && (
-                          <Badge className="bg-[#DC143C] text-white text-xs">Featured</Badge>
-                        )}
-                      </div>
-                      <h3 className="font-semibold text-lg line-clamp-2 mb-2">
-                        {attraction.name}
-                      </h3>
-                      <div className="space-y-2 text-sm text-muted-foreground">
-                        {attraction.rating && (
-                          <div className="flex items-center gap-2">
-                            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                            <span>{attraction.rating}/5</span>
-                          </div>
-                        )}
-                        {attraction.location && (
-                          <div className="flex items-center gap-2">
-                            <MapPin className="h-4 w-4" />
-                            <span className="line-clamp-1">{attraction.location}</span>
-                          </div>
-                        )}
-                      </div>
-                      {attraction.description && (
-                        <p className="text-sm text-muted-foreground line-clamp-2 mt-2">
-                          {attraction.description}
-                        </p>
-                      )}
-                    </CardContent>
-                  </Card>
-                </Link>
+                  attraction={attraction}
+                  onPrefetch={prefetchAttraction}
+                />
               ))}
             </div>
 

@@ -55,6 +55,7 @@ import { SearchAutocomplete, addRecentSearch } from "@/components/SearchAutocomp
 import { SaveSearchButton } from "@/components/SaveSearchButton";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
 import { getStringParam, getNumberParam } from "@/lib/urlParams";
+import { promoteSponsored } from "@/lib/sponsoredListings";
 
 // Lazy load heavy map component (includes Leaflet library ~150KB)
 const EventsMap = lazy(() => import("@/components/EventsMap"));
@@ -288,7 +289,7 @@ export default function EventsPage() {
 
       let query = supabase
         .from("events")
-        .select("id, title, date, location, category, image_url, price, venue, is_featured, event_start_utc, event_start_local, city, latitude, longitude, enhanced_description, original_description", { count: 'exact' })
+        .select("id, title, date, location, category, image_url, price, venue, is_featured, is_sponsored, sponsored_until, event_start_utc, event_start_local, city, latitude, longitude, enhanced_description, original_description", { count: 'exact' })
         .gte("date", new Date().toISOString().split("T")[0])
         .order("date", { ascending: true })
         .range((page - 1) * EVENTS_PER_PAGE, page * EVENTS_PER_PAGE - 1);
@@ -406,7 +407,9 @@ export default function EventsPage() {
         sorted.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         break;
     }
-    return sorted;
+    // Float up to 2 actively-sponsored events to the top; organic order otherwise
+    // untouched (WEB-FEAT-005).
+    return promoteSponsored(sorted);
   }, [priceFilteredEvents, sortBy]);
   const totalCount = eventsData?.totalCount || 0;
   const hasMore = totalCount > page * EVENTS_PER_PAGE;

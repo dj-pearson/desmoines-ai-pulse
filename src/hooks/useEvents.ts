@@ -30,6 +30,8 @@ const EVENT_LIST_COLUMNS = [
   "event_timezone",
   "is_enhanced",
   "is_featured",
+  "is_sponsored",
+  "sponsored_until",
   "latitude",
   "longitude",
 ] satisfies readonly (keyof Event)[];

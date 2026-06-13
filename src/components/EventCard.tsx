@@ -35,6 +35,8 @@ import { OptimizedImage } from "@/components/OptimizedImage";
 import { CARD_IMAGE_WIDTHS } from "@/lib/imageTransform";
 import { SponsoredBadge } from "@/components/SponsoredBadge";
 import { getEventCategoryStyle } from "@/lib/categoryColors";
+import { isActivelySponsored } from "@/lib/sponsoredListings";
+import { useSponsoredTracking } from "@/hooks/useSponsoredTracking";
 
 const createSlug = (name: string): string => {
   return name
@@ -68,11 +70,20 @@ function EventCardComponent({ event, onViewDetails }: EventCardProps) {
   // Determine if trending based on view data
   const isTrending = viewData.trending_score > 70 || viewData.recent_views > 100;
 
+  // Sponsored treatment is expiry-aware: a lapsed sponsored_until window loses
+  // the badge/ring automatically (WEB-FEAT-005).
+  const sponsored = isActivelySponsored(event);
+  const { ref: sponsoredRef, trackClick: trackSponsoredClick } =
+    useSponsoredTracking<HTMLDivElement>(sponsored, "event", event.id);
+
   const handleViewDetails = useCallback(() => {
     // Track interaction
     if (isAuthenticated) {
       trackInteraction(event.id, "view");
     }
+
+    // Track sponsored click-through distinctly
+    trackSponsoredClick();
 
     // Add to recently viewed
     addToRecentlyViewed(event);
@@ -81,12 +92,12 @@ function EventCardComponent({ event, onViewDetails }: EventCardProps) {
     trackView();
 
     onViewDetails(event);
-  }, [isAuthenticated, trackInteraction, event, addToRecentlyViewed, trackView, onViewDetails]);
+  }, [isAuthenticated, trackInteraction, event, addToRecentlyViewed, trackView, onViewDetails, trackSponsoredClick]);
 
   const categoryStyle = getEventCategoryStyle(event.category);
 
   return (
-    <Card className={`overflow-hidden hover:shadow-lg transition-all duration-200 hover:scale-[1.02] card-interactive group focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2 ${event.is_sponsored ? 'ring-2 ring-amber-400/60' : ''}`}>
+    <Card ref={sponsoredRef} className={`overflow-hidden hover:shadow-lg transition-all duration-200 hover:scale-[1.02] card-interactive group focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2 ${sponsored ? 'ring-2 ring-amber-400/60' : ''}`}>
       {/* Image with overlay badges */}
       <div className="relative overflow-hidden">
         {event.image_url && !imageError ? (
@@ -114,9 +125,9 @@ function EventCardComponent({ event, onViewDetails }: EventCardProps) {
         {/* Overlay badges for urgency/social proof */}
         <div className="absolute top-2 left-2 right-2 flex items-start justify-between gap-2">
           <div className="flex flex-col gap-2">
-            {event.is_sponsored && <SponsoredBadge />}
-            {!event.is_sponsored && isTrending && <SocialProofBadge type="trending" count={viewData.recent_views} size="sm" />}
-            {!event.is_sponsored && isNew && !isTrending && <SocialProofBadge type="new" size="sm" />}
+            {sponsored && <SponsoredBadge />}
+            {!sponsored && isTrending && <SocialProofBadge type="trending" count={viewData.recent_views} size="sm" />}
+            {!sponsored && isNew && !isTrending && <SocialProofBadge type="new" size="sm" />}
           </div>
 
           {/* Distance Badge (only shown in Near Me mode) */}

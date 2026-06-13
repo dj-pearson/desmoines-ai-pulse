@@ -74,6 +74,7 @@ import {
   getBoolParam,
   getNumberParam,
 } from "@/lib/urlParams";
+import { promoteSponsored } from "@/lib/sponsoredListings";
 
 // Lazy load map component to prevent react-leaflet bundling issues
 const RestaurantsMap = lazy(() => import("@/components/RestaurantsMap"));
@@ -139,17 +140,24 @@ export default function Restaurants() {
     navigate(`/restaurants/${random.slug || random.id}`);
   }, [restaurants, navigate]);
 
+  // Float up to 2 actively-sponsored restaurants to the top of the browse list;
+  // organic order otherwise untouched (WEB-FEAT-005).
+  const orderedRestaurants = useMemo(
+    () => promoteSponsored(restaurants),
+    [restaurants],
+  );
+
   // Paginate restaurants
-  const totalPages = Math.ceil((restaurants?.length || 0) / ITEMS_PER_PAGE);
+  const totalPages = Math.ceil((orderedRestaurants?.length || 0) / ITEMS_PER_PAGE);
   const paginatedRestaurants = useMemo(() => {
     if (isMobile) {
       // Mobile: show all up to current page (load more pattern)
-      return restaurants.slice(0, page * ITEMS_PER_PAGE);
+      return orderedRestaurants.slice(0, page * ITEMS_PER_PAGE);
     }
     // Desktop: show current page only
     const start = (page - 1) * ITEMS_PER_PAGE;
-    return restaurants.slice(start, start + ITEMS_PER_PAGE);
-  }, [restaurants, page, isMobile]);
+    return orderedRestaurants.slice(start, start + ITEMS_PER_PAGE);
+  }, [orderedRestaurants, page, isMobile]);
 
   const hasMorePages = isMobile
     ? page * ITEMS_PER_PAGE < restaurants.length
