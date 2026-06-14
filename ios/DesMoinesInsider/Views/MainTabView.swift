@@ -65,6 +65,16 @@ struct MainTabView: View {
         var id: String { rawValue }
     }
 
+    // MARK: - Deep Linking (IOS-AUDIT-FEAT-002)
+
+    @State private var deepLink = DeepLinkHandler.shared
+    /// Content detail presented modally from a deep link / notification tap.
+    @State private var deepLinkDetail: DeepLinkDetail?
+    /// Discover surface opened directly from a deep link.
+    @State private var discoverRoute: DiscoverDestination?
+    /// True while a deep-linked id is being fetched into a full model.
+    @State private var isResolvingDeepLink = false
+
     var body: some View {
         Group {
             if sizeClass == .regular {
@@ -120,6 +130,80 @@ struct MainTabView: View {
             case .tripPlanner: TripPlannerView(ownsNavigationStack: true)
             case .paywall: PaywallView(context: .tripPlanner)
             case .hub: ContentHubView(hub: .music)
+            }
+        }
+        // Resolve a pending deep link both on first appearance (cold launch from a
+        // link/notification) and whenever a new one arrives while running.
+        .onChange(of: deepLink.pendingDestination, initial: true) { _, _ in
+            resolvePendingDestination()
+        }
+        .sheet(item: $deepLinkDetail) { detail in
+            NavigationStack {
+                Group {
+                    switch detail {
+                    case .event(let event): EventDetailView(event: event)
+                    case .restaurant(let restaurant): RestaurantDetailView(restaurant: restaurant)
+                    case .attraction(let attraction): AttractionDetailView(attraction: attraction)
+                    }
+                }
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Done") { deepLinkDetail = nil }
+                    }
+                }
+            }
+        }
+        .sheet(item: $discoverRoute) { destination in
+            DiscoverHubView(initialDestination: destination)
+        }
+        .overlay {
+            if isResolvingDeepLink {
+                ZStack {
+                    Color.black.opacity(0.15).ignoresSafeArea()
+                    ProgressView()
+                        .padding(20)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+                }
+                .accessibilityLabel("Opening link")
+            }
+        }
+    }
+
+    // MARK: - Deep Link Resolution
+
+    /// Consumes the pending destination and routes to it: tab switch, Discover
+    /// surface, or a fetched content detail (events/restaurants/attractions are
+    /// deep-linked by id, so the full model is fetched before presenting).
+    private func resolvePendingDestination() {
+        guard let destination = deepLink.consumeDestination() else { return }
+        switch destination {
+        case .tab(let tab):
+            selectedTab = tab
+        case .discover(let surface):
+            discoverRoute = surface
+        case .event(let id):
+            resolveDetail(fallback: .home) { .event(try await EventsService.shared.fetchEvent(id: id)) }
+        case .restaurant(let id):
+            resolveDetail(fallback: .restaurants) { .restaurant(try await RestaurantsService.shared.fetchRestaurant(id: id)) }
+        case .attraction(let id):
+            resolveDetail(fallback: .home) { .attraction(try await AttractionsService.shared.fetchAttraction(id: id)) }
+        }
+    }
+
+    private func resolveDetail(
+        fallback: Tab,
+        _ fetch: @escaping () async throws -> DeepLinkDetail
+    ) {
+        Task {
+            isResolvingDeepLink = true
+            defer { isResolvingDeepLink = false }
+            do {
+                deepLinkDetail = try await fetch()
+            } catch {
+                // Couldn't load the linked item — land on a sensible tab instead
+                // of leaving the user staring at a spinner.
+                AppLogger.nav.warning("Deep link detail fetch failed: \(error.localizedDescription)")
+                selectedTab = fallback
             }
         }
     }
@@ -265,6 +349,24 @@ struct MainTabView: View {
         case .map: EventMapView()
         case .favorites: FavoritesView()
         case .profile: ProfileView()
+        }
+    }
+}
+
+// MARK: - Deep Link Detail Route
+
+/// A fully-resolved content model to present modally from a deep link or
+/// notification tap. Identifiable so it can drive `.sheet(item:)`.
+private enum DeepLinkDetail: Identifiable {
+    case event(Event)
+    case restaurant(Restaurant)
+    case attraction(Attraction)
+
+    var id: String {
+        switch self {
+        case .event(let event): return "event-\(event.id)"
+        case .restaurant(let restaurant): return "restaurant-\(restaurant.id)"
+        case .attraction(let attraction): return "attraction-\(attraction.id)"
         }
     }
 }

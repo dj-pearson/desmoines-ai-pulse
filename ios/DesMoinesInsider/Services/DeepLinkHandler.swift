@@ -52,6 +52,31 @@ final class DeepLinkHandler {
         return pendingDestination
     }
 
+    // MARK: - Notification Payloads
+
+    /// Routes a notification payload (local reminder or remote push) to a
+    /// destination. Local event reminders carry an `eventId`; remote push may
+    /// carry a full deep-link `url`. Returns `true` if a destination was set.
+    @discardableResult
+    func handleNotification(userInfo: [AnyHashable: Any]) -> Bool {
+        // Remote push can carry a full deep-link URL — reuse the URL parser so a
+        // single payload field can target any supported screen.
+        if let urlString = userInfo["url"] as? String,
+           let url = URL(string: urlString),
+           handle(url) {
+            return true
+        }
+
+        // Local event reminders carry the event id directly.
+        if let eventId = userInfo["eventId"] as? String,
+           let id = validatedId(eventId, source: "notification") {
+            pendingDestination = .event(id: id)
+            return true
+        }
+
+        return false
+    }
+
     // MARK: - ID Validation
 
     /// Validates that an ID looks like a UUID (8-4-4-4-12 hex format).

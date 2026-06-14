@@ -15,7 +15,20 @@ final class SupabaseService {
     /// A human-readable reason why the client could not be created.
     let configurationError: String?
 
+    /// URLSession with certificate pinning, injected into the Supabase client so
+    /// all API/Functions/Storage traffic is pinned (SEC-001). Retained for the
+    /// app lifetime alongside the client.
+    private let pinnedSession: URLSession
+
     private init() {
+        // Build the pinned session up front so it's available regardless of which
+        // configuration branch we take.
+        pinnedSession = URLSession(
+            configuration: .default,
+            delegate: CertificatePinningService.shared,
+            delegateQueue: nil
+        )
+
         guard let url = Config.supabaseURL else {
             client = nil
             configurationError = "SUPABASE_URL is missing or invalid. Ensure secrets are injected at build time."
@@ -36,7 +49,8 @@ final class SupabaseService {
                     flowType: .pkce
                 ),
                 global: SupabaseClientOptions.GlobalOptions(
-                    headers: ["X-Client-Info": "desmoines-insider-ios"]
+                    headers: ["X-Client-Info": "desmoines-insider-ios"],
+                    session: pinnedSession
                 )
             )
         )

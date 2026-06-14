@@ -88,9 +88,27 @@ final class PushNotificationService: NSObject {
 
 // MARK: - App Delegate for Push Notifications
 
-/// Use as `@UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate` in the App struct
-/// when `Config.enablePushNotifications` is true.
-class AppDelegate: NSObject, UIApplicationDelegate {
+/// Installed via `@UIApplicationDelegateAdaptor(AppDelegate.self)` in the App struct.
+///
+/// Installed unconditionally (not gated on `Config.enablePushNotifications`) because
+/// it also owns notification *presentation* and *tap routing* for local event
+/// reminders, which work regardless of whether remote push is enabled. Remote-token
+/// callbacks below only fire after `registerForRemoteNotifications()` is called, which
+/// is itself gated on `Config.enablePushNotifications`.
+final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        // Take ownership of foreground presentation + tap handling for both local
+        // reminders and remote push. Set even when push is disabled so reminder
+        // taps route to the right screen.
+        UNUserNotificationCenter.current().delegate = self
+        return true
+    }
+
+    // MARK: - Remote Notification Token
+
     func application(
         _ application: UIApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
@@ -107,5 +125,33 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         Task { @MainActor in
             PushNotificationService.shared.didFailToRegisterForRemoteNotifications(error: error)
         }
+    }
+
+    // MARK: - UNUserNotificationCenterDelegate
+
+    /// Show a banner (+ sound, badge) for notifications that arrive while the app
+    /// is in the foreground — without this, foreground notifications are silently
+    /// dropped by the system.
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound, .badge])
+    }
+
+    /// Route a notification tap to the matching screen. Local event reminders carry
+    /// an `eventId` (see LocalNotificationService); remote push may carry a
+    /// deep-link `url`. Both are resolved by DeepLinkHandler.
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let userInfo = response.notification.request.content.userInfo
+        Task { @MainActor in
+            DeepLinkHandler.shared.handleNotification(userInfo: userInfo)
+        }
+        completionHandler()
     }
 }

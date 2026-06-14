@@ -74,6 +74,15 @@ enum Config {
     static let enableAIFeatures = true
     static let enablePushNotifications = false
 
+    /// Hard-block (cancel) Supabase connections whose TLS chain doesn't match a
+    /// pinned SPKI hash, in Release builds. Default `false`: pinning is still
+    /// ACTIVE and mismatches are logged, but connections are allowed so a stale
+    /// pin can never brick production. Flip to `true` ONLY after verifying the
+    /// pinned hashes in CertificatePinningService against the live Supabase host
+    /// (see the openssl command in that file). DEBUG builds are always
+    /// report-only regardless of this flag.
+    static let enforceCertificatePinning = false
+
     // MARK: - Testing
 
     /// `true` when the app is launched by XCUITest (Fastlane Snapshot, etc.).

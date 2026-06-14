@@ -263,24 +263,9 @@ struct RestaurantsView: View {
     // MARK: - Error Banner
 
     private func errorBanner(_ error: String) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.yellow)
-            Text(error)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-            Spacer()
-            Button {
-                Task { await viewModel.refresh() }
-            } label: {
-                Text("Retry")
-                    .font(.caption.bold())
-                    .foregroundStyle(Color.accentColor)
-            }
+        ErrorBannerView(message: error) {
+            Task { await viewModel.refresh() }
         }
-        .padding(12)
-        .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
     }
 
     /// Sponsored listings (IOS-ADS-011) pulled to the front of the Dining feed;

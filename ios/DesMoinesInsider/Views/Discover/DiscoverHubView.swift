@@ -22,10 +22,21 @@ struct DiscoverHubView: View {
     /// NavigationStack supplied by the presenter (e.g. pushed from Home).
     var ownsNavigationStack: Bool = true
 
+    /// Optional surface to open directly on appear (deep links, IOS-AUDIT-FEAT-005).
+    /// Only honored when this view owns its NavigationStack.
+    var initialDestination: DiscoverDestination? = nil
+
+    @State private var path = NavigationPath()
+
     var body: some View {
         if ownsNavigationStack {
-            NavigationStack {
+            NavigationStack(path: $path) {
                 content
+            }
+            .task {
+                if let initialDestination, path.isEmpty {
+                    path.append(initialDestination)
+                }
             }
         } else {
             content

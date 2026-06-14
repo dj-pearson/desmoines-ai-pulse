@@ -89,9 +89,14 @@ struct ToastOverlayModifier: ViewModifier {
             }
             .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.35, dampingFraction: 0.8), value: message)
             .onChange(of: message) { _, newValue in
-                guard newValue != nil else { return }
+                guard let newValue else { return }
+                // Toasts are otherwise silent for VoiceOver — announce the text so
+                // assistive-tech users get the same feedback (IOS-AUDIT-UX-003).
+                UIAccessibility.post(notification: .announcement, argument: newValue.text)
+                // Give VoiceOver users longer to hear it before auto-dismiss.
+                let duration: Double = UIAccessibility.isVoiceOverRunning ? 4.0 : 2.0
                 Task { @MainActor in
-                    try? await Task.sleep(for: .seconds(2.0))
+                    try? await Task.sleep(for: .seconds(duration))
                     if self.message == newValue {
                         self.message = nil
                     }

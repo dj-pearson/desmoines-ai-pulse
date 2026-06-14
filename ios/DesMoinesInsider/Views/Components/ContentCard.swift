@@ -491,6 +491,11 @@ struct CardFavoriteButton: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(isFavorited ? "Remove \(name) from saved" : "Save \(name)")
+        // Expose toggle state (IOS-AUDIT-UX-001) and guarantee a 44pt hit target
+        // (IOS-AUDIT-UX-002); the visual heart stays 28/36pt.
+        .accessibilityValue(isFavorited ? "Saved" : "Not saved")
+        .accessibilityAddTraits(isFavorited ? .isSelected : [])
+        .minHitTarget()
     }
 
     private var heartColor: Color {
