@@ -95,7 +95,8 @@ struct OnboardingView: View {
                     }
                 }
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Page \(currentPage + 1) of \(pages.count)")
+                .accessibilityLabel("Onboarding progress")
+                .accessibilityValue("Page \(currentPage + 1) of \(pages.count)")
 
                 // Buttons
                 HStack(spacing: 16) {
@@ -116,9 +117,11 @@ struct OnboardingView: View {
                                 .fontWeight(.semibold)
                                 .padding(.horizontal, 32)
                                 .padding(.vertical, 12)
+                                .frame(minHeight: 44)
                                 .background(Color.accentColor, in: Capsule())
                                 .foregroundStyle(.white)
                         }
+                        .accessibilityLabel("Next page")
                     } else {
                         Button {
                             analytics.trackOnboardingTrial(action: "shown")
@@ -129,21 +132,24 @@ struct OnboardingView: View {
                                 .fontWeight(.semibold)
                                 .padding(.horizontal, 32)
                                 .padding(.vertical, 12)
+                                .frame(minHeight: 44)
                                 .background(Color.accentColor, in: Capsule())
                                 .foregroundStyle(.white)
                         }
+                        .accessibilityLabel("Continue")
                     }
                 }
                 .padding(.horizontal)
 
-                // Skip — bypasses the rest of onboarding entirely (one tap, never blocks)
-                if currentPage < pages.count - 1 {
-                    Button("Skip") {
-                        complete()
-                    }
-                    .font(.subheadline)
-                    .foregroundStyle(.tertiary)
+                // Skip — bypasses the rest of onboarding entirely (one tap, never blocks).
+                // Reachable on every page, including the last value page.
+                Button("Skip") {
+                    complete()
                 }
+                .font(.subheadline)
+                .foregroundStyle(.tertiary)
+                .minHitTarget()
+                .accessibilityLabel("Skip onboarding")
             }
             .padding(.bottom, 40)
         }

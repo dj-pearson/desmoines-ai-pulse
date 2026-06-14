@@ -33,6 +33,10 @@ struct HomeView: View {
     /// is presented so subsequent toolbar Swipe taps go back to the
     /// derived-from-filters context.
     @State private var ribbonDiscoverContext: (DiscoverFilterContext, DiscoverMode)?
+    /// Sponsored-first ordering of the events feed (IOS-ADS-011). Derived from
+    /// `viewModel.events` and recomputed only when that array changes (PERF-010)
+    /// rather than on every `body` pass.
+    @State private var arrangedEvents: [Event] = []
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
@@ -197,6 +201,16 @@ struct HomeView: View {
                 // IOS-PARITY-005 — warm the Best-Of winners cache so award
                 // badges surface on cards across the app (fail-soft).
                 await BestOfViewModel.refreshWinners()
+            }
+            .onChange(of: viewModel.events) { _, _ in
+                updateArrangedEvents()
+            }
+            .onAppear {
+                // Seed in case events were already populated (e.g. cached) before
+                // the first onChange fires.
+                if arrangedEvents.isEmpty && !viewModel.events.isEmpty {
+                    updateArrangedEvents()
+                }
             }
             .toastOverlay(message: $toast)
         }
@@ -377,6 +391,9 @@ struct HomeView: View {
                 .padding(.top, 40)
             } else {
                 LazyVStack(spacing: 12) {
+                    // enumerated() gives an O(1) index for entranceAnimation /
+                    // ad cadence; arrangedEvents only changes when data changes,
+                    // so this isn't recomputing the arrangement per body (PERF-010).
                     ForEach(Array(arrangedEvents.enumerated()), id: \.element.id) { index, event in
                         Button {
                             if event.isActivelySponsored {
@@ -416,10 +433,15 @@ struct HomeView: View {
         .padding(.bottom, 20)
     }
 
-    /// Sponsored listings (IOS-ADS-011) pulled to the front of the main events
-    /// feed; organic order is otherwise preserved.
-    private var arrangedEvents: [Event] {
-        SponsoredArranger.arrange(viewModel.events, isSponsored: { $0.isActivelySponsored })
+    /// Recompute the sponsored-first ordering. Called when `viewModel.events`
+    /// changes (PERF-010) instead of on every `body` evaluation. Sponsored
+    /// listings (IOS-ADS-011) are pulled to the front; organic order is
+    /// otherwise preserved.
+    private func updateArrangedEvents() {
+        arrangedEvents = SponsoredArranger.arrange(
+            viewModel.events,
+            isSponsored: { $0.isActivelySponsored }
+        )
     }
 
     /// Native in-feed ad cadence (IOS-ADS-012): the first ad appears after

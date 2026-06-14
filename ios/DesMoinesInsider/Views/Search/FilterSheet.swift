@@ -41,6 +41,7 @@ struct FilterSheet: View {
                                 }
                             }
                         }
+                        .accessibilityAddTraits(selectedCategory == category ? .isSelected : [])
                     }
                 }
 
@@ -61,6 +62,7 @@ struct FilterSheet: View {
                                 }
                             }
                         }
+                        .accessibilityAddTraits(selectedDatePreset == preset ? .isSelected : [])
                     }
                 }
 
@@ -142,6 +144,8 @@ struct FilterSheet: View {
                     step: 1
                 )
                 .tint(Color.accentColor)
+                .accessibilityLabel("Maximum distance")
+                .accessibilityValue(maxDistance.map { "\(Int($0)) miles" } ?? "Any")
 
                 HStack {
                     Text("1 mi")
@@ -192,6 +196,8 @@ struct FilterSheet: View {
                     step: 0.5
                 )
                 .tint(.yellow)
+                .accessibilityLabel("Minimum rating")
+                .accessibilityValue(minRating.map { String(format: "%.1f stars", $0) } ?? "Any")
 
                 HStack {
                     Text("1.0")

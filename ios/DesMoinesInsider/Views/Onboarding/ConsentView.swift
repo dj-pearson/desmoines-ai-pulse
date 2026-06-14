@@ -71,14 +71,38 @@ struct ConsentView: View {
                                 .foregroundStyle(.white)
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
                         }
+                        .accessibilityLabel("Save privacy preferences")
 
-                        Button {
-                            consent.acceptAll()
-                            onComplete()
-                        } label: {
-                            Text("Accept All")
-                                .font(.subheadline.weight(.medium))
-                                .foregroundStyle(Color.accentColor)
+                        HStack(spacing: 24) {
+                            Button {
+                                consent.acceptAll()
+                                onComplete()
+                            } label: {
+                                Text("Accept All")
+                                    .font(.subheadline.weight(.medium))
+                                    .foregroundStyle(Color.accentColor)
+                                    .frame(maxWidth: .infinity)
+                                    .minHitTarget()
+                            }
+                            .accessibilityLabel("Accept all data collection")
+
+                            Button {
+                                locationEnabled = false
+                                emailEnabled = false
+                                analyticsEnabled = false
+                                consent.locationConsent = false
+                                consent.emailConsent = false
+                                consent.analyticsConsent = false
+                                consent.saveAndComplete()
+                                onComplete()
+                            } label: {
+                                Text("Decline All")
+                                    .font(.subheadline.weight(.medium))
+                                    .foregroundStyle(Color.accentColor)
+                                    .frame(maxWidth: .infinity)
+                                    .minHitTarget()
+                            }
+                            .accessibilityLabel("Reject all non-essential data collection")
                         }
                     }
                     .padding(.top, 8)

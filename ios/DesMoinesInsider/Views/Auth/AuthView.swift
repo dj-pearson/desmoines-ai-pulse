@@ -5,6 +5,8 @@ import AuthenticationServices
 struct AuthView: View {
     @State private var viewModel = AuthViewModel()
     @State private var isSignUpMode = false
+    @State private var isPasswordVisible = false
+    @State private var isConfirmPasswordVisible = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -61,10 +63,30 @@ struct AuthView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 4) {
-                        SecureField("Password", text: $viewModel.password)
+                        HStack(spacing: 8) {
+                            Group {
+                                if isPasswordVisible {
+                                    TextField("Password", text: $viewModel.password)
+                                } else {
+                                    SecureField("Password", text: $viewModel.password)
+                                }
+                            }
                             .textContentType(isSignUpMode ? .newPassword : .password)
+                            .autocapitalization(.none)
                             .textFieldStyle(.glassInput)
+                            .accessibilityLabel("Password")
                             .accessibilityHint(isSignUpMode ? "Must be at least 8 characters with uppercase, lowercase, and a number" : "")
+
+                            Button {
+                                isPasswordVisible.toggle()
+                            } label: {
+                                Image(systemName: isPasswordVisible ? "eye.slash" : "eye")
+                                    .foregroundStyle(.secondary)
+                                    .minHitTarget()
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(isPasswordVisible ? "Hide password" : "Show password")
+                        }
 
                         if isSignUpMode && !viewModel.password.isEmpty {
                             PasswordStrengthBar(strength: viewModel.passwordStrength)
@@ -73,9 +95,29 @@ struct AuthView: View {
 
                     if isSignUpMode {
                         VStack(alignment: .leading, spacing: 4) {
-                            SecureField("Confirm Password", text: $viewModel.confirmPassword)
+                            HStack(spacing: 8) {
+                                Group {
+                                    if isConfirmPasswordVisible {
+                                        TextField("Confirm Password", text: $viewModel.confirmPassword)
+                                    } else {
+                                        SecureField("Confirm Password", text: $viewModel.confirmPassword)
+                                    }
+                                }
                                 .textContentType(.newPassword)
+                                .autocapitalization(.none)
                                 .textFieldStyle(.glassInput)
+                                .accessibilityLabel("Confirm password")
+
+                                Button {
+                                    isConfirmPasswordVisible.toggle()
+                                } label: {
+                                    Image(systemName: isConfirmPasswordVisible ? "eye.slash" : "eye")
+                                        .foregroundStyle(.secondary)
+                                        .minHitTarget()
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel(isConfirmPasswordVisible ? "Hide confirm password" : "Show confirm password")
+                            }
 
                             if !viewModel.confirmPassword.isEmpty && !viewModel.passwordsMatch {
                                 Text("Passwords do not match")

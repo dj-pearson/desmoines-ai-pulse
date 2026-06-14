@@ -6,6 +6,10 @@ struct RestaurantsView: View {
     @State private var toast: ToastMessage?
     @State private var showScrollToTop = false
     @State private var showDiscover = false
+    /// Sponsored-first ordering of the Dining feed (IOS-ADS-011). Derived from
+    /// `viewModel.restaurants` and recomputed only when that array changes
+    /// (PERF-010) rather than on every `body` pass.
+    @State private var arrangedRestaurants: [Restaurant] = []
 
     var body: some View {
         NavigationStack {
@@ -41,6 +45,8 @@ struct RestaurantsView: View {
                             .padding(.top, 40)
                         } else {
                             LazyVStack(spacing: 12) {
+                                // enumerated() gives an O(1) index; arrangedRestaurants
+                                // only changes when data changes (PERF-010).
                                 ForEach(Array(arrangedRestaurants.enumerated()), id: \.element.id) { index, restaurant in
                                     NavigationLink(value: restaurant) {
                                         RestaurantCardView(restaurant: restaurant, toast: $toast)
@@ -140,6 +146,16 @@ struct RestaurantsView: View {
             }
             .task {
                 await viewModel.loadInitialData()
+            }
+            .onChange(of: viewModel.restaurants) { _, _ in
+                updateArrangedRestaurants()
+            }
+            .onAppear {
+                // Seed in case restaurants were already populated (e.g. cached)
+                // before the first onChange fires.
+                if arrangedRestaurants.isEmpty && !viewModel.restaurants.isEmpty {
+                    updateArrangedRestaurants()
+                }
             }
             .toastOverlay(message: $toast)
         }
@@ -268,10 +284,15 @@ struct RestaurantsView: View {
         }
     }
 
-    /// Sponsored listings (IOS-ADS-011) pulled to the front of the Dining feed;
+    /// Recompute the sponsored-first ordering. Called when
+    /// `viewModel.restaurants` changes (PERF-010) instead of on every `body`
+    /// evaluation. Sponsored listings (IOS-ADS-011) are pulled to the front;
     /// organic order is otherwise preserved.
-    private var arrangedRestaurants: [Restaurant] {
-        SponsoredArranger.arrange(viewModel.restaurants, isSponsored: { $0.isActivelySponsored })
+    private func updateArrangedRestaurants() {
+        arrangedRestaurants = SponsoredArranger.arrange(
+            viewModel.restaurants,
+            isSponsored: { $0.isActivelySponsored }
+        )
     }
 
     /// Native in-feed ad cadence (IOS-ADS-012), driven by the central AdConfig.

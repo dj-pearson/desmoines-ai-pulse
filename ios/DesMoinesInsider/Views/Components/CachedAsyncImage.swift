@@ -15,11 +15,15 @@ struct CachedAsyncImage<Placeholder: View>: View {
     /// can display. Set false for a zoomable full-screen viewer that needs the
     /// full resolution. Full-quality bytes are always kept on disk regardless.
     var downsamples: Bool = true
+    /// Alt text for VoiceOver. When nil (default) the image is treated as
+    /// decorative and hidden from the accessibility tree (UX-004).
+    var accessibilityLabel: String? = nil
     @ViewBuilder let placeholder: () -> Placeholder
 
     @State private var image: UIImage?
     @State private var thumbnail: UIImage?
     @State private var isLoading = true
+    @State private var failed = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -36,6 +40,8 @@ struct CachedAsyncImage<Placeholder: View>: View {
                     .scaledToFill()
                     .clipped()
                     .blur(radius: 12)
+            } else if failed {
+                failureView
             } else if isLoading {
                 placeholder()
                     .overlay {
@@ -48,9 +54,29 @@ struct CachedAsyncImage<Placeholder: View>: View {
                 placeholder()
             }
         }
+        .accessibilityElement(children: accessibilityLabel == nil ? .ignore : .combine)
+        .accessibilityLabel(accessibilityLabel ?? "")
+        .accessibilityHidden(accessibilityLabel == nil)
         .task(id: url) {
             await loadImage()
         }
+    }
+
+    /// Distinguishable broken-image state shown when network/disk decode fails.
+    /// Tapping retries the load (UX-004).
+    private var failureView: some View {
+        placeholder()
+            .overlay {
+                Image(systemName: "photo.badge.exclamationmark")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                Task { await loadImage() }
+            }
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint("Image failed to load. Tap to retry.")
     }
 
     private func loadImage() async {
@@ -58,6 +84,9 @@ struct CachedAsyncImage<Placeholder: View>: View {
             isLoading = false
             return
         }
+
+        // Clear any prior failure (also covers the retry-tap path).
+        failed = false
 
         // Cap decode size to the device's native width unless full-res is asked
         // for (zoomable viewer). nil == no downsampling.
@@ -105,9 +134,14 @@ struct CachedAsyncImage<Placeholder: View>: View {
 
                 // Release thumbnail from memory
                 thumbnail = nil
+            } else {
+                // Decode failed despite a successful download.
+                failed = true
             }
         } catch {
-            // Silently fail — placeholder shown
+            // Network/disk failure — show a distinguishable broken-image state
+            // the user can tap to retry (UX-004).
+            failed = true
         }
 
         isLoading = false
