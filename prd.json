@@ -957,6 +957,671 @@
       "priority": 52,
       "passes": true,
       "notes": "[DONE 2026-06-13] Deleted RestaurantsPage.tsx (0 importers), EventFilters.tsx (removed the dead allEvents home view + handleViewAllEvents/handleScrapeEvents/scrapeMutation cascade), Hero3D.tsx, Hero3DCityscape.tsx. Confirmed three/@react-three only reachable via lazy HeroCityLite."
+    },
+    {
+      "id": "IOS-AUDIT-SEC-001",
+      "title": "Wire certificate pinning into the Supabase client (currently dead code)",
+      "description": "As a user, I need app traffic to Supabase to be certificate-pinned so a network attacker with a trusted-but-rogue cert cannot intercept my session, because the pinning service exists but is never actually used.",
+      "acceptanceCriteria": [
+        "CertificatePinningService is installed as the URLSessionDelegate on the URLSession used by SupabaseClient (via SupabaseClientOptions GlobalOptions session injection)",
+        "A MITM proxy presenting a non-pinned (but OS-trusted) cert is rejected in Release builds (reportOnly == false)",
+        "Same proxy succeeds in DEBUG (reportOnly == true) and logs the mismatch via AppLogger",
+        "Launch log/test confirms the pinned session is the one in use",
+        "Pinned SPKI hashes verified current against the live Supabase host before shipping",
+        "No edge-function request/response shapes change (CLAUDE.md backward-compat preserved)"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Evidence: CertificatePinningService.swift is a complete URLSessionDelegate but has zero callers; SupabaseService.swift:30-42 builds SupabaseClient with the default initializer (internal URLSession, no delegate). Only URLSession.shared is used (WeatherService.swift:84, CachedAsyncImage.swift:85). No app traffic is pinned today."
+    },
+    {
+      "id": "IOS-AUDIT-SEC-002",
+      "title": "Validate URL scheme before opening content-supplied links",
+      "description": "As a user, I need links that come from server/content (event/restaurant/hotel/article URLs) to be restricted to http/https so a compromised content row cannot open file:, tel:, or javascript: targets.",
+      "acceptanceCriteria": [
+        "Shared URL.isSafeWebLink helper restricts content links to http/https schemes",
+        "event.sourceUrl, restaurant/attraction/hotel website, and article browse targets all pass through the helper",
+        "Non-http schemes render no button / are dropped and logged via AppLogger.nav.warning",
+        "First-party map intents (maps://) and known deep links remain allowed where intended",
+        "Unit test covers javascript:, file:, http:, https: inputs"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: CampaignAdService.swift:38-47 correctly allow-lists schemes, but content URLs do not. event.sourceUrl flows into Link(destination:) at EventDetailActions.swift:67-68; UIApplication.shared.open on content values at AttractionDetailView.swift:234, HotelDetailView.swift:254, RestaurantDetailView, EventDetailInfo; WebViewPage fed article/hotel targets at ArticleDetailView.swift:54."
+    },
+    {
+      "id": "IOS-AUDIT-SEC-003",
+      "title": "Divert cross-host WebView navigations to Safari regardless of navigation type",
+      "description": "As a user, I need untrusted external pages (sponsored/affiliate) to open in SFSafariViewController instead of the in-app WKWebView so server redirects and JS-driven navigations cannot load other hosts inside the app's trust context.",
+      "acceptanceCriteria": [
+        "WebView decidePolicyFor diverts based on resolved target host/scheme, not only navigationType == .linkActivated",
+        "A 302 redirect to a different registrable domain opens in Safari/SFSafariViewController",
+        "A JS window.location cross-host navigation is also diverted",
+        "Same-host navigation (internal privacy/terms links) still loads in-app",
+        "Sponsored/affiliate clickouts standardize on SafariView where feasible"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: WebView.swift:28-40 only diverts when navigationType == .linkActivated AND host differs; server redirects, meta-refresh, form posts, and JS window.location to another host fall through to decisionHandler(.allow) and load in-app."
+    },
+    {
+      "id": "IOS-AUDIT-SEC-004",
+      "title": "Hash the analytics user id instead of reversible hex encoding",
+      "description": "As a user, I need my Supabase user id to never be sent to analytics in a reversible form, because the current 'anonymization' is plain hex encoding of the raw UUID.",
+      "acceptanceCriteria": [
+        "User id passed through SHA-256 (CryptoKit) before any analytics use, or replaced by a random per-install pseudonymous id",
+        "Truncated value is not derivable back to the UUID",
+        "Misleading 'hex hash' comment corrected to describe the real transform",
+        "If/when Firebase analytics is enabled, PrivacyInfo.xcprivacy is updated to declare the analytics data collected"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: AnalyticsService.swift:134-145 comments 'first 16 chars of hex hash' but does userId.data(using:.utf8).map { %02x }.joined() truncated — a reversible hex encoding of the literal UUID, not a hash."
+    },
+    {
+      "id": "IOS-AUDIT-SEC-005",
+      "title": "Mark jailbreak detection as advisory and add a non-string-matched signal",
+      "description": "As the team, we need JailbreakDetector documented as best-effort and not relied upon for any security decision, because all current checks are trivially bypassed by mainstream tools.",
+      "acceptanceCriteria": [
+        "Code comment states detection is advisory and bypassable",
+        "At least one additional non-string-matched signal added (e.g. fork() success or sandbox integrity probe)",
+        "No security control (pinning, keychain, entitlement) is gated on isJailbroken",
+        "Detection remains non-blocking and skipped on Simulator"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Evidence: JailbreakDetector.swift relies on file-existence, URL-scheme, write-test, and dylib name string-matching (checkDynamicLibraries:82-104) — all defeated by Shadow/Liberty Lite/SSLKillSwitch. Result only drives a soft warning (DesMoinesInsiderApp.swift:103-105)."
+    },
+    {
+      "id": "IOS-AUDIT-SEC-006",
+      "title": "Revoke local entitlement on explicit server receipt rejection; enforce premium via RLS",
+      "description": "As the business, we need premium access to be enforced server-side so a spoofed local StoreKit state cannot unlock premium data, because the client currently fails open indefinitely on an explicit invalid receipt.",
+      "acceptanceCriteria": [
+        "Transient (5xx/network) validation failures still fail open with retry/backoff (unchanged)",
+        "Explicit server valid:false causes loss of premium entitlement after a bounded grace window",
+        "Premium server DATA is never returned by RLS to a free user_subscriptions row regardless of client localTier",
+        "Substring fallback id.contains('vip')/'insider' is removed or constrained to known product-id sets",
+        "validate-ios-receipt request/response shape unchanged (additive optional fields only)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: StoreKitService.syncEntitlementToBackend (StoreKitService.swift:435-518) only logs on decoded.valid==false (490-496) and on exhausted retries (517); never revokes localTier. localTier (99-114) falls back to id.contains('vip')/'insider')."
+    },
+    {
+      "id": "IOS-AUDIT-SEC-007",
+      "title": "Add a pre-commit guard against committing Secrets files / key-shaped strings",
+      "description": "As the team, we need a hook that blocks committing Secrets.xcconfig, Secrets.generated.swift, and JWT-looking strings so the bundled anon key (or worse) cannot be accidentally pushed.",
+      "acceptanceCriteria": [
+        "Pre-commit hook rejects staged Secrets.* files and JWT/anon-key-shaped strings (eyJ..., *.supabase.co)",
+        "Documented confirmation that only the anon key (never service-role) is bundled",
+        "CI fails if a key-shaped string appears in tracked files",
+        "No change to the build-time secret injection flow"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Evidence: make setup copies example -> Secrets.xcconfig (Makefile:28); generate-secrets.sh writes literal key into Secrets.generated.swift; both protected only by ios/.gitignore:23-24. No secret-scanning hook exists."
+    },
+    {
+      "id": "IOS-AUDIT-SEC-008",
+      "title": "Gate ad-impression/click telemetry behind consent and declare it in the privacy manifest",
+      "description": "As a user, I need ad-interaction telemetry tied to my user id to respect my consent choice and be disclosed, because it is currently logged for all users regardless of consent and is absent from the privacy manifest.",
+      "acceptanceCriteria": [
+        "AdTrackingService.logImpression/logClick early-return when the relevant consent flag is false",
+        "PrivacyInfo.xcprivacy declares the product-interaction/usage data actually collected",
+        "Revoking analytics consent stops new ad telemetry and flushes/stops the queue",
+        "NSPrivacyTracking remains accurate (first-party, no IDFA)"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Evidence: AdTrackingService.swift:147-189 writes ad_impressions/ad_clicks with user_id to Supabase with no analyticsConsent check, unlike AnalyticsService (23,31,135). ConsentService.needsConsentPrompt (58-60) prompts EU-only. PrivacyInfo.xcprivacy declares no usage-data collection."
+    },
+    {
+      "id": "IOS-AUDIT-PERF-001",
+      "title": "Purge image cache on memory pressure and prune disk on background",
+      "description": "As a user on an older device, I need the image cache to release memory under pressure so the app is not jetsam-killed while scrolling image-heavy lists.",
+      "acceptanceCriteria": [
+        "ImageCache observes UIApplication.didReceiveMemoryWarningNotification and calls memoryCache.removeAllObjects()",
+        "Disk prune (pruneDiskIfNeeded) runs on didEnterBackground, not only at init",
+        "Simulated memory warning measurably drops resident image memory (Instruments) with no crash/blank images (re-fetched from disk)",
+        "totalCostLimit cost accounting still honored",
+        "Observer lifetime managed safely (singleton)"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Evidence: CachedAsyncImage.swift:139-181 ImageCache (50MB/200 count NSCache) has no memory-warning observer; disk prune runs once at init (line 164) only."
+    },
+    {
+      "id": "IOS-AUDIT-PERF-002",
+      "title": "Stop reading UIScreen.main inside async image loading",
+      "description": "As the team, we need device pixel width resolved once on the main actor and passed into image loading so there is no deprecated, main-actor-unsafe UIScreen.main access after an await suspension.",
+      "acceptanceCriteria": [
+        "No UIScreen.main access inside any async function body",
+        "Device pixel width resolved once on the main actor (e.g. from UIWindowScene) and passed down",
+        "Builds clean under SWIFT_STRICT_CONCURRENCY=complete",
+        "Downsampling still caps decode at native width; works in iPad split-screen / multi-window",
+        "No visual regression in list thumbnails vs full-screen viewer"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: CachedAsyncImage.swift:64 reads UIScreen.main.nativeBounds.width inside async loadImage(), re-evaluated every load and continuing past await suspension points."
+    },
+    {
+      "id": "IOS-AUDIT-PERF-003",
+      "title": "Cancel disk image decode work for recycled cells",
+      "description": "As a user, I need cancelled image tasks to skip the expensive decode so fast scrolling does not waste CPU/IO decoding off-screen images.",
+      "acceptanceCriteria": [
+        "Cancelled image tasks check Task.isCancelled before ImageDownsampler.decode and bail",
+        "Disk reads are not all serialized behind a single utility queue (or decode happens off it)",
+        "Rapid scroll of 100+ image cells shows reduced CPU in Instruments",
+        "No regression in cache-hit correctness; no @unchecked Sendable gaps introduced"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: CachedAsyncImage.swift:188-218 getFromDisk wraps a single serial DispatchQueue in withCheckedContinuation; queued Data(contentsOf:)+decode runs to completion even after the .task(id:url) is cancelled on cell recycle."
+    },
+    {
+      "id": "IOS-AUDIT-PERF-004",
+      "title": "Eliminate redundant debounced re-fetches on bulk filter changes",
+      "description": "As a user, I need applying a preset or clearing filters to trigger exactly one network fetch so the app does not fire N cancel/spawn fetch cycles.",
+      "acceptanceCriteria": [
+        "Applying a preset fires exactly one fetch, not one per property didSet",
+        "clearFilters() fires at most one fetch",
+        "Seeding weekendVM.selectedDatePreset after initial load does not double-fetch",
+        "Debounce still applies to genuine user typing/toggling; user-visible behavior unchanged"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: HomeView.swift:194-196 sets weekend preset after loadInitialData(), and EventsViewModel.swift:26-28 didSet calls resetAndFetch(); clearFilters sets ~8 properties -> 8 debounced tasks."
+    },
+    {
+      "id": "IOS-AUDIT-PERF-005",
+      "title": "Enforce QueryCache size cap with LRU eviction",
+      "description": "As a user, I need the on-disk query cache to stay bounded so browsing many filter combinations does not grow the cache without limit.",
+      "acceptanceCriteria": [
+        "maxDiskBytes is actually enforced via LRU eviction (delete oldest until under limit)",
+        "Eviction runs on launch and/or background transition",
+        "24h hard-expiry and offline stale-serving behavior preserved",
+        "Unit test: writing >50MB leaves the cache directory <=50MB"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: QueryCache.swift declares maxDiskBytes=50MB (line 18) but it is never read; pruneExpired() (line 105) only removes >24h entries. Per-filter cache keys (EventsViewModel.swift:182-190) accumulate unbounded."
+    },
+    {
+      "id": "IOS-AUDIT-PERF-006",
+      "title": "Dedupe sponsored-listing impressions per session",
+      "description": "As the business, we need a sponsored listing to log at most one impression per session so scrolling it on/off screen does not inflate impression counts.",
+      "acceptanceCriteria": [
+        "logSponsoredImpression dedupes via a Set keyed by listingType|listingId (mirroring the campaign-ad path)",
+        "Scrolling a sponsored card off/on screen does not re-log an impression",
+        "Campaign-ad dedupe behavior unchanged; click logging still fires per tap",
+        "Measured analytics call volume during scroll drops"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: HomeView.swift:408-412 and RestaurantsView.swift:50-54 call logSponsoredImpression from .onAppear; AdTrackingService.swift:235 has no dedupe (unlike campaign path at 150-152)."
+    },
+    {
+      "id": "IOS-AUDIT-PERF-007",
+      "title": "Remove main-actor API call from MetricKitSubscriber nonisolated deinit",
+      "description": "As the team, we need MetricKitSubscriber to not call a @MainActor API from its nonisolated deinit so the code is strict-concurrency clean.",
+      "acceptanceCriteria": [
+        "No main-actor API called from a nonisolated deinit (remove the dead deinit or make unsubscribe explicit/main-actor-scheduled)",
+        "Builds clean under strict concurrency",
+        "MetricKit payloads still received and logged; no runtime behavior change"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Evidence: MetricKitSubscriber.swift:10-21 is @MainActor; deinit (line 19) calls MXMetricManager.shared.remove(self). Singleton retained for app lifetime (DesMoinesInsiderApp.swift:21) so deinit is also dead code."
+    },
+    {
+      "id": "IOS-AUDIT-PERF-008",
+      "title": "Base network retry decisions on structured status codes, not localized strings",
+      "description": "As a user in any locale, I need retries to fire on real 5xx/timeout failures only so non-transient 4xx errors are not retried and retries work outside English.",
+      "acceptanceCriteria": [
+        "Retry decision based on structured status code (PostgrestError/HTTP status), not localizedDescription substring matching",
+        "4xx errors are never retried",
+        "Behavior identical across device locales; 5xx/timeout still retried with backoff",
+        "Cancellation still short-circuits retries"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Evidence: NetworkRetry.swift:69-77 substring-matches localizedDescription for '500','502','connection','timeout' — locale-dependent and over-broad (an event named with '500' could be retried 3x with backoff)."
+    },
+    {
+      "id": "IOS-AUDIT-PERF-009",
+      "title": "Memoize Restaurant.isOpenNow parsing and cached Calendar",
+      "description": "As a user, I need the 'Open Now' filter to stay snappy on large lists so toggling it does not allocate a Calendar and re-parse hours strings per restaurant per pass.",
+      "acceptanceCriteria": [
+        "No Calendar.current allocation inside the per-restaurant loop (use a static/shared calendar)",
+        "Business hours parsed at most once per restaurant (computed-once stored property)",
+        "'Open Now' toggle on a 100+ list stays under the 150ms target",
+        "openStatusText does not re-parse on every render; open/closed correctness (incl. overnight) unchanged"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: Restaurant.swift:56-85 calls Calendar.current (59) and components(separatedBy:) per call; RestaurantsViewModel.applyClientSide (211) invokes isOpenNow() for every restaurant each toggle/page."
+    },
+    {
+      "id": "IOS-AUDIT-PERF-010",
+      "title": "Compute sponsored arrangement off the render path and use stable ForEach ids",
+      "description": "As a user, I need the events/restaurants feed to not re-arrange and re-allocate on every unrelated state change so scrolling stays smooth and entrance animations don't replay.",
+      "acceptanceCriteria": [
+        "SponsoredArranger.arrange runs when the data changes (stored on VM/derived state), not in a body-evaluated computed property",
+        "ForEach uses stable model id without per-render Array(...enumerated()) allocation",
+        "Pagination append does not re-trigger entrance animations on existing rows",
+        "Sponsored-first ordering preserved; render CPU on toast/loading changes drops"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: HomeView.swift:397 and RestaurantsView.swift:44 use ForEach(Array(arrangedEvents.enumerated())...); arrangedEvents (HomeView.swift:438) calls SponsoredArranger.arrange in a computed property re-run on every body pass."
+    },
+    {
+      "id": "IOS-AUDIT-PERF-011",
+      "title": "Make DateParser concurrency-safe and memoize parsed dates on models",
+      "description": "As the team, we need shared DateFormatter/ISO8601 statics marked safe for concurrent read and parsed dates cached on models so parsing is correct under strict concurrency and not repeated every render.",
+      "acceptanceCriteria": [
+        "Formatter statics explicitly marked safe for concurrent read (no caller mutates); builds clean under strict concurrency",
+        "Event.parsedDate (and equivalents) are not re-parsed on every body evaluation (memoized)",
+        "Parsing results unchanged for all supported formats"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Evidence: DateParser.swift:39-63 exposes static DateFormatter/ISO8601DateFormatter instances used cross-actor (Event.parsedDate:72 on main, applyClientSideOffMain on background); non-Sendable statics accessed concurrently."
+    },
+    {
+      "id": "IOS-AUDIT-PERF-012",
+      "title": "Remove force-unwrap of the caches directory in cache singletons",
+      "description": "As a user, I need the app to not crash at launch if the caches directory is unavailable so a sandbox edge case degrades gracefully.",
+      "acceptanceCriteria": [
+        "No force-unwrap (!) of the caches directory in CachedAsyncImage or QueryCache",
+        "Missing caches dir falls back to a temp dir instead of crashing, and logs the fallback",
+        "Image and query caches function normally in the common case"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Evidence: CachedAsyncImage.swift:154 and QueryCache.swift:25 both do FileManager...urls(for:.cachesDirectory...).first! in launch-path singleton init."
+    },
+    {
+      "id": "IOS-AUDIT-PERF-013",
+      "title": "Use cancellable structured concurrency for the App Store review prompt",
+      "description": "As a user, I need the review prompt to not appear at an awkward moment so the delayed request is cancelled if I navigate away or background the app.",
+      "acceptanceCriteria": [
+        "Review request uses Task.sleep, cancellable with the view, inside the existing .task",
+        "Only prompts when a foreground-active scene still exists",
+        "One-time gating (hasRequestedReview) preserved; no DispatchQueue.main.asyncAfter in the launch path"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Evidence: DesMoinesInsiderApp.swift:146-152 uses DispatchQueue.main.asyncAfter(deadline:.now()+2) to call AppStore.requestReview — fire-and-forget, no cancellation."
+    },
+    {
+      "id": "IOS-AUDIT-UX-001",
+      "title": "Expose favorite-button toggle state to VoiceOver",
+      "description": "As a VoiceOver user, I need the heart/favorite button to announce its saved state so I can tell whether a card is already saved without re-reading the action verb.",
+      "acceptanceCriteria": [
+        "Favorite button exposes .accessibilityValue reflecting saved/not-saved",
+        ".isSelected trait present when favorited",
+        "VoiceOver announces the state change after toggling without re-navigating",
+        "Pattern applied to all three card types (event, restaurant, attraction) and to share/remind buttons on detail screens",
+        "No change to visible label text or layout"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Evidence: CardFavoriteButton sets only .accessibilityLabel (ContentCard.swift:493) and flips the text; no .accessibilityValue / .isSelected trait — VoiceOver announces a plain button."
+    },
+    {
+      "id": "IOS-AUDIT-UX-002",
+      "title": "Raise favorite and filter-chip hit targets to 44pt",
+      "description": "As a user, I need tap targets to meet Apple's 44pt minimum so the heart and removable filter chips are easy to hit accurately.",
+      "acceptanceCriteria": [
+        "Heart button tap area >=44x44pt in all card variants (visual size may stay smaller, via .minHitTarget()/contentShape)",
+        "FilterChipView tap area >=44pt tall",
+        ".minHitTarget() reused rather than ad-hoc frames",
+        "Verified with Accessibility Inspector hit-target audit"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Evidence: ContentCard.swift:483-484 inline heart is 28x28pt (overlay 36pt), both under 44pt, no .minHitTarget() (helper exists at View+Accessibility.swift:12). FilterChipView.swift:31-32 ~28-32pt tall."
+    },
+    {
+      "id": "IOS-AUDIT-UX-003",
+      "title": "Announce toasts to VoiceOver and extend dismiss when VoiceOver is active",
+      "description": "As a VoiceOver user, I need success/error/info toasts to be announced so I get feedback after favoriting, adding to calendar, or hitting an error.",
+      "acceptanceCriteria": [
+        "Toast text announced via AccessibilityNotification.Announcement on appearance",
+        "Error toasts announced with higher priority",
+        "Auto-dismiss extended when UIAccessibility.isVoiceOverRunning",
+        "Existing ReduceMotion behavior unchanged"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Evidence: ToastOverlay.swift renders and auto-dismisses after 2s (91-99) but posts no accessibility announcement and adds no traits — silent for VoiceOver."
+    },
+    {
+      "id": "IOS-AUDIT-UX-004",
+      "title": "Show a failure/retry state and accessibility label for cached images",
+      "description": "As a user, I need a failed image to show a distinguishable state with tap-to-retry and a meaningful VoiceOver label instead of a blank gray box.",
+      "acceptanceCriteria": [
+        "Failed image shows a distinguishable broken/placeholder state (e.g. photo SF Symbol), not a blank gray box",
+        "Tapping a failed image retries loadImage()",
+        "CachedAsyncImage accepts an accessibility label; decorative usages are .accessibilityHidden(true)",
+        "Successful path and crossfade unchanged"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: CachedAsyncImage.swift:109-111 catch just sets isLoading=false -> bare Color(.systemGray5) placeholder (338); no a11y label on the image (26-50)."
+    },
+    {
+      "id": "IOS-AUDIT-UX-005",
+      "title": "Add a reusable ErrorStateView and fix false-success refresh haptic",
+      "description": "As a user, I need consistent offline/empty/error/loading states across list screens and a refresh haptic that reflects the real outcome.",
+      "acceptanceCriteria": [
+        "Single ErrorStateView (icon + message + Retry) mirroring EmptyStateView, used by Home, Restaurants, Attractions",
+        "All three screens present the same offline/empty/error/loading structure",
+        "refresh() returns success/failure; .refreshable fires .success only on success, .error on failure",
+        "Retry action re-fetches and clears the error"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Evidence: RestaurantsView.swift:24-26 has an inline error banner; HomeView.swift:371-394 checks NetworkMonitor; AttractionsView has neither and AttractionsView.swift:80-83 always fires .success haptic after refresh regardless of outcome."
+    },
+    {
+      "id": "IOS-AUDIT-UX-006",
+      "title": "Give FilterSheet clear apply/cancel semantics and accessible sliders",
+      "description": "As a user, I need the filter sheet to have clear apply/cancel behavior and VoiceOver-labeled sliders so I understand what changes and can read slider values.",
+      "acceptanceCriteria": [
+        "Clear apply/cancel semantics (draft applied on Apply with a real Cancel) OR a live 'Show N results' confirm button",
+        "Distance and rating sliders announce label + current value to VoiceOver",
+        "Selected category/date option buttons carry .isSelected",
+        "A single discoverable 'Clear all' remains"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: FilterSheet.swift binds directly to parent @Binding (6-11) so every change applies live; 'Done' (101-103) doesn't confirm/cancel; sliders (136-143, 186-193) lack a11y label/value; selected rows show a checkmark (38,58) but buttons lack .isSelected."
+    },
+    {
+      "id": "IOS-AUDIT-UX-007",
+      "title": "Surface active filter count on the filter entry point",
+      "description": "As a user, I need a badge showing how many filters are active so I know the current filter state without opening the sheet.",
+      "acceptanceCriteria": [
+        "Filter button shows the active count when > 0 (using existing viewModel.activeFilterCount)",
+        "Accessibility label includes the count (e.g. 'Filters, 3 active')",
+        "Consistent across Home, Restaurants, Attractions",
+        "No badge shown when zero filters active"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: activeFilterCount already computed (AttractionsView.swift:74, RestaurantsView.swift:38) but the filter toolbar button shows no badge."
+    },
+    {
+      "id": "IOS-AUDIT-UX-008",
+      "title": "Add password visibility toggle and field labels to AuthView",
+      "description": "As a user signing up, I need a show/hide toggle on password fields and persistent field labels so I can verify entry and VoiceOver has context.",
+      "acceptanceCriteria": [
+        "Password/confirm fields have a working show/hide toggle (>=44pt target, labeled) swapping SecureField/TextField on the same string",
+        "Each field has a persistent accessibility label independent of placeholder",
+        "Loading state announced and the submit button disabled during submit (via .brandLoading)",
+        "Email field keeps .keyboardType(.emailAddress)/content type"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: AuthView.swift:63-67,76-78 SecureField with no toggle; placeholder-only fields (38-66); ProgressView (107-129) with no a11y announcement."
+    },
+    {
+      "id": "IOS-AUDIT-UX-009",
+      "title": "Keep Skip reachable on the last onboarding page and size nav buttons",
+      "description": "As a user, I need an escape from onboarding on every page and properly sized nav buttons so I am not funneled into the trial page with no way out.",
+      "acceptanceCriteria": [
+        "Skip/close affordance reachable on all onboarding pages including the last",
+        "Next/Continue buttons >=44pt tall (migrated to .brandPrimary/.brandGhost)",
+        "Page indicator announces the current page to VoiceOver as it changes",
+        "ReduceMotion respected on page transitions"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: OnboardingView.swift:140-146 renders Skip only while currentPage < pages.count-1; nav buttons use .padding(.vertical,12) on subheadline (~36pt) at 114-134; page indicator static (98)."
+    },
+    {
+      "id": "IOS-AUDIT-UX-010",
+      "title": "Add a decline / minimal-data path to ConsentView",
+      "description": "As a user, I need an explicit decline/reject-non-essential action so I can proceed with minimal data collection (UX and compliance).",
+      "acceptanceCriteria": [
+        "A clearly labeled 'Reject non-essential'/'Decline All' action, equally prominent to 'Accept All'",
+        "Declining persists the minimal-consent state and dismisses",
+        "All three actions (Accept All, Save, Decline) are >=44pt and VoiceOver-labeled",
+        "Default toggle states reflect privacy-first defaults"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: ConsentView.swift:58-83 exposes only 'Save Preferences' and 'Accept All' — no decline/reject path."
+    },
+    {
+      "id": "IOS-AUDIT-UX-011",
+      "title": "Make the paywall close and restore controls prominent and accessible",
+      "description": "As a user, I need a conventional close button and a clearly interactive Restore control on the paywall so I can dismiss it and restore purchases easily.",
+      "acceptanceCriteria": [
+        "Prominent, labeled close control (xmark.circle) with >=44pt target",
+        "'Restore Purchases' is visually distinguishable from legal links as an interactive control",
+        "Selected tier announces .isSelected to VoiceOver",
+        "Period (monthly/annual) selection also announces selected state"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: PaywallView.swift:241-246 only exit is a toolbar 'Not now' text item; Restore is plain caption text same weight as Terms/Privacy (455-459); tier radios (318-366) don't announce selected state."
+    },
+    {
+      "id": "IOS-AUDIT-UX-012",
+      "title": "Fix PremiumGate unlock button size and PremiumBadge accessibility",
+      "description": "As a user, I need the PremiumGate unlock CTA to meet 44pt and the PremiumBadge to read as one clear element for VoiceOver.",
+      "acceptanceCriteria": [
+        "Unlock button >=44pt tall (via .brandPrimary or .minHitTarget())",
+        "PremiumBadge reads as one combined element with a clear label (e.g. 'Insider feature, locked')",
+        "Lock icon marked decorative",
+        "No visual regression to the gate overlay"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Evidence: PremiumGate.swift:60-69 unlock CTA is .caption with .padding(.vertical,10) (~28-32pt); PremiumBadge (86-101) is an HStack with no accessibilityElement so VoiceOver reads 'lock.fill' + tier separately."
+    },
+    {
+      "id": "IOS-AUDIT-UX-013",
+      "title": "Hide decorative icons and combine star ratings for VoiceOver",
+      "description": "As a VoiceOver user, I need star ratings announced as a single value and decorative icons hidden so the screen is not cluttered with 'star' repetitions.",
+      "acceptanceCriteria": [
+        "Star rating rows announce a single 'N out of 5 stars' value",
+        "Decorative hero/placeholder icons are .accessibilityHidden(true)",
+        "Award/sponsored badges carry meaningful labels (e.g. 'Best of Des Moines winner')",
+        "Applied consistently across event/restaurant/attraction cards and detail screens"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Evidence: AttractionDetailView.swift:97 five star Images read individually; hero placeholder/type icons (52,68) not hidden; ContentCard.swift:172 placeholder and :426 trophy badge unlabeled."
+    },
+    {
+      "id": "IOS-AUDIT-UX-014",
+      "title": "Adopt AppTypography across detail/card/list screens",
+      "description": "As a user with large Dynamic Type, I need text to use the clamped AppTypography ramp so titles don't truncate at accessibility sizes.",
+      "acceptanceCriteria": [
+        "EmptyStateView, AttractionDetailView, ContentCard, and the three list screens use .appText(...) for text",
+        "No remaining .font(.title3/.subheadline/.caption) in those files",
+        "Snapshot/manual check at largest accessibility Dynamic Type shows no clipped titles",
+        "Visual hierarchy preserved"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Evidence: AppTypography.swift shipped (IOS-027) but adoption is minimal — EmptyStateView.swift:39, ~20 instances in AttractionDetailView.swift (79,98,121,...) and ContentCard.swift (232,249,303,325,389) hardcode .font()."
+    },
+    {
+      "id": "IOS-AUDIT-FEAT-001",
+      "title": "Install AppDelegateAdaptor so push registration actually works",
+      "description": "As a user, I need APNs registration to actually run so device tokens reach the backend and push notifications can be delivered (currently the delegate is never installed).",
+      "acceptanceCriteria": [
+        "@UIApplicationDelegateAdaptor(AppDelegate.self) added to the App struct (gated on Config.enablePushNotifications)",
+        "didRegisterForRemoteNotificationsWithDeviceToken fires on a real device and logs a token",
+        "Token reaches the register-device-token edge function (a device_tokens row is created)",
+        "Permission prompt appears at a deliberate moment (post-onboarding), not only on saved-search alert enable",
+        "checkPermissionStatus() consulted so a denied user is not re-prompted endlessly"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Evidence: AppDelegate (PushNotificationService.swift:93) implements the token callback, but DesMoinesInsiderApp.swift (4-27) has no @UIApplicationDelegateAdaptor, so the callback never fires and syncTokenToBackend never runs. Contradicts ios_prd.json IOS-011 (passes:true)."
+    },
+    {
+      "id": "IOS-AUDIT-FEAT-002",
+      "title": "Invoke DeepLinkHandler on URL and universal-link opens",
+      "description": "As a user, I need shared event/restaurant links to open the right screen in-app so deep links and universal links work (the handler is currently dead code).",
+      "acceptanceCriteria": [
+        ".onOpenURL calls DeepLinkHandler.shared.handle(url) after the Supabase auth handle",
+        ".onContinueUserActivity(NSUserActivityTypeBrowsingWeb) added for universal links",
+        "MainTabView observes consumeDestination() and navigates, clearing after navigation",
+        "Tapping desmoinespulse.com/events/<id> opens the event detail in-app",
+        "Unmatched URLs fall back to the in-app browser without crashing"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Evidence: DeepLinkHandler.shared.handle(url) and consumeDestination() have zero callers; DesMoinesInsiderApp.swift:84 .onOpenURL forwards only to SupabaseService.client?.handle(url); no onContinueUserActivity. Contradicts ios_prd.json IOS-012 (passes:true)."
+    },
+    {
+      "id": "IOS-AUDIT-FEAT-003",
+      "title": "Handle notification taps and foreground presentation",
+      "description": "As a user, I need tapping an event-reminder notification to open that event and foreground notifications to show a banner (no UNUserNotificationCenterDelegate exists today).",
+      "acceptanceCriteria": [
+        "AppDelegate conforms to UNUserNotificationCenterDelegate and the delegate is set at launch",
+        "userNotificationCenter(_:didReceive:) routes userInfo['eventId'] to event detail via DeepLinkHandler",
+        "willPresent shows .banner,.sound for foreground notifications",
+        "Cold-launch from a notification lands on the right screen after init",
+        "Push notifications with a deep-link payload route correctly too"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Evidence: No UNUserNotificationCenterDelegate / didReceive anywhere; UNUserNotificationCenter.current().delegate never set. LocalNotificationService.swift:45 attaches userInfo['eventId'] but nothing consumes it. Unmet AC of ios_prd.json IOS-011."
+    },
+    {
+      "id": "IOS-AUDIT-FEAT-004",
+      "title": "Index events and restaurants into Spotlight",
+      "description": "As a user, I need the app's core content (events, restaurants) discoverable in system Spotlight so I can find it from outside the app.",
+      "acceptanceCriteria": [
+        "EventsViewModel/RestaurantsViewModel call SpotlightService.indexEvents/indexRestaurants after fetch, capped to a reasonable count",
+        "Searching an event/restaurant name in system Spotlight returns it",
+        "Index updates as content refreshes; stale items pruned",
+        "Indexing runs off the main actor and never blocks the list"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: SpotlightService.indexEvents/indexRestaurants (SpotlightService.swift:14,59) have zero callers; only indexArticles/indexHotels are wired."
+    },
+    {
+      "id": "IOS-AUDIT-FEAT-005",
+      "title": "Make Spotlight results deep-link into the app",
+      "description": "As a user, I need tapping a Spotlight result to open the matching detail screen so indexed content is actionable (depends on IOS-AUDIT-FEAT-002).",
+      "acceptanceCriteria": [
+        "CSSearchableItemActionType user activity handled; CSSearchableItemActivityIdentifier parsed (e.g. event-<id>)",
+        "Routing via DeepLinkHandler opens the matching detail screen",
+        "Identifier parsing covers event/restaurant/article/hotel prefixes",
+        "Unknown identifiers fail gracefully to the home tab"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: No CSSearchableItemActionType handling exists; even indexed articles/hotels can't open from Spotlight."
+    },
+    {
+      "id": "IOS-AUDIT-FEAT-006",
+      "title": "Make the Ask Pulse quota-exceeded upsell reachable",
+      "description": "As a free user who exhausts Ask Pulse, I need an upgrade CTA instead of a raw error so the monetization moment actually fires.",
+      "acceptanceCriteria": [
+        "AskPulseService.ask detects the 429/quota response and throws .quotaExceeded",
+        "The view presents a paywall/upgrade CTA (PaywallView) instead of a raw error string",
+        "lastUsage.remaining is surfaced to the user before exhaustion",
+        "VIP/unlimited users never hit the quota path"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: AskPulseView.swift:274 catches .quotaExceeded but AskPulseService.ask (AskPulseService.swift:73-104) never throws it — a 429 falls into the generic catch with no upsell."
+    },
+    {
+      "id": "IOS-AUDIT-FEAT-007",
+      "title": "Wire (or remove) the Trip Planner soft-paywall seam",
+      "description": "As a free user, I need the engagement-based soft paywall to participate in the Trip Planner flow, or the dead seam removed, so the frequency-capped upsell isn't misleadingly half-built.",
+      "acceptanceCriteria": [
+        "A free user's first Trip Planner Generate attempt triggers the capped soft paywall once (considerAfterTripPlannerAttempt called), respecting maxPresentations/cooldownDays",
+        "Analytics logs source: 'trip_planner'",
+        "OR: the unused method is deleted with no dangling references",
+        "Existing hard-gate behavior remains coherent with whichever path is chosen"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: SoftPaywallService.considerAfterTripPlannerAttempt() (SoftPaywallService.swift:35) has zero callers; TripPlannerView.swift:271 hard-gates free users immediately."
+    },
+    {
+      "id": "IOS-AUDIT-FEAT-008",
+      "title": "Create annual subscription SKUs and remove paywall workarounds",
+      "description": "As a user, I need the Insider/VIP annual plans (and trial) to load so the contextual paywall can offer annual pricing instead of routing around the bug.",
+      "acceptanceCriteria": [
+        "Annual SKUs created in App Store Connect with final immutable IDs; StoreKitService constants updated from placeholder format",
+        "availablePeriods(for:) returns [.monthly,.annual] for both tiers; products load in sandbox and production",
+        "PaywallView period toggle shows monthly + annual for Insider and VIP",
+        "annualSavingsPercent renders a real percentage",
+        "AdBannerView/InterstitialAdView workarounds that bypass PaywallView are removed"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: AdBannerView.swift:80-88 and InterstitialAdView.swift:57-59 bypass PaywallView because the annual SKU drops; annual IDs are placeholder-format (StoreKitService.swift:36-37 prod_insider_annual/prod_vip_annual) vs real monthly IDs."
+    },
+    {
+      "id": "IOS-AUDIT-FEAT-009",
+      "title": "Preselect the trial-eligible period on trial-led paywall contexts",
+      "description": "As a user shown a trial-promising paywall, I need the trial copy and 'Start Free Trial' CTA to actually appear so we don't promise a trial that the monthly default hides.",
+      "acceptanceCriteria": [
+        "Trial-oriented contexts (winBack, adFree, generic, onboarding) auto-prefer the period carrying an eligible intro offer (annual)",
+        "Any trial-promising context shows 'X-day free trial, then ...' and CTA 'Start Free Trial'",
+        "Trial-ineligible users see the normal price with no false promise",
+        "Monthly-only contexts unaffected"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: Only annual SKUs carry introductoryOffer; PaywallView defaults selectedPeriod=.monthly (PaywallView.swift:201,217); winBack/adFree/generic don't pass preferredPeriod:.annual, so refreshTrialCopy() clears the trial. Depends on IOS-AUDIT-FEAT-008."
+    },
+    {
+      "id": "IOS-AUDIT-FEAT-010",
+      "title": "Replace the no-op CrashReportingService with real reporting",
+      "description": "As the team, we need crashes and non-fatals reported so production purchase/restore failures are observable.",
+      "acceptanceCriteria": [
+        "A crash reporter (Crashlytics or Sentry) is integrated, or recordError/non-fatals are routed via AppLogger + a server endpoint",
+        "StoreKit purchase/restore/verification failures are logged as non-fatals",
+        "User-id/tier attached for triage (privacy-compliant)",
+        "DEBUG builds don't pollute production crash data"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Evidence: CrashReportingService.swift:25,35,42,49 are all empty // TODO: Uncomment when Firebase is added — nothing is reported."
+    },
+    {
+      "id": "IOS-AUDIT-FEAT-011",
+      "title": "Surface StoreKit transaction-failure notifications to the user",
+      "description": "As a user whose background/verification transaction fails, I need a non-blocking toast with a support reference so I'm not left without feedback.",
+      "acceptanceCriteria": [
+        "MainTabView observes .storeKitTransactionFailed (like the .favoritesLimitReached pattern)",
+        "A non-blocking toast shows with a copyable support/transaction reference",
+        "It does not fire for normal user-cancellations"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Evidence: StoreKitService.handleTransactionFailure posts .storeKitTransactionFailed (StoreKitService.swift:389) with a transaction id but no view observes it."
+    },
+    {
+      "id": "IOS-AUDIT-FEAT-012",
+      "title": "Verify saved-search event-alert delivery end to end",
+      "description": "As a user enabling event alerts, I need the full push path to work so the advertised 'saved searches & event alerts' feature actually delivers.",
+      "acceptanceCriteria": [
+        "Enabling an alert both registers for push (depends on IOS-AUDIT-FEAT-001) and persists the flag",
+        "A new matching event produces a push (server alert job confirmed to exist)",
+        "UI reflects alert on/off state and ideally last-match time",
+        "Disabling an alert stops delivery"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Evidence: SavedSearchService.swift:6-7 stores an alert flag and notes server-side delivery, but push registration is broken (IOS-AUDIT-FEAT-001) and only triggered from saved-search enable. Copy promises the feature at SubscriptionView.swift:144."
     }
   ]
 }
