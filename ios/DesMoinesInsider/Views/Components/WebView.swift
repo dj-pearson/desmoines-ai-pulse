@@ -8,7 +8,11 @@ struct WebView: UIViewRepresentable {
     func makeUIView(context: Context) -> WKWebView {
         let webView = WKWebView()
         webView.navigationDelegate = context.coordinator
-        webView.load(URLRequest(url: url))
+        // Only load http/https; never a content-supplied file:/javascript:/etc.
+        // scheme (IOS-AUDIT-SEC-002).
+        if url.isSafeWebLink {
+            webView.load(URLRequest(url: url))
+        }
         return webView
     }
 
@@ -19,24 +23,39 @@ struct WebView: UIViewRepresentable {
     }
 
     class Coordinator: NSObject, WKNavigationDelegate {
-        /// Open external links (different host) in Safari instead of the in-app browser.
+        /// Divert any cross-host top-level navigation (not just user taps) to
+        /// Safari, so server redirects / JS `window.location` changes can't load
+        /// another host inside the app's trust context (IOS-AUDIT-SEC-003). Also
+        /// block non-http(s) schemes outright (IOS-AUDIT-SEC-002).
         func webView(
             _ webView: WKWebView,
             decidePolicyFor navigationAction: WKNavigationAction,
             decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
         ) {
-            guard let requestURL = navigationAction.request.url,
-                  let initialHost = webView.url?.host,
-                  let targetHost = requestURL.host,
-                  navigationAction.navigationType == .linkActivated,
-                  targetHost != initialHost else {
+            guard let requestURL = navigationAction.request.url else {
                 decisionHandler(.allow)
                 return
             }
 
-            // External link — open in Safari
-            UIApplication.shared.open(requestURL)
-            decisionHandler(.cancel)
+            // Reject non-web schemes (file:, javascript:, etc.).
+            guard requestURL.isSafeWebLink else {
+                decisionHandler(.cancel)
+                return
+            }
+
+            // Same-host (or first navigation) loads in-app; a different host on a
+            // top-level navigation of any type goes to Safari.
+            let isTopLevel = navigationAction.targetFrame?.isMainFrame ?? true
+            if let initialHost = webView.url?.host,
+               let targetHost = requestURL.host,
+               isTopLevel,
+               targetHost != initialHost {
+                UIApplication.shared.open(requestURL)
+                decisionHandler(.cancel)
+                return
+            }
+
+            decisionHandler(.allow)
         }
     }
 }
@@ -47,8 +66,21 @@ struct WebViewPage: View {
     let url: URL
 
     var body: some View {
-        WebView(url: url)
-            .navigationTitle(title)
-            .navigationBarTitleDisplayMode(.inline)
+        Group {
+            if url.isSafeWebLink {
+                WebView(url: url)
+            } else {
+                // Content-supplied URL with an unexpected scheme — don't load it
+                // (IOS-AUDIT-SEC-002); show a neutral message instead of a blank
+                // web view.
+                ContentUnavailableView(
+                    "Can't open link",
+                    systemImage: "exclamationmark.triangle",
+                    description: Text("This link can't be opened safely.")
+                )
+            }
+        }
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
     }
 }

@@ -1,5 +1,6 @@
 import Foundation
 import os
+import CryptoKit
 
 /// Lightweight analytics facade that wraps Firebase Analytics.
 ///
@@ -133,12 +134,14 @@ final class AnalyticsService {
 
     func setUserId(_ userId: String?) {
         guard ConsentService.shared.analyticsConsent else { return }
-        // Anonymize: only first 16 chars of hex hash
         if let userId {
-            let hash = userId.data(using: .utf8)!.map { String(format: "%02x", $0) }.joined()
-            let truncated = String(hash.prefix(16))
-            // Analytics.setUserID(truncated)
-            AppLogger.general.debug("Analytics: user set \(truncated)")
+            // One-way SHA-256 so the analytics id is a pseudonym, not the raw
+            // (reversible) Supabase UUID (IOS-AUDIT-SEC-004). Truncated to 16 hex
+            // chars for a compact, non-reversible key.
+            let digest = SHA256.hash(data: Data(userId.utf8))
+            let pseudonym = digest.map { String(format: "%02x", $0) }.joined().prefix(16)
+            // Analytics.setUserID(String(pseudonym))
+            AppLogger.general.debug("Analytics: user set \(pseudonym)")
         } else {
             // Analytics.setUserID(nil)
         }
