@@ -3,6 +3,10 @@ import StoreKit
 
 @main
 struct DesMoinesInsiderApp: App {
+    /// Owns push-token callbacks and, more importantly, notification presentation
+    /// + tap routing for local event reminders (works even with push disabled).
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
     @State private var authService = AuthService.shared
     @State private var favoritesService = FavoritesService.shared
     @State private var locationService = LocationService.shared
@@ -84,6 +88,15 @@ struct DesMoinesInsiderApp: App {
             .onOpenURL { url in
                 // Handle auth callbacks (email verification, OAuth redirects, etc.)
                 SupabaseService.shared.client?.handle(url)
+                // Then attempt to resolve content deep links (custom scheme).
+                // DeepLinkHandler skips auth-callback URLs itself.
+                DeepLinkHandler.shared.handle(url)
+            }
+            .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+                // Universal links (applinks:desmoinesinsider.com) arrive here, not
+                // via onOpenURL.
+                guard let url = activity.webpageURL else { return }
+                DeepLinkHandler.shared.handle(url)
             }
             .task {
                 launchCount += 1
@@ -118,6 +131,14 @@ struct DesMoinesInsiderApp: App {
 
                 if authService.isAuthenticated {
                     await favoritesService.loadFavorites()
+
+                    // Register for push at a deliberate, post-onboarding moment
+                    // (gated — currently dormant until the flag is enabled and the
+                    // backend register-device-token path is live).
+                    if Config.enablePushNotifications {
+                        await PushNotificationService.shared.checkPermissionStatus()
+                        await PushNotificationService.shared.requestPermissionAndRegister()
+                    }
 
                     // Request review after engagement thresholds
                     requestReviewIfEligible()
