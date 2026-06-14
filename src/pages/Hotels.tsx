@@ -29,6 +29,8 @@ import {
   MapPin,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import AffiliateDisclosureBanner from "@/components/AffiliateDisclosureBanner";
 import Header from "@/components/Header";
@@ -106,7 +108,7 @@ export default function Hotels() {
     }, 300);
   };
 
-  const { hotels, isLoading, totalCount } = useHotels({
+  const { hotels, isLoading, totalCount, error: hotelsError, refetch } = useHotels({
     search: debouncedSearch,
     area: selectedAreas.length > 0 ? selectedAreas : undefined,
     priceRange: selectedPriceRanges.length > 0 ? selectedPriceRanges : undefined,
@@ -429,8 +431,13 @@ export default function Hotels() {
                 </div>
               )}
 
+              {/* Error state */}
+              {!isLoading && hotelsError && (
+                <ErrorState error={hotelsError} onRetry={() => refetch()} />
+              )}
+
               {/* Featured hotels section */}
-              {!isLoading && featuredHotels.length > 0 && !debouncedSearch && activeFilterCount === 0 && (
+              {!isLoading && !hotelsError && featuredHotels.length > 0 && !debouncedSearch && activeFilterCount === 0 && (
                 <section className="mb-8">
                   <h2 className="text-xl font-semibold mb-4">Featured Hotels</h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -442,7 +449,7 @@ export default function Hotels() {
               )}
 
               {/* All hotels grid */}
-              {!isLoading && (
+              {!isLoading && !hotelsError && (
                 <>
                   {hotels.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -450,17 +457,21 @@ export default function Hotels() {
                         <HotelCard key={hotel.id} hotel={hotel} />
                       ))}
                     </div>
+                  ) : debouncedSearch || activeFilterCount > 0 ? (
+                    <EmptyState
+                      icon={Building2}
+                      title="No hotels match your filters"
+                      description="Try adjusting your filters or search terms to see more results."
+                      actions={[
+                        { label: 'Clear All Filters', variant: 'outline', onClick: clearAllFilters },
+                      ]}
+                    />
                   ) : (
-                    <div className="text-center py-16">
-                      <Building2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                      <h3 className="text-lg font-semibold mb-2">No hotels found</h3>
-                      <p className="text-muted-foreground mb-4">
-                        Try adjusting your filters or search terms
-                      </p>
-                      <Button variant="outline" onClick={clearAllFilters}>
-                        Clear All Filters
-                      </Button>
-                    </div>
+                    <EmptyState
+                      icon={Building2}
+                      title="No hotels available yet"
+                      description="Check back soon — we're adding places to stay across Des Moines."
+                    />
                   )}
                 </>
               )}

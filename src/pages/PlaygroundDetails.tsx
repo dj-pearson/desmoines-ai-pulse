@@ -8,6 +8,10 @@ import { Separator } from "@/components/ui/separator";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { LazyLocationMap } from "@/components/LazyLocationMap";
+import { getDirectionsUrl } from "@/lib/directions";
+import { OpenStatusChip } from "@/components/OpenStatusChip";
+import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import ShareDialog from "@/components/ShareDialog";
 import { FAQSection } from "@/components/FAQSection";
 import { BackToTop } from "@/components/BackToTop";
@@ -329,7 +333,7 @@ export default function PlaygroundDetails() {
             <div className="flex flex-wrap gap-3 p-4 md:p-6 bg-gray-50 border-b">
               {playground.location && (
                 <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(playground.name + " " + playground.location)}`}
+                  href={getDirectionsUrl({ latitude: playground.latitude, longitude: playground.longitude, address: `${playground.name} ${playground.location}` })}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
@@ -403,7 +407,7 @@ export default function PlaygroundDetails() {
                           <p className="text-gray-900 font-medium">{playground.location}</p>
                           <p className="text-sm text-gray-500">{BRAND.city}, {BRAND.state}</p>
                           <a
-                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(playground.name + " " + playground.location)}`}
+                            href={getDirectionsUrl({ latitude: playground.latitude, longitude: playground.longitude, address: `${playground.name} ${playground.location}` })}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center text-sm text-[#2D1B69] hover:underline mt-1"
@@ -414,13 +418,24 @@ export default function PlaygroundDetails() {
                         </div>
                       </div>
                     )}
+                    {playground.latitude && playground.longitude && (
+                      <div className="overflow-hidden rounded-xl">
+                        <LazyLocationMap
+                          latitude={playground.latitude}
+                          longitude={playground.longitude}
+                          venue={playground.name}
+                          location={playground.location}
+                          className="h-48 w-full"
+                        />
+                      </div>
+                    )}
                     <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
                       <span className="text-gray-600">Admission</span>
                       <Badge className="bg-emerald-100 text-emerald-700 font-medium">Free</Badge>
                     </div>
                     <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
                       <span className="text-gray-600">Hours</span>
-                      <span className="text-gray-900 text-sm font-medium">Dawn to Dusk</span>
+                      <OpenStatusChip hours={null} fallbackLabel="Check local park listings" />
                     </div>
                   </div>
                 </div>
@@ -545,7 +560,7 @@ export default function PlaygroundDetails() {
                   <div className="space-y-3">
                     <div>
                       <h3 className="font-semibold text-sm text-gray-900">Hours</h3>
-                      <p className="text-sm text-gray-600">Dawn to Dusk, daily</p>
+                      <OpenStatusChip hours={null} fallbackLabel="Check local park listings for hours" className="mt-1" />
                     </div>
                     <div>
                       <h3 className="font-semibold text-sm text-gray-900">Area</h3>
@@ -689,6 +704,19 @@ export default function PlaygroundDetails() {
       </div>
       <Footer />
       <BackToTop />
+      <StickyMobileCTA
+        variant="playground"
+        primaryAction={{
+          label: "Directions",
+          href: getDirectionsUrl({
+            latitude: playground.latitude,
+            longitude: playground.longitude,
+            address: `${playground.name} ${playground.location ?? ""}`,
+          }),
+          icon: "directions",
+          isExternal: true,
+        }}
+      />
     </>
   );
 }

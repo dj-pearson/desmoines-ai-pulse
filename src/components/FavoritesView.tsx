@@ -177,6 +177,7 @@ export function FavoritesView() {
                       size="icon"
                       onClick={() => toggleFavorite(event.id)}
                       className="flex-shrink-0"
+                      aria-label="Remove from favorites"
                     >
                       <Heart className="h-5 w-5 fill-red-500 text-red-500" />
                     </Button>

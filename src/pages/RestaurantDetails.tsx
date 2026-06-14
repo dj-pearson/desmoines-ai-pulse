@@ -43,7 +43,9 @@ import {
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useContentTracking } from "@/hooks/useContentTracking";
-import { getRestaurantOpenStatus } from "@/lib/restaurantHours";
+import { getRestaurantOpenStatus, getOpeningHoursSpecification } from "@/lib/restaurantHours";
+import { LazyLocationMap } from "@/components/LazyLocationMap";
+import { getDirectionsUrl } from "@/lib/directions";
 import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { NearbyContent } from "@/components/NearbyContent";
@@ -83,7 +85,7 @@ export default function RestaurantDetails() {
   });
 
   // Track page view and content interactions
-  const { trackShare } = useContentTracking(restaurant?.id, 'restaurant');
+  const { trackShare, trackClick } = useContentTracking(restaurant?.id, 'restaurant');
 
   const { data: relatedRestaurants } = useQuery({
     queryKey: ["related-restaurants", restaurant?.cuisine, restaurant?.id],
@@ -263,7 +265,6 @@ export default function RestaurantDetails() {
       streetAddress: restaurant.location,
       addressLocality: cityName,
       addressRegion: "Iowa",
-      postalCode: "50309",
       addressCountry: "US",
     },
     ...(restaurant.phone && { telephone: restaurant.phone }),
@@ -285,14 +286,11 @@ export default function RestaurantDetails() {
       latitude: restaurant.latitude || 41.5868,
       longitude: restaurant.longitude || -93.6250,
     },
-    openingHoursSpecification: restaurant.opening ? [
-      "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"
-    ].map((day) => ({
-      "@type": "OpeningHoursSpecification",
-      dayOfWeek: day,
-      opens: "11:00",
-      closes: "22:00",
-    })) : undefined,
+    // Derived from the same parser as the visible open/closed badge; omitted
+    // entirely when the free-form hours can't be parsed (no fabricated hours).
+    ...(getOpeningHoursSpecification(restaurant.opening)
+      ? { openingHoursSpecification: getOpeningHoursSpecification(restaurant.opening) }
+      : {}),
     paymentAccepted: "Cash, Credit Card, Debit Card",
     currenciesAccepted: "USD",
     hasMenu: {
@@ -301,7 +299,6 @@ export default function RestaurantDetails() {
       name: `${restaurant.name} Menu`,
       url: `https://desmoinespulse.com/restaurants/${restaurant.slug || restaurant.id}#menu`,
     },
-    acceptsReservations: true,
     areaServed: {
       "@type": "City",
       name: "Des Moines",
@@ -532,7 +529,7 @@ export default function RestaurantDetails() {
               )}
               {restaurant.location && (
                 <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(restaurant.name + " " + restaurant.location)}`}
+                  href={getDirectionsUrl({ latitude: restaurant.latitude, longitude: restaurant.longitude, address: `${restaurant.name} ${restaurant.location}` })}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
@@ -649,7 +646,7 @@ export default function RestaurantDetails() {
                           <p className="text-gray-900 font-medium">{restaurant.location}</p>
                           <p className="text-sm text-gray-500">{cityName}, Iowa</p>
                           <a
-                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(restaurant.name + " " + restaurant.location)}`}
+                            href={getDirectionsUrl({ latitude: restaurant.latitude, longitude: restaurant.longitude, address: `${restaurant.name} ${restaurant.location}` })}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center text-sm text-[#2D1B69] hover:underline mt-1"
@@ -658,6 +655,17 @@ export default function RestaurantDetails() {
                             Get Directions
                           </a>
                         </div>
+                      </div>
+                    )}
+                    {restaurant.latitude && restaurant.longitude && (
+                      <div className="overflow-hidden rounded-xl">
+                        <LazyLocationMap
+                          latitude={restaurant.latitude}
+                          longitude={restaurant.longitude}
+                          venue={restaurant.name}
+                          location={restaurant.location}
+                          className="h-48 w-full"
+                        />
                       </div>
                     )}
                     {restaurant.phone && (
@@ -840,8 +848,8 @@ export default function RestaurantDetails() {
             />
           </Card>
 
-          {/* Related Restaurants - Same Cuisine */}
-          {relatedRestaurants && relatedRestaurants.length > 0 && (
+          {/* Related Restaurants - Same Cuisine — hidden when fewer than 3 matches */}
+          {relatedRestaurants && relatedRestaurants.length >= 3 && (
             <section className="mb-8" aria-labelledby="related-heading">
               <h2 id="related-heading" className="text-2xl font-bold text-gray-900 mb-2">
                 More {restaurant.cuisine} Restaurants in Des Moines
@@ -849,7 +857,7 @@ export default function RestaurantDetails() {
               <p className="text-gray-600 mb-6">
                 Explore other {restaurant.cuisine} dining options near {cityName}
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5" onClick={trackClick}>
                 {relatedRestaurants.map((related) => (
                   <RestaurantCard
                     key={related.id}
@@ -910,7 +918,7 @@ export default function RestaurantDetails() {
         primaryAction={
           restaurant.phone
             ? {
-                label: "Call Now",
+                label: "Call to Reserve",
                 href: `tel:${restaurant.phone}`,
                 icon: "phone",
               }
@@ -927,7 +935,7 @@ export default function RestaurantDetails() {
           restaurant.location
             ? {
                 label: "Directions",
-                href: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(restaurant.name + " " + restaurant.location)}`,
+                href: getDirectionsUrl({ latitude: restaurant.latitude, longitude: restaurant.longitude, address: `${restaurant.name} ${restaurant.location}` }),
                 icon: "directions",
                 isExternal: true,
               }

@@ -61,6 +61,7 @@ export function NLPSearchBar({
     results,
     parsedIntent,
     isSearching,
+    isError,
     hasResults,
     totalResults,
     responseTime,
@@ -311,8 +312,25 @@ export function NLPSearchBar({
               </div>
             )}
 
+            {/* Error → keyword fallback */}
+            {!isSearching && isError && query.length >= 3 && (
+              <div className="space-y-3 py-2 text-center">
+                <p className="text-sm text-muted-foreground">
+                  AI search is temporarily unavailable. You can still search by keyword.
+                </p>
+                <Link
+                  to={`/search?q=${encodeURIComponent(query)}`}
+                  className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                >
+                  <Search className="h-4 w-4" />
+                  Search "{query}" by keyword
+                  <ArrowRight className="h-3 w-3" />
+                </Link>
+              </div>
+            )}
+
             {/* No Results */}
-            {!isSearching && query.length >= 3 && !hasResults && parsedIntent && (
+            {!isSearching && !isError && query.length >= 3 && !hasResults && parsedIntent && (
               <div className="text-center py-6">
                 <Search className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
                 <p className="text-muted-foreground">

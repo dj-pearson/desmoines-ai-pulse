@@ -17,11 +17,16 @@ import {
   ExternalLink,
   ChevronRight,
   ArrowLeft,
+  Navigation,
 } from "lucide-react";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import AffiliateDisclosureBanner from "@/components/AffiliateDisclosureBanner";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { LazyLocationMap } from "@/components/LazyLocationMap";
+import { getDirectionsUrl } from "@/lib/directions";
+import { OpenStatusChip } from "@/components/OpenStatusChip";
+import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 
@@ -328,8 +333,40 @@ export default function HotelDetails() {
                       {hotel.area && (
                         <Badge variant="outline" className="mt-1 text-xs">{hotel.area}</Badge>
                       )}
+                      <a
+                        href={getDirectionsUrl({
+                          latitude: hotel.latitude,
+                          longitude: hotel.longitude,
+                          address: fullAddress,
+                        })}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center text-sm text-primary hover:underline mt-1"
+                      >
+                        <Navigation className="h-3.5 w-3.5 mr-1" />
+                        Directions
+                      </a>
+                      <div className="mt-2">
+                        <OpenStatusChip
+                          hours={null}
+                          website={hotel.source_url}
+                          fallbackLabel="Check hotel site for hours & check-in"
+                        />
+                      </div>
                     </div>
                   </div>
+
+                  {hotel.latitude && hotel.longitude && (
+                    <div className="overflow-hidden rounded-lg">
+                      <LazyLocationMap
+                        latitude={hotel.latitude}
+                        longitude={hotel.longitude}
+                        venue={hotel.name}
+                        location={fullAddress}
+                        className="h-48 w-full"
+                      />
+                    </div>
+                  )}
 
                   {/* Phone */}
                   {hotel.phone && (
@@ -392,6 +429,50 @@ export default function HotelDetails() {
 
         <Footer />
       </div>
+
+      <StickyMobileCTA
+        variant="hotel"
+        primaryAction={
+          hotel.source_url
+            ? {
+                label: "Book Now",
+                href: hotel.source_url,
+                icon: "external",
+                isExternal: true,
+              }
+            : hotel.phone
+            ? {
+                label: "Call to Book",
+                href: `tel:${hotel.phone}`,
+                icon: "phone",
+              }
+            : {
+                // No booking link or phone — still give a working action.
+                label: "Find Rooms",
+                href: `https://www.google.com/search?q=${encodeURIComponent(
+                  `${hotel.name} ${hotel.city ?? "Des Moines"} hotel booking`
+                )}`,
+                icon: "external",
+                isExternal: true,
+              }
+        }
+        secondaryAction={
+          hotel.latitude && hotel.longitude
+            ? {
+                label: "Directions",
+                href: getDirectionsUrl({
+                  latitude: hotel.latitude,
+                  longitude: hotel.longitude,
+                  address: fullAddress,
+                }),
+                icon: "directions",
+                isExternal: true,
+              }
+            : hotel.phone
+            ? { label: "Call", href: `tel:${hotel.phone}`, icon: "phone" }
+            : undefined
+        }
+      />
     </>
   );
 }

@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 const log = createLogger('EventsToday');
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import EventCard from "@/components/EventCard";
+import { SocialEventCard } from "@/components/SocialEventCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -199,7 +199,7 @@ export default function EventsToday() {
         ) : todaysEvents.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
             {todaysEvents.map((event) => (
-              <EventCard key={event.id} event={event} onViewDetails={() => {}} />
+              <SocialEventCard key={event.id} event={event} onViewDetails={() => {}} />
             ))}
           </div>
         ) : (

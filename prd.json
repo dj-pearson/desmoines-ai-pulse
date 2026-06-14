@@ -481,8 +481,8 @@
         "npm run validate passes"
       ],
       "priority": 31,
-      "passes": false,
-      "notes": "Evidence: src/components/ui/loading-skeleton.tsx + empty-state.tsx exist but adoption is inconsistent (EventsPage lacks EmptyState; error handling diverges per page)."
+      "passes": true,
+      "notes": "Evidence: src/components/ui/loading-skeleton.tsx + empty-state.tsx exist but adoption is inconsistent (EventsPage lacks EmptyState; error handling diverges per page). [DONE 2026-06-13] New shared ErrorState (offline/server detection + query-refetch Retry). Articles/Deals/Hotels/Attractions/Restaurants standardized on shape-matched CardsGridSkeleton + shared EmptyState (no-content vs filtered) + ErrorState; EventsPage already compliant. Skeletons respect prefers-reduced-motion via base Skeleton."
     },
     {
       "id": "WEB-UX-003",
@@ -498,7 +498,7 @@
       ],
       "priority": 32,
       "passes": false,
-      "notes": "Evidence: result count hidden on mobile (src/pages/Restaurants.tsx ~503); filters live in the hero so they scroll away. Mirrors what IOS-IA-004 shipped natively."
+      "notes": "Evidence: result count hidden on mobile (src/pages/Restaurants.tsx ~503); filters live in the hero so they scroll away. Mirrors what IOS-IA-004 shipped natively. [PARTIAL 2026-06-13] Result count now visible on mobile (Restaurants, was hidden md:block); aria-live already announces it. Remaining: sticky search/filter bar, removable chips on Events/Restaurants (Attractions already has them), filter-sheet focus restoration, Playwright mobile suite — need browser verification not available in this container."
     },
     {
       "id": "WEB-UX-004",
@@ -512,8 +512,8 @@
         "npm run validate passes"
       ],
       "priority": 33,
-      "passes": false,
-      "notes": "Evidence: RestaurantDetails fetches related but doesn't render; breadcrumbs.tsx ~35-54 derives labels from the pathname."
+      "passes": true,
+      "notes": "Evidence: RestaurantDetails fetches related but doesn't render; breadcrumbs.tsx ~35-54 derives labels from the pathname. [DONE 2026-06-13] Related rails (Event/Restaurant/Attraction) already rendered with LastUpdatedBadge + named breadcrumbs; tightened visibility to >=3 matches and added trackClick (delegated) on each rail grid for engagement measurement."
     },
     {
       "id": "WEB-UX-005",
@@ -527,8 +527,8 @@
         "npm run validate passes"
       ],
       "priority": 34,
-      "passes": false,
-      "notes": "Builds on the completed WCAG work in memory (landmarks, touch targets done). Evidence: SearchAutocomplete lacks arrow-key handling; SocialEventCard/RestaurantCard action labels inconsistent."
+      "passes": true,
+      "notes": "Builds on the completed WCAG work in memory (landmarks, touch targets done). Evidence: SearchAutocomplete lacks arrow-key handling; SocialEventCard/RestaurantCard action labels inconsistent. [DONE 2026-06-13] SearchAutocomplete had arrow/Enter/Escape; added combobox ARIA (role/aria-expanded/aria-controls/aria-activedescendant + option ids) for announced selection. FavoriteButton gained optional itemName -> Save {name} labels (wired SocialEventCard/EventCard); actions are tabbable buttons w/ stopPropagation. Focus restoration via Radix + useFocusRestore. NOTE: axe/Playwright a11y suite not run locally (no browsers); CI verifies."
     },
     {
       "id": "WEB-UX-006",
@@ -727,7 +727,8 @@
         "npm run validate passes (type-check + lint)"
       ],
       "priority": 36,
-      "passes": false
+      "passes": true,
+      "notes": "[DONE 2026-06-13] Added lazy /events/near-me route (App.tsx); surfaced in Events header nav group + mobile nav links, a BottomNav slot, and home hero QuickActions (desktop+mobile). Geolocation explicit-action-only; fixed async permission-denied handling with toast + fallback banner linking to /events. Map view uses lazy EventsMap. Reuses useProximitySearch / search_events_near_location RPC. Also fixed a pre-existing syntax error in VideoPlayer.tsx that was blocking lint."
     },
     {
       "id": "WEB-UX-008",
@@ -741,7 +742,8 @@
         "npm run validate passes (type-check + lint)"
       ],
       "priority": 37,
-      "passes": false
+      "passes": true,
+      "notes": "[DONE 2026-06-13] Home hero now leads with NLPSearchBar (primary) + example chips; structured SearchSection demoted to labeled secondary. /search points to new NLP-driven SearchResults page (reads ?q=, runs nlp-search, links results by id /{type}/{id}). Advanced filters preserved as refine step at /search/advanced, no paywall on basic NLP query. Graceful keyword fallback (useEvents/useRestaurants/useAttractions search, mounted only on error) with visible notice; NLPSearchBar dropdown also shows keyword-fallback link on error."
     },
     {
       "id": "WEB-UX-009",
@@ -755,7 +757,8 @@
         "npm run validate passes (type-check + lint)"
       ],
       "priority": 38,
-      "passes": false
+      "passes": true,
+      "notes": "[DONE 2026-06-13] All 6 event list pages now use SocialEventCard. SocialEventCard always shows a time slot (parsed time CT / All day / Time TBA). EventCard kept for denser related/dashboard rails with an explanatory header comment. Single Link nav target; favorite/share stopPropagation."
     },
     {
       "id": "WEB-UX-010",
@@ -782,7 +785,8 @@
         "npm run validate passes (type-check + lint)"
       ],
       "priority": 40,
-      "passes": false
+      "passes": true,
+      "notes": "[DONE 2026-06-13] Added canonical ticketUrl guard (source_url && !source_url_broken) in EventDetails and used it for StickyMobileCTA primary+secondary actions; broken/absent URL falls through to Add to Calendar. Audited all source_url usages — EventDetails sticky CTA was the only user-facing event ticket CTA missing the guard (schema/SEO emit JSON-LD not CTAs; restaurant menu link has no broken-flag)."
     },
     {
       "id": "WEB-UX-012",
@@ -795,7 +799,8 @@
         "npm run validate passes (type-check + lint)"
       ],
       "priority": 41,
-      "passes": false
+      "passes": true,
+      "notes": "[DONE 2026-06-13] openingHoursSpecification now derived via new getOpeningHoursSpecification() reusing the badge parser; omitted when unparseable. Removed hardcoded postalCode 50309 and unconditional acceptsReservations. Badge + structured data share one parser so they cannot contradict."
     },
     {
       "id": "WEB-UX-013",
@@ -808,7 +813,8 @@
         "npm run validate passes (type-check + lint)"
       ],
       "priority": 42,
-      "passes": false
+      "passes": true,
+      "notes": "[DONE 2026-06-13] Applied .pb-bottom-nav (pb-20 lg:pb-0) to the shared <main> wrapper in App.tsx so all mobile routes clear the fixed h-16 BottomNav; desktop unaffected (lg:pb-0). Verified no double-padding with existing inner pb usages."
     },
     {
       "id": "WEB-UX-014",
@@ -822,7 +828,8 @@
         "npm run validate passes (type-check + lint)"
       ],
       "priority": 43,
-      "passes": false
+      "passes": true,
+      "notes": "[DONE 2026-06-13] H1 value prop + greeting demoted to eyebrow; AI Plan My Night now navigates to /trip-planner (no dead CTA); QuickActions consolidated to Today|This Weekend|Near Me|Open Now (desktop+mobile, all real links); mobile hero capped to 80vh."
     },
     {
       "id": "WEB-UX-015",
@@ -835,7 +842,8 @@
         "npm run validate passes (type-check + lint)"
       ],
       "priority": 44,
-      "passes": false
+      "passes": true,
+      "notes": "[DONE 2026-06-13] AllInclusiveDashboard gates only on eventsLoading (not slowest of 4); ForYouRail shows skeleton row while loading (no shift); homepage reordered so content dashboard renders right after the For-You rail with AI marketing demoted below."
     },
     {
       "id": "WEB-UX-016",
@@ -849,7 +857,8 @@
         "npm run validate passes (type-check + lint)"
       ],
       "priority": 45,
-      "passes": false
+      "passes": true,
+      "notes": "[DONE 2026-06-13] Header collapsed to 4 groups (Events/Eat & Drink/Explore/Plan), data-driven DesktopNav+MobileNav. De-duped concepts; /things-to-do/tourists 301->/visitors-guide via public/_redirects. Deals+Map added to Explore group + footer; BottomNav Explore(/attractions) replaced with Map(/map) resolving the label collision (Near Me already present). Trigger active-state + priority Popular tag added."
     },
     {
       "id": "WEB-UX-017",
@@ -862,7 +871,8 @@
         "npm run validate passes (type-check + lint)"
       ],
       "priority": 46,
-      "passes": false
+      "passes": true,
+      "notes": "[DONE 2026-06-13] PseoRoutePage validates segments against the taxonomy slug set + curated prefixes (things-to-do/nightlife/guide) before the DB lookup (gated via usePseoPage enabled opt). Unknown paths and DB-misses render the real NotFound (noindex 404). Confirmed all nav targets except bare /nightlife have explicit routes, so valid landing pages are unaffected."
     },
     {
       "id": "WEB-UX-018",
@@ -875,7 +885,8 @@
         "npm run validate passes (type-check + lint)"
       ],
       "priority": 47,
-      "passes": false
+      "passes": true,
+      "notes": "[DONE 2026-06-13] EventsPage sort pushed into query (.order by sortBy), newest=created_at, sortBy in queryKey + page-reset; dropped client re-sort. AdvancedSearch: id-based result links, removed Math.random distance + Nearest First option, removed no-op Open Now toggle."
     },
     {
       "id": "WEB-UX-019",
@@ -888,7 +899,8 @@
         "npm run validate passes (type-check + lint)"
       ],
       "priority": 48,
-      "passes": false
+      "passes": true,
+      "notes": "[DONE 2026-06-13] New getDirectionsUrl (maps/dir destination=lat,lng, address fallback) + LazyLocationMap (lazy leaflet + sized placeholder, no CLS). Map embedded on Restaurant/Attraction/Playground/Hotel details when coords exist; all Directions links now use exact coordinates; HotelDetails gained a Directions link from its address."
     },
     {
       "id": "WEB-UX-020",
@@ -901,7 +913,8 @@
         "npm run validate passes (type-check + lint)"
       ],
       "priority": 49,
-      "passes": false
+      "passes": true,
+      "notes": "[DONE 2026-06-13] New OpenStatusChip (reuses getRestaurantOpenStatus): real status when hours parse, explicit check-hours fallback (link when site known) otherwise. Added to AttractionDetails (real attraction.hours), PlaygroundDetails (replaced hardcoded Dawn to Dusk x2), HotelDetails (fallback link)."
     },
     {
       "id": "WEB-UX-021",
@@ -914,7 +927,8 @@
         "npm run validate passes (type-check + lint)"
       ],
       "priority": 50,
-      "passes": false
+      "passes": true,
+      "notes": "[DONE 2026-06-13] StickyMobileCTA widened (+playground/+hotel, unified CTAAction icon type, fixes pre-existing share TS error). PlaygroundDetails sticky Directions; HotelDetails sticky Book Now/Call/Find Rooms fallback + Directions; RestaurantDetails Call to Reserve; EventDetails mobile hero capped to h-48 so key info is above the fold."
     },
     {
       "id": "WEB-UX-022",
@@ -927,7 +941,8 @@
         "npm run validate passes (type-check + lint)"
       ],
       "priority": 51,
-      "passes": false
+      "passes": true,
+      "notes": "[DONE 2026-06-13] Dense mobile controls (EventsPage view-toggle/clear, Restaurants clear) now >=44px on mobile via responsive sizing, compact on desktop. Added aria-labels to all icon-only buttons missing an accessible name (user-facing + admin); verified 0 remain. Native buttons are keyboard-operable."
     },
     {
       "id": "WEB-UX-023",
@@ -940,7 +955,8 @@
         "npm run validate passes (type-check + lint)"
       ],
       "priority": 52,
-      "passes": false
+      "passes": true,
+      "notes": "[DONE 2026-06-13] Deleted RestaurantsPage.tsx (0 importers), EventFilters.tsx (removed the dead allEvents home view + handleViewAllEvents/handleScrapeEvents/scrapeMutation cascade), Hero3D.tsx, Hero3DCityscape.tsx. Confirmed three/@react-three only reachable via lazy HeroCityLite."
     }
   ]
 }

@@ -26,7 +26,6 @@ import {
   Utensils,
   X,
   Sparkles,
-  AlertCircle,
   Clock,
   List,
   Map,
@@ -40,6 +39,7 @@ import {
 import { useState, lazy, Suspense, useMemo, useCallback, useRef, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { FAQSection } from "@/components/FAQSection";
 import { BackToTop } from "@/components/BackToTop";
 import { useAnnounce } from "@/hooks/use-announce";
@@ -322,7 +322,7 @@ export default function Restaurants() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 text-gray-400 hover:text-gray-600"
+                      className="h-11 w-11 sm:h-8 sm:w-8 text-gray-400 hover:text-gray-600"
                       onClick={() => {
                         setSearchInput("");
                         setFilters((prev) => ({ ...prev, search: "" }));
@@ -499,8 +499,8 @@ export default function Restaurants() {
                   </SelectContent>
                 </Select>
 
-                {/* Results count */}
-                <p className="text-sm text-muted-foreground whitespace-nowrap hidden md:block">
+                {/* Results count — visible at all viewports (WEB-UX-003) */}
+                <p className="text-sm text-muted-foreground whitespace-nowrap">
                   {isLoading ? (
                     "Searching..."
                   ) : (
@@ -579,18 +579,7 @@ export default function Restaurants() {
                   label={filters.search ? `Searching for "${filters.search}"...` : filters.cuisine.length > 0 ? `Loading ${filters.cuisine.join(', ')} restaurants...` : "Loading restaurants..."}
                 />
               ) : error ? (
-                <EmptyState
-                  icon={AlertCircle}
-                  title="Unable to load restaurants"
-                  description="We're having trouble loading the restaurant list. Please check your connection and try again."
-                  actions={[
-                    {
-                      label: "Try Again",
-                      onClick: () => refetch(),
-                      variant: "default",
-                    },
-                  ]}
-                />
+                <ErrorState error={error} onRetry={() => refetch()} />
               ) : restaurants.length === 0 ? (
                 <EmptyState
                   icon={hasActiveFilters ? SearchX : Utensils}

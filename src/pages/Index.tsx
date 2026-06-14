@@ -14,10 +14,9 @@ import { createEventSlugWithCentralTime } from "@/lib/timezone";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { useEventScraper } from "@/hooks/useSupabase";
 import { Event } from "@/lib/types";
 import { BRAND } from "@/lib/brandConfig";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { openExternalUrl } from "@/lib/capacitorUtils";
 import Header from "@/components/Header";
 import { FAQSection } from "@/components/FAQSection";
@@ -25,6 +24,7 @@ import SEOHead from "@/components/SEOHead";
 import SEOStructure from "@/components/SEOStructure";
 import { SEOEnhancedHead } from "@/components/SEOEnhancedHead";
 import SearchSection from "@/components/SearchSection";
+import { NLPSearchBar } from "@/components/NLPSearchBar";
 import { EnhancedHero } from "@/components/EnhancedHero";
 import { ForYouRail } from "@/components/ForYouRail";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
@@ -40,7 +40,6 @@ const AllInclusiveDashboard = lazy(() => import("@/components/AllInclusiveDashbo
 const PersonalizedDashboard = lazy(() => import("@/components/PersonalizedDashboard"));
 const SmartEventNavigation = lazy(() => import("@/components/SmartEventNavigation"));
 const MostSearched = lazy(() => import("@/components/MostSearched"));
-const EventFilters = lazy(() => import("@/components/EventFilters"));
 const GEOContent = lazy(() => import("@/components/GEOContent"));
 const Newsletter = lazy(() => import("@/components/Newsletter"));
 const EventSocialHub = lazy(() => import("@/components/EventSocialHub").then(m => ({ default: m.EventSocialHub })));
@@ -105,7 +104,6 @@ export default function Index() {
   // Consolidated view state: which secondary view is active
   const [activeView, setActiveView] = useState<
     | { type: 'default' }
-    | { type: 'allEvents' }
     | { type: 'socialHub'; eventId: string }
   >({ type: 'default' });
   const [searchFilters, setSearchFilters] = useState<{
@@ -124,6 +122,7 @@ export default function Index() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const { toast } = useToast();
   const { isAuthenticated, user } = useAuth();
+  const navigate = useNavigate();
   const { preferences, isLoading: preferencesLoading } = useUserPreferences();
   const { eventsToday, restaurantsCount, newThisWeek, isLoading: statsLoading } = useHomepageStats();
 
@@ -186,15 +185,10 @@ export default function Index() {
   };
 
   const handleAIPlanClick = () => {
-    // Placeholder for AI Trip Planner (Month 4 feature)
-    // For now, show a toast to indicate coming soon
-    toast({
-      title: "AI Trip Planner Coming Soon!",
-      description: "Our intelligent trip planning feature is currently in development. Stay tuned!",
-    });
+    // Route to the real, shipped AI Trip Planner (no more "coming soon" dead CTA).
+    navigate("/trip-planner");
   };
 
-  const scrapeMutation = useEventScraper();
 
   // WebSite Schema
   const structuredData = {
@@ -359,31 +353,8 @@ export default function Index() {
     setShowEventDetails(true);
   };
 
-  const handleViewAllEvents = () => {
-    setActiveView({ type: 'allEvents' });
-  };
-
   const handleViewSocial = (eventId: string) => {
     setActiveView({ type: 'socialHub', eventId });
-  };
-
-  const handleScrapeEvents = () => {
-    scrapeMutation.mutate(undefined, {
-      onSuccess: () => {
-        toast({
-          title: "Events Updated!",
-          description: "Latest events have been scraped and enhanced with AI.",
-        });
-      },
-      onError: (error: Error) => {
-        toast({
-          title: "Scraping Failed",
-          description:
-            error.message || "Failed to scrape events. Please try again.",
-          variant: "destructive",
-        });
-      },
-    });
   };
 
   const formatEventDate = (date: string | Date) => {
@@ -441,10 +412,44 @@ export default function Index() {
           onAIPlanClick={handleAIPlanClick}
         />
 
+        {/* Primary: natural-language (NLP) search */}
+        <section className="border-b bg-gradient-to-b from-background to-muted/20 py-8">
+          <div className="mx-auto max-w-3xl px-4">
+            <div className="mb-4 text-center">
+              <h2 className="text-xl font-bold sm:text-2xl">
+                Just describe what you're looking for
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Try "free things to do this weekend with kids" — our AI understands plain language.
+              </p>
+            </div>
+            <NLPSearchBar
+              placeholder="Search naturally, like 'Family dinner under $50 near downtown Saturday'"
+              showExamples
+              showResults
+            />
+          </div>
+        </section>
+
+        {/* Secondary: structured filter search */}
+        <div className="bg-muted/10 py-2 text-center text-sm text-muted-foreground">
+          Prefer to filter by category, date, and price?
+        </div>
         <SearchSection onSearch={handleSearch} />
 
         {/* For You / Trending rail — IOS-DISCOVER-2026-002 web parity */}
         <ForYouRail />
+
+        {/* All-Inclusive Dashboard — real content first, before marketing (WEB-UX-015) */}
+        <div data-dashboard="all-inclusive">
+          <Suspense fallback={<DashboardSkeleton />}>
+            <AllInclusiveDashboard
+              onViewEventDetails={handleViewEventDetails}
+              filters={searchFilters}
+              onClearFilters={handleClearFilters}
+            />
+          </Suspense>
+        </div>
 
         {/* Top Banner Ad Placement */}
         <div className="py-4 bg-muted/10">
@@ -589,17 +594,6 @@ export default function Index() {
           </div>
         </section>
 
-        {/* All-Inclusive Dashboard */}
-        <div data-dashboard="all-inclusive">
-          <Suspense fallback={<DashboardSkeleton />}>
-            <AllInclusiveDashboard
-              onViewEventDetails={handleViewEventDetails}
-              filters={searchFilters}
-              onClearFilters={handleClearFilters}
-            />
-          </Suspense>
-        </div>
-
         {activeView.type === 'default' && (
           <Suspense fallback={<CardGridSkeleton />}>
             {/* Recently Viewed Section */}
@@ -667,33 +661,6 @@ export default function Index() {
           </Suspense>
         )}
 
-        {activeView.type === 'allEvents' && (
-          <Suspense fallback={<DashboardSkeleton />}>
-            <div className="py-8">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-8">
-                <div className="flex items-center justify-between">
-                  <Button
-                    variant="outline"
-                    onClick={() => setActiveView({ type: 'default' })}
-                  >
-                    ← Back to Smart Discovery
-                  </Button>
-                  <Button
-                    onClick={handleScrapeEvents}
-                    disabled={scrapeMutation.isPending}
-                    className="bg-accent hover:bg-green-700 text-white"
-                  >
-                    <Sparkles className="h-4 w-4 mr-2" />
-                    {scrapeMutation.isPending ? "Updating..." : "Update Events"}
-                  </Button>
-                </div>
-              </div>
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <EventFilters onViewEventDetails={handleViewEventDetails} />
-              </div>
-            </div>
-          </Suspense>
-        )}
 
         {/* GEO-optimized content section */}
         <Suspense fallback={<SectionLoader />}>

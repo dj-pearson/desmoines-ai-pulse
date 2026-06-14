@@ -60,7 +60,7 @@ export default function EventDetails() {
   });
 
   // Track page view and content interactions
-  const { trackShare } = useContentTracking(event?.id, 'event');
+  const { trackShare, trackClick } = useContentTracking(event?.id, 'event');
 
   const relatedEvents = event
     ? events
@@ -154,6 +154,13 @@ export default function EventDetails() {
 
   const eventDate = new Date(event.date);
   const isUpcoming = eventDate >= new Date();
+  // Canonical ticket-link guard: only actionable when present AND not flagged
+  // broken (WEB-AUTO link-checker). Use this everywhere a ticket CTA renders.
+  const ticketUrl =
+    event.source_url &&
+    !(event as { source_url_broken?: boolean }).source_url_broken
+      ? event.source_url
+      : null;
   const eventSlug = createEventSlugWithCentralTime(event.title, event);
   const eventUrl = `${BRAND.baseUrl}/events/${eventSlug}`;
   const isFree = !event.price || event.price.toLowerCase().includes('free') || event.price === '$0';
@@ -191,7 +198,7 @@ export default function EventDetails() {
 
         {/* Hero Image Section */}
         {event.image_url && (
-          <div className="relative h-64 md:h-80 lg:h-96 overflow-hidden bg-slate-900">
+          <div className="relative h-48 sm:h-64 md:h-80 lg:h-96 overflow-hidden bg-slate-900">
             <img
               src={event.image_url}
               alt={`${event.title} - ${event.category} event in ${event.city || 'Des Moines'}, Iowa`}
@@ -520,8 +527,8 @@ export default function EventDetails() {
             {/* Hotel Callout */}
             <EventHotelCallout eventId={event.id} eventArea={event.city || undefined} />
 
-            {/* Related Events Section */}
-            {relatedEvents.length > 0 && (
+            {/* Related Events Section — hidden when fewer than 3 matches */}
+            {relatedEvents.length >= 3 && (
               <section className="mt-12 pt-8 border-t">
                 <div className="flex items-center justify-between mb-6">
                   <div>
@@ -537,7 +544,7 @@ export default function EventDetails() {
                     <ChevronRight className="h-4 w-4 ml-1" />
                   </Button>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5" onClick={trackClick}>
                   {relatedEvents.map((relatedEvent) => (
                     <EventCard
                       key={relatedEvent.id}
@@ -595,10 +602,10 @@ export default function EventDetails() {
       <StickyMobileCTA
         variant="event"
         primaryAction={
-          event.source_url
+          ticketUrl
             ? {
                 label: "Get Tickets",
-                href: event.source_url,
+                href: ticketUrl,
                 icon: "external",
                 isExternal: true,
               }
@@ -611,7 +618,7 @@ export default function EventDetails() {
             : undefined
         }
         secondaryAction={
-          event.source_url && isUpcoming
+          ticketUrl && isUpcoming
             ? {
                 label: "Add to Calendar",
                 onClick: () => downloadICS(event),

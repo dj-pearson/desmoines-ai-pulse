@@ -97,12 +97,14 @@ const GuidesPage = lazyWithRetry(() => import("./pages/GuidesPage"));
 const MonthlyEventsPage = lazyWithRetry(() => import("./pages/MonthlyEventsPage"));
 const EventsSegmentHandler = lazyWithRetry(() => import("./components/EventsSegmentHandler"));
 const AdvancedSearchPage = lazyWithRetry(() => import("./components/AdvancedSearchPage"));
+const SearchResults = lazyWithRetry(() => import("./pages/SearchResults"));
 const RealTimePage = lazyWithRetry(() => import("./components/RealTimePage"));
 
 // SEO-focused time-sensitive pages
 const EventsToday = lazyWithRetry(() => import("./pages/EventsToday"));
 const EventsThisWeekend = lazyWithRetry(() => import("./pages/EventsThisWeekend"));
 const EventsByLocation = lazyWithRetry(() => import("./pages/EventsByLocation"));
+const EventsNearMe = lazyWithRetry(() => import("./pages/EventsNearMe"));
 
 // SEO hub pages - new category pages
 const FreeEvents = lazyWithRetry(() => import("./pages/FreeEvents"));
@@ -283,7 +285,7 @@ const App = () => (
             <Sonner />
             <AccessibilityWidget />
             <RouteErrorBoundary>
-            <main id="main-content" tabIndex={-1}>
+            <main id="main-content" tabIndex={-1} className="pb-bottom-nav">
             <Suspense fallback={<PageLoader />}>
             <Routes>
             <Route path="/" element={<Index />} />
@@ -327,6 +329,8 @@ const App = () => (
               path="/events/this-weekend"
               element={<EventsThisWeekend />}
             />
+            {/* Location-based discovery */}
+            <Route path="/events/near-me" element={<EventsNearMe />} />
             {/* Category SEO hub pages */}
             <Route path="/events/free" element={<FreeEvents />} />
             <Route path="/events/kids" element={<KidsEvents />} />
@@ -395,7 +399,8 @@ const App = () => (
               element={<BusinessPartnership />}
             />
             <Route path="/business" element={<BusinessHub />} />
-            <Route path="/search" element={<AdvancedSearchPage />} />
+            <Route path="/search" element={<SearchResults />} />
+            <Route path="/search/advanced" element={<AdvancedSearchPage />} />
             <Route path="/guides" element={<GuidesPage />} />
             <Route path="/real-time" element={<RealTimePage />} />
             {/* Lead magnet tools */}

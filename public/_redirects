@@ -1,0 +1,5 @@
+# Cloudflare Pages redirects. Processed before the SPA fallback.
+
+# WEB-UX-016: canonical Visitor Guide is /visitors-guide. The pSEO
+# /things-to-do/tourists page duplicated that concept — 301 to the canonical.
+/things-to-do/tourists  /visitors-guide  301

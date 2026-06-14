@@ -246,6 +246,7 @@ export function MenuUrlManager({ restaurants }: MenuUrlManagerProps) {
                                 size="icon"
                                 variant="ghost"
                                 className="h-8 w-8"
+                                aria-label="Save URL"
                                 disabled={isSaving}
                                 onClick={() => handleSave(r.id)}
                               >
@@ -264,6 +265,7 @@ export function MenuUrlManager({ restaurants }: MenuUrlManagerProps) {
                                 size="icon"
                                 variant="ghost"
                                 className="h-8 w-8 text-destructive hover:text-destructive"
+                                aria-label="Clear URL"
                                 disabled={isSaving}
                                 onClick={() => handleClear(r.id)}
                               >

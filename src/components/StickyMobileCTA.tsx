@@ -8,22 +8,26 @@ import {
   Share2,
 } from "lucide-react";
 
+type CTAIcon =
+  | "external"
+  | "calendar"
+  | "phone"
+  | "directions"
+  | "website"
+  | "share";
+
+interface CTAAction {
+  label: string;
+  href?: string;
+  onClick?: () => void;
+  icon: CTAIcon;
+  isExternal?: boolean;
+}
+
 interface StickyMobileCTAProps {
-  variant: "event" | "restaurant" | "attraction";
-  primaryAction?: {
-    label: string;
-    href?: string;
-    onClick?: () => void;
-    icon: "external" | "calendar" | "phone" | "directions" | "website";
-    isExternal?: boolean;
-  };
-  secondaryAction?: {
-    label: string;
-    href?: string;
-    onClick?: () => void;
-    icon: "share" | "directions" | "website" | "calendar";
-    isExternal?: boolean;
-  };
+  variant: "event" | "restaurant" | "attraction" | "playground" | "hotel";
+  primaryAction?: CTAAction;
+  secondaryAction?: CTAAction;
 }
 
 const iconMap = {
@@ -41,10 +45,7 @@ export function StickyMobileCTA({
 }: StickyMobileCTAProps) {
   if (!primaryAction && !secondaryAction) return null;
 
-  const renderButton = (
-    action: NonNullable<StickyMobileCTAProps["primaryAction"]>,
-    isPrimary: boolean
-  ) => {
+  const renderButton = (action: CTAAction, isPrimary: boolean) => {
     const Icon = iconMap[action.icon];
     const buttonContent = (
       <>

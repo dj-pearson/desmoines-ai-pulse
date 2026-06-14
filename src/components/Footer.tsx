@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Heart, Mail, Calendar, Utensils, MapPin, Building2, Crown, ArrowRight, Facebook, Twitter, Instagram, PlusCircle, Users, Sparkles } from "lucide-react";
+import { Heart, Mail, Calendar, Utensils, MapPin, Map, Building2, Crown, ArrowRight, Facebook, Twitter, Instagram, PlusCircle, Users, Sparkles, DollarSign } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -214,6 +214,16 @@ export default function Footer() {
                 <li>
                   <Link to="/attractions" className="text-neutral-400 hover:text-white transition-colors text-sm flex items-center gap-2">
                     <MapPin className="h-3.5 w-3.5" /> Attractions
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/map" className="text-neutral-400 hover:text-white transition-colors text-sm flex items-center gap-2">
+                    <Map className="h-3.5 w-3.5" /> Discover Map
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/deals" className="text-neutral-400 hover:text-white transition-colors text-sm flex items-center gap-2">
+                    <DollarSign className="h-3.5 w-3.5" /> Deals & Coupons
                   </Link>
                 </li>
                 <li>

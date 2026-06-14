@@ -62,17 +62,17 @@ export default function AdvancedSearchPage() {
     }
   };
 
+  // Link by id to match the app's :id routes (no slug-based 404s) — WEB-UX-018.
   const getResultLink = (result: any) => {
-    const slug = result.title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
     switch (result.type) {
       case 'event':
-        return `/events/${slug}`;
+        return `/events/${result.id}`;
       case 'restaurant':
-        return `/restaurants/${slug}`;
+        return `/restaurants/${result.id}`;
       case 'attraction':
-        return `/attractions/${slug}`;
+        return `/attractions/${result.id}`;
       case 'playground':
-        return `/playgrounds/${slug}`;
+        return `/playgrounds/${result.id}`;
       default:
         return '#';
     }

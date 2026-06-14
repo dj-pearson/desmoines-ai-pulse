@@ -367,6 +367,7 @@ export function MenuScrapePanel({ restaurants }: MenuScrapePanelProps) {
                             variant="ghost"
                             size="icon"
                             className="h-7 w-7"
+                            aria-label="Scrape menu"
                             disabled={running}
                             onClick={() => runBatch([r.id])}
                           >

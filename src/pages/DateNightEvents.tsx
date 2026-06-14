@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 const log = createLogger('DateNightEvents');
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import EventCard from "@/components/EventCard";
+import { SocialEventCard } from "@/components/SocialEventCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
 import RelatedContent from "@/components/RelatedContent";
@@ -281,7 +281,7 @@ export default function DateNightEvents() {
             </h2>
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {dateEvents.map((event) => (
-                <EventCard key={event.id} event={event} />
+                <SocialEventCard key={event.id} event={event} onViewDetails={() => {}} />
               ))}
             </div>
           </>

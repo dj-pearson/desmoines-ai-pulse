@@ -43,7 +43,15 @@ export function ForYouRail() {
         </div>
 
         <div className="flex gap-4 overflow-x-auto pb-2 -mx-4 px-4 snap-x snap-mandatory">
-          {recommendations.map((rec) => (
+          {isLoading && recommendations.length === 0
+            ? Array.from({ length: 6 }).map((_, i) => (
+                <div key={`skeleton-${i}`} className="snap-start shrink-0 w-56" aria-hidden="true">
+                  <div className="aspect-video w-56 rounded-lg bg-muted animate-pulse motion-reduce:animate-none" />
+                  <div className="mt-2 h-4 w-3/4 rounded bg-muted animate-pulse motion-reduce:animate-none" />
+                  <div className="mt-1 h-3 w-1/2 rounded bg-muted animate-pulse motion-reduce:animate-none" />
+                </div>
+              ))
+            : recommendations.map((rec) => (
             <Link
               key={rec.id}
               to={`/events/${rec.id}`}

@@ -9,12 +9,13 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { PseoPageContent, PseoPageRow } from '../schemas';
 
-export function usePseoPage(slug: string) {
+export function usePseoPage(slug: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['pseo-page', slug],
     queryFn: () => fetchPseoPage(slug),
     staleTime: 10 * 60 * 1000, // 10 minutes
     retry: 1,
+    enabled: options?.enabled ?? true,
   });
 }
 
