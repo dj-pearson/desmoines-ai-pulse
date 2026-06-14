@@ -857,7 +857,8 @@
         "npm run validate passes (type-check + lint)"
       ],
       "priority": 45,
-      "passes": false
+      "passes": true,
+      "notes": "[DONE 2026-06-13] Header collapsed to 4 groups (Events/Eat & Drink/Explore/Plan), data-driven DesktopNav+MobileNav. De-duped concepts; /things-to-do/tourists 301->/visitors-guide via public/_redirects. Deals+Map added to Explore group + footer; BottomNav Explore(/attractions) replaced with Map(/map) resolving the label collision (Near Me already present). Trigger active-state + priority Popular tag added."
     },
     {
       "id": "WEB-UX-017",
