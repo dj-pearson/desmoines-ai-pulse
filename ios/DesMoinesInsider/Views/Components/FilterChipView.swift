@@ -40,6 +40,7 @@ struct FilterChipView: View {
             .shadow(color: tint.opacity(0.18), radius: 4, x: 0, y: 2)
         }
         .buttonStyle(PressableCardStyle(scale: 0.94))
+        .minHitTarget()
         .accessibilityLabel("Remove filter: \(text)")
     }
 }

@@ -254,28 +254,11 @@ struct HomeView: View {
     // MARK: - Error Banner
 
     private func errorBanner(_ message: String) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.yellow)
-            Text(message)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-            Spacer()
-            Button {
-                Task { await viewModel.refresh() }
-            } label: {
-                Text("Retry")
-                    .font(.caption.bold())
-                    .foregroundStyle(Color.accentColor)
-            }
+        ErrorBannerView(message: message) {
+            Task { await viewModel.refresh() }
         }
-        .padding(12)
-        .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
         .padding(.horizontal)
         .padding(.vertical, 4)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Error: \(message). Tap retry to try again.")
     }
 
     // MARK: - Active Filter Chips (individually removable)

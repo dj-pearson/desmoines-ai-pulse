@@ -65,6 +65,9 @@ struct RestaurantCardView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(favorites.isRestaurantFavorited(restaurant.id) ? "Remove from saved" : "Save restaurant")
+                    .accessibilityValue(favorites.isRestaurantFavorited(restaurant.id) ? "Saved" : "Not saved")
+                    .accessibilityAddTraits(favorites.isRestaurantFavorited(restaurant.id) ? .isSelected : [])
+                    .minHitTarget()
                 }
 
                 // Cuisine & Price

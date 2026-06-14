@@ -83,6 +83,9 @@ struct EventCardView: View {
                             ? "Remove \(event.title) from saved"
                             : "Save \(event.title)"
                     )
+                    .accessibilityValue(favorites.isFavorited(event.id) ? "Saved" : "Not saved")
+                    .accessibilityAddTraits(favorites.isFavorited(event.id) ? .isSelected : [])
+                    .minHitTarget()
 
                     Spacer()
 
