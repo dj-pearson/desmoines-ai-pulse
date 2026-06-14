@@ -149,6 +149,36 @@ final class ImageCache: @unchecked Sendable {
         diskQueue.async { [weak self] in
             self?.pruneDiskIfNeeded()
         }
+
+        // Release memory under pressure (NSCache evicts opportunistically, not
+        // reliably under jetsam pressure) and re-prune disk across long sessions
+        // (PERF-001).
+        registerLifecycleObservers()
+    }
+
+    /// Drop the in-memory image cache on memory warnings and re-prune the disk
+    /// cache when the app backgrounds. Block-based observers are retained by the
+    /// notification center for the lifetime of this singleton.
+    private func registerLifecycleObservers() {
+        let center = NotificationCenter.default
+        center.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil,
+            queue: nil
+        ) { [weak self] _ in
+            // Images are reloaded from the disk tier on next access, so dropping
+            // the memory tier is safe and frees resident bitmaps immediately.
+            self?.memoryCache.removeAllObjects()
+        }
+        center.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification,
+            object: nil,
+            queue: nil
+        ) { [weak self] _ in
+            self?.diskQueue.async { [weak self] in
+                self?.pruneDiskIfNeeded()
+            }
+        }
     }
 
     // MARK: - Memory

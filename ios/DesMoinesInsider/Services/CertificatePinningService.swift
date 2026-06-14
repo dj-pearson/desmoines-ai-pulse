@@ -40,12 +40,18 @@ final class CertificatePinningService: NSObject, URLSessionDelegate {
     ]
 
     /// When `true`, pinning failures are logged but connections are NOT blocked.
-    /// Set to `true` during development/testing, `false` for production.
-    #if DEBUG
-    let reportOnly = true
-    #else
-    let reportOnly = false
-    #endif
+    ///
+    /// Always report-only in DEBUG. In Release it stays report-only UNTIL
+    /// `Config.enforceCertificatePinning` is enabled — so wiring pinning in can
+    /// never brick production with a stale pin. Flip the flag only after the
+    /// pinned SPKI hashes are verified against the live Supabase host.
+    var reportOnly: Bool {
+        #if DEBUG
+        return true
+        #else
+        return !Config.enforceCertificatePinning
+        #endif
+    }
 
     private override init() {
         super.init()
