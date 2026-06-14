@@ -18,23 +18,23 @@ final class EventsViewModel {
     // MARK: - Filters
 
     var searchText = "" {
-        didSet { resetAndFetch() }
+        didSet { if !suppressFetch { resetAndFetch() } }
     }
     var selectedCategory: EventCategory? {
-        didSet { resetAndFetch() }
+        didSet { if !suppressFetch { resetAndFetch() } }
     }
     var selectedDatePreset: DateFilterPreset? {
-        didSet { resetAndFetch() }
+        didSet { if !suppressFetch { resetAndFetch() } }
     }
     var showFeaturedOnly = false {
-        didSet { resetAndFetch() }
+        didSet { if !suppressFetch { resetAndFetch() } }
     }
     var selectedCities: Set<String> = [] {
-        didSet { resetAndFetch() }
+        didSet { if !suppressFetch { resetAndFetch() } }
     }
     /// Sort order for the events list. IOS-DISCOVER-2026-003.
     var sortBy: EventSortOption = .soonest {
-        didSet { if oldValue != sortBy { resetAndFetch() } }
+        didSet { if !suppressFetch, oldValue != sortBy { resetAndFetch() } }
     }
 
     /// Currently applied smart preset, if any. Cleared when the user changes
@@ -43,14 +43,19 @@ final class EventsViewModel {
 
     // Premium filters (Insider+ only)
     var showFreeOnly = false {
-        didSet { resetAndFetch() }
+        didSet { if !suppressFetch { resetAndFetch() } }
     }
     var maxDistance: Double? {
-        didSet { resetAndFetch() }
+        didSet { if !suppressFetch { resetAndFetch() } }
     }
     var minRating: Double? {
-        didSet { resetAndFetch() }
+        didSet { if !suppressFetch { resetAndFetch() } }
     }
+
+    /// When true, filter `didSet`s skip their per-property `resetAndFetch()` so a
+    /// bulk update (clearFilters / applyPreset) can fire exactly one fetch
+    /// instead of N debounced ones. PERF-004.
+    private var suppressFetch = false
 
     // MARK: - Pagination
 
@@ -132,6 +137,10 @@ final class EventsViewModel {
                 // Cache the first page for offline/cold-start use
                 let cacheKey = eventsCacheKey()
                 await cache.set(cacheKey, value: response.events)
+                // Keep Spotlight in sync with what the user is browsing
+                // (mirrors ArticlesViewModel/HotelsViewModel).
+                let toIndex = Array(response.events.prefix(Config.defaultPageSize))
+                Task { await SpotlightService.shared.indexEvents(toIndex) }
             } else {
                 events.append(contentsOf: filtered)
             }
@@ -205,6 +214,7 @@ final class EventsViewModel {
     }
 
     func clearFilters() {
+        suppressFetch = true
         selectedCategory = nil
         selectedDatePreset = nil
         showFeaturedOnly = false
@@ -214,6 +224,8 @@ final class EventsViewModel {
         maxDistance = nil
         minRating = nil
         activePreset = nil
+        suppressFetch = false
+        resetAndFetch()
     }
 
     // MARK: - Smart Presets
@@ -225,6 +237,7 @@ final class EventsViewModel {
             clearFilters()
             return
         }
+        suppressFetch = true
         selectedCategory = preset.category
         selectedDatePreset = preset.datePreset
         showFeaturedOnly = preset.featured
@@ -234,6 +247,8 @@ final class EventsViewModel {
         minRating = nil
         searchText = ""
         activePreset = preset
+        suppressFetch = false
+        resetAndFetch()
     }
 
     // MARK: - Premium Filters (applied client-side)

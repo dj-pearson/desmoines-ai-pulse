@@ -106,6 +106,10 @@ final class RestaurantsViewModel {
             if reset {
                 allRestaurants = response.restaurants
                 await cache.set(restaurantsCacheKey(), value: response.restaurants)
+                // Keep Spotlight in sync with what the user is browsing
+                // (mirrors ArticlesViewModel/HotelsViewModel).
+                let toIndex = Array(response.restaurants.prefix(Config.defaultPageSize))
+                Task { await SpotlightService.shared.indexRestaurants(toIndex) }
             } else {
                 allRestaurants.append(contentsOf: response.restaurants)
             }

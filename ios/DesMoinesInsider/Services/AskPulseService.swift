@@ -1,4 +1,5 @@
 import Foundation
+import Supabase
 
 /// Client for the discover-chat (Ask Pulse) edge function.
 /// Implements IOS-DISCOVER-2026-001.
@@ -93,14 +94,36 @@ final class AskPulseService {
             userLocation: userLocation.map { .init(latitude: $0.0, longitude: $0.1) },
         )
 
-        let response: Response = try await client.functions.invoke(
-            "discover-chat",
-            options: .init(body: payload),
-        )
+        do {
+            let response: Response = try await client.functions.invoke(
+                "discover-chat",
+                options: .init(body: payload),
+            )
 
-        lastUsage = response.usage
-        lastError = nil
-        return response
+            lastUsage = response.usage
+            lastError = nil
+            return response
+        } catch {
+            // The edge function returns HTTP 429 ("Daily Ask Pulse limit
+            // reached") when the per-day quota is exhausted. Surface that as a
+            // dedicated error so the UI can offer an upgrade path instead of a
+            // raw error string. Everything else propagates unchanged.
+            if Self.isQuotaExceeded(error) {
+                lastError = AskPulseError.quotaExceeded.errorDescription
+                throw AskPulseError.quotaExceeded
+            }
+            throw error
+        }
+    }
+
+    /// Detects the discover-chat quota response (HTTP 429). Matches on the
+    /// Supabase `FunctionsError.httpError` status when available, with a
+    /// string fallback for robustness across SDK versions.
+    private static func isQuotaExceeded(_ error: Error) -> Bool {
+        if case let FunctionsError.httpError(code, _) = error, code == 429 {
+            return true
+        }
+        return error.localizedDescription.contains("429")
     }
 
     enum AskPulseError: LocalizedError {

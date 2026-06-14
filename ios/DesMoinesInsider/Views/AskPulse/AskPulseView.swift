@@ -17,6 +17,10 @@ struct AskPulseView: View {
     @State private var sponsoredPick: SponsoredPickService.SponsoredPick?
     @State private var isLoading = false
     @State private var errorMessage: String?
+    /// Set when the daily Ask Pulse quota is hit so we show an upgrade CTA
+    /// instead of a plain error (FEAT-006).
+    @State private var quotaReached = false
+    @State private var showUpgrade = false
     @FocusState private var inputFocused: Bool
 
     private let suggestions: [String] = [
@@ -42,7 +46,9 @@ struct AskPulseView: View {
                                 followUpChips
                             }
                         }
-                        if let errorMessage {
+                        if quotaReached {
+                            quotaBanner
+                        } else if let errorMessage {
                             errorBanner(errorMessage)
                         }
                     }
@@ -68,6 +74,9 @@ struct AskPulseView: View {
                 }
             }
             .onAppear { inputFocused = true }
+            .sheet(isPresented: $showUpgrade) {
+                SubscriptionView()
+            }
         }
     }
 
@@ -213,6 +222,41 @@ struct AskPulseView: View {
         .background(.bar)
     }
 
+    /// Shown when the user hits the daily Ask Pulse quota (HTTP 429). Offers a
+    /// clear upgrade path instead of a raw error string (FEAT-006).
+    private var quotaBanner: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "sparkles")
+                    .foregroundStyle(Color.accentColor.gradient)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("You've hit today's Ask Pulse limit")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Upgrade for more Ask Pulse queries every day.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            Button {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                showUpgrade = true
+            } label: {
+                Text("Upgrade")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .foregroundStyle(.white)
+                    .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 12))
+            }
+            .accessibilityLabel("Upgrade for more Ask Pulse queries")
+        }
+        .padding()
+        .background(Color.accentColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 12))
+        .accessibilityElement(children: .contain)
+    }
+
     private func errorBanner(_ message: String) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")
@@ -237,6 +281,7 @@ struct AskPulseView: View {
         followUps = []
         sponsoredPick = nil
         errorMessage = nil
+        quotaReached = false
         input = ""
         inputFocused = true
     }
@@ -249,6 +294,7 @@ struct AskPulseView: View {
         input = ""
         isLoading = true
         errorMessage = nil
+        quotaReached = false
         sponsoredPick = nil
 
         do {
@@ -271,8 +317,9 @@ struct AskPulseView: View {
                 : "Here are \(response.picks.count) ideas — see the cards below."
             conversation.append(.init(role: .assistant, content: summary))
             UINotificationFeedbackGenerator().notificationOccurred(.success)
-        } catch let AskPulseService.AskPulseError.quotaExceeded {
-            errorMessage = "You've hit today's Ask Pulse limit. Upgrade for more queries."
+        } catch AskPulseService.AskPulseError.quotaExceeded {
+            quotaReached = true
+            errorMessage = nil
             UINotificationFeedbackGenerator().notificationOccurred(.warning)
         } catch {
             errorMessage = error.localizedDescription

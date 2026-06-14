@@ -52,6 +52,23 @@ final class DeepLinkHandler {
         return pendingDestination
     }
 
+    // MARK: - Spotlight
+
+    /// Routes a tapped Spotlight result to a destination. SpotlightService uses
+    /// `"<type>-<uuid>"` unique identifiers (IOS-AUDIT-FEAT-005). Article/hotel
+    /// results aren't in the current Destination set, so they return false.
+    @discardableResult
+    func handleSpotlightItem(_ identifier: String) -> Bool {
+        let parts = identifier.split(separator: "-", maxSplits: 1).map(String.init)
+        guard parts.count == 2, let id = validatedId(parts[1], source: "spotlight") else { return false }
+        switch parts[0] {
+        case "event":      pendingDestination = .event(id: id);      return true
+        case "restaurant": pendingDestination = .restaurant(id: id); return true
+        case "attraction": pendingDestination = .attraction(id: id); return true
+        default:           return false
+        }
+    }
+
     // MARK: - Notification Payloads
 
     /// Routes a notification payload (local reminder or remote push) to a

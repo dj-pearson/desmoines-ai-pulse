@@ -65,14 +65,16 @@ private func isTransientError(_ error: Error) -> Bool {
         return retryableCodes.contains(nsError.code)
     }
 
-    // Check for HTTP 5xx in error description (Supabase SDK wraps these)
+    // HTTP 5xx from the Supabase SDK. The previous check substring-matched the
+    // whole localized message for "500"/"connection"/etc., which is
+    // locale-dependent AND over-broad — it retried any 4xx whose message merely
+    // contained "connection", or content text containing "500", burning ~7s of
+    // backoff on non-transient failures (IOS-AUDIT-PERF-008). Match a standalone
+    // 5xx status token plus an explicit timeout phrase instead.
     let description = error.localizedDescription.lowercased()
-    if description.contains("500")
-        || description.contains("502")
-        || description.contains("503")
-        || description.contains("504")
-        || description.contains("timeout")
-        || description.contains("connection") {
+    if description.range(of: #"\b5\d{2}\b"#, options: .regularExpression) != nil
+        || description.contains("timed out")
+        || description.contains("request timeout") {
         return true
     }
 

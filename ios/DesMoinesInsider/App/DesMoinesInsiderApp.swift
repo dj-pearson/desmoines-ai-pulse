@@ -1,5 +1,6 @@
 import SwiftUI
 import StoreKit
+import CoreSpotlight
 
 @main
 struct DesMoinesInsiderApp: App {
@@ -97,6 +98,11 @@ struct DesMoinesInsiderApp: App {
                 // via onOpenURL.
                 guard let url = activity.webpageURL else { return }
                 DeepLinkHandler.shared.handle(url)
+            }
+            .onContinueUserActivity(CSSearchableItemActionType) { activity in
+                // Tapping a Spotlight result (IOS-AUDIT-FEAT-005).
+                guard let id = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String else { return }
+                DeepLinkHandler.shared.handleSpotlightItem(id)
             }
             .task {
                 launchCount += 1

@@ -31,8 +31,12 @@ final class SoftPaywallService {
         present(source: "favorites", context: .unlimitedFavorites)
     }
 
-    /// Seam for IOS-PARITY-001: call on the first AI Trip Planner attempt.
-    func considerAfterTripPlannerAttempt() {
+    /// Seam for IOS-PARITY-001: call when a free user attempts the AI Trip
+    /// Planner. Presents the frequency-capped soft upsell when eligible and
+    /// reports whether it did, so the caller can fall back to its own hard gate
+    /// (so the feature stays gated even after the soft cap/cooldown is hit).
+    @discardableResult
+    func considerAfterTripPlannerAttempt() -> Bool {
         present(source: "trip_planner", context: .tripPlanner)
     }
 
@@ -45,8 +49,9 @@ final class SoftPaywallService {
 
     // MARK: - Internals
 
-    private func present(source: String, context: PaywallContext) {
-        guard isEligible() else { return }
+    @discardableResult
+    private func present(source: String, context: PaywallContext) -> Bool {
+        guard isEligible() else { return false }
         let defaults = UserDefaults.standard
         defaults.set(Date(), forKey: lastShownKey)
         defaults.set(defaults.integer(forKey: countKey) + 1, forKey: countKey)
@@ -56,6 +61,7 @@ final class SoftPaywallService {
             object: nil,
             userInfo: ["context": context.id]
         )
+        return true
     }
 
     /// Gates: onboarding done, still free, under the lifetime cap, past cooldown.
