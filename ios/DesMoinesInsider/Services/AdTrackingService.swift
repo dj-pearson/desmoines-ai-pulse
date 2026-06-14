@@ -48,6 +48,11 @@ final class AdTrackingService {
     /// so a slot scrolling in and out of view doesn't double-count.
     private var loggedImpressions: Set<String> = []
 
+    /// Sponsored-listing impressions already logged this app run, keyed by
+    /// type+id+placement, so a card scrolling in and out of view (logged from
+    /// `.onAppear`) doesn't inflate counts (IOS-AUDIT-PERF-006).
+    private var loggedSponsoredImpressions: Set<String> = []
+
     // MARK: - Inventory classes (IOS-ADS-014)
 
     enum AdInventoryClass: String {
@@ -233,6 +238,10 @@ final class AdTrackingService {
     // MARK: - Sponsored listings (distinct, RLS-safe) — IOS-ADS-011 / IOS-ADS-015
 
     func logSponsoredImpression(listingType: String, listingId: String, placement: String = "feed") {
+        let dedupeKey = "\(listingType)|\(listingId)|\(placement)"
+        guard !loggedSponsoredImpressions.contains(dedupeKey) else { return }
+        loggedSponsoredImpressions.insert(dedupeKey)
+
         analytics.trackEvent("sponsored_listing_impression", parameters: [
             "inventory_class": AdInventoryClass.sponsoredListing.rawValue,
             "listing_type": listingType, "listing_id": listingId, "placement": placement,

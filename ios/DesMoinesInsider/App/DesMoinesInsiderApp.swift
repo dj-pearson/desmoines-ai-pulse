@@ -144,7 +144,7 @@ struct DesMoinesInsiderApp: App {
                     }
 
                     // Request review after engagement thresholds
-                    requestReviewIfEligible()
+                    await requestReviewIfEligible()
                 }
             }
             } // ThemeCrossfadeContainer
@@ -153,7 +153,7 @@ struct DesMoinesInsiderApp: App {
 
     // MARK: - App Review
 
-    private func requestReviewIfEligible() {
+    private func requestReviewIfEligible() async {
         // Require at least 3 launches and 1+ favorites before prompting
         guard launchCount >= 3,
               favoritesService.favoriteEventIds.count + favoritesService.favoriteRestaurantIds.count >= 1
@@ -163,14 +163,16 @@ struct DesMoinesInsiderApp: App {
         guard !UserDefaults.standard.bool(forKey: "hasRequestedReview") else { return }
         UserDefaults.standard.set(true, forKey: "hasRequestedReview")
 
-        // Delay slightly so the app is fully visible
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            guard let scene = UIApplication.shared.connectedScenes
+        // Delay slightly so the app is fully visible. Structured + cancellable
+        // with the enclosing .task, and only prompt if a foreground scene still
+        // exists (IOS-AUDIT-PERF-013).
+        try? await Task.sleep(for: .seconds(2))
+        guard !Task.isCancelled,
+              let scene = UIApplication.shared.connectedScenes
                 .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene else {
-                return
-            }
-            AppStore.requestReview(in: scene)
+            return
         }
+        AppStore.requestReview(in: scene)
     }
 }
 

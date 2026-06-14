@@ -151,7 +151,10 @@ final class ImageCache: @unchecked Sendable {
         memoryCache.countLimit = 200
         memoryCache.totalCostLimit = 50 * 1024 * 1024 // 50 MB
 
-        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        // Avoid force-unwrapping in a launch-path singleton (IOS-AUDIT-PERF-012);
+        // fall back to the temp dir if the caches dir is somehow unavailable.
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
         // v2: prior versions hashed with `key.utf8.hex.prefix(64)`, which is a
         // 32-byte URL prefix — every Supabase storage URL collides. New
         // directory name ensures clients with poisoned v1 caches start fresh.

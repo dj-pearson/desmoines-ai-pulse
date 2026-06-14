@@ -16,9 +16,9 @@ final class MetricKitSubscriber: NSObject, MXMetricManagerSubscriber {
         MXMetricManager.shared.add(self)
     }
 
-    deinit {
-        MXMetricManager.shared.remove(self)
-    }
+    // No deinit: this is an app-lifetime singleton (never deallocated), so the
+    // previous deinit calling the @MainActor MXMetricManager from a nonisolated
+    // deinit was both dead code and a strict-concurrency violation (PERF-007).
 
     // MARK: - MXMetricManagerSubscriber
 

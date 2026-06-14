@@ -53,10 +53,15 @@ struct Restaurant: Identifiable, Codable, Hashable {
 
     /// Determines if the restaurant is currently open based on business_hours.
     /// Returns nil if hours data is unavailable.
+    /// Shared calendar to avoid re-snapshotting `Calendar.current` (a struct copy)
+    /// on every isOpenNow() call during list filtering (IOS-AUDIT-PERF-009).
+    /// `autoupdatingCurrent` stays correct if the device timezone/locale changes.
+    private static let calendar = Calendar.autoupdatingCurrent
+
     func isOpenNow(at date: Date = .now) -> Bool? {
         guard let hours = businessHours else { return nil }
 
-        let calendar = Calendar.current
+        let calendar = Self.calendar
         let weekday = calendar.component(.weekday, from: date) // 1=Sun, 2=Mon...
         let dayName = Self.dayNames[weekday - 1]
 

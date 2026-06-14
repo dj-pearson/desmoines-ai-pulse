@@ -22,7 +22,10 @@ actor QueryCache {
     private static let cacheVersion = 2
 
     private init() {
-        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        // Avoid force-unwrapping in a launch-path singleton (IOS-AUDIT-PERF-012);
+        // fall back to the temp dir if the caches dir is somehow unavailable.
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
         cacheDir = caches.appendingPathComponent("QueryCache", isDirectory: true)
         defaultTTL = TimeInterval(Config.cacheExpirationMinutes * 60)
 
@@ -97,13 +100,15 @@ actor QueryCache {
         try? FileManager.default.removeItem(at: fileURL(for: key))
     }
 
-    /// Removes all expired entries. Call on app launch.
+    /// Removes expired entries (24h hard limit), then enforces the disk-size cap
+    /// with oldest-first LRU eviction. Call on app launch.
     func pruneExpired() {
         let fm = FileManager.default
-        guard let files = try? fm.contentsOfDirectory(at: cacheDir, includingPropertiesForKeys: [.contentModificationDateKey]) else { return }
+        guard let files = try? fm.contentsOfDirectory(at: cacheDir, includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey]) else { return }
 
         let maxAge: TimeInterval = 24 * 60 * 60 // 24 hours hard limit
         var removedCount = 0
+        var survivors: [(url: URL, size: Int, modified: Date)] = []
 
         for file in files {
             guard let attrs = try? fm.attributesOfItem(atPath: file.path),
@@ -112,11 +117,26 @@ actor QueryCache {
             if Date().timeIntervalSince(modified) > maxAge {
                 try? fm.removeItem(at: file)
                 removedCount += 1
+            } else {
+                survivors.append((file, (attrs[.size] as? Int) ?? 0, modified))
+            }
+        }
+
+        // Size-based LRU eviction (IOS-AUDIT-PERF-005): maxDiskBytes was declared
+        // but never enforced, so browsing many filter combos grew the cache
+        // unbounded. Evict oldest-first until under the cap.
+        var totalSize = survivors.reduce(0) { $0 + $1.size }
+        if totalSize > maxDiskBytes {
+            for entry in survivors.sorted(by: { $0.modified < $1.modified }) {
+                if totalSize <= maxDiskBytes { break }
+                try? fm.removeItem(at: entry.url)
+                totalSize -= entry.size
+                removedCount += 1
             }
         }
 
         if removedCount > 0 {
-            AppLogger.cache.info("Pruned \(removedCount) expired cache entries")
+            AppLogger.cache.info("Pruned \(removedCount) cache entries (expired + LRU)")
         }
     }
 
