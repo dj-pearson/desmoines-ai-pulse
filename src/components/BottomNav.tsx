@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Home, Calendar, Navigation, UtensilsCrossed, Compass, User } from "lucide-react";
+import { Home, Calendar, Navigation, UtensilsCrossed, Map, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { prefetchRoute } from "@/lib/prefetch";
@@ -38,9 +38,9 @@ export default function BottomNav() {
       icon: UtensilsCrossed,
     },
     {
-      href: "/attractions",
-      label: "Explore",
-      icon: Compass,
+      href: "/map",
+      label: "Map",
+      icon: Map,
     },
     {
       href: isAuthenticated ? "/dashboard" : "/auth",

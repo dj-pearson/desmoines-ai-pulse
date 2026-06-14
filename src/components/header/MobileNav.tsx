@@ -11,10 +11,6 @@ import {
 import {
   Menu,
   X,
-  Calendar,
-  Utensils,
-  Compass,
-  FileText,
   ChevronRight,
   Crown,
   User,
@@ -23,7 +19,6 @@ import {
   Shield,
   LogOut,
   Trophy,
-  MapPin,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { prefetchRoute } from "@/lib/prefetch";
@@ -108,50 +103,16 @@ export function MobileNav({
           role="none"
         >
           <nav className="space-y-6" role="navigation" aria-label="Mobile navigation">
-            {/* Things to Do Section */}
-            <NavSection
-              title="Things to Do"
-              icon={MapPin}
-              items={navigationGroups.thingsToDo.items}
-              isActivePath={isActivePath}
-              onLinkClick={handleLinkClick}
-            />
-
-            {/* Events Section */}
-            <NavSection
-              title="Events"
-              icon={Calendar}
-              items={navigationGroups.events.items}
-              isActivePath={isActivePath}
-              onLinkClick={handleLinkClick}
-            />
-
-            {/* Dining Section */}
-            <NavSection
-              title="Dining"
-              icon={Utensils}
-              items={navigationGroups.dining.items}
-              isActivePath={isActivePath}
-              onLinkClick={handleLinkClick}
-            />
-
-            {/* Explore Section */}
-            <NavSection
-              title="Explore"
-              icon={Compass}
-              items={navigationGroups.explore.items}
-              isActivePath={isActivePath}
-              onLinkClick={handleLinkClick}
-            />
-
-            {/* Resources Section */}
-            <NavSection
-              title="Resources"
-              icon={FileText}
-              items={navigationGroups.resources.items}
-              isActivePath={isActivePath}
-              onLinkClick={handleLinkClick}
-            />
+            {Object.values(navigationGroups).map((group) => (
+              <NavSection
+                key={group.label}
+                title={group.label}
+                icon={group.icon}
+                items={group.items}
+                isActivePath={isActivePath}
+                onLinkClick={handleLinkClick}
+              />
+            ))}
           </nav>
 
           {/* Mobile Theme Toggle */}
