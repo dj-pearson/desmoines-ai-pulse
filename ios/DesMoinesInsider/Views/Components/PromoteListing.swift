@@ -45,21 +45,6 @@ enum BusinessPromotion {
     }
 }
 
-/// SFSafariViewController wrapper. Used for the advertiser checkout so the web
-/// Stripe flow runs in a first-class, cookie-sharing browser (Guideline-friendly),
-/// not an embedded WKWebView.
-struct SafariView: UIViewControllerRepresentable {
-    let url: URL
-
-    func makeUIViewController(context: Context) -> SFSafariViewController {
-        let config = SFSafariViewController.Configuration()
-        config.entersReaderIfAvailable = false
-        return SFSafariViewController(url: url, configuration: config)
-    }
-
-    func updateUIViewController(_ controller: SFSafariViewController, context: Context) {}
-}
-
 /// Reusable "Promote / Advertise this" affordance. Opens the web advertiser
 /// portal in SFSafariViewController (see rationale above) — never StoreKit.
 struct PromoteListingButton: View {

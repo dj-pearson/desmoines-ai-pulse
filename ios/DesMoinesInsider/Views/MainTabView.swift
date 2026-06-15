@@ -210,7 +210,7 @@ struct MainTabView: View {
         case dashboard
     }
 
-    @State private var sidebarSelection: SidebarSelection = .tab(.home)
+    @State private var sidebarSelection: SidebarSelection? = .tab(.home)
 
     private var iPadLayout: some View {
         NavigationSplitView {
@@ -239,7 +239,7 @@ struct MainTabView: View {
         // Keep the sidebar and `selectedTab` (used by deep links + the
         // interstitial boundary) in sync, without feedback loops.
         .onChange(of: sidebarSelection) { _, newValue in
-            if case .tab(let tab) = newValue, tab != selectedTab { selectedTab = tab }
+            if let newValue, case .tab(let tab) = newValue, tab != selectedTab { selectedTab = tab }
         }
         .onChange(of: selectedTab) { _, newTab in
             if sidebarSelection != .tab(newTab) { sidebarSelection = .tab(newTab) }
@@ -248,7 +248,7 @@ struct MainTabView: View {
 
     @ViewBuilder
     private var detailPane: some View {
-        switch sidebarSelection {
+        switch sidebarSelection ?? .tab(.home) {
         case .tab(let tab): tabContent(for: tab)
         case .discover: DiscoverHubView()
         case .tripPlanner: TripPlannerView(ownsNavigationStack: true)

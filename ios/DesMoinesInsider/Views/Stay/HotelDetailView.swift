@@ -15,7 +15,7 @@ struct HotelDetailView: View {
     private var gallery: [String] { hotel.galleryImageURLs }
 
     var body: some View {
-        ScrollView {
+        ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: 18) {
                 galleryHeader
                 VStack(alignment: .leading, spacing: 18) {
