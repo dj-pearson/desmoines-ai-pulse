@@ -90,7 +90,12 @@
       "Bash(git commit *)",
       "Bash(git restore *)",
       "Bash(git ls-remote *)",
-      "Bash(awk '/^      events: \\\\{/,/^      [a-z]+: \\\\{/' src/integrations/supabase/types.ts)"
+      "Bash(awk '/^      events: \\\\{/,/^      [a-z]+: \\\\{/' src/integrations/supabase/types.ts)",
+      "Bash(supabase --version)",
+      "Bash(supabase status *)",
+      "Bash(cat)",
+      "Bash(chmod +x /tmp/find_orphaned.sh)",
+      "Bash(/tmp/find_orphaned.sh)"
     ],
     "deny": [],
     "ask": []
