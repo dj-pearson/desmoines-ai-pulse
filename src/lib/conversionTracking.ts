@@ -3,8 +3,19 @@ import { createLogger } from "@/lib/logger";
 
 const log = createLogger("conversion");
 
-/** Guest-favorites funnel steps (WEB-FEAT-006). */
-export type ConversionStep = "guest_save" | "guest_wall_hit" | "signup_from_wall";
+/**
+ * Funnel steps:
+ * - guest favorites (WEB-FEAT-006)
+ * - contextual paywall present/dismiss/checkout-start, tagged by context id
+ *   in `meta.contentId` (WEB-FEAT-001), for per-surface conversion measurement.
+ */
+export type ConversionStep =
+  | "guest_save"
+  | "guest_wall_hit"
+  | "signup_from_wall"
+  | "paywall_present"
+  | "paywall_dismiss"
+  | "paywall_checkout_start";
 
 /**
  * Fire-and-forget funnel event. Never blocks UX and never throws — if the

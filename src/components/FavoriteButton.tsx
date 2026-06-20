@@ -6,6 +6,7 @@ import { useContentFavorites, type FavoriteContentType } from "@/hooks/useConten
 import { useAuthStatus } from "@/hooks/useAuth";
 import { useGuestFavorites, type GuestFavoriteType } from "@/hooks/useGuestFavorites";
 import { trackConversion } from "@/lib/conversionTracking";
+import { openPaywall } from "@/lib/paywallStore";
 import { cn } from "@/lib/utils";
 import { hapticTap } from "@/lib/capacitorUtils";
 import { toast } from "sonner";
@@ -97,6 +98,12 @@ export function FavoriteButton({
         hapticTap();
         if (!isAuthenticated) {
           handleGuestToggle();
+          return;
+        }
+        // Free-tier favorites cap → contextual paywall on the 4th save attempt
+        // (WEB-FEAT-001), instead of a dead-end toast.
+        if (isEvent && !favorited && !eventFav.canAddFavorite) {
+          openPaywall("unlimited_favorites");
           return;
         }
         const wasFavorited = favorited;

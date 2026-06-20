@@ -4050,3 +4050,42 @@ no-ops if event_type is CHECK-constrained).
   A src/hooks/__tests__/useGuestFavorites.test.ts
   M src/components/FavoriteButton.tsx
   M src/App.tsx
+
+## 2026-06-20 — WEB-FEAT-001 (contextual paywall modal, web parity with iOS) [passes:true]
+
+The UpgradeModal already carried per-feature copy for 13 contexts (mirroring
+iOS: unlimited favorites, advanced filters, ad-free, daily digest, trip planner,
+write reviews, saved searches, custom alerts, early access, + VIP set) and uses
+Radix Dialog (focus trap / Escape / focus restore built in). Added the missing
+pieces:
+
+- Benefit bullets: featureDescriptions gains an optional benefits[] (added to
+  unlimited_favorites + trip_planner) rendered as a checkmarked list.
+- Per-surface analytics: UpgradeModal logs paywall_present / paywall_dismiss
+  (open-transition effect) and paywall_checkout_start (CTA), tagged with the
+  context id via trackConversion (broadened ConversionStep).
+- Global trigger: src/lib/paywallStore.ts (openPaywall/closePaywall +
+  usePaywallState) drives a single app-root <GlobalUpgradeModal/> (mounted in
+  App), so non-gate call sites can open the contextual modal.
+- Favorites cap: FavoriteButton now opens the unlimited_favorites paywall on the
+  4th event-save attempt (eventFav.canAddFavorite === false) instead of a
+  dead-end toast.
+- PremiumGate already passes `feature` to UpgradeModal (contextual), so all gate
+  call sites get the per-feature copy + analytics. Feature keys match
+  useSubscription.hasFeature() (same key used for gate + modal).
+
+Note: the CTA routes to /pricing (the existing Stripe flow) and logs
+checkout_start; an in-modal Stripe redirect (startCheckout) is a later option.
+
+### Verification (run)
+New src/lib/__tests__/paywallStore.test.ts (renderHook open/close/tier) — 2/2;
+full vitest 105/105. tsc clean; eslint 0 errors. npm run validate passes.
+
+### Files
+  A src/lib/paywallStore.ts
+  A src/components/GlobalUpgradeModal.tsx
+  A src/lib/__tests__/paywallStore.test.ts
+  M src/components/UpgradeModal.tsx
+  M src/components/FavoriteButton.tsx
+  M src/lib/conversionTracking.ts
+  M src/App.tsx

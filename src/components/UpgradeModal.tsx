@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
+import { trackConversion } from "@/lib/conversionTracking";
 import {
   Dialog,
   DialogContent,
@@ -32,12 +33,17 @@ interface UpgradeModalProps {
 
 const featureDescriptions: Record<
   string,
-  { title: string; description: string; tier: "insider" | "vip" }
+  { title: string; description: string; tier: "insider" | "vip"; benefits?: string[] }
 > = {
   unlimited_favorites: {
     title: "Unlimited Favorites",
     description: "Save as many events and restaurants as you want — free accounts are limited to 3",
     tier: "insider",
+    benefits: [
+      "Save unlimited events, restaurants & attractions",
+      "Sync your saves across all your devices",
+      "Never lose a place you wanted to try",
+    ],
   },
   early_access: {
     title: "Early Access",
@@ -63,6 +69,11 @@ const featureDescriptions: Record<
     title: "AI Trip Planner",
     description: "Plan your perfect Des Moines trip with AI-powered itineraries. Insider members get 5 trips/month",
     tier: "insider",
+    benefits: [
+      "AI builds a full day-by-day itinerary in seconds",
+      "5 saved trip plans every month",
+      "Tailored to your interests, budget & dates",
+    ],
   },
   write_reviews: {
     title: "Write Reviews",
@@ -130,6 +141,19 @@ export function UpgradeModal({
   );
 
   const featureInfo = feature ? featureDescriptions[feature] : null;
+  const contextId = feature ?? "generic";
+
+  // Per-surface conversion measurement: present/dismiss tagged by context id
+  // (WEB-FEAT-001).
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (open && !wasOpen.current) {
+      trackConversion("paywall_present", { contentId: contextId });
+    } else if (!open && wasOpen.current) {
+      trackConversion("paywall_dismiss", { contentId: contextId });
+    }
+    wasOpen.current = open;
+  }, [open, contextId]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -153,6 +177,17 @@ export function UpgradeModal({
             )}
           </DialogDescription>
         </DialogHeader>
+
+        {featureInfo?.benefits && featureInfo.benefits.length > 0 && (
+          <ul className="mt-3 space-y-1.5">
+            {featureInfo.benefits.map((benefit, idx) => (
+              <li key={idx} className="flex items-start gap-2 text-sm">
+                <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                <span>{benefit}</span>
+              </li>
+            ))}
+          </ul>
+        )}
 
         <div className="mt-4 space-y-4">
           {/* Plan Selection */}
@@ -262,7 +297,13 @@ export function UpgradeModal({
                   : "bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
               )}
             >
-              <Link to="/pricing" onClick={() => onOpenChange(false)}>
+              <Link
+                to="/pricing"
+                onClick={() => {
+                  trackConversion("paywall_checkout_start", { contentId: contextId });
+                  onOpenChange(false);
+                }}
+              >
                 Upgrade to {selectedPlan === "insider" ? "Insider" : "VIP"}
               </Link>
             </Button>
