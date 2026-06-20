@@ -435,7 +435,7 @@
         "npm run validate passes"
       ],
       "priority": 28,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: src/main.tsx ~161-164 (retry: 1, gcTime 5min global)."
     },
     {

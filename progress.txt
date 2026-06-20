@@ -3484,3 +3484,36 @@ EventDetails + AdminContent lint 0 errors.
   M src/pages/EventDetails.tsx
   M src/pages/AdminContent.tsx
   M docs/AUTOMATION_JOBS.md
+
+## 2026-06-20 — WEB-PERF-006 (TanStack Query cache + retry tuning per data class) [passes:true]
+
+### New module: src/lib/queryConfig.ts
+Single source of truth replacing scattered magic numbers:
+- STALE_TIME constants per data class: CONTENT_LIST 10min, CONTENT_DETAIL 15min,
+  REFERENCE 1h, USER 30s, SHORT 1min.
+- GC_TIME 30min so inactive lists stay cached -> instant back-navigation for
+  useQuery-based hooks.
+- shouldRetry(failureCount, error): retries transient network/5xx up to 2x,
+  NEVER retries 401/403/404 (or other 4xx) — except 408/429 which are retried.
+  Reads status off fetch Response / Supabase Postgrest/Auth error shapes.
+- retryDelay(attemptIndex): exponential backoff 1s,2s,4s capped at 10s.
+
+### main.tsx
+Global QueryClient now uses retry: shouldRetry, retryDelay, gcTime: GC_TIME
+(was 5min), staleTime default kept at SHORT (60s) so user-mutated data
+(favorites/reviews) never goes stale — those mutation hooks already invalidate.
+
+### Scope note (honest)
+The primary content-list hooks (useEvents/useRestaurants/useAttractions/
+useHotels) are useState/useEffect based, NOT useQuery, so they don't benefit
+from gcTime caching. Converting them to useQuery is a larger refactor tracked
+separately (overlaps WEB-PERF-001). All other useQuery hooks app-wide now get
+the smarter retry policy + 30min gcTime immediately.
+
+### Verification
+type-check PASSES (exit 0); eslint on changed files 0 errors (only pre-existing
+`any` warnings in main.tsx, untouched).
+
+### Files
+  A src/lib/queryConfig.ts
+  M src/main.tsx

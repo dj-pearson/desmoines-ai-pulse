@@ -10,6 +10,7 @@ import '@/lib/env'; // Validate environment variables at startup
 import App from "./App";
 import "./index.css";
 import { initializeOnInteraction } from "./lib/lazyInit";
+import { GC_TIME, STALE_TIME, shouldRetry, retryDelay } from "@/lib/queryConfig";
 
 // Initialize Sentry before anything else (only when DSN is configured)
 initSentry();
@@ -154,14 +155,19 @@ if (Array.isArray((window as any).__earlyErrors) && (window as any).__earlyError
   }
 }
 
-// Optimized query client with minimal configuration for faster TTI
+// Query client tuned per data class (WEB-PERF-006). Defaults are the safe
+// floor for queries that don't override; per-hook staleTime (see
+// @/lib/queryConfig STALE_TIME) does the per-data-class tuning. Long gcTime
+// keeps inactive lists cached so back-navigation renders instantly.
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: 1,
+      // Retry transient network/5xx with backoff; never retry 401/403/404.
+      retry: shouldRetry,
+      retryDelay,
       refetchOnWindowFocus: false,
-      staleTime: 60 * 1000,
-      gcTime: 5 * 60 * 1000,
+      staleTime: STALE_TIME.SHORT,
+      gcTime: GC_TIME,
       // Use "always" so queries fire even if Capacitor's Network plugin
       // hasn't reported online status yet. "online" can silently block
       // all queries until a network status event arrives.
