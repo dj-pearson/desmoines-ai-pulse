@@ -3812,3 +3812,45 @@ WEB-AUTO-010..014 (Stripe / saved-search job / ad serving / OG images / map
 bounds / review composer / trip planner / edge-function automations — backend +
 runtime verification heavy). iOS-AUDIT-* (47) not started: Swift can't be
 compiled/verified in this container (no Xcode).
+
+## 2026-06-20 — WEB-FEAT-004 (First-party campaign ad serving with house-ad fill) [passes:true]
+
+### Starting point
+AdBanner already consumed get_active_ads RPC via useActiveAds, had the FTC 'Ad'
+label, ad-free for premium (hasFeature('ad_free')), and a campaign->affiliate
+fallback. Gaps: a slot could still render EMPTY (affiliate returns null), no
+house-ad fill, no fill-rate tracking distinction, and no caching.
+
+### Changes
+- useActiveAds: now useQuery with staleTime 5min (was uncached useState/useEffect).
+- New HouseAd component: rotates 3 promo messages, viewability impression
+  (createViewabilityObserver), CTA opens the contextual paywall (UpgradeModal
+  feature='ad_free'); 'Ad' label; sized per placement.
+- AdBanner fill chain is now paid campaign -> affiliate -> house, so a slot
+  NEVER renders empty (a caller-provided content `fallback` still wins over
+  house fill). Affiliate availability checked via useAffiliateAd.
+- src/lib/adAnalytics.ts: logAdImpression/logAdClick tagged with inventory_class
+  ('paid' | 'affiliate' | 'house') to user_analytics (session-deduped
+  impressions) so fill rate per class is measurable. Paid campaigns keep logging
+  to ad_impressions/ad_clicks via the existing useAdTracking (iOS-parity).
+- AffiliateAdBanner: added affiliate-class viewability impression + click
+  logging.
+
+### Premium / FTC
+Insider+VIP (ad_free) see zero ads (unchanged). Every slot carries the FTC 'Ad'
+label.
+
+### Note
+Below-fold placements: affiliate <img> uses loading=lazy; house ad is text;
+impression tracking is IntersectionObserver-based. Deeper route-level lazy mount
+is tracked under WEB-PERF-003.
+
+### Verification
+type-check PASSES (exit 0); eslint changed files 0 errors/0 warnings.
+
+### Files
+  A src/lib/adAnalytics.ts
+  A src/components/HouseAd.tsx
+  M src/hooks/useActiveAds.ts
+  M src/components/AdBanner.tsx
+  M src/components/AffiliateAdBanner.tsx
