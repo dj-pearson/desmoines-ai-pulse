@@ -53,12 +53,20 @@ struct Restaurant: Identifiable, Codable, Hashable {
 
     /// Determines if the restaurant is currently open based on business_hours.
     /// Returns nil if hours data is unavailable.
+    /// Shared calendar so the "Open Now" filter doesn't allocate Calendar.current
+    /// for every restaurant on every toggle/page — the dominant per-call cost on
+    /// a 100+ list (IOS-AUDIT-PERF-009). Captures the user's timezone once.
+    private static let sharedCalendar = Calendar.current
+
     func isOpenNow(at date: Date = .now) -> Bool? {
         guard let hours = businessHours else { return nil }
 
-        let calendar = Calendar.current
-        let weekday = calendar.component(.weekday, from: date) // 1=Sun, 2=Mon...
-        let dayName = Self.dayNames[weekday - 1]
+        // One dateComponents call instead of three component(_:from:) calls.
+        let parts = Self.sharedCalendar.dateComponents([.weekday, .hour, .minute], from: date)
+        guard let weekday = parts.weekday, let hour = parts.hour, let minute = parts.minute else {
+            return nil
+        }
+        let dayName = Self.dayNames[weekday - 1] // 1=Sun, 2=Mon...
 
         guard let dayHours = hours.hours(for: dayName) else { return nil }
         if dayHours.isEmpty || dayHours.lowercased() == "closed" { return false }
@@ -72,8 +80,6 @@ struct Restaurant: Identifiable, Codable, Hashable {
             return nil
         }
 
-        let hour = calendar.component(.hour, from: date)
-        let minute = calendar.component(.minute, from: date)
         let currentMinutes = hour * 60 + minute
 
         // Handle overnight hours (close < open means past midnight)

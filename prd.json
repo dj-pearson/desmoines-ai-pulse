@@ -1199,7 +1199,7 @@
         "openStatusText does not re-parse on every render; open/closed correctness (incl. overnight) unchanged"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: Restaurant.swift:56-85 calls Calendar.current (59) and components(separatedBy:) per call; RestaurantsViewModel.applyClientSide (211) invokes isOpenNow() for every restaurant each toggle/page."
     },
     {
@@ -1226,7 +1226,7 @@
         "Parsing results unchanged for all supported formats"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: DateParser.swift:39-63 exposes static DateFormatter/ISO8601DateFormatter instances used cross-actor (Event.parsedDate:72 on main, applyClientSideOffMain on background); non-Sendable statics accessed concurrently."
     },
     {

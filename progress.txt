@@ -3890,3 +3890,22 @@ types against a real build. Left passes:false to avoid a guess that may not comp
 ### Files
   M ios/DesMoinesInsider/Services/MetricKitSubscriber.swift
   M ios/DesMoinesInsider/App/DesMoinesInsiderApp.swift
+
+## 2026-06-20 — iOS PERF-009 / PERF-011 (open-now + date parsing perf) [passes:true]
+
+- PERF-009: Restaurant.isOpenNow no longer allocates Calendar.current per call
+  (the dominant cost when toggling "Open Now" on a 100+ list) — uses a static
+  sharedCalendar and a single dateComponents([.weekday,.hour,.minute]) call
+  instead of three. Open/closed logic (incl. overnight) unchanged. (Struct
+  memoization of the parsed hours isn't feasible without a class redesign; the
+  Calendar allocation was the hotspot.)
+- PERF-011: DateParser now memoizes successful parses in a thread-safe NSCache
+  keyed by raw string, so Event.parsedDate (and all callers) don't re-parse on
+  every SwiftUI body evaluation. Formatter statics marked nonisolated(unsafe)
+  (read-only after config; ISO8601DateFormatter/DateFormatter parsing is
+  thread-safe) so it builds clean under strict concurrency. Parsing results
+  unchanged for all supported formats.
+
+### Files
+  M ios/DesMoinesInsider/Models/Restaurant.swift
+  M ios/DesMoinesInsider/Services/DateParser.swift
