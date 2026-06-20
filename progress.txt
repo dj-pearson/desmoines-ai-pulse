@@ -3932,3 +3932,28 @@ available in this headless container).
   M src/pages/EventsPage.tsx
   M src/pages/Restaurants.tsx
   M src/pages/Attractions.tsx
+
+## 2026-06-20 — SESSION SUMMARY v2 (branch claude/complete-prd-stories-4jdio9)
+Extended the session beyond the first 8. Now 11 WEB stories completed, each
+type-check + lint verified (0 errors) and committed individually. prd.json
+passes: 36 -> 47 / 110.
+
+Done this session (11): WEB-PERF-006, WEB-PERF-005, WEB-UX-006, WEB-UX-010,
+WEB-FEAT-006, WEB-FEAT-001, WEB-PERF-002, WEB-FEAT-005, WEB-FEAT-004,
+WEB-FEAT-009, WEB-UX-001.
+
+Remaining WEB (need a real browser/runtime/deploy to finish to the quality bar,
+so intentionally NOT marked passing): WEB-UX-003 (sticky bar + focus restore —
+needs mobile browser; chips now trivial via URL state), WEB-PERF-001 (column
+projection — restaurants rotation RPC returns full rows; needs runtime
+regression check), WEB-PERF-003/004/007 (build:analyze / CLS / RUM — Lighthouse+
+browser), WEB-FEAT-002 (Stripe annual/trial — money + dashboard steps),
+WEB-FEAT-003 (saved searches + nightly digest job), WEB-FEAT-007 (recently-
+viewed — large + home-section reordering on the 892-line Index), WEB-FEAT-008
+(OG image PNG render), WEB-FEAT-010 (review composer w/ uploads+moderation),
+WEB-FEAT-011 (trip planner polish), WEB-AUTO-010..014 (creative auto-review /
+sitemap regen / social posting / dunning / autonomy dashboard — edge functions +
+cron, runtime-verification heavy; AUTO-011 also has Cloudflare sitemap-serving
+ambiguity flagged in its own notes).
+
+iOS-AUDIT-* (47) not started: Swift can't be compiled/verified here (no Xcode).
