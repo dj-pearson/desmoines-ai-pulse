@@ -4073,3 +4073,43 @@ share, generation) needs a browser; logic verified by reading.
   A src/lib/tripCalendar.ts
   M src/hooks/useTripPlanner.ts
   M src/pages/TripPlanner.tsx
+
+## 2026-06-20 — WEB-PERF-007 (Real-user web-vitals monitoring + regression alerts) [passes:true]
+
+### Collection (src/lib/webVitals.ts)
+Dynamically imports `web-vitals` on requestIdleCallback (off the critical path /
+initial bundle), 20% session sampling, respects Do-Not-Track, posts LCP/CLS/INP/
+TTFB to the new web_vitals table. Page paths normalized to groups
+(/events/detail etc.). Wired in main.tsx via idle dynamic import (never blocks
+render). Anonymous; no PII.
+
+### Storage (migration 20260620000004_web_vitals.sql)
+web_vitals table (metric/value/rating/page_group/path/session_id/created_at) +
+indexes. RLS: anon INSERT only, NO select policy — raw rows stay private; the
+admin trend reads aggregated job metadata instead. types.ts updated.
+
+### Weekly rollup (supabase/functions/web-vitals-weekly + cron 20260620000005)
+jobRunner-wrapped (WEB-AUTO-001): computes p75 per metric per page-group for the
+last 7 days vs the prior 7, flags regressions (>20% WoW OR over budget — LCP
+2.5s / CLS 0.1 / INP 200ms / TTFB 800ms), emails via sendJobAlert, and stores the
+snapshot in run metadata. Scheduled Mondays 06:00 UTC.
+
+### Admin panel (src/components/admin/WebVitalsPanel.tsx)
+Reads the latest web-vitals-weekly run metadata, renders p75 per metric/page-
+group with budget status + WoW previous value + a regressions callout. Added to
+AdminSystem "jobs" tab under JobHealthPanel. No heavy charting dep.
+
+### Verification
+type-check + lint PASS (0 errors); edge function bundles cleanly via esbuild.
+Runtime (cron run, real beacons, email) verified on deploy per this project's
+backend bar (matches WEB-AUTO-001..009).
+
+### Files
+  A supabase/migrations/20260620000004_web_vitals.sql
+  A supabase/migrations/20260620000005_web_vitals_cron.sql
+  A supabase/functions/web-vitals-weekly/index.ts
+  A src/lib/webVitals.ts
+  A src/components/admin/WebVitalsPanel.tsx
+  M src/integrations/supabase/types.ts
+  M src/main.tsx
+  M src/pages/AdminSystem.tsx

@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      web_vitals: {
+        Row: {
+          created_at: string
+          id: string
+          metric: string
+          page_group: string
+          path: string | null
+          rating: string | null
+          session_id: string | null
+          value: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          metric: string
+          page_group: string
+          path?: string | null
+          rating?: string | null
+          session_id?: string | null
+          value: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          metric?: string
+          page_group?: string
+          path?: string | null
+          rating?: string | null
+          session_id?: string | null
+          value?: number
+        }
+        Relationships: []
+      }
       content_favorites: {
         Row: {
           content_id: string

@@ -230,6 +230,15 @@ function initializeApp() {
 
   // Defer all non-critical features until after interaction
   initializeOnInteraction();
+
+  // Real-user web-vitals reporting (WEB-PERF-007) — load web-vitals on idle so
+  // it never blocks rendering and stays off the critical path.
+  const startVitals = () => import("@/lib/webVitals").then((m) => m.initWebVitals());
+  if ("requestIdleCallback" in window) {
+    (window as unknown as { requestIdleCallback: (cb: () => void) => void }).requestIdleCallback(startVitals);
+  } else {
+    setTimeout(startVitals, 2000);
+  }
 }
 
 // Start as soon as DOM is ready

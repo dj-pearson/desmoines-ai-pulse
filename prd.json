@@ -450,7 +450,7 @@
         "npm run validate passes"
       ],
       "priority": 29,
-      "passes": false,
+      "passes": true,
       "notes": "Autonomy-themed perf: closes the loop so the perf stories above stay won. No web-vitals reporting exists today per the audit."
     },
     {

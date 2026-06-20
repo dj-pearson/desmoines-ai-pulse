@@ -6,6 +6,7 @@ import UserRoleManager from "@/components/UserRoleManager";
 import AdminSystemControls from "@/components/AdminSystemControls";
 import AdminApplicationSettings from "@/components/AdminApplicationSettings";
 import JobHealthPanel from "@/components/admin/JobHealthPanel";
+import WebVitalsPanel from "@/components/admin/WebVitalsPanel";
 import {
   Users,
   Server,
@@ -73,7 +74,12 @@ export default function AdminSystem() {
         {/* Tab Content */}
         {canManageUsers() && activeTab === "users" && <UserRoleManager />}
 
-        {activeTab === "jobs" && <JobHealthPanel />}
+        {activeTab === "jobs" && (
+          <div className="space-y-6">
+            <JobHealthPanel />
+            <WebVitalsPanel />
+          </div>
+        )}
 
         {canManageUsers() && activeTab === "system" && <AdminSystemControls />}
 
