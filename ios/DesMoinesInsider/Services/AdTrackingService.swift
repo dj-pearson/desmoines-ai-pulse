@@ -146,6 +146,10 @@ final class AdTrackingService {
     @discardableResult
     func logImpression(campaignId: String, creativeId: String, placement: String) async -> String? {
         guard let client = supabase, !Config.isUITesting else { return nil }
+        // Ad-interaction telemetry is tied to user_id, so it must respect the
+        // analytics consent choice — same gate AnalyticsService applies
+        // (IOS-AUDIT-SEC-008). Without this, ad_impressions wrote for all users.
+        guard ConsentService.shared.analyticsConsent else { return nil }
         let session = sessionId
         let dedupeKey = "\(campaignId)|\(creativeId)|\(session)"
         guard !loggedImpressions.contains(dedupeKey) else { return nil }
@@ -192,6 +196,8 @@ final class AdTrackingService {
     /// Offline-safe: queued and flushed on reconnect.
     func logClick(campaignId: String, creativeId: String, impressionId: String?) async {
         guard let client = supabase, !Config.isUITesting else { return }
+        // Respect analytics consent (IOS-AUDIT-SEC-008).
+        guard ConsentService.shared.analyticsConsent else { return }
         let row = ClickRow(
             campaign_id: campaignId,
             creative_id: creativeId,
@@ -324,6 +330,15 @@ final class AdTrackingService {
     /// app launch. Best-effort: rows that still fail stay queued for next time.
     func flushPendingEvents() async {
         guard let client = supabase, !Config.isUITesting else { return }
+        // If the user revoked analytics consent while offline, drop the queued
+        // ad telemetry instead of sending it on reconnect (IOS-AUDIT-SEC-008).
+        guard ConsentService.shared.analyticsConsent else {
+            if !pending.isEmpty {
+                pending = PendingQueue()
+                persistQueue()
+            }
+            return
+        }
         guard NetworkMonitor.shared.isConnected, !pending.isEmpty else { return }
 
         var remainingImpressions: [ImpressionRow] = []

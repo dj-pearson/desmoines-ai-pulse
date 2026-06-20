@@ -3621,3 +3621,20 @@ but they should be ROTATED and scrubbed. Logged in ios/SECRETS.md follow-up.
   M .githooks/pre-commit
   A .github/workflows/secret-scan.yml
   A ios/SECRETS.md
+
+## 2026-06-20 — iOS SEC-008 (gate ad telemetry behind consent + manifest) [passes:true]
+
+- AdTrackingService.logImpression/logClick now early-return unless
+  ConsentService.shared.analyticsConsent (they wrote ad_impressions/ad_clicks
+  with user_id for ALL users before, unlike AnalyticsService).
+  affiliate/sponsored/house logging already routes through the consent-gated
+  AnalyticsService.trackEvent, so no change needed there.
+- flushPendingEvents() drops (clears + persists) the queued telemetry instead of
+  sending it if consent was revoked while offline.
+- PrivacyInfo.xcprivacy now declares NSPrivacyCollectedDataTypeProductInteraction
+  (linked, tracking=false, purposes Analytics + AppFunctionality). NSPrivacyTracking
+  stays false (first-party, no IDFA).
+
+### Files
+  M ios/DesMoinesInsider/Services/AdTrackingService.swift
+  M ios/DesMoinesInsider/Resources/PrivacyInfo.xcprivacy

@@ -1072,7 +1072,7 @@
         "NSPrivacyTracking remains accurate (first-party, no IDFA)"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: AdTrackingService.swift:147-189 writes ad_impressions/ad_clicks with user_id to Supabase with no analyticsConsent check, unlike AnalyticsService (23,31,135). ConsentService.needsConsentPrompt (58-60) prompts EU-only. PrivacyInfo.xcprivacy declares no usage-data collection."
     },
     {
