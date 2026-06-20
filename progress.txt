@@ -3682,3 +3682,25 @@ and ship a staged release.
   M ios/DesMoinesInsider/Views/Components/FilterChipView.swift
   M ios/DesMoinesInsider/Views/EventDetail/EventDetailView.swift
   M ios/DesMoinesInsider/Views/Restaurants/RestaurantDetailView.swift
+
+## 2026-06-20 — Image pipeline investigation + fixes (NOT a PRD story; owner-requested)
+
+Three agents traced why many listings lack images. ROOT CAUSE: firecrawl-scraper
+(the 30-min scrape-events cron delegates to it) inserts events with image_url
+NEVER set, so every crawled event starts imageless and depends entirely on the
+nightly backfill — whose last-resort CATEGORY_DEFAULTS are all empty strings.
+Secondary: admin manual-fix picker was dead (find-image-candidates missing), no
+dimension/subject validation (tracking pixels/logos can be stored), and
+backfill's page fetch had no SSRF guard.
+
+### Fix 1: implement the missing find-image-candidates edge function
+ImagePickerDialog.tsx invoked find-image-candidates, which did not exist — so the
+human escape hatch for fixing a wrong/missing image was broken. Implemented it
+reusing existing helpers (extractAllImagesFromHtml + findExistingVenueRecord +
+getGooglePlacesPhotos), with an SSRF guard (validateURLForSSRF) + size cap
+(fetchTextWithSizeCap, 200KB) on the page fetch. Read-only; returns
+{record, candidates[]} exactly as the dialog expects. Auth mirrors apply-image
+(requireAdminOrApiKey), so no config.toml entry needed.
+
+### Files
+  A supabase/functions/find-image-candidates/index.ts
