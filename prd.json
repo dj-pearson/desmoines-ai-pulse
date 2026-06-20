@@ -620,7 +620,7 @@
         "npm run validate passes"
       ],
       "priority": 40,
-      "passes": false,
+      "passes": true,
       "notes": "Web twin of IOS-ADS-011; events/restaurants rows already carry is_sponsored/sponsored_until."
     },
     {

@@ -47,6 +47,7 @@ import { OpenNowBanner } from "@/components/OpenNowBanner";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { useIsMobile } from "@/hooks/use-mobile";
 import RestaurantCard from "@/components/RestaurantCard";
+import { arrangeSponsoredFirst } from "@/lib/sponsored";
 import { SearchAutocomplete, addRecentSearch } from "@/components/SearchAutocomplete";
 import {
   Pagination,
@@ -114,13 +115,16 @@ export default function Restaurants() {
   // Paginate restaurants
   const totalPages = Math.ceil((restaurants?.length || 0) / ITEMS_PER_PAGE);
   const paginatedRestaurants = useMemo(() => {
+    // Boost up to 2 actively-sponsored restaurants to the top before paginating
+    // (WEB-FEAT-005); organic order otherwise, Sponsored badge on the card.
+    const arranged = arrangeSponsoredFirst(restaurants);
     if (isMobile) {
       // Mobile: show all up to current page (load more pattern)
-      return restaurants.slice(0, page * ITEMS_PER_PAGE);
+      return arranged.slice(0, page * ITEMS_PER_PAGE);
     }
     // Desktop: show current page only
     const start = (page - 1) * ITEMS_PER_PAGE;
-    return restaurants.slice(start, start + ITEMS_PER_PAGE);
+    return arranged.slice(start, start + ITEMS_PER_PAGE);
   }, [restaurants, page, isMobile]);
 
   const hasMorePages = isMobile

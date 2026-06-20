@@ -31,6 +31,7 @@ import {
   LoadingSpinner,
 } from "@/components/ui/loading-skeleton";
 import { SocialEventCard } from "@/components/SocialEventCard";
+import { arrangeSponsoredFirst } from "@/lib/sponsored";
 import Header from "@/components/Header";
 import { AdBanner } from "@/components/AdBanner";
 import Footer from "@/components/Footer";
@@ -363,8 +364,10 @@ export default function EventsPage() {
 
   const rawEvents = eventsData?.events || [];
   // The query already returns the page in the correct sort order (WEB-UX-018),
-  // so we only apply the client-side price filter here — no re-sorting.
-  const events = filterEventsByPrice(rawEvents, priceRange);
+  // so we only apply the client-side price filter here — no re-sorting. Then
+  // boost up to 2 actively-sponsored events to the top (WEB-FEAT-005); the
+  // Sponsored badge keeps them clearly labeled.
+  const events = arrangeSponsoredFirst(filterEventsByPrice(rawEvents, priceRange));
   const totalCount = eventsData?.totalCount || 0;
   const hasMore = totalCount > page * EVENTS_PER_PAGE;
 

@@ -4,6 +4,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { FavoriteButton } from '@/components/FavoriteButton';
 import { getCategoryStyle } from '@/lib/categoryStyles';
+import { SponsoredBadge } from '@/components/SponsoredBadge';
+import { isActivelySponsored } from '@/lib/sponsored';
+import { trackSponsoredListing } from '@/lib/sponsoredTracking';
 import ShareDialog from '@/components/ShareDialog';
 import { useEventSocial } from '@/hooks/useEventSocial';
 import { BatchEventSocialData } from '@/hooks/useBatchEventSocial';
@@ -50,6 +53,12 @@ function SocialEventCardComponent({
 
   const categoryStyle = getCategoryStyle(event.category);
 
+  // Active sponsorship only (WEB-FEAT-005); expired ones drop the treatment.
+  const sponsored = isActivelySponsored(event);
+  React.useEffect(() => {
+    if (sponsored) trackSponsoredListing("impression", "event", event.id);
+  }, [sponsored, event.id]);
+
   const getDateParts = () => {
     try {
       const dateSource = event.event_start_utc || event.event_start_local || event.date;
@@ -76,11 +85,18 @@ function SocialEventCardComponent({
 
   return (
     <Card
-      className={`group relative overflow-hidden border-0 shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-card ${
-        featured ? 'md:col-span-2 md:row-span-2' : ''
-      }`}
+      className={`group relative overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-card ${
+        sponsored ? 'ring-2 ring-amber-400 border-0' : 'border-0'
+      } ${featured ? 'md:col-span-2 md:row-span-2' : ''}`}
     >
-      <Link to={eventUrl} className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-xl" aria-label={`View details for ${event.title}`}>
+      <Link
+        to={eventUrl}
+        className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-xl"
+        aria-label={`${sponsored ? 'Sponsored: ' : ''}View details for ${event.title}`}
+        onClick={() => {
+          if (sponsored) trackSponsoredListing('click', 'event', event.id);
+        }}
+      >
         <CardContent className="p-0">
           {/* Image Section with Overlay */}
           <div className={`relative overflow-hidden ${featured ? 'h-64 md:h-80' : 'h-52'}`}>
@@ -129,6 +145,7 @@ function SocialEventCardComponent({
 
             {/* Top Right Badges */}
             <div className="absolute top-3 right-3 z-10 flex flex-col gap-1.5 items-end">
+              {sponsored && <SponsoredBadge className="shadow-lg" />}
               {isLive && (
                 <Badge className="bg-green-500 text-white border-0 shadow-lg text-[10px] px-2 animate-pulse">
                   <TrendingUp className="h-3 w-3 mr-1" />

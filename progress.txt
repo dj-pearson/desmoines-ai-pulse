@@ -4089,3 +4089,37 @@ full vitest 105/105. tsc clean; eslint 0 errors. npm run validate passes.
   M src/components/FavoriteButton.tsx
   M src/lib/conversionTracking.ts
   M src/App.tsx
+
+## 2026-06-20 — WEB-FEAT-005 (sponsored/featured listings inline in browse lists) [passes:true]
+
+Web twin of IOS-ADS-011: actively-sponsored events/restaurants get a top slot +
+amber ring + "Sponsored" badge in browse lists, clearly labeled, shown to all tiers.
+
+- src/lib/sponsored.ts: isActivelySponsored (is_sponsored AND sponsored_until not
+  past — so EXPIRED sponsorships drop the treatment automatically) +
+  arrangeSponsoredFirst (boost ≤2 to the top, organic order otherwise).
+- src/lib/sponsoredTracking.ts: trackSponsoredListing(impression|click, type, id)
+  — distinct from paid campaign creatives (sponsored listings have no creative_id,
+  so they log via the analytics path keyed by listing id, mirroring iOS), fire-and-forget.
+- Cards now gate the ring/badge on isActivelySponsored (not raw is_sponsored) and
+  fire impression (on mount) + click tracking: EventCard, RestaurantCard, and the
+  main-list SocialEventCard. SponsoredBadge already provides FTC-compliant
+  "Sponsored content" a11y text; card aria-labels also prefix "Sponsored:".
+- Arrangement applied in EventsPage (events) and Restaurants (before pagination,
+  cap 2). Attractions: the table has no is_sponsored/sponsored_until columns, so
+  isActivelySponsored is always false there — vacuously satisfied, no card edit.
+
+### Verification (run)
+New src/lib/__tests__/sponsored.test.ts (active check + arrangement cap/order/
+expiry) — 5/5; full vitest 110/110. tsc clean; eslint 0 errors. npm run validate
+passes. Note: trackSponsoredListing writes user_analytics best-effort.
+
+### Files
+  A src/lib/sponsored.ts
+  A src/lib/sponsoredTracking.ts
+  A src/lib/__tests__/sponsored.test.ts
+  M src/components/EventCard.tsx
+  M src/components/RestaurantCard.tsx
+  M src/components/SocialEventCard.tsx
+  M src/pages/EventsPage.tsx
+  M src/pages/Restaurants.tsx
