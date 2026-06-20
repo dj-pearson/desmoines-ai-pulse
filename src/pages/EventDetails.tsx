@@ -44,6 +44,7 @@ import { FavoriteButton } from "@/components/FavoriteButton";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { useContentTracking } from "@/hooks/useContentTracking";
+import { useRecordRecentView } from "@/hooks/useRecentlyViewedFeed";
 import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { NearbyContent } from "@/components/NearbyContent";
@@ -61,6 +62,20 @@ export default function EventDetails() {
 
   // Track page view and content interactions
   const { trackShare, trackClick } = useContentTracking(event?.id, 'event');
+
+  // Record into the unified recently-viewed feed (WEB-FEAT-007).
+  useRecordRecentView(
+    event
+      ? {
+          id: event.id,
+          type: "event",
+          title: event.title,
+          href: `/events/${createEventSlugWithCentralTime(event.title, event)}`,
+          image_url: event.image_url,
+          subtitle: event.venue || event.location || event.category,
+        }
+      : null,
+  );
 
   const relatedEvents = event
     ? events

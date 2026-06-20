@@ -4302,3 +4302,69 @@ healthy heap; it OOMs under memory pressure in this container.
   M src/pages/Restaurants.tsx
   M src/pages/Attractions.tsx
   M tests/search-filters.spec.ts
+
+## 2026-06-20 — WEB-FEAT-007 (Recently-viewed rail + personalized home section ordering) [passes:true]
+
+### What shipped
+Two new pure libraries (the actual new logic, fully unit-tested) + wiring:
+- src/lib/recentlyViewed.ts — unified recently-viewed store on safeStorage:
+  one list across events/restaurants/attractions, newest-first, deduped by
+  (type,id), capped at 20, pruned > 30 days on every read/write. Exposes
+  recordView/readRecentlyViewed/removeView/clearRecentlyViewed + engagementByType
+  (the engagement signal).
+- src/lib/homeSectionOrder.ts — computeHomeSectionOrder(counts): deterministic
+  domain order from engagement. A type goes first only with >= 3 views AND
+  strictly more than the others (ties → canonical, so no flicker between equal
+  interests). Returns {order, cohort:"control"|"personalized:<type>"}.
+- src/hooks/useRecentlyViewedFeed.ts — useRecordRecentView(entry|null) records a
+  view (guest→store; signed-in→best-effort upsert to recently_viewed) and
+  useRecentlyViewedFeed() reads the merged feed with remove/clear. All server
+  calls are best-effort and swallow errors so guests never break.
+- Server table: supabase/migrations/20260620000004_recently_viewed.sql — additive
+  CREATE TABLE + per-owner RLS (select/insert/update/delete own rows). Safe in a
+  single release (additive only).
+- Components: RecentlyViewedRail (homepage horizontal rail, gated >= 3 entries,
+  per-item remove), RecentlyViewedList (dashboard full list + remove + clear),
+  HomeInterestNav (the data-driven domain row).
+- Wiring: recordView in EventDetails/RestaurantDetails/AttractionDetails;
+  HomeInterestNav + RecentlyViewedRail added after ForYouRail in Index;
+  RecentlyViewedList added to the UserDashboard overview tab.
+
+### AC mapping
+1. ✓ {id,type,timestamp}, guest safeStorage + signed-in RLS table, cap 20,
+   prune 30d. 2. ✓ rail gated >=3; dashboard full list w/ remove. 3. ✓ domains
+   render in computeHomeSectionOrder() order (dining-first when restaurants
+   dominate; canonical for guests/no-signal). NOTE: the homepage had no
+   pre-existing events/restaurants/attractions section trio, so AC3 is realized
+   as an ordered "Browse by interest" domain row (HomeInterestNav) — a real,
+   deterministic, data-driven home section. 4. ✓ cohort logged once/session to
+   user_analytics + a safeStorage guard. 5. ✓ order computed synchronously in a
+   useMemo from the local store (no async, no post-paint reorder) → no CLS by
+   construction. 6. ✓ npm run validate passes.
+
+### Verification
+vitest 132/132 (added recentlyViewed 7 + homeSectionOrder 6); eslint 0 errors on
+all new/changed files; `npm run validate` exits 0. Types: scoped `tsc -p`
+confirmed ZERO new type errors in the new/wired files (the two I briefly
+introduced — a user_analytics insert missing session_id, and two stale
+@ts-expect-error in a test — are fixed). CAVEATS (cannot verify headlessly):
+(a) the signed-in server sync needs `supabase db push` of the new migration to
+exercise end-to-end (guest path is fully tested); (b) the actual CLS number
+needs a real browser/Lighthouse — architecturally there is no post-paint
+reorder; (c) cohort conversion analysis depends on the user_analytics pipeline.
+
+### Files
+  A src/lib/recentlyViewed.ts
+  A src/lib/homeSectionOrder.ts
+  A src/hooks/useRecentlyViewedFeed.ts
+  A src/components/RecentlyViewedRail.tsx
+  A src/components/RecentlyViewedList.tsx
+  A src/components/HomeInterestNav.tsx
+  A src/lib/__tests__/recentlyViewed.test.ts
+  A src/lib/__tests__/homeSectionOrder.test.ts
+  A supabase/migrations/20260620000004_recently_viewed.sql
+  M src/pages/EventDetails.tsx
+  M src/pages/RestaurantDetails.tsx
+  M src/pages/AttractionDetails.tsx
+  M src/pages/Index.tsx
+  M src/pages/UserDashboard.tsx

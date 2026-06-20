@@ -652,7 +652,7 @@
         "npm run validate passes"
       ],
       "priority": 42,
-      "passes": false,
+      "passes": true,
       "notes": "Web twin of iOS ForYou/IA-006 ordering. Index.tsx already renders ForYouRail + PersonalizedRecommendations — this story makes placement itself data-driven."
     },
     {
