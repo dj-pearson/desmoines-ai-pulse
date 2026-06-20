@@ -24,6 +24,7 @@ import {
   hasSpecificTime,
 } from '@/lib/timezone';
 import { Link } from 'react-router-dom';
+import { getEventCategoryStyle } from '@/lib/categoryStyles';
 
 interface SocialEventCardProps {
   event: Event;
@@ -47,19 +48,7 @@ function SocialEventCardComponent({
   const liveStats = socialData?.liveStats ?? individualFetch.liveStats;
   const attendees = socialData?.attendees ?? individualFetch.attendees;
 
-  const getCategoryStyle = (category: string) => {
-    const c = category.toLowerCase();
-    if (c.includes('music')) return { bg: 'bg-violet-500', text: 'text-violet-500', icon: 'bg-violet-500/10' };
-    if (c.includes('food') || c.includes('drink')) return { bg: 'bg-orange-500', text: 'text-orange-500', icon: 'bg-orange-500/10' };
-    if (c.includes('sport')) return { bg: 'bg-emerald-500', text: 'text-emerald-500', icon: 'bg-emerald-500/10' };
-    if (c.includes('art') || c.includes('culture')) return { bg: 'bg-pink-500', text: 'text-pink-500', icon: 'bg-pink-500/10' };
-    if (c.includes('family') || c.includes('kid')) return { bg: 'bg-sky-500', text: 'text-sky-500', icon: 'bg-sky-500/10' };
-    if (c.includes('outdoor')) return { bg: 'bg-green-500', text: 'text-green-500', icon: 'bg-green-500/10' };
-    if (c.includes('business') || c.includes('network')) return { bg: 'bg-slate-600', text: 'text-slate-600', icon: 'bg-slate-600/10' };
-    return { bg: 'bg-primary', text: 'text-primary', icon: 'bg-primary/10' };
-  };
-
-  const categoryStyle = getCategoryStyle(event.category);
+  const categoryStyle = getEventCategoryStyle(event.category);
 
   const getDateParts = () => {
     try {

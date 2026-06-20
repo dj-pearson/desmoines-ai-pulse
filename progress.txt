@@ -3550,3 +3550,39 @@ type-check PASSES (exit 0); eslint changed files 0 errors.
   M src/contexts/AuthContext.tsx
   M src/components/Header.tsx
   M src/components/BottomNav.tsx
+
+## 2026-06-20 — WEB-UX-006 (Centralize category/cuisine colors into theme tokens) [passes:true]
+
+### New module: src/lib/categoryStyles.ts
+Single source of truth replacing duplicated hardcoded color/gradient literals:
+- getEventCategoryStyle(category) -> {bg,text,icon} for event categories
+  (music/food/sport/art/family/outdoor/business + default). Text accents now
+  carry dark: variants (e.g. text-violet-600 dark:text-violet-400) tuned for
+  >=4.5:1 contrast in both themes; solid badge bg + white text reads in both.
+- getEventCategoryBadgeClass(category) -> "bg-... text-white" convenience.
+- getCuisineGradient(cuisine) -> decorative image-fallback gradient.
+- getHotelTypeGradient(type) -> lodging image-fallback gradient.
+
+### Refactors (literals removed, now import the tokens)
+- RestaurantCard: removed local cuisineGradients map + getGradient.
+- SocialEventCard: removed inline getCategoryStyle (was text-*-500 with no dark
+  variant -> now contrast-safe).
+- EventCard: removed getCategoryColor (music purple->violet to match the shared
+  token; minor unifying shift).
+- HotelCard: removed local typeGradients + getGradient.
+
+### Note
+InteractiveMap.getCategoryColor returns raw hex for Leaflet marker icons (not
+Tailwind classes) — intentionally left separate; it's a different output format.
+
+### Verification
+type-check PASSES (exit 0); eslint changed files 0 errors. Visual-regression
+spec requires a browser (not runnable headless here) — classes are equivalent
+or contrast-improved, no structural changes.
+
+### Files
+  A src/lib/categoryStyles.ts
+  M src/components/RestaurantCard.tsx
+  M src/components/SocialEventCard.tsx
+  M src/components/EventCard.tsx
+  M src/components/HotelCard.tsx

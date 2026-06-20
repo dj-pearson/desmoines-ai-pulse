@@ -541,7 +541,7 @@
         "npm run validate passes"
       ],
       "priority": 35,
-      "passes": false,
+      "passes": true,
       "notes": "Web twin of IOS-POLISH-006. Low risk, high consistency payoff."
     },
     {
