@@ -1295,7 +1295,7 @@
         "Existing ReduceMotion behavior unchanged"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: ToastOverlay.swift renders and auto-dismisses after 2s (91-99) but posts no accessibility announcement and adds no traits — silent for VoiceOver."
     },
     {
@@ -1365,7 +1365,7 @@
         "Email field keeps .keyboardType(.emailAddress)/content type"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: AuthView.swift:63-67,76-78 SecureField with no toggle; placeholder-only fields (38-66); ProgressView (107-129) with no a11y announcement."
     },
     {
@@ -1379,7 +1379,7 @@
         "ReduceMotion respected on page transitions"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: OnboardingView.swift:140-146 renders Skip only while currentPage < pages.count-1; nav buttons use .padding(.vertical,12) on subheadline (~36pt) at 114-134; page indicator static (98)."
     },
     {

@@ -5,6 +5,8 @@ import AuthenticationServices
 struct AuthView: View {
     @State private var viewModel = AuthViewModel()
     @State private var isSignUpMode = false
+    @State private var showPassword = false
+    @State private var showConfirmPassword = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -61,10 +63,13 @@ struct AuthView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 4) {
-                        SecureField("Password", text: $viewModel.password)
-                            .textContentType(isSignUpMode ? .newPassword : .password)
-                            .textFieldStyle(.glassInput)
-                            .accessibilityHint(isSignUpMode ? "Must be at least 8 characters with uppercase, lowercase, and a number" : "")
+                        passwordField(
+                            title: "Password",
+                            text: $viewModel.password,
+                            isVisible: $showPassword,
+                            contentType: isSignUpMode ? .newPassword : .password
+                        )
+                        .accessibilityHint(isSignUpMode ? "Must be at least 8 characters with uppercase, lowercase, and a number" : "")
 
                         if isSignUpMode && !viewModel.password.isEmpty {
                             PasswordStrengthBar(strength: viewModel.passwordStrength)
@@ -73,9 +78,12 @@ struct AuthView: View {
 
                     if isSignUpMode {
                         VStack(alignment: .leading, spacing: 4) {
-                            SecureField("Confirm Password", text: $viewModel.confirmPassword)
-                                .textContentType(.newPassword)
-                                .textFieldStyle(.glassInput)
+                            passwordField(
+                                title: "Confirm Password",
+                                text: $viewModel.confirmPassword,
+                                isVisible: $showConfirmPassword,
+                                contentType: .newPassword
+                            )
 
                             if !viewModel.confirmPassword.isEmpty && !viewModel.passwordsMatch {
                                 Text("Passwords do not match")
@@ -116,16 +124,12 @@ struct AuthView: View {
                         }
                     }
                 } label: {
-                    HStack {
-                        if viewModel.isSigningIn || viewModel.isSigningUp {
-                            ProgressView()
-                                .tint(.white)
-                        }
-                        Text(isSignUpMode ? "Create Account" : "Sign In")
-                    }
+                    Text(isSignUpMode ? "Create Account" : "Sign In")
                 }
                 .buttonStyle(.brandPrimary)
-                .disabled(viewModel.isSigningIn || viewModel.isSigningUp || viewModel.isLockedOut)
+                // Announces "Loading", dims, and disables while submitting (UX-008).
+                .brandLoading(viewModel.isSigningIn || viewModel.isSigningUp)
+                .disabled(viewModel.isLockedOut)
                 .padding(.horizontal)
 
                 // Forgot password
@@ -181,6 +185,40 @@ struct AuthView: View {
             Button("OK", role: .cancel) { dismiss() }
         } message: {
             Text("We've sent a verification link to your email. Please verify your account to continue.")
+        }
+    }
+
+    // MARK: - Password field with show/hide toggle (IOS-AUDIT-UX-008)
+
+    @ViewBuilder
+    private func passwordField(
+        title: String,
+        text: Binding<String>,
+        isVisible: Binding<Bool>,
+        contentType: UITextContentType
+    ) -> some View {
+        Group {
+            if isVisible.wrappedValue {
+                TextField(title, text: text)
+            } else {
+                SecureField(title, text: text)
+            }
+        }
+        .textContentType(contentType)
+        .textFieldStyle(.glassInput)
+        // Persistent label independent of the placeholder.
+        .accessibilityLabel(title)
+        .overlay(alignment: .trailing) {
+            Button {
+                isVisible.wrappedValue.toggle()
+            } label: {
+                Image(systemName: isVisible.wrappedValue ? "eye.slash.fill" : "eye.fill")
+                    .foregroundStyle(.secondary)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .padding(.trailing, 4)
+            .accessibilityLabel(isVisible.wrappedValue ? "Hide \(title.lowercased())" : "Show \(title.lowercased())")
         }
     }
 

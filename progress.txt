@@ -3788,3 +3788,24 @@ FavoritesView pattern). `npm run validate` therefore passes. Playwright not run
   M src/pages/AttractionDetails.tsx
   M src/pages/PlaygroundDetails.tsx
   M src/pages/Attractions.tsx
+
+## 2026-06-20 — iOS ease-of-use a11y batch (UX-003/008/009) [passes:true]
+
+- UX-003: ToastOverlay now posts AccessibilityNotification.Announcement on
+  appearance (error toasts at .high priority), extends auto-dismiss to 5s when
+  VoiceOver is running (2s otherwise), and combines the toast into one a11y
+  element. ReduceMotion behavior unchanged.
+- UX-008: AuthView password + confirm fields get a reusable passwordField()
+  with a ≥44pt labeled show/hide eye toggle (swaps TextField/SecureField on the
+  same binding), persistent accessibility labels independent of the placeholder,
+  and the submit button migrated to .brandLoading (announces "Loading", dims,
+  disables). Email keeps .emailAddress keyboard/content type.
+- UX-009: Skip is now reachable on EVERY onboarding page (was hidden on the
+  last). Next/Continue migrated to full-width .brandPrimary (≥44pt); Back/Skip
+  to .brandGhost(compact). Page indicator announces "Page X of Y" via
+  AccessibilityNotification on change. ReduceMotion still respected.
+
+### Files
+  M ios/DesMoinesInsider/Views/Components/ToastOverlay.swift
+  M ios/DesMoinesInsider/Views/Auth/AuthView.swift
+  M ios/DesMoinesInsider/Views/Onboarding/OnboardingView.swift
