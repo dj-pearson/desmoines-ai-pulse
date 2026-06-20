@@ -3719,3 +3719,13 @@ getGooglePlacesPhotos), with an SSRF guard (validateURLForSSRF) + size cap
 ### Files
   M supabase/functions/_shared/imageStorage.ts
   M supabase/functions/backfill-images/index.ts
+
+### Findings doc + recommended next steps
+Wrote docs/IMAGE_PIPELINE_FINDINGS.md: root-cause ranking, correctness risks,
+what shipped, and ranked next steps (backfill-cron + image_checked_at column;
+per-item ingest extraction; AI relevance gate; category defaults). The riskier
+ones touch the core ingestion path / need curated assets → flagged for owner
+review before implementing.
+
+### Files
+  A docs/IMAGE_PIPELINE_FINDINGS.md
