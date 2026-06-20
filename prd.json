@@ -283,7 +283,7 @@
         "npm run validate passes"
       ],
       "priority": 18,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: src/pages/AdminCampaigns.tsx (~lines 180-200) shows the manual is_approved toggle; campaigns sit in status='pending_creative' until a human acts. This directly unblocks ad revenue latency."
     },
     {

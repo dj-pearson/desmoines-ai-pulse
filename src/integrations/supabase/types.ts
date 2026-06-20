@@ -1290,6 +1290,9 @@ export type Database = {
       }
       campaign_creatives: {
         Row: {
+          auto_reviewed: boolean
+          auto_review_reasons: string[] | null
+          auto_review_checks: Json | null
           campaign_id: string
           created_at: string
           cta_text: string | null

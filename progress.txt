@@ -4175,3 +4175,37 @@ type-check + lint PASS (0 errors); edge function bundles cleanly via esbuild.
   A supabase/functions/autonomy-overview/index.ts
   A src/pages/AdminAutonomy.tsx
   M src/App.tsx
+
+## 2026-06-20 — WEB-AUTO-010 (Campaign creative auto-review) [passes:true]
+
+### Pipeline (migration 20260620000006 + supabase/functions/campaign-creative-review)
+AFTER INSERT trigger on campaign_creatives enqueues review via pg_net; a 10-min
+sweep cron catches stragglers. Per creative the function runs: image loads +
+meets placement min dimensions (top_banner/below_fold 728x90, featured_spot/
+sponsored_listing 300x250, sidebar 160x600), target URL is https + resolves
+(SSRF-guarded; redirect to non-https rejected), text brand-safety via Claude
+(claude-haiku-4-5; fails OPEN when ANTHROPIC_API_KEY absent), and advertiser/
+campaign standing (not rejected/cancelled/suspended). All pass -> is_approved=
+true (proceeds via the normal status flow); any fail -> unapproved with
+machine-readable auto_review_reasons + a rejection_reason summary.
+
+### Additive columns
+campaign_creatives gains auto_reviewed, auto_review_reasons text[],
+auto_review_checks jsonb (types.ts updated). is_approved / rejection_reason flow
+and get_active_ads are untouched (iOS-safe).
+
+### Audit + metrics + override
+Each decision writes to security_audit_logs (creative_auto_approved/rejected with
+checks+reasons). Sweep runs through the jobRunner recording autoApprovalRate in
+metadata (surfaced by WEB-AUTO-014). AdminCampaignDetail shows the auto-review
+reasons on held creatives; the existing Approve/Reject controls remain (admin
+override both directions).
+
+### Verification
+type-check + lint PASS (0 errors); edge function bundles cleanly via esbuild.
+
+### Files
+  A supabase/migrations/20260620000006_creative_auto_review.sql
+  A supabase/functions/campaign-creative-review/index.ts
+  M src/integrations/supabase/types.ts
+  M src/pages/AdminCampaignDetail.tsx
