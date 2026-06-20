@@ -3586,3 +3586,54 @@ or contrast-improved, no structural changes.
   M src/components/SocialEventCard.tsx
   M src/components/EventCard.tsx
   M src/components/HotelCard.tsx
+
+## 2026-06-20 — WEB-UX-010 (Fix broken & missing Save controls) [passes:true]
+
+### Problem
+useFavorites was EVENTS-ONLY (user_event_interactions.event_id). Detail pages
+for restaurants/attractions/playgrounds rendered a static Save <Button> with no
+onClick (dead control), and RestaurantCard / the Attractions card had no Save
+button at all — so saving while browsing only worked for events.
+
+### Backend (additive, backward-compatible)
+- New migration 20260620000001_content_favorites.sql: content_favorites table
+  (user_id, content_type CHECK in restaurant/attraction/hotel/playground,
+  content_id, unique per user+type+id) + owner-only RLS (select/insert/delete) +
+  indexes. Event favorites stay in user_event_interactions untouched.
+- Added content_favorites to generated types.ts (Row/Insert/Update) so the hook
+  is fully typed (no `any`).
+
+### Hook: src/hooks/useContentFavorites.ts
+Mirrors useFavorites for non-event types: optimistic add/remove, login guard,
+subscription favorites-limit enforcement, USER staleTime. Returns isFavorited/
+toggleFavorite/isToggling/etc.
+
+### Component: FavoriteButton
+Refactored into a shared FavoriteButtonView + two data variants (EventFavorite-
+Button via useFavorites, ContentFavoriteButton via useContentFavorites) behind
+one export. New props: contentType + contentId (eventId still works -> zero
+churn at existing call sites). Now also preventDefault + aria-pressed, and only
+toasts success when the toggle actually succeeded (was toasting even on failure).
+
+### Wiring
+- RestaurantDetails / AttractionDetails / PlaygroundDetails: static Save button
+  -> <FavoriteButton contentType=... contentId=... showText itemName=.../>.
+- RestaurantCard: top-right Save overlay on the image.
+- Attractions list card: wrapped image in relative div + top-right Save overlay.
+- HotelDetails: no Save button exists -> nothing to replace (AC "if present").
+
+### Verification
+type-check PASSES (exit 0); eslint changed files 0 errors. Runtime save/unsave
+needs a logged-in browser session (not available headless) — logic mirrors the
+proven event-favorites path.
+
+### Files
+  A supabase/migrations/20260620000001_content_favorites.sql
+  A src/hooks/useContentFavorites.ts
+  M src/integrations/supabase/types.ts
+  M src/components/FavoriteButton.tsx
+  M src/components/RestaurantCard.tsx
+  M src/pages/Attractions.tsx
+  M src/pages/RestaurantDetails.tsx
+  M src/pages/AttractionDetails.tsx
+  M src/pages/PlaygroundDetails.tsx

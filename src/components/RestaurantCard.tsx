@@ -8,6 +8,7 @@ import { getRestaurantOpenStatus } from "@/lib/restaurantHours";
 import { SponsoredBadge } from "@/components/SponsoredBadge";
 import { usePrefetchRestaurant } from "@/hooks/usePrefetchDetail";
 import { getCuisineGradient } from "@/lib/categoryStyles";
+import { FavoriteButton } from "@/components/FavoriteButton";
 
 const DIETARY_TAGS = [
   { id: "vegan", label: "Vegan", icon: Leaf, bg: "bg-green-50", text: "text-green-700", keywords: ["vegan"] },
@@ -127,6 +128,18 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
 
           {/* Dark overlay for text readability */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+
+          {/* Save (favorite) overlay — stopPropagation handled inside the button */}
+          <div className="absolute top-3 right-3 z-20">
+            <FavoriteButton
+              contentType="restaurant"
+              contentId={restaurant.id}
+              itemName={restaurant.name}
+              size="icon"
+              variant="ghost"
+              className="h-9 w-9 rounded-full bg-white/90 hover:bg-white shadow-md backdrop-blur"
+            />
+          </div>
 
           {/* Top badges */}
           <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 z-10">

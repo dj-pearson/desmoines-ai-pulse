@@ -772,7 +772,7 @@
         "npm run validate passes (type-check + lint)"
       ],
       "priority": 39,
-      "passes": false
+      "passes": true
     },
     {
       "id": "WEB-UX-011",

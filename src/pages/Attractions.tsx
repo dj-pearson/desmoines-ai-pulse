@@ -45,6 +45,7 @@ import {
 } from "@/components/ui/pagination";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { OptimizedImage } from "@/components/OptimizedImage";
+import { FavoriteButton } from "@/components/FavoriteButton";
 import { SearchAutocomplete, addRecentSearch } from "@/components/SearchAutocomplete";
 import { usePrefetchAttraction } from "@/hooks/usePrefetchDetail";
 import {
@@ -613,21 +614,34 @@ export default function Attractions() {
                   onMouseEnter={() => prefetchAttraction(createSlug(attraction.name))}
                 >
                   <Card className="h-full hover:shadow-lg transition-all duration-200 hover:-translate-y-1 rounded-2xl overflow-hidden">
-                    {attraction.image_url ? (
-                      <OptimizedImage
-                        src={attraction.image_url}
-                        alt={`${attraction.name} - ${attraction.type} in Des Moines`}
-                        width={640}
-                        height={360}
-                        className="transition-transform duration-200 hover:scale-105 object-cover"
-                        containerClassName="aspect-video overflow-hidden"
-                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                      />
-                    ) : (
-                      <div className="aspect-video bg-gradient-to-br from-[#2D1B69] to-[#DC143C] flex items-center justify-center" role="img" aria-label={`No image available for ${attraction.name}`}>
-                        <Landmark className="h-12 w-12 text-white/40" />
+                    <div className="relative">
+                      {attraction.image_url ? (
+                        <OptimizedImage
+                          src={attraction.image_url}
+                          alt={`${attraction.name} - ${attraction.type} in Des Moines`}
+                          width={640}
+                          height={360}
+                          className="transition-transform duration-200 hover:scale-105 object-cover"
+                          containerClassName="aspect-video overflow-hidden"
+                          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                        />
+                      ) : (
+                        <div className="aspect-video bg-gradient-to-br from-[#2D1B69] to-[#DC143C] flex items-center justify-center" role="img" aria-label={`No image available for ${attraction.name}`}>
+                          <Landmark className="h-12 w-12 text-white/40" />
+                        </div>
+                      )}
+                      {/* Save (favorite) overlay — stopPropagation handled inside */}
+                      <div className="absolute top-3 right-3 z-20">
+                        <FavoriteButton
+                          contentType="attraction"
+                          contentId={attraction.id}
+                          itemName={attraction.name}
+                          size="icon"
+                          variant="ghost"
+                          className="h-9 w-9 rounded-full bg-white/90 hover:bg-white shadow-md backdrop-blur"
+                        />
                       </div>
-                    )}
+                    </div>
                     <CardContent className="p-5">
                       <div className="flex items-center justify-between mb-2">
                         <Badge
