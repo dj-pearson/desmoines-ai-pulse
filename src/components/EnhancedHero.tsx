@@ -1,4 +1,4 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useState, useEffect } from "react";
 import { Brain, MessageSquare, Mic, Sparkles, Users, Star, TrendingUp } from "lucide-react";
 import { Link } from "react-router-dom";
 import { QuickActions, QuickActionsMobile } from "./QuickActions";
@@ -36,6 +36,24 @@ export function EnhancedHero({
 }: EnhancedHeroProps) {
   const isMobile = useMediaQuery("(max-width: 768px)");
   const isNativeApp = isMobileApp();
+
+  // Defer the heavy 3D scene (three.js) off the critical path until the browser
+  // is idle, so it never rides first paint of `/` (WEB-PERF-003). The static
+  // gradient below fills the exact same space, so the upgrade causes no CLS.
+  const [show3D, setShow3D] = useState(false);
+  useEffect(() => {
+    if (isMobile || IS_NATIVE) return;
+    const w = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    };
+    if (typeof w.requestIdleCallback === "function") {
+      const handle = w.requestIdleCallback(() => setShow3D(true), { timeout: 3000 });
+      return () => w.cancelIdleCallback?.(handle);
+    }
+    const t = window.setTimeout(() => setShow3D(true), 1200);
+    return () => clearTimeout(t);
+  }, [isMobile]);
   // Compute greeting synchronously to avoid CLS from empty-to-filled text
   const hour = new Date().getHours();
   const greeting = hour < 12
@@ -64,11 +82,15 @@ export function EnhancedHero({
         className
       )}
     >
-      {/* 3D City Background – skip on mobile web (saves 800KB Three.js) and native apps */}
-      {HeroCityLite && !isMobile ? (
+      {/* 3D City Background – skip on mobile web (saves 800KB Three.js) and native
+          apps, and defer to idle on desktop so it's off the critical path. */}
+      {HeroCityLite && !isMobile && show3D ? (
         <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-[#0a0a1a] via-[#1a1a2e] to-[#2D1B69]" />}>
           <HeroCityLite />
         </Suspense>
+      ) : HeroCityLite && !isMobile ? (
+        // Desktop, pre-idle: identical static gradient so the 3D swap is CLS-free.
+        <div className="absolute inset-0 bg-gradient-to-br from-[#0a0a1a] via-[#1a1a2e] to-[#2D1B69]" />
       ) : (
         <div className="absolute inset-0 bg-gradient-to-br from-[#071e62] via-[#1a1a2e] to-[#2D1B69]">
           {/* Subtle grid pattern */}

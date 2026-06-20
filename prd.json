@@ -390,7 +390,7 @@
         "npm run validate passes"
       ],
       "priority": 25,
-      "passes": false,
+      "passes": true,
       "notes": "vite.config.ts already has manualChunks + a removeLazyPreloads transform — verify what it actually strips before changing it; the perf agent suspected modulepreload still pulls vendor chunks early."
     },
     {

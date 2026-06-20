@@ -4123,3 +4123,35 @@ passes. Note: trackSponsoredListing writes user_analytics best-effort.
   M src/components/SocialEventCard.tsx
   M src/pages/EventsPage.tsx
   M src/pages/Restaurants.tsx
+
+## 2026-06-20 — WEB-PERF-003 (defer heavy libraries off the critical path) [passes:true]
+
+Audited with `vite build`: heavy libs are code-split and NOT on the critical path.
+Entry index.html modulepreloads only vendor-react/ecosystem/supabase/ui/icons —
+NOT three/recharts/leaflet. Chunk sizes: vendor-three 797kB, vendor-recharts
+364kB, HeroCityLite 4.9kB (each its own chunk); leaflet rides the small lazy map
+chunks (EventLocationMap/EventsMap/etc.).
+
+What was already done: HeroCityLite (three.js) lazy + skipped on mobile/native;
+list-page maps lazy(); admin chart pages + SmartCalendar are route-level
+lazyWithRetry in App.tsx; Restaurant/Attraction details use LazyLocationMap.
+
+What this change added:
+- EnhancedHero: the 3D scene now upgrades on requestIdleCallback (timeout 3s;
+  setTimeout 1.2s fallback) instead of mounting on first paint — so vendor-three
+  loads on idle, never on first paint of /. Desktop pre-idle shows the SAME
+  static gradient as the Suspense fallback, so the swap is structurally CLS-free.
+  Mobile stays static.
+- EventDetails: switched the eager EventLocationMap import to LazyLocationMap
+  (Suspense + fixed-height placeholder), matching Restaurant/Attraction details —
+  leaflet now lazy on all three detail pages.
+
+### Verification
+vite build chunk audit (above) confirms separation; tsc clean; eslint 0 errors.
+CAVEAT: the Lighthouse LCP/TTI numbers and a live CLS measurement need a browser
+(not available in-container) — the static-gradient swap is CLS-free by
+construction (same absolute-inset div), but confirm with Lighthouse before/after.
+
+### Files
+  M src/components/EnhancedHero.tsx
+  M src/pages/EventDetails.tsx
