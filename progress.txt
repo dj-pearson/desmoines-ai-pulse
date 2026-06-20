@@ -4236,3 +4236,69 @@ by design.
   M src/components/RestaurantCard.tsx
   M src/pages/Attractions.tsx
   A src/components/__tests__/OptimizedImage.test.ts
+
+## 2026-06-20 — WEB-UX-001 (URL-synced filter state on Events/Restaurants/Attractions) [passes:true]
+
+### What shipped
+New reusable hook src/hooks/useUrlFilterState.ts makes the query string the
+single source of truth for list-page filters (get/getList/set/clear over
+react-router useSearchParams; values equal to their default are dropped from
+the URL; functional setParams updater so concurrent setters compose).
+
+- Events (EventsPage.tsx): q, category, date (preset key), loc, price, sort,
+  page all live in the URL. Search input stays local for instant typing and a
+  debounced (300ms, replace:true) effect writes it to ?q= so keystrokes don't
+  stack history; a pull effect syncs the input back on back/forward. Quick date
+  presets toggle ?date=; the query recomputes preset bounds itself. Calendar
+  custom ranges stay ephemeral (only presets are serialized, per the AC).
+- Restaurants (Restaurants.tsx): the whole RestaurantFilterOptions object is
+  derived from the URL (q, cuisine, price, loc, tags, rating "min-max", sort,
+  feat, open) via buildRestaurantFilters; setFilters serializes the next object
+  back. Drop-in for the old useState setter (accepts object or updater).
+- Attractions (Attractions.tsx): q, type, rating, feat, sort, page. Search
+  filters in-memory (instant) with the URL mirrored debounced.
+- All three: each filter setter resets page to 1 in the same URL write (removed
+  the old `useEffect(()=>setPage(1),[filters])`); Clear-all clear()s the params.
+- SEO landing routes (/events/today, /events/free, /restaurants/open-now, …)
+  are independent page components — untouched, still work, and ignore/compose
+  extra params.
+
+### Verification
+- Unit: src/hooks/__tests__/useUrlFilterState.test.tsx (5 tests, MemoryRouter)
+  covers read/fallback, getList CSV, default-omission on write, array
+  serialization + null removal, and clear(). vitest 119/119 green.
+- eslint: 0 errors on all four changed files; `npm run validate` exits 0.
+- Types: see the TYPE-CHECK FINDING below — verified via a scoped `tsc -p` over
+  EventsPage + Restaurants + Attractions + the hook (+ their import graph).
+  I introduced ZERO new type errors and FIXED 2 pre-existing EventsPage ones
+  (undefined `setShowMobileFilters`; the onDateChange mode-union mismatch).
+- Playwright: extended tests/search-filters.spec.ts with a "URL-synced filter
+  state" describe (search→URL debounced, deep-link applies on mount, back
+  restores the filtered URL+input, shared URL reproducible). CAVEAT: the
+  Playwright suite needs a browser + running app + DB, which aren't available
+  in this container — run `npm run test` (search-filters) in CI/locally to
+  confirm green.
+
+### ⚠️ TYPE-CHECK FINDING (please triage)
+`npm run type-check` (= `tsc --noEmit` against the root tsconfig.json, which has
+`"files": []` + project references) is effectively a NO-OP: without `tsc -b` the
+referenced projects aren't checked, so `npm run validate` never actually
+type-checks src/. Consequence: real type errors have accumulated unnoticed.
+A full `tsc -p tsconfig.app.json` currently reports ~43 errors across the repo
+(e.g. Footer.tsx newsletter_subscribers not in generated types; useVoting.ts;
+useActiveAds placement union; EnhancedLocalSEO props). Two are latent
+ReferenceErrors that would crash on click and the no-op check hid:
+  - src/pages/EventsPage.tsx — `setShowMobileFilters` (FIXED here).
+  - src/pages/Restaurants.tsx ~835 — `setActiveCuisineQuick` (still broken;
+    orphaned call in the cuisine-quick button onClick — NOT fixed, out of scope).
+Recommend a follow-up chore: change type-check to `tsc -b` (or
+`tsc -p tsconfig.app.json`), then burn down the backlog. Note `tsc` needs a
+healthy heap; it OOMs under memory pressure in this container.
+
+### Files
+  A src/hooks/useUrlFilterState.ts
+  A src/hooks/__tests__/useUrlFilterState.test.tsx
+  M src/pages/EventsPage.tsx
+  M src/pages/Restaurants.tsx
+  M src/pages/Attractions.tsx
+  M tests/search-filters.spec.ts

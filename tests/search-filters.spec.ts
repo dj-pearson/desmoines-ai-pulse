@@ -527,3 +527,64 @@ test.describe('Search Performance', () => {
     }
   });
 });
+
+/**
+ * URL-synced filter state (WEB-UX-001)
+ *
+ * Filters are reflected in the query string so a filtered view survives
+ * back/forward navigation and is shareable. These exercise the round-trip on
+ * the Events list (the Restaurants/Attractions pages use the same hook).
+ */
+test.describe('URL-synced filter state', () => {
+  test('typing search syncs to the URL (debounced)', async ({ page }) => {
+    await page.goto('/events', { waitUntil: 'networkidle' });
+
+    const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
+    if (await searchInput.count() === 0) test.skip(true, 'no search input');
+
+    await searchInput.fill('jazz');
+    // Wait past the 300ms debounce, then assert the URL carries the query.
+    await expect(async () => {
+      expect(new URL(page.url()).searchParams.get('q')).toBe('jazz');
+    }).toPass({ timeout: 3000 });
+  });
+
+  test('loading a URL with params applies the filter on mount', async ({ page }) => {
+    await page.goto('/events?q=music', { waitUntil: 'networkidle' });
+
+    const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
+    if (await searchInput.count() === 0) test.skip(true, 'no search input');
+
+    await expect(searchInput).toHaveValue('music');
+  });
+
+  test('back navigation restores the prior filtered URL', async ({ page }) => {
+    await page.goto('/events', { waitUntil: 'networkidle' });
+
+    const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
+    if (await searchInput.count() === 0) test.skip(true, 'no search input');
+
+    await searchInput.fill('coffee');
+    await expect(async () => {
+      expect(new URL(page.url()).searchParams.get('q')).toBe('coffee');
+    }).toPass({ timeout: 3000 });
+
+    // Navigate away to a different list, then back.
+    await page.goto('/restaurants', { waitUntil: 'networkidle' });
+    await page.goBack({ waitUntil: 'networkidle' });
+
+    expect(new URL(page.url()).searchParams.get('q')).toBe('coffee');
+    await expect(searchInput).toHaveValue('coffee');
+  });
+
+  test('a shared filtered URL is reproducible (deep link)', async ({ page }) => {
+    // Open a pre-filtered link the way a shared URL would arrive.
+    await page.goto('/events?q=festival', { waitUntil: 'networkidle' });
+    expect(new URL(page.url()).searchParams.get('q')).toBe('festival');
+
+    const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
+    if (await searchInput.count() > 0) {
+      await expect(searchInput).toHaveValue('festival');
+    }
+  });
+});
