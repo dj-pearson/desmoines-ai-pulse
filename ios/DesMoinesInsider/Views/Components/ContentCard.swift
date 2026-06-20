@@ -490,7 +490,13 @@ struct CardFavoriteButton: View {
             }
         }
         .buttonStyle(.plain)
+        // ≥44pt tap target without growing the visible heart (IOS-AUDIT-UX-002).
+        .minHitTarget()
         .accessibilityLabel(isFavorited ? "Remove \(name) from saved" : "Save \(name)")
+        // Expose saved/not-saved state to VoiceOver (IOS-AUDIT-UX-001) so it
+        // announces the toggle without re-reading the action verb.
+        .accessibilityValue(isFavorited ? "Saved" : "Not saved")
+        .accessibilityAddTraits(isFavorited ? .isSelected : [])
     }
 
     private var heartColor: Color {

@@ -3665,3 +3665,20 @@ and ship a staged release.
   M ios/DesMoinesInsider/Services/SupabaseService.swift
   M ios/DesMoinesInsider/Services/CertificatePinningService.swift
   M ios/DesMoinesInsider/Configuration/Config.swift
+
+## 2026-06-20 — iOS UX-001 / UX-002 (favorite a11y state + 44pt targets) [passes:true]
+
+- UX-001: CardFavoriteButton (shared across event/restaurant/attraction cards)
+  now exposes .accessibilityValue(Saved/Not saved) + .isSelected trait. Same
+  added to the EventDetailView and RestaurantDetailView toolbar favorite buttons.
+  The Remind-Me button already had .accessibilitySelected; share buttons are
+  pure actions (no toggle state). AttractionDetail has no detail-level favorite.
+- UX-002: CardFavoriteButton and FilterChipView now use the existing
+  .minHitTarget() helper for a ≥44pt tap area while keeping the visible heart
+  (28/36pt) and capsule compact.
+
+### Files
+  M ios/DesMoinesInsider/Views/Components/ContentCard.swift
+  M ios/DesMoinesInsider/Views/Components/FilterChipView.swift
+  M ios/DesMoinesInsider/Views/EventDetail/EventDetailView.swift
+  M ios/DesMoinesInsider/Views/Restaurants/RestaurantDetailView.swift

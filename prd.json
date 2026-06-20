@@ -1267,7 +1267,7 @@
         "No change to visible label text or layout"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: CardFavoriteButton sets only .accessibilityLabel (ContentCard.swift:493) and flips the text; no .accessibilityValue / .isSelected trait — VoiceOver announces a plain button."
     },
     {
@@ -1281,7 +1281,7 @@
         "Verified with Accessibility Inspector hit-target audit"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: ContentCard.swift:483-484 inline heart is 28x28pt (overlay 36pt), both under 44pt, no .minHitTarget() (helper exists at View+Accessibility.swift:12). FilterChipView.swift:31-32 ~28-32pt tall."
     },
     {
