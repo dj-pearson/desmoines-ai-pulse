@@ -374,7 +374,7 @@
         "npm run validate passes"
       ],
       "priority": 24,
-      "passes": false,
+      "passes": true,
       "notes": "Two concrete wins flagged with line evidence by the perf audit; both are pure efficiency with zero UX change."
     },
     {

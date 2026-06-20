@@ -70,36 +70,44 @@ export function useTrending(options: TrendingOptions = {}) {
         return;
       }
 
-      // Fetch actual content if requested
-      const enrichedItems: TrendingItem[] = [];
-      
-      for (const item of trendingData) {
-        let content = null;
-        
-        if (includeContent) {
-          try {
-            const tableName = getTableName(item.content_type);
-            const { data: contentData } = await supabase
-              .from(tableName as never)
-              .select('*')
-              .eq('id', item.content_id)
-              .single();
-            content = contentData;
-          } catch (_contentError) {
-            console.log(`Could not fetch content for ${item.content_type}:${item.content_id}`);
-          }
+      // Batch-fetch content per type in a single .in() query each — no more
+      // one-query-per-item N+1. (WEB-PERF-002)
+      const contentByKey = new Map<string, Record<string, unknown>>();
+      if (includeContent) {
+        const idsByType = new Map<string, string[]>();
+        for (const item of trendingData) {
+          const list = idsByType.get(item.content_type) || [];
+          list.push(item.content_id);
+          idsByType.set(item.content_type, list);
         }
-
-        enrichedItems.push({
-          id: item.id || `${item.content_type}-${item.content_id}`,
-          contentType: item.content_type,
-          contentId: item.content_id,
-          content,
-          trendingScore: item[`score_${timeWindow}`] || item.score || 0,
-          timeWindow,
-          reason: generateTrendingReason(item, timeWindow)
-        });
+        await Promise.all(
+          Array.from(idsByType.entries()).map(async ([type, ids]) => {
+            try {
+              const tableName = getTableName(type);
+              const { data: rows } = await supabase
+                .from(tableName as never)
+                .select('*')
+                .in('id', ids);
+              (rows as Array<Record<string, unknown>> | null)?.forEach((row) => {
+                contentByKey.set(`${type}:${row.id as string}`, row);
+              });
+            } catch (_contentError) {
+              console.log(`Could not batch-fetch content for ${type}`);
+            }
+          })
+        );
       }
+
+      const enrichedItems: TrendingItem[] = trendingData.map((item) => ({
+        id: item.id || `${item.content_type}-${item.content_id}`,
+        contentType: item.content_type,
+        contentId: item.content_id,
+        content:
+          contentByKey.get(`${item.content_type}:${item.content_id}`) ?? null,
+        trendingScore: item[`score_${timeWindow}`] || item.score || 0,
+        timeWindow,
+        reason: generateTrendingReason(item, timeWindow),
+      }));
 
       setTrendingItems(enrichedItems);
     } catch (err) {

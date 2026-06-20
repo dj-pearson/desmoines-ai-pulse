@@ -3717,3 +3717,32 @@ type-check PASSES (exit 0); eslint changed files 0 errors.
   M src/components/FavoriteButton.tsx
   M src/hooks/useFavorites.ts
   M src/hooks/useContentFavorites.ts
+
+## 2026-06-20 — WEB-PERF-002 (Kill wasteful query patterns) [passes:true]
+
+### Trending N+1 eliminated (useTrendingContent.ts)
+The enrichment loop fired one .single() per trending item. Now content is
+batch-fetched per content type with a single .in('id', ids) query each, results
+mapped back via a Map keyed by `${type}:${id}`. Query count on a trending
+surface: 1 (scores) + 1 per distinct content type. Typical ForYou/trending rails
+filter to a single contentType -> 2 queries (was 1 + N).
+
+### Filter options now server-side DISTINCT (WEB-PERF-002)
+New migration 20260620000002_restaurant_filter_options.sql adds RPC
+get_restaurant_filter_options() returning {cuisines:[{cuisine,count}], locations:[]}
+(SECURITY DEFINER, granted anon+authenticated, excludes merged rows).
+useCuisineCounts + useRestaurantFilterOptions rewritten to useQuery against the
+RPC with staleTime REFERENCE (1h) and a SHARED query key (one fetch, cached) —
+replacing the two full-column scans that pulled every cuisine/location row to
+dedupe in JS. Legacy client-side scan kept as a pre-migration fallback so the UI
+renders identical options before the function is deployed.
+
+### Verification
+type-check PASSES (exit 0); eslint changed files 0 errors (pre-existing warnings
+only). Identical option output guaranteed by the fallback path mirroring the old
+logic.
+
+### Files
+  A supabase/migrations/20260620000002_restaurant_filter_options.sql
+  M src/hooks/useTrendingContent.ts
+  M src/hooks/useRestaurants.ts
