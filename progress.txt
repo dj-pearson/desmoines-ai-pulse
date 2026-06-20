@@ -4368,3 +4368,51 @@ reorder; (c) cohort conversion analysis depends on the user_analytics pipeline.
   M src/pages/AttractionDetails.tsx
   M src/pages/Index.tsx
   M src/pages/UserDashboard.tsx
+
+## 2026-06-20 — CHORE: real type-check available + type-backlog triage (follow-up to WEB-UX-001 finding)
+
+### Context
+WEB-UX-001 surfaced that `npm run type-check` (`tsc --noEmit` on the root
+tsconfig, which has `"files": []` + references) checks NOTHING without `tsc -b`.
+A real `tsc -p tsconfig.app.json` reveals 124 errors across 43 files.
+
+### Root cause of the backlog (important)
+~80 of the 124 are a SINGLE root cause: the generated
+src/integrations/supabase/types.ts is STALE — it predates ~12 tables/RPCs that
+the app already uses: restaurant_menus, restaurant_menu_items,
+restaurant_analytics, user_preferences, newsletter_subscribers,
+swipe_interactions, media_assets, image_optimization_queue, event_analytics,
+device_tokens, consent_records, ad_rate_card (+ RPCs search_menu_items,
+increment_restaurant_view, increment_event_view, batch_increment_views,
+validate_ad_creative_upload, postgis fns). Because they're absent from the
+Database type, every `.from("<table>")` / `.rpc("<fn>")` errors (TS2769/2339/
+2345) and chains go "excessively deep" (TS2589, 12 of them).
+THE FIX for these is to regenerate types — an OWNER/DB action I can't run here:
+  supabase gen types typescript --linked > src/integrations/supabase/types.ts
+That single regen should clear ~80 of the 124.
+
+The remaining ~20-30 are genuine, hand-fixable bugs (Json→string coercions,
+unknown→Key, a `const` assertion on a non-literal, an ad-placement union
+mismatch, two undefined-name ReferenceErrors).
+
+### What I changed now (safe, non-breaking)
+- package.json: kept `type-check` as-is (so `validate` stays green and this
+  branch's CI isn't red-walled on 124 mostly-DB-blocked errors) and ADDED
+  `type-check:app` = `tsc -p tsconfig.app.json --noEmit && tsc -p
+  tsconfig.node.json --noEmit` — the REAL check, runnable today.
+- Fixed a real crash: src/pages/Restaurants.tsx cuisine quick-filter called the
+  undefined `setActiveCuisineQuick('')` (ReferenceError on click) — removed the
+  orphaned call (the setFilters + scroll already do the work). (The sibling
+  `setShowMobileFilters` crasher in EventsPage was fixed under WEB-UX-001.)
+
+### Recommended sequence to finish the burndown (owner + me)
+1. OWNER: run `supabase gen types typescript` to refresh types.ts (clears ~80).
+2. ME: fix the ~20-30 residual genuine errors, then
+3. flip `type-check` → `type-check:app` (and point `validate` at it) so CI
+   actually type-checks going forward.
+Doing step 3 before steps 1-2 would make `validate`/CI red on errors no PR can
+fix without DB access — hence the staged approach.
+
+NOTE: a full `tsc -p tsconfig.app.json` is very slow (~4-5 min) and memory-heavy
+(~3.5GB) in this container; scoped `tsc -p <tmp-include>.json` over a file +
+its import graph is the practical local check (~90-180s).

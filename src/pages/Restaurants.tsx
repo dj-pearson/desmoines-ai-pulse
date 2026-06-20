@@ -832,7 +832,6 @@ export default function Restaurants() {
                       key={cuisine}
                       onClick={() => {
                         setFilters((prev) => ({ ...prev, cuisine: [cuisine] }));
-                        setActiveCuisineQuick('');
                         document.getElementById('all-restaurants-heading')?.scrollIntoView({ behavior: 'smooth' });
                       }}
                       className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border border-gray-200 dark:border-gray-700 bg-white dark:bg-card text-gray-700 dark:text-gray-300 hover:border-[#2D1B69] dark:hover:border-primary hover:bg-[#2D1B69]/5 dark:hover:bg-primary/10 transition-all duration-200 shadow-sm"
