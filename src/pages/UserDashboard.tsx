@@ -35,6 +35,7 @@ import { useUserSubmittedEvents, useDeleteEvent } from "@/hooks/useUserSubmitted
 import { useSubscription } from "@/hooks/useSubscription";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useCampaigns } from "@/hooks/useCampaigns";
+import { RecentlyViewedList } from "@/components/RecentlyViewedList";
 import { PremiumBadge } from "@/components/PremiumBadge";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import EventSubmissionForm from "@/components/EventSubmissionForm";
@@ -294,6 +295,10 @@ export default function UserDashboard() {
                   </p>
                 </CardContent>
               </Card>
+            </div>
+
+            <div className="mt-6">
+              <RecentlyViewedList />
             </div>
 
             <div className="mt-6">

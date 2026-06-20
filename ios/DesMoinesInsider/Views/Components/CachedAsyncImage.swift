@@ -15,11 +15,16 @@ struct CachedAsyncImage<Placeholder: View>: View {
     /// can display. Set false for a zoomable full-screen viewer that needs the
     /// full resolution. Full-quality bytes are always kept on disk regardless.
     var downsamples: Bool = true
+    /// Optional VoiceOver label. When nil the image is treated as decorative and
+    /// hidden from accessibility — cards and detail screens supply their own
+    /// combined labels, so a bare image announcement would be noise (IOS-AUDIT-UX-004).
+    var accessibilityLabel: String? = nil
     @ViewBuilder let placeholder: () -> Placeholder
 
     @State private var image: UIImage?
     @State private var thumbnail: UIImage?
     @State private var isLoading = true
+    @State private var loadFailed = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -36,6 +41,8 @@ struct CachedAsyncImage<Placeholder: View>: View {
                     .scaledToFill()
                     .clipped()
                     .blur(radius: 12)
+            } else if loadFailed {
+                failureState
             } else if isLoading {
                 placeholder()
                     .overlay {
@@ -51,6 +58,31 @@ struct CachedAsyncImage<Placeholder: View>: View {
         .task(id: url) {
             await loadImage()
         }
+        .imageAccessibility(label: accessibilityLabel, failed: loadFailed)
+    }
+
+    /// Distinguishable failed state with tap-to-retry (IOS-AUDIT-UX-004).
+    private var failureState: some View {
+        placeholder()
+            .overlay {
+                VStack(spacing: 4) {
+                    Image(systemName: "photo")
+                        .foregroundStyle(.secondary)
+                    if url != nil {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { retry() }
+    }
+
+    private func retry() {
+        loadFailed = false
+        isLoading = true
+        Task { await loadImage() }
     }
 
     private func loadImage() async {
@@ -60,8 +92,10 @@ struct CachedAsyncImage<Placeholder: View>: View {
         }
 
         // Cap decode size to the device's native width unless full-res is asked
-        // for (zoomable viewer). nil == no downsampling.
-        let maxPixels: CGFloat? = downsamples ? UIScreen.main.nativeBounds.width : nil
+        // for (zoomable viewer). nil == no downsampling. Resolved once on the
+        // main actor (IOS-AUDIT-PERF-002) — no UIScreen.main read after a
+        // suspension point.
+        let maxPixels: CGFloat? = downsamples ? await DeviceMetrics.nativePixelWidth : nil
 
         // 1. Memory cache (instant)
         if let cached = ImageCache.shared.getFromMemory(urlString) {
@@ -105,9 +139,17 @@ struct CachedAsyncImage<Placeholder: View>: View {
 
                 // Release thumbnail from memory
                 thumbnail = nil
+                loadFailed = false
+            } else {
+                // Bytes downloaded but undecodable — show the failed state.
+                loadFailed = true
             }
         } catch {
-            // Silently fail — placeholder shown
+            // Don't flag a cancelled task (cell recycled / view gone) as a
+            // user-visible failure (IOS-AUDIT-UX-004 / PERF-003).
+            if !(error is CancellationError) && !Task.isCancelled {
+                loadFailed = true
+            }
         }
 
         isLoading = false
@@ -151,7 +193,9 @@ final class ImageCache: @unchecked Sendable {
         memoryCache.countLimit = 200
         memoryCache.totalCostLimit = 50 * 1024 * 1024 // 50 MB
 
-        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        // Fall back to the temporary directory rather than crashing if the
+        // caches directory is somehow unavailable (IOS-AUDIT-PERF-012).
+        let caches = Self.cachesDirectory()
         // v2: prior versions hashed with `key.utf8.hex.prefix(64)`, which is a
         // 32-byte URL prefix — every Supabase storage URL collides. New
         // directory name ensures clients with poisoned v1 caches start fresh.
@@ -164,6 +208,33 @@ final class ImageCache: @unchecked Sendable {
         diskQueue.async { [weak self] in
             self?.pruneDiskIfNeeded()
         }
+
+        // Release memory under pressure so an image-heavy scroll doesn't get the
+        // app jetsam-killed; re-prune disk when backgrounded (IOS-AUDIT-PERF-001).
+        // The singleton lives for the process lifetime, so we never remove these.
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.memoryCache.removeAllObjects()
+            AppLogger.cache.info("Image memory cache purged on memory warning")
+        }
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification,
+            object: nil, queue: nil
+        ) { [weak self] _ in
+            self?.diskQueue.async { self?.pruneDiskIfNeeded() }
+        }
+    }
+
+    /// Caches directory with a temp-dir fallback (IOS-AUDIT-PERF-012). Never
+    /// force-unwraps so a sandbox edge case degrades instead of crashing.
+    static func cachesDirectory() -> URL {
+        if let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
+            return dir
+        }
+        AppLogger.cache.error("Caches directory unavailable; falling back to temporary directory")
+        return FileManager.default.temporaryDirectory
     }
 
     // MARK: - Memory
@@ -186,6 +257,24 @@ final class ImageCache: @unchecked Sendable {
     /// resolution). The full-quality bytes stay on disk; only the returned
     /// in-memory bitmap is downsampled.
     func getFromDisk(_ key: String, maxPixelSize: CGFloat? = nil) async -> UIImage? {
+        // Cheap IO (existence/meta/bytes) on the serial disk queue...
+        guard let data = await readDiskBytes(for: key) else { return nil }
+
+        // ...but bail before the expensive decode if the cell was recycled mid
+        // scroll, so fast scrolling doesn't burn CPU decoding off-screen images
+        // (IOS-AUDIT-PERF-003).
+        if Task.isCancelled { return nil }
+
+        // Decode off the single serial queue so 100 image cells don't serialize
+        // behind one another's decode work.
+        return await Task.detached(priority: .utility) {
+            ImageDownsampler.decode(data, maxPixelSize: maxPixelSize)
+        }.value
+    }
+
+    /// Reads the raw cached bytes for `key` (honoring expiry) on the serial disk
+    /// queue. Returns nil on miss/expiry; decode is performed by the caller.
+    private func readDiskBytes(for key: String) async -> Data? {
         let fileURL = diskFileURL(for: key)
         let metaURL = diskMetaURL(for: key)
 
@@ -206,13 +295,7 @@ final class ImageCache: @unchecked Sendable {
                     return
                 }
 
-                guard let data = try? Data(contentsOf: fileURL),
-                      let image = ImageDownsampler.decode(data, maxPixelSize: maxPixelSize) else {
-                    continuation.resume(returning: nil)
-                    return
-                }
-
-                continuation.resume(returning: image)
+                continuation.resume(returning: try? Data(contentsOf: fileURL))
             }
         }
     }
@@ -327,6 +410,44 @@ private extension UIImage {
     var approxMemoryCost: Int {
         guard let cg = cgImage else { return 0 }
         return cg.bytesPerRow * cg.height
+    }
+}
+
+// MARK: - Device metrics (IOS-AUDIT-PERF-002)
+
+/// Native pixel width of the device, resolved once on the main actor from the
+/// active window scene (not the deprecated, main-actor-unsafe `UIScreen.main`).
+/// Cached so repeated image loads don't re-query the scene graph.
+private enum DeviceMetrics {
+    @MainActor private static var cachedNativeWidth: CGFloat?
+
+    @MainActor static var nativePixelWidth: CGFloat {
+        if let cachedNativeWidth { return cachedNativeWidth }
+        let width = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?
+            .screen.nativeBounds.width
+            ?? 1170 // ~iPhone native width fallback if no scene is attached yet
+        cachedNativeWidth = width
+        return width
+    }
+}
+
+// MARK: - Image accessibility (IOS-AUDIT-UX-004)
+
+private extension View {
+    /// Labels the image for VoiceOver when a label is supplied, otherwise hides
+    /// the decorative image so cards/detail screens own the announcement.
+    @ViewBuilder
+    func imageAccessibility(label: String?, failed: Bool) -> some View {
+        if let label, !label.isEmpty {
+            self
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text(failed ? "\(label), image failed to load" : label))
+                .accessibilityAddTraits(.isImage)
+        } else {
+            self.accessibilityHidden(true)
+        }
     }
 }
 

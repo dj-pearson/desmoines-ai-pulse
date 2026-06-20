@@ -7,6 +7,10 @@
  * >= 4.5:1 contrast on the card surface; solid badge backgrounds pair with
  * white text and read well in both themes. Image-fallback gradients are
  * decorative (no text on top) so they don't need a separate dark value.
+ *
+ * NOTE: exports both the `getEventCategoryStyle`/`getEventCategoryBadgeClass`
+ * names and the legacy `getCategoryStyle`/`CUISINE_GRADIENTS`/
+ * `DEFAULT_CATEGORY_STYLE` names so all call sites resolve.
  */
 
 export interface CategoryStyle {
@@ -18,7 +22,7 @@ export interface CategoryStyle {
   icon: string;
 }
 
-const DEFAULT_CATEGORY_STYLE: CategoryStyle = {
+export const DEFAULT_CATEGORY_STYLE: CategoryStyle = {
   bg: "bg-primary",
   text: "text-primary",
   icon: "bg-primary/10",
@@ -35,8 +39,8 @@ const EVENT_CATEGORY_STYLES: ReadonlyArray<{ match: readonly string[]; style: Ca
   { match: ["business", "network"], style: { bg: "bg-slate-600", text: "text-slate-600 dark:text-slate-300", icon: "bg-slate-600/10" } },
 ];
 
-/** Full {bg,text,icon} token for an event category (used by SocialEventCard). */
-export function getEventCategoryStyle(category?: string): CategoryStyle {
+/** Full {bg,text,icon} token for an event category. */
+export function getEventCategoryStyle(category?: string | null): CategoryStyle {
   if (!category) return DEFAULT_CATEGORY_STYLE;
   const c = category.toLowerCase();
   for (const { match, style } of EVENT_CATEGORY_STYLES) {
@@ -45,15 +49,16 @@ export function getEventCategoryStyle(category?: string): CategoryStyle {
   return DEFAULT_CATEGORY_STYLE;
 }
 
+/** Legacy alias (pre-merge name). */
+export const getCategoryStyle = getEventCategoryStyle;
+
 /** Convenience badge class ("bg-... text-white") for an event category. */
-export function getEventCategoryBadgeClass(category?: string): string {
+export function getEventCategoryBadgeClass(category?: string | null): string {
   return `${getEventCategoryStyle(category).bg} text-white`;
 }
 
-const FALLBACK_GRADIENT = "from-[#2D1B69] to-[#DC143C]";
-
 /** Cuisine -> decorative image-fallback gradient (used by RestaurantCard). */
-const CUISINE_GRADIENTS: Record<string, string> = {
+export const CUISINE_GRADIENTS: Record<string, string> = {
   Italian: "from-red-600 to-orange-500",
   Mexican: "from-green-600 to-yellow-500",
   Chinese: "from-red-700 to-amber-500",
@@ -69,15 +74,17 @@ const CUISINE_GRADIENTS: Record<string, string> = {
   Seafood: "from-cyan-500 to-blue-600",
   Pizza: "from-red-500 to-yellow-500",
   Steakhouse: "from-stone-700 to-red-800",
+  default: "from-[#2D1B69] to-[#DC143C]",
 };
 
-export function getCuisineGradient(cuisine?: string): string {
-  if (!cuisine) return FALLBACK_GRADIENT;
+export function getCuisineGradient(cuisine?: string | null): string {
+  if (!cuisine) return CUISINE_GRADIENTS.default;
   const c = cuisine.toLowerCase();
   for (const [key, value] of Object.entries(CUISINE_GRADIENTS)) {
+    if (key === "default") continue;
     if (c.includes(key.toLowerCase())) return value;
   }
-  return FALLBACK_GRADIENT;
+  return CUISINE_GRADIENTS.default;
 }
 
 /** Lodging type -> decorative image-fallback gradient (used by HotelCard). */
@@ -92,5 +99,5 @@ const HOTEL_TYPE_GRADIENTS: Record<string, string> = {
 
 export function getHotelTypeGradient(type?: string | null): string {
   if (type && HOTEL_TYPE_GRADIENTS[type]) return HOTEL_TYPE_GRADIENTS[type];
-  return FALLBACK_GRADIENT;
+  return CUISINE_GRADIENTS.default;
 }

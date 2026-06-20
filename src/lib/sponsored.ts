@@ -4,6 +4,10 @@
  * is_sponsored (+ optional sponsored_until expiry) — distinct from paid
  * campaign ads (ad_impressions/ad_clicks). They are clearly labeled, shown to
  * all tiers, and tracked under their own inventory class in user_analytics.
+ *
+ * NOTE: exports both the `isSponsoredActive`/`arrangeSponsored` names and the
+ * `isActivelySponsored`/`arrangeSponsoredFirst` aliases so all call sites
+ * (and tests) resolve after the branch merge.
  */
 import { supabase } from "@/integrations/supabase/client";
 import { storage } from "@/lib/safeStorage";
@@ -24,8 +28,12 @@ export interface SponsorableItem {
 export function isSponsoredActive(item: SponsorableItem | null | undefined): boolean {
   if (!item?.is_sponsored) return false;
   if (!item.sponsored_until) return true;
-  return new Date(item.sponsored_until).getTime() > Date.now();
+  const until = new Date(item.sponsored_until).getTime();
+  return Number.isFinite(until) ? until > Date.now() : true;
 }
+
+/** Legacy alias (pre-merge name). */
+export const isActivelySponsored = isSponsoredActive;
 
 /**
  * Move up to {@link SPONSORED_CAP} active-sponsored items to the front,
@@ -44,6 +52,11 @@ export function arrangeSponsored<T extends SponsorableItem>(
     else organic.push(item);
   }
   return sponsored.length === 0 ? items : [...sponsored, ...organic];
+}
+
+/** Legacy alias (pre-merge name). */
+export function arrangeSponsoredFirst<T extends SponsorableItem>(items: T[], cap = SPONSORED_CAP): T[] {
+  return arrangeSponsored(items, cap);
 }
 
 function getSessionId(): string {

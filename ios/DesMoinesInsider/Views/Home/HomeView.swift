@@ -72,8 +72,9 @@ struct HomeView: View {
                     EventInlineFilters(viewModel: viewModel)
                         .padding(.top, 2)
 
-                    // Error banner
-                    if let error = viewModel.errorMessage {
+                    // Stale-data error note (feed has content but a refresh failed);
+                    // the empty+error case is handled by eventsList's ErrorStateView.
+                    if let error = viewModel.errorMessage, !viewModel.events.isEmpty {
                         errorBanner(error)
                     }
 
@@ -382,6 +383,13 @@ struct HomeView: View {
                     actionTitle: "Retry",
                     action: { Task { await viewModel.refresh() } }
                 )
+                .padding(.top, 40)
+            } else if viewModel.events.isEmpty, let error = viewModel.errorMessage {
+                // Genuine load error (online) — show the shared error/retry state
+                // instead of a misleading "No Events Found" (UX-005).
+                ErrorStateView(message: error) {
+                    Task { await viewModel.refresh() }
+                }
                 .padding(.top, 40)
             } else if viewModel.events.isEmpty {
                 EmptyStateView(

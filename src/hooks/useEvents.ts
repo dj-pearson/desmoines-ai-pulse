@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { EVENT_LIST_COLUMNS } from "@/lib/listColumns";
 import { Database } from "@/integrations/supabase/types";
 
 type Event = Database["public"]["Tables"]["events"]["Row"];
@@ -47,7 +48,7 @@ export function useEvents(filters: EventFilters = {}) {
       const sortBy: EventSortBy = filters.sortBy ?? "soonest";
       let query = supabase
         .from("events")
-        .select("*", { count: "exact" })
+        .select(EVENT_LIST_COLUMNS, { count: "exact" })
         .gte("date", today) // Only today and future events
         .neq("is_merged", true) // Hide rows merged into a duplicate (WEB-AUTO-005)
         .neq("is_hidden", true); // Hide soft-hidden stale events (WEB-AUTO-006)

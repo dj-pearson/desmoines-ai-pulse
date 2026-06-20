@@ -16,12 +16,18 @@ struct AttractionsView: View {
                     VStack(spacing: 14) {
                         Color.clear.frame(height: 0).id("top")
 
-                        if let error = viewModel.errorMessage {
+                        // Stale-data error note (we have data but a refresh failed).
+                        if let error = viewModel.errorMessage, !viewModel.attractions.isEmpty {
                             errorBanner(error)
                         }
 
                         if viewModel.isLoading && viewModel.attractions.isEmpty {
                             ForEach(0..<4, id: \.self) { _ in AttractionCardSkeleton() }
+                        } else if let error = viewModel.errorMessage, viewModel.attractions.isEmpty {
+                            ErrorStateView(message: error) {
+                                Task { await viewModel.refresh() }
+                            }
+                            .padding(.top, 40)
                         } else if viewModel.attractions.isEmpty {
                             EmptyStateView(
                                 icon: "star.circle",
@@ -79,7 +85,9 @@ struct AttractionsView: View {
             }
             .refreshable {
                 await viewModel.refresh()
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                // Reflect the real outcome instead of always firing success (UX-005).
+                UINotificationFeedbackGenerator()
+                    .notificationOccurred(viewModel.errorMessage == nil ? .success : .error)
             }
             .navigationTitle("Explore")
             .searchable(

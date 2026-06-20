@@ -20,8 +20,8 @@ struct RestaurantsView: View {
                         // Ad banner for free users (hidden for subscribers)
                         AdSlot(.detail)
 
-                        // Error banner
-                        if let error = viewModel.errorMessage {
+                        // Stale-data error note (we have data but a refresh failed).
+                        if let error = viewModel.errorMessage, !viewModel.restaurants.isEmpty {
                             errorBanner(error)
                         }
 
@@ -30,6 +30,11 @@ struct RestaurantsView: View {
                             ForEach(0..<4, id: \.self) { _ in
                                 RestaurantCardSkeleton()
                             }
+                        } else if let error = viewModel.errorMessage, viewModel.restaurants.isEmpty {
+                            ErrorStateView(message: error) {
+                                Task { await viewModel.refresh() }
+                            }
+                            .padding(.top, 40)
                         } else if viewModel.restaurants.isEmpty {
                             EmptyStateView(
                                 icon: "fork.knife",

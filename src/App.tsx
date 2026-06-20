@@ -20,6 +20,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import BottomNav from "@/components/BottomNav";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { GuestFavoriteMigrator } from "@/components/GuestFavoriteMigrator";
+import { GlobalUpgradeModal } from "@/components/GlobalUpgradeModal";
 import { AccessibilityProvider } from "@/contexts/AccessibilityContext";
 import { AccessibilityWidget } from "@/components/AccessibilityWidget";
 import { SessionManager } from "@/components/auth/SessionManager";
@@ -281,6 +282,7 @@ const App = () => (
       <AuthProvider>
         <SessionManager />
         <GuestFavoriteMigrator />
+        <GlobalUpgradeModal />
         <OfflineBanner />
         <ErrorBoundary>
           <KeyboardShortcutsProvider>

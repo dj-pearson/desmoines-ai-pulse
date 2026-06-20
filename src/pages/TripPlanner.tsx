@@ -874,7 +874,7 @@ export default function TripPlanner() {
                     <p className="text-muted-foreground mb-4">
                       Generate a new itinerary or select one from your saved trips.
                     </p>
-                    <Button onClick={() => document.querySelector('[value="plan"]')?.click()}>
+                    <Button onClick={() => (document.querySelector('[value="plan"]') as HTMLElement | null)?.click()}>
                       Plan a Trip
                     </Button>
                   </CardContent>
@@ -917,7 +917,7 @@ export default function TripPlanner() {
                     <p className="text-muted-foreground mb-4">
                       Start planning your first Des Moines adventure!
                     </p>
-                    <Button onClick={() => document.querySelector('[value="plan"]')?.click()}>
+                    <Button onClick={() => (document.querySelector('[value="plan"]') as HTMLElement | null)?.click()}>
                       Plan Your First Trip
                     </Button>
                   </CardContent>

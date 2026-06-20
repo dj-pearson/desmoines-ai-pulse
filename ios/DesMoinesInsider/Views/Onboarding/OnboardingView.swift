@@ -96,54 +96,54 @@ struct OnboardingView: View {
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Page \(currentPage + 1) of \(pages.count)")
+                // Announce page changes to VoiceOver as the user advances (UX-009).
+                .onChange(of: currentPage) { _, newValue in
+                    AccessibilityNotification.Announcement(
+                        AttributedString("Page \(newValue + 1) of \(pages.count)")
+                    ).post()
+                }
 
-                // Buttons
-                HStack(spacing: 16) {
+                // Primary action — full-width, ≥44pt (brandPrimary), per UX-009.
+                if currentPage < pages.count - 1 {
+                    Button {
+                        withAnimation(reduceMotion ? nil : .default) { currentPage += 1 }
+                    } label: {
+                        Text("Next")
+                    }
+                    .buttonStyle(.brandPrimary)
+                    .padding(.horizontal)
+                } else {
+                    Button {
+                        analytics.trackOnboardingTrial(action: "shown")
+                        SoftPaywallService.shared.noteOnboardingUpsellShown()
+                        showTrialStep = true
+                    } label: {
+                        Text("Continue")
+                    }
+                    .buttonStyle(.brandPrimary)
+                    .padding(.horizontal)
+                }
+
+                // Secondary row: Back (when available) + Skip (ALWAYS reachable,
+                // including the last onboarding page) — UX-009.
+                HStack {
                     if currentPage > 0 {
                         Button("Back") {
                             withAnimation(reduceMotion ? nil : .default) { currentPage -= 1 }
                         }
-                        .foregroundStyle(.secondary)
+                        .buttonStyle(.brandGhost(size: .compact))
+                        .fixedSize()
                     }
 
                     Spacer()
 
-                    if currentPage < pages.count - 1 {
-                        Button {
-                            withAnimation(reduceMotion ? nil : .default) { currentPage += 1 }
-                        } label: {
-                            Text("Next")
-                                .fontWeight(.semibold)
-                                .padding(.horizontal, 32)
-                                .padding(.vertical, 12)
-                                .background(Color.accentColor, in: Capsule())
-                                .foregroundStyle(.white)
-                        }
-                    } else {
-                        Button {
-                            analytics.trackOnboardingTrial(action: "shown")
-                            SoftPaywallService.shared.noteOnboardingUpsellShown()
-                            showTrialStep = true
-                        } label: {
-                            Text("Continue")
-                                .fontWeight(.semibold)
-                                .padding(.horizontal, 32)
-                                .padding(.vertical, 12)
-                                .background(Color.accentColor, in: Capsule())
-                                .foregroundStyle(.white)
-                        }
-                    }
-                }
-                .padding(.horizontal)
-
-                // Skip — bypasses the rest of onboarding entirely (one tap, never blocks)
-                if currentPage < pages.count - 1 {
                     Button("Skip") {
                         complete()
                     }
-                    .font(.subheadline)
-                    .foregroundStyle(.tertiary)
+                    .buttonStyle(.brandGhost(size: .compact))
+                    .fixedSize()
                 }
+                .padding(.horizontal)
             }
             .padding(.bottom, 40)
         }

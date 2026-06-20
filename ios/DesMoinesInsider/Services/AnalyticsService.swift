@@ -1,5 +1,6 @@
 import Foundation
 import os
+import CryptoKit
 
 /// Lightweight analytics facade that wraps Firebase Analytics.
 ///
@@ -133,12 +134,16 @@ final class AnalyticsService {
 
     func setUserId(_ userId: String?) {
         guard ConsentService.shared.analyticsConsent else { return }
-        // Anonymize: only first 16 chars of hex hash
         if let userId {
-            let hash = userId.data(using: .utf8)!.map { String(format: "%02x", $0) }.joined()
-            let truncated = String(hash.prefix(16))
-            // Analytics.setUserID(truncated)
-            AppLogger.general.debug("Analytics: user set \(truncated)")
+            // SHA-256 the UUID, then truncate. The prior code hex-encoded the raw
+            // UTF-8 bytes — a reversible encoding of the literal UUID, not a hash
+            // (IOS-AUDIT-SEC-004). A truncated digest is not derivable back to the
+            // source id.
+            let digest = SHA256.hash(data: Data(userId.utf8))
+            let hex = digest.map { String(format: "%02x", $0) }.joined()
+            let pseudonymousId = String(hex.prefix(16))
+            // Analytics.setUserID(pseudonymousId)
+            AppLogger.general.debug("Analytics: user set \(pseudonymousId)")
         } else {
             // Analytics.setUserID(nil)
         }

@@ -40,12 +40,17 @@ final class CertificatePinningService: NSObject, URLSessionDelegate {
     ]
 
     /// When `true`, pinning failures are logged but connections are NOT blocked.
-    /// Set to `true` during development/testing, `false` for production.
-    #if DEBUG
-    let reportOnly = true
-    #else
-    let reportOnly = false
-    #endif
+    /// DEBUG is always report-only; Release enforces only once the pinned SPKI
+    /// hashes have been verified against the live host and
+    /// `Config.certificatePinningEnforced` is flipped on (IOS-AUDIT-SEC-001).
+    /// This prevents stale hashes from bricking API connectivity on ship.
+    var reportOnly: Bool {
+        #if DEBUG
+        return true
+        #else
+        return !Config.certificatePinningEnforced
+        #endif
+    }
 
     private override init() {
         super.init()

@@ -52,6 +52,44 @@ final class DeepLinkHandler {
         return pendingDestination
     }
 
+    // MARK: - Notifications (IOS-AUDIT-FEAT-003)
+
+    /// Routes a notification payload to a destination. Event-reminder local
+    /// notifications carry `eventId`; push payloads may carry a deep-link `url`
+    /// or a typed `type`/`id` pair. Returns true if a destination was set.
+    @discardableResult
+    func handleNotification(userInfo: [AnyHashable: Any]) -> Bool {
+        if let eventId = userInfo["eventId"] as? String,
+           let id = validatedId(eventId, source: "notification") {
+            pendingDestination = .event(id: id)
+            return true
+        }
+        if let urlString = userInfo["url"] as? String, let url = URL(string: urlString) {
+            return handle(url)
+        }
+        if let type = userInfo["type"] as? String, let rawId = userInfo["id"] as? String {
+            return routeTyped(type: type, rawId: rawId)
+        }
+        return false
+    }
+
+    private func routeTyped(type: String, rawId: String) -> Bool {
+        switch type {
+        case "event":
+            guard let id = validatedId(rawId, source: "notification") else { return false }
+            pendingDestination = .event(id: id)
+        case "restaurant":
+            guard let id = validatedId(rawId, source: "notification") else { return false }
+            pendingDestination = .restaurant(id: id)
+        case "attraction":
+            guard let id = validatedId(rawId, source: "notification") else { return false }
+            pendingDestination = .attraction(id: id)
+        default:
+            return false
+        }
+        return true
+    }
+
     // MARK: - ID Validation
 
     /// Validates that an ID looks like a UUID (8-4-4-4-12 hex format).

@@ -360,7 +360,7 @@
         "npm run validate passes"
       ],
       "priority": 23,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: src/hooks/useRestaurants.ts:126, useHotels.ts:51, useAttractions.ts:49 all select('*'). Content tables carry seo_keywords/geo_faq/geo_key_facts per CLAUDE.md schema — pure waste on cards."
     },
     {
@@ -390,7 +390,7 @@
         "npm run validate passes"
       ],
       "priority": 25,
-      "passes": false,
+      "passes": true,
       "notes": "vite.config.ts already has manualChunks + a removeLazyPreloads transform — verify what it actually strips before changing it; the perf agent suspected modulepreload still pulls vendor chunks early."
     },
     {
@@ -652,7 +652,7 @@
         "npm run validate passes"
       ],
       "priority": 42,
-      "passes": false,
+      "passes": true,
       "notes": "Web twin of iOS ForYou/IA-006 ordering. Index.tsx already renders ForYouRail + PersonalizedRecommendations — this story makes placement itself data-driven."
     },
     {
@@ -986,7 +986,7 @@
         "Unit test covers javascript:, file:, http:, https: inputs"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: CampaignAdService.swift:38-47 correctly allow-lists schemes, but content URLs do not. event.sourceUrl flows into Link(destination:) at EventDetailActions.swift:67-68; UIApplication.shared.open on content values at AttractionDetailView.swift:234, HotelDetailView.swift:254, RestaurantDetailView, EventDetailInfo; WebViewPage fed article/hotel targets at ArticleDetailView.swift:54."
     },
     {
@@ -1001,7 +1001,7 @@
         "Sponsored/affiliate clickouts standardize on SafariView where feasible"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: WebView.swift:28-40 only diverts when navigationType == .linkActivated AND host differs; server redirects, meta-refresh, form posts, and JS window.location to another host fall through to decisionHandler(.allow) and load in-app."
     },
     {
@@ -1015,7 +1015,7 @@
         "If/when Firebase analytics is enabled, PrivacyInfo.xcprivacy is updated to declare the analytics data collected"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: AnalyticsService.swift:134-145 comments 'first 16 chars of hex hash' but does userId.data(using:.utf8).map { %02x }.joined() truncated — a reversible hex encoding of the literal UUID, not a hash."
     },
     {
@@ -1029,7 +1029,7 @@
         "Detection remains non-blocking and skipped on Simulator"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: JailbreakDetector.swift relies on file-existence, URL-scheme, write-test, and dylib name string-matching (checkDynamicLibraries:82-104) — all defeated by Shadow/Liberty Lite/SSLKillSwitch. Result only drives a soft warning (DesMoinesInsiderApp.swift:103-105)."
     },
     {
@@ -1058,7 +1058,7 @@
         "No change to the build-time secret injection flow"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: make setup copies example -> Secrets.xcconfig (Makefile:28); generate-secrets.sh writes literal key into Secrets.generated.swift; both protected only by ios/.gitignore:23-24. No secret-scanning hook exists."
     },
     {
@@ -1072,7 +1072,7 @@
         "NSPrivacyTracking remains accurate (first-party, no IDFA)"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: AdTrackingService.swift:147-189 writes ad_impressions/ad_clicks with user_id to Supabase with no analyticsConsent check, unlike AnalyticsService (23,31,135). ConsentService.needsConsentPrompt (58-60) prompts EU-only. PrivacyInfo.xcprivacy declares no usage-data collection."
     },
     {
@@ -1087,7 +1087,7 @@
         "Observer lifetime managed safely (singleton)"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: CachedAsyncImage.swift:139-181 ImageCache (50MB/200 count NSCache) has no memory-warning observer; disk prune runs once at init (line 164) only."
     },
     {
@@ -1102,7 +1102,7 @@
         "No visual regression in list thumbnails vs full-screen viewer"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: CachedAsyncImage.swift:64 reads UIScreen.main.nativeBounds.width inside async loadImage(), re-evaluated every load and continuing past await suspension points."
     },
     {
@@ -1116,7 +1116,7 @@
         "No regression in cache-hit correctness; no @unchecked Sendable gaps introduced"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: CachedAsyncImage.swift:188-218 getFromDisk wraps a single serial DispatchQueue in withCheckedContinuation; queued Data(contentsOf:)+decode runs to completion even after the .task(id:url) is cancelled on cell recycle."
     },
     {
@@ -1171,7 +1171,7 @@
         "MetricKit payloads still received and logged; no runtime behavior change"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: MetricKitSubscriber.swift:10-21 is @MainActor; deinit (line 19) calls MXMetricManager.shared.remove(self). Singleton retained for app lifetime (DesMoinesInsiderApp.swift:21) so deinit is also dead code."
     },
     {
@@ -1199,7 +1199,7 @@
         "openStatusText does not re-parse on every render; open/closed correctness (incl. overnight) unchanged"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: Restaurant.swift:56-85 calls Calendar.current (59) and components(separatedBy:) per call; RestaurantsViewModel.applyClientSide (211) invokes isOpenNow() for every restaurant each toggle/page."
     },
     {
@@ -1226,7 +1226,7 @@
         "Parsing results unchanged for all supported formats"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: DateParser.swift:39-63 exposes static DateFormatter/ISO8601DateFormatter instances used cross-actor (Event.parsedDate:72 on main, applyClientSideOffMain on background); non-Sendable statics accessed concurrently."
     },
     {
@@ -1239,7 +1239,7 @@
         "Image and query caches function normally in the common case"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: CachedAsyncImage.swift:154 and QueryCache.swift:25 both do FileManager...urls(for:.cachesDirectory...).first! in launch-path singleton init."
     },
     {
@@ -1252,7 +1252,7 @@
         "One-time gating (hasRequestedReview) preserved; no DispatchQueue.main.asyncAfter in the launch path"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: DesMoinesInsiderApp.swift:146-152 uses DispatchQueue.main.asyncAfter(deadline:.now()+2) to call AppStore.requestReview — fire-and-forget, no cancellation."
     },
     {
@@ -1267,7 +1267,7 @@
         "No change to visible label text or layout"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: CardFavoriteButton sets only .accessibilityLabel (ContentCard.swift:493) and flips the text; no .accessibilityValue / .isSelected trait — VoiceOver announces a plain button."
     },
     {
@@ -1281,7 +1281,7 @@
         "Verified with Accessibility Inspector hit-target audit"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: ContentCard.swift:483-484 inline heart is 28x28pt (overlay 36pt), both under 44pt, no .minHitTarget() (helper exists at View+Accessibility.swift:12). FilterChipView.swift:31-32 ~28-32pt tall."
     },
     {
@@ -1295,7 +1295,7 @@
         "Existing ReduceMotion behavior unchanged"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: ToastOverlay.swift renders and auto-dismisses after 2s (91-99) but posts no accessibility announcement and adds no traits — silent for VoiceOver."
     },
     {
@@ -1309,7 +1309,7 @@
         "Successful path and crossfade unchanged"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: CachedAsyncImage.swift:109-111 catch just sets isLoading=false -> bare Color(.systemGray5) placeholder (338); no a11y label on the image (26-50)."
     },
     {
@@ -1323,7 +1323,7 @@
         "Retry action re-fetches and clears the error"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: RestaurantsView.swift:24-26 has an inline error banner; HomeView.swift:371-394 checks NetworkMonitor; AttractionsView has neither and AttractionsView.swift:80-83 always fires .success haptic after refresh regardless of outcome."
     },
     {
@@ -1365,7 +1365,7 @@
         "Email field keeps .keyboardType(.emailAddress)/content type"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: AuthView.swift:63-67,76-78 SecureField with no toggle; placeholder-only fields (38-66); ProgressView (107-129) with no a11y announcement."
     },
     {
@@ -1379,7 +1379,7 @@
         "ReduceMotion respected on page transitions"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: OnboardingView.swift:140-146 renders Skip only while currentPage < pages.count-1; nav buttons use .padding(.vertical,12) on subheadline (~36pt) at 114-134; page indicator static (98)."
     },
     {
@@ -1393,7 +1393,7 @@
         "Default toggle states reflect privacy-first defaults"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: ConsentView.swift:58-83 exposes only 'Save Preferences' and 'Accept All' — no decline/reject path."
     },
     {
@@ -1407,7 +1407,7 @@
         "Period (monthly/annual) selection also announces selected state"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: PaywallView.swift:241-246 only exit is a toolbar 'Not now' text item; Restore is plain caption text same weight as Terms/Privacy (455-459); tier radios (318-366) don't announce selected state."
     },
     {
@@ -1421,7 +1421,7 @@
         "No visual regression to the gate overlay"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: PremiumGate.swift:60-69 unlock CTA is .caption with .padding(.vertical,10) (~28-32pt); PremiumBadge (86-101) is an HStack with no accessibilityElement so VoiceOver reads 'lock.fill' + tier separately."
     },
     {
@@ -1464,7 +1464,7 @@
         "checkPermissionStatus() consulted so a denied user is not re-prompted endlessly"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: AppDelegate (PushNotificationService.swift:93) implements the token callback, but DesMoinesInsiderApp.swift (4-27) has no @UIApplicationDelegateAdaptor, so the callback never fires and syncTokenToBackend never runs. Contradicts ios_prd.json IOS-011 (passes:true)."
     },
     {
@@ -1479,7 +1479,7 @@
         "Unmatched URLs fall back to the in-app browser without crashing"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: DeepLinkHandler.shared.handle(url) and consumeDestination() have zero callers; DesMoinesInsiderApp.swift:84 .onOpenURL forwards only to SupabaseService.client?.handle(url); no onContinueUserActivity. Contradicts ios_prd.json IOS-012 (passes:true)."
     },
     {
@@ -1494,7 +1494,7 @@
         "Push notifications with a deep-link payload route correctly too"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: No UNUserNotificationCenterDelegate / didReceive anywhere; UNUserNotificationCenter.current().delegate never set. LocalNotificationService.swift:45 attaches userInfo['eventId'] but nothing consumes it. Unmet AC of ios_prd.json IOS-011."
     },
     {

@@ -74,6 +74,15 @@ enum Config {
     static let enableAIFeatures = true
     static let enablePushNotifications = false
 
+    /// Certificate pinning enforcement (IOS-AUDIT-SEC-001). The pinning delegate
+    /// is ALWAYS installed on the Supabase URLSession, but enforcement (rejecting
+    /// a non-pinned cert) only happens in Release when this is `true`. It ships
+    /// `false` so the delegate runs report-only until the pinned SPKI hashes in
+    /// CertificatePinningService are verified against the live Supabase host —
+    /// flipping it on with stale hashes would block all API traffic. DEBUG is
+    /// always report-only regardless.
+    static let certificatePinningEnforced = false
+
     // MARK: - Testing
 
     /// `true` when the app is launched by XCUITest (Fastlane Snapshot, etc.).
