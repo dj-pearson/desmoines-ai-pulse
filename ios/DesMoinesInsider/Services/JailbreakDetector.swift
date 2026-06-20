@@ -1,15 +1,20 @@
 import Foundation
 import UIKit
 import os
+import Darwin
 
 /// Detects common jailbreak indicators on the device.
 ///
-/// Shows a soft warning only — does NOT block app usage (per App Store guidelines).
-/// Checks are skipped entirely on Simulator to avoid false positives during development.
+/// ADVISORY ONLY (IOS-AUDIT-SEC-005). Every check here is best-effort and
+/// trivially bypassed by mainstream tooling (Shadow, Liberty Lite, SSLKillSwitch,
+/// etc.). The result MUST NOT gate any security control — certificate pinning,
+/// Keychain access, and premium entitlement are all enforced independently of
+/// this. It only drives a soft, non-blocking warning (per App Store guidelines),
+/// and is skipped entirely on Simulator to avoid false positives in development.
 enum JailbreakDetector {
 
-    /// Returns `true` if any jailbreak indicators are found.
-    /// Always returns `false` on Simulator.
+    /// Returns `true` if any jailbreak indicators are found. Best-effort and
+    /// bypassable — see the type doc. Always returns `false` on Simulator.
     static var isJailbroken: Bool {
         #if targetEnvironment(simulator)
         return false
@@ -18,6 +23,7 @@ enum JailbreakDetector {
             || checkSuspiciousURLSchemes()
             || checkWritableSystemPaths()
             || checkDynamicLibraries()
+            || checkForkRestriction()
         #endif
     }
 
@@ -101,5 +107,26 @@ enum JailbreakDetector {
             }
         }
         return false
+    }
+
+    /// Non-string-matched signal (IOS-AUDIT-SEC-005): a correctly sandboxed iOS
+    /// app is denied `fork()`; if the call succeeds the sandbox has been
+    /// compromised (a strong jailbreak indicator). The child exits immediately
+    /// and the parent reaps it. Still advisory and bypassable.
+    private static func checkForkRestriction() -> Bool {
+        let pid = fork()
+        if pid < 0 {
+            // fork() denied by the sandbox — expected on a stock device.
+            return false
+        }
+        if pid == 0 {
+            // Child process: terminate without running any app logic.
+            _exit(0)
+        }
+        // Parent: reap the child so we don't leak a zombie.
+        var status: Int32 = 0
+        waitpid(pid, &status, 0)
+        AppLogger.general.warning("Jailbreak indicator: fork() not restricted by sandbox")
+        return true
     }
 }

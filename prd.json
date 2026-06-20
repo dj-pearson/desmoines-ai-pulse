@@ -1001,7 +1001,7 @@
         "Sponsored/affiliate clickouts standardize on SafariView where feasible"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: WebView.swift:28-40 only diverts when navigationType == .linkActivated AND host differs; server redirects, meta-refresh, form posts, and JS window.location to another host fall through to decisionHandler(.allow) and load in-app."
     },
     {
@@ -1015,7 +1015,7 @@
         "If/when Firebase analytics is enabled, PrivacyInfo.xcprivacy is updated to declare the analytics data collected"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: AnalyticsService.swift:134-145 comments 'first 16 chars of hex hash' but does userId.data(using:.utf8).map { %02x }.joined() truncated — a reversible hex encoding of the literal UUID, not a hash."
     },
     {
@@ -1029,7 +1029,7 @@
         "Detection remains non-blocking and skipped on Simulator"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: JailbreakDetector.swift relies on file-existence, URL-scheme, write-test, and dylib name string-matching (checkDynamicLibraries:82-104) — all defeated by Shadow/Liberty Lite/SSLKillSwitch. Result only drives a soft warning (DesMoinesInsiderApp.swift:103-105)."
     },
     {

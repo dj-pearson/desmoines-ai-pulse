@@ -3555,3 +3555,23 @@ dormant until the flag flips — the code path is correct and gated.
   M ios/DesMoinesInsider/Services/PushNotificationService.swift
   M ios/DesMoinesInsider/Services/DeepLinkHandler.swift
   M ios/DesMoinesInsider/Views/MainTabView.swift
+
+## 2026-06-20 — iOS security batch 1 (SEC-003/004/005) [passes:true]
+
+- SEC-004: AnalyticsService.setUserId now SHA-256s the UUID (CryptoKit) before
+  truncating; the old code hex-encoded the raw UTF-8 bytes (reversible). Comment
+  corrected. Still gated on analyticsConsent.
+- SEC-005: JailbreakDetector documented as advisory/bypassable; added a
+  non-string-matched signal (checkForkRestriction — fork() succeeding means the
+  sandbox is broken; child _exit(0), parent waitpid reaps). Confirmed nothing
+  gates a security control on isJailbroken (only the soft warning in App.swift).
+- SEC-003: WebView.decidePolicyFor now diverts on resolved target host/scheme
+  for ANY navigation type (302 redirects, meta-refresh, form posts, JS
+  window.location), not just .linkActivated. Non-web schemes are dropped (with
+  tel/mailto/sms/maps/facetime handed to the system). Same-registrable-domain
+  (eTLD+1 approx) navigations still load in-app; first load is allowed.
+
+### Files
+  M ios/DesMoinesInsider/Services/AnalyticsService.swift
+  M ios/DesMoinesInsider/Services/JailbreakDetector.swift
+  M ios/DesMoinesInsider/Views/Components/WebView.swift
