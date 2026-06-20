@@ -29,6 +29,12 @@ export interface OptimizedImageProps {
   enableWebP?: boolean;
   enableAVIF?: boolean;
   useTransformApi?: boolean;
+  /**
+   * Emit a transform-based srcset + sizes so the browser fetches a right-sized
+   * image (WEB-PERF-004). On by default; the plain <img src> stays the original
+   * URL so a failed transform falls back safely. Set false to opt out.
+   */
+  responsive?: boolean;
   transformWidths?: number[];
   onLoad?: () => void;
   onError?: () => void;
@@ -138,6 +144,7 @@ export default function OptimizedImage({
   enableWebP = true,
   enableAVIF = false,
   useTransformApi = false,
+  responsive = true,
   transformWidths = DEFAULT_WIDTHS,
   onLoad,
   onError,
@@ -152,15 +159,18 @@ export default function OptimizedImage({
   const webpSupported = useMemo(() => enableWebP && supportsWebP(), [enableWebP]);
   const avifSupported = useMemo(() => enableAVIF && supportsAVIF(), [enableAVIF]);
 
-  // Generate srcset if not provided
+  // Generate srcset if not provided. Enabled by default (responsive) so cards
+  // fetch card-sized images; the <img src> below stays the original URL, so if
+  // the transform endpoint is unavailable the browser falls back to it
+  // (WEB-PERF-004).
   const computedSrcSet = useMemo(() => {
     if (srcSet) return srcSet;
-    if (!useTransformApi) return undefined;
+    if (!responsive && !useTransformApi) return undefined;
 
     // Determine format based on browser support
     const format = avifSupported ? "avif" : webpSupported ? "webp" : undefined;
     return generateTransformedSrcSet(src, transformWidths, format, quality);
-  }, [src, srcSet, useTransformApi, transformWidths, avifSupported, webpSupported, quality]);
+  }, [src, srcSet, responsive, useTransformApi, transformWidths, avifSupported, webpSupported, quality]);
 
   // Intersection Observer for lazy loading
   useEffect(() => {

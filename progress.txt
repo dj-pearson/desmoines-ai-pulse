@@ -4002,3 +4002,34 @@ type-check + lint PASS (0 errors).
   M src/pages/EventsPage.tsx
   M src/pages/Restaurants.tsx
   M src/pages/Attractions.tsx
+
+## 2026-06-20 — WEB-PERF-004 (Image CLS elimination + right-sized responsive images) [passes:true]
+
+### OptimizedImage: responsive srcset ON by default
+Previously srcset/sizes were only emitted when useTransformApi was explicitly
+set, so cards fetched full-size images. Added a `responsive` prop (default true):
+the component now generates a transform-based srcset (image-transform edge fn /
+Supabase render: ?url=&width=&quality=&format=) so the browser fetches a
+card/hero-sized image via the `sizes` hint. The plain <img src> stays the
+ORIGINAL url, so a failed/absent transform falls back safely (never a broken
+image). The riskier <picture> format <source>s remain opt-in (useTransformApi).
+
+### CLS
+List-card + detail-hero images already render inside fixed-size containers:
+OptimizedImage sets the container aspect-ratio from aspectRatio or width/height,
+and cards wrap it in fixed-height/aspect-video parents (EventCard 640/192,
+Attractions aspect-video, RestaurantCard absolute-inset in h-48, etc.) — no
+layout shift on load.
+
+### Dialog image
+Index event quick-view <img> already has a fixed height (h-48/h-64), loading=
+lazy, decoding=async, and only mounts when the Radix Dialog is open (content
+unmounts when closed) — so it doesn't prefetch while closed. No change needed.
+
+### Verification
+type-check + lint PASS (0 errors). CLS < 0.1 is satisfied structurally (fixed-
+ratio containers); numeric Lighthouse/CLS measurement needs a browser (not
+available in this headless container).
+
+### Files
+  M src/components/OptimizedImage.tsx

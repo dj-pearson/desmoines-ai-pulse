@@ -405,7 +405,7 @@
         "npm run validate passes"
       ],
       "priority": 26,
-      "passes": false,
+      "passes": true,
       "notes": "Pairs with WEB-SEC-007's image-transform caching. iOS prd POLISH-002 notes document the image-transform contract (verify_jwt=false, ?url=&width=&quality=) — reuse that knowledge."
     },
     {
