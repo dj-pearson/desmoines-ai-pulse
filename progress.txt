@@ -3637,3 +3637,43 @@ proven event-favorites path.
   M src/pages/RestaurantDetails.tsx
   M src/pages/AttractionDetails.tsx
   M src/pages/PlaygroundDetails.tsx
+
+## 2026-06-20 — WEB-FEAT-006 (Guest favorites with signup migration) [passes:true]
+
+### Guest store: src/lib/guestFavorites.ts
+safeStorage-backed (versioned key dmi-guest-favorites-v1), cap GUEST_FAVORITE_CAP=3.
+Tiny external store (subscribe/getSnapshot) so all FavoriteButtons stay in sync
+via useSyncExternalStore. toggleGuestFavorite returns added/removed/capped.
+
+### FavoriteButton
+Now reads useAuthFlags(): unauthenticated -> GuestFavoriteButton variant
+(useSyncExternalStore over the guest store). On guest save: toast shows count
+"Saved N/3 — sign up free to keep saving" with a Sign up action. On cap: a
+contextual SIGNUP prompt (not the paywall). Authenticated path unchanged
+(event/content variants).
+
+### Conversion logging: src/lib/favoriteAnalytics.ts
+Writes to user_analytics (same path as the subscription funnel): guest_save,
+guest_save_wall_hit, signup_from_wall. Session id reuses dmi-session-id.
+
+### Migration on sign-in
+useGuestFavoriteMigration (mounted via headless GuestFavoriteMigrator next to
+SessionManager in App.tsx): on user transition, writes pending guest favorites
+to the server — events -> user_event_interactions (per-row insert, ignore dupes),
+others -> content_favorites upsert(ignoreDuplicates onConflict user,type,id) —
+clears local copy, invalidates favorites queries, logs signup_from_wall per item,
+and shows an acknowledgement toast "We saved your N favorites to your account".
+Idempotent via a per-user ref guard.
+
+### Verification
+type-check PASSES (exit 0); eslint changed files 0 errors. Runtime guest->signup
+migration needs a browser session (not available headless); logic verified by
+reading.
+
+### Files
+  A src/lib/guestFavorites.ts
+  A src/lib/favoriteAnalytics.ts
+  A src/hooks/useGuestFavoriteMigration.ts
+  A src/components/GuestFavoriteMigrator.tsx
+  M src/components/FavoriteButton.tsx
+  M src/App.tsx

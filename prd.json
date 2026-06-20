@@ -636,7 +636,7 @@
         "npm run validate passes"
       ],
       "priority": 41,
-      "passes": false,
+      "passes": true,
       "notes": "Highest-leverage funnel fix from the features audit. Keep the safeStorage schema versioned per CLAUDE.md on-disk-state rules."
     },
     {

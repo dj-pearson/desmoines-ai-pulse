@@ -8,6 +8,16 @@ import {
 import { cn } from "@/lib/utils";
 import { hapticTap } from "@/lib/capacitorUtils";
 import { toast } from "sonner";
+import { useSyncExternalStore } from "react";
+import { useAuthFlags } from "@/contexts/AuthContext";
+import {
+  subscribeGuestFavorites,
+  isGuestFavorited,
+  toggleGuestFavorite,
+  GUEST_FAVORITE_CAP,
+  type GuestFavoriteType,
+} from "@/lib/guestFavorites";
+import { logFavoriteFunnelEvent } from "@/lib/favoriteAnalytics";
 
 interface FavoriteButtonProps {
   /** Event id (legacy/default path). Required when no contentType is given. */
@@ -143,14 +153,88 @@ function ContentFavoriteButton({
   );
 }
 
+/**
+ * Guest (unauthenticated) variant — saves to safeStorage up to a small cap,
+ * then prompts signup instead of the paywall. (WEB-FEAT-006)
+ */
+function GuestFavoriteButton({
+  guestType,
+  id,
+  ...rest
+}: Omit<FavoriteButtonProps, "eventId" | "contentType" | "contentId"> & {
+  guestType: GuestFavoriteType;
+  id: string;
+}) {
+  const favorites = useSyncExternalStore(
+    subscribeGuestFavorites,
+    () => isGuestFavorited(guestType, id),
+    () => false
+  );
+
+  return (
+    <FavoriteButtonView
+      favorited={favorites}
+      isToggling={false}
+      onToggle={() => {
+        const result = toggleGuestFavorite(guestType, id);
+        if (result.action === "added") {
+          logFavoriteFunnelEvent("guest_save", guestType, id, null, {
+            count: result.count,
+          });
+          toast.success(
+            `Saved ${result.count}/${GUEST_FAVORITE_CAP} — sign up free to keep saving`,
+            {
+              id: `guest-fav-${guestType}-${id}`,
+              action: { label: "Sign up", onClick: () => goToSignup() },
+            }
+          );
+        } else if (result.action === "removed") {
+          toast.success("Removed from favorites", {
+            id: `guest-fav-${guestType}-${id}`,
+          });
+        } else {
+          // Cap reached — contextual signup prompt (NOT the paywall).
+          logFavoriteFunnelEvent("guest_save_wall_hit", guestType, id, null, {
+            count: result.count,
+          });
+          toast("Sign up free to keep saving", {
+            id: "guest-fav-wall",
+            description: `You've saved ${GUEST_FAVORITE_CAP} items as a guest. Create a free account to save more.`,
+            action: { label: "Sign up", onClick: () => goToSignup() },
+          });
+        }
+      }}
+      {...rest}
+    />
+  );
+}
+
+function goToSignup() {
+  if (typeof window !== "undefined") {
+    const next = encodeURIComponent(
+      window.location.pathname + window.location.search
+    );
+    window.location.href = `/auth?redirect=${next}`;
+  }
+}
+
 export function FavoriteButton({
   eventId,
   contentType,
   contentId,
   ...rest
 }: FavoriteButtonProps) {
+  const { isAuthenticated } = useAuthFlags();
+  const guestType: GuestFavoriteType =
+    contentType && contentType !== "event" ? contentType : "event";
+  const id = contentId ?? eventId;
+
+  if (!isAuthenticated) {
+    if (!id) return null;
+    return <GuestFavoriteButton guestType={guestType} id={id} {...rest} />;
+  }
+
   if (contentType && contentType !== "event") {
-    const id = contentId ?? eventId;
     if (!id) return null;
     return <ContentFavoriteButton contentType={contentType} contentId={id} {...rest} />;
   }
