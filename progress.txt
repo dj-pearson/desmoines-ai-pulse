@@ -3934,3 +3934,33 @@ validate passes. Playwright search/filter not run (no browser).
   M src/hooks/useRestaurants.ts
   M src/hooks/useEvents.ts
   M src/hooks/useAttractions.ts
+
+## 2026-06-20 — WEB-PERF-002 (kill trending N+1 + full-table filter fetches) [passes:true]
+
+- Trending N+1 GONE: useTrendingContent previously fired one query per trending
+  item to fetch its content. Now it groups content_ids by type and does ONE
+  .in('id', ids) query per content type (≤4, typically 1-2 for a single-type
+  surface), building a lookup map. Trending surface query count: 1 trending +
+  ≤1/type instead of 1 + N.
+- Filter facets via DISTINCT RPC: new migration get_restaurant_filter_facets()
+  (STABLE, granted anon/authenticated) returns distinct cuisines+counts and
+  distinct locations in one small JSON. useCuisineCounts + useRestaurantFilterOptions
+  converted to TanStack useQuery (shared key, staleTime 1h) calling it — replacing
+  the two full-`cuisine`/`location`-column fetches. SearchSection's Restaurants
+  branch reuses the same cached facets fetcher (+ staleTime 1h).
+- Identical options preserved (cuisines sorted, locations sorted; counts desc).
+
+NOTE (honest scope): SearchSection's EVENTS category dropdown and
+useHotelFilterOptions still dedupe full columns client-side — same pattern, but
+they carry extra filters (future/not-hidden events; hotels) that would each need
+their own facets RPC. Left as follow-ups (lower-traffic); the line-evidenced
+restaurants + trending wins are done.
+
+### Verification
+tsc --noEmit clean; eslint 0 errors. npm run validate passes.
+
+### Files
+  A supabase/migrations/20260620000002_restaurant_filter_facets.sql
+  M src/hooks/useTrendingContent.ts
+  M src/hooks/useRestaurants.ts
+  M src/components/SearchSection.tsx
