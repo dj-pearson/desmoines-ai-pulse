@@ -3599,3 +3599,25 @@ file:/tel:/javascript:/data:/custom schemes.
   M ios/DesMoinesInsider/Models/{Attraction,Restaurant,Hotel}.swift
   M ios/DesMoinesInsider/Views/EventDetail/EventDetailActions.swift
   M ios/DesMoinesInsider/Views/Articles/ArticleDetailView.swift
+
+## 2026-06-20 — iOS SEC-007 (pre-commit + CI secret guard) [passes:true]
+
+- Extended .githooks/pre-commit (already active via core.hooksPath): rejects
+  staged Secrets.xcconfig / Secrets.generated.swift and JWT-shaped strings
+  (eyJ….eyJ….) in staged additions.
+- New .github/workflows/secret-scan.yml: fails a PR that tracks a Secrets file
+  or ADDS a key-shaped string (diff-based so history stays green).
+- New ios/SECRETS.md documents that only the anon key is bundled (never
+  service-role) and the build-time injection flow (unchanged).
+
+### ⚠️ Security finding surfaced (needs owner action, out of scope here)
+Pre-existing committed Supabase JWTs exist in history, including SERVICE-ROLE
+keys in older supabase/migrations/*.sql and a couple debug scripts
+(debug-browser.js, invoke-populate-playgrounds.cjs, scripts/*). The diff-based
+scan deliberately does not retroactively fail on these (would block every PR),
+but they should be ROTATED and scrubbed. Logged in ios/SECRETS.md follow-up.
+
+### Files
+  M .githooks/pre-commit
+  A .github/workflows/secret-scan.yml
+  A ios/SECRETS.md

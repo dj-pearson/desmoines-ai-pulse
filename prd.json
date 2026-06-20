@@ -1058,7 +1058,7 @@
         "No change to the build-time secret injection flow"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: make setup copies example -> Secrets.xcconfig (Makefile:28); generate-secrets.sh writes literal key into Secrets.generated.swift; both protected only by ios/.gitignore:23-24. No secret-scanning hook exists."
     },
     {
