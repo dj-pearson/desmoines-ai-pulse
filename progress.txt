@@ -4113,3 +4113,34 @@ backend bar (matches WEB-AUTO-001..009).
   M src/integrations/supabase/types.ts
   M src/main.tsx
   M src/pages/AdminSystem.tsx
+
+## 2026-06-20 — SESSION SUMMARY v3 (branch claude/complete-prd-stories-4jdio9)
+15 WEB stories completed this session, each type-check + lint verified (0 errors),
+backend functions esbuild-parse-verified, committed individually. prd.json
+passes: 36 -> 51 / 110.
+
+Done (15): WEB-PERF-006, WEB-PERF-005, WEB-UX-006, WEB-UX-010, WEB-FEAT-006,
+WEB-FEAT-001, WEB-PERF-002, WEB-FEAT-005, WEB-FEAT-004, WEB-FEAT-009, WEB-UX-001,
+WEB-UX-003, WEB-PERF-004, WEB-FEAT-011, WEB-PERF-007.
+
+Remaining WEB (13) — each blocked on runtime/deploy/visual verification or a
+large/tangled refactor, left honest at passes:false:
+- WEB-AUTO-010 creative auto-review (image-dim + Claude brand-safety checks need
+  runtime); WEB-AUTO-011 sitemap regen (Cloudflare static-vs-function serving
+  ambiguity flagged in its own notes); WEB-AUTO-012 social posting (which
+  platform webhooks are configured is runtime); WEB-AUTO-013 dunning lifecycle
+  (Stripe webhook + emails, money); WEB-AUTO-014 autonomy dashboard (aggregates
+  the above queues — best after they exist).
+- WEB-PERF-001 column projection (restaurants rotation RPC returns full rows;
+  needs runtime regression check); WEB-PERF-003 defer heavy libs (AC requires
+  before/after build:analyze + Lighthouse numbers — no browser here).
+- WEB-FEAT-002 annual plans+trial (Stripe price IDs + webhook, money);
+  WEB-FEAT-003 saved-search digest (existing saved_searches uses the advanced-
+  search filter model, not the list-page URL filters — deep-link reconciliation
+  + nightly job); WEB-FEAT-007 recently-viewed (data-driven home-section
+  reordering on the 892-line Index = visual risk needing a browser);
+  WEB-FEAT-008 OG image (PNG render via Satori/resvg — runtime); WEB-FEAT-010
+  review composer (photo resize + Storage owner-scoped RLS + lightbox — storage
+  runtime).
+
+iOS-AUDIT-* (47): not started — no Xcode to compile/verify Swift.
