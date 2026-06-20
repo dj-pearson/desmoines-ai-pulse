@@ -330,7 +330,7 @@
         "npm run validate passes"
       ],
       "priority": 21,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: process-stripe-refund is manual (AdminRefunds.tsx); stripe-webhook exists. user_subscriptions has platform column (iOS work added it) — use it for the exclusion guard."
     },
     {

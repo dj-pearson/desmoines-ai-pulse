@@ -7,6 +7,7 @@ import AdminSystemControls from "@/components/AdminSystemControls";
 import AdminApplicationSettings from "@/components/AdminApplicationSettings";
 import JobHealthPanel from "@/components/admin/JobHealthPanel";
 import WebVitalsPanel from "@/components/admin/WebVitalsPanel";
+import SubscriptionEventsPanel from "@/components/admin/SubscriptionEventsPanel";
 import {
   Users,
   Server,
@@ -78,6 +79,7 @@ export default function AdminSystem() {
           <div className="space-y-6">
             <JobHealthPanel />
             <WebVitalsPanel />
+            <SubscriptionEventsPanel />
           </div>
         )}
 

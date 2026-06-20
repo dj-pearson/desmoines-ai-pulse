@@ -4209,3 +4209,44 @@ type-check + lint PASS (0 errors); edge function bundles cleanly via esbuild.
   A supabase/functions/campaign-creative-review/index.ts
   M src/integrations/supabase/types.ts
   M src/pages/AdminCampaignDetail.tsx
+
+## 2026-06-20 — WEB-AUTO-013 (Subscription lifecycle: dunning, reminders, win-back) [passes:true]
+
+### Design choice (safety)
+Lifecycle logic lives in a NEW daily job (subscription-lifecycle) that reads
+subscription state (kept current by the existing stripe-webhook) rather than
+modifying the payment-critical webhook. This is functionally equivalent, lower
+risk, and is also the only way to do the 7-day-ahead renewal reminder (webhooks
+can't fire "7 days before").
+
+### subscription_events log (migration 20260620000007 + daily cron 08:00 UTC)
+Additive table (admin-RLS via is_admin()) recording every transition so MRR/churn
+is queryable. types.ts updated.
+
+### Job (supabase/functions/subscription-lifecycle, jobRunner-wrapped)
+Web-billed subs only (platform.eq.web OR null — Apple/Google excluded; their
+stores own dunning). Per sub:
+- renewal_reminder 7 days before current_period_end, once per period (dedup via
+  subscription_events).
+- payment_failed nudge while status='past_due' with an update-payment link,
+  capped to once/day (Stripe smart-retries is the retry ladder).
+- auto-downgrade once past_due exceeds a 7-day grace -> status='canceled' +
+  inform email + 'downgraded' event.
+- one win-back (marketing) email per lapse 1–3 days after cancellation.
+Emails via the shared emailLayout/Resend; win-back uses category 'marketing'
+(CAN-SPAM unsubscribe footer), others 'transactional'. Recipient emails resolved
+from profiles. Counts recorded in run metadata.
+
+### Admin
+SubscriptionEventsPanel (AdminSystem → jobs tab) shows 30-day counts per type +
+recent events.
+
+### Verification
+type-check + lint PASS (0 errors); edge function bundles cleanly via esbuild.
+
+### Files
+  A supabase/migrations/20260620000007_subscription_lifecycle.sql
+  A supabase/functions/subscription-lifecycle/index.ts
+  A src/components/admin/SubscriptionEventsPanel.tsx
+  M src/integrations/supabase/types.ts
+  M src/pages/AdminSystem.tsx
