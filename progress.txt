@@ -3793,3 +3793,22 @@ viewability needs a browser; logic verified by reading.
   M src/pages/EventsPage.tsx
   M src/pages/Restaurants.tsx
   M src/pages/Attractions.tsx
+
+## 2026-06-20 — SESSION SUMMARY (branch claude/complete-prd-stories-4jdio9)
+Completed 8 WEB stories this session, each type-check + lint verified (0 errors)
+and committed individually. prd.json passes: 36 -> 44 / 110.
+
+Done: WEB-PERF-006, WEB-PERF-005, WEB-UX-006, WEB-UX-010, WEB-FEAT-006,
+WEB-FEAT-001, WEB-PERF-002, WEB-FEAT-005.
+
+Deferred (need a browser/Lighthouse or are large mini-projects best done with
+runtime verification): WEB-UX-001 (URL filter state — complex multi-filter
+rewrite across 3 pages), WEB-UX-003 (sticky bar — needs mobile browser),
+WEB-PERF-001 (column projection — restaurants RPC returns full rows; regression
+risk needs runtime), WEB-PERF-003/004/007 (build:analyze / CLS / RUM — need
+browser+Lighthouse), WEB-FEAT-007 (recently-viewed — large rewrite + server
+table + home section reordering), WEB-FEAT-002/003/004/008/009/010/011 and
+WEB-AUTO-010..014 (Stripe / saved-search job / ad serving / OG images / map
+bounds / review composer / trip planner / edge-function automations — backend +
+runtime verification heavy). iOS-AUDIT-* (47) not started: Swift can't be
+compiled/verified in this container (no Xcode).
