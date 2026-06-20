@@ -400,7 +400,7 @@ export default function AttractionDetails() {
             {/* Quick Actions Bar */}
             <div className="flex flex-wrap items-center gap-3 p-4 md:p-6 bg-gray-50 border-b">
               <OpenStatusChip
-                hours={attraction.hours}
+                hours={typeof attraction.hours === "string" ? attraction.hours : undefined}
                 website={attraction.website}
                 className="self-center"
               />

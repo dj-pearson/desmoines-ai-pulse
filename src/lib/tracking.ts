@@ -270,7 +270,7 @@ export function createViewabilityObserver(
   const threshold = options?.threshold ?? 0.5; // 50% visible by default
   const minDuration = options?.minDuration ?? 1000; // 1 second by default
 
-  let visibilityTimer: NodeJS.Timeout | null = null;
+  let visibilityTimer: ReturnType<typeof setTimeout> | null = null;
   let hasTriggered = false;
 
   const observer = new IntersectionObserver(

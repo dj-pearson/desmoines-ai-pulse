@@ -31,6 +31,7 @@ import {
   LoadingSpinner,
 } from "@/components/ui/loading-skeleton";
 import { SocialEventCard } from "@/components/SocialEventCard";
+import type { Event as DMEvent } from "@/lib/types";
 import { arrangeSponsoredFirst } from "@/lib/sponsored";
 import Header from "@/components/Header";
 import { AdBanner } from "@/components/AdBanner";
@@ -110,7 +111,7 @@ export default function EventsPage() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
 
-  const handleViewEventDetails = useCallback((event: { id: string; title: string; date?: string }) => {
+  const handleViewEventDetails = useCallback((event: DMEvent) => {
     navigate(`/events/${createEventSlugWithCentralTime(event.title, event as any)}`);
   }, [navigate]);
 

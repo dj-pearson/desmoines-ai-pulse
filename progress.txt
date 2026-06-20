@@ -4416,3 +4416,31 @@ fix without DB access — hence the staged approach.
 NOTE: a full `tsc -p tsconfig.app.json` is very slow (~4-5 min) and memory-heavy
 (~3.5GB) in this container; scoped `tsc -p <tmp-include>.json` over a file +
 its import graph is the practical local check (~90-180s).
+
+## 2026-06-20 — CHORE: genuine type-error burndown (batch 1, regen-independent)
+
+Per the "fix genuine bugs now, regen later" decision, fixed the type errors that
+are NOT downstream of the stale generated types (those ~80 await `supabase gen
+types`). All verified via scoped `tsc -p` (zero new errors) + vitest 132/132:
+
+- src/hooks/useAnalytics.ts, src/lib/tracking.ts: `NodeJS.Timeout` →
+  `ReturnType<typeof setTimeout>` (browser code; NodeJS namespace unavailable).
+- src/hooks/use-announce.ts: dropped invalid `as const` on the `politeness`
+  param (TS1355 — const-assert needs a literal).
+- src/components/EnhancedLocalSEO.tsx: added optional `keywords?: string[]` prop
+  (merged into generated keywords) — fixes Attractions.tsx, FreeEvents.tsx,
+  Playgrounds.tsx all passing `keywords=` to a component that didn't declare it.
+- src/pages/TripPlanner.tsx: `querySelector(...)` cast to `HTMLElement` before
+  `.click()` (Element has no click()).
+- src/pages/AttractionDetails.tsx: `hours` (Json) guarded to string|undefined
+  before passing to OpenStatusChip.
+- src/pages/FreeEvents.tsx: `{count}` (unknown from Object.entries) → `as number`.
+- src/pages/EventsPage.tsx: typed handleViewEventDetails param as the lib/types
+  `Event` (imported as DMEvent) so it matches SocialEventCard.onViewDetails.
+- src/hooks/useAnalytics.ts (loose Record<string,unknown> queue): `as never` on
+  the user_analytics/search_analytics inserts + `as string` on the Set.has()
+  guards.
+- (earlier this session) src/pages/Restaurants.tsx setActiveCuisineQuick crash.
+
+Remaining ~80+ errors are the stale-types root cause → run `supabase gen types
+typescript` to clear, then flip `type-check` → `type-check:app` in `validate`.
