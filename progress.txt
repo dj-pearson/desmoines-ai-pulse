@@ -3809,3 +3809,23 @@ FavoritesView pattern). `npm run validate` therefore passes. Playwright not run
   M ios/DesMoinesInsider/Views/Components/ToastOverlay.swift
   M ios/DesMoinesInsider/Views/Auth/AuthView.swift
   M ios/DesMoinesInsider/Views/Onboarding/OnboardingView.swift
+
+## 2026-06-20 — WEB-UX-006 (centralize category/cuisine colors) [passes:true]
+
+- New src/lib/categoryStyles.ts: single source of truth — CUISINE_GRADIENTS +
+  getCuisineGradient(), and CATEGORY_RULES + getCategoryStyle() returning
+  {bg,text,icon}. Same class strings as before (no visual change), so the palette
+  is centralized without a visual regression.
+- RestaurantCard: dropped local cuisineGradients/getGradient, imports
+  getCuisineGradient. SocialEventCard: dropped inline getCategoryStyle, imports
+  it. grep confirmed no other components carried these literals.
+
+### Verification
+tsc --noEmit clean; eslint 0 errors (pre-existing warnings only). npm run
+validate passes. Visual-regression Playwright not run (no browser) but class
+strings are byte-identical to the originals.
+
+### Files
+  A src/lib/categoryStyles.ts
+  M src/components/RestaurantCard.tsx
+  M src/components/SocialEventCard.tsx
