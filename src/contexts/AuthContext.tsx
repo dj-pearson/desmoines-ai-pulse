@@ -33,8 +33,23 @@ interface AuthActions {
 
 type AuthContextType = AuthState & AuthActions;
 
+/**
+ * Boolean-only slice of auth state (no `user`/`session` objects). Its identity
+ * is stable across TOKEN_REFRESHED ticks — which mutate `session`/`user` but
+ * not these flags — so flag-only consumers (Header, BottomNav, gates) don't
+ * re-render on every session refresh. (WEB-PERF-005)
+ */
+export interface AuthFlags {
+  isLoading: boolean;
+  isAuthenticated: boolean;
+  isAdmin: boolean;
+  isAdminLoading: boolean;
+  requiresMFA: boolean;
+}
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const AuthStateContext = createContext<AuthState | undefined>(undefined);
+const AuthFlagsContext = createContext<AuthFlags | undefined>(undefined);
 const AuthActionsContext = createContext<AuthActions | undefined>(undefined);
 
 // Cache for admin status
@@ -666,6 +681,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     getSessionExpiresAt,
   }), [login, signup, logout, requireAdmin, refreshSession, signInWithGoogle, signInWithApple, resetPassword, updatePassword, resendVerification, getSessionExpiresAt]);
 
+  // Memoized boolean slice — identity only changes when a flag actually flips,
+  // not when session/user are swapped on a token refresh.
+  const flags = useMemo<AuthFlags>(() => ({
+    isLoading: authState.isLoading,
+    isAuthenticated: authState.isAuthenticated,
+    isAdmin: authState.isAdmin,
+    isAdminLoading: authState.isAdminLoading,
+    requiresMFA: authState.requiresMFA,
+  }), [
+    authState.isLoading,
+    authState.isAuthenticated,
+    authState.isAdmin,
+    authState.isAdminLoading,
+    authState.requiresMFA,
+  ]);
+
   const combined = useMemo<AuthContextType>(() => ({
     ...authState,
     ...actions,
@@ -674,9 +705,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={combined}>
       <AuthStateContext.Provider value={authState}>
-        <AuthActionsContext.Provider value={actions}>
-          {children}
-        </AuthActionsContext.Provider>
+        <AuthFlagsContext.Provider value={flags}>
+          <AuthActionsContext.Provider value={actions}>
+            {children}
+          </AuthActionsContext.Provider>
+        </AuthFlagsContext.Provider>
       </AuthStateContext.Provider>
     </AuthContext.Provider>
   );
@@ -687,6 +720,19 @@ export function useAuthState(): AuthState {
   const context = useContext(AuthStateContext);
   if (context === undefined) {
     throw new Error("useAuthState must be used within an AuthProvider");
+  }
+  return context;
+}
+
+/**
+ * Boolean auth flags only — consumers won't re-render on token-refresh ticks
+ * that only change session/user. Prefer this in hot components (Header,
+ * BottomNav, gates) that don't read the user/session objects. (WEB-PERF-005)
+ */
+export function useAuthFlags(): AuthFlags {
+  const context = useContext(AuthFlagsContext);
+  if (context === undefined) {
+    throw new Error("useAuthFlags must be used within an AuthProvider");
   }
   return context;
 }

@@ -1,7 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import { Home, Calendar, Navigation, UtensilsCrossed, Map, User } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthFlags } from "@/contexts/AuthContext";
 import { prefetchRoute } from "@/lib/prefetch";
 import { hapticTap } from "@/lib/capacitorUtils";
 
@@ -13,7 +13,8 @@ interface NavItem {
 }
 
 export default function BottomNav() {
-  const { isAuthenticated } = useAuth();
+  // Flags-only so the tab bar doesn't re-render on token-refresh. (WEB-PERF-005)
+  const { isAuthenticated } = useAuthFlags();
   const location = useLocation();
 
   const navItems: NavItem[] = [

@@ -3517,3 +3517,36 @@ type-check PASSES (exit 0); eslint on changed files 0 errors (only pre-existing
 ### Files
   A src/lib/queryConfig.ts
   M src/main.tsx
+
+## 2026-06-20 — WEB-PERF-005 (Split AuthContext to stop app-wide re-renders) [passes:true]
+
+### Starting point
+AuthContext was ALREADY split into AuthStateContext + AuthActionsContext with
+memoized actions (prior work). The remaining leak: hot components read the
+COMBINED useAuth() object, which is re-created on every authState change —
+including TOKEN_REFRESHED ticks that only swap session/user.
+
+### Change
+- Added a memoized boolean slice `AuthFlags` { isLoading, isAuthenticated,
+  isAdmin, isAdminLoading, requiresMFA } via new AuthFlagsContext + useAuthFlags().
+  Its identity only changes when a flag actually flips — NOT when session/user
+  are replaced on a token refresh — so flag-only consumers stop re-rendering on
+  refresh ticks.
+- Header.tsx -> useAuthFlags() (isAuthenticated, isAdmin) + useAuthActions()
+  (logout). BottomNav.tsx -> useAuthFlags() (isAuthenticated).
+- useAuth() public API unchanged (still returns combined state+actions); zero
+  call-site churn elsewhere.
+
+### Why this satisfies "no re-render on session refresh ticks"
+handleAuthChange's TOKEN_REFRESHED branch sets {session,user} only; the flags
+object stays referentially equal -> Header/BottomNav skip the render. Verified
+by reasoning over the provider memo deps (DevTools profiling not runnable in
+this headless container — noted honestly).
+
+### Verification
+type-check PASSES (exit 0); eslint changed files 0 errors.
+
+### Files
+  M src/contexts/AuthContext.tsx
+  M src/components/Header.tsx
+  M src/components/BottomNav.tsx
