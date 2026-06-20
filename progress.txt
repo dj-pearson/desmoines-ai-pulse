@@ -3729,3 +3729,28 @@ review before implementing.
 
 ### Files
   A docs/IMAGE_PIPELINE_FINDINGS.md
+
+### Fix 3: backlog-drain — image_checked_at + dedicated backfill cron (owner-approved)
+The big lever for "lots of listings have no picture". backfill-images only ran
+nightly (~25/table via data-quality-heal) and re-tried permanent failures every
+run, so a real backlog sat for weeks.
+
+- Migration 20260620000001: additive image_checked_at TIMESTAMPTZ on
+  events/restaurants/attractions/playgrounds + partial indexes on imageless rows
+  (ordered by image_checked_at NULLS FIRST). Schedules backfill-images via pg_cron
+  (events hourly; restaurants/attractions every 6h) using the established
+  current_setting('app.settings.*') + net.http_post pattern.
+- backfill-images: now filters `(image_url null/'') AND (image_checked_at IS NULL
+  OR < 7d ago)`, orders never-checked first, and STAMPS image_checked_at on every
+  attempt (success and both failure branches). So new imageless rows drain fast
+  and permanent failures retry at most weekly instead of every run. nextOffset on
+  real runs returns 0 (rows leave the working set) so admin "Run All" doesn't skip
+  — verified ImageBackfill.tsx stops on `=== null`, treating 0 correctly.
+- PostgREST .or() timestamp is ms-stripped + quoted for safe parsing.
+
+DEPLOY ORDER (owner): `supabase db push` (adds the column) BEFORE deploying the
+backfill-images function, since the function now reads/writes image_checked_at.
+
+### Files
+  A supabase/migrations/20260620000001_image_checked_at_backfill.sql
+  M supabase/functions/backfill-images/index.ts

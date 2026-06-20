@@ -189,6 +189,13 @@ Deno.serve(async (req) => {
     // Today's date (YYYY-MM-DD) for filtering past events out of the backfill —
     // there's no point fetching images for events that have already happened.
     const todayIso = new Date().toISOString().slice(0, 10);
+    const nowIso = new Date().toISOString();
+    // Re-try a row that previously failed at most once a week (its source page
+    // may have gained an image since) — but never every run. Drop milliseconds
+    // so the timestamp parses cleanly inside a PostgREST .or() filter.
+    const retryBefore = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .replace(/\.\d{3}Z$/, "Z");
 
     console.log(
       `🖼️ backfill-images: category=${category} batchSize=${batchSize} offset=${offset} dryRun=${dryRun}${
@@ -202,7 +209,12 @@ Deno.serve(async (req) => {
     let recordsQuery = supabase
       .from(table)
       .select(SELECT_COLS[category])
-      .or("image_url.is.null,image_url.eq.");
+      .or("image_url.is.null,image_url.eq.")
+      // Skip rows attempted within the retry window so permanent failures don't
+      // get re-tried every run (image_checked_at stamped below on each attempt).
+      .or(`image_checked_at.is.null,image_checked_at.lt."${retryBefore}"`)
+      // Never-checked rows first, then oldest-checked — drains new backlog fast.
+      .order("image_checked_at", { ascending: true, nullsFirst: true });
 
     if (category === "events") {
       recordsQuery = recordsQuery.gte("date", todayIso).order("date", { ascending: true });
@@ -250,7 +262,8 @@ Deno.serve(async (req) => {
     let countQuery = supabase
       .from(table)
       .select("id", { count: "exact", head: true })
-      .or("image_url.is.null,image_url.eq.");
+      .or("image_url.is.null,image_url.eq.")
+      .or(`image_checked_at.is.null,image_checked_at.lt."${retryBefore}"`);
     if (category === "events") {
       countQuery = countQuery.gte("date", todayIso);
     }
@@ -264,10 +277,13 @@ Deno.serve(async (req) => {
       updated: 0,
       skipped: 0,
       failed: 0,
-      nextOffset:
-        offset + batchSize < (totalRemaining ?? 0)
-          ? offset + batchSize
-          : null,
+      // On a real run every processed row leaves the working set (image filled,
+      // or image_checked_at stamped), so keep draining from offset 0 rather than
+      // advancing past rows that shifted up. Dry runs change nothing, so they
+      // page normally.
+      nextOffset: dryRun
+        ? (offset + batchSize < (totalRemaining ?? 0) ? offset + batchSize : null)
+        : ((totalRemaining ?? 0) - records.length > 0 ? 0 : null),
       dryRun,
       details: [],
     };
@@ -342,6 +358,9 @@ Deno.serve(async (req) => {
 
       if (!rawImageUrl) {
         result.failed++;
+        // Stamp the attempt so this row drops out of the working set for the
+        // retry window instead of being re-scraped every single run.
+        await supabase.from(table).update({ image_checked_at: nowIso }).eq("id", id);
         result.details.push({
           id,
           name,
@@ -361,6 +380,7 @@ Deno.serve(async (req) => {
 
       if (!cdnUrl) {
         result.failed++;
+        await supabase.from(table).update({ image_checked_at: nowIso }).eq("id", id);
         result.details.push({
           id,
           name,
@@ -373,10 +393,10 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Update the record
+      // Update the record (stamp image_checked_at so we don't re-process it)
       const { error: updateError } = await supabase
         .from(table)
-        .update({ image_url: cdnUrl, updated_at: new Date().toISOString() })
+        .update({ image_url: cdnUrl, image_checked_at: nowIso, updated_at: nowIso })
         .eq("id", id);
 
       if (updateError) {
