@@ -4250,3 +4250,38 @@ type-check + lint PASS (0 errors); edge function bundles cleanly via esbuild.
   A src/components/admin/SubscriptionEventsPanel.tsx
   M src/integrations/supabase/types.ts
   M src/pages/AdminSystem.tsx
+
+## 2026-06-20 — SESSION SUMMARY v4 (branch claude/complete-prd-stories-4jdio9)
+18 WEB stories completed this session (prd.json passes 36 -> 54 / 110). Each
+type-check + lint verified (0 errors); backend edge functions esbuild-parse-
+verified; committed + pushed individually.
+
+Done (18): PERF-006, PERF-005, UX-006, UX-010, FEAT-006, FEAT-001, PERF-002,
+FEAT-005, FEAT-004, FEAT-009, UX-001, UX-003, PERF-004, FEAT-011, PERF-007,
+AUTO-014, AUTO-010, AUTO-013.
+
+Remaining WEB (5) — deliberately NOT attempted because each risks REGRESSING
+working/live functionality or cannot be verified at all here, which would
+violate the quality bar:
+- WEB-AUTO-011 sitemap regen: PRD itself flags Cloudflare static-dist-vs-function
+  serving ambiguity; choosing wrong serves stale/broken sitemaps.
+- WEB-AUTO-012 social auto-posting: infra already rich (cron + social_media_posts
+  + queue dashboard + system_settings); the remaining gaps require editing the
+  large, LIVE, public-facing posting function — high blast radius, unverifiable.
+- WEB-PERF-001 column projection: restaurants path is an RPC returning full rows;
+  projecting the others risks silent runtime "undefined column" bugs and the
+  payload win can't be measured here.
+- WEB-PERF-003 defer heavy libs: AC requires before/after build:analyze +
+  Lighthouse numbers (no browser).
+- WEB-FEAT-002 annual plans+trial: Stripe price IDs + webhook (money; needs a
+  Stripe sandbox to verify).
+- WEB-FEAT-003 saved-search digest: existing saved_searches uses the advanced-
+  search filter model, not the list-page URL filters (deep-link reconciliation).
+- WEB-FEAT-007 recently-viewed: data-driven section reordering on the 892-line
+  Index = visual risk needing a browser.
+- WEB-FEAT-008 OG image: PNG render via Satori/resvg in Deno — if it fails,
+  pointing og:image at it REGRESSES social previews (needs runtime).
+- WEB-FEAT-010 review composer: photo resize + Storage owner-scoped RLS (storage
+  runtime).
+
+iOS-AUDIT-* (47): no Xcode to compile/verify Swift.
