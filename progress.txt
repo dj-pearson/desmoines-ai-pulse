@@ -3575,3 +3575,27 @@ dormant until the flag flips — the code path is correct and gated.
   M ios/DesMoinesInsider/Services/AnalyticsService.swift
   M ios/DesMoinesInsider/Services/JailbreakDetector.swift
   M ios/DesMoinesInsider/Views/Components/WebView.swift
+
+## 2026-06-20 — iOS SEC-002 (validate content link schemes) [passes:true]
+
+Centralized content-link safety so a compromised content row can't open
+file:/tel:/javascript:/data:/custom schemes.
+
+- New Extensions/URL+SafeWebLink.swift: URL.isSafeWebLink (http/https only) and
+  String.safeWebURL (parses content strings, defaults bare host to https, logs +
+  drops unsafe schemes via AppLogger.nav.warning).
+- Routed through it: Attraction/Restaurant/Hotel .websiteURL (the old code did
+  hasPrefix("http") which mis-handled httpx:// etc.), event.sourceUrl in
+  EventDetailActions, and ArticleDetailView.openLink (now drops non-web instead
+  of system-opening mailto/tel from content).
+- First-party intents (maps:// in the openInMaps helpers, app deep links,
+  affiliate booking via Hotel.normalizedURL) are code-constructed and
+  intentionally NOT routed through the helper.
+- URLSafetyTests.swift covers http/https/javascript/file/tel/data/empty.
+
+### Files
+  A ios/DesMoinesInsider/Extensions/URL+SafeWebLink.swift
+  A ios/DesMoinesInsiderTests/URLSafetyTests.swift
+  M ios/DesMoinesInsider/Models/{Attraction,Restaurant,Hotel}.swift
+  M ios/DesMoinesInsider/Views/EventDetail/EventDetailActions.swift
+  M ios/DesMoinesInsider/Views/Articles/ArticleDetailView.swift

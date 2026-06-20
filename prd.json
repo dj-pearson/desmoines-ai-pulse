@@ -986,7 +986,7 @@
         "Unit test covers javascript:, file:, http:, https: inputs"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: CampaignAdService.swift:38-47 correctly allow-lists schemes, but content URLs do not. event.sourceUrl flows into Link(destination:) at EventDetailActions.swift:67-68; UIApplication.shared.open on content values at AttractionDetailView.swift:234, HotelDetailView.swift:254, RestaurantDetailView, EventDetailInfo; WebViewPage fed article/hotel targets at ArticleDetailView.swift:54."
     },
     {

@@ -144,10 +144,10 @@ struct Restaurant: Identifiable, Codable, Hashable {
         return URL(string: "tel://\(cleaned)")
     }
 
+    /// Safe http/https website URL only (IOS-AUDIT-SEC-002) — an unsafe scheme
+    /// in the content row yields nil so no button renders.
     var websiteURL: URL? {
-        guard let website, !website.isEmpty else { return nil }
-        if website.hasPrefix("http") { return URL(string: website) }
-        return URL(string: "https://\(website)")
+        website.flatMap { $0.safeWebURL }
     }
 
     func hash(into hasher: inout Hasher) {
