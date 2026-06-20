@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { ChefHat, Star, MapPin, Flame, Sparkles, Leaf, Wheat } from "lucide-react";
 import { memo, useState, useMemo, useCallback } from "react";
 import { OptimizedImage } from "@/components/OptimizedImage";
+import { FavoriteButton } from "@/components/FavoriteButton";
 import { SocialProofBadge } from "@/components/SocialProofBadge";
 import { getRestaurantOpenStatus } from "@/lib/restaurantHours";
 import { SponsoredBadge } from "@/components/SponsoredBadge";
@@ -153,6 +154,17 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
 
           {/* Dark overlay for text readability */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+
+          {/* Save (favorite) — stopPropagation/preventDefault keep it from navigating the card */}
+          <div className="absolute top-3 right-3 z-20">
+            <FavoriteButton
+              contentType="restaurant"
+              contentId={restaurant.id}
+              itemName={restaurant.name}
+              size="icon"
+              className="h-9 w-9 rounded-full bg-black/40 backdrop-blur-sm hover:bg-black/60"
+            />
+          </div>
 
           {/* Top badges */}
           <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 z-10">

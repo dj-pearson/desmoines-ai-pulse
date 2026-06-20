@@ -3754,3 +3754,37 @@ backfill-images function, since the function now reads/writes image_checked_at.
 ### Files
   A supabase/migrations/20260620000001_image_checked_at_backfill.sql
   M supabase/functions/backfill-images/index.ts
+
+## 2026-06-20 — WEB-UX-010 (fix broken/missing Save controls) [passes:true]
+
+Save worked only for events; RestaurantDetails/AttractionDetails/PlaygroundDetails
+rendered a static <Button> with no onClick (dead), and Restaurant/Attraction
+browse cards had no favorite control at all.
+
+- New useContentFavorites(contentType) hook: generic favorites for
+  restaurant/attraction/playground backed by the parallel user_{type}_interactions
+  tables iOS already uses (cast `as any`, matching FavoritesView). Optimistic
+  add/remove, graceful when a table is absent, login-required toast.
+- FavoriteButton extended: optional contentType ("event" default) + contentId;
+  events path (useFavorites) untouched, non-event types use useContentFavorites.
+  Calls both hooks unconditionally (rules of hooks); added preventDefault +
+  aria-pressed. All existing eventId call sites still compile (eventId optional).
+- Replaced the dead Save buttons on the 3 detail pages with a working
+  FavoriteButton (showText). Added a top-right heart overlay (z-20,
+  stopPropagation/preventDefault so the card link doesn't fire) on RestaurantCard
+  and the inline Attractions card.
+
+### Verification
+Installed deps and ran for real: `tsc --noEmit` clean (0 errors); `eslint` exits 0
+(only pre-existing warnings + `any` warnings matching the established
+FavoritesView pattern). `npm run validate` therefore passes. Playwright not run
+(no browser in container).
+
+### Files
+  A src/hooks/useContentFavorites.ts
+  M src/components/FavoriteButton.tsx
+  M src/components/RestaurantCard.tsx
+  M src/pages/RestaurantDetails.tsx
+  M src/pages/AttractionDetails.tsx
+  M src/pages/PlaygroundDetails.tsx
+  M src/pages/Attractions.tsx

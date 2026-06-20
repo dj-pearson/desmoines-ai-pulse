@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { FavoriteButton } from "@/components/FavoriteButton";
 import { Separator } from "@/components/ui/separator";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import SEOHead from "@/components/SEOHead";
@@ -29,7 +30,6 @@ import {
   ArrowLeft,
   Navigation,
   Share2,
-  Heart,
   MessageCircle,
   Award,
   Utensils,
@@ -420,10 +420,15 @@ export default function RestaurantDetails() {
                   </Button>
                 }
               />
-              <Button variant="outline" size="sm" className="rounded-xl">
-                <Heart className="h-4 w-4 mr-1.5" />
-                Save
-              </Button>
+              <FavoriteButton
+                contentType="restaurant"
+                contentId={restaurant.id}
+                itemName={restaurant.name}
+                variant="outline"
+                size="sm"
+                showText
+                className="rounded-xl"
+              />
             </div>
           </div>
 
