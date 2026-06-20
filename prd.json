@@ -1087,7 +1087,7 @@
         "Observer lifetime managed safely (singleton)"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: CachedAsyncImage.swift:139-181 ImageCache (50MB/200 count NSCache) has no memory-warning observer; disk prune runs once at init (line 164) only."
     },
     {
@@ -1102,7 +1102,7 @@
         "No visual regression in list thumbnails vs full-screen viewer"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: CachedAsyncImage.swift:64 reads UIScreen.main.nativeBounds.width inside async loadImage(), re-evaluated every load and continuing past await suspension points."
     },
     {
@@ -1116,7 +1116,7 @@
         "No regression in cache-hit correctness; no @unchecked Sendable gaps introduced"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: CachedAsyncImage.swift:188-218 getFromDisk wraps a single serial DispatchQueue in withCheckedContinuation; queued Data(contentsOf:)+decode runs to completion even after the .task(id:url) is cancelled on cell recycle."
     },
     {
@@ -1239,7 +1239,7 @@
         "Image and query caches function normally in the common case"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: CachedAsyncImage.swift:154 and QueryCache.swift:25 both do FileManager...urls(for:.cachesDirectory...).first! in launch-path singleton init."
     },
     {
@@ -1309,7 +1309,7 @@
         "Successful path and crossfade unchanged"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: CachedAsyncImage.swift:109-111 catch just sets isLoading=false -> bare Color(.systemGray5) placeholder (338); no a11y label on the image (26-50)."
     },
     {

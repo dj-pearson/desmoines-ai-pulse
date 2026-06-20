@@ -3484,3 +3484,38 @@ EventDetails + AdminContent lint 0 errors.
   M src/pages/EventDetails.tsx
   M src/pages/AdminContent.tsx
   M docs/AUTOMATION_JOBS.md
+
+## 2026-06-20 — iOS image-cache hardening (PERF-001/002/003/012, UX-004) [passes:true]
+
+Five stories, all in CachedAsyncImage.swift (+ QueryCache.swift for PERF-012).
+
+- PERF-001: ImageCache now observes UIApplication.didReceiveMemoryWarning ->
+  memoryCache.removeAllObjects(), and re-runs pruneDiskIfNeeded() on
+  didEnterBackground (previously only at init). Observers added once in the
+  singleton init (process-lifetime, never removed).
+- PERF-002: Removed UIScreen.main read inside async loadImage(). New
+  DeviceMetrics.nativePixelWidth is @MainActor, resolved from the active
+  UIWindowScene and cached; loadImage awaits it (main-actor hop) before any
+  network/disk await. iPad split-screen/multi-window safe.
+- PERF-003: getFromDisk() split into readDiskBytes() (cheap IO on the serial
+  diskQueue) + a cancellation check (Task.isCancelled) before decode, with the
+  decode moved off the serial queue via Task.detached(.utility). Recycled cells
+  skip the expensive decode.
+- PERF-012: Removed force-unwrap of .cachesDirectory in BOTH ImageCache
+  (new static cachesDirectory()) and QueryCache.init; both fall back to
+  FileManager.temporaryDirectory and log via AppLogger.cache.
+- UX-004: Failed loads (undecodable bytes or non-cancellation throw) set a new
+  loadFailed state -> failureState view (photo + refresh SF Symbols) with
+  tap-to-retry. CachedAsyncImage gains an optional accessibilityLabel; labeled
+  images expose .isImage + label (and "image failed to load" on failure),
+  decorative usages are .accessibilityHidden(true). Cancelled tasks are not
+  flagged as failures.
+
+### Verification
+No Xcode in this env; changes are surgical and match existing patterns
+(AppLogger.cache confirmed present; @unchecked Sendable ImageCache unchanged;
+convenience init still compiles since new props have defaults).
+
+### Files
+  M ios/DesMoinesInsider/Views/Components/CachedAsyncImage.swift
+  M ios/DesMoinesInsider/Services/QueryCache.swift
