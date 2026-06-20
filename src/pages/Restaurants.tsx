@@ -47,6 +47,7 @@ import { OpenNowBanner } from "@/components/OpenNowBanner";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { useIsMobile } from "@/hooks/use-mobile";
 import RestaurantCard from "@/components/RestaurantCard";
+import { arrangeSponsored } from "@/lib/sponsored";
 import { SearchAutocomplete, addRecentSearch } from "@/components/SearchAutocomplete";
 import {
   Pagination,
@@ -111,17 +112,24 @@ export default function Restaurants() {
     navigate(`/restaurants/${random.slug || random.id}`);
   }, [restaurants, navigate]);
 
+  // Boost up to 2 active sponsored listings to the top (WEB-FEAT-005), organic
+  // order otherwise.
+  const arrangedRestaurants = useMemo(
+    () => arrangeSponsored(restaurants),
+    [restaurants]
+  );
+
   // Paginate restaurants
-  const totalPages = Math.ceil((restaurants?.length || 0) / ITEMS_PER_PAGE);
+  const totalPages = Math.ceil((arrangedRestaurants?.length || 0) / ITEMS_PER_PAGE);
   const paginatedRestaurants = useMemo(() => {
     if (isMobile) {
       // Mobile: show all up to current page (load more pattern)
-      return restaurants.slice(0, page * ITEMS_PER_PAGE);
+      return arrangedRestaurants.slice(0, page * ITEMS_PER_PAGE);
     }
     // Desktop: show current page only
     const start = (page - 1) * ITEMS_PER_PAGE;
-    return restaurants.slice(start, start + ITEMS_PER_PAGE);
-  }, [restaurants, page, isMobile]);
+    return arrangedRestaurants.slice(start, start + ITEMS_PER_PAGE);
+  }, [arrangedRestaurants, page, isMobile]);
 
   const hasMorePages = isMobile
     ? page * ITEMS_PER_PAGE < restaurants.length

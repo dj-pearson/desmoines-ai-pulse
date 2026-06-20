@@ -25,6 +25,10 @@ import {
 } from '@/lib/timezone';
 import { Link } from 'react-router-dom';
 import { getEventCategoryStyle } from '@/lib/categoryStyles';
+import { SponsoredBadge } from '@/components/SponsoredBadge';
+import { isSponsoredActive, logSponsoredClick } from '@/lib/sponsored';
+import { useSponsoredImpression } from '@/hooks/useSponsoredImpression';
+import { useRef } from 'react';
 
 interface SocialEventCardProps {
   event: Event;
@@ -74,13 +78,26 @@ function SocialEventCardComponent({
   const isLive = liveStats && liveStats.total_checkins > 0;
   const attendeeCount = attendees?.length || liveStats?.current_attendees || 0;
 
+  // Sponsored listing (WEB-FEAT-005): active only while not expired.
+  const sponsoredActive = isSponsoredActive(event);
+  const cardRef = useRef<HTMLDivElement>(null);
+  useSponsoredImpression(cardRef, 'event', event.id, sponsoredActive);
+
   return (
     <Card
+      ref={cardRef}
       className={`group relative overflow-hidden border-0 shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-card ${
         featured ? 'md:col-span-2 md:row-span-2' : ''
-      }`}
+      } ${sponsoredActive ? 'ring-2 ring-amber-400 shadow-lg' : ''}`}
     >
-      <Link to={eventUrl} className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-xl" aria-label={`View details for ${event.title}`}>
+      <Link
+        to={eventUrl}
+        className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-xl"
+        aria-label={`${sponsoredActive ? 'Sponsored: ' : ''}View details for ${event.title}`}
+        onClick={() => {
+          if (sponsoredActive) logSponsoredClick('event', event.id);
+        }}
+      >
         <CardContent className="p-0">
           {/* Image Section with Overlay */}
           <div className={`relative overflow-hidden ${featured ? 'h-64 md:h-80' : 'h-52'}`}>
@@ -129,13 +146,14 @@ function SocialEventCardComponent({
 
             {/* Top Right Badges */}
             <div className="absolute top-3 right-3 z-10 flex flex-col gap-1.5 items-end">
+              {sponsoredActive && <SponsoredBadge className="shadow-lg" />}
               {isLive && (
                 <Badge className="bg-green-500 text-white border-0 shadow-lg text-[10px] px-2 animate-pulse">
                   <TrendingUp className="h-3 w-3 mr-1" />
                   LIVE
                 </Badge>
               )}
-              {event.is_featured && (
+              {!sponsoredActive && event.is_featured && (
                 <Badge className="bg-amber-500 text-white border-0 shadow-lg text-[10px] px-2">
                   <Sparkles className="h-3 w-3 mr-1" />
                   Featured

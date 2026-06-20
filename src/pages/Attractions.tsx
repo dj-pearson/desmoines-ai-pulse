@@ -46,6 +46,9 @@ import {
 import { useIsMobile } from "@/hooks/use-mobile";
 import { OptimizedImage } from "@/components/OptimizedImage";
 import { FavoriteButton } from "@/components/FavoriteButton";
+import { SponsoredBadge } from "@/components/SponsoredBadge";
+import { SponsoredImpressionMarker } from "@/components/SponsoredImpressionMarker";
+import { arrangeSponsored, isSponsoredActive, logSponsoredClick } from "@/lib/sponsored";
 import { SearchAutocomplete, addRecentSearch } from "@/components/SearchAutocomplete";
 import { usePrefetchAttraction } from "@/hooks/usePrefetchDetail";
 import {
@@ -149,7 +152,8 @@ export default function Attractions() {
         sorted.sort((a, b) => (b.rating || 0) - (a.rating || 0));
         break;
     }
-    return sorted;
+    // Boost up to 2 active sponsored listings to the top (WEB-FEAT-005).
+    return arrangeSponsored(sorted);
   }, [filteredAttractions, sortBy]);
 
   const handleSurpriseMe = () => {
@@ -611,9 +615,18 @@ export default function Attractions() {
                   key={attraction.id}
                   to={`/attractions/${createSlug(attraction.name)}`}
                   className="block"
+                  aria-label={`${isSponsoredActive(attraction) ? "Sponsored: " : ""}${attraction.name}`}
                   onMouseEnter={() => prefetchAttraction(createSlug(attraction.name))}
+                  onClick={() => {
+                    if (isSponsoredActive(attraction))
+                      logSponsoredClick("attraction", attraction.id);
+                  }}
                 >
-                  <Card className="h-full hover:shadow-lg transition-all duration-200 hover:-translate-y-1 rounded-2xl overflow-hidden">
+                  <Card
+                    className={`h-full hover:shadow-lg transition-all duration-200 hover:-translate-y-1 rounded-2xl overflow-hidden ${
+                      isSponsoredActive(attraction) ? "ring-2 ring-amber-400 shadow-lg" : ""
+                    }`}
+                  >
                     <div className="relative">
                       {attraction.image_url ? (
                         <OptimizedImage
@@ -630,6 +643,17 @@ export default function Attractions() {
                           <Landmark className="h-12 w-12 text-white/40" />
                         </div>
                       )}
+                      {/* Sponsored listing treatment (WEB-FEAT-005) */}
+                      {isSponsoredActive(attraction) && (
+                        <div className="absolute top-3 left-3 z-20">
+                          <SponsoredBadge className="shadow-lg" />
+                        </div>
+                      )}
+                      <SponsoredImpressionMarker
+                        contentType="attraction"
+                        contentId={attraction.id}
+                        active={isSponsoredActive(attraction)}
+                      />
                       {/* Save (favorite) overlay — stopPropagation handled inside */}
                       <div className="absolute top-3 right-3 z-20">
                         <FavoriteButton

@@ -734,6 +734,8 @@ export type Database = {
           id: string
           image_url: string | null
           is_featured: boolean | null
+          is_sponsored: boolean
+          sponsored_until: string | null
           latitude: number | null
           location: string | null
           longitude: number | null
@@ -765,6 +767,8 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_featured?: boolean | null
+          is_sponsored?: boolean
+          sponsored_until?: string | null
           latitude?: number | null
           location?: string | null
           longitude?: number | null
@@ -795,6 +799,8 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_featured?: boolean | null
+          is_sponsored?: boolean
+          sponsored_until?: string | null
           latitude?: number | null
           location?: string | null
           longitude?: number | null
@@ -1036,6 +1042,8 @@ export type Database = {
           email?: string | null
           id?: string
           is_featured?: boolean | null
+          is_sponsored?: boolean
+          sponsored_until?: string | null
           latitude?: number | null
           logo_url?: string | null
           longitude?: number | null
@@ -1065,6 +1073,8 @@ export type Database = {
           email?: string | null
           id?: string
           is_featured?: boolean | null
+          is_sponsored?: boolean
+          sponsored_until?: string | null
           latitude?: number | null
           logo_url?: string | null
           longitude?: number | null
@@ -3697,6 +3707,8 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_featured?: boolean | null
+          is_sponsored?: boolean
+          sponsored_until?: string | null
           latitude?: number | null
           location?: string | null
           longitude?: number | null
@@ -3718,6 +3730,8 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_featured?: boolean | null
+          is_sponsored?: boolean
+          sponsored_until?: string | null
           latitude?: number | null
           location?: string | null
           longitude?: number | null

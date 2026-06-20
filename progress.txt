@@ -3746,3 +3746,50 @@ logic.
   A supabase/migrations/20260620000002_restaurant_filter_options.sql
   M src/hooks/useTrendingContent.ts
   M src/hooks/useRestaurants.ts
+
+## 2026-06-20 — WEB-FEAT-005 (Sponsored/featured listings inline in browse lists) [passes:true]
+
+### Helper: src/lib/sponsored.ts (web twin of iOS SponsoredArranger)
+- isSponsoredActive(item): is_sponsored && (no sponsored_until OR not past) — so
+  EXPIRED sponsorships automatically lose treatment, zero manual cleanup.
+- arrangeSponsored(items, cap=2): boosts up to 2 active-sponsored items to the
+  top, organic order otherwise; returns input untouched when none sponsored.
+- logSponsoredImpression/Click -> user_analytics with content_type and
+  filters_used.inventory_class='sponsored_listing' (distinct inventory class),
+  impressions deduped per session.
+
+### Viewability tracking
+useSponsoredImpression(ref, type, id, active) reuses createViewabilityObserver
+(>=50% visible >=1s) from tracking.ts. SponsoredImpressionMarker headless
+component for inline (non-component) cards.
+
+### Surfaces wired
+- Events: EventsPage arranges events; SocialEventCard gains amber ring +
+  SponsoredBadge (FTC label, aria 'Sponsored content') + ref impression + click
+  log + 'Sponsored:' aria prefix; featured badge suppressed when sponsored.
+- Restaurants: Restaurants page arranges; RestaurantCard treatment now gated on
+  isSponsoredActive (was raw is_sponsored, ignoring expiry) + impression/click.
+- Attractions: NEW additive migration 20260620000003 adds is_sponsored +
+  sponsored_until (+ partial index) to attractions (events/restaurants already
+  had them); types.ts updated. Attractions page arranges; inline card gains ring
+  + SponsoredBadge + SponsoredImpressionMarker + click log + aria prefix.
+
+### All tiers, never disguised
+Sponsored listings show to every tier (content, not interruptive ads) with a
+clear FTC 'Sponsored' label + screen-reader prefix.
+
+### Verification
+type-check PASSES (exit 0); eslint changed files 0 errors. Runtime ordering/
+viewability needs a browser; logic verified by reading.
+
+### Files
+  A supabase/migrations/20260620000003_attractions_sponsored.sql
+  A src/lib/sponsored.ts
+  A src/hooks/useSponsoredImpression.ts
+  A src/components/SponsoredImpressionMarker.tsx
+  M src/integrations/supabase/types.ts
+  M src/components/RestaurantCard.tsx
+  M src/components/SocialEventCard.tsx
+  M src/pages/EventsPage.tsx
+  M src/pages/Restaurants.tsx
+  M src/pages/Attractions.tsx
