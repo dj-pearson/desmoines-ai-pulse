@@ -3850,3 +3850,22 @@ strings are byte-identical to the originals.
   M ios/DesMoinesInsider/Views/Home/HomeView.swift
   M ios/DesMoinesInsider/Views/Restaurants/RestaurantsView.swift
   M ios/DesMoinesInsider/Views/Attractions/AttractionsView.swift
+
+## 2026-06-20 — iOS UX-010/011/012 (consent decline, paywall controls, premium gate) [passes:true]
+
+- UX-010 (ConsentView): added a "Decline All" action equally prominent to
+  "Accept All" (paired outlined buttons), persisting a minimal-consent state via
+  saveAndComplete() and dismissing. All three actions ≥44pt + VoiceOver-labeled.
+  Toggle defaults flipped to privacy-first (opt-in / all off).
+- UX-011 (PaywallView): replaced the text "Not now" with a prominent labeled
+  xmark.circle.fill close; "Restore" is now a distinct accent ≥44pt "Restore
+  Purchases" button separated from the Terms/Privacy legal links; tier and period
+  rows now carry the .isSelected trait (dropped the redundant ", selected" text).
+- UX-012 (PremiumGate): unlock CTA is now ≥44pt tall (minHeight:44, same type
+  size — no visual regression); PremiumBadge reads as one element
+  ("Insider feature, locked") with the lock icon marked decorative.
+
+### Files
+  M ios/DesMoinesInsider/Views/Onboarding/ConsentView.swift
+  M ios/DesMoinesInsider/Views/Subscription/PaywallView.swift
+  M ios/DesMoinesInsider/Views/Components/PremiumGate.swift

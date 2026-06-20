@@ -4,9 +4,10 @@ import SwiftUI
 /// Explains what data is collected and why, with opt-in toggles.
 struct ConsentView: View {
     @State private var consent = ConsentService.shared
-    @State private var locationEnabled = true
-    @State private var emailEnabled = true
-    @State private var analyticsEnabled = true
+    // Privacy-first defaults (IOS-AUDIT-UX-010): non-essential data is opt-in.
+    @State private var locationEnabled = false
+    @State private var emailEnabled = false
+    @State private var analyticsEnabled = false
 
     let onComplete: () -> Void
 
@@ -65,20 +66,49 @@ struct ConsentView: View {
                         } label: {
                             Text("Save Preferences")
                                 .font(.headline)
-                                .frame(maxWidth: .infinity)
-                                .padding()
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                                .padding(.vertical, 4)
                                 .background(Color.accentColor)
                                 .foregroundStyle(.white)
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
                         }
+                        .accessibilityLabel("Save your selected privacy preferences")
 
-                        Button {
-                            consent.acceptAll()
-                            onComplete()
-                        } label: {
-                            Text("Accept All")
-                                .font(.subheadline.weight(.medium))
-                                .foregroundStyle(Color.accentColor)
+                        // Decline and Accept are equally prominent (IOS-AUDIT-UX-010):
+                        // declining persists a minimal-consent state and dismisses.
+                        HStack(spacing: 12) {
+                            Button {
+                                consent.locationConsent = false
+                                consent.emailConsent = false
+                                consent.analyticsConsent = false
+                                consent.saveAndComplete()
+                                onComplete()
+                            } label: {
+                                Text("Decline All")
+                                    .font(.subheadline.weight(.semibold))
+                                    .frame(maxWidth: .infinity, minHeight: 44)
+                                    .foregroundStyle(Color.accentColor)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .strokeBorder(Color.accentColor.opacity(0.4), lineWidth: 1)
+                                    )
+                            }
+                            .accessibilityLabel("Decline all non-essential data collection")
+
+                            Button {
+                                consent.acceptAll()
+                                onComplete()
+                            } label: {
+                                Text("Accept All")
+                                    .font(.subheadline.weight(.semibold))
+                                    .frame(maxWidth: .infinity, minHeight: 44)
+                                    .foregroundStyle(Color.accentColor)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .strokeBorder(Color.accentColor.opacity(0.4), lineWidth: 1)
+                                    )
+                            }
+                            .accessibilityLabel("Accept all data collection")
                         }
                     }
                     .padding(.top, 8)

@@ -240,8 +240,17 @@ struct PaywallView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Not now") { dismiss() }
-                        .accessibilityLabel("Dismiss upgrade screen")
+                    // Prominent, labeled close (IOS-AUDIT-UX-011); toolbar items
+                    // already satisfy the 44pt hit-target minimum.
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title2)
+                            .symbolRenderingMode(.hierarchical)
+                            .foregroundStyle(.secondary)
+                    }
+                    .accessibilityLabel("Close")
                 }
             }
             .task {
@@ -362,7 +371,8 @@ struct PaywallView: View {
             )
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(tier.displayName), \(priceText(for: tier))\(isSelected ? ", selected" : "")")
+        .accessibilityLabel("\(tier.displayName), \(priceText(for: tier))")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     // MARK: Period toggle (with annual savings badge — IOS-SUB-012)
@@ -412,7 +422,8 @@ struct PaywallView: View {
             .contentShape(RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(period.label)\(savings != nil ? ", save \(savings!) percent" : "")\(isSelected ? ", selected" : "")")
+        .accessibilityLabel("\(period.label)\(savings != nil ? ", save \(savings!) percent" : "")")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     // MARK: Purchase footer (pinned)
@@ -452,12 +463,25 @@ struct PaywallView: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 
+            // Restore is an interactive control — make it distinct from the
+            // legal links (accent, bolder, ≥44pt) so it doesn't read as fine
+            // print (IOS-AUDIT-UX-011).
+            Button {
+                Task { await restore() }
+            } label: {
+                Text("Restore Purchases")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.accentColor)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .accessibilityLabel("Restore previous purchases")
+
             HStack(spacing: 16) {
-                Button("Restore") { Task { await restore() } }
                 Link("Terms", destination: Config.siteURL.appendingPathComponent("terms"))
                 Link("Privacy", destination: Config.siteURL.appendingPathComponent("privacy-policy"))
             }
             .font(.caption.weight(.medium))
+            .foregroundStyle(.secondary)
         }
         .padding(.horizontal)
         .padding(.top, 10)

@@ -1393,7 +1393,7 @@
         "Default toggle states reflect privacy-first defaults"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: ConsentView.swift:58-83 exposes only 'Save Preferences' and 'Accept All' — no decline/reject path."
     },
     {
@@ -1407,7 +1407,7 @@
         "Period (monthly/annual) selection also announces selected state"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: PaywallView.swift:241-246 only exit is a toolbar 'Not now' text item; Restore is plain caption text same weight as Terms/Privacy (455-459); tier radios (318-366) don't announce selected state."
     },
     {
@@ -1421,7 +1421,7 @@
         "No visual regression to the gate overlay"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: PremiumGate.swift:60-69 unlock CTA is .caption with .padding(.vertical,10) (~28-32pt); PremiumBadge (86-101) is an HStack with no accessibilityElement so VoiceOver reads 'lock.fill' + tier separately."
     },
     {
