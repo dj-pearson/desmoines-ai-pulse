@@ -1,4 +1,4 @@
-import { useState, useMemo, lazy, Suspense } from 'react';
+import { useState, useMemo, lazy, Suspense, useRef } from 'react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { Helmet } from 'react-helmet-async';
@@ -7,39 +7,21 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 import {
-  Calendar, UtensilsCrossed, Star, MapPin, Navigation,
+  Calendar, UtensilsCrossed, Star, MapPin, Navigation, Search, ChevronUp, ChevronDown,
 } from 'lucide-react';
+import { STALE_TIME } from '@/lib/queryConfig';
+import type { MapBounds, MapEntity } from '@/components/map/DiscoverMapCanvas';
 
-const MapContainer = lazy(() =>
-  import('react-leaflet').then((m) => ({ default: m.MapContainer }))
-);
-const TileLayer = lazy(() =>
-  import('react-leaflet').then((m) => ({ default: m.TileLayer }))
-);
-const MarkerImport = lazy(() =>
-  import('react-leaflet').then((m) => ({ default: m.Marker }))
-);
-const PopupImport = lazy(() =>
-  import('react-leaflet').then((m) => ({ default: m.Popup }))
-);
-
-interface MapEntity {
-  id: string;
-  name: string;
-  type: 'event' | 'restaurant' | 'attraction';
-  latitude: number;
-  longitude: number;
-  description?: string;
-  category?: string;
-  rating?: number;
-  date?: string;
-}
+// react-leaflet stays off the initial bundle (WEB-PERF-003) — the whole canvas
+// (incl. leaflet) loads lazily when the map renders.
+const DiscoverMapCanvas = lazy(() => import('@/components/map/DiscoverMapCanvas'));
 
 const LAYER_CONFIG = [
-  { key: 'event' as const, label: 'Events', Icon: Calendar, color: '#6366f1' },
-  { key: 'restaurant' as const, label: 'Restaurants', Icon: UtensilsCrossed, color: '#ef4444' },
-  { key: 'attraction' as const, label: 'Attractions', Icon: Star, color: '#f59e0b' },
+  { key: 'event' as const, label: 'Events', Icon: Calendar },
+  { key: 'restaurant' as const, label: 'Restaurants', Icon: UtensilsCrossed },
+  { key: 'attraction' as const, label: 'Attractions', Icon: Star },
 ];
 
 function useMapEntities() {
@@ -73,58 +55,65 @@ function useMapEntities() {
       if (eventsRes.data) {
         for (const e of eventsRes.data) {
           results.push({
-            id: e.id,
-            name: e.title,
-            type: 'event',
-            latitude: Number(e.latitude),
-            longitude: Number(e.longitude),
-            description: e.description?.slice(0, 120),
-            category: e.category,
-            date: e.date,
+            id: e.id, name: e.title, type: 'event',
+            latitude: Number(e.latitude), longitude: Number(e.longitude),
+            description: e.description?.slice(0, 120), category: e.category, date: e.date,
           });
         }
       }
-
       if (restaurantsRes.data) {
         for (const r of restaurantsRes.data) {
           results.push({
-            id: r.id,
-            name: r.name,
-            type: 'restaurant',
-            latitude: Number(r.latitude),
-            longitude: Number(r.longitude),
-            description: r.description?.slice(0, 120),
-            category: r.cuisine,
+            id: r.id, name: r.name, type: 'restaurant',
+            latitude: Number(r.latitude), longitude: Number(r.longitude),
+            description: r.description?.slice(0, 120), category: r.cuisine,
             rating: r.rating ? Number(r.rating) : undefined,
           });
         }
       }
-
       if (attractionsRes.data) {
         for (const a of attractionsRes.data) {
           results.push({
-            id: a.id,
-            name: a.name,
-            type: 'attraction',
-            latitude: Number(a.latitude),
-            longitude: Number(a.longitude),
-            description: a.description?.slice(0, 120),
-            category: a.category,
+            id: a.id, name: a.name, type: 'attraction',
+            latitude: Number(a.latitude), longitude: Number(a.longitude),
+            description: a.description?.slice(0, 120), category: a.category,
           });
         }
       }
-
       return results;
     },
-    staleTime: 10 * 60 * 1000,
+    staleTime: STALE_TIME.CONTENT_LIST,
   });
 }
+
+function withinBounds(e: MapEntity, b: MapBounds): boolean {
+  return (
+    e.latitude <= b.north &&
+    e.latitude >= b.south &&
+    e.longitude <= b.east &&
+    e.longitude >= b.west
+  );
+}
+
+const TYPE_LABEL: Record<MapEntity['type'], string> = {
+  event: 'Event', restaurant: 'Restaurant', attraction: 'Attraction',
+};
+const detailPath = (e: MapEntity) =>
+  `/${e.type === 'event' ? 'events' : e.type === 'restaurant' ? 'restaurants' : 'attractions'}/${e.id}`;
 
 export default function DiscoverMap() {
   const { data: entities, isLoading } = useMapEntities();
   const [activeLayers, setActiveLayers] = useState<Set<string>>(
     new Set(['event', 'restaurant', 'attraction'])
   );
+  // Bounds the map currently shows (updated on moveend) vs. the bounds the list
+  // is filtered to ("Search this area" promotes pending -> applied).
+  const [pendingBounds, setPendingBounds] = useState<MapBounds | null>(null);
+  const [appliedBounds, setAppliedBounds] = useState<MapBounds | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [flyTo, setFlyTo] = useState<{ lat: number; lng: number; key: number } | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const flyKey = useRef(0);
 
   const toggleLayer = (key: string) => {
     setActiveLayers((prev) => {
@@ -135,24 +124,98 @@ export default function DiscoverMap() {
     });
   };
 
-  const filtered = useMemo(
+  const layerFiltered = useMemo(
     () => entities?.filter((e) => activeLayers.has(e.type)) ?? [],
     [entities, activeLayers]
   );
 
+  // Markers reflect layer toggles; the list reflects layer toggles AND the
+  // applied viewport bounds.
+  const inView = useMemo(
+    () =>
+      appliedBounds
+        ? layerFiltered.filter((e) => withinBounds(e, appliedBounds))
+        : layerFiltered,
+    [layerFiltered, appliedBounds]
+  );
+
+  const boundsAreStale =
+    pendingBounds !== null && pendingBounds !== appliedBounds;
+
+  const handleSearchArea = () => {
+    setAppliedBounds(pendingBounds);
+  };
+
+  const handleSelect = (id: string) => {
+    setSelectedId(id);
+    const entity = entities?.find((e) => e.id === id);
+    if (entity) {
+      flyKey.current += 1;
+      setFlyTo({ lat: entity.latitude, lng: entity.longitude, key: flyKey.current });
+    }
+  };
+
   const handleNearMe = () => {
     if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(() => {
-      // The map will re-center if we implement it with useMap
-      // For now, the button shows intent
+    navigator.geolocation.getCurrentPosition((pos) => {
+      flyKey.current += 1;
+      setFlyTo({
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        key: flyKey.current,
+      });
     });
   };
+
+  const ResultsList = (
+    <ul className="divide-y" aria-label="Results in view">
+      {inView.length === 0 ? (
+        <li className="p-4 text-sm text-muted-foreground">
+          No results in this area. Pan or zoom out, then “Search this area”.
+        </li>
+      ) : (
+        inView.map((e) => (
+          <li key={e.id}>
+            <button
+              type="button"
+              onClick={() => handleSelect(e.id)}
+              className={cn(
+                'w-full text-left p-3 hover:bg-muted/60 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                selectedId === e.id && 'bg-primary/10'
+              )}
+              aria-current={selectedId === e.id}
+            >
+              <div className="flex items-center gap-2 mb-0.5">
+                <Badge variant="outline" className="text-[10px]">{TYPE_LABEL[e.type]}</Badge>
+                {e.rating && (
+                  <span className="text-[11px] text-muted-foreground">
+                    <Star className="h-3 w-3 inline mr-0.5 text-amber-500" />{e.rating}
+                  </span>
+                )}
+              </div>
+              <h3 className="font-medium text-sm line-clamp-1">{e.name}</h3>
+              {e.category && (
+                <p className="text-xs text-muted-foreground line-clamp-1">{e.category}</p>
+              )}
+              <a
+                href={detailPath(e)}
+                className="text-xs text-primary hover:underline"
+                onClick={(ev) => ev.stopPropagation()}
+              >
+                View details
+              </a>
+            </button>
+          </li>
+        ))
+      )}
+    </ul>
+  );
 
   return (
     <>
       <Helmet>
         <title>Discover Map — Explore Des Moines | Des Moines Insider</title>
-        <meta name="description" content="Explore Des Moines on an interactive map. Toggle events, restaurants, and attractions to discover what is nearby." />
+        <meta name="description" content="Explore Des Moines on an interactive map. Pan to search an area and browse events, restaurants, and attractions in view." />
       </Helmet>
       <div className="min-h-screen bg-background flex flex-col">
         <Header />
@@ -167,6 +230,7 @@ export default function DiscoverMap() {
                 variant={activeLayers.has(key) ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => toggleLayer(key)}
+                aria-pressed={activeLayers.has(key)}
               >
                 <Icon className="h-4 w-4 mr-1" />
                 {label}
@@ -185,71 +249,66 @@ export default function DiscoverMap() {
           </div>
         </div>
 
-        {/* Map */}
-        <div className="flex-1 relative" style={{ minHeight: '60vh' }}>
-          {isLoading ? (
-            <div className="flex items-center justify-center h-full">
-              <Skeleton className="w-full h-full absolute inset-0" />
+        {/* Map + results */}
+        <div className="flex-1 relative flex" style={{ minHeight: '60vh' }}>
+          {/* Desktop sidebar list */}
+          <aside className="hidden md:flex md:flex-col w-80 border-r bg-card overflow-hidden">
+            <div className="p-3 border-b flex items-center justify-between">
+              <span className="text-sm font-semibold" aria-live="polite">
+                {inView.length} in view
+              </span>
             </div>
-          ) : (
-            <Suspense fallback={<Skeleton className="w-full h-full absolute inset-0" />}>
-              <MapContainer
-                center={[41.5868, -93.625]}
-                zoom={13}
-                style={{ width: '100%', height: '100%', position: 'absolute', inset: 0 }}
-                scrollWheelZoom
-              >
-                <TileLayer
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            <div className="flex-1 overflow-y-auto">{ResultsList}</div>
+          </aside>
+
+          {/* Map */}
+          <div className="flex-1 relative">
+            {isLoading ? (
+              <Skeleton className="w-full h-full absolute inset-0" />
+            ) : (
+              <Suspense fallback={<Skeleton className="w-full h-full absolute inset-0" />}>
+                <DiscoverMapCanvas
+                  entities={layerFiltered}
+                  selectedId={selectedId}
+                  onSelect={handleSelect}
+                  onBoundsChange={setPendingBounds}
+                  flyTo={flyTo}
                 />
-                {filtered.map((entity) => (
-                  <Suspense key={entity.id} fallback={null}>
-                    <MarkerImport
-                      position={[entity.latitude, entity.longitude]}
-                    >
-                      <PopupImport>
-                        <div className="min-w-[200px]">
-                          <h3 className="font-semibold text-sm mb-1">{entity.name}</h3>
-                          {entity.category && (
-                            <p className="text-xs text-muted-foreground mb-1">{entity.category}</p>
-                          )}
-                          {entity.description && (
-                            <p className="text-xs mb-2">{entity.description}</p>
-                          )}
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="text-xs">
-                              {entity.type === 'event' ? 'Event' : entity.type === 'restaurant' ? 'Restaurant' : 'Attraction'}
-                            </Badge>
-                            {entity.rating && (
-                              <span className="text-xs text-muted-foreground">
-                                <Star className="h-3 w-3 inline mr-0.5 text-amber-500" />
-                                {entity.rating}
-                              </span>
-                            )}
-                          </div>
-                          <a
-                            href={`/${entity.type === 'event' ? 'events' : entity.type === 'restaurant' ? 'restaurants' : 'attractions'}/${entity.id}`}
-                            className="text-xs text-primary hover:underline mt-2 block"
-                          >
-                            View Details
-                          </a>
-                          <a
-                            href={`https://www.google.com/maps/dir/?api=1&destination=${entity.latitude},${entity.longitude}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs text-primary hover:underline"
-                          >
-                            <MapPin className="h-3 w-3 inline mr-0.5" /> Get Directions
-                          </a>
-                        </div>
-                      </PopupImport>
-                    </MarkerImport>
-                  </Suspense>
-                ))}
-              </MapContainer>
-            </Suspense>
-          )}
+              </Suspense>
+            )}
+
+            {/* Search this area */}
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000]">
+              <Button
+                size="sm"
+                onClick={handleSearchArea}
+                disabled={!boundsAreStale}
+                className="shadow-lg"
+              >
+                <Search className="h-4 w-4 mr-1" /> Search this area
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Mobile bottom sheet */}
+        <div className="md:hidden fixed bottom-20 inset-x-0 z-[1000]">
+          <div className="mx-2 mb-2 rounded-t-xl border bg-card shadow-2xl">
+            <button
+              type="button"
+              onClick={() => setSheetOpen((o) => !o)}
+              className="w-full flex items-center justify-between px-4 py-3"
+              aria-expanded={sheetOpen}
+            >
+              <span className="text-sm font-semibold" aria-live="polite">
+                {inView.length} in view
+              </span>
+              {sheetOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+            </button>
+            {sheetOpen && (
+              <div className="max-h-[40vh] overflow-y-auto border-t">{ResultsList}</div>
+            )}
+          </div>
         </div>
 
         <Footer />

@@ -682,7 +682,7 @@
         "npm run validate passes"
       ],
       "priority": 44,
-      "passes": false,
+      "passes": true,
       "notes": "Existing DiscoverMap page is the shell; content tables have lat/lng maintained by geocoding triggers (and WEB-AUTO-003 heals gaps)."
     },
     {

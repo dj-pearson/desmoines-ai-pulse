@@ -3854,3 +3854,36 @@ type-check PASSES (exit 0); eslint changed files 0 errors/0 warnings.
   M src/hooks/useActiveAds.ts
   M src/components/AdBanner.tsx
   M src/components/AffiliateAdBanner.tsx
+
+## 2026-06-20 — WEB-FEAT-009 (Map-first discovery: bounds-aware DiscoverMap) [passes:true]
+
+### Approach
+DiscoverMap previously loaded all geo'd entities and dropped markers with no
+spatial interaction. Added bounds-aware filtering CLIENT-SIDE (lat/lng range over
+the already-loaded, capped dataset) — satisfies "RPC or lat/lng range filters"
+with no new migration.
+
+### Canvas extracted: src/components/map/DiscoverMapCanvas.tsx
+react-leaflet moved into its own lazy()-imported module so leaflet stays off the
+initial bundle (keeps WEB-PERF-003). Adds:
+- BoundsWatcher (useMapEvents moveend -> emits {north,south,east,west}, plus an
+  initial emit on mount).
+- FlyToController (useMap -> flyTo on selection / Near Me).
+- Marker click -> onSelect; selected marker gets zIndexOffset.
+
+### Page (DiscoverMap.tsx)
+- pendingBounds (current viewport) vs appliedBounds (what the list filters to);
+  "Search this area" promotes pending->applied, disabled until the view moves.
+- In-view list: desktop left sidebar + mobile bottom sheet, each with a live
+  "N in view" count (aria-live). Layer toggles control both markers and list.
+- Card<->marker selection sync: clicking a card or marker highlights the card
+  (bg + aria-current) and flies the map to it. Near Me flies to geolocation.
+- Leaflet stays lazy; list/cards link to detail pages.
+
+### Verification
+type-check PASSES (exit 0); eslint changed files 0 errors. Runtime pan/zoom
+behavior needs a browser (not available headless).
+
+### Files
+  A src/components/map/DiscoverMapCanvas.tsx
+  M src/pages/DiscoverMap.tsx
