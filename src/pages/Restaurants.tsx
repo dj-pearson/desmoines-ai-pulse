@@ -49,6 +49,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import RestaurantCard from "@/components/RestaurantCard";
 import { arrangeSponsored } from "@/lib/sponsored";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
+import { ActiveFilterChips } from "@/components/filters/ActiveFilterChips";
 import { SearchAutocomplete, addRecentSearch } from "@/components/SearchAutocomplete";
 import {
   Pagination,
@@ -125,6 +126,29 @@ export default function Restaurants() {
     },
     [filters, setMany]
   );
+
+  // Active-filter chips (WEB-UX-003) — each removal updates the URL via setFilters.
+  const restaurantChips = useMemo(() => {
+    const chips: { key: string; label: string; onRemove: () => void }[] = [];
+    if (filters.search)
+      chips.push({ key: "q", label: `Search: "${filters.search}"`, onRemove: () => { setSearchInput(""); setParam("q", "", { resetsPage: true }); } });
+    filters.cuisine.forEach((c) =>
+      chips.push({ key: `cuisine-${c}`, label: c, onRemove: () => setFilters((p) => ({ ...p, cuisine: p.cuisine.filter((x) => x !== c) })) })
+    );
+    filters.priceRange.forEach((c) =>
+      chips.push({ key: `price-${c}`, label: c, onRemove: () => setFilters((p) => ({ ...p, priceRange: p.priceRange.filter((x) => x !== c) })) })
+    );
+    filters.location.forEach((c) =>
+      chips.push({ key: `loc-${c}`, label: c, onRemove: () => setFilters((p) => ({ ...p, location: p.location.filter((x) => x !== c) })) })
+    );
+    if (filters.featuredOnly)
+      chips.push({ key: "featured", label: "Featured only", onRemove: () => setFilters((p) => ({ ...p, featuredOnly: false })) });
+    if (filters.openNow)
+      chips.push({ key: "open", label: "Open now", onRemove: () => setFilters((p) => ({ ...p, openNow: false })) });
+    if (filters.rating[0] !== 0 || filters.rating[1] !== 5)
+      chips.push({ key: "rating", label: `Rating ${filters.rating[0]}–${filters.rating[1]}`, onRemove: () => setFilters((p) => ({ ...p, rating: [0, 5] })) });
+    return chips;
+  }, [filters, setFilters, setParam]);
 
   const [viewMode, setViewMode] = useState<"list" | "map">("list");
   const [searchInput, setSearchInput] = useState(() => getStr("q", ""));
@@ -654,8 +678,14 @@ export default function Restaurants() {
                 </Suspense>
               ) : (
                 <>
+                  {/* Sticky filter bar: removable chips (WEB-UX-003) */}
+                  {restaurantChips.length > 0 && (
+                    <div className="sticky top-16 z-30 py-2 mb-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+                      <ActiveFilterChips onClearAll={handleClearFilters} chips={restaurantChips} />
+                    </div>
+                  )}
                   {/* Results count */}
-                  <p className="text-sm text-muted-foreground mb-4">
+                  <p className="text-sm text-muted-foreground mb-4" aria-live="polite">
                     {isMobile
                       ? `Showing ${Math.min(paginatedRestaurants.length, restaurants.length)} of ${restaurants.length} restaurants`
                       : `Showing ${Math.min((page - 1) * ITEMS_PER_PAGE + 1, restaurants.length)}-${Math.min(page * ITEMS_PER_PAGE, restaurants.length)} of ${restaurants.length} restaurants`}

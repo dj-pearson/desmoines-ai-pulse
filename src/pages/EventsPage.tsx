@@ -33,6 +33,7 @@ import {
 import { SocialEventCard } from "@/components/SocialEventCard";
 import { arrangeSponsored } from "@/lib/sponsored";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
+import { ActiveFilterChips } from "@/components/filters/ActiveFilterChips";
 import Header from "@/components/Header";
 import { AdBanner } from "@/components/AdBanner";
 import Footer from "@/components/Footer";
@@ -479,6 +480,28 @@ export default function EventsPage() {
     isNearMeActive,
   ].filter(Boolean).length;
 
+  // Active-filter chips (WEB-UX-003) — removal updates the URL state.
+  const eventChips: { key: string; label: string; onRemove: () => void }[] = [
+    ...(debouncedSearchQuery
+      ? [{ key: "q", label: `Search: "${debouncedSearchQuery}"`, onRemove: () => { setSearchQuery(""); setParam("q", "", { resetsPage: true }); } }]
+      : []),
+    ...(selectedCategory !== "all"
+      ? [{ key: "category", label: selectedCategory, onRemove: () => setSelectedCategory("all") }]
+      : []),
+    ...(activeDatePreset
+      ? [{ key: "preset", label: DATE_PRESETS.find((p) => p.key === activeDatePreset)?.label || "Date", onRemove: () => setParam("preset", "", { resetsPage: true }) }]
+      : []),
+    ...(location !== "any-location"
+      ? [{ key: "location", label: location, onRemove: () => setLocation("any-location") }]
+      : []),
+    ...(priceRange !== "any-price"
+      ? [{ key: "price", label: priceRange, onRemove: () => setPriceRange("any-price") }]
+      : []),
+    ...(isNearMeActive
+      ? [{ key: "near", label: "Near me", onRemove: () => setIsNearMeActive(false) }]
+      : []),
+  ];
+
   // SEO
   const seoTitle = searchQuery
     ? `"${searchQuery}" Events in Des Moines, Iowa`
@@ -832,7 +855,7 @@ export default function EventsPage() {
                   : "Upcoming Events"}
               </h2>
               {!isLoading && (
-                <p className="text-sm text-muted-foreground mt-0.5">
+                <p className="text-sm text-muted-foreground mt-0.5" aria-live="polite">
                   {events?.length || 0} events in Des Moines{isNearMeActive ? ' near you' : ''}
                 </p>
               )}
@@ -843,6 +866,13 @@ export default function EventsPage() {
               onChange={setSortBy}
             />
           </div>
+
+          {/* Sticky filter bar: removable chips (WEB-UX-003) */}
+          {eventChips.length > 0 && (
+            <div className="sticky top-16 z-30 py-2 mb-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+              <ActiveFilterChips onClearAll={handleClearFilters} chips={eventChips} />
+            </div>
+          )}
 
           {/* Featured Events Section */}
           {!isLoading && activeFiltersCount === 0 && featuredEvents.length > 0 && (

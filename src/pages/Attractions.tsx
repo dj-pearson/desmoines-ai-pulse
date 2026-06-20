@@ -7,6 +7,7 @@ import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { FAQSection } from "@/components/FAQSection";
 import { useAttractions } from "@/hooks/useAttractions";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
+import { ActiveFilterChips } from "@/components/filters/ActiveFilterChips";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 import { useToast } from "@/hooks/use-toast";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
@@ -562,39 +563,30 @@ export default function Attractions() {
           />
         </div>
 
-        {/* Active Filter Badges */}
-        {hasActiveFilters && (
-          <div className="flex flex-wrap items-center gap-2 mb-4">
-            <span className="text-sm text-muted-foreground">Active filters:</span>
-            {searchQuery && (
-              <Badge variant="secondary" className="gap-1 pr-1">
-                Search: &quot;{searchQuery}&quot;
-                <button onClick={() => setSearchQuery("")} className="ml-1 hover:bg-accent rounded-full p-0.5" aria-label={`Remove search filter "${searchQuery}"`}><X className="h-3 w-3" /></button>
-              </Badge>
-            )}
-            {selectedType !== "all" && (
-              <Badge variant="secondary" className="gap-1 pr-1">
-                Type: {selectedType}
-                <button onClick={() => setSelectedType("all")} className="ml-1 hover:bg-accent rounded-full p-0.5" aria-label={`Remove type filter "${selectedType}"`}><X className="h-3 w-3" /></button>
-              </Badge>
-            )}
-            {minRating !== "any-rating" && (
-              <Badge variant="secondary" className="gap-1 pr-1">
-                Rating: {minRating}+
-                <button onClick={() => setMinRating("any-rating")} className="ml-1 hover:bg-accent rounded-full p-0.5" aria-label="Remove rating filter"><X className="h-3 w-3" /></button>
-              </Badge>
-            )}
-            {featuredOnly !== "all" && (
-              <Badge variant="secondary" className="gap-1 pr-1">
-                Featured Only
-                <button onClick={() => setFeaturedOnly("all")} className="ml-1 hover:bg-accent rounded-full p-0.5" aria-label="Remove featured filter"><X className="h-3 w-3" /></button>
-              </Badge>
-            )}
-            <Button variant="ghost" size="sm" onClick={handleClearFilters} className="text-muted-foreground h-7 text-xs">
-              Clear All
-            </Button>
-          </div>
-        )}
+        {/* Sticky filter bar: result count + removable chips (WEB-UX-003) */}
+        <div className="sticky top-16 z-30 py-2 mb-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b">
+          <span className="text-sm font-medium" aria-live="polite">
+            {filteredAttractions?.length || 0} result{(filteredAttractions?.length || 0) === 1 ? "" : "s"}
+          </span>
+          <ActiveFilterChips
+            className="mt-2"
+            onClearAll={handleClearFilters}
+            chips={[
+              ...(searchQuery
+                ? [{ key: "q", label: `Search: "${searchQuery}"`, onRemove: () => { setSearchQuery(""); setParam("q", "", { resetsPage: true }); } }]
+                : []),
+              ...(selectedType !== "all"
+                ? [{ key: "type", label: `Type: ${selectedType}`, onRemove: () => setSelectedType("all") }]
+                : []),
+              ...(minRating !== "any-rating"
+                ? [{ key: "rating", label: `Rating: ${minRating}+`, onRemove: () => setMinRating("any-rating") }]
+                : []),
+              ...(featuredOnly !== "all"
+                ? [{ key: "featured", label: "Featured only", onRemove: () => setFeaturedOnly("all") }]
+                : []),
+            ]}
+          />
+        </div>
 
         {viewMode === 'map' ? (
           <AttractionsMap attractions={sortedAttractions} />

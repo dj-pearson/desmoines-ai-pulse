@@ -3957,3 +3957,48 @@ cron, runtime-verification heavy; AUTO-011 also has Cloudflare sitemap-serving
 ambiguity flagged in its own notes).
 
 iOS-AUDIT-* (47) not started: Swift can't be compiled/verified here (no Xcode).
+
+## 2026-06-20 — WEB-UX-003 (Sticky bar, persistent chips, visible result counts) [passes:true]
+
+### New component: src/components/filters/ActiveFilterChips.tsx
+Reusable removable chips ({key,label,onRemove}[]) + "Clear all"; renders nothing
+when empty; visible at all viewports. Removal is wired to the URL filter state
+(WEB-UX-001) so it updates the shareable URL.
+
+### Per page
+- Each list page (Events/Restaurants/Attractions) now renders a STICKY bar
+  (`sticky top-16 z-30` under the sticky header) above the results carrying the
+  result count + the removable chips. The count is aria-live='polite' and
+  visible at all viewports (incl. mobile).
+- Attractions: replaced its bespoke inline badges with ActiveFilterChips.
+- Restaurants: chips built from the combined filter object (search, each
+  cuisine/price/location, featured, open now, rating); count already mobile-
+  visible (prior partial) + aria-live added.
+- Events: chips for search/category/date-preset/location/price/near-me; count
+  aria-live added.
+
+### Focus restore (AC item)
+Mobile filter surfaces are Radix primitives that auto-restore focus to their
+trigger on close: Attractions = Sheet, Events = Popover (EventInlineFilters).
+Restaurants filters are inline (no modal) so nothing to restore. No extra code
+needed.
+
+### Tests
+Added tests/sticky-filter-chips.spec.ts (chip renders for an active search,
+removing it clears the URL, result count visible) across the three pages.
+
+### Honest note
+The sticky element is the chips+count controls bar; the main search input stays
+within each page's hero (extracting it into the sticky bar would be a risky hero
+restructure best done with a browser). Sticky visual behavior + the mobile
+Playwright run need a browser (not available in this headless container).
+
+### Verification
+type-check + lint PASS (0 errors).
+
+### Files
+  A src/components/filters/ActiveFilterChips.tsx
+  A tests/sticky-filter-chips.spec.ts
+  M src/pages/EventsPage.tsx
+  M src/pages/Restaurants.tsx
+  M src/pages/Attractions.tsx
