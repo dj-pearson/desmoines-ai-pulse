@@ -4012,3 +4012,41 @@ validate passes. Instant back-nav is gcTime-driven (verify in-browser).
 
 ### Files
   M src/main.tsx
+
+## 2026-06-20 — WEB-FEAT-006 (guest favorites with signup migration) [passes:true]
+
+Kill the save-wall: anonymous visitors can save up to 3 favorites before a
+contextual sign-up prompt; on login they migrate to the account.
+
+- src/hooks/useGuestFavorites.ts: versioned safeStorage store (key
+  "guest_favorites_v1", CLAUDE.md on-disk-state rule), cap GUEST_FAVORITE_LIMIT=3,
+  reactive via useSyncExternalStore + a module pub/sub so every FavoriteButton
+  stays in sync. Survives reloads.
+- FavoriteButton: when unauthenticated, saves to the guest store (the user-gated
+  TanStack queries stay disabled, no wasted fetches). At the cap it shows a
+  contextual sonner prompt "Sign up free to keep saving" with a Sign-up action
+  (→ /auth) — NOT the paywall; non-cap saves toast "Saved (N/3)".
+- Migration: src/lib/guestFavoriteMigration.ts inserts guest items into the
+  user_event/restaurant/attraction/playground_interactions tables, idempotent
+  (23505 unique-violation counts as success), then clears local. Driven by
+  <GuestFavoriteMigrator/> (mounted in App under AuthProvider) which fires on the
+  null→user transition, invalidates favorites queries, and toasts
+  "We saved your N favorites to your account".
+- Conversion funnel: src/lib/conversionTracking.ts trackConversion() (lightweight,
+  fire-and-forget, no per-button analytics session) logs guest_save,
+  guest_wall_hit, and signup_from_wall.
+
+### Verification (run)
+New src/hooks/__tests__/useGuestFavorites.test.ts (cap/toggle/remove/persist) —
+4/4 pass; full vitest suite 103/103. tsc clean; eslint 0 errors. npm run validate
+passes. Note: trackConversion writes to user_analytics best-effort (silently
+no-ops if event_type is CHECK-constrained).
+
+### Files
+  A src/hooks/useGuestFavorites.ts
+  A src/lib/conversionTracking.ts
+  A src/lib/guestFavoriteMigration.ts
+  A src/components/GuestFavoriteMigrator.tsx
+  A src/hooks/__tests__/useGuestFavorites.test.ts
+  M src/components/FavoriteButton.tsx
+  M src/App.tsx

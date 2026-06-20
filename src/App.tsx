@@ -19,6 +19,7 @@ import { KeyboardShortcutsModal } from "@/components/KeyboardShortcutsModal";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import BottomNav from "@/components/BottomNav";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { GuestFavoriteMigrator } from "@/components/GuestFavoriteMigrator";
 import { AccessibilityProvider } from "@/contexts/AccessibilityContext";
 import { AccessibilityWidget } from "@/components/AccessibilityWidget";
 import { SessionManager } from "@/components/auth/SessionManager";
@@ -278,6 +279,7 @@ const App = () => (
       <ScrollToTopOnNavigate />
       <AuthProvider>
         <SessionManager />
+        <GuestFavoriteMigrator />
         <OfflineBanner />
         <ErrorBoundary>
           <KeyboardShortcutsProvider>
