@@ -65,6 +65,28 @@ struct MainTabView: View {
         var id: String { rawValue }
     }
 
+    /// Deep-link / universal-link / notification routing (IOS-AUDIT-FEAT-002/003).
+    /// DeepLinkHandler sets `pendingDestination`; we consume it here and present
+    /// the resolved screen, clearing the pending value after navigation.
+    @State private var deepLink = DeepLinkHandler.shared
+    @State private var deepLinkPresentation: DeepLinkPresentation?
+
+    enum DeepLinkPresentation: Identifiable {
+        case event(String)
+        case restaurant(String)
+        case attraction(String)
+        case discover(DiscoverDestination)
+
+        var id: String {
+            switch self {
+            case .event(let id): return "event-\(id)"
+            case .restaurant(let id): return "restaurant-\(id)"
+            case .attraction(let id): return "attraction-\(id)"
+            case .discover(let d): return "discover-\(d.rawValue)"
+            }
+        }
+    }
+
     var body: some View {
         Group {
             if sizeClass == .regular {
@@ -87,6 +109,15 @@ struct MainTabView: View {
             if Config.isUITesting, let screen = Config.uiTestScreen {
                 uiTestCover = UITestCover(rawValue: screen)
             }
+            // Consume any deep link that arrived before this view appeared
+            // (cold launch from a link or notification).
+            routeDeepLink()
+        }
+        .onChange(of: deepLink.pendingDestination) { _, _ in
+            routeDeepLink()
+        }
+        .sheet(item: $deepLinkPresentation) { presentation in
+            DeepLinkResolverView(presentation: presentation)
         }
         .onChange(of: selectedTab) { _, _ in
             // Major navigation boundary. Free tier only; the service enforces the
@@ -121,6 +152,20 @@ struct MainTabView: View {
             case .paywall: PaywallView(context: .tripPlanner)
             case .hub: ContentHubView(hub: .music)
             }
+        }
+    }
+
+    /// Consumes a pending deep-link destination and routes it: tab destinations
+    /// switch the active tab in place; content/discover destinations present a
+    /// resolver sheet (IOS-AUDIT-FEAT-002/003).
+    private func routeDeepLink() {
+        guard let destination = deepLink.consumeDestination() else { return }
+        switch destination {
+        case .event(let id): deepLinkPresentation = .event(id)
+        case .restaurant(let id): deepLinkPresentation = .restaurant(id)
+        case .attraction(let id): deepLinkPresentation = .attraction(id)
+        case .discover(let d): deepLinkPresentation = .discover(d)
+        case .tab(let tab): selectedTab = tab
         }
     }
 
@@ -265,6 +310,93 @@ struct MainTabView: View {
         case .map: EventMapView()
         case .favorites: FavoritesView()
         case .profile: ProfileView()
+        }
+    }
+}
+
+// MARK: - Deep Link Resolver (IOS-AUDIT-FEAT-002/003)
+
+/// Resolves a deep-linked id to its model and presents the matching detail
+/// screen inside a dismissable NavigationStack. Discover destinations render
+/// their native surface directly. Falls back to an error+retry state if the
+/// content can't be fetched (e.g. offline or deleted), never crashing.
+private struct DeepLinkResolverView: View {
+    let presentation: MainTabView.DeepLinkPresentation
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var phase: Phase = .loading
+
+    private enum Phase {
+        case loading
+        case failed
+        case event(Event)
+        case restaurant(Restaurant)
+        case attraction(Attraction)
+    }
+
+    var body: some View {
+        NavigationStack {
+            content
+                // Discover surfaces render with ownsNavigationStack:false and
+                // push typed values, so the parent stack registers the routes.
+                .navigationDestination(for: Event.self) { EventDetailView(event: $0) }
+                .navigationDestination(for: Restaurant.self) { RestaurantDetailView(restaurant: $0) }
+                .navigationDestination(for: Attraction.self) { AttractionDetailView(attraction: $0) }
+                .navigationDestination(for: Article.self) { ArticleDetailView(article: $0) }
+                .navigationDestination(for: Hotel.self) { HotelDetailView(hotel: $0) }
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Close") { dismiss() }
+                    }
+                }
+        }
+        .task { await resolve() }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch presentation {
+        case .discover(let destination):
+            destination.destinationView
+        case .event, .restaurant, .attraction:
+            switch phase {
+            case .loading:
+                ProgressView("Loading…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .failed:
+                ContentUnavailableView {
+                    Label("Couldn’t open this link", systemImage: "wifi.exclamationmark")
+                } description: {
+                    Text("The content may have moved or you’re offline.")
+                } actions: {
+                    Button("Try Again") { Task { await resolve() } }
+                }
+            case .event(let event):
+                EventDetailView(event: event)
+            case .restaurant(let restaurant):
+                RestaurantDetailView(restaurant: restaurant)
+            case .attraction(let attraction):
+                AttractionDetailView(attraction: attraction)
+            }
+        }
+    }
+
+    private func resolve() async {
+        switch presentation {
+        case .discover:
+            return // rendered directly
+        case .event(let id):
+            phase = .loading
+            do { phase = .event(try await EventsService.shared.fetchEvent(id: id)) }
+            catch { phase = .failed }
+        case .restaurant(let id):
+            phase = .loading
+            do { phase = .restaurant(try await RestaurantsService.shared.fetchRestaurant(id: id)) }
+            catch { phase = .failed }
+        case .attraction(let id):
+            phase = .loading
+            do { phase = .attraction(try await AttractionsService.shared.fetchAttraction(id: id)) }
+            catch { phase = .failed }
         }
     }
 }

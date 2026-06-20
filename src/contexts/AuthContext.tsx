@@ -33,8 +33,16 @@ interface AuthActions {
 
 type AuthContextType = AuthState & AuthActions;
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+/**
+ * The rarely-changing status fields — everything except `user`/`session`. A
+ * TOKEN_REFRESHED tick changes session/user but NOT these, so components that
+ * only read isAuthenticated/isAdmin (header, nav, gates) can subscribe here and
+ * skip re-rendering on every refresh tick (WEB-PERF-005).
+ */
+type AuthStatus = Omit<AuthState, "user" | "session">;
+
 const AuthStateContext = createContext<AuthState | undefined>(undefined);
+const AuthStatusContext = createContext<AuthStatus | undefined>(undefined);
 const AuthActionsContext = createContext<AuthActions | undefined>(undefined);
 
 // Cache for admin status
@@ -666,19 +674,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     getSessionExpiresAt,
   }), [login, signup, logout, requireAdmin, refreshSession, signInWithGoogle, signInWithApple, resetPassword, updatePassword, resendVerification, getSessionExpiresAt]);
 
-  const combined = useMemo<AuthContextType>(() => ({
-    ...authState,
-    ...actions,
-  }), [authState, actions]);
+  // Memoized on ONLY the status fields, so its identity is stable across
+  // session/token-refresh ticks (which change user/session) — WEB-PERF-005.
+  const status = useMemo<AuthStatus>(() => ({
+    isLoading: authState.isLoading,
+    isAuthenticated: authState.isAuthenticated,
+    isAdmin: authState.isAdmin,
+    isAdminLoading: authState.isAdminLoading,
+    requiresMFA: authState.requiresMFA,
+    mfaFactorId: authState.mfaFactorId,
+  }), [
+    authState.isLoading,
+    authState.isAuthenticated,
+    authState.isAdmin,
+    authState.isAdminLoading,
+    authState.requiresMFA,
+    authState.mfaFactorId,
+  ]);
 
   return (
-    <AuthContext.Provider value={combined}>
-      <AuthStateContext.Provider value={authState}>
+    <AuthStateContext.Provider value={authState}>
+      <AuthStatusContext.Provider value={status}>
         <AuthActionsContext.Provider value={actions}>
           {children}
         </AuthActionsContext.Provider>
-      </AuthStateContext.Provider>
-    </AuthContext.Provider>
+      </AuthStatusContext.Provider>
+    </AuthStateContext.Provider>
   );
 }
 
@@ -700,12 +721,27 @@ export function useAuthActions(): AuthActions {
   return context;
 }
 
-/** Combined auth state + actions (backward compatible) */
-export function useAuth(): AuthContextType {
-  const context = useContext(AuthContext);
+/**
+ * Rarely-changing auth status (isAuthenticated / isAdmin / loading / MFA) with
+ * NO user/session — does not re-render on session or token-refresh ticks.
+ * Prefer this (with useAuthActions) in nav/header/gates (WEB-PERF-005).
+ */
+export function useAuthStatus(): AuthStatus {
+  const context = useContext(AuthStatusContext);
   if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
+    throw new Error("useAuthStatus must be used within an AuthProvider");
   }
   return context;
+}
+
+/**
+ * Combined auth state + actions (backward compatible). Composed from the split
+ * contexts so the public API is unchanged for existing call sites — heavy
+ * consumers should migrate to useAuthStatus/useAuthActions for fewer re-renders.
+ */
+export function useAuth(): AuthContextType {
+  const state = useAuthState();
+  const actions = useAuthActions();
+  return useMemo<AuthContextType>(() => ({ ...state, ...actions }), [state, actions]);
 }
 

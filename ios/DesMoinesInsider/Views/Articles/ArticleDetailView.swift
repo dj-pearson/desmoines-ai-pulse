@@ -174,14 +174,13 @@ struct ArticleDetailView: View {
     // MARK: - Actions
 
     private func openLink(_ url: URL) {
-        guard let scheme = url.scheme?.lowercased() else { return }
-        if scheme == "http" || scheme == "https" {
-            // In-app browser for web links (article cross-links, sources).
-            browseTarget = AdTarget(url: url)
-        } else {
-            // mailto:, tel:, etc. — hand off to the system.
-            UIApplication.shared.open(url)
+        // Article body links are content-supplied — only open safe web schemes
+        // in the in-app browser; drop and log anything else (IOS-AUDIT-SEC-002).
+        guard url.isSafeWebLink else {
+            AppLogger.nav.warning("Dropped unsafe article link (scheme: \(url.scheme ?? "nil"))")
+            return
         }
+        browseTarget = AdTarget(url: url)
     }
 
     private func toggleSave() {

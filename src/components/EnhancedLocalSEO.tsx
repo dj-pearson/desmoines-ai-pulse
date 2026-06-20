@@ -69,6 +69,7 @@ interface EnhancedLocalSEOProps {
   suburb?: string;
   category?: string;
   isTimeSensitive?: boolean; // For today/weekend pages
+  keywords?: string[]; // Caller-supplied keywords, merged with generated ones
 }
 
 export default function EnhancedLocalSEO({
@@ -85,6 +86,7 @@ export default function EnhancedLocalSEO({
   suburb,
   category,
   isTimeSensitive = false,
+  keywords: extraKeywords = [],
 }: EnhancedLocalSEOProps) {
   // Generate location-specific keywords
   const generateLocalKeywords = () => {
@@ -118,6 +120,8 @@ export default function EnhancedLocalSEO({
     if (attractionData) {
       keywords.push("attractions", "places to visit", "sightseeing");
     }
+
+    if (extraKeywords.length) keywords.push(...extraKeywords);
 
     return keywords.join(", ");
   };

@@ -68,6 +68,8 @@ struct RestaurantDetailView: View {
                             .foregroundStyle(favorites.isRestaurantFavorited(restaurant.id) ? .red : .primary)
                     }
                     .accessibilityLabel(favorites.isRestaurantFavorited(restaurant.id) ? "Remove from saved" : "Save restaurant")
+                    .accessibilityValue(favorites.isRestaurantFavorited(restaurant.id) ? "Saved" : "Not saved")
+                    .accessibilityAddTraits(favorites.isRestaurantFavorited(restaurant.id) ? .isSelected : [])
                 }
             }
         }

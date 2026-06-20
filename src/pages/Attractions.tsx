@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useEffect, lazy, Suspense, useRef } from "react";
+import React, { useState, useMemo, useEffect, useCallback, lazy, Suspense, useRef } from "react";
+import { useUrlFilterState } from "@/hooks/useUrlFilterState";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { AdBanner } from "@/components/AdBanner";
@@ -45,6 +46,7 @@ import {
 } from "@/components/ui/pagination";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { OptimizedImage } from "@/components/OptimizedImage";
+import { FavoriteButton } from "@/components/FavoriteButton";
 import { SearchAutocomplete, addRecentSearch } from "@/components/SearchAutocomplete";
 import { usePrefetchAttraction } from "@/hooks/usePrefetchDetail";
 import {
@@ -65,6 +67,17 @@ const createSlug = (name: string): string => {
     .replace(/^-+|-+$/g, "");
 };
 
+// URL param defaults (WEB-UX-001). A value equal to its default is omitted
+// from the query string to keep shared links clean.
+const ATTRACTION_FILTER_DEFAULTS: Record<string, string> = {
+  q: "",
+  type: "all",
+  rating: "any-rating",
+  feat: "all",
+  sort: "rating",
+  page: "1",
+};
+
 export default function Attractions() {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -73,18 +86,50 @@ export default function Attractions() {
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const prefetchAttraction = usePrefetchAttraction();
-  // Filter states
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedType, setSelectedType] = useState("all");
-  const [minRating, setMinRating] = useState("any-rating");
+  // URL is the source of truth for filters (WEB-UX-001) so the filtered view
+  // survives back/forward navigation and is shareable.
+  const { params, get, set, clear } = useUrlFilterState();
+  const selectedType = get("type", "all");
+  const minRating = get("rating", "any-rating");
+  const featuredOnly = get("feat", "all");
+  const sortBy = get("sort", "rating");
+  const page = Math.max(1, parseInt(get("page", "1"), 10) || 1);
+
+  // Search filters in-memory (instant), so keep it as local state for a
+  // responsive input; a debounced effect mirrors it to ?q= for shareability.
+  const [searchQuery, setSearchQuery] = useState(get("q"));
+
+  // Display toggles (not URL-synced).
   const [showFilters, setShowFilters] = useState(true); // Show filters by default
   const [showMobileFilters, setShowMobileFilters] = useState(false);
-  const [featuredOnly, setFeaturedOnly] = useState("all");
-  const [sortBy, setSortBy] = useState("rating");
   const [viewMode, setViewMode] = useState('list');
 
   const ITEMS_PER_PAGE = 30;
-  const [page, setPage] = useState(1);
+
+  // Discrete filter setters write through to the URL and reset to page 1.
+  const setSelectedType = useCallback(
+    (v: string) => set({ type: v, page: null }, { defaults: ATTRACTION_FILTER_DEFAULTS }),
+    [set],
+  );
+  const setMinRating = useCallback(
+    (v: string) => set({ rating: v, page: null }, { defaults: ATTRACTION_FILTER_DEFAULTS }),
+    [set],
+  );
+  const setFeaturedOnly = useCallback(
+    (v: string) => set({ feat: v, page: null }, { defaults: ATTRACTION_FILTER_DEFAULTS }),
+    [set],
+  );
+  const setSortBy = useCallback(
+    (v: string) => set({ sort: v, page: null }, { defaults: ATTRACTION_FILTER_DEFAULTS }),
+    [set],
+  );
+  const setPage = useCallback(
+    (updater: number | ((p: number) => number)) => {
+      const next = typeof updater === "function" ? updater(page) : updater;
+      set({ page: next <= 1 ? null : next }, { defaults: ATTRACTION_FILTER_DEFAULTS });
+    },
+    [set, page],
+  );
 
   // Get all attractions first
   const { attractions: allAttractions, isLoading, error, refetch } = useAttractions({});
@@ -171,10 +216,26 @@ export default function Attractions() {
     ? page * ITEMS_PER_PAGE < sortedAttractions.length
     : page < totalPages;
 
-  // Reset page when filters change
+  // Page resets to 1 inside each discrete filter setter (URL is the source of
+  // truth). Search resets page via the debounced URL write below.
+
+  // Push debounced search input → URL (replace, so each keystroke doesn't add a
+  // history entry). Reads params.get directly to avoid re-arming on every nav.
   useEffect(() => {
-    setPage(1);
-  }, [searchQuery, selectedType, minRating, featuredOnly, sortBy]);
+    const timer = setTimeout(() => {
+      if (searchQuery !== (params.get("q") ?? "")) {
+        set({ q: searchQuery, page: null }, { replace: true, defaults: ATTRACTION_FILTER_DEFAULTS });
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery]);
+
+  // Pull URL → input on external navigation (back/forward, shared link).
+  useEffect(() => {
+    setSearchQuery(get("q"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.get("q")]);
 
   // Announce result count to screen readers
   useEffect(() => {
@@ -198,9 +259,7 @@ export default function Attractions() {
 
   const handleClearFilters = () => {
     setSearchQuery("");
-    setSelectedType("all");
-    setMinRating("any-rating");
-    setFeaturedOnly("all");
+    clear(["q", "type", "rating", "feat", "page"]);
     toast({
       title: "Filters Cleared",
       description: "All filters have been reset",
@@ -613,21 +672,35 @@ export default function Attractions() {
                   onMouseEnter={() => prefetchAttraction(createSlug(attraction.name))}
                 >
                   <Card className="h-full hover:shadow-lg transition-all duration-200 hover:-translate-y-1 rounded-2xl overflow-hidden">
-                    {attraction.image_url ? (
-                      <OptimizedImage
-                        src={attraction.image_url}
-                        alt={`${attraction.name} - ${attraction.type} in Des Moines`}
-                        width={640}
-                        height={360}
-                        className="transition-transform duration-200 hover:scale-105 object-cover"
-                        containerClassName="aspect-video overflow-hidden"
-                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                      />
-                    ) : (
-                      <div className="aspect-video bg-gradient-to-br from-[#2D1B69] to-[#DC143C] flex items-center justify-center" role="img" aria-label={`No image available for ${attraction.name}`}>
-                        <Landmark className="h-12 w-12 text-white/40" />
+                    <div className="relative">
+                      {attraction.image_url ? (
+                        <OptimizedImage
+                          src={attraction.image_url}
+                          alt={`${attraction.name} - ${attraction.type} in Des Moines`}
+                          width={640}
+                          height={360}
+                          className="transition-transform duration-200 hover:scale-105 object-cover"
+                          containerClassName="aspect-video overflow-hidden"
+                          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                          useTransformApi
+                          transformWidths={[320, 480, 640, 960]}
+                        />
+                      ) : (
+                        <div className="aspect-video bg-gradient-to-br from-[#2D1B69] to-[#DC143C] flex items-center justify-center" role="img" aria-label={`No image available for ${attraction.name}`}>
+                          <Landmark className="h-12 w-12 text-white/40" />
+                        </div>
+                      )}
+                      {/* Save (favorite) — stopPropagation/preventDefault keep it from navigating the card */}
+                      <div className="absolute top-3 right-3 z-20">
+                        <FavoriteButton
+                          contentType="attraction"
+                          contentId={attraction.id}
+                          itemName={attraction.name}
+                          size="icon"
+                          className="h-9 w-9 rounded-full bg-black/40 backdrop-blur-sm hover:bg-black/60"
+                        />
                       </div>
-                    )}
+                    </div>
                     <CardContent className="p-5">
                       <div className="flex items-center justify-between mb-2">
                         <Badge

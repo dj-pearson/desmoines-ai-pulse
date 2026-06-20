@@ -1,7 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import { Home, Calendar, Navigation, UtensilsCrossed, Map, User } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthStatus } from "@/hooks/useAuth";
 import { prefetchRoute } from "@/lib/prefetch";
 import { hapticTap } from "@/lib/capacitorUtils";
 
@@ -13,7 +13,9 @@ interface NavItem {
 }
 
 export default function BottomNav() {
-  const { isAuthenticated } = useAuth();
+  // Status-only (no user/session) so BottomNav skips token-refresh re-renders
+  // (WEB-PERF-005).
+  const { isAuthenticated } = useAuthStatus();
   const location = useLocation();
 
   const navItems: NavItem[] = [

@@ -3,6 +3,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { FavoriteButton } from '@/components/FavoriteButton';
+import { getCategoryStyle } from '@/lib/categoryStyles';
+import { SponsoredBadge } from '@/components/SponsoredBadge';
+import { isActivelySponsored } from '@/lib/sponsored';
+import { trackSponsoredListing } from '@/lib/sponsoredTracking';
 import ShareDialog from '@/components/ShareDialog';
 import { useEventSocial } from '@/hooks/useEventSocial';
 import { BatchEventSocialData } from '@/hooks/useBatchEventSocial';
@@ -47,19 +51,13 @@ function SocialEventCardComponent({
   const liveStats = socialData?.liveStats ?? individualFetch.liveStats;
   const attendees = socialData?.attendees ?? individualFetch.attendees;
 
-  const getCategoryStyle = (category: string) => {
-    const c = category.toLowerCase();
-    if (c.includes('music')) return { bg: 'bg-violet-500', text: 'text-violet-500', icon: 'bg-violet-500/10' };
-    if (c.includes('food') || c.includes('drink')) return { bg: 'bg-orange-500', text: 'text-orange-500', icon: 'bg-orange-500/10' };
-    if (c.includes('sport')) return { bg: 'bg-emerald-500', text: 'text-emerald-500', icon: 'bg-emerald-500/10' };
-    if (c.includes('art') || c.includes('culture')) return { bg: 'bg-pink-500', text: 'text-pink-500', icon: 'bg-pink-500/10' };
-    if (c.includes('family') || c.includes('kid')) return { bg: 'bg-sky-500', text: 'text-sky-500', icon: 'bg-sky-500/10' };
-    if (c.includes('outdoor')) return { bg: 'bg-green-500', text: 'text-green-500', icon: 'bg-green-500/10' };
-    if (c.includes('business') || c.includes('network')) return { bg: 'bg-slate-600', text: 'text-slate-600', icon: 'bg-slate-600/10' };
-    return { bg: 'bg-primary', text: 'text-primary', icon: 'bg-primary/10' };
-  };
-
   const categoryStyle = getCategoryStyle(event.category);
+
+  // Active sponsorship only (WEB-FEAT-005); expired ones drop the treatment.
+  const sponsored = isActivelySponsored(event);
+  React.useEffect(() => {
+    if (sponsored) trackSponsoredListing("impression", "event", event.id);
+  }, [sponsored, event.id]);
 
   const getDateParts = () => {
     try {
@@ -87,11 +85,18 @@ function SocialEventCardComponent({
 
   return (
     <Card
-      className={`group relative overflow-hidden border-0 shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-card ${
-        featured ? 'md:col-span-2 md:row-span-2' : ''
-      }`}
+      className={`group relative overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-card ${
+        sponsored ? 'ring-2 ring-amber-400 border-0' : 'border-0'
+      } ${featured ? 'md:col-span-2 md:row-span-2' : ''}`}
     >
-      <Link to={eventUrl} className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-xl" aria-label={`View details for ${event.title}`}>
+      <Link
+        to={eventUrl}
+        className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-xl"
+        aria-label={`${sponsored ? 'Sponsored: ' : ''}View details for ${event.title}`}
+        onClick={() => {
+          if (sponsored) trackSponsoredListing('click', 'event', event.id);
+        }}
+      >
         <CardContent className="p-0">
           {/* Image Section with Overlay */}
           <div className={`relative overflow-hidden ${featured ? 'h-64 md:h-80' : 'h-52'}`}>
@@ -140,6 +145,7 @@ function SocialEventCardComponent({
 
             {/* Top Right Badges */}
             <div className="absolute top-3 right-3 z-10 flex flex-col gap-1.5 items-end">
+              {sponsored && <SponsoredBadge className="shadow-lg" />}
               {isLive && (
                 <Badge className="bg-green-500 text-white border-0 shadow-lg text-[10px] px-2 animate-pulse">
                   <TrendingUp className="h-3 w-3 mr-1" />

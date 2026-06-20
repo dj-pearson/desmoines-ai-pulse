@@ -15,6 +15,27 @@ if [ -n "$blocked" ]; then
   exit 1
 fi
 
+# 1b) (IOS-AUDIT-SEC-007) Never commit iOS Secrets files — they bundle the
+#     Supabase anon key and are generated at build time from Secrets.xcconfig.
+secret_files=$(printf '%s\n' "$staged" | grep -E '(^|/)Secrets\.(xcconfig|generated\.swift)$' || true)
+if [ -n "$secret_files" ]; then
+  echo "❌ Refusing to commit iOS Secrets files (they bundle the Supabase anon key):"
+  printf '   %s\n' $secret_files
+  echo "   These are generated at build time — never commit them (see ios/SECRETS.md)."
+  exit 1
+fi
+
+# 1c) (IOS-AUDIT-SEC-007) Block JWT/anon-key-shaped strings in staged additions.
+#     Matches a base64url JWT header.payload.signature (covers Supabase anon and
+#     service-role keys). .env.example placeholders use <...> and won't match.
+jwt_hits=$(git diff --cached -U0 --diff-filter=ACM | grep -E '^\+' \
+  | grep -E 'eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}' || true)
+if [ -n "$jwt_hits" ]; then
+  echo "❌ Refusing to commit: a JWT/anon-key-shaped string was found in staged changes."
+  echo "   Supabase keys are injected at build time and must never be committed."
+  exit 1
+fi
+
 # 2) If gitleaks is installed locally, run it on the staged changes as a fast
 #    second line of defense. Skipped silently when gitleaks isn't present (CI
 #    still runs the authoritative scan).

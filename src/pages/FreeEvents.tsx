@@ -222,7 +222,7 @@ export default function FreeEvents() {
                     <div key={category} className="flex items-center justify-between p-3 bg-muted rounded-lg">
                       <span className="text-sm font-medium">{category}</span>
                       <span className="text-xs bg-primary text-primary-foreground px-2 py-1 rounded-full">
-                        {count}
+                        {count as number}
                       </span>
                     </div>
                   ))}

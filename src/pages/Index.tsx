@@ -47,6 +47,8 @@ const EventSocialHub = lazy(() => import("@/components/EventSocialHub").then(m =
 const PreferencesOnboarding = lazy(() => import("@/components/PreferencesOnboarding").then(m => ({ default: m.PreferencesOnboarding })));
 const PersonalizedRecommendations = lazy(() => import("@/components/PersonalizedRecommendations").then(m => ({ default: m.PersonalizedRecommendations })));
 const RecentlyViewed = lazy(() => import("@/components/RecentlyViewed").then(m => ({ default: m.RecentlyViewed })));
+const RecentlyViewedRail = lazy(() => import("@/components/RecentlyViewedRail").then(m => ({ default: m.RecentlyViewedRail })));
+const HomeInterestNav = lazy(() => import("@/components/HomeInterestNav").then(m => ({ default: m.HomeInterestNav })));
 const SocialProof = lazy(() => import("@/components/SocialProof").then(m => ({ default: m.SocialProof })));
 
 // Shape-matched skeleton loaders for lazy-loaded sections
@@ -439,6 +441,13 @@ export default function Index() {
 
         {/* For You / Trending rail — IOS-DISCOVER-2026-002 web parity */}
         <ForYouRail />
+
+        {/* Data-driven domain ordering + recently-viewed rail (WEB-FEAT-007).
+            Both compute synchronously from the local store, so no layout shift. */}
+        <Suspense fallback={null}>
+          <HomeInterestNav />
+          <RecentlyViewedRail />
+        </Suspense>
 
         {/* All-Inclusive Dashboard — real content first, before marketing (WEB-UX-015) */}
         <div data-dashboard="all-inclusive">

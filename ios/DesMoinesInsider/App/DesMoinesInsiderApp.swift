@@ -3,6 +3,10 @@ import StoreKit
 
 @main
 struct DesMoinesInsiderApp: App {
+    /// Installs the APNs / notification delegate so push registration and
+    /// notification taps actually work (IOS-AUDIT-FEAT-001 / FEAT-003).
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
     @State private var authService = AuthService.shared
     @State private var favoritesService = FavoritesService.shared
     @State private var locationService = LocationService.shared
@@ -84,6 +88,15 @@ struct DesMoinesInsiderApp: App {
             .onOpenURL { url in
                 // Handle auth callbacks (email verification, OAuth redirects, etc.)
                 SupabaseService.shared.client?.handle(url)
+                // Then route content deep links (events/restaurants/attractions);
+                // auth-callback URLs are ignored by the handler (IOS-AUDIT-FEAT-002).
+                DeepLinkHandler.shared.handle(url)
+            }
+            .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+                // Universal links (https://desmoinesinsider.com/...) (IOS-AUDIT-FEAT-002).
+                if let url = activity.webpageURL {
+                    DeepLinkHandler.shared.handle(url)
+                }
             }
             .task {
                 launchCount += 1
@@ -123,7 +136,15 @@ struct DesMoinesInsiderApp: App {
                     await favoritesService.loadFavorites()
 
                     // Request review after engagement thresholds
-                    requestReviewIfEligible()
+                    await requestReviewIfEligible()
+                }
+
+                // Deliberate, one-time push-permission prompt after onboarding
+                // (IOS-AUDIT-FEAT-001) — not only when a saved-search alert is
+                // enabled. Gated on the feature flag; never re-prompts a user
+                // who already decided.
+                if Config.enablePushNotifications, hasCompletedOnboarding, authService.isAuthenticated {
+                    await PushNotificationService.shared.requestPermissionIfAppropriate()
                 }
             }
             } // ThemeCrossfadeContainer
@@ -132,7 +153,7 @@ struct DesMoinesInsiderApp: App {
 
     // MARK: - App Review
 
-    private func requestReviewIfEligible() {
+    private func requestReviewIfEligible() async {
         // Require at least 3 launches and 1+ favorites before prompting
         guard launchCount >= 3,
               favoritesService.favoriteEventIds.count + favoritesService.favoriteRestaurantIds.count >= 1
@@ -140,16 +161,21 @@ struct DesMoinesInsiderApp: App {
 
         // Only prompt once (AppStore rate-limits this, but we gate on our side too)
         guard !UserDefaults.standard.bool(forKey: "hasRequestedReview") else { return }
-        UserDefaults.standard.set(true, forKey: "hasRequestedReview")
 
-        // Delay slightly so the app is fully visible
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            guard let scene = UIApplication.shared.connectedScenes
-                .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene else {
-                return
-            }
-            AppStore.requestReview(in: scene)
+        // Delay slightly so the app is fully visible. Structured + cancellable
+        // with the view's .task — no fire-and-forget asyncAfter on the launch
+        // path (IOS-AUDIT-PERF-013).
+        try? await Task.sleep(for: .seconds(2))
+        guard !Task.isCancelled else { return }
+
+        // Only prompt when a foreground-active scene still exists, and only mark
+        // as requested once we actually show it.
+        guard let scene = UIApplication.shared.connectedScenes
+            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene else {
+            return
         }
+        UserDefaults.standard.set(true, forKey: "hasRequestedReview")
+        AppStore.requestReview(in: scene)
     }
 }
 

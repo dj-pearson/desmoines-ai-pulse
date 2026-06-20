@@ -31,6 +31,8 @@ import {
   LoadingSpinner,
 } from "@/components/ui/loading-skeleton";
 import { SocialEventCard } from "@/components/SocialEventCard";
+import type { Event as DMEvent } from "@/lib/types";
+import { arrangeSponsoredFirst } from "@/lib/sponsored";
 import Header from "@/components/Header";
 import { AdBanner } from "@/components/AdBanner";
 import Footer from "@/components/Footer";
@@ -51,9 +53,23 @@ import { EventInlineFilters } from "@/components/EventInlineFilters";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { SearchAutocomplete, addRecentSearch } from "@/components/SearchAutocomplete";
+import { useUrlFilterState } from "@/hooks/useUrlFilterState";
 
 // Lazy load heavy map component (includes Leaflet library ~150KB)
 const EventsMap = lazy(() => import("@/components/EventsMap"));
+
+// URL param defaults (WEB-UX-001). A value equal to its default is omitted
+// from the query string to keep shared links clean. Param keys are short and
+// stable since they're user-visible in the URL.
+const EVENT_FILTER_DEFAULTS: Record<string, string> = {
+  q: "",
+  category: "all",
+  date: "",
+  loc: "any-location",
+  price: "any-price",
+  sort: "date_asc",
+  page: "1",
+};
 
 function parsePriceFromText(priceText: string | null): number | null {
   if (!priceText) return null;
@@ -95,49 +111,85 @@ export default function EventsPage() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
 
-  const handleViewEventDetails = useCallback((event: { id: string; title: string; date?: string }) => {
+  const handleViewEventDetails = useCallback((event: DMEvent) => {
     navigate(`/events/${createEventSlugWithCentralTime(event.title, event as any)}`);
   }, [navigate]);
 
-  const [searchQuery, setSearchQuery] = useState("");
-  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("all");
-  const [dateFilter, setDateFilter] = useState<{
+  // URL is the source of truth for filters (WEB-UX-001) so a filtered view
+  // survives back/forward navigation and is shareable. Values equal to their
+  // default are omitted from the query string.
+  const { params, get, set, clear } = useUrlFilterState();
+
+  const searchTerm = get("q"); // committed search (drives the query)
+  const selectedCategory = get("category", "all");
+  const location = get("loc", "any-location");
+  const priceRange = get("price", "any-price");
+  const sortBy = get("sort", "date_asc");
+  const activeDatePreset = params.get("date"); // preset key or null
+  const page = Math.max(1, parseInt(get("page", "1"), 10) || 1);
+
+  // Controlled search input mirrors the URL but updates instantly; a debounced
+  // effect writes it back to ?q= with replace so typing doesn't spam history.
+  const [searchQuery, setSearchQuery] = useState(searchTerm);
+
+  // Calendar-driven custom date ranges aren't serialized (only quick presets
+  // are, per the AC); they live as ephemeral local state and take precedence
+  // over the URL preset when set.
+  const [customDateFilter, setCustomDateFilter] = useState<{
     start?: Date;
     end?: Date;
-    mode: "single" | "range" | "preset";
+    mode: string;
     preset?: string;
   } | null>(null);
-  const [activeDatePreset, setActiveDatePreset] = useState<string | null>(null);
-  const [location, setLocation] = useState("any-location");
-  const [priceRange, setPriceRange] = useState("any-price");
+
+  const dateFilter = customDateFilter ?? (activeDatePreset ? { mode: "preset", preset: activeDatePreset } : null);
+
   const [viewMode, setViewMode] = useState("list");
-  const [sortBy, setSortBy] = useState("date_asc");
-  const [page, setPage] = useState(1);
   const EVENTS_PER_PAGE = 30;
   const { toast } = useToast();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const { announce, announcement, regionProps } = useAnnounce();
 
-  // Geolocation state for "Near Me" feature
+  // Geolocation state for "Near Me" feature (permission-based, not URL-synced)
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [isNearMeActive, setIsNearMeActive] = useState(false);
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
 
-  const handleClearFilters = () => {
+  // Discrete filter setters write through to the URL and reset to page 1.
+  const setSelectedCategory = useCallback(
+    (v: string) => set({ category: v, page: null }, { defaults: EVENT_FILTER_DEFAULTS }),
+    [set],
+  );
+  const setLocation = useCallback(
+    (v: string) => set({ loc: v, page: null }, { defaults: EVENT_FILTER_DEFAULTS }),
+    [set],
+  );
+  const setPriceRange = useCallback(
+    (v: string) => set({ price: v, page: null }, { defaults: EVENT_FILTER_DEFAULTS }),
+    [set],
+  );
+  const setSortBy = useCallback(
+    (v: string) => set({ sort: v, page: null }, { defaults: EVENT_FILTER_DEFAULTS }),
+    [set],
+  );
+  const setPage = useCallback(
+    (updater: number | ((p: number) => number)) => {
+      const next = typeof updater === "function" ? updater(page) : updater;
+      set({ page: next <= 1 ? null : next }, { defaults: EVENT_FILTER_DEFAULTS });
+    },
+    [set, page],
+  );
+
+  const handleClearFilters = useCallback(() => {
     setSearchQuery("");
-    setSelectedCategory("all");
-    setDateFilter(null);
-    setActiveDatePreset(null);
-    setLocation("any-location");
-    setPriceRange("any-price");
+    setCustomDateFilter(null);
     setIsNearMeActive(false);
-    setShowMobileFilters(false);
+    clear(["q", "category", "date", "loc", "price", "page"]);
     toast({
       title: "Filters Cleared",
       description: "All filters have been reset",
     });
-  };
+  }, [clear, toast]);
 
   useFilterKeyboardShortcuts({
     enabled: !isMobile,
@@ -152,52 +204,41 @@ export default function EventsPage() {
     onClearFilters: handleClearFilters,
   });
 
-  // Debounce search query
+  // Push debounced search input → URL (replace, so each keystroke doesn't add a
+  // history entry). Reads params.get directly to avoid re-arming on every nav.
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearchQuery(searchQuery), 300);
+    const timer = setTimeout(() => {
+      if (searchQuery !== (params.get("q") ?? "")) {
+        set({ q: searchQuery, page: null }, { replace: true, defaults: EVENT_FILTER_DEFAULTS });
+      }
+    }, 300);
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery]);
 
-  // Quick date preset handler
-  const handleDatePreset = (preset: string) => {
-    if (activeDatePreset === preset) {
-      setActiveDatePreset(null);
-      setDateFilter(null);
-      return;
-    }
-    setActiveDatePreset(preset);
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(today.getDate() + 1);
+  // Pull URL → input on external navigation (back/forward, shared link).
+  useEffect(() => {
+    setSearchQuery(searchTerm);
+  }, [searchTerm]);
 
-    switch (preset) {
-      case "today":
-        setDateFilter({ mode: "preset", preset: "today", start: today, end: today });
-        break;
-      case "tomorrow":
-        setDateFilter({ mode: "preset", preset: "tomorrow", start: tomorrow, end: tomorrow });
-        break;
-      case "this-weekend": {
-        const saturday = new Date(today);
-        saturday.setDate(today.getDate() + (6 - today.getDay()));
-        const sunday = new Date(saturday);
-        sunday.setDate(saturday.getDate() + 1);
-        setDateFilter({ mode: "preset", preset: "this-weekend", start: saturday, end: sunday });
-        break;
+  // Quick date preset handler — toggles the ?date= preset key. The query
+  // recomputes preset date bounds itself, so only the key needs to round-trip.
+  const handleDatePreset = useCallback(
+    (preset: string) => {
+      setCustomDateFilter(null);
+      if (activeDatePreset === preset) {
+        clear(["date"]);
+      } else {
+        set({ date: preset, page: null }, { defaults: EVENT_FILTER_DEFAULTS });
       }
-      case "this-week": {
-        const endOfWeek = new Date(today);
-        endOfWeek.setDate(today.getDate() + (6 - today.getDay()));
-        setDateFilter({ mode: "preset", preset: "this-week", start: today, end: endOfWeek });
-        break;
-      }
-    }
-  };
+    },
+    [activeDatePreset, set, clear],
+  );
 
   const { data: eventsData, isLoading, error, refetch } = useQuery({
     queryKey: [
       "events",
-      debouncedSearchQuery,
+      searchTerm,
       selectedCategory,
       dateFilter,
       location,
@@ -220,8 +261,8 @@ export default function EventsPage() {
         if (selectedCategory && selectedCategory !== "all") {
           filteredData = filteredData.filter((e) => e.category === selectedCategory);
         }
-        if (debouncedSearchQuery) {
-          const searchLower = debouncedSearchQuery.toLowerCase();
+        if (searchTerm) {
+          const searchLower = searchTerm.toLowerCase();
           filteredData = filteredData.filter((e) =>
             e.title?.toLowerCase().includes(searchLower) ||
             e.enhanced_description?.toLowerCase().includes(searchLower) ||
@@ -267,8 +308,8 @@ export default function EventsPage() {
 
       query = query.range((page - 1) * EVENTS_PER_PAGE, page * EVENTS_PER_PAGE - 1);
 
-      if (debouncedSearchQuery) {
-        query = query.textSearch('search_vector', debouncedSearchQuery, {
+      if (searchTerm) {
+        query = query.textSearch('search_vector', searchTerm, {
           type: 'websearch',
           config: 'english'
         });
@@ -363,8 +404,10 @@ export default function EventsPage() {
 
   const rawEvents = eventsData?.events || [];
   // The query already returns the page in the correct sort order (WEB-UX-018),
-  // so we only apply the client-side price filter here — no re-sorting.
-  const events = filterEventsByPrice(rawEvents, priceRange);
+  // so we only apply the client-side price filter here — no re-sorting. Then
+  // boost up to 2 actively-sponsored events to the top (WEB-FEAT-005); the
+  // Sponsored badge keeps them clearly labeled.
+  const events = arrangeSponsoredFirst(filterEventsByPrice(rawEvents, priceRange));
   const totalCount = eventsData?.totalCount || 0;
   const hasMore = totalCount > page * EVENTS_PER_PAGE;
 
@@ -372,7 +415,8 @@ export default function EventsPage() {
     return (rawEvents || []).filter((e: any) => e.is_featured).slice(0, 3);
   }, [rawEvents]);
 
-  useEffect(() => { setPage(1); }, [debouncedSearchQuery, selectedCategory, dateFilter, location, priceRange, sortBy]);
+  // Page resets to 1 inside each filter setter (URL is the source of truth),
+  // so no separate reset effect is needed.
 
   // Announce result count to screen readers after search/filter changes
   useEffect(() => {
@@ -742,7 +786,7 @@ export default function EventsPage() {
                   onLocationChange={setLocation}
                   priceRange={priceRange}
                   onPriceRangeChange={setPriceRange}
-                  onDateChange={(d) => { setDateFilter(d); setActiveDatePreset(null); }}
+                  onDateChange={(d) => { setCustomDateFilter(d); clear(["date"]); }}
                   categories={categories || []}
                   totalResults={events?.length || 0}
                   isLoading={isLoading}
@@ -844,7 +888,7 @@ export default function EventsPage() {
           )}
 
           {/* Event Grid / Map */}
-          {isLoading && <CardsGridSkeleton count={6} variant="event" label={debouncedSearchQuery ? `Searching for "${debouncedSearchQuery}"...` : selectedCategory !== "all" ? `Loading ${selectedCategory} events...` : "Loading events..."} />}
+          {isLoading && <CardsGridSkeleton count={6} variant="event" label={searchTerm ? `Searching for "${searchTerm}"...` : selectedCategory !== "all" ? `Loading ${selectedCategory} events...` : "Loading events..."} />}
 
           {!isLoading && viewMode === "map" ? (
             <Suspense fallback={<LoadingSpinner label="Loading map..." />}>

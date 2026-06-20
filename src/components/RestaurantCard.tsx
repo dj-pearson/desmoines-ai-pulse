@@ -1,11 +1,15 @@
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { ChefHat, Star, MapPin, Flame, Sparkles, Leaf, Wheat } from "lucide-react";
-import { memo, useState, useMemo, useCallback } from "react";
+import { memo, useState, useMemo, useCallback, useEffect } from "react";
 import { OptimizedImage } from "@/components/OptimizedImage";
+import { FavoriteButton } from "@/components/FavoriteButton";
+import { getCuisineGradient } from "@/lib/categoryStyles";
 import { SocialProofBadge } from "@/components/SocialProofBadge";
 import { getRestaurantOpenStatus } from "@/lib/restaurantHours";
 import { SponsoredBadge } from "@/components/SponsoredBadge";
+import { isActivelySponsored } from "@/lib/sponsored";
+import { trackSponsoredListing } from "@/lib/sponsoredTracking";
 import { usePrefetchRestaurant } from "@/hooks/usePrefetchDetail";
 
 const DIETARY_TAGS = [
@@ -35,6 +39,7 @@ interface RestaurantCardProps {
     opening?: string;
     is_featured?: boolean;
     is_sponsored?: boolean;
+    sponsored_until?: string | null;
     image_url?: string;
     phone?: string;
     website?: string;
@@ -44,32 +49,6 @@ interface RestaurantCardProps {
   variant?: "default" | "compact" | "featured";
 }
 
-const cuisineGradients: Record<string, string> = {
-  Italian: "from-red-600 to-orange-500",
-  Mexican: "from-green-600 to-yellow-500",
-  Chinese: "from-red-700 to-amber-500",
-  Japanese: "from-pink-600 to-red-400",
-  Thai: "from-orange-500 to-yellow-400",
-  Indian: "from-orange-600 to-red-500",
-  American: "from-blue-600 to-red-500",
-  French: "from-blue-500 to-indigo-600",
-  Mediterranean: "from-sky-500 to-emerald-400",
-  Korean: "from-rose-500 to-orange-400",
-  Vietnamese: "from-emerald-500 to-lime-400",
-  BBQ: "from-amber-700 to-red-600",
-  Seafood: "from-cyan-500 to-blue-600",
-  Pizza: "from-red-500 to-yellow-500",
-  Steakhouse: "from-stone-700 to-red-800",
-  default: "from-[#2D1B69] to-[#DC143C]",
-};
-
-function getGradient(cuisine?: string): string {
-  if (!cuisine) return cuisineGradients.default;
-  for (const [key, value] of Object.entries(cuisineGradients)) {
-    if (cuisine.toLowerCase().includes(key.toLowerCase())) return value;
-  }
-  return cuisineGradients.default;
-}
 
 function StarRating({ rating }: { rating: number }) {
   const stars = [];
@@ -101,7 +80,7 @@ function StarRating({ rating }: { rating: number }) {
 
 function RestaurantCardComponent({ restaurant, variant = "default" }: RestaurantCardProps) {
   const [imageError, setImageError] = useState(false);
-  const gradient = getGradient(restaurant.cuisine);
+  const gradient = getCuisineGradient(restaurant.cuisine);
   const showImage = restaurant.image_url && !imageError;
   const isFeatured = variant === "featured" || restaurant.is_featured;
   const openStatus = useMemo(() => getRestaurantOpenStatus(restaurant.opening), [restaurant.opening]);
@@ -112,6 +91,13 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
     return daysSince <= 14;
   }, [restaurant.created_at]);
 
+  // Active sponsorship only — expired (sponsored_until past) drops the treatment
+  // automatically (WEB-FEAT-005).
+  const sponsored = isActivelySponsored(restaurant);
+  useEffect(() => {
+    if (sponsored) trackSponsoredListing("impression", "restaurant", restaurant.id);
+  }, [sponsored, restaurant.id]);
+
   const prefetchRestaurant = usePrefetchRestaurant();
   const handleMouseEnter = useCallback(() => {
     prefetchRestaurant(restaurant.slug || restaurant.id);
@@ -121,12 +107,15 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
     <Link
       to={`/restaurants/${restaurant.slug || restaurant.id}`}
       className="group block focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-2xl"
-      aria-label={`View ${restaurant.name} - ${restaurant.cuisine || "Restaurant"} in ${restaurant.city || "Des Moines"}`}
+      aria-label={`${sponsored ? "Sponsored: " : ""}View ${restaurant.name} - ${restaurant.cuisine || "Restaurant"} in ${restaurant.city || "Des Moines"}`}
       onMouseEnter={handleMouseEnter}
+      onClick={() => {
+        if (sponsored) trackSponsoredListing("click", "restaurant", restaurant.id);
+      }}
     >
       <article
         className={`relative h-full rounded-2xl overflow-hidden border bg-card transition-all duration-200 group-hover:shadow-xl group-hover:-translate-y-1.5 ${
-          restaurant.is_sponsored ? "ring-2 ring-amber-400 shadow-lg" : isFeatured ? "ring-2 ring-amber-400/50 shadow-lg" : "shadow-sm"
+          sponsored ? "ring-2 ring-amber-400 shadow-lg" : isFeatured ? "ring-2 ring-amber-400/50 shadow-lg" : "shadow-sm"
         }`}
       >
         {/* Image / Gradient Header */}
@@ -140,6 +129,8 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
               className="transition-transform duration-200 group-hover:scale-105 object-cover"
               containerClassName="absolute inset-0"
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+              useTransformApi
+              transformWidths={[320, 480, 640, 960]}
               onError={() => setImageError(true)}
             />
           ) : (
@@ -154,16 +145,27 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
           {/* Dark overlay for text readability */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
 
+          {/* Save (favorite) — stopPropagation/preventDefault keep it from navigating the card */}
+          <div className="absolute top-3 right-3 z-20">
+            <FavoriteButton
+              contentType="restaurant"
+              contentId={restaurant.id}
+              itemName={restaurant.name}
+              size="icon"
+              className="h-9 w-9 rounded-full bg-black/40 backdrop-blur-sm hover:bg-black/60"
+            />
+          </div>
+
           {/* Top badges */}
           <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 z-10">
-            {restaurant.is_sponsored && <SponsoredBadge />}
-            {!restaurant.is_sponsored && isFeatured && (
+            {sponsored && <SponsoredBadge />}
+            {!sponsored && isFeatured && (
               <Badge className="bg-amber-500 text-white border-0 shadow-md text-xs font-semibold px-2.5 py-0.5">
                 <Sparkles className="h-3 w-3 mr-1" />
                 Featured
               </Badge>
             )}
-            {!restaurant.is_sponsored && !isFeatured && isNew && (
+            {!sponsored && !isFeatured && isNew && (
               <SocialProofBadge type="new" size="sm" />
             )}
             {openStatus.isOpen && (

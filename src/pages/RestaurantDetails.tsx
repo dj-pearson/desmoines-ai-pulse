@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { FavoriteButton } from "@/components/FavoriteButton";
 import { Separator } from "@/components/ui/separator";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import SEOHead from "@/components/SEOHead";
@@ -29,7 +30,6 @@ import {
   ArrowLeft,
   Navigation,
   Share2,
-  Heart,
   MessageCircle,
   Award,
   Utensils,
@@ -43,6 +43,7 @@ import {
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useContentTracking } from "@/hooks/useContentTracking";
+import { useRecordRecentView } from "@/hooks/useRecentlyViewedFeed";
 import { getRestaurantOpenStatus, getOpeningHoursSpecification } from "@/lib/restaurantHours";
 import { LazyLocationMap } from "@/components/LazyLocationMap";
 import { getDirectionsUrl } from "@/lib/directions";
@@ -86,6 +87,20 @@ export default function RestaurantDetails() {
 
   // Track page view and content interactions
   const { trackShare, trackClick } = useContentTracking(restaurant?.id, 'restaurant');
+
+  // Record into the unified recently-viewed feed (WEB-FEAT-007).
+  useRecordRecentView(
+    restaurant
+      ? {
+          id: restaurant.id,
+          type: "restaurant",
+          title: restaurant.name,
+          href: `/restaurants/${restaurant.slug || restaurant.id}`,
+          image_url: restaurant.image_url ?? undefined,
+          subtitle: restaurant.cuisine || restaurant.location || undefined,
+        }
+      : null,
+  );
 
   const { data: relatedRestaurants } = useQuery({
     queryKey: ["related-restaurants", restaurant?.cuisine, restaurant?.id],
@@ -420,10 +435,15 @@ export default function RestaurantDetails() {
                   </Button>
                 }
               />
-              <Button variant="outline" size="sm" className="rounded-xl">
-                <Heart className="h-4 w-4 mr-1.5" />
-                Save
-              </Button>
+              <FavoriteButton
+                contentType="restaurant"
+                contentId={restaurant.id}
+                itemName={restaurant.name}
+                variant="outline"
+                size="sm"
+                showText
+                className="rounded-xl"
+              />
             </div>
           </div>
 

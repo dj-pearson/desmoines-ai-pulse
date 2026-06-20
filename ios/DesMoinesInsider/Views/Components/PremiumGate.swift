@@ -62,8 +62,8 @@ struct PremiumGate<Content: View>: View {
             } label: {
                 Text("Unlock with \(requiredTier.displayName)")
                     .font(.caption.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
+                    // ≥44pt tap target (IOS-AUDIT-UX-012) without changing the type size.
+                    .frame(maxWidth: .infinity, minHeight: 44)
                     .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 10))
                     .foregroundStyle(.white)
             }
@@ -90,6 +90,7 @@ struct PremiumBadge: View {
         HStack(spacing: 4) {
             Image(systemName: "lock.fill")
                 .font(.system(size: 9))
+                .accessibilityHidden(true)
             Text(tier.displayName)
                 .font(.system(size: 10, weight: .semibold))
         }
@@ -97,6 +98,9 @@ struct PremiumBadge: View {
         .padding(.horizontal, 7)
         .padding(.vertical, 3)
         .background(tier == .vip ? Color.purple : Color.orange, in: Capsule())
+        // Read as one element: "Insider feature, locked" (IOS-AUDIT-UX-012).
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(tier.displayName) feature, locked")
     }
 }
 

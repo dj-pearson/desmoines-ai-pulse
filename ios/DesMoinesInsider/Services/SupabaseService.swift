@@ -27,6 +27,19 @@ final class SupabaseService {
             return
         }
 
+        // Install certificate pinning on the URLSession the Supabase client uses
+        // (IOS-AUDIT-SEC-001). Previously the pinning delegate existed but was
+        // never wired, so no app traffic was pinned. Enforcement is gated by
+        // Config.certificatePinningEnforced (report-only until verified).
+        let pinnedSession = URLSession(
+            configuration: .default,
+            delegate: CertificatePinningService.shared,
+            delegateQueue: nil
+        )
+        AppLogger.network.info(
+            "Supabase client using pinned URLSession (enforced: \(!CertificatePinningService.shared.reportOnly))"
+        )
+
         client = SupabaseClient(
             supabaseURL: url,
             supabaseKey: key,
@@ -36,7 +49,8 @@ final class SupabaseService {
                     flowType: .pkce
                 ),
                 global: SupabaseClientOptions.GlobalOptions(
-                    headers: ["X-Client-Info": "desmoines-insider-ios"]
+                    headers: ["X-Client-Info": "desmoines-insider-ios"],
+                    session: pinnedSession
                 )
             )
         )

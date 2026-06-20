@@ -80,6 +80,8 @@ struct EventDetailView: View {
                             .foregroundStyle(viewModel.isFavorited ? .red : .primary)
                     }
                     .accessibilityLabel(viewModel.isFavorited ? "Remove from saved" : "Save event")
+                    .accessibilityValue(viewModel.isFavorited ? "Saved" : "Not saved")
+                    .accessibilityAddTraits(viewModel.isFavorited ? .isSelected : [])
                 }
             }
         }

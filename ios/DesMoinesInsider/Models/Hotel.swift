@@ -83,9 +83,10 @@ struct Hotel: Identifiable, Codable, Hashable {
         return nil
     }
 
+    /// Safe http/https website URL only (IOS-AUDIT-SEC-002) — an unsafe scheme
+    /// in the content row yields nil so no button renders.
     var websiteURL: URL? {
-        guard let site = website else { return nil }
-        return normalizedURL(site)
+        website.flatMap { $0.safeWebURL }
     }
 
     /// Partner label for analytics + CTA copy ("Book on Hilton", etc.).

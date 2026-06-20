@@ -58,40 +58,42 @@ function supportsAVIF(): boolean {
 }
 
 /**
- * Generate srcset for responsive images
+ * Whether a URL can be server-side resized/format-converted.
+ *
+ * Only Supabase Storage URLs qualify: they go through the native
+ * `/render/image/public/` transformation endpoint, which genuinely resizes and
+ * re-encodes. The `image-transform` edge function does NOT resize (it proxies
+ * the original bytes), so routing external URLs through it would add a network
+ * hop for zero byte savings and risk mismatched `<picture>` source types.
+ * External URLs therefore opt out of transforms and serve as-is.
  */
-function generateSrcSet(src: string, widths: number[]): string {
-  return widths.map((w) => `${src} ${w}w`).join(", ");
+function canTransform(src: string): boolean {
+  return SUPABASE_STORAGE_PATTERN.test(src);
 }
 
 /**
- * Get transformed image URL via edge function
+ * Get transformed image URL via Supabase's native image-transformation endpoint.
+ * Callers must gate on canTransform(src); for non-transformable URLs this
+ * returns the original src unchanged.
+ *
+ * Requires image transformation enabled on the Supabase project. If it isn't,
+ * the request 400s and OptimizedImage's two-stage fallback re-loads the
+ * original URL — so this is always safe to attempt.
  */
 function getTransformedUrl(
   src: string,
   options: { width?: number; format?: string; quality?: number }
 ): string {
+  if (!canTransform(src)) return src;
+
   const { width, format, quality } = options;
-
-  // If it's a Supabase storage URL, use the transform API
-  if (SUPABASE_STORAGE_PATTERN.test(src)) {
-    const url = new URL(src);
-    if (width) url.searchParams.set("width", String(width));
-    if (format) url.searchParams.set("format", format);
-    if (quality) url.searchParams.set("quality", String(quality));
-    return url.toString();
-  }
-
-  // For external URLs, use our image proxy edge function
-  const proxyUrl = new URL(
-    `${import.meta.env.VITE_SUPABASE_URL || ""}/functions/v1/image-transform`
+  const url = new URL(
+    src.replace("/storage/v1/object/public/", "/storage/v1/render/image/public/")
   );
-  proxyUrl.searchParams.set("url", src);
-  if (width) proxyUrl.searchParams.set("width", String(width));
-  if (format) proxyUrl.searchParams.set("format", format);
-  if (quality) proxyUrl.searchParams.set("quality", String(quality));
-
-  return proxyUrl.toString();
+  if (width) url.searchParams.set("width", String(width));
+  if (format) url.searchParams.set("format", format);
+  if (quality) url.searchParams.set("quality", String(quality));
+  return url.toString();
 }
 
 /**
@@ -145,6 +147,12 @@ export default function OptimizedImage({
 }: OptimizedImageProps) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [error, setError] = useState(false);
+  // Two-stage fallback: if a transformed source (srcset via the transform API)
+  // fails to load, retry once with the original untransformed `src` (no srcset)
+  // before giving up and showing the placeholder. This makes enabling
+  // useTransformApi safe — a project without image transformation enabled
+  // simply serves the original image instead of a broken one.
+  const [transformFailed, setTransformFailed] = useState(false);
   const [isInView, setIsInView] = useState(priority);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -152,15 +160,21 @@ export default function OptimizedImage({
   const webpSupported = useMemo(() => enableWebP && supportsWebP(), [enableWebP]);
   const avifSupported = useMemo(() => enableAVIF && supportsAVIF(), [enableAVIF]);
 
-  // Generate srcset if not provided
+  // Only storage-hosted images can be server-side resized; external URLs serve
+  // as-is (see canTransform).
+  const transformable = useTransformApi && canTransform(src);
+
+  // Generate srcset if not provided. Once a transform has failed we drop the
+  // transformed srcset entirely and let the bare `src` (original URL) load.
   const computedSrcSet = useMemo(() => {
+    if (transformFailed) return srcSet ?? undefined;
     if (srcSet) return srcSet;
-    if (!useTransformApi) return undefined;
+    if (!transformable) return undefined;
 
     // Determine format based on browser support
     const format = avifSupported ? "avif" : webpSupported ? "webp" : undefined;
     return generateTransformedSrcSet(src, transformWidths, format, quality);
-  }, [src, srcSet, useTransformApi, transformWidths, avifSupported, webpSupported, quality]);
+  }, [src, srcSet, transformable, transformWidths, avifSupported, webpSupported, quality, transformFailed]);
 
   // Intersection Observer for lazy loading
   useEffect(() => {
@@ -193,12 +207,19 @@ export default function OptimizedImage({
   }, [onLoad]);
 
   const handleError = useCallback(() => {
+    // Stage 1: a transformed source failed → retry with the original URL.
+    if (transformable && !srcSet && !transformFailed) {
+      setTransformFailed(true);
+      return;
+    }
+    // Stage 2: the original URL also failed → surface the fallback/placeholder.
     setError(true);
     setIsLoaded(false);
     onError?.();
-  }, [onError]);
+  }, [onError, transformable, srcSet, transformFailed]);
 
-  // Determine the image source (fallback to placeholder on error)
+  // Determine the image source. On a transform failure we serve the original
+  // `src`; only after that also fails do we fall back to the placeholder.
   const imageSrc = error && fallbackSrc ? fallbackSrc : src;
 
   // Calculate aspect ratio style
@@ -210,7 +231,9 @@ export default function OptimizedImage({
 
   // Generate picture element sources for modern formats
   const renderPictureSources = () => {
-    if (!useTransformApi || error) return null;
+    // Drop modern-format <source>s once a transform has failed so the browser
+    // doesn't keep retrying the (broken) transform endpoint.
+    if (!transformable || error || transformFailed) return null;
 
     const sources = [];
 
@@ -311,3 +334,6 @@ export default function OptimizedImage({
 
 // Named export for consistency
 export { OptimizedImage };
+
+// Pure helpers exported for unit testing (WEB-PERF-004).
+export { canTransform, getTransformedUrl };

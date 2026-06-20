@@ -46,7 +46,9 @@ import { useAnnounce } from "@/hooks/use-announce";
 import { OpenNowBanner } from "@/components/OpenNowBanner";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useUrlFilterState } from "@/hooks/useUrlFilterState";
 import RestaurantCard from "@/components/RestaurantCard";
+import { arrangeSponsoredFirst } from "@/lib/sponsored";
 import { SearchAutocomplete, addRecentSearch } from "@/components/SearchAutocomplete";
 import {
   Pagination,
@@ -78,27 +80,121 @@ const sortOptions = [
   { value: "price_high", label: "Price: High-Low", icon: DollarSign },
 ];
 
+// URL param defaults (WEB-UX-001). A value equal to its default is omitted
+// from the query string to keep shared links clean.
+const RESTAURANT_FILTER_DEFAULTS: Record<string, string> = {
+  q: "",
+  cuisine: "",
+  price: "",
+  loc: "",
+  tags: "",
+  rating: "",
+  sort: "popularity",
+  feat: "",
+  open: "",
+  page: "1",
+};
+
+const RESTAURANT_SORTS: readonly string[] = [
+  "popularity",
+  "rating",
+  "newest",
+  "alphabetical",
+  "price_low",
+  "price_high",
+];
+
+/** Derive the full filters object from the URL — the source of truth. */
+function buildRestaurantFilters(params: URLSearchParams): RestaurantFilterOptions {
+  const list = (k: string): string[] => {
+    const v = params.get(k);
+    return v ? v.split(",").map((s) => s.trim()).filter(Boolean) : [];
+  };
+  let rating: number[] = [0, 5];
+  const ratingRaw = params.get("rating");
+  if (ratingRaw) {
+    const parts = ratingRaw.split("-").map(Number);
+    if (parts.length === 2 && parts.every((n) => !Number.isNaN(n))) rating = parts;
+  }
+  const sortRaw = params.get("sort") ?? "popularity";
+  return {
+    search: params.get("q") ?? "",
+    cuisine: list("cuisine"),
+    priceRange: list("price"),
+    rating,
+    location: list("loc"),
+    sortBy: (RESTAURANT_SORTS.includes(sortRaw)
+      ? sortRaw
+      : "popularity") as RestaurantFilterOptions["sortBy"],
+    featuredOnly: params.get("feat") === "1",
+    openNow: params.get("open") === "1",
+    tags: list("tags"),
+  };
+}
+
+/** Serialize a filters object back to URL params (defaults are dropped by `set`). */
+function restaurantFiltersToParams(
+  f: RestaurantFilterOptions,
+): Record<string, string | string[] | null> {
+  return {
+    q: f.search,
+    cuisine: f.cuisine,
+    price: f.priceRange,
+    loc: f.location,
+    tags: f.tags,
+    rating: f.rating[0] !== 0 || f.rating[1] !== 5 ? `${f.rating[0]}-${f.rating[1]}` : null,
+    sort: f.sortBy,
+    feat: f.featuredOnly ? "1" : null,
+    open: f.openNow ? "1" : null,
+  };
+}
+
 export default function Restaurants() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const [filters, setFilters] = useState<RestaurantFilterOptions>({
-    search: "",
-    cuisine: [],
-    priceRange: [],
-    rating: [0, 5],
-    location: [],
-    sortBy: "popularity",
-    featuredOnly: false,
-    openNow: false,
-    tags: [],
-  });
+
+  // URL is the source of truth for filters (WEB-UX-001) so the filtered view
+  // survives back/forward navigation and is shareable.
+  const { params, set, clear } = useUrlFilterState();
+  const filters = useMemo<RestaurantFilterOptions>(
+    () => buildRestaurantFilters(params),
+    [params],
+  );
+
   const [viewMode, setViewMode] = useState<"list" | "map">("list");
-  const [searchInput, setSearchInput] = useState("");
+  // Controlled input mirrors ?q= but updates instantly; debounced effect below
+  // writes it back to the URL (replace) so typing doesn't spam history.
+  const [searchInput, setSearchInput] = useState(filters.search);
   const { toast } = useToast();
 
   const ITEMS_PER_PAGE = 30;
-  const [page, setPage] = useState(1);
+  const page = Math.max(1, parseInt(params.get("page") ?? "1", 10) || 1);
+
+  // Any filter change writes through to the URL and resets to page 1. Accepts
+  // the same object-or-updater shape as the old useState setter.
+  const setFilters = useCallback(
+    (
+      updater:
+        | RestaurantFilterOptions
+        | ((prev: RestaurantFilterOptions) => RestaurantFilterOptions),
+    ) => {
+      const next = typeof updater === "function" ? updater(filters) : updater;
+      set(
+        { ...restaurantFiltersToParams(next), page: null },
+        { defaults: RESTAURANT_FILTER_DEFAULTS },
+      );
+    },
+    [filters, set],
+  );
+
+  const setPage = useCallback(
+    (updater: number | ((p: number) => number)) => {
+      const next = typeof updater === "function" ? updater(page) : updater;
+      set({ page: next <= 1 ? null : next }, { defaults: RESTAURANT_FILTER_DEFAULTS });
+    },
+    [set, page],
+  );
 
   const { restaurants, isLoading, error, totalCount, refetch } = useRestaurants(filters);
   const filterOptions = useRestaurantFilterOptions();
@@ -114,33 +210,41 @@ export default function Restaurants() {
   // Paginate restaurants
   const totalPages = Math.ceil((restaurants?.length || 0) / ITEMS_PER_PAGE);
   const paginatedRestaurants = useMemo(() => {
+    // Boost up to 2 actively-sponsored restaurants to the top before paginating
+    // (WEB-FEAT-005); organic order otherwise, Sponsored badge on the card.
+    const arranged = arrangeSponsoredFirst(restaurants);
     if (isMobile) {
       // Mobile: show all up to current page (load more pattern)
-      return restaurants.slice(0, page * ITEMS_PER_PAGE);
+      return arranged.slice(0, page * ITEMS_PER_PAGE);
     }
     // Desktop: show current page only
     const start = (page - 1) * ITEMS_PER_PAGE;
-    return restaurants.slice(start, start + ITEMS_PER_PAGE);
+    return arranged.slice(start, start + ITEMS_PER_PAGE);
   }, [restaurants, page, isMobile]);
 
   const hasMorePages = isMobile
     ? page * ITEMS_PER_PAGE < restaurants.length
     : page < totalPages;
 
-  // Reset page when filters change
-  useEffect(() => {
-    setPage(1);
-  }, [filters]);
+  // Page resets to 1 inside each filter setter (URL is the source of truth),
+  // so no separate reset effect is needed.
 
-  // Debounced search
+  // Push debounced search input → URL (replace, so each keystroke doesn't add a
+  // history entry). Reads params.get directly to avoid re-arming on every nav.
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (searchInput !== filters.search) {
-        setFilters((prev) => ({ ...prev, search: searchInput }));
+      if (searchInput !== (params.get("q") ?? "")) {
+        set({ q: searchInput, page: null }, { replace: true, defaults: RESTAURANT_FILTER_DEFAULTS });
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchInput, filters.search]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchInput]);
+
+  // Pull URL → input on external navigation (back/forward, shared link).
+  useEffect(() => {
+    setSearchInput(filters.search);
+  }, [filters.search]);
 
   // Announce result count to screen readers
   useEffect(() => {
@@ -152,23 +256,13 @@ export default function Restaurants() {
   }, [restaurants?.length, isLoading, filters.search, announce]);
 
   const handleClearFilters = useCallback(() => {
-    setFilters({
-      search: "",
-      cuisine: [],
-      priceRange: [],
-      rating: [0, 5],
-      location: [],
-      sortBy: "popularity",
-      featuredOnly: false,
-      openNow: false,
-      tags: [],
-    });
     setSearchInput("");
+    clear(["q", "cuisine", "price", "loc", "tags", "rating", "sort", "feat", "open", "page"]);
     toast({
       title: "Filters Cleared",
       description: "All filters have been reset",
     });
-  }, [toast]);
+  }, [clear, toast]);
 
   const getActiveFiltersCount = useMemo(() => {
     let count = 0;
@@ -738,7 +832,6 @@ export default function Restaurants() {
                       key={cuisine}
                       onClick={() => {
                         setFilters((prev) => ({ ...prev, cuisine: [cuisine] }));
-                        setActiveCuisineQuick('');
                         document.getElementById('all-restaurants-heading')?.scrollIntoView({ behavior: 'smooth' });
                       }}
                       className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border border-gray-200 dark:border-gray-700 bg-white dark:bg-card text-gray-700 dark:text-gray-300 hover:border-[#2D1B69] dark:hover:border-primary hover:bg-[#2D1B69]/5 dark:hover:bg-primary/10 transition-all duration-200 shadow-sm"

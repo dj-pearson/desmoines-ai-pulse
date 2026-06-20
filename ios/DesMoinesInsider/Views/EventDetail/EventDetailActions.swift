@@ -63,8 +63,9 @@ struct EventDetailActions: View {
                     }
                 }
 
-                // External Link
-                if let sourceUrl = event.sourceUrl, let url = URL(string: sourceUrl) {
+                // External Link — content-supplied, so restrict to safe web
+                // schemes (IOS-AUDIT-SEC-002); unsafe values render no button.
+                if let url = event.sourceUrl.flatMap({ $0.safeWebURL }) {
                     Link(destination: url) {
                         Label("More Info", systemImage: "safari")
                             .font(.subheadline.weight(.medium))

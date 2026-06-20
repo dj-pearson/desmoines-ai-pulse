@@ -13,6 +13,7 @@ import InteractiveDateSelector from "@/components/InteractiveDateSelector";
 import { useAnalytics } from "@/hooks/useAnalytics";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchRestaurantFilterFacets } from "@/hooks/useRestaurants";
 
 interface SearchSectionProps {
   onSearch: (
@@ -65,18 +66,15 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
         ].filter(Boolean);
         return uniqueCategories.sort();
       } else if (category === "Restaurants") {
-        const { data, error } = await supabase
-          .from("restaurants")
-          .select("cuisine");
-
-        if (error) throw error;
-        const uniqueCuisines = [
-          ...new Set(data.map((restaurant) => restaurant.cuisine)),
-        ].filter(Boolean);
-        return uniqueCuisines.sort();
+        // Distinct cuisines from the cached facets RPC instead of fetching the
+        // whole cuisine column to dedupe client-side (WEB-PERF-002).
+        const facets = await fetchRestaurantFilterFacets();
+        return facets.cuisines.map((c) => c.cuisine).sort();
       }
       return [];
     },
+    // Filter options change rarely — cache for an hour (WEB-PERF-002).
+    staleTime: 60 * 60 * 1000,
     enabled:
       category !== "All" &&
       (category === "Events" || category === "Restaurants"),

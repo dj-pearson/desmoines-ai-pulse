@@ -84,13 +84,46 @@ final class PushNotificationService: NSObject {
         let settings = await UNUserNotificationCenter.current().notificationSettings()
         permissionStatus = settings.authorizationStatus
     }
+
+    /// Requests push permission at a deliberate post-onboarding moment
+    /// (IOS-AUDIT-FEAT-001) — exactly once per install, and never re-prompting a
+    /// user who already decided. If a previous grant exists but remote
+    /// registration hasn't happened this launch, re-register.
+    func requestPermissionIfAppropriate() async {
+        await checkPermissionStatus()
+
+        guard permissionStatus == .notDetermined else {
+            if permissionStatus == .authorized && !isRegistered {
+                UIApplication.shared.registerForRemoteNotifications()
+            }
+            return
+        }
+
+        guard !UserDefaults.standard.bool(forKey: Self.didRequestPermissionKey) else { return }
+        UserDefaults.standard.set(true, forKey: Self.didRequestPermissionKey)
+        await requestPermissionAndRegister()
+    }
+
+    private static let didRequestPermissionKey = "didRequestPushPermission"
 }
 
 // MARK: - App Delegate for Push Notifications
 
-/// Use as `@UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate` in the App struct
-/// when `Config.enablePushNotifications` is true.
-class AppDelegate: NSObject, UIApplicationDelegate {
+/// Installed via `@UIApplicationDelegateAdaptor(AppDelegate.self)` in the App
+/// struct so APNs token callbacks (IOS-AUDIT-FEAT-001) and notification taps /
+/// foreground presentation (IOS-AUDIT-FEAT-003) are actually delivered. The
+/// UNUserNotificationCenter delegate is set unconditionally because local
+/// event-reminder notifications need tap routing even when remote push is off;
+/// remote registration itself stays gated on `Config.enablePushNotifications`.
+class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        UNUserNotificationCenter.current().delegate = self
+        return true
+    }
+
     func application(
         _ application: UIApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
@@ -107,5 +140,30 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         Task { @MainActor in
             PushNotificationService.shared.didFailToRegisterForRemoteNotifications(error: error)
         }
+    }
+
+    // MARK: - UNUserNotificationCenterDelegate (IOS-AUDIT-FEAT-003)
+
+    /// Show foreground notifications as a banner with sound instead of swallowing them.
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound])
+    }
+
+    /// Route a notification tap (event reminder or push deep-link payload) to the
+    /// right screen via DeepLinkHandler; MainTabView consumes the destination.
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let userInfo = response.notification.request.content.userInfo
+        Task { @MainActor in
+            DeepLinkHandler.shared.handleNotification(userInfo: userInfo)
+        }
+        completionHandler()
     }
 }

@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { FavoriteButton } from "@/components/FavoriteButton";
 import { Separator } from "@/components/ui/separator";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import Header from "@/components/Header";
@@ -25,7 +26,6 @@ import {
   ArrowLeft,
   Navigation,
   Share2,
-  Heart,
   Sparkles,
   Check,
   Info,
@@ -248,10 +248,15 @@ export default function PlaygroundDetails() {
                   </Button>
                 }
               />
-              <Button variant="outline" size="sm" className="rounded-xl">
-                <Heart className="h-4 w-4 mr-1.5" />
-                Save
-              </Button>
+              <FavoriteButton
+                contentType="playground"
+                contentId={playground.id}
+                itemName={playground.name}
+                variant="outline"
+                size="sm"
+                showText
+                className="rounded-xl"
+              />
             </div>
           </div>
 

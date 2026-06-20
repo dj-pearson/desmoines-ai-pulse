@@ -22,7 +22,15 @@ actor QueryCache {
     private static let cacheVersion = 2
 
     private init() {
-        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        // Fall back to the temporary directory rather than force-unwrapping and
+        // crashing at launch if the caches directory is unavailable (IOS-AUDIT-PERF-012).
+        let caches: URL
+        if let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
+            caches = dir
+        } else {
+            AppLogger.cache.error("Caches directory unavailable; falling back to temporary directory")
+            caches = FileManager.default.temporaryDirectory
+        }
         cacheDir = caches.appendingPathComponent("QueryCache", isDirectory: true)
         defaultTTL = TimeInterval(Config.cacheExpirationMinutes * 60)
 
