@@ -129,6 +129,8 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
               className="transition-transform duration-200 group-hover:scale-105 object-cover"
               containerClassName="absolute inset-0"
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+              useTransformApi
+              transformWidths={[320, 480, 640, 960]}
               onError={() => setImageError(true)}
             />
           ) : (

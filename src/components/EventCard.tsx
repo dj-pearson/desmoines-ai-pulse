@@ -127,6 +127,8 @@ function EventCardComponent({ event, onViewDetails }: EventCardProps) {
             containerClassName="w-full h-48"
             aspectRatio="640/192"
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            useTransformApi
+            transformWidths={[320, 480, 640, 960]}
             onError={() => setImageError(true)}
           />
         ) : (

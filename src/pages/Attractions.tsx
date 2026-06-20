@@ -624,6 +624,8 @@ export default function Attractions() {
                           className="transition-transform duration-200 hover:scale-105 object-cover"
                           containerClassName="aspect-video overflow-hidden"
                           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                          useTransformApi
+                          transformWidths={[320, 480, 640, 960]}
                         />
                       ) : (
                         <div className="aspect-video bg-gradient-to-br from-[#2D1B69] to-[#DC143C] flex items-center justify-center" role="img" aria-label={`No image available for ${attraction.name}`}>

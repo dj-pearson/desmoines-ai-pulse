@@ -4189,3 +4189,50 @@ Run `supabase db push` + `supabase functions deploy web-vitals-regression-check`
   A src/components/admin/WebVitalsPanel.tsx
   M src/main.tsx
   M src/pages/AdminSystem.tsx
+
+## 2026-06-20 — WEB-PERF-004 (Image CLS elimination + right-sized responsive images) [passes:true]
+
+### What shipped
+- Two-stage error fallback in OptimizedImage so transforms are always safe to
+  enable: a failed transformed source retries once with the original (bare) URL
+  before ever showing the placeholder — "a failed transform falls back to the
+  original URL (never a broken image)". State: `transformFailed` → drops the
+  transformed srcset and modern-format <picture> sources, reloads bare `src`.
+- Correct transform routing. Discovery: the `image-transform` edge function does
+  NOT resize — it proxies the original bytes and only rewrites the content-type
+  header. So routing EXTERNAL urls through it adds a network hop for zero byte
+  savings and risks a mismatched `<picture type="image/webp">` over JPEG bytes.
+  Introduced `canTransform(src)` = Supabase Storage URL only; getTransformedUrl
+  now rewrites storage URLs to the native `/storage/v1/render/image/public/`
+  endpoint (which genuinely resizes/re-encodes) and returns external URLs
+  unchanged. srcset + modern-format sources are gated on `transformable`.
+- Enabled `useTransformApi` with card-sized `transformWidths={[320,480,640,960]}`
+  on the three content list-cards (EventCard, RestaurantCard, Attractions card)
+  — they already had fixed aspect-ratio containers + width/height (no CLS).
+- Removed dead `generateSrcSet` helper.
+
+### CLS containers (already in place, verified)
+- EventCard: aspectRatio="640/192" + width/height, container w-full h-48.
+- RestaurantCard: OptimizedImage in `absolute inset-0` inside fixed h-36/h-48.
+- Attractions card: containerClassName="aspect-video" + width/height.
+- Index quick-view dialog image is double-gated (`{selectedEvent && …}` AND a
+  Radix Dialog that only mounts DialogContent when open) → no prefetch while
+  closed.
+
+### Verification
+tsc --noEmit clean; eslint 0 errors (pre-existing warnings only); `npm run
+validate` exits 0; vitest 114/114 (added src/components/__tests__/OptimizedImage
+.test.ts: canTransform storage-vs-external + getTransformedUrl render-endpoint
+rewrite / external passthrough). CAVEATS I cannot verify headlessly: (1) the
+actual CLS numbers (<0.1 on /, /events, /restaurants, a detail page) need a real
+browser + Lighthouse; (2) right-sizing requires Supabase **image transformation
+enabled** on the project — until it is, storage images simply serve at full size
+via the two-stage fallback (no breakage). External-hosted images are unaffected
+by design.
+
+### Files
+  M src/components/OptimizedImage.tsx
+  M src/components/EventCard.tsx
+  M src/components/RestaurantCard.tsx
+  M src/pages/Attractions.tsx
+  A src/components/__tests__/OptimizedImage.test.ts
