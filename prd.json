@@ -1323,7 +1323,7 @@
         "Retry action re-fetches and clears the error"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: RestaurantsView.swift:24-26 has an inline error banner; HomeView.swift:371-394 checks NetworkMonitor; AttractionsView has neither and AttractionsView.swift:80-83 always fires .success haptic after refresh regardless of outcome."
     },
     {

@@ -3829,3 +3829,24 @@ strings are byte-identical to the originals.
   A src/lib/categoryStyles.ts
   M src/components/RestaurantCard.tsx
   M src/components/SocialEventCard.tsx
+
+## 2026-06-20 — iOS UX-005 (reusable ErrorStateView + fix false-success haptic) [passes:true]
+
+- New ErrorStateView (icon + message + Retry), mirroring EmptyStateView's
+  structure/animation/a11y. Used by Home, Restaurants, and Attractions for the
+  empty+error case, so all three now share the same loading/empty/error/offline
+  structure with a working Retry that re-fetches and clears the error.
+- Fixed the false-success haptic: AttractionsView.refreshable fired
+  .notificationOccurred(.success) unconditionally; now reflects the outcome
+  (.success only when viewModel.errorMessage == nil, else .error) — matching the
+  pattern HomeView/RestaurantsView already used. (Kept refresh() returning Void
+  and read errorMessage to avoid rippling the async-let refresh tuple in HomeView.)
+- Each screen now shows a stale-data error banner only when data is present, and
+  the full ErrorStateView when empty due to error (vs the old misleading
+  "No Events/Restaurants/Attractions Found").
+
+### Files
+  A ios/DesMoinesInsider/Views/Components/ErrorStateView.swift
+  M ios/DesMoinesInsider/Views/Home/HomeView.swift
+  M ios/DesMoinesInsider/Views/Restaurants/RestaurantsView.swift
+  M ios/DesMoinesInsider/Views/Attractions/AttractionsView.swift
