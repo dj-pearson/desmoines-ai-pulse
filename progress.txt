@@ -3519,3 +3519,39 @@ convenience init still compiles since new props have defaults).
 ### Files
   M ios/DesMoinesInsider/Views/Components/CachedAsyncImage.swift
   M ios/DesMoinesInsider/Services/QueryCache.swift
+
+## 2026-06-20 — iOS app lifecycle: push + deep links + notifications (FEAT-001/002/003) [passes:true]
+
+The AppDelegate existed but was never installed, so push registration, deep
+links, and notification taps were all dead code. Wired the whole lifecycle.
+
+- FEAT-001: @UIApplicationDelegateAdaptor(AppDelegate.self) added to
+  DesMoinesInsiderApp. New PushNotificationService.requestPermissionIfAppropriate()
+  prompts once post-onboarding (gated on Config.enablePushNotifications, which
+  ships false), consults checkPermissionStatus() so a denied user is never
+  re-prompted, and re-registers if previously authorized.
+- FEAT-002: .onOpenURL now calls DeepLinkHandler.shared.handle(url) after the
+  Supabase auth handle; added .onContinueUserActivity(NSUserActivityTypeBrowsingWeb)
+  for universal links. MainTabView observes deepLink.pendingDestination,
+  consumes it, and presents a DeepLinkResolverView (fetches the model by id via
+  EventsService/RestaurantsService/AttractionsService, shows the detail in a
+  dismissable NavigationStack, with a retry/error state on fetch failure — no
+  crash on unmatched/offline). tab/discover destinations route in place.
+- FEAT-003: AppDelegate now conforms to UNUserNotificationCenterDelegate, set as
+  the center delegate in didFinishLaunchingWithOptions (unconditionally — local
+  event-reminder taps need it even with push off). willPresent shows
+  .banner/.sound; didReceive routes userInfo (eventId / url / type+id) through
+  the new DeepLinkHandler.handleNotification(). Cold-launch taps land correctly
+  because the destination persists until MainTabView consumes it on appear.
+
+### Verification
+No Xcode in this env. Wiring mirrors existing patterns (StoreKitService.shared
+as @State; navigationDestination registrations mirror DiscoverHubView). Note:
+Config.enablePushNotifications is false, so the remote-registration path stays
+dormant until the flag flips — the code path is correct and gated.
+
+### Files
+  M ios/DesMoinesInsider/App/DesMoinesInsiderApp.swift
+  M ios/DesMoinesInsider/Services/PushNotificationService.swift
+  M ios/DesMoinesInsider/Services/DeepLinkHandler.swift
+  M ios/DesMoinesInsider/Views/MainTabView.swift

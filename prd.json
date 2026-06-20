@@ -1464,7 +1464,7 @@
         "checkPermissionStatus() consulted so a denied user is not re-prompted endlessly"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: AppDelegate (PushNotificationService.swift:93) implements the token callback, but DesMoinesInsiderApp.swift (4-27) has no @UIApplicationDelegateAdaptor, so the callback never fires and syncTokenToBackend never runs. Contradicts ios_prd.json IOS-011 (passes:true)."
     },
     {
@@ -1479,7 +1479,7 @@
         "Unmatched URLs fall back to the in-app browser without crashing"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: DeepLinkHandler.shared.handle(url) and consumeDestination() have zero callers; DesMoinesInsiderApp.swift:84 .onOpenURL forwards only to SupabaseService.client?.handle(url); no onContinueUserActivity. Contradicts ios_prd.json IOS-012 (passes:true)."
     },
     {
@@ -1494,7 +1494,7 @@
         "Push notifications with a deep-link payload route correctly too"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: No UNUserNotificationCenterDelegate / didReceive anywhere; UNUserNotificationCenter.current().delegate never set. LocalNotificationService.swift:45 attaches userInfo['eventId'] but nothing consumes it. Unmet AC of ios_prd.json IOS-011."
     },
     {
