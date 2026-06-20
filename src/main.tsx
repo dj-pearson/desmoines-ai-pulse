@@ -257,6 +257,9 @@ function initializeApp() {
 
   // Defer all non-critical features until after interaction
   initializeOnInteraction();
+
+  // Real-user web-vitals (WEB-PERF-007) — sampled, DNT-respecting, idle-loaded.
+  void import("@/lib/webVitalsRum").then(({ initWebVitalsRum }) => initWebVitalsRum());
 }
 
 // Start as soon as DOM is ready

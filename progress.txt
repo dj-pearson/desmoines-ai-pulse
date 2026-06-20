@@ -4155,3 +4155,37 @@ construction (same absolute-inset div), but confirm with Lighthouse before/after
 ### Files
   M src/components/EnhancedHero.tsx
   M src/pages/EventDetails.tsx
+
+## 2026-06-20 — WEB-PERF-007 (real-user web-vitals + automated regression alerts) [passes:true]
+
+Closes the perf loop: RUM collection + a weekly machine check.
+
+- Collection: src/lib/webVitalsRum.ts reports LCP/CLS/INP/TTFB to a new
+  web_vitals table — sampled 10%, anonymous (per-session id, not user id),
+  respects Do-Not-Track, and dynamically imports web-vitals on requestIdleCallback
+  so it adds nothing to the critical bundle and never blocks render. Wired into
+  main.tsx via a dynamic import() (separate chunk).
+- Schema: migration 20260620000003 — web_vitals table (additive) + index + RLS
+  (anon/auth INSERT, admin SELECT) + a weekly pg_cron (Mon 04:00 UTC) hitting the
+  new edge function.
+- Regression job: supabase/functions/web-vitals-regression-check wraps the work
+  in runJob (WEB-AUTO-001), computes p75 per metric per page-group for the last 7
+  days vs the previous 7, and emails (sendJobAlert/Resend) when any metric
+  degrades >20% week-over-week or breaches budget (LCP 2.5s, CLS 0.1, INP 200ms).
+- Admin panel: src/components/admin/WebVitalsPanel (recharts p75 trend, 14 days)
+  added as a lazy "Web Vitals" tab in AdminSystem (recharts chunk loads only when
+  the tab opens).
+
+### Verification
+tsc clean; eslint 0 errors; vitest 110/110. CAVEAT: the migration (table/RLS/cron)
+and the edge function need a Supabase deploy to verify end-to-end (no DB/Deno in
+this container); both follow the proven image_checked_at cron + jobRunner patterns.
+Run `supabase db push` + `supabase functions deploy web-vitals-regression-check`.
+
+### Files
+  A supabase/migrations/20260620000003_web_vitals_rum.sql
+  A supabase/functions/web-vitals-regression-check/index.ts
+  A src/lib/webVitalsRum.ts
+  A src/components/admin/WebVitalsPanel.tsx
+  M src/main.tsx
+  M src/pages/AdminSystem.tsx
