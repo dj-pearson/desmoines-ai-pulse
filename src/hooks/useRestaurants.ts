@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
 import { Database } from "@/integrations/supabase/types";
 import { getRestaurantRotationSeed } from "@/lib/restaurantRotation";
 
@@ -125,7 +126,7 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
 
       let query = supabase
         .from("restaurants")
-        .select("*", { count: "exact" })
+        .select(RESTAURANT_LIST_COLUMNS, { count: "exact" })
         .neq("is_merged", true); // Hide rows merged into a duplicate (WEB-AUTO-005)
 
       // Use full-text search with tsvector for better performance and relevance ranking

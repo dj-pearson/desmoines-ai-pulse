@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { ATTRACTION_LIST_COLUMNS } from "@/lib/listColumns";
 import { Database } from "@/integrations/supabase/types";
 import { createLogger } from '@/lib/logger';
 
@@ -46,7 +47,7 @@ export function useAttractions(filters: AttractionFilters = {}) {
     try {
       setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
-      let query = supabase.from("attractions").select("*", { count: "exact" });
+      let query = supabase.from("attractions").select(ATTRACTION_LIST_COLUMNS, { count: "exact" });
 
       // Default to active rows only; admin callers can pass false to see all.
       if (filters.activeOnly !== false) {

@@ -360,7 +360,7 @@
         "npm run validate passes"
       ],
       "priority": 23,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: src/hooks/useRestaurants.ts:126, useHotels.ts:51, useAttractions.ts:49 all select('*'). Content tables carry seo_keywords/geo_faq/geo_key_facts per CLAUDE.md schema — pure waste on cards."
     },
     {

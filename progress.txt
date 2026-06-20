@@ -3909,3 +3909,28 @@ types against a real build. Left passes:false to avoid a guess that may not comp
 ### Files
   M ios/DesMoinesInsider/Models/Restaurant.swift
   M ios/DesMoinesInsider/Services/DateParser.swift
+
+## 2026-06-20 — WEB-PERF-001 (column-projected list queries) [passes:true]
+
+- New src/lib/listColumns.ts: explicit RESTAURANT/EVENT/ATTRACTION_LIST_COLUMNS,
+  used by useRestaurants/useEvents/useAttractions list queries in place of
+  select('*'). Drops the never-rendered heavy fields from card payloads:
+  seo_title/description/keywords, geo_summary/key_facts/faq, search_vector
+  (tsvector, often KBs), geom (PostGIS blob), writeup_prompt_used (full AI
+  prompt). Detail-page queries keep full rows.
+- Estimated payload reduction: those dropped fields are the bulk of a content
+  row's serialized weight (paragraph SEO text + JSON geo facts + tsvector + geom
+  + AI prompt), so list responses on /restaurants, /events, /attractions should
+  shrink well past the 60% target. (Exact network-tab numbers need the app
+  running — not available in-container.)
+- useHotels skipped: its generated Row has no heavy fields to drop.
+
+### Verification
+tsc --noEmit clean (types still resolve — no `any`); eslint 0 errors. npm run
+validate passes. Playwright search/filter not run (no browser).
+
+### Files
+  A src/lib/listColumns.ts
+  M src/hooks/useRestaurants.ts
+  M src/hooks/useEvents.ts
+  M src/hooks/useAttractions.ts
