@@ -6,6 +6,7 @@ import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { FAQSection } from "@/components/FAQSection";
 import { useAttractions } from "@/hooks/useAttractions";
+import { useUrlFilters } from "@/hooks/useUrlFilters";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 import { useToast } from "@/hooks/use-toast";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
@@ -77,18 +78,43 @@ export default function Attractions() {
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const prefetchAttraction = usePrefetchAttraction();
-  // Filter states
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedType, setSelectedType] = useState("all");
-  const [minRating, setMinRating] = useState("any-rating");
+  // Filter states — URL-synced (WEB-UX-001) so views are shareable and survive
+  // back/forward. Discrete filters are URL-derived; search keeps a local state
+  // for responsive typing and writes to the URL debounced.
+  const { getStr, getNum, setParam, clearParams } = useUrlFilters();
+  const selectedType = getStr("type", "all");
+  const minRating = getStr("rating", "any-rating");
+  const featuredOnly = getStr("featured", "all");
+  const sortBy = getStr("sort", "rating");
+  const setSelectedType = (v: string) => setParam("type", v, { def: "all", resetsPage: true });
+  const setMinRating = (v: string) => setParam("rating", v, { def: "any-rating", resetsPage: true });
+  const setFeaturedOnly = (v: string) => setParam("featured", v, { def: "all", resetsPage: true });
+  const setSortBy = (v: string) => setParam("sort", v, { def: "rating", resetsPage: true });
+
+  const urlQ = getStr("q", "");
+  const [searchQuery, setSearchQuery] = useState(() => urlQ);
+  // Debounced URL write (replace, so typing doesn't spam history).
+  useEffect(() => {
+    if (searchQuery === urlQ) return;
+    const t = setTimeout(
+      () => setParam("q", searchQuery, { def: "", resetsPage: true, replace: true }),
+      300
+    );
+    return () => clearTimeout(t);
+  }, [searchQuery, urlQ, setParam]);
+  // Back/forward & shared links: pull URL changes back into the input.
+  useEffect(() => {
+    if (urlQ !== searchQuery) setSearchQuery(urlQ);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlQ]);
+
   const [showFilters, setShowFilters] = useState(true); // Show filters by default
   const [showMobileFilters, setShowMobileFilters] = useState(false);
-  const [featuredOnly, setFeaturedOnly] = useState("all");
-  const [sortBy, setSortBy] = useState("rating");
   const [viewMode, setViewMode] = useState('list');
 
   const ITEMS_PER_PAGE = 30;
-  const [page, setPage] = useState(1);
+  const page = getNum("page", 1);
+  const setPage = (v: number) => setParam("page", v, { def: 1 });
 
   // Get all attractions first
   const { attractions: allAttractions, isLoading, error, refetch } = useAttractions({});
@@ -176,10 +202,7 @@ export default function Attractions() {
     ? page * ITEMS_PER_PAGE < sortedAttractions.length
     : page < totalPages;
 
-  // Reset page when filters change
-  useEffect(() => {
-    setPage(1);
-  }, [searchQuery, selectedType, minRating, featuredOnly, sortBy]);
+  // Page reset on filter change is handled by setParam({ resetsPage: true }).
 
   // Announce result count to screen readers
   useEffect(() => {
@@ -203,9 +226,7 @@ export default function Attractions() {
 
   const handleClearFilters = () => {
     setSearchQuery("");
-    setSelectedType("all");
-    setMinRating("any-rating");
-    setFeaturedOnly("all");
+    clearParams(["q", "type", "rating", "featured", "sort"]);
     toast({
       title: "Filters Cleared",
       description: "All filters have been reset",

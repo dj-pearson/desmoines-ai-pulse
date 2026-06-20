@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/loading-skeleton";
 import { SocialEventCard } from "@/components/SocialEventCard";
 import { arrangeSponsored } from "@/lib/sponsored";
+import { useUrlFilters } from "@/hooks/useUrlFilters";
 import Header from "@/components/Header";
 import { AdBanner } from "@/components/AdBanner";
 import Footer from "@/components/Footer";
@@ -92,6 +93,40 @@ const DATE_PRESETS = [
 ] as const;
 
 
+type DateFilterValue = {
+  start?: Date;
+  end?: Date;
+  mode: "single" | "range" | "preset";
+  preset?: string;
+} | null;
+
+/** Pure preset -> date range, so a ?preset= URL param can be re-derived on load. */
+function computePresetRange(preset: string): DateFilterValue {
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  switch (preset) {
+    case "today":
+      return { mode: "preset", preset: "today", start: today, end: today };
+    case "tomorrow":
+      return { mode: "preset", preset: "tomorrow", start: tomorrow, end: tomorrow };
+    case "this-weekend": {
+      const saturday = new Date(today);
+      saturday.setDate(today.getDate() + (6 - today.getDay()));
+      const sunday = new Date(saturday);
+      sunday.setDate(saturday.getDate() + 1);
+      return { mode: "preset", preset: "this-weekend", start: saturday, end: sunday };
+    }
+    case "this-week": {
+      const endOfWeek = new Date(today);
+      endOfWeek.setDate(today.getDate() + (6 - today.getDay()));
+      return { mode: "preset", preset: "this-week", start: today, end: endOfWeek };
+    }
+    default:
+      return null;
+  }
+}
+
 export default function EventsPage() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
@@ -100,21 +135,32 @@ export default function EventsPage() {
     navigate(`/events/${createEventSlugWithCentralTime(event.title, event as any)}`);
   }, [navigate]);
 
-  const [searchQuery, setSearchQuery] = useState("");
-  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("all");
-  const [dateFilter, setDateFilter] = useState<{
-    start?: Date;
-    end?: Date;
-    mode: "single" | "range" | "preset";
-    preset?: string;
-  } | null>(null);
-  const [activeDatePreset, setActiveDatePreset] = useState<string | null>(null);
-  const [location, setLocation] = useState("any-location");
-  const [priceRange, setPriceRange] = useState("any-price");
+  // URL-synced filters (WEB-UX-001): shareable + survive back/forward. The
+  // debounced search value lives in the URL ('q'); date presets in 'preset'.
+  const { getStr, getNum, setParam, clearParams } = useUrlFilters();
+  const debouncedSearchQuery = getStr("q", "");
+  const selectedCategory = getStr("category", "all");
+  const location = getStr("location", "any-location");
+  const priceRange = getStr("price", "any-price");
+  const sortBy = getStr("sort", "date_asc");
+  const activeDatePreset = getStr("preset", "") || null;
+  const page = getNum("page", 1);
+
+  const setSelectedCategory = (v: string) => setParam("category", v, { def: "all", resetsPage: true });
+  const setLocation = (v: string) => setParam("location", v, { def: "any-location", resetsPage: true });
+  const setPriceRange = (v: string) => setParam("price", v, { def: "any-price", resetsPage: true });
+  const setSortBy = (v: string) => setParam("sort", v, { def: "date_asc", resetsPage: true });
+  const setPage = (v: number) => setParam("page", v, { def: 1 });
+
+  // Local immediate search input; writes to URL 'q' debounced.
+  const [searchQuery, setSearchQuery] = useState(() => debouncedSearchQuery);
+  // Custom (non-preset) date ranges stay local; presets derive from the URL.
+  const [customDateFilter, setCustomDateFilter] = useState<DateFilterValue>(null);
+  const dateFilter: DateFilterValue = activeDatePreset
+    ? computePresetRange(activeDatePreset)
+    : customDateFilter;
+
   const [viewMode, setViewMode] = useState("list");
-  const [sortBy, setSortBy] = useState("date_asc");
-  const [page, setPage] = useState(1);
   const EVENTS_PER_PAGE = 30;
   const { toast } = useToast();
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -127,11 +173,8 @@ export default function EventsPage() {
 
   const handleClearFilters = () => {
     setSearchQuery("");
-    setSelectedCategory("all");
-    setDateFilter(null);
-    setActiveDatePreset(null);
-    setLocation("any-location");
-    setPriceRange("any-price");
+    setCustomDateFilter(null);
+    clearParams(["q", "category", "preset", "location", "price", "sort"]);
     setIsNearMeActive(false);
     setShowMobileFilters(false);
     toast({
@@ -153,45 +196,30 @@ export default function EventsPage() {
     onClearFilters: handleClearFilters,
   });
 
-  // Debounce search query
+  // Debounced search -> URL 'q' (replace, so typing stays out of history).
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearchQuery(searchQuery), 300);
+    if (searchQuery === debouncedSearchQuery) return;
+    const timer = setTimeout(
+      () => setParam("q", searchQuery, { def: "", resetsPage: true, replace: true }),
+      300
+    );
     return () => clearTimeout(timer);
-  }, [searchQuery]);
+  }, [searchQuery, debouncedSearchQuery, setParam]);
 
-  // Quick date preset handler
+  // Back/forward & shared links: pull URL search back into the input.
+  useEffect(() => {
+    setSearchQuery(debouncedSearchQuery);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearchQuery]);
+
+  // Quick date preset handler — toggles the 'preset' URL param; dateFilter is
+  // derived from it. Selecting a preset clears any custom range.
   const handleDatePreset = (preset: string) => {
+    setCustomDateFilter(null);
     if (activeDatePreset === preset) {
-      setActiveDatePreset(null);
-      setDateFilter(null);
-      return;
-    }
-    setActiveDatePreset(preset);
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(today.getDate() + 1);
-
-    switch (preset) {
-      case "today":
-        setDateFilter({ mode: "preset", preset: "today", start: today, end: today });
-        break;
-      case "tomorrow":
-        setDateFilter({ mode: "preset", preset: "tomorrow", start: tomorrow, end: tomorrow });
-        break;
-      case "this-weekend": {
-        const saturday = new Date(today);
-        saturday.setDate(today.getDate() + (6 - today.getDay()));
-        const sunday = new Date(saturday);
-        sunday.setDate(saturday.getDate() + 1);
-        setDateFilter({ mode: "preset", preset: "this-weekend", start: saturday, end: sunday });
-        break;
-      }
-      case "this-week": {
-        const endOfWeek = new Date(today);
-        endOfWeek.setDate(today.getDate() + (6 - today.getDay()));
-        setDateFilter({ mode: "preset", preset: "this-week", start: today, end: endOfWeek });
-        break;
-      }
+      setParam("preset", "", { resetsPage: true });
+    } else {
+      setParam("preset", preset, { resetsPage: true });
     }
   };
 
@@ -374,7 +402,7 @@ export default function EventsPage() {
     return (rawEvents || []).filter((e: any) => e.is_featured).slice(0, 3);
   }, [rawEvents]);
 
-  useEffect(() => { setPage(1); }, [debouncedSearchQuery, selectedCategory, dateFilter, location, priceRange, sortBy]);
+  // Page reset on filter change is handled by setParam/clearParams (resetsPage).
 
   // Announce result count to screen readers after search/filter changes
   useEffect(() => {
@@ -744,7 +772,7 @@ export default function EventsPage() {
                   onLocationChange={setLocation}
                   priceRange={priceRange}
                   onPriceRangeChange={setPriceRange}
-                  onDateChange={(d) => { setDateFilter(d); setActiveDatePreset(null); }}
+                  onDateChange={(d) => { setCustomDateFilter(d); setParam("preset", "", { resetsPage: true }); }}
                   categories={categories || []}
                   totalResults={events?.length || 0}
                   isLoading={isLoading}
@@ -870,7 +898,7 @@ export default function EventsPage() {
           {!isLoading && events && events.length > 0 && hasMore && (
             <div className="flex justify-center mt-10">
               <Button
-                onClick={() => setPage(p => p + 1)}
+                onClick={() => setPage(page + 1)}
                 variant="outline"
                 size="lg"
                 className="min-w-[200px] rounded-full"

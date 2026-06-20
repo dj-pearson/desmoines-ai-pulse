@@ -466,7 +466,7 @@
         "npm run validate passes"
       ],
       "priority": 30,
-      "passes": false,
+      "passes": true,
       "notes": "Top UX-audit finding. Evidence: src/pages/EventsPage.tsx ~102-116, src/pages/Restaurants.tsx ~85-95 (pure useState filters)."
     },
     {

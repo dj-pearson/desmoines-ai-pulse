@@ -48,6 +48,7 @@ import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { useIsMobile } from "@/hooks/use-mobile";
 import RestaurantCard from "@/components/RestaurantCard";
 import { arrangeSponsored } from "@/lib/sponsored";
+import { useUrlFilters } from "@/hooks/useUrlFilters";
 import { SearchAutocomplete, addRecentSearch } from "@/components/SearchAutocomplete";
 import {
   Pagination,
@@ -83,23 +84,55 @@ export default function Restaurants() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const [filters, setFilters] = useState<RestaurantFilterOptions>({
-    search: "",
-    cuisine: [],
-    priceRange: [],
-    rating: [0, 5],
-    location: [],
-    sortBy: "popularity",
-    featuredOnly: false,
-    openNow: false,
-    tags: [],
-  });
+  // Filters are URL-synced (WEB-UX-001): shareable + survive back/forward.
+  const { getStr, getNum, getList, setParam, setMany, clearParams } = useUrlFilters();
+  const filters: RestaurantFilterOptions = useMemo(
+    () => ({
+      search: getStr("q", ""),
+      cuisine: getList("cuisine"),
+      priceRange: getList("price"),
+      rating: [getNum("rmin", 0), getNum("rmax", 5)],
+      location: getList("location"),
+      sortBy: getStr("sort", "popularity") as RestaurantFilterOptions["sortBy"],
+      featuredOnly: getStr("featured", "") === "1",
+      openNow: getStr("open", "") === "1",
+      tags: getList("tags"),
+    }),
+    [getStr, getNum, getList]
+  );
+
+  // setFilters-compatible writer (accepts an object or an updater) that persists
+  // the whole filter object into the URL and resets pagination.
+  const setFilters = useCallback(
+    (
+      update:
+        | RestaurantFilterOptions
+        | ((prev: RestaurantFilterOptions) => RestaurantFilterOptions)
+    ) => {
+      const next = typeof update === "function" ? update(filters) : update;
+      setMany({
+        q: next.search,
+        cuisine: next.cuisine,
+        price: next.priceRange,
+        rmin: next.rating[0] !== 0 ? next.rating[0] : "",
+        rmax: next.rating[1] !== 5 ? next.rating[1] : "",
+        location: next.location,
+        sort: next.sortBy !== "popularity" ? next.sortBy : "",
+        featured: next.featuredOnly ? "1" : "",
+        open: next.openNow ? "1" : "",
+        tags: next.tags,
+      });
+    },
+    [filters, setMany]
+  );
+
   const [viewMode, setViewMode] = useState<"list" | "map">("list");
-  const [searchInput, setSearchInput] = useState("");
+  const [searchInput, setSearchInput] = useState(() => getStr("q", ""));
   const { toast } = useToast();
 
   const ITEMS_PER_PAGE = 30;
-  const [page, setPage] = useState(1);
+  const page = getNum("page", 1);
+  const setPage = (v: number) => setParam("page", v, { def: 1 });
 
   const { restaurants, isLoading, error, totalCount, refetch } = useRestaurants(filters);
   const filterOptions = useRestaurantFilterOptions();
@@ -135,20 +168,23 @@ export default function Restaurants() {
     ? page * ITEMS_PER_PAGE < restaurants.length
     : page < totalPages;
 
-  // Reset page when filters change
-  useEffect(() => {
-    setPage(1);
-  }, [filters]);
+  // Page reset on filter change is handled by setMany/setParam (resetsPage).
 
-  // Debounced search
+  // Debounced search -> URL (WEB-UX-001). Writing only the 'q' param avoids
+  // history spam; setParam(replace) keeps typing out of the back stack.
   useEffect(() => {
+    if (searchInput === filters.search) return;
     const timer = setTimeout(() => {
-      if (searchInput !== filters.search) {
-        setFilters((prev) => ({ ...prev, search: searchInput }));
-      }
+      setParam("q", searchInput, { def: "", resetsPage: true, replace: true });
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchInput, filters.search]);
+  }, [searchInput, filters.search, setParam]);
+
+  // Back/forward & shared links: pull URL search back into the input.
+  useEffect(() => {
+    setSearchInput(filters.search);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.search]);
 
   // Announce result count to screen readers
   useEffect(() => {
@@ -160,23 +196,13 @@ export default function Restaurants() {
   }, [restaurants?.length, isLoading, filters.search, announce]);
 
   const handleClearFilters = useCallback(() => {
-    setFilters({
-      search: "",
-      cuisine: [],
-      priceRange: [],
-      rating: [0, 5],
-      location: [],
-      sortBy: "popularity",
-      featuredOnly: false,
-      openNow: false,
-      tags: [],
-    });
+    clearParams(["q", "cuisine", "price", "rmin", "rmax", "location", "sort", "featured", "open", "tags"]);
     setSearchInput("");
     toast({
       title: "Filters Cleared",
       description: "All filters have been reset",
     });
-  }, [toast]);
+  }, [toast, clearParams]);
 
   const getActiveFiltersCount = useMemo(() => {
     let count = 0;

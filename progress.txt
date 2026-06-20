@@ -3887,3 +3887,48 @@ behavior needs a browser (not available headless).
 ### Files
   A src/components/map/DiscoverMapCanvas.tsx
   M src/pages/DiscoverMap.tsx
+
+## 2026-06-20 — WEB-UX-001 (URL-synced filter state on Events/Restaurants/Attractions) [passes:true]
+
+### New hook: src/hooks/useUrlFilters.ts
+Thin typed wrapper over useSearchParams: getStr/getNum/getList read a param with
+a default; setParam writes one (deletes when == default, optional resetsPage +
+replace); setMany writes a whole filter object at once; clearParams removes a set
+(+ page). URL is the source of truth.
+
+### Pattern (all three pages)
+- Discrete filters (category/cuisine/type, sort, location, price, date preset,
+  page) are URL-DERIVED — no local state — so back/forward & shared links work
+  automatically and changing a filter resets page via resetsPage.
+- Search keeps a local input state for responsive typing + a debounced write to
+  ?q= (replace, so keystrokes don't spam history) + a back-sync effect that
+  pulls URL->input on navigation. Two-way guard (skip when equal) prevents loops.
+- "Clear all" -> clearParams(...) + reset local search; the redundant
+  reset-page-on-change effects were removed (handled by resetsPage).
+
+### Per-page specifics
+- Attractions: q/type/rating/featured/sort/page.
+- Restaurants: combined filters object made URL-derived (q, cuisine[], price[],
+  rmin/rmax, location[], sort, featured, open, tags[]); a setFilters-compatible
+  writer (accepts object OR updater) persists the whole object via setMany, so
+  child components (onFiltersChange, onApplyPreset) keep working unchanged.
+- Events: q/category/location/price/sort/page + date PRESET in ?preset=
+  (dateFilter derived from it via pure computePresetRange; custom date ranges
+  stay in local state). Fixed setPage(p=>p+1) -> setPage(page+1).
+
+### SEO landings
+/events/today etc. are separate routes; useSearchParams composes with any extra
+params (no change needed).
+
+### Verification
+type-check + lint PASS (0 errors). Added tests/url-filter-state.spec.ts
+(shareable-URL applies on load, typing reflects to URL, back restores filters)
+for the three pages — runs in CI (Playwright needs a browser/dev server, not
+available in this headless container).
+
+### Files
+  A src/hooks/useUrlFilters.ts
+  A tests/url-filter-state.spec.ts
+  M src/pages/EventsPage.tsx
+  M src/pages/Restaurants.tsx
+  M src/pages/Attractions.tsx
