@@ -3993,3 +3993,22 @@ PASSES (vitest). tsc --noEmit clean; eslint 0 errors. npm run validate passes.
   M src/components/Header.tsx
   M src/components/BottomNav.tsx
   A src/contexts/__tests__/AuthContext.test.tsx
+
+## 2026-06-20 — WEB-PERF-006 (TanStack Query cache + retry tuning) [passes:true]
+
+src/main.tsx QueryClient defaults tuned with documented constants:
+- DEFAULT_STALE_TIME 5min (public content rarely changes), DEFAULT_GC_TIME 30min
+  (keeps cache so back-navigation to a recently-visited list renders instantly).
+- retry is now a function: up to MAX_QUERY_RETRIES (2) for network/5xx, and NEVER
+  for client errors (400/401/403/404) via httpStatusOf() status extraction.
+  retryDelay = exponential backoff (800ms base, 30s cap).
+- User-specific data stays correct via mutation invalidation, not short staleTime
+  — spot-checked: useFavorites + useContentFavorites + useUserSubmittedEvents all
+  invalidateQueries on mutation, so the longer default introduces no staleness.
+
+### Verification
+tsc --noEmit clean; eslint 0 errors; full vitest suite 99/99 pass. npm run
+validate passes. Instant back-nav is gcTime-driven (verify in-browser).
+
+### Files
+  M src/main.tsx
