@@ -3964,3 +3964,32 @@ tsc --noEmit clean; eslint 0 errors. npm run validate passes.
   M src/hooks/useTrendingContent.ts
   M src/hooks/useRestaurants.ts
   M src/components/SearchSection.tsx
+
+## 2026-06-20 — WEB-PERF-005 (split AuthContext to stop app-wide re-renders) [passes:true]
+
+The split state/actions contexts already existed, but (a) useAuth() read a
+combined context that changed every tick, and (b) even useAuthState re-rendered
+on TOKEN_REFRESHED for components that only read isAuthenticated/isAdmin.
+
+- New AuthStatus = Omit<AuthState,'user'|'session'> + AuthStatusContext, with a
+  `status` value memoized on ONLY the 6 status fields — so a token-refresh tick
+  (which changes session/user) does NOT change its identity.
+- New useAuthStatus() hook. useAuth() recomposed as a composition of
+  useAuthState()+useAuthActions() (dropped the redundant combined AuthContext +
+  `combined` memo) — public API unchanged (zero call-site churn).
+- Migrated Header (isAuthenticated/isAdmin via useAuthStatus, logout via
+  useAuthActions) and BottomNav (useAuthStatus) — the 50+-consumer hot paths.
+- src/hooks/useAuth.ts now also re-exports useAuthState/useAuthStatus/useAuthActions.
+
+### Verification (actually run)
+New src/contexts/__tests__/AuthContext.test.tsx mounts AuthProvider with a
+status consumer + a state consumer, fires a TOKEN_REFRESHED tick, and asserts the
+status consumer's render count is UNCHANGED while the state consumer re-renders —
+PASSES (vitest). tsc --noEmit clean; eslint 0 errors. npm run validate passes.
+
+### Files
+  M src/contexts/AuthContext.tsx
+  M src/hooks/useAuth.ts
+  M src/components/Header.tsx
+  M src/components/BottomNav.tsx
+  A src/contexts/__tests__/AuthContext.test.tsx

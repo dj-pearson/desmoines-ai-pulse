@@ -420,7 +420,7 @@
         "npm run validate passes"
       ],
       "priority": 27,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: src/contexts/AuthContext.tsx ~87-96. Keep the change mechanical and well-tested — this file is load-bearing for every protected surface."
     },
     {
