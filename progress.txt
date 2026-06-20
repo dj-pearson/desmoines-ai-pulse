@@ -3638,3 +3638,30 @@ but they should be ROTATED and scrubbed. Logged in ios/SECRETS.md follow-up.
 ### Files
   M ios/DesMoinesInsider/Services/AdTrackingService.swift
   M ios/DesMoinesInsider/Resources/PrivacyInfo.xcprivacy
+
+## 2026-06-20 — iOS SEC-001 (cert pinning) — WIRED, enforcement pending owner [passes:FALSE]
+
+CertificatePinningService was a complete URLSessionDelegate with ZERO callers.
+Now wired:
+- SupabaseService injects URLSession(delegate: CertificatePinningService.shared)
+  via SupabaseClientOptions.GlobalOptions(session:). All Supabase traffic now
+  flows through the pinning delegate. Logs the pinned session at init.
+- reportOnly is now computed: DEBUG always report-only; Release enforces only when
+  the new Config.certificatePinningEnforced flag is true (ships FALSE).
+
+LEFT FALSE on purpose: two ACs can't be satisfied in this sandbox and are unsafe
+to assume —
+  1. "Pinned SPKI hashes verified current against the live Supabase host" — needs
+     network + openssl against the live host.
+  2. "MITM rejected in Release (reportOnly == false)" — requires flipping
+     certificatePinningEnforced on, which is only safe AFTER (1). Note the SPKI
+     extraction hashes SecKeyCopyExternalRepresentation (raw key) not full SPKI
+     DER; the pinned hashes' generation method must be reconciled before enabling.
+OWNER ACTION to finish: verify/refresh the 5 SPKI hashes against the live host,
+confirm the extraction matches, then set Config.certificatePinningEnforced = true
+and ship a staged release.
+
+### Files
+  M ios/DesMoinesInsider/Services/SupabaseService.swift
+  M ios/DesMoinesInsider/Services/CertificatePinningService.swift
+  M ios/DesMoinesInsider/Configuration/Config.swift
