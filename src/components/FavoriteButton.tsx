@@ -8,8 +8,9 @@ import {
 import { cn } from "@/lib/utils";
 import { hapticTap } from "@/lib/capacitorUtils";
 import { toast } from "sonner";
-import { useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { useAuthFlags } from "@/contexts/AuthContext";
+import { UpgradeModal } from "@/components/UpgradeModal";
 import {
   subscribeGuestFavorites,
   isGuestFavorited,
@@ -104,22 +105,32 @@ function EventFavoriteButton({
 }) {
   const { isFavorited, toggleFavorite, isToggling } = useFavorites();
   const favorited = isFavorited(eventId);
+  const [showUpgrade, setShowUpgrade] = useState(false);
   return (
-    <FavoriteButtonView
-      favorited={favorited}
-      isToggling={isToggling}
-      onToggle={() => {
-        const wasFavorited = favorited;
-        const result = toggleFavorite(eventId);
-        if (result.success) {
-          toast.success(
-            wasFavorited ? "Removed from favorites" : "Added to favorites",
-            { id: `fav-${eventId}` }
-          );
-        }
-      }}
-      {...rest}
-    />
+    <>
+      <FavoriteButtonView
+        favorited={favorited}
+        isToggling={isToggling}
+        onToggle={() => {
+          const wasFavorited = favorited;
+          const result = toggleFavorite(eventId);
+          if (result.success) {
+            toast.success(
+              wasFavorited ? "Removed from favorites" : "Added to favorites",
+              { id: `fav-${eventId}` }
+            );
+          } else if (result.needsUpgrade) {
+            setShowUpgrade(true);
+          }
+        }}
+        {...rest}
+      />
+      <UpgradeModal
+        open={showUpgrade}
+        onOpenChange={setShowUpgrade}
+        feature="unlimited_favorites"
+      />
+    </>
   );
 }
 
@@ -134,22 +145,32 @@ function ContentFavoriteButton({
   const { isFavorited, toggleFavorite, isToggling } =
     useContentFavorites(contentType);
   const favorited = isFavorited(contentId);
+  const [showUpgrade, setShowUpgrade] = useState(false);
   return (
-    <FavoriteButtonView
-      favorited={favorited}
-      isToggling={isToggling}
-      onToggle={() => {
-        const wasFavorited = favorited;
-        const result = toggleFavorite(contentId);
-        if (result.success) {
-          toast.success(
-            wasFavorited ? "Removed from favorites" : "Added to favorites",
-            { id: `fav-${contentType}-${contentId}` }
-          );
-        }
-      }}
-      {...rest}
-    />
+    <>
+      <FavoriteButtonView
+        favorited={favorited}
+        isToggling={isToggling}
+        onToggle={() => {
+          const wasFavorited = favorited;
+          const result = toggleFavorite(contentId);
+          if (result.success) {
+            toast.success(
+              wasFavorited ? "Removed from favorites" : "Added to favorites",
+              { id: `fav-${contentType}-${contentId}` }
+            );
+          } else if (result.needsUpgrade) {
+            setShowUpgrade(true);
+          }
+        }}
+        {...rest}
+      />
+      <UpgradeModal
+        open={showUpgrade}
+        onOpenChange={setShowUpgrade}
+        feature="unlimited_favorites"
+      />
+    </>
   );
 }
 

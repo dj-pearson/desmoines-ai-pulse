@@ -3677,3 +3677,43 @@ reading.
   A src/components/GuestFavoriteMigrator.tsx
   M src/components/FavoriteButton.tsx
   M src/App.tsx
+
+## 2026-06-20 — WEB-FEAT-001 (Contextual paywall modal with per-feature copy) [passes:true]
+
+### Decision: reuse, don't duplicate
+A contextual UpgradeModal already existed (Radix Dialog -> built-in focus trap,
+Escape, focus restore; per-feature copy map; plan toggle; CTA -> existing Stripe
+/pricing flow). Rather than create a parallel PaywallModal, I extended it to
+close the FEAT-001 gaps.
+
+### Contexts (mirror iOS set)
+featureDescriptions covers unlimited_favorites, trip_planner, save_searches,
+create_alerts (renamed "Custom Event Alerts"), advanced_filters, ad_free,
+daily_digest, write_reviews + NEW insider_tips ("Insider & Dining Tips"). Keys
+align with useSubscription hasFeature().
+
+### Analytics (src/lib/paywallAnalytics.ts)
+logPaywallEvent -> user_analytics with content_type 'paywall', content_id =
+context id: paywall_present (on open), paywall_dismiss (on close unless checkout
+started), paywall_checkout_start (CTA, with plan). Enables per-surface
+conversion measurement.
+
+### Favorites cap (3 free) -> contextual modal on 4th save
+useFavorites + useContentFavorites no longer fire a destructive "limit reached"
+toast; they return needsUpgrade and FavoriteButton (event + content variants)
+opens <UpgradeModal feature="unlimited_favorites" /> instead. No double
+messaging.
+
+### Accessibility
+Radix Dialog provides focus trap / Escape / focus restore; modal is responsive
+(sm:max-w-xl).
+
+### Verification
+type-check PASSES (exit 0); eslint changed files 0 errors.
+
+### Files
+  A src/lib/paywallAnalytics.ts
+  M src/components/UpgradeModal.tsx
+  M src/components/FavoriteButton.tsx
+  M src/hooks/useFavorites.ts
+  M src/hooks/useContentFavorites.ts

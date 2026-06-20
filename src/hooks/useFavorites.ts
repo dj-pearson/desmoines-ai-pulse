@@ -146,13 +146,10 @@ export function useFavorites() {
       return { success: true, needsUpgrade: false };
     }
 
-    // If adding, check limits
+    // If adding, check limits. The caller (FavoriteButton) presents the
+    // contextual paywall modal (WEB-FEAT-001) on needsUpgrade — no destructive
+    // toast here to avoid double messaging.
     if (!canAddFavorite()) {
-      toast({
-        title: "Favorites Limit Reached",
-        description: `Free accounts can save up to ${limits.favorites} favorites. Upgrade to Insider for unlimited saves!`,
-        variant: "destructive",
-      });
       return { success: false, needsUpgrade: true };
     }
 

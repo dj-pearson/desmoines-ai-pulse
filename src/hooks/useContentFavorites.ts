@@ -133,11 +133,8 @@ export function useContentFavorites(contentType: FavoriteContentType) {
     }
 
     if (!canAddFavorite()) {
-      toast({
-        title: "Favorites Limit Reached",
-        description: `Free accounts can save up to ${limits.favorites} favorites. Upgrade to Insider for unlimited saves!`,
-        variant: "destructive",
-      });
+      // The caller (FavoriteButton) presents the contextual paywall modal
+      // (WEB-FEAT-001) — no destructive toast here to avoid double messaging.
       return { success: false, needsUpgrade: true };
     }
 

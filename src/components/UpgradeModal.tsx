@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Dialog,
@@ -21,6 +21,7 @@ import {
   X,
 } from "lucide-react";
 import { useSubscription } from "@/hooks/useSubscription";
+import { logPaywallEvent } from "@/lib/paywallAnalytics";
 import { cn } from "@/lib/utils";
 
 interface UpgradeModalProps {
@@ -75,8 +76,13 @@ const featureDescriptions: Record<
     tier: "insider",
   },
   create_alerts: {
-    title: "Event Alerts",
+    title: "Custom Event Alerts",
     description: "Set up alerts to be notified when events match your interests",
+    tier: "insider",
+  },
+  insider_tips: {
+    title: "Insider & Dining Tips",
+    description: "Unlock curated local dining tips and insider picks for the best of Des Moines",
     tier: "insider",
   },
   vip_events: {
@@ -130,9 +136,33 @@ export function UpgradeModal({
   );
 
   const featureInfo = feature ? featureDescriptions[feature] : null;
+  // Context id for funnel logging — the feature key, or "generic".
+  const contextId = feature || "generic";
+  const checkoutStartedRef = useRef(false);
+
+  // Log present once per open; log dismiss on close unless checkout started.
+  useEffect(() => {
+    if (open) {
+      checkoutStartedRef.current = false;
+      logPaywallEvent("paywall_present", contextId);
+    }
+  }, [open, contextId]);
+
+  const handleOpenChange = (next: boolean) => {
+    if (!next && open && !checkoutStartedRef.current) {
+      logPaywallEvent("paywall_dismiss", contextId);
+    }
+    onOpenChange(next);
+  };
+
+  const handleCheckoutStart = (plan: "insider" | "vip") => {
+    checkoutStartedRef.current = true;
+    logPaywallEvent("paywall_checkout_start", contextId, { plan });
+    onOpenChange(false);
+  };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">
@@ -262,13 +292,16 @@ export function UpgradeModal({
                   : "bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
               )}
             >
-              <Link to="/pricing" onClick={() => onOpenChange(false)}>
+              <Link
+                to="/pricing"
+                onClick={() => handleCheckoutStart(selectedPlan)}
+              >
                 Upgrade to {selectedPlan === "insider" ? "Insider" : "VIP"}
               </Link>
             </Button>
             <Button
               variant="ghost"
-              onClick={() => onOpenChange(false)}
+              onClick={() => handleOpenChange(false)}
               className="text-muted-foreground"
             >
               Maybe later

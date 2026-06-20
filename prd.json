@@ -557,7 +557,7 @@
         "npm run validate passes"
       ],
       "priority": 36,
-      "passes": false,
+      "passes": true,
       "notes": "Mirror iOS IOS-SUB-010/011 (see archived notes in scripts/ralph/archive and git history for the context list + tier mapping). PremiumFeature keys should match the web useSubscription hasFeature() list to stay cross-platform consistent."
     },
     {
