@@ -1171,7 +1171,7 @@
         "MetricKit payloads still received and logged; no runtime behavior change"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: MetricKitSubscriber.swift:10-21 is @MainActor; deinit (line 19) calls MXMetricManager.shared.remove(self). Singleton retained for app lifetime (DesMoinesInsiderApp.swift:21) so deinit is also dead code."
     },
     {
@@ -1252,7 +1252,7 @@
         "One-time gating (hasRequestedReview) preserved; no DispatchQueue.main.asyncAfter in the launch path"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: DesMoinesInsiderApp.swift:146-152 uses DispatchQueue.main.asyncAfter(deadline:.now()+2) to call AppStore.requestReview — fire-and-forget, no cancellation."
     },
     {

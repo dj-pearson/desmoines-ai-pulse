@@ -3869,3 +3869,24 @@ strings are byte-identical to the originals.
   M ios/DesMoinesInsider/Views/Onboarding/ConsentView.swift
   M ios/DesMoinesInsider/Views/Subscription/PaywallView.swift
   M ios/DesMoinesInsider/Views/Components/PremiumGate.swift
+
+## 2026-06-20 — iOS PERF-007 / PERF-013 (lifecycle concurrency) [passes:true]
+
+- PERF-007: removed MetricKitSubscriber's deinit (it called the main-actor
+  MXMetricManager.shared from a nonisolated deinit — dead code on a
+  process-lifetime singleton, and unsafe under strict concurrency). Payload
+  handling unchanged.
+- PERF-013: App Store review prompt now uses cancellable Task.sleep(for: 2s)
+  inside the App's existing .task (no DispatchQueue.main.asyncAfter on the launch
+  path), checks Task.isCancelled, only prompts when a foreground-active scene
+  exists, and marks hasRequestedReview only once it actually shows — one-time
+  gating preserved.
+
+NOTE: PERF-008 (NetworkRetry structured status codes) intentionally NOT done —
+postgrest-swift v2's PostgrestError exposes no HTTP status field, so a truly
+"structured status code" check can't be written without confirming the SDK error
+types against a real build. Left passes:false to avoid a guess that may not compile.
+
+### Files
+  M ios/DesMoinesInsider/Services/MetricKitSubscriber.swift
+  M ios/DesMoinesInsider/App/DesMoinesInsiderApp.swift

@@ -136,7 +136,7 @@ struct DesMoinesInsiderApp: App {
                     await favoritesService.loadFavorites()
 
                     // Request review after engagement thresholds
-                    requestReviewIfEligible()
+                    await requestReviewIfEligible()
                 }
 
                 // Deliberate, one-time push-permission prompt after onboarding
@@ -153,7 +153,7 @@ struct DesMoinesInsiderApp: App {
 
     // MARK: - App Review
 
-    private func requestReviewIfEligible() {
+    private func requestReviewIfEligible() async {
         // Require at least 3 launches and 1+ favorites before prompting
         guard launchCount >= 3,
               favoritesService.favoriteEventIds.count + favoritesService.favoriteRestaurantIds.count >= 1
@@ -161,16 +161,21 @@ struct DesMoinesInsiderApp: App {
 
         // Only prompt once (AppStore rate-limits this, but we gate on our side too)
         guard !UserDefaults.standard.bool(forKey: "hasRequestedReview") else { return }
-        UserDefaults.standard.set(true, forKey: "hasRequestedReview")
 
-        // Delay slightly so the app is fully visible
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            guard let scene = UIApplication.shared.connectedScenes
-                .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene else {
-                return
-            }
-            AppStore.requestReview(in: scene)
+        // Delay slightly so the app is fully visible. Structured + cancellable
+        // with the view's .task — no fire-and-forget asyncAfter on the launch
+        // path (IOS-AUDIT-PERF-013).
+        try? await Task.sleep(for: .seconds(2))
+        guard !Task.isCancelled else { return }
+
+        // Only prompt when a foreground-active scene still exists, and only mark
+        // as requested once we actually show it.
+        guard let scene = UIApplication.shared.connectedScenes
+            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene else {
+            return
         }
+        UserDefaults.standard.set(true, forKey: "hasRequestedReview")
+        AppStore.requestReview(in: scene)
     }
 }
 
