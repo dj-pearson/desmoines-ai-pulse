@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useAuthStatus, useAuthActions } from "@/hooks/useAuth";
+import { useAuthFlags, useAuthActions } from "@/contexts/AuthContext";
 import { useProfile } from "@/hooks/useProfile";
 import { useGamification } from "@/hooks/useGamification";
 import { useAccessibility } from "@/hooks/useAccessibility";
@@ -15,9 +15,9 @@ import { createLogger } from '@/lib/logger';
 const log = createLogger('Header');
 
 export default function Header() {
-  // Status + actions only (no user/session) so the header doesn't re-render on
-  // token-refresh ticks (WEB-PERF-005).
-  const { isAuthenticated, isAdmin } = useAuthStatus();
+  // Flags + actions only (no user/session) so the header doesn't re-render on
+  // token-refresh ticks. (WEB-PERF-005)
+  const { isAuthenticated, isAdmin } = useAuthFlags();
   const { logout } = useAuthActions();
   const { profile } = useProfile();
   const { userLevel, userXP } = useGamification();

@@ -335,6 +335,21 @@ export default function AdminCampaignDetail() {
                             <p>CTA: "{creative.cta_text}"</p>
                             <p>Size: {creative.dimensions_width}×{creative.dimensions_height}px</p>
                           </div>
+                          {/* Auto-review failure reasons (WEB-AUTO-010) */}
+                          {creative.auto_reviewed &&
+                            Array.isArray(creative.auto_review_reasons) &&
+                            creative.auto_review_reasons.length > 0 && (
+                              <div className="mt-3 rounded-md bg-amber-500/10 border border-amber-500/30 p-2">
+                                <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                                  Auto-review held this creative:
+                                </p>
+                                <ul className="mt-1 list-disc pl-4 text-xs text-muted-foreground">
+                                  {creative.auto_review_reasons.map((r: string, i: number) => (
+                                    <li key={i}>{r}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
                         </div>
                         <div className="flex gap-2">
                           <Button

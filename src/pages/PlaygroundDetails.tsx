@@ -26,6 +26,7 @@ import {
   ArrowLeft,
   Navigation,
   Share2,
+  Heart,
   Sparkles,
   Check,
   Info,
@@ -251,10 +252,10 @@ export default function PlaygroundDetails() {
               <FavoriteButton
                 contentType="playground"
                 contentId={playground.id}
-                itemName={playground.name}
                 variant="outline"
                 size="sm"
                 showText
+                itemName={playground.name}
                 className="rounded-xl"
               />
             </div>

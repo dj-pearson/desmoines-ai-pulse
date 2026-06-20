@@ -30,6 +30,7 @@ import {
   ArrowLeft,
   Navigation,
   Share2,
+  Heart,
   MessageCircle,
   Award,
   Utensils,
@@ -43,7 +44,6 @@ import {
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useContentTracking } from "@/hooks/useContentTracking";
-import { useRecordRecentView } from "@/hooks/useRecentlyViewedFeed";
 import { getRestaurantOpenStatus, getOpeningHoursSpecification } from "@/lib/restaurantHours";
 import { LazyLocationMap } from "@/components/LazyLocationMap";
 import { getDirectionsUrl } from "@/lib/directions";
@@ -87,20 +87,6 @@ export default function RestaurantDetails() {
 
   // Track page view and content interactions
   const { trackShare, trackClick } = useContentTracking(restaurant?.id, 'restaurant');
-
-  // Record into the unified recently-viewed feed (WEB-FEAT-007).
-  useRecordRecentView(
-    restaurant
-      ? {
-          id: restaurant.id,
-          type: "restaurant",
-          title: restaurant.name,
-          href: `/restaurants/${restaurant.slug || restaurant.id}`,
-          image_url: restaurant.image_url ?? undefined,
-          subtitle: restaurant.cuisine || restaurant.location || undefined,
-        }
-      : null,
-  );
 
   const { data: relatedRestaurants } = useQuery({
     queryKey: ["related-restaurants", restaurant?.cuisine, restaurant?.id],
@@ -438,10 +424,10 @@ export default function RestaurantDetails() {
               <FavoriteButton
                 contentType="restaurant"
                 contentId={restaurant.id}
-                itemName={restaurant.name}
                 variant="outline"
                 size="sm"
                 showText
+                itemName={restaurant.name}
                 className="rounded-xl"
               />
             </div>

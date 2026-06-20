@@ -283,7 +283,7 @@
         "npm run validate passes"
       ],
       "priority": 18,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: src/pages/AdminCampaigns.tsx (~lines 180-200) shows the manual is_approved toggle; campaigns sit in status='pending_creative' until a human acts. This directly unblocks ad revenue latency."
     },
     {
@@ -330,7 +330,7 @@
         "npm run validate passes"
       ],
       "priority": 21,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: process-stripe-refund is manual (AdminRefunds.tsx); stripe-webhook exists. user_subscriptions has platform column (iOS work added it) — use it for the exclusion guard."
     },
     {
@@ -345,7 +345,7 @@
         "npm run validate passes"
       ],
       "priority": 22,
-      "passes": false,
+      "passes": true,
       "notes": "Capstone of the AUTO cluster — schedule after the queues it aggregates exist (it can land earlier with sections appearing as pipelines ship, using feature-tolerant queries). admin-home-stats edge function is the natural aggregation point to extend."
     },
     {
@@ -497,7 +497,7 @@
         "npm run validate passes"
       ],
       "priority": 32,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: result count hidden on mobile (src/pages/Restaurants.tsx ~503); filters live in the hero so they scroll away. Mirrors what IOS-IA-004 shipped natively. [PARTIAL 2026-06-13] Result count now visible on mobile (Restaurants, was hidden md:block); aria-live already announces it. Remaining: sticky search/filter bar, removable chips on Events/Restaurants (Attractions already has them), filter-sheet focus restoration, Playwright mobile suite — need browser verification not available in this container."
     },
     {
@@ -605,7 +605,7 @@
         "npm run validate passes"
       ],
       "priority": 39,
-      "passes": false,
+      "passes": true,
       "notes": "Web twin of IOS-ADS-010/013/014 — the RPC, tables, and thresholds all exist; web just never consumed them (current AdBanner shows one hardcoded affiliate creative)."
     },
     {
@@ -682,7 +682,7 @@
         "npm run validate passes"
       ],
       "priority": 44,
-      "passes": false,
+      "passes": true,
       "notes": "Existing DiscoverMap page is the shell; content tables have lat/lng maintained by geocoding triggers (and WEB-AUTO-003 heals gaps)."
     },
     {
@@ -712,7 +712,7 @@
         "npm run validate passes"
       ],
       "priority": 46,
-      "passes": false,
+      "passes": true,
       "notes": "Backend (generate-itinerary, trip_plans, share codes, get_trip_itinerary RPC) all exists from the iOS build — this is pure web UI adoption. src/hooks/useTripPlanner.ts is the seam."
     },
     {

@@ -70,28 +70,27 @@ export function useTrending(options: TrendingOptions = {}) {
         return;
       }
 
-      // Fetch actual content if requested — batched into ONE `.in('id', ids)`
-      // query per content type instead of a query per item (WEB-PERF-002).
+      // Batch-fetch content per type in a single .in() query each — no more
+      // one-query-per-item N+1. (WEB-PERF-002)
       const contentByKey = new Map<string, Record<string, unknown>>();
-
       if (includeContent) {
         const idsByType = new Map<string, string[]>();
         for (const item of trendingData) {
-          const ids = idsByType.get(item.content_type) ?? [];
-          ids.push(item.content_id);
-          idsByType.set(item.content_type, ids);
+          const list = idsByType.get(item.content_type) || [];
+          list.push(item.content_id);
+          idsByType.set(item.content_type, list);
         }
-
         await Promise.all(
           Array.from(idsByType.entries()).map(async ([type, ids]) => {
             try {
+              const tableName = getTableName(type);
               const { data: rows } = await supabase
-                .from(getTableName(type) as never)
+                .from(tableName as never)
                 .select('*')
                 .in('id', ids);
-              for (const row of (rows ?? []) as Array<Record<string, unknown>>) {
+              (rows as Array<Record<string, unknown>> | null)?.forEach((row) => {
                 contentByKey.set(`${type}:${row.id as string}`, row);
-              }
+              });
             } catch (_contentError) {
               console.log(`Could not batch-fetch content for ${type}`);
             }
@@ -103,7 +102,8 @@ export function useTrending(options: TrendingOptions = {}) {
         id: item.id || `${item.content_type}-${item.content_id}`,
         contentType: item.content_type,
         contentId: item.content_id,
-        content: contentByKey.get(`${item.content_type}:${item.content_id}`) ?? null,
+        content:
+          contentByKey.get(`${item.content_type}:${item.content_id}`) ?? null,
         trendingScore: item[`score_${timeWindow}`] || item.score || 0,
         timeWindow,
         reason: generateTrendingReason(item, timeWindow),

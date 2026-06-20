@@ -1,16 +1,16 @@
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { ChefHat, Star, MapPin, Flame, Sparkles, Leaf, Wheat } from "lucide-react";
-import { memo, useState, useMemo, useCallback, useEffect } from "react";
+import { memo, useState, useMemo, useCallback, useRef } from "react";
 import { OptimizedImage } from "@/components/OptimizedImage";
-import { FavoriteButton } from "@/components/FavoriteButton";
-import { getCuisineGradient } from "@/lib/categoryStyles";
 import { SocialProofBadge } from "@/components/SocialProofBadge";
 import { getRestaurantOpenStatus } from "@/lib/restaurantHours";
 import { SponsoredBadge } from "@/components/SponsoredBadge";
-import { isActivelySponsored } from "@/lib/sponsored";
-import { trackSponsoredListing } from "@/lib/sponsoredTracking";
 import { usePrefetchRestaurant } from "@/hooks/usePrefetchDetail";
+import { getCuisineGradient } from "@/lib/categoryStyles";
+import { FavoriteButton } from "@/components/FavoriteButton";
+import { isSponsoredActive, logSponsoredClick } from "@/lib/sponsored";
+import { useSponsoredImpression } from "@/hooks/useSponsoredImpression";
 
 const DIETARY_TAGS = [
   { id: "vegan", label: "Vegan", icon: Leaf, bg: "bg-green-50", text: "text-green-700", keywords: ["vegan"] },
@@ -48,7 +48,6 @@ interface RestaurantCardProps {
   };
   variant?: "default" | "compact" | "featured";
 }
-
 
 function StarRating({ rating }: { rating: number }) {
   const stars = [];
@@ -91,31 +90,30 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
     return daysSince <= 14;
   }, [restaurant.created_at]);
 
-  // Active sponsorship only — expired (sponsored_until past) drops the treatment
-  // automatically (WEB-FEAT-005).
-  const sponsored = isActivelySponsored(restaurant);
-  useEffect(() => {
-    if (sponsored) trackSponsoredListing("impression", "restaurant", restaurant.id);
-  }, [sponsored, restaurant.id]);
-
   const prefetchRestaurant = usePrefetchRestaurant();
   const handleMouseEnter = useCallback(() => {
     prefetchRestaurant(restaurant.slug || restaurant.id);
   }, [prefetchRestaurant, restaurant.slug, restaurant.id]);
 
+  // Sponsored listing (WEB-FEAT-005): active only while not expired.
+  const sponsoredActive = isSponsoredActive(restaurant);
+  const articleRef = useRef<HTMLElement>(null);
+  useSponsoredImpression(articleRef, "restaurant", restaurant.id, sponsoredActive);
+
   return (
     <Link
       to={`/restaurants/${restaurant.slug || restaurant.id}`}
       className="group block focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-2xl"
-      aria-label={`${sponsored ? "Sponsored: " : ""}View ${restaurant.name} - ${restaurant.cuisine || "Restaurant"} in ${restaurant.city || "Des Moines"}`}
+      aria-label={`${sponsoredActive ? "Sponsored: " : ""}View ${restaurant.name} - ${restaurant.cuisine || "Restaurant"} in ${restaurant.city || "Des Moines"}`}
       onMouseEnter={handleMouseEnter}
       onClick={() => {
-        if (sponsored) trackSponsoredListing("click", "restaurant", restaurant.id);
+        if (sponsoredActive) logSponsoredClick("restaurant", restaurant.id);
       }}
     >
       <article
+        ref={articleRef}
         className={`relative h-full rounded-2xl overflow-hidden border bg-card transition-all duration-200 group-hover:shadow-xl group-hover:-translate-y-1.5 ${
-          sponsored ? "ring-2 ring-amber-400 shadow-lg" : isFeatured ? "ring-2 ring-amber-400/50 shadow-lg" : "shadow-sm"
+          sponsoredActive ? "ring-2 ring-amber-400 shadow-lg" : isFeatured ? "ring-2 ring-amber-400/50 shadow-lg" : "shadow-sm"
         }`}
       >
         {/* Image / Gradient Header */}
@@ -129,8 +127,6 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
               className="transition-transform duration-200 group-hover:scale-105 object-cover"
               containerClassName="absolute inset-0"
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-              useTransformApi
-              transformWidths={[320, 480, 640, 960]}
               onError={() => setImageError(true)}
             />
           ) : (
@@ -145,27 +141,28 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
           {/* Dark overlay for text readability */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
 
-          {/* Save (favorite) — stopPropagation/preventDefault keep it from navigating the card */}
+          {/* Save (favorite) overlay — stopPropagation handled inside the button */}
           <div className="absolute top-3 right-3 z-20">
             <FavoriteButton
               contentType="restaurant"
               contentId={restaurant.id}
               itemName={restaurant.name}
               size="icon"
-              className="h-9 w-9 rounded-full bg-black/40 backdrop-blur-sm hover:bg-black/60"
+              variant="ghost"
+              className="h-9 w-9 rounded-full bg-white/90 hover:bg-white shadow-md backdrop-blur"
             />
           </div>
 
           {/* Top badges */}
           <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 z-10">
-            {sponsored && <SponsoredBadge />}
-            {!sponsored && isFeatured && (
+            {sponsoredActive && <SponsoredBadge />}
+            {!sponsoredActive && isFeatured && (
               <Badge className="bg-amber-500 text-white border-0 shadow-md text-xs font-semibold px-2.5 py-0.5">
                 <Sparkles className="h-3 w-3 mr-1" />
                 Featured
               </Badge>
             )}
-            {!sponsored && !isFeatured && isNew && (
+            {!sponsoredActive && !isFeatured && isNew && (
               <SocialProofBadge type="new" size="sm" />
             )}
             {openStatus.isOpen && (

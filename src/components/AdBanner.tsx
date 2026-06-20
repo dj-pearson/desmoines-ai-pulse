@@ -1,7 +1,9 @@
 import { useActiveAds } from "@/hooks/useActiveAds";
 import { useAdTracking } from "@/hooks/useAdTracking";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useAffiliateAd } from "@/hooks/useAffiliateAd";
 import { AffiliateAdBanner } from "@/components/AffiliateAdBanner";
+import { HouseAd } from "@/components/HouseAd";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ExternalLink } from "lucide-react";
@@ -17,6 +19,9 @@ interface AdBannerProps {
 export function AdBanner({ placement, className = "", fallback }: AdBannerProps) {
   const { hasFeature, isLoading: subscriptionLoading } = useSubscription();
   const { ad, isLoading: adLoading } = useActiveAds(placement);
+  // Affiliate availability for the fill chain (campaign -> affiliate -> house).
+  const { partner, imageUrl, affiliateUrl } = useAffiliateAd(placement);
+  const hasAffiliate = !!(partner && imageUrl && affiliateUrl);
 
   const { adRef, trackClick } = useAdTracking({
     campaignId: ad?.campaign_id || '',
@@ -36,8 +41,14 @@ export function AdBanner({ placement, className = "", fallback }: AdBannerProps)
     return null;
   }
 
+  // Fill chain so a slot never renders empty (WEB-FEAT-004):
+  //   paid campaign -> affiliate -> house ad. A caller-provided `fallback`
+  //   (e.g. content) still takes precedence over house fill.
   if (!ad) {
-    return fallback ? <>{fallback}</> : <AffiliateAdBanner placement={placement} className={className} />;
+    if (hasAffiliate) {
+      return <AffiliateAdBanner placement={placement} className={className} />;
+    }
+    return fallback ? <>{fallback}</> : <HouseAd placement={placement} className={className} />;
   }
 
   const handleAdClick = async () => {

@@ -26,6 +26,7 @@ import {
   ArrowLeft,
   Navigation,
   Share2,
+  Heart,
   Sparkles,
   Globe,
   Info,
@@ -39,7 +40,6 @@ import {
 import { useState } from "react";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useContentTracking } from "@/hooks/useContentTracking";
-import { useRecordRecentView } from "@/hooks/useRecentlyViewedFeed";
 import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { NearbyContent } from "@/components/NearbyContent";
@@ -106,20 +106,6 @@ export default function AttractionDetails() {
 
   // Track page view and content interactions
   const { trackShare, trackClick } = useContentTracking(attraction?.id, 'attraction');
-
-  // Record into the unified recently-viewed feed (WEB-FEAT-007).
-  useRecordRecentView(
-    attraction
-      ? {
-          id: attraction.id,
-          type: "attraction",
-          title: attraction.name,
-          href: `/attractions/${createSlug(attraction.name)}`,
-          image_url: attraction.image_url ?? undefined,
-          subtitle: attraction.type || attraction.location || undefined,
-        }
-      : null,
-  );
 
   const { data: relatedAttractions } = useQuery({
     queryKey: ["related-attractions", attraction?.type, attraction?.id],
@@ -321,10 +307,10 @@ export default function AttractionDetails() {
               <FavoriteButton
                 contentType="attraction"
                 contentId={attraction.id}
-                itemName={attraction.name}
                 variant="outline"
                 size="sm"
                 showText
+                itemName={attraction.name}
                 className="rounded-xl"
               />
             </div>
@@ -400,7 +386,7 @@ export default function AttractionDetails() {
             {/* Quick Actions Bar */}
             <div className="flex flex-wrap items-center gap-3 p-4 md:p-6 bg-gray-50 border-b">
               <OpenStatusChip
-                hours={typeof attraction.hours === "string" ? attraction.hours : undefined}
+                hours={attraction.hours}
                 website={attraction.website}
                 className="self-center"
               />

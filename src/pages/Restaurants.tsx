@@ -46,9 +46,10 @@ import { useAnnounce } from "@/hooks/use-announce";
 import { OpenNowBanner } from "@/components/OpenNowBanner";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useUrlFilterState } from "@/hooks/useUrlFilterState";
 import RestaurantCard from "@/components/RestaurantCard";
-import { arrangeSponsoredFirst } from "@/lib/sponsored";
+import { arrangeSponsored } from "@/lib/sponsored";
+import { useUrlFilters } from "@/hooks/useUrlFilters";
+import { ActiveFilterChips } from "@/components/filters/ActiveFilterChips";
 import { SearchAutocomplete, addRecentSearch } from "@/components/SearchAutocomplete";
 import {
   Pagination,
@@ -80,121 +81,82 @@ const sortOptions = [
   { value: "price_high", label: "Price: High-Low", icon: DollarSign },
 ];
 
-// URL param defaults (WEB-UX-001). A value equal to its default is omitted
-// from the query string to keep shared links clean.
-const RESTAURANT_FILTER_DEFAULTS: Record<string, string> = {
-  q: "",
-  cuisine: "",
-  price: "",
-  loc: "",
-  tags: "",
-  rating: "",
-  sort: "popularity",
-  feat: "",
-  open: "",
-  page: "1",
-};
-
-const RESTAURANT_SORTS: readonly string[] = [
-  "popularity",
-  "rating",
-  "newest",
-  "alphabetical",
-  "price_low",
-  "price_high",
-];
-
-/** Derive the full filters object from the URL — the source of truth. */
-function buildRestaurantFilters(params: URLSearchParams): RestaurantFilterOptions {
-  const list = (k: string): string[] => {
-    const v = params.get(k);
-    return v ? v.split(",").map((s) => s.trim()).filter(Boolean) : [];
-  };
-  let rating: number[] = [0, 5];
-  const ratingRaw = params.get("rating");
-  if (ratingRaw) {
-    const parts = ratingRaw.split("-").map(Number);
-    if (parts.length === 2 && parts.every((n) => !Number.isNaN(n))) rating = parts;
-  }
-  const sortRaw = params.get("sort") ?? "popularity";
-  return {
-    search: params.get("q") ?? "",
-    cuisine: list("cuisine"),
-    priceRange: list("price"),
-    rating,
-    location: list("loc"),
-    sortBy: (RESTAURANT_SORTS.includes(sortRaw)
-      ? sortRaw
-      : "popularity") as RestaurantFilterOptions["sortBy"],
-    featuredOnly: params.get("feat") === "1",
-    openNow: params.get("open") === "1",
-    tags: list("tags"),
-  };
-}
-
-/** Serialize a filters object back to URL params (defaults are dropped by `set`). */
-function restaurantFiltersToParams(
-  f: RestaurantFilterOptions,
-): Record<string, string | string[] | null> {
-  return {
-    q: f.search,
-    cuisine: f.cuisine,
-    price: f.priceRange,
-    loc: f.location,
-    tags: f.tags,
-    rating: f.rating[0] !== 0 || f.rating[1] !== 5 ? `${f.rating[0]}-${f.rating[1]}` : null,
-    sort: f.sortBy,
-    feat: f.featuredOnly ? "1" : null,
-    open: f.openNow ? "1" : null,
-  };
-}
-
 export default function Restaurants() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const searchInputRef = useRef<HTMLInputElement>(null);
-
-  // URL is the source of truth for filters (WEB-UX-001) so the filtered view
-  // survives back/forward navigation and is shareable.
-  const { params, set, clear } = useUrlFilterState();
-  const filters = useMemo<RestaurantFilterOptions>(
-    () => buildRestaurantFilters(params),
-    [params],
+  // Filters are URL-synced (WEB-UX-001): shareable + survive back/forward.
+  const { getStr, getNum, getList, setParam, setMany, clearParams } = useUrlFilters();
+  const filters: RestaurantFilterOptions = useMemo(
+    () => ({
+      search: getStr("q", ""),
+      cuisine: getList("cuisine"),
+      priceRange: getList("price"),
+      rating: [getNum("rmin", 0), getNum("rmax", 5)],
+      location: getList("location"),
+      sortBy: getStr("sort", "popularity") as RestaurantFilterOptions["sortBy"],
+      featuredOnly: getStr("featured", "") === "1",
+      openNow: getStr("open", "") === "1",
+      tags: getList("tags"),
+    }),
+    [getStr, getNum, getList]
   );
 
+  // setFilters-compatible writer (accepts an object or an updater) that persists
+  // the whole filter object into the URL and resets pagination.
+  const setFilters = useCallback(
+    (
+      update:
+        | RestaurantFilterOptions
+        | ((prev: RestaurantFilterOptions) => RestaurantFilterOptions)
+    ) => {
+      const next = typeof update === "function" ? update(filters) : update;
+      setMany({
+        q: next.search,
+        cuisine: next.cuisine,
+        price: next.priceRange,
+        rmin: next.rating[0] !== 0 ? next.rating[0] : "",
+        rmax: next.rating[1] !== 5 ? next.rating[1] : "",
+        location: next.location,
+        sort: next.sortBy !== "popularity" ? next.sortBy : "",
+        featured: next.featuredOnly ? "1" : "",
+        open: next.openNow ? "1" : "",
+        tags: next.tags,
+      });
+    },
+    [filters, setMany]
+  );
+
+  // Active-filter chips (WEB-UX-003) — each removal updates the URL via setFilters.
+  const restaurantChips = useMemo(() => {
+    const chips: { key: string; label: string; onRemove: () => void }[] = [];
+    if (filters.search)
+      chips.push({ key: "q", label: `Search: "${filters.search}"`, onRemove: () => { setSearchInput(""); setParam("q", "", { resetsPage: true }); } });
+    filters.cuisine.forEach((c) =>
+      chips.push({ key: `cuisine-${c}`, label: c, onRemove: () => setFilters((p) => ({ ...p, cuisine: p.cuisine.filter((x) => x !== c) })) })
+    );
+    filters.priceRange.forEach((c) =>
+      chips.push({ key: `price-${c}`, label: c, onRemove: () => setFilters((p) => ({ ...p, priceRange: p.priceRange.filter((x) => x !== c) })) })
+    );
+    filters.location.forEach((c) =>
+      chips.push({ key: `loc-${c}`, label: c, onRemove: () => setFilters((p) => ({ ...p, location: p.location.filter((x) => x !== c) })) })
+    );
+    if (filters.featuredOnly)
+      chips.push({ key: "featured", label: "Featured only", onRemove: () => setFilters((p) => ({ ...p, featuredOnly: false })) });
+    if (filters.openNow)
+      chips.push({ key: "open", label: "Open now", onRemove: () => setFilters((p) => ({ ...p, openNow: false })) });
+    if (filters.rating[0] !== 0 || filters.rating[1] !== 5)
+      chips.push({ key: "rating", label: `Rating ${filters.rating[0]}–${filters.rating[1]}`, onRemove: () => setFilters((p) => ({ ...p, rating: [0, 5] })) });
+    return chips;
+  }, [filters, setFilters, setParam]);
+
   const [viewMode, setViewMode] = useState<"list" | "map">("list");
-  // Controlled input mirrors ?q= but updates instantly; debounced effect below
-  // writes it back to the URL (replace) so typing doesn't spam history.
-  const [searchInput, setSearchInput] = useState(filters.search);
+  const [searchInput, setSearchInput] = useState(() => getStr("q", ""));
   const { toast } = useToast();
 
   const ITEMS_PER_PAGE = 30;
-  const page = Math.max(1, parseInt(params.get("page") ?? "1", 10) || 1);
-
-  // Any filter change writes through to the URL and resets to page 1. Accepts
-  // the same object-or-updater shape as the old useState setter.
-  const setFilters = useCallback(
-    (
-      updater:
-        | RestaurantFilterOptions
-        | ((prev: RestaurantFilterOptions) => RestaurantFilterOptions),
-    ) => {
-      const next = typeof updater === "function" ? updater(filters) : updater;
-      set(
-        { ...restaurantFiltersToParams(next), page: null },
-        { defaults: RESTAURANT_FILTER_DEFAULTS },
-      );
-    },
-    [filters, set],
-  );
-
-  const setPage = useCallback(
-    (updater: number | ((p: number) => number)) => {
-      const next = typeof updater === "function" ? updater(page) : updater;
-      set({ page: next <= 1 ? null : next }, { defaults: RESTAURANT_FILTER_DEFAULTS });
-    },
-    [set, page],
-  );
+  const page = getNum("page", 1);
+  const setPage = (v: number) => setParam("page", v, { def: 1 });
 
   const { restaurants, isLoading, error, totalCount, refetch } = useRestaurants(filters);
   const filterOptions = useRestaurantFilterOptions();
@@ -207,43 +169,45 @@ export default function Restaurants() {
     navigate(`/restaurants/${random.slug || random.id}`);
   }, [restaurants, navigate]);
 
+  // Boost up to 2 active sponsored listings to the top (WEB-FEAT-005), organic
+  // order otherwise.
+  const arrangedRestaurants = useMemo(
+    () => arrangeSponsored(restaurants),
+    [restaurants]
+  );
+
   // Paginate restaurants
-  const totalPages = Math.ceil((restaurants?.length || 0) / ITEMS_PER_PAGE);
+  const totalPages = Math.ceil((arrangedRestaurants?.length || 0) / ITEMS_PER_PAGE);
   const paginatedRestaurants = useMemo(() => {
-    // Boost up to 2 actively-sponsored restaurants to the top before paginating
-    // (WEB-FEAT-005); organic order otherwise, Sponsored badge on the card.
-    const arranged = arrangeSponsoredFirst(restaurants);
     if (isMobile) {
       // Mobile: show all up to current page (load more pattern)
-      return arranged.slice(0, page * ITEMS_PER_PAGE);
+      return arrangedRestaurants.slice(0, page * ITEMS_PER_PAGE);
     }
     // Desktop: show current page only
     const start = (page - 1) * ITEMS_PER_PAGE;
-    return arranged.slice(start, start + ITEMS_PER_PAGE);
-  }, [restaurants, page, isMobile]);
+    return arrangedRestaurants.slice(start, start + ITEMS_PER_PAGE);
+  }, [arrangedRestaurants, page, isMobile]);
 
   const hasMorePages = isMobile
     ? page * ITEMS_PER_PAGE < restaurants.length
     : page < totalPages;
 
-  // Page resets to 1 inside each filter setter (URL is the source of truth),
-  // so no separate reset effect is needed.
+  // Page reset on filter change is handled by setMany/setParam (resetsPage).
 
-  // Push debounced search input → URL (replace, so each keystroke doesn't add a
-  // history entry). Reads params.get directly to avoid re-arming on every nav.
+  // Debounced search -> URL (WEB-UX-001). Writing only the 'q' param avoids
+  // history spam; setParam(replace) keeps typing out of the back stack.
   useEffect(() => {
+    if (searchInput === filters.search) return;
     const timer = setTimeout(() => {
-      if (searchInput !== (params.get("q") ?? "")) {
-        set({ q: searchInput, page: null }, { replace: true, defaults: RESTAURANT_FILTER_DEFAULTS });
-      }
+      setParam("q", searchInput, { def: "", resetsPage: true, replace: true });
     }, 300);
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchInput]);
+  }, [searchInput, filters.search, setParam]);
 
-  // Pull URL → input on external navigation (back/forward, shared link).
+  // Back/forward & shared links: pull URL search back into the input.
   useEffect(() => {
     setSearchInput(filters.search);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.search]);
 
   // Announce result count to screen readers
@@ -256,13 +220,13 @@ export default function Restaurants() {
   }, [restaurants?.length, isLoading, filters.search, announce]);
 
   const handleClearFilters = useCallback(() => {
+    clearParams(["q", "cuisine", "price", "rmin", "rmax", "location", "sort", "featured", "open", "tags"]);
     setSearchInput("");
-    clear(["q", "cuisine", "price", "loc", "tags", "rating", "sort", "feat", "open", "page"]);
     toast({
       title: "Filters Cleared",
       description: "All filters have been reset",
     });
-  }, [clear, toast]);
+  }, [toast, clearParams]);
 
   const getActiveFiltersCount = useMemo(() => {
     let count = 0;
@@ -714,8 +678,14 @@ export default function Restaurants() {
                 </Suspense>
               ) : (
                 <>
+                  {/* Sticky filter bar: removable chips (WEB-UX-003) */}
+                  {restaurantChips.length > 0 && (
+                    <div className="sticky top-16 z-30 py-2 mb-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+                      <ActiveFilterChips onClearAll={handleClearFilters} chips={restaurantChips} />
+                    </div>
+                  )}
                   {/* Results count */}
-                  <p className="text-sm text-muted-foreground mb-4">
+                  <p className="text-sm text-muted-foreground mb-4" aria-live="polite">
                     {isMobile
                       ? `Showing ${Math.min(paginatedRestaurants.length, restaurants.length)} of ${restaurants.length} restaurants`
                       : `Showing ${Math.min((page - 1) * ITEMS_PER_PAGE + 1, restaurants.length)}-${Math.min(page * ITEMS_PER_PAGE, restaurants.length)} of ${restaurants.length} restaurants`}
@@ -832,6 +802,7 @@ export default function Restaurants() {
                       key={cuisine}
                       onClick={() => {
                         setFilters((prev) => ({ ...prev, cuisine: [cuisine] }));
+                        setActiveCuisineQuick('');
                         document.getElementById('all-restaurants-heading')?.scrollIntoView({ behavior: 'smooth' });
                       }}
                       className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border border-gray-200 dark:border-gray-700 bg-white dark:bg-card text-gray-700 dark:text-gray-300 hover:border-[#2D1B69] dark:hover:border-primary hover:bg-[#2D1B69]/5 dark:hover:bg-primary/10 transition-all duration-200 shadow-sm"

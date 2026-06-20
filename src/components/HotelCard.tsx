@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Star, MapPin, Wifi, Car, Coffee, Dumbbell, PawPrint, Building2, ExternalLink } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
+import { getHotelTypeGradient } from "@/lib/categoryStyles";
 
 type Hotel = Database["public"]["Tables"]["hotels"]["Row"];
 
@@ -19,20 +20,6 @@ const amenityIcons: Record<string, React.ElementType> = {
   "Free Parking": Car,
   "Pet Friendly": PawPrint,
 };
-
-const typeGradients: Record<string, string> = {
-  "Hotel": "from-blue-600 to-indigo-500",
-  "Boutique Hotel": "from-purple-600 to-pink-500",
-  "Motel": "from-teal-600 to-cyan-500",
-  "Resort": "from-emerald-600 to-teal-500",
-  "B&B": "from-orange-600 to-amber-500",
-  "Extended Stay": "from-slate-600 to-gray-500",
-};
-
-function getGradient(type?: string | null): string {
-  if (type && typeGradients[type]) return typeGradients[type];
-  return "from-[#2D1B69] to-[#DC143C]";
-}
 
 function renderStars(rating: number | null) {
   if (!rating) return null;
@@ -68,7 +55,7 @@ export default function HotelCard({ hotel, variant = "default", showBookButton =
               decoding="async"
             />
           ) : (
-            <div className={`w-full h-full bg-gradient-to-br ${getGradient(hotel.hotel_type)} flex items-center justify-center`} role="img" aria-label={`No image available for ${hotel.name}`}>
+            <div className={`w-full h-full bg-gradient-to-br ${getHotelTypeGradient(hotel.hotel_type)} flex items-center justify-center`} role="img" aria-label={`No image available for ${hotel.name}`}>
               <Building2 className="h-12 w-12 text-white/70" />
             </div>
           )}

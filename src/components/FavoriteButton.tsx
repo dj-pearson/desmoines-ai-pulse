@@ -1,22 +1,34 @@
 import { Button } from "@/components/ui/button";
 import { Heart, Loader2 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 import { useFavorites } from "@/hooks/useFavorites";
-import { useContentFavorites, type FavoriteContentType } from "@/hooks/useContentFavorites";
-import { useAuthStatus } from "@/hooks/useAuth";
-import { useGuestFavorites, type GuestFavoriteType } from "@/hooks/useGuestFavorites";
-import { trackConversion } from "@/lib/conversionTracking";
-import { openPaywall } from "@/lib/paywallStore";
+import {
+  useContentFavorites,
+  type FavoriteContentType,
+} from "@/hooks/useContentFavorites";
 import { cn } from "@/lib/utils";
 import { hapticTap } from "@/lib/capacitorUtils";
 import { toast } from "sonner";
+import { useState, useSyncExternalStore } from "react";
+import { useAuthFlags } from "@/contexts/AuthContext";
+import { UpgradeModal } from "@/components/UpgradeModal";
+import {
+  subscribeGuestFavorites,
+  isGuestFavorited,
+  toggleGuestFavorite,
+  GUEST_FAVORITE_CAP,
+  type GuestFavoriteType,
+} from "@/lib/guestFavorites";
+import { logFavoriteFunnelEvent } from "@/lib/favoriteAnalytics";
 
 interface FavoriteButtonProps {
-  /** Event id — kept for backward compatibility with existing event call sites. */
+  /** Event id (legacy/default path). Required when no contentType is given. */
   eventId?: string;
-  /** Content type. Defaults to "event" so existing `eventId` usage is unchanged. */
-  contentType?: "event" | FavoriteContentType;
-  /** Content id for non-event types (restaurant/attraction/playground). */
+  /**
+   * Content type for non-event favorites (restaurant/attraction/hotel/
+   * playground). When set, `contentId` (or `eventId` as a fallback) is used.
+   */
+  contentType?: FavoriteContentType | "event";
+  /** Content id for non-event favorites. Falls back to `eventId`. */
   contentId?: string;
   variant?: "default" | "ghost" | "outline";
   size?: "default" | "sm" | "lg" | "icon";
@@ -26,95 +38,42 @@ interface FavoriteButtonProps {
   itemName?: string;
 }
 
-export function FavoriteButton({
-  eventId,
-  contentType = "event",
-  contentId,
+type ViewProps = {
+  favorited: boolean;
+  isToggling: boolean;
+  onToggle: () => void;
+} & Pick<FavoriteButtonProps, "variant" | "size" | "className" | "showText" | "itemName">;
+
+/** Shared presentational button — no data dependency. */
+function FavoriteButtonView({
+  favorited,
+  isToggling,
+  onToggle,
   variant = "ghost",
   size = "icon",
   className,
   showText = false,
   itemName,
-}: FavoriteButtonProps) {
-  const id = contentId ?? eventId ?? "";
-  const navigate = useNavigate();
-
-  // Both hooks are called unconditionally (rules of hooks); the content hook is
-  // disabled for the events path and vice-versa. For guests, neither query fires
-  // (they're user-gated) — guest saves live in safeStorage via useGuestFavorites.
-  const eventFav = useFavorites();
-  const contentFav = useContentFavorites(
-    contentType === "event" ? null : contentType,
-  );
-  const { isAuthenticated } = useAuthStatus();
-  const guest = useGuestFavorites();
-
-  const isEvent = contentType === "event";
-  const favorited = !isAuthenticated
-    ? guest.isGuestFavorited(contentType, id)
-    : isEvent
-    ? eventFav.isFavorited(id)
-    : contentFav.isFavorited(id);
-  const isToggling = isAuthenticated
-    ? isEvent
-      ? eventFav.isToggling
-      : contentFav.isToggling
-    : false;
-
+}: ViewProps) {
   const ariaLabel = isToggling
     ? "Updating favorite..."
     : favorited
-    ? itemName ? `Remove ${itemName} from favorites` : "Remove from favorites"
-    : itemName ? `Save ${itemName}` : "Add to favorites";
-
-  const handleGuestToggle = () => {
-    const result = guest.toggleGuestFavorite({
-      contentType: contentType as GuestFavoriteType,
-      contentId: id,
-      name: itemName,
-    });
-    if (result.status === "cap_reached") {
-      trackConversion("guest_wall_hit", { contentType, contentId: id });
-      toast("Sign up free to keep saving", {
-        id: "guest-fav-wall",
-        description: `You've used your ${guest.limit} free saves. Create a free account to save more — it's instant.`,
-        action: { label: "Sign up", onClick: () => navigate("/auth") },
-      });
-    } else if (result.status === "added") {
-      trackConversion("guest_save", { contentType, contentId: id });
-      toast.success(`Saved (${result.count}/${guest.limit})`, { id: `fav-${contentType}-${id}` });
-    } else {
-      toast.success("Removed from favorites", { id: `fav-${contentType}-${id}` });
-    }
-  };
+    ? itemName
+      ? `Remove ${itemName} from favorites`
+      : "Remove from favorites"
+    : itemName
+    ? `Save ${itemName}`
+    : "Add to favorites";
 
   return (
     <Button
       variant={variant}
       size={size}
       onClick={(e) => {
-        e.stopPropagation();
         e.preventDefault();
+        e.stopPropagation();
         hapticTap();
-        if (!isAuthenticated) {
-          handleGuestToggle();
-          return;
-        }
-        // Free-tier favorites cap → contextual paywall on the 4th save attempt
-        // (WEB-FEAT-001), instead of a dead-end toast.
-        if (isEvent && !favorited && !eventFav.canAddFavorite) {
-          openPaywall("unlimited_favorites");
-          return;
-        }
-        const wasFavorited = favorited;
-        if (isEvent) {
-          eventFav.toggleFavorite(id);
-        } else {
-          contentFav.toggleFavorite(id);
-        }
-        toast.success(wasFavorited ? "Removed from favorites" : "Added to favorites", {
-          id: `fav-${contentType}-${id}`,
-        });
+        onToggle();
       }}
       disabled={isToggling}
       className={cn(className)}
@@ -133,9 +92,173 @@ export function FavoriteButton({
           )}
         />
       )}
-      {showText && (
-        <span className="ml-2">{favorited ? "Saved" : "Save"}</span>
-      )}
+      {showText && <span className="ml-2">{favorited ? "Saved" : "Save"}</span>}
     </Button>
   );
+}
+
+function EventFavoriteButton({
+  eventId,
+  ...rest
+}: Omit<FavoriteButtonProps, "contentType" | "contentId" | "eventId"> & {
+  eventId: string;
+}) {
+  const { isFavorited, toggleFavorite, isToggling } = useFavorites();
+  const favorited = isFavorited(eventId);
+  const [showUpgrade, setShowUpgrade] = useState(false);
+  return (
+    <>
+      <FavoriteButtonView
+        favorited={favorited}
+        isToggling={isToggling}
+        onToggle={() => {
+          const wasFavorited = favorited;
+          const result = toggleFavorite(eventId);
+          if (result.success) {
+            toast.success(
+              wasFavorited ? "Removed from favorites" : "Added to favorites",
+              { id: `fav-${eventId}` }
+            );
+          } else if (result.needsUpgrade) {
+            setShowUpgrade(true);
+          }
+        }}
+        {...rest}
+      />
+      <UpgradeModal
+        open={showUpgrade}
+        onOpenChange={setShowUpgrade}
+        feature="unlimited_favorites"
+      />
+    </>
+  );
+}
+
+function ContentFavoriteButton({
+  contentType,
+  contentId,
+  ...rest
+}: Omit<FavoriteButtonProps, "eventId" | "contentType"> & {
+  contentType: FavoriteContentType;
+  contentId: string;
+}) {
+  const { isFavorited, toggleFavorite, isToggling } =
+    useContentFavorites(contentType);
+  const favorited = isFavorited(contentId);
+  const [showUpgrade, setShowUpgrade] = useState(false);
+  return (
+    <>
+      <FavoriteButtonView
+        favorited={favorited}
+        isToggling={isToggling}
+        onToggle={() => {
+          const wasFavorited = favorited;
+          const result = toggleFavorite(contentId);
+          if (result.success) {
+            toast.success(
+              wasFavorited ? "Removed from favorites" : "Added to favorites",
+              { id: `fav-${contentType}-${contentId}` }
+            );
+          } else if (result.needsUpgrade) {
+            setShowUpgrade(true);
+          }
+        }}
+        {...rest}
+      />
+      <UpgradeModal
+        open={showUpgrade}
+        onOpenChange={setShowUpgrade}
+        feature="unlimited_favorites"
+      />
+    </>
+  );
+}
+
+/**
+ * Guest (unauthenticated) variant — saves to safeStorage up to a small cap,
+ * then prompts signup instead of the paywall. (WEB-FEAT-006)
+ */
+function GuestFavoriteButton({
+  guestType,
+  id,
+  ...rest
+}: Omit<FavoriteButtonProps, "eventId" | "contentType" | "contentId"> & {
+  guestType: GuestFavoriteType;
+  id: string;
+}) {
+  const favorites = useSyncExternalStore(
+    subscribeGuestFavorites,
+    () => isGuestFavorited(guestType, id),
+    () => false
+  );
+
+  return (
+    <FavoriteButtonView
+      favorited={favorites}
+      isToggling={false}
+      onToggle={() => {
+        const result = toggleGuestFavorite(guestType, id);
+        if (result.action === "added") {
+          logFavoriteFunnelEvent("guest_save", guestType, id, null, {
+            count: result.count,
+          });
+          toast.success(
+            `Saved ${result.count}/${GUEST_FAVORITE_CAP} — sign up free to keep saving`,
+            {
+              id: `guest-fav-${guestType}-${id}`,
+              action: { label: "Sign up", onClick: () => goToSignup() },
+            }
+          );
+        } else if (result.action === "removed") {
+          toast.success("Removed from favorites", {
+            id: `guest-fav-${guestType}-${id}`,
+          });
+        } else {
+          // Cap reached — contextual signup prompt (NOT the paywall).
+          logFavoriteFunnelEvent("guest_save_wall_hit", guestType, id, null, {
+            count: result.count,
+          });
+          toast("Sign up free to keep saving", {
+            id: "guest-fav-wall",
+            description: `You've saved ${GUEST_FAVORITE_CAP} items as a guest. Create a free account to save more.`,
+            action: { label: "Sign up", onClick: () => goToSignup() },
+          });
+        }
+      }}
+      {...rest}
+    />
+  );
+}
+
+function goToSignup() {
+  if (typeof window !== "undefined") {
+    const next = encodeURIComponent(
+      window.location.pathname + window.location.search
+    );
+    window.location.href = `/auth?redirect=${next}`;
+  }
+}
+
+export function FavoriteButton({
+  eventId,
+  contentType,
+  contentId,
+  ...rest
+}: FavoriteButtonProps) {
+  const { isAuthenticated } = useAuthFlags();
+  const guestType: GuestFavoriteType =
+    contentType && contentType !== "event" ? contentType : "event";
+  const id = contentId ?? eventId;
+
+  if (!isAuthenticated) {
+    if (!id) return null;
+    return <GuestFavoriteButton guestType={guestType} id={id} {...rest} />;
+  }
+
+  if (contentType && contentType !== "event") {
+    if (!id) return null;
+    return <ContentFavoriteButton contentType={contentType} contentId={id} {...rest} />;
+  }
+  if (!eventId) return null;
+  return <EventFavoriteButton eventId={eventId} {...rest} />;
 }

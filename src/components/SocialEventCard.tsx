@@ -3,10 +3,6 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { FavoriteButton } from '@/components/FavoriteButton';
-import { getCategoryStyle } from '@/lib/categoryStyles';
-import { SponsoredBadge } from '@/components/SponsoredBadge';
-import { isActivelySponsored } from '@/lib/sponsored';
-import { trackSponsoredListing } from '@/lib/sponsoredTracking';
 import ShareDialog from '@/components/ShareDialog';
 import { useEventSocial } from '@/hooks/useEventSocial';
 import { BatchEventSocialData } from '@/hooks/useBatchEventSocial';
@@ -28,6 +24,11 @@ import {
   hasSpecificTime,
 } from '@/lib/timezone';
 import { Link } from 'react-router-dom';
+import { getEventCategoryStyle } from '@/lib/categoryStyles';
+import { SponsoredBadge } from '@/components/SponsoredBadge';
+import { isSponsoredActive, logSponsoredClick } from '@/lib/sponsored';
+import { useSponsoredImpression } from '@/hooks/useSponsoredImpression';
+import { useRef } from 'react';
 
 interface SocialEventCardProps {
   event: Event;
@@ -51,13 +52,7 @@ function SocialEventCardComponent({
   const liveStats = socialData?.liveStats ?? individualFetch.liveStats;
   const attendees = socialData?.attendees ?? individualFetch.attendees;
 
-  const categoryStyle = getCategoryStyle(event.category);
-
-  // Active sponsorship only (WEB-FEAT-005); expired ones drop the treatment.
-  const sponsored = isActivelySponsored(event);
-  React.useEffect(() => {
-    if (sponsored) trackSponsoredListing("impression", "event", event.id);
-  }, [sponsored, event.id]);
+  const categoryStyle = getEventCategoryStyle(event.category);
 
   const getDateParts = () => {
     try {
@@ -83,18 +78,24 @@ function SocialEventCardComponent({
   const isLive = liveStats && liveStats.total_checkins > 0;
   const attendeeCount = attendees?.length || liveStats?.current_attendees || 0;
 
+  // Sponsored listing (WEB-FEAT-005): active only while not expired.
+  const sponsoredActive = isSponsoredActive(event);
+  const cardRef = useRef<HTMLDivElement>(null);
+  useSponsoredImpression(cardRef, 'event', event.id, sponsoredActive);
+
   return (
     <Card
-      className={`group relative overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-card ${
-        sponsored ? 'ring-2 ring-amber-400 border-0' : 'border-0'
-      } ${featured ? 'md:col-span-2 md:row-span-2' : ''}`}
+      ref={cardRef}
+      className={`group relative overflow-hidden border-0 shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-card ${
+        featured ? 'md:col-span-2 md:row-span-2' : ''
+      } ${sponsoredActive ? 'ring-2 ring-amber-400 shadow-lg' : ''}`}
     >
       <Link
         to={eventUrl}
         className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-xl"
-        aria-label={`${sponsored ? 'Sponsored: ' : ''}View details for ${event.title}`}
+        aria-label={`${sponsoredActive ? 'Sponsored: ' : ''}View details for ${event.title}`}
         onClick={() => {
-          if (sponsored) trackSponsoredListing('click', 'event', event.id);
+          if (sponsoredActive) logSponsoredClick('event', event.id);
         }}
       >
         <CardContent className="p-0">
@@ -145,14 +146,14 @@ function SocialEventCardComponent({
 
             {/* Top Right Badges */}
             <div className="absolute top-3 right-3 z-10 flex flex-col gap-1.5 items-end">
-              {sponsored && <SponsoredBadge className="shadow-lg" />}
+              {sponsoredActive && <SponsoredBadge className="shadow-lg" />}
               {isLive && (
                 <Badge className="bg-green-500 text-white border-0 shadow-lg text-[10px] px-2 animate-pulse">
                   <TrendingUp className="h-3 w-3 mr-1" />
                   LIVE
                 </Badge>
               )}
-              {event.is_featured && (
+              {!sponsoredActive && event.is_featured && (
                 <Badge className="bg-amber-500 text-white border-0 shadow-lg text-[10px] px-2">
                   <Sparkles className="h-3 w-3 mr-1" />
                   Featured

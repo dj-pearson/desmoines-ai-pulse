@@ -31,8 +31,9 @@ import {
   LoadingSpinner,
 } from "@/components/ui/loading-skeleton";
 import { SocialEventCard } from "@/components/SocialEventCard";
-import type { Event as DMEvent } from "@/lib/types";
-import { arrangeSponsoredFirst } from "@/lib/sponsored";
+import { arrangeSponsored } from "@/lib/sponsored";
+import { useUrlFilters } from "@/hooks/useUrlFilters";
+import { ActiveFilterChips } from "@/components/filters/ActiveFilterChips";
 import Header from "@/components/Header";
 import { AdBanner } from "@/components/AdBanner";
 import Footer from "@/components/Footer";
@@ -53,23 +54,9 @@ import { EventInlineFilters } from "@/components/EventInlineFilters";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { SearchAutocomplete, addRecentSearch } from "@/components/SearchAutocomplete";
-import { useUrlFilterState } from "@/hooks/useUrlFilterState";
 
 // Lazy load heavy map component (includes Leaflet library ~150KB)
 const EventsMap = lazy(() => import("@/components/EventsMap"));
-
-// URL param defaults (WEB-UX-001). A value equal to its default is omitted
-// from the query string to keep shared links clean. Param keys are short and
-// stable since they're user-visible in the URL.
-const EVENT_FILTER_DEFAULTS: Record<string, string> = {
-  q: "",
-  category: "all",
-  date: "",
-  loc: "any-location",
-  price: "any-price",
-  sort: "date_asc",
-  page: "1",
-};
 
 function parsePriceFromText(priceText: string | null): number | null {
   if (!priceText) return null;
@@ -107,42 +94,72 @@ const DATE_PRESETS = [
 ] as const;
 
 
+type DateFilterValue = {
+  start?: Date;
+  end?: Date;
+  mode: "single" | "range" | "preset";
+  preset?: string;
+} | null;
+
+/** Pure preset -> date range, so a ?preset= URL param can be re-derived on load. */
+function computePresetRange(preset: string): DateFilterValue {
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  switch (preset) {
+    case "today":
+      return { mode: "preset", preset: "today", start: today, end: today };
+    case "tomorrow":
+      return { mode: "preset", preset: "tomorrow", start: tomorrow, end: tomorrow };
+    case "this-weekend": {
+      const saturday = new Date(today);
+      saturday.setDate(today.getDate() + (6 - today.getDay()));
+      const sunday = new Date(saturday);
+      sunday.setDate(saturday.getDate() + 1);
+      return { mode: "preset", preset: "this-weekend", start: saturday, end: sunday };
+    }
+    case "this-week": {
+      const endOfWeek = new Date(today);
+      endOfWeek.setDate(today.getDate() + (6 - today.getDay()));
+      return { mode: "preset", preset: "this-week", start: today, end: endOfWeek };
+    }
+    default:
+      return null;
+  }
+}
+
 export default function EventsPage() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
 
-  const handleViewEventDetails = useCallback((event: DMEvent) => {
+  const handleViewEventDetails = useCallback((event: { id: string; title: string; date?: string }) => {
     navigate(`/events/${createEventSlugWithCentralTime(event.title, event as any)}`);
   }, [navigate]);
 
-  // URL is the source of truth for filters (WEB-UX-001) so a filtered view
-  // survives back/forward navigation and is shareable. Values equal to their
-  // default are omitted from the query string.
-  const { params, get, set, clear } = useUrlFilterState();
+  // URL-synced filters (WEB-UX-001): shareable + survive back/forward. The
+  // debounced search value lives in the URL ('q'); date presets in 'preset'.
+  const { getStr, getNum, setParam, clearParams } = useUrlFilters();
+  const debouncedSearchQuery = getStr("q", "");
+  const selectedCategory = getStr("category", "all");
+  const location = getStr("location", "any-location");
+  const priceRange = getStr("price", "any-price");
+  const sortBy = getStr("sort", "date_asc");
+  const activeDatePreset = getStr("preset", "") || null;
+  const page = getNum("page", 1);
 
-  const searchTerm = get("q"); // committed search (drives the query)
-  const selectedCategory = get("category", "all");
-  const location = get("loc", "any-location");
-  const priceRange = get("price", "any-price");
-  const sortBy = get("sort", "date_asc");
-  const activeDatePreset = params.get("date"); // preset key or null
-  const page = Math.max(1, parseInt(get("page", "1"), 10) || 1);
+  const setSelectedCategory = (v: string) => setParam("category", v, { def: "all", resetsPage: true });
+  const setLocation = (v: string) => setParam("location", v, { def: "any-location", resetsPage: true });
+  const setPriceRange = (v: string) => setParam("price", v, { def: "any-price", resetsPage: true });
+  const setSortBy = (v: string) => setParam("sort", v, { def: "date_asc", resetsPage: true });
+  const setPage = (v: number) => setParam("page", v, { def: 1 });
 
-  // Controlled search input mirrors the URL but updates instantly; a debounced
-  // effect writes it back to ?q= with replace so typing doesn't spam history.
-  const [searchQuery, setSearchQuery] = useState(searchTerm);
-
-  // Calendar-driven custom date ranges aren't serialized (only quick presets
-  // are, per the AC); they live as ephemeral local state and take precedence
-  // over the URL preset when set.
-  const [customDateFilter, setCustomDateFilter] = useState<{
-    start?: Date;
-    end?: Date;
-    mode: string;
-    preset?: string;
-  } | null>(null);
-
-  const dateFilter = customDateFilter ?? (activeDatePreset ? { mode: "preset", preset: activeDatePreset } : null);
+  // Local immediate search input; writes to URL 'q' debounced.
+  const [searchQuery, setSearchQuery] = useState(() => debouncedSearchQuery);
+  // Custom (non-preset) date ranges stay local; presets derive from the URL.
+  const [customDateFilter, setCustomDateFilter] = useState<DateFilterValue>(null);
+  const dateFilter: DateFilterValue = activeDatePreset
+    ? computePresetRange(activeDatePreset)
+    : customDateFilter;
 
   const [viewMode, setViewMode] = useState("list");
   const EVENTS_PER_PAGE = 30;
@@ -150,46 +167,22 @@ export default function EventsPage() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const { announce, announcement, regionProps } = useAnnounce();
 
-  // Geolocation state for "Near Me" feature (permission-based, not URL-synced)
+  // Geolocation state for "Near Me" feature
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [isNearMeActive, setIsNearMeActive] = useState(false);
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
 
-  // Discrete filter setters write through to the URL and reset to page 1.
-  const setSelectedCategory = useCallback(
-    (v: string) => set({ category: v, page: null }, { defaults: EVENT_FILTER_DEFAULTS }),
-    [set],
-  );
-  const setLocation = useCallback(
-    (v: string) => set({ loc: v, page: null }, { defaults: EVENT_FILTER_DEFAULTS }),
-    [set],
-  );
-  const setPriceRange = useCallback(
-    (v: string) => set({ price: v, page: null }, { defaults: EVENT_FILTER_DEFAULTS }),
-    [set],
-  );
-  const setSortBy = useCallback(
-    (v: string) => set({ sort: v, page: null }, { defaults: EVENT_FILTER_DEFAULTS }),
-    [set],
-  );
-  const setPage = useCallback(
-    (updater: number | ((p: number) => number)) => {
-      const next = typeof updater === "function" ? updater(page) : updater;
-      set({ page: next <= 1 ? null : next }, { defaults: EVENT_FILTER_DEFAULTS });
-    },
-    [set, page],
-  );
-
-  const handleClearFilters = useCallback(() => {
+  const handleClearFilters = () => {
     setSearchQuery("");
     setCustomDateFilter(null);
+    clearParams(["q", "category", "preset", "location", "price", "sort"]);
     setIsNearMeActive(false);
-    clear(["q", "category", "date", "loc", "price", "page"]);
+    setShowMobileFilters(false);
     toast({
       title: "Filters Cleared",
       description: "All filters have been reset",
     });
-  }, [clear, toast]);
+  };
 
   useFilterKeyboardShortcuts({
     enabled: !isMobile,
@@ -204,41 +197,37 @@ export default function EventsPage() {
     onClearFilters: handleClearFilters,
   });
 
-  // Push debounced search input → URL (replace, so each keystroke doesn't add a
-  // history entry). Reads params.get directly to avoid re-arming on every nav.
+  // Debounced search -> URL 'q' (replace, so typing stays out of history).
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (searchQuery !== (params.get("q") ?? "")) {
-        set({ q: searchQuery, page: null }, { replace: true, defaults: EVENT_FILTER_DEFAULTS });
-      }
-    }, 300);
+    if (searchQuery === debouncedSearchQuery) return;
+    const timer = setTimeout(
+      () => setParam("q", searchQuery, { def: "", resetsPage: true, replace: true }),
+      300
+    );
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchQuery]);
+  }, [searchQuery, debouncedSearchQuery, setParam]);
 
-  // Pull URL → input on external navigation (back/forward, shared link).
+  // Back/forward & shared links: pull URL search back into the input.
   useEffect(() => {
-    setSearchQuery(searchTerm);
-  }, [searchTerm]);
+    setSearchQuery(debouncedSearchQuery);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearchQuery]);
 
-  // Quick date preset handler — toggles the ?date= preset key. The query
-  // recomputes preset date bounds itself, so only the key needs to round-trip.
-  const handleDatePreset = useCallback(
-    (preset: string) => {
-      setCustomDateFilter(null);
-      if (activeDatePreset === preset) {
-        clear(["date"]);
-      } else {
-        set({ date: preset, page: null }, { defaults: EVENT_FILTER_DEFAULTS });
-      }
-    },
-    [activeDatePreset, set, clear],
-  );
+  // Quick date preset handler — toggles the 'preset' URL param; dateFilter is
+  // derived from it. Selecting a preset clears any custom range.
+  const handleDatePreset = (preset: string) => {
+    setCustomDateFilter(null);
+    if (activeDatePreset === preset) {
+      setParam("preset", "", { resetsPage: true });
+    } else {
+      setParam("preset", preset, { resetsPage: true });
+    }
+  };
 
   const { data: eventsData, isLoading, error, refetch } = useQuery({
     queryKey: [
       "events",
-      searchTerm,
+      debouncedSearchQuery,
       selectedCategory,
       dateFilter,
       location,
@@ -261,8 +250,8 @@ export default function EventsPage() {
         if (selectedCategory && selectedCategory !== "all") {
           filteredData = filteredData.filter((e) => e.category === selectedCategory);
         }
-        if (searchTerm) {
-          const searchLower = searchTerm.toLowerCase();
+        if (debouncedSearchQuery) {
+          const searchLower = debouncedSearchQuery.toLowerCase();
           filteredData = filteredData.filter((e) =>
             e.title?.toLowerCase().includes(searchLower) ||
             e.enhanced_description?.toLowerCase().includes(searchLower) ||
@@ -308,8 +297,8 @@ export default function EventsPage() {
 
       query = query.range((page - 1) * EVENTS_PER_PAGE, page * EVENTS_PER_PAGE - 1);
 
-      if (searchTerm) {
-        query = query.textSearch('search_vector', searchTerm, {
+      if (debouncedSearchQuery) {
+        query = query.textSearch('search_vector', debouncedSearchQuery, {
           type: 'websearch',
           config: 'english'
         });
@@ -405,9 +394,8 @@ export default function EventsPage() {
   const rawEvents = eventsData?.events || [];
   // The query already returns the page in the correct sort order (WEB-UX-018),
   // so we only apply the client-side price filter here — no re-sorting. Then
-  // boost up to 2 actively-sponsored events to the top (WEB-FEAT-005); the
-  // Sponsored badge keeps them clearly labeled.
-  const events = arrangeSponsoredFirst(filterEventsByPrice(rawEvents, priceRange));
+  // boost up to 2 active sponsored listings to the top (WEB-FEAT-005).
+  const events = arrangeSponsored(filterEventsByPrice(rawEvents, priceRange));
   const totalCount = eventsData?.totalCount || 0;
   const hasMore = totalCount > page * EVENTS_PER_PAGE;
 
@@ -415,8 +403,7 @@ export default function EventsPage() {
     return (rawEvents || []).filter((e: any) => e.is_featured).slice(0, 3);
   }, [rawEvents]);
 
-  // Page resets to 1 inside each filter setter (URL is the source of truth),
-  // so no separate reset effect is needed.
+  // Page reset on filter change is handled by setParam/clearParams (resetsPage).
 
   // Announce result count to screen readers after search/filter changes
   useEffect(() => {
@@ -492,6 +479,28 @@ export default function EventsPage() {
     priceRange !== "any-price",
     isNearMeActive,
   ].filter(Boolean).length;
+
+  // Active-filter chips (WEB-UX-003) — removal updates the URL state.
+  const eventChips: { key: string; label: string; onRemove: () => void }[] = [
+    ...(debouncedSearchQuery
+      ? [{ key: "q", label: `Search: "${debouncedSearchQuery}"`, onRemove: () => { setSearchQuery(""); setParam("q", "", { resetsPage: true }); } }]
+      : []),
+    ...(selectedCategory !== "all"
+      ? [{ key: "category", label: selectedCategory, onRemove: () => setSelectedCategory("all") }]
+      : []),
+    ...(activeDatePreset
+      ? [{ key: "preset", label: DATE_PRESETS.find((p) => p.key === activeDatePreset)?.label || "Date", onRemove: () => setParam("preset", "", { resetsPage: true }) }]
+      : []),
+    ...(location !== "any-location"
+      ? [{ key: "location", label: location, onRemove: () => setLocation("any-location") }]
+      : []),
+    ...(priceRange !== "any-price"
+      ? [{ key: "price", label: priceRange, onRemove: () => setPriceRange("any-price") }]
+      : []),
+    ...(isNearMeActive
+      ? [{ key: "near", label: "Near me", onRemove: () => setIsNearMeActive(false) }]
+      : []),
+  ];
 
   // SEO
   const seoTitle = searchQuery
@@ -786,7 +795,7 @@ export default function EventsPage() {
                   onLocationChange={setLocation}
                   priceRange={priceRange}
                   onPriceRangeChange={setPriceRange}
-                  onDateChange={(d) => { setCustomDateFilter(d); clear(["date"]); }}
+                  onDateChange={(d) => { setCustomDateFilter(d); setParam("preset", "", { resetsPage: true }); }}
                   categories={categories || []}
                   totalResults={events?.length || 0}
                   isLoading={isLoading}
@@ -846,7 +855,7 @@ export default function EventsPage() {
                   : "Upcoming Events"}
               </h2>
               {!isLoading && (
-                <p className="text-sm text-muted-foreground mt-0.5">
+                <p className="text-sm text-muted-foreground mt-0.5" aria-live="polite">
                   {events?.length || 0} events in Des Moines{isNearMeActive ? ' near you' : ''}
                 </p>
               )}
@@ -857,6 +866,13 @@ export default function EventsPage() {
               onChange={setSortBy}
             />
           </div>
+
+          {/* Sticky filter bar: removable chips (WEB-UX-003) */}
+          {eventChips.length > 0 && (
+            <div className="sticky top-16 z-30 py-2 mb-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+              <ActiveFilterChips onClearAll={handleClearFilters} chips={eventChips} />
+            </div>
+          )}
 
           {/* Featured Events Section */}
           {!isLoading && activeFiltersCount === 0 && featuredEvents.length > 0 && (
@@ -888,7 +904,7 @@ export default function EventsPage() {
           )}
 
           {/* Event Grid / Map */}
-          {isLoading && <CardsGridSkeleton count={6} variant="event" label={searchTerm ? `Searching for "${searchTerm}"...` : selectedCategory !== "all" ? `Loading ${selectedCategory} events...` : "Loading events..."} />}
+          {isLoading && <CardsGridSkeleton count={6} variant="event" label={debouncedSearchQuery ? `Searching for "${debouncedSearchQuery}"...` : selectedCategory !== "all" ? `Loading ${selectedCategory} events...` : "Loading events..."} />}
 
           {!isLoading && viewMode === "map" ? (
             <Suspense fallback={<LoadingSpinner label="Loading map..." />}>
@@ -912,7 +928,7 @@ export default function EventsPage() {
           {!isLoading && events && events.length > 0 && hasMore && (
             <div className="flex justify-center mt-10">
               <Button
-                onClick={() => setPage(p => p + 1)}
+                onClick={() => setPage(page + 1)}
                 variant="outline"
                 size="lg"
                 className="min-w-[200px] rounded-full"

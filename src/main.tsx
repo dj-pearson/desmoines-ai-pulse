@@ -10,6 +10,7 @@ import '@/lib/env'; // Validate environment variables at startup
 import App from "./App";
 import "./index.css";
 import { initializeOnInteraction } from "./lib/lazyInit";
+import { GC_TIME, STALE_TIME, shouldRetry, retryDelay } from "@/lib/queryConfig";
 
 // Initialize Sentry before anything else (only when DSN is configured)
 initSentry();
@@ -154,47 +155,19 @@ if (Array.isArray((window as any).__earlyErrors) && (window as any).__earlyError
   }
 }
 
-// Query cache + retry tuning per data class (WEB-PERF-006).
-// Public content is the common case, so the DEFAULTS favor it; user-specific
-// hooks (favorites, subscription, profile) keep correctness via mutation
-// invalidation rather than a short staleTime.
-const DEFAULT_STALE_TIME = 5 * 60 * 1000; // 5 min — public content rarely changes
-const DEFAULT_GC_TIME = 30 * 60 * 1000; // 30 min — keep cache for instant back-nav
-const MAX_QUERY_RETRIES = 2;
-const RETRY_BASE_MS = 800;
-const RETRY_MAX_MS = 30 * 1000;
-
-/** Best-effort HTTP status extraction from heterogeneous fetch/Supabase errors. */
-function httpStatusOf(error: unknown): number | undefined {
-  if (!error || typeof error !== "object") return undefined;
-  const e = error as Record<string, unknown>;
-  for (const candidate of [e.status, e.statusCode, e.httpStatus]) {
-    const n =
-      typeof candidate === "number"
-        ? candidate
-        : typeof candidate === "string"
-        ? parseInt(candidate, 10)
-        : NaN;
-    if (Number.isFinite(n)) return n;
-  }
-  return undefined;
-}
-
+// Query client tuned per data class (WEB-PERF-006). Defaults are the safe
+// floor for queries that don't override; per-hook staleTime (see
+// @/lib/queryConfig STALE_TIME) does the per-data-class tuning. Long gcTime
+// keeps inactive lists cached so back-navigation renders instantly.
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // Retry network/5xx up to MAX_QUERY_RETRIES with backoff; never retry a
-      // client error (400/401/403/404) — it won't succeed on a retry.
-      retry: (failureCount, error) => {
-        const status = httpStatusOf(error);
-        if (status !== undefined && status >= 400 && status < 500) return false;
-        return failureCount < MAX_QUERY_RETRIES;
-      },
-      retryDelay: (attempt) =>
-        Math.min(RETRY_BASE_MS * 2 ** attempt, RETRY_MAX_MS),
+      // Retry transient network/5xx with backoff; never retry 401/403/404.
+      retry: shouldRetry,
+      retryDelay,
       refetchOnWindowFocus: false,
-      staleTime: DEFAULT_STALE_TIME,
-      gcTime: DEFAULT_GC_TIME,
+      staleTime: STALE_TIME.SHORT,
+      gcTime: GC_TIME,
       // Use "always" so queries fire even if Capacitor's Network plugin
       // hasn't reported online status yet. "online" can silently block
       // all queries until a network status event arrives.
@@ -258,8 +231,14 @@ function initializeApp() {
   // Defer all non-critical features until after interaction
   initializeOnInteraction();
 
-  // Real-user web-vitals (WEB-PERF-007) — sampled, DNT-respecting, idle-loaded.
-  void import("@/lib/webVitalsRum").then(({ initWebVitalsRum }) => initWebVitalsRum());
+  // Real-user web-vitals reporting (WEB-PERF-007) — load web-vitals on idle so
+  // it never blocks rendering and stays off the critical path.
+  const startVitals = () => import("@/lib/webVitals").then((m) => m.initWebVitals());
+  if ("requestIdleCallback" in window) {
+    (window as unknown as { requestIdleCallback: (cb: () => void) => void }).requestIdleCallback(startVitals);
+  } else {
+    setTimeout(startVitals, 2000);
+  }
 }
 
 // Start as soon as DOM is ready

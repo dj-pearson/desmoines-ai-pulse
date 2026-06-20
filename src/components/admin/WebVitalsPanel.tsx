@@ -1,134 +1,117 @@
-import { useEffect, useState } from "react";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2 } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Activity, AlertTriangle } from "lucide-react";
 
 /**
- * Admin trend of real-user web-vitals p75 per metric over the last 14 days
- * (WEB-PERF-007). Reuses recharts; lazy-loaded by AdminSystem so the chart vendor
- * chunk only loads when this tab is opened. web_vitals isn't in the generated
- * types yet → `as never` cast (matching JobHealthPanel).
+ * Real-user web-vitals trend (WEB-PERF-007). Reads the latest web-vitals-weekly
+ * job run metadata (p75 per metric per page-group, week-over-week + budgets) so
+ * the raw RUM rows stay private. Lazy-friendly; no heavy charting dependency.
  */
-const METRICS = ["LCP", "CLS", "INP", "TTFB"] as const;
-const BUDGETS: Record<string, number | undefined> = { LCP: 2500, CLS: 0.1, INP: 200, TTFB: undefined };
-
-function p75(values: number[]): number | null {
-  if (values.length === 0) return null;
-  const sorted = [...values].sort((a, b) => a - b);
-  return sorted[Math.min(sorted.length - 1, Math.floor(0.75 * sorted.length))];
+interface WebVitalsMeta {
+  sampleSize?: number;
+  current?: Record<string, number>;
+  previous?: Record<string, number>;
+  regressions?: string[];
+  budgets?: Record<string, number>;
+  computedAt?: string;
 }
 
-interface DayPoint {
-  day: string;
-  [metric: string]: number | string | null;
+function fmt(metric: string, value: number): string {
+  return metric === "CLS" ? value.toFixed(3) : `${Math.round(value)}ms`;
 }
 
 export default function WebVitalsPanel() {
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<DayPoint[]>([]);
+  const { data: meta, isLoading } = useQuery({
+    queryKey: ["web-vitals-weekly-meta"],
+    queryFn: async (): Promise<WebVitalsMeta | null> => {
+      const { data } = await supabase
+        .from("automation_job_runs" as never)
+        .select("metadata")
+        .eq("job_name", "web-vitals-weekly")
+        .order("started_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return (
+        (data as unknown as { metadata?: WebVitalsMeta } | null)?.metadata ?? null
+      );
+    },
+    staleTime: 5 * 60 * 1000,
+  });
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
-      const { data: rows } = await supabase
-        .from("web_vitals" as never)
-        .select("metric, value, created_at")
-        .gte("created_at", since);
+  if (isLoading) return null;
 
-      if (cancelled) return;
-
-      // Group values by day → metric.
-      const byDay = new Map<string, Map<string, number[]>>();
-      for (const r of (rows ?? []) as Array<{ metric: string; value: number; created_at: string }>) {
-        const day = r.created_at.slice(0, 10);
-        if (!byDay.has(day)) byDay.set(day, new Map());
-        const m = byDay.get(day)!;
-        const arr = m.get(r.metric) ?? [];
-        arr.push(r.value);
-        m.set(r.metric, arr);
-      }
-
-      const points: DayPoint[] = [...byDay.entries()]
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([day, metrics]) => {
-          const point: DayPoint = { day: day.slice(5) };
-          for (const metric of METRICS) point[metric] = p75(metrics.get(metric) ?? []);
-          return point;
-        });
-
-      setData(points);
-      setLoading(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  if (loading) {
+  if (!meta || !meta.current || Object.keys(meta.current).length === 0) {
     return (
-      <div className="flex items-center justify-center py-12 text-muted-foreground">
-        <Loader2 className="h-6 w-6 animate-spin" />
-        <span className="ml-2">Loading web-vitals…</span>
-      </div>
+      <Card className="p-4">
+        <h3 className="font-semibold flex items-center gap-2">
+          <Activity className="h-4 w-4" /> Web Vitals (RUM)
+        </h3>
+        <p className="text-sm text-muted-foreground mt-2">
+          No web-vitals rollup yet. The weekly job populates this once real-user
+          data has been collected.
+        </p>
+      </Card>
     );
   }
 
-  if (data.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground py-6">
-        No web-vitals collected yet. Real-user metrics are sampled (10%) and start
-        flowing after the next deploy with collection enabled.
-      </p>
-    );
-  }
+  const budgets = meta.budgets || {};
+  const entries = Object.entries(meta.current).sort(([a], [b]) => a.localeCompare(b));
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {METRICS.map((metric) => (
-        <Card key={metric}>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
-              {metric} p75 (last 14 days)
-              {BUDGETS[metric] !== undefined && (
-                <span className="ml-2 text-xs text-muted-foreground">
-                  budget {BUDGETS[metric]}
-                  {metric === "CLS" ? "" : "ms"}
-                </span>
-              )}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-48">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data} margin={{ top: 5, right: 10, bottom: 0, left: -10 }}>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-                  <XAxis dataKey="day" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} width={44} />
-                  <Tooltip />
-                  <Line
-                    type="monotone"
-                    dataKey={metric}
-                    stroke="hsl(var(--primary))"
-                    strokeWidth={2}
-                    dot={false}
-                    connectNulls
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+    <Card className="p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold flex items-center gap-2">
+          <Activity className="h-4 w-4" /> Web Vitals (RUM) — p75
+        </h3>
+        <span className="text-xs text-muted-foreground">
+          {meta.sampleSize ?? 0} samples · 7d
+        </span>
+      </div>
+
+      {meta.regressions && meta.regressions.length > 0 && (
+        <div className="rounded-md bg-amber-500/10 border border-amber-500/30 p-2 text-sm">
+          <div className="flex items-center gap-1.5 font-medium text-amber-700 dark:text-amber-400">
+            <AlertTriangle className="h-4 w-4" /> {meta.regressions.length} regression(s)
+          </div>
+          <ul className="mt-1 list-disc pl-5 text-xs text-muted-foreground">
+            {meta.regressions.slice(0, 6).map((r, i) => (
+              <li key={i}>{r}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {entries.map(([key, value]) => {
+          const [metric, pageGroup] = key.split("|");
+          const budget = budgets[metric];
+          const overBudget = budget !== undefined && value > budget;
+          const prev = meta.previous?.[key];
+          return (
+            <div
+              key={key}
+              className="flex items-center justify-between rounded-md border p-2 text-sm"
+            >
+              <div className="min-w-0">
+                <span className="font-medium">{metric}</span>{" "}
+                <span className="text-muted-foreground">{pageGroup}</span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {prev !== undefined && (
+                  <span className="text-xs text-muted-foreground">
+                    {fmt(metric, prev)} →
+                  </span>
+                )}
+                <Badge variant={overBudget ? "destructive" : "secondary"}>
+                  {fmt(metric, value)}
+                </Badge>
+              </div>
             </div>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
+          );
+        })}
+      </div>
+    </Card>
   );
 }

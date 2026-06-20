@@ -1,4 +1,4 @@
-import { useState, lazy, Suspense } from "react";
+import { useState, Suspense } from "react";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import AdminNav from "@/components/admin/AdminNav";
@@ -6,6 +6,8 @@ import UserRoleManager from "@/components/UserRoleManager";
 import AdminSystemControls from "@/components/AdminSystemControls";
 import AdminApplicationSettings from "@/components/AdminApplicationSettings";
 import JobHealthPanel from "@/components/admin/JobHealthPanel";
+import WebVitalsPanel from "@/components/admin/WebVitalsPanel";
+import SubscriptionEventsPanel from "@/components/admin/SubscriptionEventsPanel";
 import {
   Users,
   Server,
@@ -13,9 +15,6 @@ import {
   Activity,
   Gauge,
 } from "lucide-react";
-
-// Lazy so the recharts vendor chunk only loads when the Web Vitals tab is opened.
-const WebVitalsPanel = lazy(() => import("@/components/admin/WebVitalsPanel"));
 
 const SYSTEM_TABS = [
   { id: "users", label: "User Management", icon: Users },
@@ -78,7 +77,13 @@ export default function AdminSystem() {
         {/* Tab Content */}
         {canManageUsers() && activeTab === "users" && <UserRoleManager />}
 
-        {activeTab === "jobs" && <JobHealthPanel />}
+        {activeTab === "jobs" && (
+          <div className="space-y-6">
+            <JobHealthPanel />
+            <WebVitalsPanel />
+            <SubscriptionEventsPanel />
+          </div>
+        )}
 
         {activeTab === "vitals" && (
           <Suspense fallback={<div className="py-12 text-center text-muted-foreground">Loading…</div>}>

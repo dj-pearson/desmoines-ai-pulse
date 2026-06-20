@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { createLogger } from '@/lib/logger';
 
@@ -14,30 +14,27 @@ export interface ActiveAd {
   cta_text?: string;
 }
 
-export function useActiveAds(placementType: 'top_banner' | 'featured_spot' | 'below_fold' | 'sidebar') {
-  const [ad, setAd] = useState<ActiveAd | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+// Campaign creatives change slowly relative to a page view — cache ~5 min
+// (WEB-FEAT-004) so browsing doesn't re-hit the RPC on every list render.
+const AD_STALE_TIME = 5 * 60 * 1000;
 
-  useEffect(() => {
-    fetchActiveAd();
-  }, [placementType]);
-
-  const fetchActiveAd = async () => {
-    try {
-      setIsLoading(true);
+export function useActiveAds(
+  placementType: 'top_banner' | 'featured_spot' | 'below_fold' | 'sidebar'
+) {
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['active-ads', placementType],
+    queryFn: async (): Promise<ActiveAd | null> => {
       const { data, error } = await supabase.rpc('get_active_ads', {
-        p_placement_type: placementType
+        p_placement_type: placementType,
       });
+      if (error) {
+        log.error('fetchActiveAd', 'Error fetching active ad', { error });
+        throw error;
+      }
+      return (data?.[0] as ActiveAd | undefined) ?? null;
+    },
+    staleTime: AD_STALE_TIME,
+  });
 
-      if (error) throw error;
-      setAd(data?.[0] || null);
-    } catch (error) {
-      log.error('fetchActiveAd', 'Error fetching active ad', { error });
-      setAd(null);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  return { ad, isLoading, refetch: fetchActiveAd };
+  return { ad: data ?? null, isLoading, refetch };
 }

@@ -1,5 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback, lazy, Suspense, useRef } from "react";
-import { useUrlFilterState } from "@/hooks/useUrlFilterState";
+import React, { useState, useMemo, useEffect, lazy, Suspense, useRef } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { AdBanner } from "@/components/AdBanner";
@@ -7,6 +6,8 @@ import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { FAQSection } from "@/components/FAQSection";
 import { useAttractions } from "@/hooks/useAttractions";
+import { useUrlFilters } from "@/hooks/useUrlFilters";
+import { ActiveFilterChips } from "@/components/filters/ActiveFilterChips";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 import { useToast } from "@/hooks/use-toast";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
@@ -47,6 +48,9 @@ import {
 import { useIsMobile } from "@/hooks/use-mobile";
 import { OptimizedImage } from "@/components/OptimizedImage";
 import { FavoriteButton } from "@/components/FavoriteButton";
+import { SponsoredBadge } from "@/components/SponsoredBadge";
+import { SponsoredImpressionMarker } from "@/components/SponsoredImpressionMarker";
+import { arrangeSponsored, isSponsoredActive, logSponsoredClick } from "@/lib/sponsored";
 import { SearchAutocomplete, addRecentSearch } from "@/components/SearchAutocomplete";
 import { usePrefetchAttraction } from "@/hooks/usePrefetchDetail";
 import {
@@ -67,17 +71,6 @@ const createSlug = (name: string): string => {
     .replace(/^-+|-+$/g, "");
 };
 
-// URL param defaults (WEB-UX-001). A value equal to its default is omitted
-// from the query string to keep shared links clean.
-const ATTRACTION_FILTER_DEFAULTS: Record<string, string> = {
-  q: "",
-  type: "all",
-  rating: "any-rating",
-  feat: "all",
-  sort: "rating",
-  page: "1",
-};
-
 export default function Attractions() {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -86,50 +79,43 @@ export default function Attractions() {
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const prefetchAttraction = usePrefetchAttraction();
-  // URL is the source of truth for filters (WEB-UX-001) so the filtered view
-  // survives back/forward navigation and is shareable.
-  const { params, get, set, clear } = useUrlFilterState();
-  const selectedType = get("type", "all");
-  const minRating = get("rating", "any-rating");
-  const featuredOnly = get("feat", "all");
-  const sortBy = get("sort", "rating");
-  const page = Math.max(1, parseInt(get("page", "1"), 10) || 1);
+  // Filter states — URL-synced (WEB-UX-001) so views are shareable and survive
+  // back/forward. Discrete filters are URL-derived; search keeps a local state
+  // for responsive typing and writes to the URL debounced.
+  const { getStr, getNum, setParam, clearParams } = useUrlFilters();
+  const selectedType = getStr("type", "all");
+  const minRating = getStr("rating", "any-rating");
+  const featuredOnly = getStr("featured", "all");
+  const sortBy = getStr("sort", "rating");
+  const setSelectedType = (v: string) => setParam("type", v, { def: "all", resetsPage: true });
+  const setMinRating = (v: string) => setParam("rating", v, { def: "any-rating", resetsPage: true });
+  const setFeaturedOnly = (v: string) => setParam("featured", v, { def: "all", resetsPage: true });
+  const setSortBy = (v: string) => setParam("sort", v, { def: "rating", resetsPage: true });
 
-  // Search filters in-memory (instant), so keep it as local state for a
-  // responsive input; a debounced effect mirrors it to ?q= for shareability.
-  const [searchQuery, setSearchQuery] = useState(get("q"));
+  const urlQ = getStr("q", "");
+  const [searchQuery, setSearchQuery] = useState(() => urlQ);
+  // Debounced URL write (replace, so typing doesn't spam history).
+  useEffect(() => {
+    if (searchQuery === urlQ) return;
+    const t = setTimeout(
+      () => setParam("q", searchQuery, { def: "", resetsPage: true, replace: true }),
+      300
+    );
+    return () => clearTimeout(t);
+  }, [searchQuery, urlQ, setParam]);
+  // Back/forward & shared links: pull URL changes back into the input.
+  useEffect(() => {
+    if (urlQ !== searchQuery) setSearchQuery(urlQ);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlQ]);
 
-  // Display toggles (not URL-synced).
   const [showFilters, setShowFilters] = useState(true); // Show filters by default
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [viewMode, setViewMode] = useState('list');
 
   const ITEMS_PER_PAGE = 30;
-
-  // Discrete filter setters write through to the URL and reset to page 1.
-  const setSelectedType = useCallback(
-    (v: string) => set({ type: v, page: null }, { defaults: ATTRACTION_FILTER_DEFAULTS }),
-    [set],
-  );
-  const setMinRating = useCallback(
-    (v: string) => set({ rating: v, page: null }, { defaults: ATTRACTION_FILTER_DEFAULTS }),
-    [set],
-  );
-  const setFeaturedOnly = useCallback(
-    (v: string) => set({ feat: v, page: null }, { defaults: ATTRACTION_FILTER_DEFAULTS }),
-    [set],
-  );
-  const setSortBy = useCallback(
-    (v: string) => set({ sort: v, page: null }, { defaults: ATTRACTION_FILTER_DEFAULTS }),
-    [set],
-  );
-  const setPage = useCallback(
-    (updater: number | ((p: number) => number)) => {
-      const next = typeof updater === "function" ? updater(page) : updater;
-      set({ page: next <= 1 ? null : next }, { defaults: ATTRACTION_FILTER_DEFAULTS });
-    },
-    [set, page],
-  );
+  const page = getNum("page", 1);
+  const setPage = (v: number) => setParam("page", v, { def: 1 });
 
   // Get all attractions first
   const { attractions: allAttractions, isLoading, error, refetch } = useAttractions({});
@@ -193,7 +179,8 @@ export default function Attractions() {
         sorted.sort((a, b) => (b.rating || 0) - (a.rating || 0));
         break;
     }
-    return sorted;
+    // Boost up to 2 active sponsored listings to the top (WEB-FEAT-005).
+    return arrangeSponsored(sorted);
   }, [filteredAttractions, sortBy]);
 
   const handleSurpriseMe = () => {
@@ -216,26 +203,7 @@ export default function Attractions() {
     ? page * ITEMS_PER_PAGE < sortedAttractions.length
     : page < totalPages;
 
-  // Page resets to 1 inside each discrete filter setter (URL is the source of
-  // truth). Search resets page via the debounced URL write below.
-
-  // Push debounced search input → URL (replace, so each keystroke doesn't add a
-  // history entry). Reads params.get directly to avoid re-arming on every nav.
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (searchQuery !== (params.get("q") ?? "")) {
-        set({ q: searchQuery, page: null }, { replace: true, defaults: ATTRACTION_FILTER_DEFAULTS });
-      }
-    }, 300);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchQuery]);
-
-  // Pull URL → input on external navigation (back/forward, shared link).
-  useEffect(() => {
-    setSearchQuery(get("q"));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.get("q")]);
+  // Page reset on filter change is handled by setParam({ resetsPage: true }).
 
   // Announce result count to screen readers
   useEffect(() => {
@@ -259,7 +227,7 @@ export default function Attractions() {
 
   const handleClearFilters = () => {
     setSearchQuery("");
-    clear(["q", "type", "rating", "feat", "page"]);
+    clearParams(["q", "type", "rating", "featured", "sort"]);
     toast({
       title: "Filters Cleared",
       description: "All filters have been reset",
@@ -595,39 +563,30 @@ export default function Attractions() {
           />
         </div>
 
-        {/* Active Filter Badges */}
-        {hasActiveFilters && (
-          <div className="flex flex-wrap items-center gap-2 mb-4">
-            <span className="text-sm text-muted-foreground">Active filters:</span>
-            {searchQuery && (
-              <Badge variant="secondary" className="gap-1 pr-1">
-                Search: &quot;{searchQuery}&quot;
-                <button onClick={() => setSearchQuery("")} className="ml-1 hover:bg-accent rounded-full p-0.5" aria-label={`Remove search filter "${searchQuery}"`}><X className="h-3 w-3" /></button>
-              </Badge>
-            )}
-            {selectedType !== "all" && (
-              <Badge variant="secondary" className="gap-1 pr-1">
-                Type: {selectedType}
-                <button onClick={() => setSelectedType("all")} className="ml-1 hover:bg-accent rounded-full p-0.5" aria-label={`Remove type filter "${selectedType}"`}><X className="h-3 w-3" /></button>
-              </Badge>
-            )}
-            {minRating !== "any-rating" && (
-              <Badge variant="secondary" className="gap-1 pr-1">
-                Rating: {minRating}+
-                <button onClick={() => setMinRating("any-rating")} className="ml-1 hover:bg-accent rounded-full p-0.5" aria-label="Remove rating filter"><X className="h-3 w-3" /></button>
-              </Badge>
-            )}
-            {featuredOnly !== "all" && (
-              <Badge variant="secondary" className="gap-1 pr-1">
-                Featured Only
-                <button onClick={() => setFeaturedOnly("all")} className="ml-1 hover:bg-accent rounded-full p-0.5" aria-label="Remove featured filter"><X className="h-3 w-3" /></button>
-              </Badge>
-            )}
-            <Button variant="ghost" size="sm" onClick={handleClearFilters} className="text-muted-foreground h-7 text-xs">
-              Clear All
-            </Button>
-          </div>
-        )}
+        {/* Sticky filter bar: result count + removable chips (WEB-UX-003) */}
+        <div className="sticky top-16 z-30 py-2 mb-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b">
+          <span className="text-sm font-medium" aria-live="polite">
+            {filteredAttractions?.length || 0} result{(filteredAttractions?.length || 0) === 1 ? "" : "s"}
+          </span>
+          <ActiveFilterChips
+            className="mt-2"
+            onClearAll={handleClearFilters}
+            chips={[
+              ...(searchQuery
+                ? [{ key: "q", label: `Search: "${searchQuery}"`, onRemove: () => { setSearchQuery(""); setParam("q", "", { resetsPage: true }); } }]
+                : []),
+              ...(selectedType !== "all"
+                ? [{ key: "type", label: `Type: ${selectedType}`, onRemove: () => setSelectedType("all") }]
+                : []),
+              ...(minRating !== "any-rating"
+                ? [{ key: "rating", label: `Rating: ${minRating}+`, onRemove: () => setMinRating("any-rating") }]
+                : []),
+              ...(featuredOnly !== "all"
+                ? [{ key: "featured", label: "Featured only", onRemove: () => setFeaturedOnly("all") }]
+                : []),
+            ]}
+          />
+        </div>
 
         {viewMode === 'map' ? (
           <AttractionsMap attractions={sortedAttractions} />
@@ -669,9 +628,18 @@ export default function Attractions() {
                   key={attraction.id}
                   to={`/attractions/${createSlug(attraction.name)}`}
                   className="block"
+                  aria-label={`${isSponsoredActive(attraction) ? "Sponsored: " : ""}${attraction.name}`}
                   onMouseEnter={() => prefetchAttraction(createSlug(attraction.name))}
+                  onClick={() => {
+                    if (isSponsoredActive(attraction))
+                      logSponsoredClick("attraction", attraction.id);
+                  }}
                 >
-                  <Card className="h-full hover:shadow-lg transition-all duration-200 hover:-translate-y-1 rounded-2xl overflow-hidden">
+                  <Card
+                    className={`h-full hover:shadow-lg transition-all duration-200 hover:-translate-y-1 rounded-2xl overflow-hidden ${
+                      isSponsoredActive(attraction) ? "ring-2 ring-amber-400 shadow-lg" : ""
+                    }`}
+                  >
                     <div className="relative">
                       {attraction.image_url ? (
                         <OptimizedImage
@@ -682,22 +650,32 @@ export default function Attractions() {
                           className="transition-transform duration-200 hover:scale-105 object-cover"
                           containerClassName="aspect-video overflow-hidden"
                           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                          useTransformApi
-                          transformWidths={[320, 480, 640, 960]}
                         />
                       ) : (
                         <div className="aspect-video bg-gradient-to-br from-[#2D1B69] to-[#DC143C] flex items-center justify-center" role="img" aria-label={`No image available for ${attraction.name}`}>
                           <Landmark className="h-12 w-12 text-white/40" />
                         </div>
                       )}
-                      {/* Save (favorite) — stopPropagation/preventDefault keep it from navigating the card */}
+                      {/* Sponsored listing treatment (WEB-FEAT-005) */}
+                      {isSponsoredActive(attraction) && (
+                        <div className="absolute top-3 left-3 z-20">
+                          <SponsoredBadge className="shadow-lg" />
+                        </div>
+                      )}
+                      <SponsoredImpressionMarker
+                        contentType="attraction"
+                        contentId={attraction.id}
+                        active={isSponsoredActive(attraction)}
+                      />
+                      {/* Save (favorite) overlay — stopPropagation handled inside */}
                       <div className="absolute top-3 right-3 z-20">
                         <FavoriteButton
                           contentType="attraction"
                           contentId={attraction.id}
                           itemName={attraction.name}
                           size="icon"
-                          className="h-9 w-9 rounded-full bg-black/40 backdrop-blur-sm hover:bg-black/60"
+                          variant="ghost"
+                          className="h-9 w-9 rounded-full bg-white/90 hover:bg-white shadow-md backdrop-blur"
                         />
                       </div>
                     </div>

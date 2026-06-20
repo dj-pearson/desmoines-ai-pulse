@@ -14,6 +14,93 @@ export type Database = {
   }
   public: {
     Tables: {
+      subscription_events: {
+        Row: {
+          created_at: string
+          details: Json | null
+          event_type: string
+          id: string
+          platform: string | null
+          subscription_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          details?: Json | null
+          event_type: string
+          id?: string
+          platform?: string | null
+          subscription_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          details?: Json | null
+          event_type?: string
+          id?: string
+          platform?: string | null
+          subscription_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      web_vitals: {
+        Row: {
+          created_at: string
+          id: string
+          metric: string
+          page_group: string
+          path: string | null
+          rating: string | null
+          session_id: string | null
+          value: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          metric: string
+          page_group: string
+          path?: string | null
+          rating?: string | null
+          session_id?: string | null
+          value: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          metric?: string
+          page_group?: string
+          path?: string | null
+          rating?: string | null
+          session_id?: string | null
+          value?: number
+        }
+        Relationships: []
+      }
+      content_favorites: {
+        Row: {
+          content_id: string
+          content_type: string
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          content_id: string
+          content_type: string
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          content_id?: string
+          content_type?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       activity_feed: {
         Row: {
           activity_type: string
@@ -710,6 +797,8 @@ export type Database = {
           id: string
           image_url: string | null
           is_featured: boolean | null
+          is_sponsored: boolean
+          sponsored_until: string | null
           latitude: number | null
           location: string | null
           longitude: number | null
@@ -741,6 +830,8 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_featured?: boolean | null
+          is_sponsored?: boolean
+          sponsored_until?: string | null
           latitude?: number | null
           location?: string | null
           longitude?: number | null
@@ -771,6 +862,8 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_featured?: boolean | null
+          is_sponsored?: boolean
+          sponsored_until?: string | null
           latitude?: number | null
           location?: string | null
           longitude?: number | null
@@ -1012,6 +1105,8 @@ export type Database = {
           email?: string | null
           id?: string
           is_featured?: boolean | null
+          is_sponsored?: boolean
+          sponsored_until?: string | null
           latitude?: number | null
           logo_url?: string | null
           longitude?: number | null
@@ -1041,6 +1136,8 @@ export type Database = {
           email?: string | null
           id?: string
           is_featured?: boolean | null
+          is_sponsored?: boolean
+          sponsored_until?: string | null
           latitude?: number | null
           logo_url?: string | null
           longitude?: number | null
@@ -1223,6 +1320,9 @@ export type Database = {
       }
       campaign_creatives: {
         Row: {
+          auto_reviewed: boolean
+          auto_review_reasons: string[] | null
+          auto_review_checks: Json | null
           campaign_id: string
           created_at: string
           cta_text: string | null
@@ -3673,6 +3773,8 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_featured?: boolean | null
+          is_sponsored?: boolean
+          sponsored_until?: string | null
           latitude?: number | null
           location?: string | null
           longitude?: number | null
@@ -3694,6 +3796,8 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_featured?: boolean | null
+          is_sponsored?: boolean
+          sponsored_until?: string | null
           latitude?: number | null
           location?: string | null
           longitude?: number | null

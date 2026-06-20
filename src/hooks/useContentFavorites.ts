@@ -1,115 +1,145 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
-import { toast } from "sonner";
+import { useToast } from "./use-toast";
+import { useSubscription } from "./useSubscription";
+import { STALE_TIME } from "@/lib/queryConfig";
 
 /**
- * Generic favorites for non-event content (restaurants / attractions /
- * playgrounds), mirroring the events-only `useFavorites` but backed by the
- * parallel `user_{type}_interactions` tables the iOS app already uses.
+ * Non-event content favorites (restaurants / attractions / hotels / playgrounds)
+ * stored in the additive `content_favorites` table. Event favorites stay in
+ * useFavorites() / user_event_interactions. (WEB-UX-010)
  *
- * Pass `null` as the content type to disable the hook entirely (so callers like
- * FavoriteButton can call it unconditionally for the events path without
- * violating the rules of hooks). The tables aren't in the generated Supabase
- * types yet, so we cast `as any` — matching FavoritesView.tsx.
+ * Mirrors useFavorites: optimistic add/remove, owner-only via RLS, and the
+ * subscription favorites limit (per content type for now; the cross-type cap is
+ * unified in WEB-FEAT-001).
  */
-export type FavoriteContentType = "restaurant" | "attraction" | "playground";
+export type FavoriteContentType =
+  | "restaurant"
+  | "attraction"
+  | "hotel"
+  | "playground";
 
-const TABLE: Record<FavoriteContentType, string> = {
-  restaurant: "user_restaurant_interactions",
-  attraction: "user_attraction_interactions",
-  playground: "user_playground_interactions",
-};
-
-const ID_COL: Record<FavoriteContentType, string> = {
-  restaurant: "restaurant_id",
-  attraction: "attraction_id",
-  playground: "playground_id",
-};
-
-export function useContentFavorites(contentType: FavoriteContentType | null) {
+export function useContentFavorites(contentType: FavoriteContentType) {
   const { user } = useAuth();
+  const { toast } = useToast();
   const queryClient = useQueryClient();
-  const enabled = !!user && !!contentType;
+  const { canPerformAction, getRemainingQuota, isPremium, limits } =
+    useSubscription();
+
   const queryKey = ["content-favorites", contentType, user?.id];
 
   const { data: favoritedIds = [], isLoading } = useQuery({
     queryKey,
     queryFn: async () => {
-      if (!user || !contentType) return [] as string[];
-      const idCol = ID_COL[contentType];
+      if (!user) return [];
       const { data, error } = await supabase
-        .from(TABLE[contentType] as any)
-        .select(idCol)
+        .from("content_favorites")
+        .select("content_id")
         .eq("user_id", user.id)
-        .eq("interaction_type", "favorite");
-      // The table may not exist in every environment — degrade to "none saved".
-      if (error) return [] as string[];
-      return ((data as any[]) || []).map((r) => r[idCol] as string);
+        .eq("content_type", contentType);
+      if (error) throw error;
+      return data.map((row) => row.content_id);
     },
-    enabled,
+    enabled: !!user,
+    staleTime: STALE_TIME.USER,
   });
 
   const addMutation = useMutation({
-    mutationFn: async (id: string) => {
-      if (!user || !contentType) throw new Error("Must be logged in");
-      const { error } = await supabase.from(TABLE[contentType] as any).insert({
+    mutationFn: async (contentId: string) => {
+      if (!user) throw new Error("Must be logged in");
+      const { error } = await supabase.from("content_favorites").insert({
         user_id: user.id,
-        [ID_COL[contentType]]: id,
-        interaction_type: "favorite",
-      } as any);
+        content_type: contentType,
+        content_id: contentId,
+      });
       if (error) throw error;
-      return id;
+      return contentId;
     },
-    onMutate: async (id: string) => {
+    onMutate: async (contentId: string) => {
       await queryClient.cancelQueries({ queryKey });
       const previous = queryClient.getQueryData<string[]>(queryKey);
-      queryClient.setQueryData<string[]>(queryKey, (old) => [...(old || []), id]);
+      queryClient.setQueryData<string[]>(queryKey, (old) => [
+        ...(old || []),
+        contentId,
+      ]);
       return { previous };
     },
-    onError: (_e, _id, ctx) => {
-      if (ctx?.previous) queryClient.setQueryData(queryKey, ctx.previous);
-      toast.error("Couldn't save — please try again");
+    onError: (_e, _id, context) => {
+      if (context?.previous)
+        queryClient.setQueryData(queryKey, context.previous);
+      toast({
+        title: "Error",
+        description: "Failed to add to favorites",
+        variant: "destructive",
+      });
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey }),
   });
 
   const removeMutation = useMutation({
-    mutationFn: async (id: string) => {
-      if (!user || !contentType) throw new Error("Must be logged in");
+    mutationFn: async (contentId: string) => {
+      if (!user) throw new Error("Must be logged in");
       const { error } = await supabase
-        .from(TABLE[contentType] as any)
+        .from("content_favorites")
         .delete()
         .eq("user_id", user.id)
-        .eq(ID_COL[contentType], id)
-        .eq("interaction_type", "favorite");
+        .eq("content_type", contentType)
+        .eq("content_id", contentId);
       if (error) throw error;
-      return id;
+      return contentId;
     },
-    onMutate: async (id: string) => {
+    onMutate: async (contentId: string) => {
       await queryClient.cancelQueries({ queryKey });
       const previous = queryClient.getQueryData<string[]>(queryKey);
-      queryClient.setQueryData<string[]>(queryKey, (old) => (old || []).filter((x) => x !== id));
+      queryClient.setQueryData<string[]>(queryKey, (old) =>
+        (old || []).filter((id) => id !== contentId)
+      );
       return { previous };
     },
-    onError: (_e, _id, ctx) => {
-      if (ctx?.previous) queryClient.setQueryData(queryKey, ctx.previous);
-      toast.error("Couldn't remove — please try again");
+    onError: (_e, _id, context) => {
+      if (context?.previous)
+        queryClient.setQueryData(queryKey, context.previous);
+      toast({
+        title: "Error",
+        description: "Failed to remove from favorites",
+        variant: "destructive",
+      });
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey }),
   });
 
-  const isFavorited = (id: string) => favoritedIds.includes(id);
+  const isFavorited = (contentId: string) => favoritedIds.includes(contentId);
 
-  const toggleFavorite = (id: string): { success: boolean } => {
+  const canAddFavorite = () =>
+    canPerformAction("favorite", favoritedIds.length);
+
+  /** Toggle; returns whether an upgrade is needed when the free cap is hit. */
+  const toggleFavorite = (
+    contentId: string
+  ): { success: boolean; needsUpgrade: boolean } => {
     if (!user) {
-      toast.error("Please log in to save favorites");
-      return { success: false };
+      toast({
+        title: "Login Required",
+        description: "Please log in to save favorites",
+        variant: "destructive",
+      });
+      return { success: false, needsUpgrade: false };
     }
-    if (!contentType) return { success: false };
-    if (favoritedIds.includes(id)) removeMutation.mutate(id);
-    else addMutation.mutate(id);
-    return { success: true };
+
+    if (isFavorited(contentId)) {
+      removeMutation.mutate(contentId);
+      return { success: true, needsUpgrade: false };
+    }
+
+    if (!canAddFavorite()) {
+      // The caller (FavoriteButton) presents the contextual paywall modal
+      // (WEB-FEAT-001) — no destructive toast here to avoid double messaging.
+      return { success: false, needsUpgrade: true };
+    }
+
+    addMutation.mutate(contentId);
+    return { success: true, needsUpgrade: false };
   };
 
   return {
@@ -118,5 +148,9 @@ export function useContentFavorites(contentType: FavoriteContentType | null) {
     isFavorited,
     toggleFavorite,
     isToggling: addMutation.isPending || removeMutation.isPending,
+    canAddFavorite: canAddFavorite(),
+    remainingFavorites: getRemainingQuota("favorite", favoritedIds.length),
+    isPremium,
+    favoritesLimit: limits.favorites,
   };
 }

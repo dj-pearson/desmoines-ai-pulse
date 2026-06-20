@@ -1,6 +1,9 @@
+import { useEffect, useRef } from 'react';
 import { useAffiliateAd } from '@/hooks/useAffiliateAd';
 import { isCapacitor, openExternalUrl } from '@/lib/capacitorUtils';
 import type { AffiliatePlacement } from '@/lib/affiliateAds';
+import { createViewabilityObserver } from '@/lib/tracking';
+import { logAdImpression, logAdClick } from '@/lib/adAnalytics';
 
 interface AffiliateAdBannerProps {
   placement: AffiliatePlacement;
@@ -9,10 +12,21 @@ interface AffiliateAdBannerProps {
 
 export function AffiliateAdBanner({ placement, className = '' }: AffiliateAdBannerProps) {
   const { partner, imageUrl, affiliateUrl } = useAffiliateAd(placement);
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Affiliate-class fill tracking (WEB-FEAT-004): viewability impression.
+  useEffect(() => {
+    if (!ref.current || !partner) return;
+    const observer = createViewabilityObserver(ref.current, () => {
+      logAdImpression('affiliate', placement, { partner: partner.name });
+    });
+    return () => observer.disconnect();
+  }, [placement, partner]);
 
   if (!partner || !imageUrl || !affiliateUrl) return null;
 
   const handleClick = async () => {
+    logAdClick('affiliate', placement, { partner: partner.name });
     if (isCapacitor()) {
       await openExternalUrl(affiliateUrl);
     } else {
@@ -38,6 +52,7 @@ export function AffiliateAdBanner({ placement, className = '' }: AffiliateAdBann
 
   return (
     <div
+      ref={ref}
       className={`relative cursor-pointer group ${sizeClasses} ${className}`}
       role="complementary"
       aria-label={`${partner.name} affiliate advertisement`}
@@ -57,6 +72,8 @@ export function AffiliateAdBanner({ placement, className = '' }: AffiliateAdBann
           if (isCapacitor()) {
             e.preventDefault();
             handleClick();
+          } else {
+            logAdClick('affiliate', placement, { partner: partner.name });
           }
         }}
         className="block"
