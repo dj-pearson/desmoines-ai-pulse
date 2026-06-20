@@ -345,7 +345,7 @@
         "npm run validate passes"
       ],
       "priority": 22,
-      "passes": false,
+      "passes": true,
       "notes": "Capstone of the AUTO cluster — schedule after the queues it aggregates exist (it can land earlier with sections appearing as pipelines ship, using feature-tolerant queries). admin-home-stats edge function is the natural aggregation point to extend."
     },
     {

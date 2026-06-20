@@ -4144,3 +4144,34 @@ large/tangled refactor, left honest at passes:false:
   runtime).
 
 iOS-AUDIT-* (47): not started — no Xcode to compile/verify Swift.
+
+## 2026-06-20 — WEB-AUTO-014 (Admin Autonomy Dashboard) [passes:true]
+
+### Single aggregate endpoint (supabase/functions/autonomy-overview)
+One admin-gated call returns every "is anything waiting on a human?" signal:
+pending event submissions, moderation queue (reviews + contacts), merge-review
+(content_merge_candidates), creative approvals (campaign_creatives is_approved
+null & unreviewed), job failures (7d) + recent failed-run alerts, per-pipeline
+auto-approval rates (from job metadata), and the latest data-quality KPI. Every
+metric is feature-tolerant (safeCount / try-catch -> null), so a missing table
+yields "—" rather than a 500 and sections light up as pipelines ship.
+
+### Page (src/pages/AdminAutonomy.tsx, /admin/autonomy)
+Lazy-loaded, ProtectedRoute admin. Queue cards deep-link to the surface that
+acts on them (event-submissions / feedback / system / campaigns); waiting queues
+get an amber ring. Explicit zero-state "Nothing needs you" when all clear +
+healthy. Auto-refreshes every 60s (refetchInterval). Automation-health section
+(7d failures + alert list + auto-approval rate badges) and data-quality KPI
+cards. Single edge function, not ~10 client queries.
+
+### Note
+Per-row AI scores live on the deep-linked submissions page; the dashboard shows
+the queue count + link (aggregate view).
+
+### Verification
+type-check + lint PASS (0 errors); edge function bundles cleanly via esbuild.
+
+### Files
+  A supabase/functions/autonomy-overview/index.ts
+  A src/pages/AdminAutonomy.tsx
+  M src/App.tsx
