@@ -712,7 +712,7 @@
         "npm run validate passes"
       ],
       "priority": 46,
-      "passes": false,
+      "passes": true,
       "notes": "Backend (generate-itinerary, trip_plans, share codes, get_trip_itinerary RPC) all exists from the iOS build — this is pure web UI adoption. src/hooks/useTripPlanner.ts is the seam."
     },
     {

@@ -4033,3 +4033,43 @@ available in this headless container).
 
 ### Files
   M src/components/OptimizedImage.tsx
+
+## 2026-06-20 — WEB-FEAT-011 (Trip Planner web polish) [passes:true]
+
+Adopted the existing trip backend (generate-itinerary, trip_plans, share codes,
+get_trip_itinerary) into a polished web UI.
+
+### Quota meter + contextual paywall
+useSubscription tier meter near Generate: VIP "Unlimited", Insider "5 AI trips
+/month", Free "Insider feature". Free users hitting Generate get the contextual
+paywall (UpgradeModal feature='trip_planner') instead of a failed request;
+server-enforced 403 upgrade_required / 429 quota_exceeded (surfaced by the hook
+with .code) also open the paywall. (Honest: the meter shows the tier allotment;
+trips aren't in the client user_analytics usage table so a live remaining count
+isn't shown — the server is authoritative.)
+
+### Itinerary reorder (persisted)
+Up/down controls per stop within a day; new reorderItemsMutation in
+useTripPlanner swaps order_index for both rows in one go + single refetch.
+
+### Map preview of stops (lazy Leaflet)
+Trip items carry no coords, so a batched query fetches lat/lng for content-linked
+stops (events/restaurants/attractions) and renders them via the lazy
+DiscoverMapCanvas (leaflet stays off the initial bundle). Custom/transport stops
+without content links are omitted.
+
+### Share + calendar export
+Share publishes + copies the /trips/shared/<code> link (hook) then opens the
+native share sheet when available. New src/lib/tripCalendar.ts builds .ics
+(whole-trip + per-day) with a download helper and a Google Calendar deep-link
+per stop. Buttons: "Add to Calendar" (whole trip), per-day calendar icon in each
+day header, Google Calendar link per stop.
+
+### Verification
+type-check + lint PASS (0 errors). Runtime (map render, .ics import, native
+share, generation) needs a browser; logic verified by reading.
+
+### Files
+  A src/lib/tripCalendar.ts
+  M src/hooks/useTripPlanner.ts
+  M src/pages/TripPlanner.tsx

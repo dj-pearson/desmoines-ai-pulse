@@ -305,6 +305,33 @@ export function useTripPlanner() {
     },
   });
 
+  // Reorder itinerary items (WEB-FEAT-011): persist new order_index values in
+  // one go and refetch once (no per-swap toast/refetch noise).
+  const reorderItemsMutation = useMutation({
+    mutationFn: async (
+      swaps: { id: string; order_index: number }[]
+    ) => {
+      await Promise.all(
+        swaps.map((s) =>
+          // @ts-ignore -- Supabase SDK deep-type instantiation under strict mode
+          supabase.from('trip_plan_items').update({ order_index: s.order_index }).eq('id', s.id)
+        )
+      );
+    },
+    onSuccess: () => {
+      if (selectedTrip) {
+        fetchTripDetails(selectedTrip.id)
+          .then(setSelectedTrip)
+          .catch((error: unknown) =>
+            log.error('reorderItems', 'Failed to refresh trip details', { error })
+          );
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to reorder: ${error.message}`);
+    },
+  });
+
   // Add custom item to trip
   const addItemMutation = useMutation({
     mutationFn: async ({
@@ -440,6 +467,7 @@ export function useTripPlanner() {
 
     // Item CRUD
     updateItem: updateItemMutation.mutateAsync,
+    reorderItems: reorderItemsMutation.mutateAsync,
     addItem: addItemMutation.mutateAsync,
     removeItem: removeItemMutation.mutateAsync,
 
