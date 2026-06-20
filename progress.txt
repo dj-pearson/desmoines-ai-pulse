@@ -3704,3 +3704,18 @@ getGooglePlacesPhotos), with an SSRF guard (validateURLForSSRF) + size cap
 
 ### Files
   A supabase/functions/find-image-candidates/index.ts
+
+### Fix 2: dimension validation + close SSRF hole in image fetching
+- imageStorage.fetchAndStoreImage now (a) routes the source URL through
+  validateURLForSSRF (block private IPs / non-web schemes) before fetching —
+  closing an SSRF hole on attacker-influenceable DB/scraped URLs across ALL
+  callers (ai-crawler, backfill-images, apply-image), and (b) rejects images
+  whose decoded header dimensions are < 100px on either side (tracking pixels /
+  favicons / badges / logos), so a record isn't marked "has image" with junk.
+- New exported imageDimensions() parses JPEG/PNG/GIF/WebP header bytes; returns
+  null for unknown formats so we never drop an image we can't measure.
+- backfill-images.scrapeImageUrl now SSRF-guards the page fetch too.
+
+### Files
+  M supabase/functions/_shared/imageStorage.ts
+  M supabase/functions/backfill-images/index.ts

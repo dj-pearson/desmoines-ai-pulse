@@ -7,6 +7,7 @@ import {
   CONTENT_TYPE_MAP,
 } from "../_shared/imageStorage.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+import { validateURLForSSRF } from "../_shared/validation.ts";
 import {
   findExistingVenueRecord,
   scrapeImageFromWebsite,
@@ -102,6 +103,16 @@ const SELECT_COLS: Record<Category, string> = {
 
 async function scrapeImageUrl(pageUrl: string): Promise<string | null> {
   if (!pageUrl) return null;
+
+  // SSRF guard — pageUrl comes from a DB row (scraped source_url/website).
+  const ssrf = validateURLForSSRF(pageUrl, {
+    allowedProtocols: ["http:", "https:"],
+    blockPrivateIPs: true,
+  });
+  if (!ssrf.valid) {
+    console.warn(`⚠️ Refusing unsafe page URL (${ssrf.error}): ${pageUrl}`);
+    return null;
+  }
 
   try {
     const response = await fetch(pageUrl, {
