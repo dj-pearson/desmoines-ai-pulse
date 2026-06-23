@@ -573,7 +573,7 @@
         "npm run validate passes"
       ],
       "priority": 37,
-      "passes": false,
+      "passes": true,
       "notes": "Matches iOS IOS-SUB-012 economics. Touches money — keep changes additive and verify webhook idempotency. Flag any Stripe-dashboard manual steps as ACTION REQUIRED in progress notes."
     },
     {

@@ -3,7 +3,17 @@
  * Des Moines AI Pulse - Stripe Products Setup Script
  * ===================================================
  *
- * This script creates the required Stripe products and prices for subscription plans.
+ * This script creates the required Stripe products and prices for subscription
+ * plans (monthly + annual Insider/VIP, matching the iOS SKUs and the web Pricing
+ * page). It is IDEMPOTENT: products are matched by metadata.tier and prices by a
+ * stable lookup_key (insider_monthly, insider_yearly, vip_monthly, vip_yearly),
+ * so re-running reuses existing objects instead of creating duplicates.
+ *
+ * ACTION REQUIRED (one-time): run this once per Stripe account/mode, then paste
+ * the printed SQL into Supabase so subscription_plans.stripe_price_id_{monthly,
+ * yearly} point at the real price IDs. Annual checkout + the 7-day trial are
+ * already wired in create-subscription-checkout; they just need these IDs.
+ *
  * Works on Windows, Mac, and Linux with Node.js.
  *
  * Prerequisites:
@@ -73,36 +83,57 @@ const createdIds = {
   vipPriceYearly: null,
 };
 
+// Idempotent: reuse an existing active product with the same metadata.tier.
 async function createProduct(name, description, metadata) {
-  console.log(`Creating product: ${name}`);
+  console.log(`Ensuring product: ${name}`);
   if (isDryRun) {
-    console.log('  [DRY RUN] Would create product');
+    console.log('  [DRY RUN] Would find-or-create product');
     return { id: 'prod_DRYRUN_' + name.replace(/\s+/g, '') };
   }
-  const product = await stripe.products.create({
-    name,
-    description,
-    metadata,
-  });
-  console.log(`  Product ID: ${product.id}`);
+  try {
+    const found = await stripe.products.search({
+      query: `metadata['tier']:'${metadata.tier}' AND active:'true'`,
+      limit: 1,
+    });
+    if (found.data.length > 0) {
+      console.log(`  Reusing existing product: ${found.data[0].id}`);
+      return found.data[0];
+    }
+  } catch (err) {
+    console.log(`  (product search unavailable: ${err.message}; creating new)`);
+  }
+  const product = await stripe.products.create({ name, description, metadata });
+  console.log(`  Created product ID: ${product.id}`);
   return product;
 }
 
-async function createPrice(productId, unitAmount, currency, interval, metadata) {
+// Idempotent: reuse the active price carrying this lookup_key (prices are
+// immutable in Stripe, so the lookup_key is the stable handle we re-resolve).
+async function createPrice(productId, unitAmount, currency, interval, lookupKey, metadata) {
   const amount = (unitAmount / 100).toFixed(2);
-  console.log(`Creating price: $${amount}/${interval}`);
+  console.log(`Ensuring price: $${amount}/${interval} (${lookupKey})`);
   if (isDryRun) {
-    console.log('  [DRY RUN] Would create price');
+    console.log('  [DRY RUN] Would find-or-create price');
     return { id: 'price_DRYRUN_' + interval };
+  }
+  const existing = await stripe.prices.list({
+    lookup_keys: [lookupKey],
+    active: true,
+    limit: 1,
+  });
+  if (existing.data.length > 0) {
+    console.log(`  Reusing existing price: ${existing.data[0].id}`);
+    return existing.data[0];
   }
   const price = await stripe.prices.create({
     product: productId,
     unit_amount: unitAmount,
     currency,
     recurring: { interval },
+    lookup_key: lookupKey,
     metadata,
   });
-  console.log(`  Price ID: ${price.id}`);
+  console.log(`  Created price ID: ${price.id}`);
   return price;
 }
 
@@ -126,6 +157,7 @@ async function main() {
       499, // $4.99 in cents
       'usd',
       'month',
+      'insider_monthly',
       { plan: 'insider', billing: 'monthly' }
     );
     createdIds.insiderPriceMonthly = insiderMonthly.id;
@@ -135,6 +167,7 @@ async function main() {
       4999, // $49.99 in cents
       'usd',
       'year',
+      'insider_yearly',
       { plan: 'insider', billing: 'yearly' }
     );
     createdIds.insiderPriceYearly = insiderYearly.id;
@@ -159,6 +192,7 @@ async function main() {
       1299, // $12.99 in cents
       'usd',
       'month',
+      'vip_monthly',
       { plan: 'vip', billing: 'monthly' }
     );
     createdIds.vipPriceMonthly = vipMonthly.id;
@@ -168,6 +202,7 @@ async function main() {
       12999, // $129.99 in cents
       'usd',
       'year',
+      'vip_yearly',
       { plan: 'vip', billing: 'yearly' }
     );
     createdIds.vipPriceYearly = vipYearly.id;

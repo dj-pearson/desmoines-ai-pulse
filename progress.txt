@@ -4333,3 +4333,37 @@ Verification: npm run validate PASS (0 errors); new edge fn lints clean
   A supabase/functions/regenerate-sitemaps/index.ts
   M supabase/config.toml
   M AUTOMATION-ARCHITECTURE.md
+
+### WEB-FEAT-002 — Annual plans + free trial on web (Stripe) ✅
+Most of this was already wired (yearly billingInterval in
+create-subscription-checkout, trial_period_days:7 for first-time subscribers,
+stripe-webhook maps `trialing` + handles subscription.updated, Pricing page
+monthly/yearly toggle, FTC renewal disclosure, SubscriptionPortal trial badge +
+period end). Closed the remaining gaps:
+
+- Pricing.tsx: replaced the hardcoded "Save 17%" toggle badge with a COMPUTED
+  `maxYearlySavingsPct` derived from the real plan prices (Insider 4.99/49.99,
+  VIP 12.99/129.99). Toggle now also initializes from an incoming ?billing=yearly
+  deep link.
+- UpgradeModal.tsx (the contextual paywall, WEB-FEAT-001): added a monthly/annual
+  toggle with a computed "Save up to N%" badge; both plan cards now show
+  interval-aware prices (and the alternate-interval price), and the upgrade CTA
+  deep-links to /pricing?plan=<tier>&billing=<interval> so the selection carries
+  through. paywall_checkout_start analytics now include the billing interval.
+- scripts/setup-stripe-products.js: made IDEMPOTENT — products matched by
+  metadata.tier via products.search; prices matched by stable lookup_key
+  (insider_monthly/insider_yearly/vip_monthly/vip_yearly) so re-runs reuse
+  existing objects instead of creating duplicates. Header documents the one-time
+  ACTION REQUIRED run + that annual checkout/trial are already wired.
+
+No DB migration needed: subscription_plans already has stripe_price_id_yearly;
+cross-platform tier resolution (UNIQUE(user_id,platform) + resolveHighestSubscription)
+unchanged, so web annual subscribers still sync to mobile.
+
+Verification: npm run type-check PASS (0 errors); changed files lint with 0
+errors (only pre-existing unused-import warnings).
+
+### Files
+  M src/pages/Pricing.tsx
+  M src/components/UpgradeModal.tsx
+  M scripts/setup-stripe-products.js
