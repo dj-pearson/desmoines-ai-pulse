@@ -7006,6 +7006,7 @@ export type Database = {
           id: string
           is_verified: boolean | null
           moderation_status: string
+          photo_urls: string[]
           rating: Database["public"]["Enums"]["rating_value"]
           review_text: string | null
           updated_at: string
@@ -7018,6 +7019,7 @@ export type Database = {
           id?: string
           is_verified?: boolean | null
           moderation_status?: string
+          photo_urls?: string[]
           rating: Database["public"]["Enums"]["rating_value"]
           review_text?: string | null
           updated_at?: string
@@ -7030,6 +7032,7 @@ export type Database = {
           id?: string
           is_verified?: boolean | null
           moderation_status?: string
+          photo_urls?: string[]
           rating?: Database["public"]["Enums"]["rating_value"]
           review_text?: string | null
           updated_at?: string
@@ -7559,6 +7562,10 @@ export type Database = {
       }
     }
     Functions: {
+      report_review: {
+        Args: { p_rating_id: string }
+        Returns: undefined
+      }
       create_event_saved_search: {
         Args: { p_name: string; p_filters: Json }
         Returns: {

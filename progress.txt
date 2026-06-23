@@ -4515,3 +4515,58 @@ ACTION REQUIRED (runtime, then flip passes=true):
   M src/components/EnhancedAttractionSEO.tsx
   M src/pages/RestaurantDetails.tsx
   M src/pages/ArticleDetails.tsx
+
+### WEB-FEAT-010 — Review composer w/ photos, wired through moderation (CODE-COMPLETE; passes=false) ⏳
+Built per user direction with passes=false pending the Supabase Storage upload +
+owner-scoped RLS + moderation round-trip that can't be runtime-verified here.
+
+Key insight: the review→moderation pipeline already exists (WEB-AUTO-009) on the
+`user_ratings` table via `RatingSystem.tsx` + `useRatings` (stars, text, submit
+that invokes moderate-content, hide pending/flagged, edit/delete, helpful votes,
+author/date display). So this story is the remaining gaps, not a rebuild:
+
+- Migration 20260623000004_review_photos.sql:
+  - user_ratings += photo_urls TEXT[] (additive).
+  - public `review-photos` storage bucket + owner-scoped RLS (path <user_id>/<file>:
+    INSERT/ALL gated by auth.uid()=foldername[1]; public SELECT).
+  - report_review(p_rating_id) SECURITY DEFINER: upserts content_moderation
+    status='flagged' reasons=['user_report'] to feed the WEB-AUTO-009 queue
+    WITHOUT auto-hiding (prevents single-report censorship; admin decides).
+- src/lib/imageResize.ts: client downscale (max 1280px) + JPEG quality-step to
+  keep uploads < 500KB.
+- useRatings: submitRating now accepts photoUrls (stored on the row; moderation
+  invoke unchanged); new reportReview() RPC wrapper.
+- RatingSystem composer: up to 3 photos (resize → upload to
+  review-photos/<userId>/<uuid>.jpg → public URL), thumbnails w/ remove; photo
+  grid + lightbox in each review; wired the previously-inert Report button;
+  guest sign-in prompt for unauthenticated users.
+- Mounted RatingSystem on RestaurantDetails + AttractionDetails (events already
+  had it) → reviews now on all three entity types.
+- types.ts updated for photo_urls + report_review RPC.
+
+ACTION REQUIRED (runtime, then flip passes=true):
+  1. Apply the migration (creates bucket + RLS).
+  2. As a signed-in user, upload a photo review on a restaurant/attraction; verify
+     the object lands under <user_id>/ and is publicly readable, the URL is stored
+     on the row, and the review flows through moderate-content (clean → visible,
+     flagged → hidden + queued).
+  3. Verify a non-owner can't write to another user's storage folder (RLS).
+  4. Verify the Report button enqueues a content_moderation row (admin queue).
+
+Verification here: npm run validate PASS (0 errors); changed files lint clean.
+
+### Files
+  A supabase/migrations/20260623000004_review_photos.sql
+  A src/lib/imageResize.ts
+  M src/integrations/supabase/types.ts
+  M src/hooks/useRatings.ts
+  M src/components/RatingSystem.tsx
+  M src/pages/RestaurantDetails.tsx
+  M src/pages/AttractionDetails.tsx
+
+## SESSION RESULT (final)
+6 stories delivered: WEB-AUTO-011, WEB-AUTO-012, WEB-FEAT-002, WEB-FEAT-003
+(passes=true, validate-verified) + WEB-FEAT-008, WEB-FEAT-010 (CODE-COMPLETE,
+passes=false pending runtime verification per user direction).
+All WEB stories now either pass or are code-complete-pending-runtime. Each runtime
+gate is documented above as ACTION REQUIRED. iOS-AUDIT-* remain (no Xcode).

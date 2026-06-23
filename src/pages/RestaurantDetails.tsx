@@ -52,6 +52,7 @@ import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { NearbyContent } from "@/components/NearbyContent";
 import { RestaurantMenuSection } from "@/components/RestaurantMenuSection";
+import { RatingSystem } from "@/components/RatingSystem";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 
 export default function RestaurantDetails() {
@@ -843,6 +844,11 @@ export default function RestaurantDetails() {
               )}
             </CardContent>
           </Card>
+
+          {/* Ratings & Reviews (WEB-FEAT-010) */}
+          <div id="reviews" className="mb-8">
+            <RatingSystem contentType="restaurant" contentId={restaurant.id} showReviews />
+          </div>
 
           {/* Restaurant-Specific FAQ */}
           <Card id="faq" className="shadow-lg rounded-2xl border-0 mb-8 overflow-hidden">
