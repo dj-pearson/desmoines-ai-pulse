@@ -190,7 +190,11 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const requestBody = await req.json();
-    const { action, contentType, subjectType, postId, triggerSource } = requestBody;
+    // targetContentId (optional, additive) lets a caller pick the exact event/
+    // restaurant to feature instead of the default random selection. Used by the
+    // social-daily-poster orchestrator (WEB-AUTO-012); absent for all existing
+    // callers, which keep their current behavior.
+    const { action, contentType, subjectType, postId, triggerSource, targetContentId } = requestBody;
 
     console.log(
       "Social Media Manager - Action:",
@@ -466,8 +470,8 @@ serve(async (req) => {
 
     if (action === "generate" || action === "generate_and_publish") {
       const autoPublish = action === "generate_and_publish";
-      
-      const result = await generateAndPublishPost(supabase, claudeApiKey, contentType, subjectType, autoPublish);
+
+      const result = await generateAndPublishPost(supabase, claudeApiKey, contentType, subjectType, autoPublish, targetContentId);
       
       return new Response(
         JSON.stringify({
@@ -608,9 +612,10 @@ async function generateAndPublishPost(
   claudeApiKey: string,
   contentType: string,
   subjectType: string,
-  autoPublish: boolean = true
+  autoPublish: boolean = true,
+  targetContentId?: string
 ) {
-  console.log(`Starting generation for ${contentType} with auto-publish: ${autoPublish}`);
+  console.log(`Starting generation for ${contentType} with auto-publish: ${autoPublish}${targetContentId ? ` (target ${targetContentId})` : ""}`);
   
   // Get recent posts to avoid repetition
   const { data: recentPosts } = await supabase
@@ -630,7 +635,25 @@ async function generateAndPublishPost(
   let selectedContent: Record<string, unknown> | null = null;
   let contentUrl = "";
 
-  if (contentType === "event") {
+  // If a specific content id was requested (e.g. by the daily-poster
+  // orchestrator), feature exactly that row and skip random selection.
+  if (targetContentId) {
+    const table = contentType === "event" ? "events" : "restaurants";
+    const { data: target } = await supabase
+      .from(table)
+      .select("*")
+      .eq("id", targetContentId)
+      .maybeSingle();
+    if (target) {
+      selectedContent = target;
+      contentUrl = generateContentUrl(contentType, target);
+      console.log(`Using targeted ${contentType}: ${target.title || target.name} (${targetContentId})`);
+    } else {
+      console.warn(`targetContentId ${targetContentId} not found in ${table}; falling back to default selection`);
+    }
+  }
+
+  if (!selectedContent && contentType === "event") {
     const { data: allEvents } = await supabase
       .from("events")
       .select("*")
@@ -667,7 +690,7 @@ async function generateAndPublishPost(
         console.log(`Selected event: ${selectedContent.title} (ID: ${selectedContent.id})`);
       }
     }
-  } else if (contentType === "restaurant") {
+  } else if (!selectedContent && contentType === "restaurant") {
     const { data: allRestaurants } = await supabase
       .from("restaurants")
       .select("*")
@@ -697,6 +720,21 @@ async function generateAndPublishPost(
     throw new Error(`No suitable ${contentType} content found for automated posting.`);
   }
 
+  // Event date formatted in America/Chicago so the generated copy reads in local
+  // time (WEB-AUTO-012). Intl with the Central tz is equivalent to date-fns-tz here.
+  const centralDate =
+    contentType === "event" && selectedContent.date
+      ? new Intl.DateTimeFormat("en-US", {
+          timeZone: "America/Chicago",
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        }).format(new Date(selectedContent.date as string))
+      : "";
+
   // Generate AI content
   const shortPrompt = `Create a compelling social media post (under 200 characters) for ${subjectType.replace(
     "_",
@@ -711,9 +749,10 @@ Description: ${
     ""
   }
 Location: ${selectedContent.location || ""}
-${contentType === "event" ? `Date: ${selectedContent.date}` : ""}
+${contentType === "event" ? `Date: ${centralDate} (Central Time)` : ""}
 ${contentType === "event" ? `Venue: ${selectedContent.venue || ""}` : ""}
 ${contentType === "restaurant" ? `Cuisine: ${selectedContent.cuisine || ""}` : ""}
+Link: ${contentUrl}
 
 Make it engaging, use relevant hashtags, and keep it under 200 characters for Twitter/Threads. Include a call to action.`;
 
@@ -730,9 +769,10 @@ Description: ${
     ""
   }
 Location: ${selectedContent.location || ""}
-${contentType === "event" ? `Date: ${selectedContent.date}` : ""}
+${contentType === "event" ? `Date: ${centralDate} (Central Time)` : ""}
 ${contentType === "event" ? `Venue: ${selectedContent.venue || ""}` : ""}
 ${contentType === "restaurant" ? `Cuisine: ${selectedContent.cuisine || ""}` : ""}
+Link: ${contentUrl}
 
 Make it detailed and engaging for Facebook/LinkedIn. Include compelling details, storytelling elements, and a strong call to action.`;
 

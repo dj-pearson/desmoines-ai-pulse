@@ -4367,3 +4367,57 @@ errors (only pre-existing unused-import warnings).
   M src/pages/Pricing.tsx
   M src/components/UpgradeModal.tsx
   M scripts/setup-stripe-products.js
+
+### WEB-AUTO-012 — Daily social media auto-posting ✅
+The social-media-manager (copy gen + webhook publishing) already existed and a
+legacy hourly cron (run_social_media_automation) generated random drafts at
+9/18 Central. Replaced that ad-hoc path with an observable orchestrator that owns
+selection + observability + pause, while REUSING the live posting function
+(no risky rewrite of it).
+
+Built:
+- Edge function supabase/functions/social-daily-poster/index.ts:
+  - jobRunner-wrapped (WEB-AUTO-001) → automation_job_runs, partial/failure logged.
+  - Reads admin pause config from system_settings('social_daily_poster').
+  - Selects the highest-signal upcoming non-hidden event (is_featured desc, date
+    asc) and a featured restaurant (is_featured desc, popularity_score desc), each
+    EXCLUDING anything posted (status='posted') in the last 30 days (queried from
+    social_media_posts.content_id).
+  - Delegates generate+publish to social-media-manager via the new optional
+    `targetContentId` field; retries each post ONCE internally (NOT a whole-job
+    throw, so a restaurant failure can't re-trigger the event post).
+  - Auth via requireAdminOrApiKey (verify_jwt=false).
+- social-media-manager/index.ts (additive, backward-compatible):
+  - New OPTIONAL `targetContentId` request field — when present, features that
+    exact event/restaurant instead of random selection; absent for all existing
+    callers (legacy cron, admin UI), which keep current behavior.
+  - Event date in the generated copy now formatted in America/Chicago (Intl, tz
+    equivalent to date-fns-tz) and the canonical deep link is included in both
+    prompts.
+- Migration 20260623000002_social_daily_poster.sql:
+  - Seeds the system_settings pause config (enabled / pause_events /
+    pause_restaurants).
+  - Retires the legacy hourly random generator cron (social-media-generation) and
+    schedules `social-daily-poster-daily` (14:00 UTC ≈ 9am Central). Leaves the
+    existing publishing safety-net cron intact.
+- Admin UI: new "Automation" tab on AdminSocial (SocialPosterSettings.tsx) to
+  toggle enabled / pause events / pause restaurants. Posting history already lives
+  in the "Post queue" tab; per-platform pause = disable that webhook under
+  "Accounts".
+
+Verification: npm run validate PASS (0 errors); new edge fns + manager edits lint
+clean (0 errors; only console/any warnings consistent with the file).
+
+### Files
+  A supabase/functions/social-daily-poster/index.ts
+  A supabase/migrations/20260623000002_social_daily_poster.sql
+  A src/components/admin/SocialPosterSettings.tsx
+  M supabase/functions/social-media-manager/index.ts
+  M supabase/config.toml
+  M src/pages/AdminSocial.tsx
+
+## SESSION RESULT
+Top-3 incomplete WEB stories completed: WEB-AUTO-011, WEB-AUTO-012, WEB-FEAT-002.
+prd.json WEB stories now 53/56 passing (remaining: WEB-FEAT-003 saved-search
+digest, WEB-FEAT-008 dynamic OG image, WEB-FEAT-010 review composer — each needs
+a runtime/Storage/Stripe-sandbox to verify safely). iOS-AUDIT-* remain (no Xcode).

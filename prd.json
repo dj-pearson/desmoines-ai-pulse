@@ -314,7 +314,7 @@
         "npm run validate passes"
       ],
       "priority": 20,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: supabase/functions/social-media-manager has shouldPostNow() (9am events / 10am restaurants) but relies on manual invocation. Check which platform webhooks are actually configured before promising platforms in the UI."
     },
     {
