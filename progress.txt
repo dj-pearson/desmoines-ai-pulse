@@ -4285,3 +4285,288 @@ violate the quality bar:
   runtime).
 
 iOS-AUDIT-* (47): no Xcode to compile/verify Swift.
+
+## 2026-06-23 — SESSION (branch claude/prd-stories-platform-review-6twezl)
+Working the top-3 incomplete WEB stories by PRD priority (AUTO-011, AUTO-012,
+FEAT-002). Much infra already existed; each story closes the remaining gaps
+additively (backward-compat rules respected: no endpoint/field removals, no
+validation tightening, additive DB only).
+
+### WEB-AUTO-011 — Event-driven sitemap regeneration + search-engine ping ✅
+Problem: sitemaps only refreshed via `npm run build` + a daily cron, so new
+content waited up to a day/deploy to be indexable.
+
+Built:
+- Migration 20260623000001_sitemap_change_queue.sql:
+  - `sitemap_change_queue` table (RLS on, service-role only).
+  - `enqueue_sitemap_change()` SECURITY DEFINER trigger fn + AFTER
+    INSERT/DELETE/UPDATE-OF triggers on events (title,date,event_start_utc,
+    is_hidden), restaurants (name,slug,is_featured), attractions (name),
+    articles (title,slug,status) — low churn, only slug/visibility cols.
+  - public `sitemaps` storage bucket.
+  - pg_cron `regenerate-sitemaps-event-driven` every 6h (guarded extension
+    setup, service-role key from app.settings — matches existing crons).
+- Edge function supabase/functions/regenerate-sitemaps/index.ts:
+  - jobRunner-wrapped (WEB-AUTO-001) → observable in automation_job_runs,
+    failures alert.
+  - Regenerates per-table XML mirroring scripts/generate-dynamic-sitemaps.ts so
+    storage copies are drop-in consistent; EXCLUDES is_hidden events (WEB-AUTO-006).
+  - Writes sitemap.xml + sitemap-events/restaurants/attractions/articles.xml to
+    the `sitemaps` bucket (upsert).
+  - Drains queue, resolves changed canonical URLs, pings Google + Bing, and
+    best-effort submits changed URLs to Google Indexing API when
+    GOOGLE_SERVICE_ACCOUNT_JSON is set. Results logged in run metadata.
+  - Auth via requireAdminOrApiKey (verify_jwt=false in config.toml).
+- Build-time generation kept as fallback; AUTOMATION-ARCHITECTURE.md updated to
+  state the event-driven path is primary.
+
+ACTION REQUIRED (one-time infra, documented): add a Cloudflare Pages
+redirect/Worker mapping /sitemap*.xml → the public `sitemaps` bucket URL so prod
+serves the always-fresh copies. Until then prod serves the build-time static
+fallback (still valid).
+
+Verification: npm run validate PASS (0 errors); new edge fn lints clean
+(0 errors, only `any` warnings, matching the existing generate-sitemaps fn).
+
+### Files
+  A supabase/migrations/20260623000001_sitemap_change_queue.sql
+  A supabase/functions/regenerate-sitemaps/index.ts
+  M supabase/config.toml
+  M AUTOMATION-ARCHITECTURE.md
+
+### WEB-FEAT-002 — Annual plans + free trial on web (Stripe) ✅
+Most of this was already wired (yearly billingInterval in
+create-subscription-checkout, trial_period_days:7 for first-time subscribers,
+stripe-webhook maps `trialing` + handles subscription.updated, Pricing page
+monthly/yearly toggle, FTC renewal disclosure, SubscriptionPortal trial badge +
+period end). Closed the remaining gaps:
+
+- Pricing.tsx: replaced the hardcoded "Save 17%" toggle badge with a COMPUTED
+  `maxYearlySavingsPct` derived from the real plan prices (Insider 4.99/49.99,
+  VIP 12.99/129.99). Toggle now also initializes from an incoming ?billing=yearly
+  deep link.
+- UpgradeModal.tsx (the contextual paywall, WEB-FEAT-001): added a monthly/annual
+  toggle with a computed "Save up to N%" badge; both plan cards now show
+  interval-aware prices (and the alternate-interval price), and the upgrade CTA
+  deep-links to /pricing?plan=<tier>&billing=<interval> so the selection carries
+  through. paywall_checkout_start analytics now include the billing interval.
+- scripts/setup-stripe-products.js: made IDEMPOTENT — products matched by
+  metadata.tier via products.search; prices matched by stable lookup_key
+  (insider_monthly/insider_yearly/vip_monthly/vip_yearly) so re-runs reuse
+  existing objects instead of creating duplicates. Header documents the one-time
+  ACTION REQUIRED run + that annual checkout/trial are already wired.
+
+No DB migration needed: subscription_plans already has stripe_price_id_yearly;
+cross-platform tier resolution (UNIQUE(user_id,platform) + resolveHighestSubscription)
+unchanged, so web annual subscribers still sync to mobile.
+
+Verification: npm run type-check PASS (0 errors); changed files lint with 0
+errors (only pre-existing unused-import warnings).
+
+### Files
+  M src/pages/Pricing.tsx
+  M src/components/UpgradeModal.tsx
+  M scripts/setup-stripe-products.js
+
+### WEB-AUTO-012 — Daily social media auto-posting ✅
+The social-media-manager (copy gen + webhook publishing) already existed and a
+legacy hourly cron (run_social_media_automation) generated random drafts at
+9/18 Central. Replaced that ad-hoc path with an observable orchestrator that owns
+selection + observability + pause, while REUSING the live posting function
+(no risky rewrite of it).
+
+Built:
+- Edge function supabase/functions/social-daily-poster/index.ts:
+  - jobRunner-wrapped (WEB-AUTO-001) → automation_job_runs, partial/failure logged.
+  - Reads admin pause config from system_settings('social_daily_poster').
+  - Selects the highest-signal upcoming non-hidden event (is_featured desc, date
+    asc) and a featured restaurant (is_featured desc, popularity_score desc), each
+    EXCLUDING anything posted (status='posted') in the last 30 days (queried from
+    social_media_posts.content_id).
+  - Delegates generate+publish to social-media-manager via the new optional
+    `targetContentId` field; retries each post ONCE internally (NOT a whole-job
+    throw, so a restaurant failure can't re-trigger the event post).
+  - Auth via requireAdminOrApiKey (verify_jwt=false).
+- social-media-manager/index.ts (additive, backward-compatible):
+  - New OPTIONAL `targetContentId` request field — when present, features that
+    exact event/restaurant instead of random selection; absent for all existing
+    callers (legacy cron, admin UI), which keep current behavior.
+  - Event date in the generated copy now formatted in America/Chicago (Intl, tz
+    equivalent to date-fns-tz) and the canonical deep link is included in both
+    prompts.
+- Migration 20260623000002_social_daily_poster.sql:
+  - Seeds the system_settings pause config (enabled / pause_events /
+    pause_restaurants).
+  - Retires the legacy hourly random generator cron (social-media-generation) and
+    schedules `social-daily-poster-daily` (14:00 UTC ≈ 9am Central). Leaves the
+    existing publishing safety-net cron intact.
+- Admin UI: new "Automation" tab on AdminSocial (SocialPosterSettings.tsx) to
+  toggle enabled / pause events / pause restaurants. Posting history already lives
+  in the "Post queue" tab; per-platform pause = disable that webhook under
+  "Accounts".
+
+Verification: npm run validate PASS (0 errors); new edge fns + manager edits lint
+clean (0 errors; only console/any warnings consistent with the file).
+
+### Files
+  A supabase/functions/social-daily-poster/index.ts
+  A supabase/migrations/20260623000002_social_daily_poster.sql
+  A src/components/admin/SocialPosterSettings.tsx
+  M supabase/functions/social-media-manager/index.ts
+  M supabase/config.toml
+  M src/pages/AdminSocial.tsx
+
+## SESSION RESULT
+Top-3 incomplete WEB stories completed: WEB-AUTO-011, WEB-AUTO-012, WEB-FEAT-002.
+prd.json WEB stories now 53/56 passing (remaining: WEB-FEAT-003 saved-search
+digest, WEB-FEAT-008 dynamic OG image, WEB-FEAT-010 review composer — each needs
+a runtime/Storage/Stripe-sandbox to verify safely). iOS-AUDIT-* remain (no Xcode).
+
+## 2026-06-23 — SESSION cont. (branch claude/prd-stories-platform-review-6twezl)
+
+### WEB-FEAT-003 — Saved searches + alerts + nightly digest ✅
+Delivered the promised "saved searches & event alerts" retention loop. Built on
+the existing saved_searches table (additive), URL-filter state (WEB-UX-001),
+email layout, and jobRunner — no rewrites.
+
+Backend (migration 20260623000003_saved_search_alerts.sql):
+- saved_searches += alerts_enabled, last_alerted_at, search_type (existing
+  advanced-search saves default to 'advanced' and are untouched). Partial index
+  on active event_list alert rows.
+- user_email_preferences += event_alerts_enabled (default true) — the notification
+  preference the digest honors.
+- RPC create_event_saved_search(p_name, p_filters) SECURITY DEFINER enforces tier
+  limits SERVER-SIDE: free 0 (client shows paywall), Insider 10, VIP unlimited;
+  resolves highest active/trialing tier (vip>insider>free).
+- pg_cron 'saved-search-alerts-nightly' (07:00 UTC) → saved-search-alerts fn.
+
+Edge function supabase/functions/saved-search-alerts/index.ts:
+- jobRunner-wrapped (observable, alerts on failure).
+- Runs each active event_list saved search against events created since that
+  search's last_alerted_at (matching category/q/location/free-price best-effort,
+  upcoming + non-hidden only), groups matches per user, sends ONE consolidated
+  marketing email via renderEmail/Resend with one-click unsubscribe and deep
+  links back to the filtered /events URL. Zero matches = no email. Skips users
+  with event_alerts_enabled=false or no verified email. Advances last_alerted_at
+  for every processed search so the window never re-scans.
+
+Frontend:
+- useSavedSearchAlerts hook (list/save/toggle/delete + global pref) with
+  deep-link + summary helpers.
+- SaveSearchButton on the Events results header: captures live URL filters,
+  routes guests to /auth, free users to the contextual paywall (WEB-FEAT-001),
+  else saves via the RPC; surfaces the server-side limit as an upsell.
+- Dashboard "Saved Searches" tab (SavedSearchesTab): per-search alert toggle +
+  delete + deep link, and a master "email me about matches" switch.
+- types.ts updated for the 3 new columns + the RPC (no DB access to regen here).
+
+Verification: npm run validate PASS (0 errors); new edge fn + components lint
+clean (0 errors).
+
+### Files
+  A supabase/migrations/20260623000003_saved_search_alerts.sql
+  A supabase/functions/saved-search-alerts/index.ts
+  A src/hooks/useSavedSearchAlerts.ts
+  A src/components/SaveSearchButton.tsx
+  A src/components/dashboard/SavedSearchesTab.tsx
+  M supabase/config.toml
+  M src/integrations/supabase/types.ts
+  M src/pages/UserDashboard.tsx
+  M src/pages/EventsPage.tsx
+
+Remaining WEB (2): WEB-FEAT-008 (dynamic OG image — needs Deno PNG runtime +
+Twitter/FB debugger screenshots the AC mandates) and WEB-FEAT-010 (review
+composer — needs Supabase Storage upload + RLS runtime). Both require runtime
+verification not available here; deferred to avoid shipping unverifiable
+social-preview/Storage regressions.
+
+### WEB-FEAT-008 — Dynamic OG-image generation (CODE-COMPLETE; passes=false) ⏳
+Built per user direction with passes=false pending the runtime verification the
+AC mandates (Twitter/FB debugger screenshots) which this env can't perform.
+
+- Edge function supabase/functions/og-image/index.ts: GET /og-image/:type/:id
+  renders a branded 1200×630 PNG for event/restaurant/attraction/article via a
+  hand-built SVG + @resvg/resvg-wasm (gradient brand bg, full-bleed item
+  thumbnail with scrim, truncated title, date/rating badge, wordmark). Font +
+  thumbnail are optional; on ANY failure the function 302-redirects to the static
+  default OG image, so og:image can never produce a broken preview. Cache-Control
+  public/1h; rate-limited (checkRateLimit). verify_jwt=false (public, like
+  image-transform) in config.toml.
+- src/lib/ogImage.ts: ogImageUrl(type,id) → the function URL (default fallback).
+- Wired og:image + twitter:image to the dynamic card on the four detail SEO
+  surfaces: EnhancedEventSEO, EnhancedAttractionSEO (added optional id),
+  RestaurantDetails + ArticleDetails (SEOHead imageUrl).
+
+ACTION REQUIRED (runtime, then flip passes=true):
+  1. Deploy og-image; confirm 200 image/png from /og-image/event/<id>.
+  2. If text doesn't render, swap FONT_URL for a reachable TTF (resvg needs
+     TTF/OTF, not woff2) — function still returns an image (photo+gradient) or
+     falls back safely meanwhile.
+  3. Validate with Twitter Card validator + Facebook Sharing Debugger; record
+     screenshots in the PR.
+  4. Optional: enumerate detail routes in scripts/prerender.mjs so non-JS
+     crawlers see the per-entity tag in static HTML.
+
+### Files
+  A supabase/functions/og-image/index.ts
+  A src/lib/ogImage.ts
+  M supabase/config.toml
+  M src/components/EnhancedEventSEO.tsx
+  M src/components/EnhancedAttractionSEO.tsx
+  M src/pages/RestaurantDetails.tsx
+  M src/pages/ArticleDetails.tsx
+
+### WEB-FEAT-010 — Review composer w/ photos, wired through moderation (CODE-COMPLETE; passes=false) ⏳
+Built per user direction with passes=false pending the Supabase Storage upload +
+owner-scoped RLS + moderation round-trip that can't be runtime-verified here.
+
+Key insight: the review→moderation pipeline already exists (WEB-AUTO-009) on the
+`user_ratings` table via `RatingSystem.tsx` + `useRatings` (stars, text, submit
+that invokes moderate-content, hide pending/flagged, edit/delete, helpful votes,
+author/date display). So this story is the remaining gaps, not a rebuild:
+
+- Migration 20260623000004_review_photos.sql:
+  - user_ratings += photo_urls TEXT[] (additive).
+  - public `review-photos` storage bucket + owner-scoped RLS (path <user_id>/<file>:
+    INSERT/ALL gated by auth.uid()=foldername[1]; public SELECT).
+  - report_review(p_rating_id) SECURITY DEFINER: upserts content_moderation
+    status='flagged' reasons=['user_report'] to feed the WEB-AUTO-009 queue
+    WITHOUT auto-hiding (prevents single-report censorship; admin decides).
+- src/lib/imageResize.ts: client downscale (max 1280px) + JPEG quality-step to
+  keep uploads < 500KB.
+- useRatings: submitRating now accepts photoUrls (stored on the row; moderation
+  invoke unchanged); new reportReview() RPC wrapper.
+- RatingSystem composer: up to 3 photos (resize → upload to
+  review-photos/<userId>/<uuid>.jpg → public URL), thumbnails w/ remove; photo
+  grid + lightbox in each review; wired the previously-inert Report button;
+  guest sign-in prompt for unauthenticated users.
+- Mounted RatingSystem on RestaurantDetails + AttractionDetails (events already
+  had it) → reviews now on all three entity types.
+- types.ts updated for photo_urls + report_review RPC.
+
+ACTION REQUIRED (runtime, then flip passes=true):
+  1. Apply the migration (creates bucket + RLS).
+  2. As a signed-in user, upload a photo review on a restaurant/attraction; verify
+     the object lands under <user_id>/ and is publicly readable, the URL is stored
+     on the row, and the review flows through moderate-content (clean → visible,
+     flagged → hidden + queued).
+  3. Verify a non-owner can't write to another user's storage folder (RLS).
+  4. Verify the Report button enqueues a content_moderation row (admin queue).
+
+Verification here: npm run validate PASS (0 errors); changed files lint clean.
+
+### Files
+  A supabase/migrations/20260623000004_review_photos.sql
+  A src/lib/imageResize.ts
+  M src/integrations/supabase/types.ts
+  M src/hooks/useRatings.ts
+  M src/components/RatingSystem.tsx
+  M src/pages/RestaurantDetails.tsx
+  M src/pages/AttractionDetails.tsx
+
+## SESSION RESULT (final)
+6 stories delivered: WEB-AUTO-011, WEB-AUTO-012, WEB-FEAT-002, WEB-FEAT-003
+(passes=true, validate-verified) + WEB-FEAT-008, WEB-FEAT-010 (CODE-COMPLETE,
+passes=false pending runtime verification per user direction).
+All WEB stories now either pass or are code-complete-pending-runtime. Each runtime
+gate is documented above as ACTION REQUIRED. iOS-AUDIT-* remain (no Xcode).

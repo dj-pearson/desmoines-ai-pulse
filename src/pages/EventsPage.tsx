@@ -23,6 +23,7 @@ import {
 import { useIsMobile } from "@/hooks/use-mobile";
 import { usePullToRefresh } from "@/hooks/use-pull-to-refresh";
 import { SortDropdown, EVENT_SORT_OPTIONS } from "@/components/SortDropdown";
+import { SaveSearchButton } from "@/components/SaveSearchButton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -860,11 +861,14 @@ export default function EventsPage() {
                 </p>
               )}
             </div>
-            <SortDropdown
-              options={EVENT_SORT_OPTIONS}
-              value={sortBy}
-              onChange={setSortBy}
-            />
+            <div className="flex items-center gap-2">
+              <SaveSearchButton className="hidden sm:inline-flex" />
+              <SortDropdown
+                options={EVENT_SORT_OPTIONS}
+                value={sortBy}
+                onChange={setSortBy}
+              />
+            </div>
           </div>
 
           {/* Sticky filter bar: removable chips (WEB-UX-003) */}

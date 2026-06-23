@@ -15,6 +15,7 @@ import { getDirectionsUrl } from "@/lib/directions";
 import { OpenStatusChip } from "@/components/OpenStatusChip";
 import ShareDialog from "@/components/ShareDialog";
 import { FAQSection } from "@/components/FAQSection";
+import { RatingSystem } from "@/components/RatingSystem";
 import { BackToTop } from "@/components/BackToTop";
 import EnhancedAttractionSEO from "@/components/EnhancedAttractionSEO";
 import SEOHead from "@/components/SEOHead";
@@ -629,6 +630,11 @@ export default function AttractionDetails() {
               </section>
             </CardContent>
           </Card>
+
+          {/* Ratings & Reviews (WEB-FEAT-010) */}
+          <div id="reviews" className="mb-8">
+            <RatingSystem contentType="attraction" contentId={attraction.id} showReviews />
+          </div>
 
           {/* Attraction-Specific FAQ */}
           <Card className="shadow-lg rounded-2xl border-0 mb-8 overflow-hidden">

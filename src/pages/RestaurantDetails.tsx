@@ -9,6 +9,7 @@ import { FavoriteButton } from "@/components/FavoriteButton";
 import { Separator } from "@/components/ui/separator";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import SEOHead from "@/components/SEOHead";
+import { ogImageUrl } from "@/lib/ogImage";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import AIWriteup from "@/components/AIWriteup";
@@ -51,6 +52,7 @@ import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { NearbyContent } from "@/components/NearbyContent";
 import { RestaurantMenuSection } from "@/components/RestaurantMenuSection";
+import { RatingSystem } from "@/components/RatingSystem";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 
 export default function RestaurantDetails() {
@@ -362,7 +364,7 @@ export default function RestaurantDetails() {
         keywords={seoKeywords}
         structuredData={restaurantSchema}
         url={`/restaurants/${restaurant.slug || restaurant.id}`}
-        imageUrl={restaurant.image_url}
+        imageUrl={ogImageUrl("restaurant", restaurant.id)}
         breadcrumbs={breadcrumbs}
         location={{
           name: restaurant.name,
@@ -842,6 +844,11 @@ export default function RestaurantDetails() {
               )}
             </CardContent>
           </Card>
+
+          {/* Ratings & Reviews (WEB-FEAT-010) */}
+          <div id="reviews" className="mb-8">
+            <RatingSystem contentType="restaurant" contentId={restaurant.id} showReviews />
+          </div>
 
           {/* Restaurant-Specific FAQ */}
           <Card id="faq" className="shadow-lg rounded-2xl border-0 mb-8 overflow-hidden">

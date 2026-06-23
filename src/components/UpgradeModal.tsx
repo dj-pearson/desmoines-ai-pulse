@@ -9,6 +9,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import {
   Crown,
   Sparkles,
@@ -124,6 +126,27 @@ const vipFeatures = [
   { icon: Sparkles, text: "Monthly local business perks" },
 ];
 
+// Plan prices — must match the Pricing page + iOS SKUs (WEB-FEAT-002).
+const PLAN_PRICING: Record<"insider" | "vip", { monthly: number; yearly: number }> = {
+  insider: { monthly: 4.99, yearly: 49.99 },
+  vip: { monthly: 12.99, yearly: 129.99 },
+};
+
+function yearlySavingsPct(plan: "insider" | "vip"): number {
+  const { monthly, yearly } = PLAN_PRICING[plan];
+  return Math.round((1 - yearly / (monthly * 12)) * 100);
+}
+
+// Largest annual discount across paid plans — drives the toggle badge.
+const MAX_YEARLY_SAVINGS_PCT = Math.max(
+  yearlySavingsPct("insider"),
+  yearlySavingsPct("vip"),
+);
+
+function formatPlanPrice(plan: "insider" | "vip", billing: "monthly" | "yearly"): string {
+  return `$${PLAN_PRICING[plan][billing].toFixed(2)}`;
+}
+
 export function UpgradeModal({
   open,
   onOpenChange,
@@ -134,6 +157,7 @@ export function UpgradeModal({
   const [selectedPlan, setSelectedPlan] = useState<"insider" | "vip">(
     requiredTier
   );
+  const [billing, setBilling] = useState<"monthly" | "yearly">("monthly");
 
   const featureInfo = feature ? featureDescriptions[feature] : null;
   // Context id for funnel logging — the feature key, or "generic".
@@ -157,7 +181,7 @@ export function UpgradeModal({
 
   const handleCheckoutStart = (plan: "insider" | "vip") => {
     checkoutStartedRef.current = true;
-    logPaywallEvent("paywall_checkout_start", contextId, { plan });
+    logPaywallEvent("paywall_checkout_start", contextId, { plan, billing });
     onOpenChange(false);
   };
 
@@ -185,6 +209,37 @@ export function UpgradeModal({
         </DialogHeader>
 
         <div className="mt-4 space-y-4">
+          {/* Billing interval toggle */}
+          <div className="flex items-center justify-center gap-3">
+            <Label
+              htmlFor="paywall-billing-toggle"
+              className={cn(
+                "text-sm cursor-pointer",
+                billing === "monthly" ? "font-semibold" : "text-muted-foreground"
+              )}
+            >
+              Monthly
+            </Label>
+            <Switch
+              id="paywall-billing-toggle"
+              checked={billing === "yearly"}
+              onCheckedChange={(checked) => setBilling(checked ? "yearly" : "monthly")}
+              aria-label="Toggle annual billing"
+            />
+            <Label
+              htmlFor="paywall-billing-toggle"
+              className={cn(
+                "text-sm cursor-pointer flex items-center gap-2",
+                billing === "yearly" ? "font-semibold" : "text-muted-foreground"
+              )}
+            >
+              Yearly
+              <Badge variant="secondary" className="bg-green-100 text-green-800 text-[10px]">
+                Save up to {MAX_YEARLY_SAVINGS_PCT}%
+              </Badge>
+            </Label>
+          </div>
+
           {/* Plan Selection */}
           <div className="grid grid-cols-2 gap-3">
             {/* Insider Plan */}
@@ -208,13 +263,15 @@ export function UpgradeModal({
                 <span className="font-semibold">Insider</span>
               </div>
               <div className="text-2xl font-bold">
-                $4.99
+                {formatPlanPrice("insider", billing)}
                 <span className="text-sm font-normal text-muted-foreground">
-                  /mo
+                  /{billing === "yearly" ? "yr" : "mo"}
                 </span>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                Save 17% yearly
+                {billing === "yearly"
+                  ? `Save ${yearlySavingsPct("insider")}% vs monthly`
+                  : `or ${formatPlanPrice("insider", "yearly")}/yr`}
               </p>
             </button>
 
@@ -242,13 +299,15 @@ export function UpgradeModal({
                 <span className="font-semibold">VIP</span>
               </div>
               <div className="text-2xl font-bold">
-                $12.99
+                {formatPlanPrice("vip", billing)}
                 <span className="text-sm font-normal text-muted-foreground">
-                  /mo
+                  /{billing === "yearly" ? "yr" : "mo"}
                 </span>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                Everything included
+                {billing === "yearly"
+                  ? `Save ${yearlySavingsPct("vip")}% vs monthly`
+                  : `or ${formatPlanPrice("vip", "yearly")}/yr`}
               </p>
             </button>
           </div>
@@ -293,7 +352,7 @@ export function UpgradeModal({
               )}
             >
               <Link
-                to="/pricing"
+                to={`/pricing?plan=${selectedPlan}&billing=${billing}`}
                 onClick={() => handleCheckoutStart(selectedPlan)}
               >
                 Upgrade to {selectedPlan === "insider" ? "Insider" : "VIP"}

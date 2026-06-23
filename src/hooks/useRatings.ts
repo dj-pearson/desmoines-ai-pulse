@@ -103,7 +103,7 @@ export function useRatings({ contentType, contentId }: UseRatingsProps) {
     }
   };
 
-  const submitRating = async (rating: RatingValue, reviewText?: string) => {
+  const submitRating = async (rating: RatingValue, reviewText?: string, photoUrls?: string[]) => {
     if (!user) {
       toast({
         title: "Authentication Required",
@@ -124,6 +124,7 @@ export function useRatings({ contentType, contentId }: UseRatingsProps) {
         content_id: contentId,
         rating,
         review_text: reviewText,
+        photo_urls: photoUrls ?? [],
         moderation_status: hasText ? "pending" : "approved",
       };
 
@@ -217,6 +218,34 @@ export function useRatings({ contentType, contentId }: UseRatingsProps) {
     }
   };
 
+  const reportReview = async (ratingId: string) => {
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to report a review",
+        variant: "destructive",
+      });
+      return false;
+    }
+    try {
+      const { error } = await supabase.rpc("report_review", { p_rating_id: ratingId });
+      if (error) throw error;
+      toast({
+        title: "Report submitted",
+        description: "Thanks — our team will take a look.",
+      });
+      return true;
+    } catch (error) {
+      console.error("Error reporting review:", error);
+      toast({
+        title: "Error",
+        description: "Couldn't submit your report. Please try again.",
+        variant: "destructive",
+      });
+      return false;
+    }
+  };
+
   const voteHelpful = async (ratingId: string, isHelpful: boolean) => {
     if (!user) {
       toast({
@@ -267,6 +296,7 @@ export function useRatings({ contentType, contentId }: UseRatingsProps) {
     submitRating,
     deleteRating,
     voteHelpful,
+    reportReview,
     refetch: fetchRatings,
   };
 }

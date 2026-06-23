@@ -119,6 +119,16 @@ const plans: PricingPlan[] = [
   },
 ];
 
+// Computed annual savings — the biggest % a paid plan saves by paying yearly
+// vs 12× monthly. Drives the billing-toggle badge so copy never drifts from the
+// real prices (WEB-FEAT-002).
+const maxYearlySavingsPct = Math.max(
+  0,
+  ...plans
+    .filter((p) => p.priceMonthly > 0 && p.priceYearly > 0)
+    .map((p) => Math.round((1 - p.priceYearly / (p.priceMonthly * 12)) * 100)),
+);
+
 const testimonials = [
   {
     quote: "The early access to events has been a game-changer. I never miss the good stuff anymore!",
@@ -181,7 +191,8 @@ export default function Pricing() {
   } = useSubscription();
   const { toast } = useToast();
   const { trackFunnelEvent } = useConversionFunnel();
-  const [isYearly, setIsYearly] = useState(false);
+  // Honor an incoming ?billing=yearly deep link (e.g. from the contextual paywall).
+  const [isYearly, setIsYearly] = useState(searchParams.get("billing") === "yearly");
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
 
   // Track pricing page view
@@ -332,7 +343,7 @@ export default function Pricing() {
                 >
                   Yearly
                   <Badge variant="secondary" className="ml-2 bg-green-100 text-green-800">
-                    Save 17%
+                    Save up to {maxYearlySavingsPct}%
                   </Badge>
                 </Label>
               </div>

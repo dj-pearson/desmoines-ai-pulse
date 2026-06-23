@@ -36,6 +36,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useCampaigns } from "@/hooks/useCampaigns";
 import { RecentlyViewedList } from "@/components/RecentlyViewedList";
+import SavedSearchesTab from "@/components/dashboard/SavedSearchesTab";
 import { PremiumBadge } from "@/components/PremiumBadge";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import EventSubmissionForm from "@/components/EventSubmissionForm";
@@ -158,6 +159,10 @@ export default function UserDashboard() {
               <TabsTrigger value="events" className="flex items-center gap-2">
                 <Calendar className="h-4 w-4" />
                 My Events
+              </TabsTrigger>
+              <TabsTrigger value="saved-searches" className="flex items-center gap-2">
+                <Bell className="h-4 w-4" />
+                Saved Searches
               </TabsTrigger>
               <TabsTrigger value="advertise" className="flex items-center gap-2">
                 <Megaphone className="h-4 w-4" />
@@ -455,6 +460,11 @@ export default function UserDashboard() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Saved Searches Tab */}
+          <TabsContent value="saved-searches">
+            <SavedSearchesTab />
           </TabsContent>
 
           {/* Advertise Tab */}

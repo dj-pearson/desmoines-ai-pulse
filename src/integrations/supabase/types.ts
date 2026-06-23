@@ -4299,31 +4299,40 @@ export type Database = {
       }
       saved_searches: {
         Row: {
+          alerts_enabled: boolean
           created_at: string
           filters: Json
           id: string
+          last_alerted_at: string | null
           last_used: string | null
           name: string
+          search_type: string
           updated_at: string
           use_count: number
           user_id: string
         }
         Insert: {
+          alerts_enabled?: boolean
           created_at?: string
           filters?: Json
           id?: string
+          last_alerted_at?: string | null
           last_used?: string | null
           name: string
+          search_type?: string
           updated_at?: string
           use_count?: number
           user_id: string
         }
         Update: {
+          alerts_enabled?: boolean
           created_at?: string
           filters?: Json
           id?: string
+          last_alerted_at?: string | null
           last_used?: string | null
           name?: string
+          search_type?: string
           updated_at?: string
           use_count?: number
           user_id?: string
@@ -6501,6 +6510,7 @@ export type Database = {
           created_at: string
           digest_day_of_week: number | null
           digest_time_hour: number | null
+          event_alerts_enabled: boolean
           id: string
           max_distance_miles: number | null
           updated_at: string
@@ -6512,6 +6522,7 @@ export type Database = {
           created_at?: string
           digest_day_of_week?: number | null
           digest_time_hour?: number | null
+          event_alerts_enabled?: boolean
           id?: string
           max_distance_miles?: number | null
           updated_at?: string
@@ -6523,6 +6534,7 @@ export type Database = {
           created_at?: string
           digest_day_of_week?: number | null
           digest_time_hour?: number | null
+          event_alerts_enabled?: boolean
           id?: string
           max_distance_miles?: number | null
           updated_at?: string
@@ -6994,6 +7006,7 @@ export type Database = {
           id: string
           is_verified: boolean | null
           moderation_status: string
+          photo_urls: string[]
           rating: Database["public"]["Enums"]["rating_value"]
           review_text: string | null
           updated_at: string
@@ -7006,6 +7019,7 @@ export type Database = {
           id?: string
           is_verified?: boolean | null
           moderation_status?: string
+          photo_urls?: string[]
           rating: Database["public"]["Enums"]["rating_value"]
           review_text?: string | null
           updated_at?: string
@@ -7018,6 +7032,7 @@ export type Database = {
           id?: string
           is_verified?: boolean | null
           moderation_status?: string
+          photo_urls?: string[]
           rating?: Database["public"]["Enums"]["rating_value"]
           review_text?: string | null
           updated_at?: string
@@ -7547,6 +7562,26 @@ export type Database = {
       }
     }
     Functions: {
+      report_review: {
+        Args: { p_rating_id: string }
+        Returns: undefined
+      }
+      create_event_saved_search: {
+        Args: { p_name: string; p_filters: Json }
+        Returns: {
+          alerts_enabled: boolean
+          created_at: string
+          filters: Json
+          id: string
+          last_alerted_at: string | null
+          last_used: string | null
+          name: string
+          search_type: string
+          updated_at: string
+          use_count: number
+          user_id: string
+        }
+      }
       _postgis_deprecate: {
         Args: { newname: string; oldname: string; version: string }
         Returns: undefined
