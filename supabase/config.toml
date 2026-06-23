@@ -55,3 +55,8 @@ verify_jwt = false
 # does its own auth via requireAdminOrApiKey (cron service-role key or admin JWT).
 [functions.cleanup-old-events]
 verify_jwt = false
+
+# Event-driven sitemap regeneration (WEB-AUTO-011). Admin/internal tooling:
+# does its own auth via requireAdminOrApiKey (cron service-role key or admin JWT).
+[functions.regenerate-sitemaps]
+verify_jwt = false

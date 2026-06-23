@@ -129,14 +129,33 @@ table: scraping_jobs
 - ✅ Des Moines local SEO focus
 
 #### Sitemap Generation
-- **Location**: `supabase/functions/generate-sitemaps/index.ts`
-- **Script**: `scripts/generate-sitemap.js`
+- **Primary (event-driven, WEB-AUTO-011)**: `supabase/functions/regenerate-sitemaps/index.ts`
+- **Fallback (build-time)**: `scripts/generate-dynamic-sitemaps.ts` (runs in `npm run build`)
 - **Status**: Functional
 
 **Capabilities:**
-- ✅ Dynamic sitemap generation
-- ✅ Includes all events, restaurants, articles, attractions
+- ✅ Event-driven regeneration is now the **primary** path. Inserts/updates/deletes
+  on `events`, `restaurants`, `attractions`, and `articles` enqueue a row into
+  `sitemap_change_queue` (via `AFTER` triggers). A `pg_cron` job
+  (`regenerate-sitemaps-event-driven`, every 6h) invokes the `regenerate-sitemaps`
+  edge function, which rebuilds the per-table sitemap XML, writes them to the public
+  `sitemaps` storage bucket, pings Google + Bing, and best-effort submits changed
+  URLs to the Google Indexing API (when `GOOGLE_SERVICE_ACCOUNT_JSON` is set).
+- ✅ Hidden/expired events (WEB-AUTO-006) drop out automatically on the same cycle.
+- ✅ Runs are recorded in `automation_job_runs` (WEB-AUTO-001 jobRunner); terminal
+  failures alert the admin.
+- ✅ Build-time generation still runs and writes the committed static fallback
+  copies under `public/` so the site always has a valid sitemap even before the
+  first event-driven run.
 - ✅ Priority and changefreq optimization
+
+> **ACTION REQUIRED (one-time infra):** the regenerated files live in the public
+> `sitemaps` storage bucket
+> (`<SUPABASE_URL>/storage/v1/object/public/sitemaps/sitemap.xml`). To serve the
+> always-fresh copies from `https://desmoinesinsider.com/sitemap*.xml`, add a
+> Cloudflare Pages redirect/rewrite (or Worker route) mapping `/sitemap*.xml` to
+> the bucket URL. Until that route is added, production serves the build-time
+> static copies (fallback) — still correct, just up to one deploy/day stale.
 
 ---
 

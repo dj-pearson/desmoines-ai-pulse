@@ -4285,3 +4285,51 @@ violate the quality bar:
   runtime).
 
 iOS-AUDIT-* (47): no Xcode to compile/verify Swift.
+
+## 2026-06-23 — SESSION (branch claude/prd-stories-platform-review-6twezl)
+Working the top-3 incomplete WEB stories by PRD priority (AUTO-011, AUTO-012,
+FEAT-002). Much infra already existed; each story closes the remaining gaps
+additively (backward-compat rules respected: no endpoint/field removals, no
+validation tightening, additive DB only).
+
+### WEB-AUTO-011 — Event-driven sitemap regeneration + search-engine ping ✅
+Problem: sitemaps only refreshed via `npm run build` + a daily cron, so new
+content waited up to a day/deploy to be indexable.
+
+Built:
+- Migration 20260623000001_sitemap_change_queue.sql:
+  - `sitemap_change_queue` table (RLS on, service-role only).
+  - `enqueue_sitemap_change()` SECURITY DEFINER trigger fn + AFTER
+    INSERT/DELETE/UPDATE-OF triggers on events (title,date,event_start_utc,
+    is_hidden), restaurants (name,slug,is_featured), attractions (name),
+    articles (title,slug,status) — low churn, only slug/visibility cols.
+  - public `sitemaps` storage bucket.
+  - pg_cron `regenerate-sitemaps-event-driven` every 6h (guarded extension
+    setup, service-role key from app.settings — matches existing crons).
+- Edge function supabase/functions/regenerate-sitemaps/index.ts:
+  - jobRunner-wrapped (WEB-AUTO-001) → observable in automation_job_runs,
+    failures alert.
+  - Regenerates per-table XML mirroring scripts/generate-dynamic-sitemaps.ts so
+    storage copies are drop-in consistent; EXCLUDES is_hidden events (WEB-AUTO-006).
+  - Writes sitemap.xml + sitemap-events/restaurants/attractions/articles.xml to
+    the `sitemaps` bucket (upsert).
+  - Drains queue, resolves changed canonical URLs, pings Google + Bing, and
+    best-effort submits changed URLs to Google Indexing API when
+    GOOGLE_SERVICE_ACCOUNT_JSON is set. Results logged in run metadata.
+  - Auth via requireAdminOrApiKey (verify_jwt=false in config.toml).
+- Build-time generation kept as fallback; AUTOMATION-ARCHITECTURE.md updated to
+  state the event-driven path is primary.
+
+ACTION REQUIRED (one-time infra, documented): add a Cloudflare Pages
+redirect/Worker mapping /sitemap*.xml → the public `sitemaps` bucket URL so prod
+serves the always-fresh copies. Until then prod serves the build-time static
+fallback (still valid).
+
+Verification: npm run validate PASS (0 errors); new edge fn lints clean
+(0 errors, only `any` warnings, matching the existing generate-sitemaps fn).
+
+### Files
+  A supabase/migrations/20260623000001_sitemap_change_queue.sql
+  A supabase/functions/regenerate-sitemaps/index.ts
+  M supabase/config.toml
+  M AUTOMATION-ARCHITECTURE.md

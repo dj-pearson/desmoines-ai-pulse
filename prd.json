@@ -299,7 +299,7 @@
         "npm run validate passes"
       ],
       "priority": 19,
-      "passes": false,
+      "passes": true,
       "notes": "Evidence: package.json build script runs generate-sitemaps; supabase/functions/generate-sitemaps + cron 20251123000000 exist. Verify how sitemaps are actually served on Cloudflare Pages (static dist vs function) before choosing the write target — public/_routes.json matters here."
     },
     {
