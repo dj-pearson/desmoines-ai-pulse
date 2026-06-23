@@ -27,6 +27,7 @@ import { LoadingSpinner } from '@/components/ui/loading-skeleton';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import SEOHead from '@/components/SEOHead';
+import { ogImageUrl } from '@/lib/ogImage';
 import ShareDialog from '@/components/ShareDialog';
 import { Helmet } from 'react-helmet-async';
 import { BRAND } from '@/lib/brandConfig';
@@ -155,6 +156,7 @@ const ArticleDetails: React.FC = () => {
         description={article.seo_description || article.excerpt || `Read ${article.title} on ${BRAND.name}`}
         keywords={article.seo_keywords || article.tags || []}
         type="article"
+        imageUrl={ogImageUrl("article", article.id)}
         canonicalUrl={`${BRAND.baseUrl}/articles/${article.slug}`}
       />
       <Helmet>

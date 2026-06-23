@@ -9,6 +9,7 @@ import { FavoriteButton } from "@/components/FavoriteButton";
 import { Separator } from "@/components/ui/separator";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import SEOHead from "@/components/SEOHead";
+import { ogImageUrl } from "@/lib/ogImage";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import AIWriteup from "@/components/AIWriteup";
@@ -362,7 +363,7 @@ export default function RestaurantDetails() {
         keywords={seoKeywords}
         structuredData={restaurantSchema}
         url={`/restaurants/${restaurant.slug || restaurant.id}`}
-        imageUrl={restaurant.image_url}
+        imageUrl={ogImageUrl("restaurant", restaurant.id)}
         breadcrumbs={breadcrumbs}
         location={{
           name: restaurant.name,

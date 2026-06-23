@@ -70,3 +70,8 @@ verify_jwt = false
 # does its own auth via requireAdminOrApiKey (cron service-role key or admin JWT).
 [functions.saved-search-alerts]
 verify_jwt = false
+
+# Dynamic OG-image cards for social shares (WEB-FEAT-008). Public: crawlers hit it
+# with no auth, so verify_jwt=false (like image-transform). Rate-limited in-fn.
+[functions.og-image]
+verify_jwt = false

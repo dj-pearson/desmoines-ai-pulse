@@ -4479,3 +4479,39 @@ Twitter/FB debugger screenshots the AC mandates) and WEB-FEAT-010 (review
 composer — needs Supabase Storage upload + RLS runtime). Both require runtime
 verification not available here; deferred to avoid shipping unverifiable
 social-preview/Storage regressions.
+
+### WEB-FEAT-008 — Dynamic OG-image generation (CODE-COMPLETE; passes=false) ⏳
+Built per user direction with passes=false pending the runtime verification the
+AC mandates (Twitter/FB debugger screenshots) which this env can't perform.
+
+- Edge function supabase/functions/og-image/index.ts: GET /og-image/:type/:id
+  renders a branded 1200×630 PNG for event/restaurant/attraction/article via a
+  hand-built SVG + @resvg/resvg-wasm (gradient brand bg, full-bleed item
+  thumbnail with scrim, truncated title, date/rating badge, wordmark). Font +
+  thumbnail are optional; on ANY failure the function 302-redirects to the static
+  default OG image, so og:image can never produce a broken preview. Cache-Control
+  public/1h; rate-limited (checkRateLimit). verify_jwt=false (public, like
+  image-transform) in config.toml.
+- src/lib/ogImage.ts: ogImageUrl(type,id) → the function URL (default fallback).
+- Wired og:image + twitter:image to the dynamic card on the four detail SEO
+  surfaces: EnhancedEventSEO, EnhancedAttractionSEO (added optional id),
+  RestaurantDetails + ArticleDetails (SEOHead imageUrl).
+
+ACTION REQUIRED (runtime, then flip passes=true):
+  1. Deploy og-image; confirm 200 image/png from /og-image/event/<id>.
+  2. If text doesn't render, swap FONT_URL for a reachable TTF (resvg needs
+     TTF/OTF, not woff2) — function still returns an image (photo+gradient) or
+     falls back safely meanwhile.
+  3. Validate with Twitter Card validator + Facebook Sharing Debugger; record
+     screenshots in the PR.
+  4. Optional: enumerate detail routes in scripts/prerender.mjs so non-JS
+     crawlers see the per-entity tag in static HTML.
+
+### Files
+  A supabase/functions/og-image/index.ts
+  A src/lib/ogImage.ts
+  M supabase/config.toml
+  M src/components/EnhancedEventSEO.tsx
+  M src/components/EnhancedAttractionSEO.tsx
+  M src/pages/RestaurantDetails.tsx
+  M src/pages/ArticleDetails.tsx
