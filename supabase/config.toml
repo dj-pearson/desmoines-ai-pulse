@@ -65,3 +65,8 @@ verify_jwt = false
 # does its own auth via requireAdminOrApiKey (cron service-role key or admin JWT).
 [functions.social-daily-poster]
 verify_jwt = false
+
+# Nightly saved-search event-alert digest (WEB-FEAT-003). Admin/internal tooling:
+# does its own auth via requireAdminOrApiKey (cron service-role key or admin JWT).
+[functions.saved-search-alerts]
+verify_jwt = false

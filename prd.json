@@ -589,7 +589,7 @@
         "npm run validate passes"
       ],
       "priority": 38,
-      "passes": false,
+      "passes": true,
       "notes": "Depends on WEB-UX-001 (URL filter state for deep links) and pairs with WEB-FEAT-001 gating. iOS PARITY-008 defines the cross-platform shape — keep table/RPC design compatible so the native app can adopt it."
     },
     {

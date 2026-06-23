@@ -4421,3 +4421,61 @@ Top-3 incomplete WEB stories completed: WEB-AUTO-011, WEB-AUTO-012, WEB-FEAT-002
 prd.json WEB stories now 53/56 passing (remaining: WEB-FEAT-003 saved-search
 digest, WEB-FEAT-008 dynamic OG image, WEB-FEAT-010 review composer — each needs
 a runtime/Storage/Stripe-sandbox to verify safely). iOS-AUDIT-* remain (no Xcode).
+
+## 2026-06-23 — SESSION cont. (branch claude/prd-stories-platform-review-6twezl)
+
+### WEB-FEAT-003 — Saved searches + alerts + nightly digest ✅
+Delivered the promised "saved searches & event alerts" retention loop. Built on
+the existing saved_searches table (additive), URL-filter state (WEB-UX-001),
+email layout, and jobRunner — no rewrites.
+
+Backend (migration 20260623000003_saved_search_alerts.sql):
+- saved_searches += alerts_enabled, last_alerted_at, search_type (existing
+  advanced-search saves default to 'advanced' and are untouched). Partial index
+  on active event_list alert rows.
+- user_email_preferences += event_alerts_enabled (default true) — the notification
+  preference the digest honors.
+- RPC create_event_saved_search(p_name, p_filters) SECURITY DEFINER enforces tier
+  limits SERVER-SIDE: free 0 (client shows paywall), Insider 10, VIP unlimited;
+  resolves highest active/trialing tier (vip>insider>free).
+- pg_cron 'saved-search-alerts-nightly' (07:00 UTC) → saved-search-alerts fn.
+
+Edge function supabase/functions/saved-search-alerts/index.ts:
+- jobRunner-wrapped (observable, alerts on failure).
+- Runs each active event_list saved search against events created since that
+  search's last_alerted_at (matching category/q/location/free-price best-effort,
+  upcoming + non-hidden only), groups matches per user, sends ONE consolidated
+  marketing email via renderEmail/Resend with one-click unsubscribe and deep
+  links back to the filtered /events URL. Zero matches = no email. Skips users
+  with event_alerts_enabled=false or no verified email. Advances last_alerted_at
+  for every processed search so the window never re-scans.
+
+Frontend:
+- useSavedSearchAlerts hook (list/save/toggle/delete + global pref) with
+  deep-link + summary helpers.
+- SaveSearchButton on the Events results header: captures live URL filters,
+  routes guests to /auth, free users to the contextual paywall (WEB-FEAT-001),
+  else saves via the RPC; surfaces the server-side limit as an upsell.
+- Dashboard "Saved Searches" tab (SavedSearchesTab): per-search alert toggle +
+  delete + deep link, and a master "email me about matches" switch.
+- types.ts updated for the 3 new columns + the RPC (no DB access to regen here).
+
+Verification: npm run validate PASS (0 errors); new edge fn + components lint
+clean (0 errors).
+
+### Files
+  A supabase/migrations/20260623000003_saved_search_alerts.sql
+  A supabase/functions/saved-search-alerts/index.ts
+  A src/hooks/useSavedSearchAlerts.ts
+  A src/components/SaveSearchButton.tsx
+  A src/components/dashboard/SavedSearchesTab.tsx
+  M supabase/config.toml
+  M src/integrations/supabase/types.ts
+  M src/pages/UserDashboard.tsx
+  M src/pages/EventsPage.tsx
+
+Remaining WEB (2): WEB-FEAT-008 (dynamic OG image — needs Deno PNG runtime +
+Twitter/FB debugger screenshots the AC mandates) and WEB-FEAT-010 (review
+composer — needs Supabase Storage upload + RLS runtime). Both require runtime
+verification not available here; deferred to avoid shipping unverifiable
+social-preview/Storage regressions.
