@@ -19,6 +19,8 @@ struct AskPulseView: View {
     @State private var errorMessage: String?
     @FocusState private var inputFocused: Bool
 
+    private let bottomAnchorID = "askPulseBottom"
+
     private let suggestions: [String] = [
         "date night, walkable, under $60",
         "something fun with the kids tomorrow afternoon",
@@ -29,31 +31,42 @@ struct AskPulseView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        if conversation.isEmpty {
-                            welcomeState
-                        } else {
-                            conversationView
-                            if !picks.isEmpty {
-                                picksSection
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 16) {
+                            if conversation.isEmpty {
+                                welcomeState
+                            } else {
+                                conversationView
+                                if !picks.isEmpty {
+                                    picksSection
+                                }
+                                if !followUps.isEmpty {
+                                    followUpChips
+                                }
                             }
-                            if !followUps.isEmpty {
-                                followUpChips
+                            if let errorMessage {
+                                errorBanner(errorMessage)
                             }
+                            // Scroll anchor so the newest message / "Thinking…" /
+                            // picks scroll into view after a send (IOS-AUDIT-UX-022).
+                            Color.clear.frame(height: 1).id(bottomAnchorID)
                         }
-                        if let errorMessage {
-                            errorBanner(errorMessage)
-                        }
+                        .padding()
                     }
-                    .padding()
+                    .background(Color(.systemGroupedBackground))
+                    .onChange(of: conversation.count) { _, _ in scrollToBottom(proxy) }
+                    .onChange(of: picks.count) { _, _ in scrollToBottom(proxy) }
+                    .onChange(of: isLoading) { _, _ in scrollToBottom(proxy) }
                 }
-                .background(Color(.systemGroupedBackground))
 
                 inputBar
             }
             .navigationTitle("Ask Pulse")
             .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(for: AskPulseService.Pick.self) { pick in
+                AskPulsePickDetailView(pick: pick)
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Close") { dismiss() }
@@ -231,6 +244,12 @@ struct AskPulseView: View {
 
     // MARK: - Actions
 
+    private func scrollToBottom(_ proxy: ScrollViewProxy) {
+        withAnimation(.easeOut(duration: 0.25)) {
+            proxy.scrollTo(bottomAnchorID, anchor: .bottom)
+        }
+    }
+
     private func resetConversation() {
         conversation = []
         picks = []
@@ -320,6 +339,68 @@ private struct AskPulsePickCard: View {
         case .event: return "calendar"
         case .restaurant: return "fork.knife"
         case .attraction: return "mountain.2.fill"
+        }
+    }
+}
+
+// MARK: - Pick Detail Resolver
+
+/// Resolves an Ask Pulse pick (which carries only an item type + id) to its
+/// full model and shows the matching detail screen, mirroring the deep-link
+/// resolver's loading/failed phases so the card's chevron never dead-ends
+/// (IOS-AUDIT-FEAT-018).
+private struct AskPulsePickDetailView: View {
+    let pick: AskPulseService.Pick
+
+    @State private var phase: Phase = .loading
+
+    private enum Phase {
+        case loading
+        case failed
+        case event(Event)
+        case restaurant(Restaurant)
+        case attraction(Attraction)
+    }
+
+    var body: some View {
+        Group {
+            switch phase {
+            case .loading:
+                ProgressView("Loading…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .failed:
+                EmptyStateView(
+                    icon: "exclamationmark.triangle",
+                    title: "Couldn't Load",
+                    message: "This pick couldn't be opened. It may have been removed or you're offline.",
+                    actionTitle: "Try Again",
+                    action: { Task { await resolve() } }
+                )
+            case .event(let event):
+                EventDetailView(event: event)
+            case .restaurant(let restaurant):
+                RestaurantDetailView(restaurant: restaurant)
+            case .attraction(let attraction):
+                AttractionDetailView(attraction: attraction)
+            }
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await resolve() }
+    }
+
+    private func resolve() async {
+        phase = .loading
+        do {
+            switch pick.itemType {
+            case .event:
+                phase = .event(try await EventsService.shared.fetchEvent(id: pick.itemId))
+            case .restaurant:
+                phase = .restaurant(try await RestaurantsService.shared.fetchRestaurant(id: pick.itemId))
+            case .attraction:
+                phase = .attraction(try await AttractionsService.shared.fetchAttraction(id: pick.itemId))
+            }
+        } catch {
+            phase = .failed
         }
     }
 }

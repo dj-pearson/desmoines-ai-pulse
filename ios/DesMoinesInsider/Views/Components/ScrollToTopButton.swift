@@ -49,9 +49,18 @@ struct ScrollToTopButton: View {
 
 /// A view modifier that tracks vertical scroll offset via a coordinate space.
 /// Sets the binding to true when the user scrolls past the threshold.
+///
+/// IMPORTANT: the enclosing `ScrollView` MUST declare the matching coordinate
+/// space, or the offset never crosses the threshold and the button never
+/// appears. Use `.scrollOffsetCoordinateSpace()` on the ScrollView so the name
+/// can't drift from a hand-typed string (IOS-AUDIT-UX-034).
 struct ScrollOffsetTracker: ViewModifier {
     @Binding var showScrollToTop: Bool
     var threshold: CGFloat = 500
+
+    /// Single source of truth for the coordinate-space name shared by the
+    /// tracker and `scrollOffsetCoordinateSpace()`.
+    static let coordinateSpaceName = "scroll"
 
     func body(content: Content) -> some View {
         content
@@ -60,7 +69,7 @@ struct ScrollOffsetTracker: ViewModifier {
                     Color.clear
                         .preference(
                             key: ScrollOffsetKey.self,
-                            value: -geo.frame(in: .named("scroll")).origin.y
+                            value: -geo.frame(in: .named(ScrollOffsetTracker.coordinateSpaceName)).origin.y
                         )
                 }
             )
@@ -81,8 +90,17 @@ private struct ScrollOffsetKey: PreferenceKey {
 }
 
 extension View {
-    /// Tracks scroll offset and sets binding when past threshold.
+    /// Tracks scroll offset and sets binding when past threshold. Requires the
+    /// enclosing ScrollView to apply `.scrollOffsetCoordinateSpace()`.
     func trackScrollOffset(showScrollToTop: Binding<Bool>, threshold: CGFloat = 500) -> some View {
         modifier(ScrollOffsetTracker(showScrollToTop: showScrollToTop, threshold: threshold))
+    }
+
+    /// Establishes the coordinate space `trackScrollOffset` measures against.
+    /// Apply this to the ScrollView itself (not its content). Using this helper
+    /// instead of a hand-typed `.coordinateSpace(name: "scroll")` keeps the name
+    /// in sync with the tracker (IOS-AUDIT-UX-034).
+    func scrollOffsetCoordinateSpace() -> some View {
+        coordinateSpace(name: ScrollOffsetTracker.coordinateSpaceName)
     }
 }

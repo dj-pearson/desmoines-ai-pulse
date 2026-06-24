@@ -20,6 +20,13 @@ struct DesMoinesInsiderApp: App {
     @State private var showJailbreakWarning = false
     @State private var awaitingBiometric = false
     @State private var sessionExpiredMessage: String?
+    /// Tracks in-session consent completion. ConsentService stores its state in
+    /// UserDefaults via computed properties, which `@Observable` cannot track, so
+    /// mutating `hasCompletedConsent` does not re-evaluate `needsConsentPrompt`
+    /// below. This locally-observed flag advances the gate once the user chooses
+    /// (IOS-AUDIT-FEAT-015). The persisted flag still suppresses the prompt on
+    /// the next launch.
+    @State private var consentCompleted = false
 
     /// MetricKit subscriber — retained for the lifetime of the app.
     private let metricKit = MetricKitSubscriber.shared
@@ -43,8 +50,8 @@ struct DesMoinesInsiderApp: App {
                     LaunchScreenView()
                 } else if !hasCompletedOnboarding {
                     OnboardingView(hasCompletedOnboarding: $hasCompletedOnboarding)
-                } else if consent.needsConsentPrompt {
-                    ConsentView { }
+                } else if consent.needsConsentPrompt && !consentCompleted {
+                    ConsentView { consentCompleted = true }
                 } else if awaitingBiometric {
                     BiometricLockView {
                         awaitingBiometric = false

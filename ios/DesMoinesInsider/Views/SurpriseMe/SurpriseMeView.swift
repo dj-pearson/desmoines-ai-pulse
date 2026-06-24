@@ -14,6 +14,8 @@ struct SurpriseMeView: View {
     @State private var rollCount = 0
     @State private var isLoading = true
     @State private var errorMessage: String?
+    @State private var saveErrorMessage: String?
+    @State private var isSaving = false
     @State private var revealed = false
 
     var body: some View {
@@ -44,6 +46,14 @@ struct SurpriseMeView: View {
                 }
             }
             .task { await load() }
+            .alert("Couldn't Save", isPresented: .init(
+                get: { saveErrorMessage != nil },
+                set: { if !$0 { saveErrorMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(saveErrorMessage ?? "")
+            }
         }
     }
 
@@ -91,14 +101,16 @@ struct SurpriseMeView: View {
                 Button {
                     save(pick)
                 } label: {
-                    Label("Save it — let's go", systemImage: "checkmark.circle.fill")
+                    Label(isSaving ? "Saving…" : "Save it — let's go",
+                          systemImage: isSaving ? "hourglass" : "checkmark.circle.fill")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
                         .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 14))
                         .foregroundStyle(.white)
                         .font(.headline)
                 }
-                .accessibilityHint("Saves this pick and closes the surprise screen")
+                .disabled(isSaving)
+                .accessibilityHint("Saves this pick to your favorites and closes the surprise screen")
 
                 Button {
                     tryAnother(pick)
@@ -116,7 +128,12 @@ struct SurpriseMeView: View {
         }
         .scaleEffect(revealed ? 1.0 : 0.92)
         .opacity(revealed ? 1.0 : 0)
-        .onAppear {
+        // Drive the reveal from the pick id, not .onAppear, so tapping "Try
+        // another" (which reuses this view with a new pick) re-triggers the
+        // animation instead of leaving the card stuck at opacity 0
+        // (IOS-AUDIT-UX-025).
+        .task(id: pick.id) {
+            revealed = false
             withAnimation(.spring(response: 0.55, dampingFraction: 0.75)) {
                 revealed = true
             }
@@ -218,11 +235,54 @@ struct SurpriseMeView: View {
     }
 
     private func save(_ pick: SurpriseMeService.Pick) {
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
-        Task { try? await service.track(pick: pick, outcome: .saved) }
-        // The actual favorite-add wiring lives in EventDetailView /
-        // RestaurantDetailView; for now, dismiss and let the user navigate.
-        dismiss()
+        guard !isSaving else { return }
+        Task { await performSave(pick) }
+    }
+
+    /// Adds the pick to the user's favorites (matching its item type) and only
+    /// then reports success and dismisses (IOS-AUDIT-FEAT-013). Guards against
+    /// toggling an already-saved item back off. The free-tier favorites cap
+    /// surfaces the app-level upsell paywall via a notification, so on that path
+    /// we dismiss without an extra error alert.
+    private func performSave(_ pick: SurpriseMeService.Pick) async {
+        isSaving = true
+        defer { isSaving = false }
+
+        let favorites = FavoritesService.shared
+        let id = pick.itemId.uuidString
+        do {
+            switch pick.itemType.lowercased() {
+            case "event":
+                if !favorites.isEventFavorited(id) {
+                    _ = try await favorites.toggleFavorite(eventId: id)
+                }
+            case "restaurant":
+                if !favorites.isRestaurantFavorited(id) {
+                    _ = try await favorites.toggleRestaurantFavorite(restaurantId: id)
+                }
+            case "attraction":
+                if !favorites.isAttractionFavorited(id) {
+                    _ = try await favorites.toggleFavoriteAttraction(attractionId: id)
+                }
+            default:
+                // Unknown content type — surface rather than claim a false save.
+                UINotificationFeedbackGenerator().notificationOccurred(.error)
+                saveErrorMessage = "This pick can't be saved right now."
+                return
+            }
+
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            try? await service.track(pick: pick, outcome: .saved)
+            dismiss()
+        } catch {
+            if FavoritesService.isLimitReached(error) {
+                // The app-level favorites paywall is already presenting.
+                dismiss()
+            } else {
+                UINotificationFeedbackGenerator().notificationOccurred(.error)
+                saveErrorMessage = error.localizedDescription
+            }
+        }
     }
 
     private func tryAnother(_ pick: SurpriseMeService.Pick) {

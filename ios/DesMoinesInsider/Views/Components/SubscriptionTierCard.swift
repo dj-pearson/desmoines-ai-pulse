@@ -136,13 +136,23 @@ struct SubscriptionTierCard: View {
 }
 
 /// Monthly / Annual billing toggle matching Android `BillingCycleToggle`.
+///
+/// NOTE (IOS-AUDIT-UX-032): this component and `SubscriptionTierCard` are not yet
+/// wired to a live screen. Before using them in production, drive `annualLabel`
+/// and the card's `price`/`billingLabel` from StoreKit (`Product.displayPrice`
+/// and PaywallView's computed `annualSavingsPercent`) — do NOT ship the
+/// placeholder "save 20%" / "$14.99" strings, which can diverge from the real
+/// products.
 struct BillingCycleToggle: View {
     @Binding var isAnnual: Bool
+    /// Defaults to a neutral label so a real savings percent (from StoreKit) is
+    /// supplied at the call site rather than hardcoded.
+    var annualLabel: String = "Annual"
 
     var body: some View {
         HStack(spacing: 4) {
             segment(label: "Monthly", selected: !isAnnual) { isAnnual = false }
-            segment(label: "Annual · save 20%", selected: isAnnual) { isAnnual = true }
+            segment(label: annualLabel, selected: isAnnual) { isAnnual = true }
         }
         .padding(4)
         .background(Color(.secondarySystemBackground))

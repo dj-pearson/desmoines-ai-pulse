@@ -22,6 +22,8 @@ struct ItineraryDetailView: View {
     @State private var loadFailed = false
     @State private var shareItems: [Any]?
     @State private var calendarMessage: String?
+    @State private var shareErrorMessage: String?
+    @State private var toast: ToastMessage?
     @State private var editMode: EditMode = .inactive
 
     private var days: [Int] { itemsByDay.keys.sorted() }
@@ -119,6 +121,12 @@ struct ItineraryDetailView: View {
         } message: {
             Text(calendarMessage ?? "")
         }
+        .alert("Couldn't Share", isPresented: Binding(get: { shareErrorMessage != nil }, set: { if !$0 { shareErrorMessage = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(shareErrorMessage ?? "")
+        }
+        .toastOverlay(message: $toast)
         .task { await load() }
     }
 
@@ -181,7 +189,15 @@ struct ItineraryDetailView: View {
         packingList = trip.packingList ?? []
 
         if items.isEmpty {
-            items = await service.fetchItems(tripId: trip.id)
+            do {
+                items = try await service.fetchItems(tripId: trip.id)
+            } catch {
+                // A real fetch failure — show the error+retry state instead of a
+                // blank itinerary (IOS-AUDIT-FEAT-023).
+                loadFailed = true
+                isLoading = false
+                return
+            }
         }
 
         if items.isEmpty && !network.isConnected {
@@ -202,13 +218,27 @@ struct ItineraryDetailView: View {
         dayItems.move(fromOffsets: offsets, toOffset: destination)
         itemsByDay[day] = dayItems
         UISelectionFeedbackGenerator().selectionChanged()
-        Task { await service.persistOrder(dayItems) }
+        Task {
+            let ok = await service.persistOrder(dayItems)
+            if !ok {
+                // Don't let the visible order silently diverge from the server —
+                // tell the user and reload server truth (IOS-AUDIT-FEAT-023).
+                toast = .error("Couldn't save the new order. Restored.")
+                await refetchItems()
+            }
+        }
+    }
+
+    /// Reloads items from the server, discarding any unsynced local order.
+    private func refetchItems() async {
+        guard let items = try? await service.fetchItems(tripId: trip.id) else { return }
+        itemsByDay = Dictionary(grouping: items.sorted { ($0.dayNumber, $0.orderIndex) < ($1.dayNumber, $1.orderIndex) }) { $0.dayNumber }
     }
 
     private func share() async {
         guard let code = await service.share(tripId: trip.id),
               let url = service.shareURL(for: code) else {
-            calendarMessage = "Couldn't create a share link. Try again."
+            shareErrorMessage = "Couldn't create a share link. Try again."
             return
         }
         shareItems = ["Check out my Des Moines itinerary: \(trip.title)", url]

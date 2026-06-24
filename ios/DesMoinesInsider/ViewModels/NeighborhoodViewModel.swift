@@ -62,11 +62,26 @@ final class NeighborhoodViewModel {
         isLoading = false
     }
 
-    /// Ask for location so the "nearby" sort can kick in, then reload.
+    /// Ask for location so the "nearby" sort can kick in, then reload. Awaits an
+    /// actual GPS fix instead of guessing with a fixed 1s sleep, so the sort
+    /// still applies on a slow cold-GPS fix (IOS-AUDIT-UX-024).
     func enableNearby() async {
         location.requestPermission()
-        // Give the first fix a moment, then re-sort.
-        try? await Task.sleep(for: .seconds(1))
+        isLoading = true
+
+        // Wait for the permission dialog to resolve (bounded), then await a
+        // real fix — getCurrentLocation() has its own internal timeout.
+        var waited: Duration = .zero
+        while location.authorizationStatus == .notDetermined, waited < .seconds(8) {
+            try? await Task.sleep(for: .milliseconds(200))
+            waited += .milliseconds(200)
+        }
+
+        if location.authorizationStatus == .authorizedWhenInUse
+            || location.authorizationStatus == .authorizedAlways {
+            _ = try? await location.getCurrentLocation()
+        }
+
         await refresh()
     }
 

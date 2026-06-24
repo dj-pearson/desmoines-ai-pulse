@@ -96,7 +96,7 @@ struct HomeView: View {
                 }
                 .trackScrollOffset(showScrollToTop: $showScrollToTop)
             }
-            .coordinateSpace(name: "scroll")
+            .scrollOffsetCoordinateSpace()
             .overlay(alignment: .bottomTrailing) {
                 ScrollToTopButton(isVisible: showScrollToTop) {
                     withAnimation { proxy.scrollTo("top") }

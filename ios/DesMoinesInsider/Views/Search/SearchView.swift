@@ -72,7 +72,10 @@ struct SearchView: View {
                     }
                 }
             }
-            .disabled(!NetworkMonitor.shared.isConnected && !viewModel.hasSearched)
+            // Don't freeze the whole screen offline — the searchable prompt and
+            // the "You're Offline" empty state already communicate the state, and
+            // typing / tapping suggestions / recents are local-only actions
+            // (IOS-AUDIT-UX-026).
             .navigationTitle("Search")
             .onChange(of: dictation.transcript) { _, newValue in
                 // Live-update the search field as the user dictates
@@ -326,7 +329,7 @@ struct SearchView: View {
             .padding()
             .trackScrollOffset(showScrollToTop: $showScrollToTop)
         }
-        .coordinateSpace(name: "scroll")
+        .scrollOffsetCoordinateSpace()
         .overlay(alignment: .bottomTrailing) {
             ScrollToTopButton(isVisible: showScrollToTop) {
                 withAnimation { proxy.scrollTo("top") }

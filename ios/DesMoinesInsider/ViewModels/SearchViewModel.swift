@@ -46,11 +46,14 @@ final class SearchViewModel {
             return
         }
 
+        // Enter the loading state immediately so the 300ms debounce window
+        // shows a spinner instead of a blank screen (IOS-AUDIT-UX-020).
+        isSearching = true
+
         searchTask = Task {
             try? await Task.sleep(for: .milliseconds(300))
             guard !Task.isCancelled else { return }
 
-            isSearching = true
             hasSearched = true
 
             async let events = searchEvents()
@@ -125,6 +128,9 @@ final class SearchViewModel {
         restaurantResults = []
         attractionResults = []
         hasSearched = false
+        // Clearing the query cancels any in-flight search, so leave the loading
+        // state too (IOS-AUDIT-UX-020).
+        isSearching = false
     }
 
     func clearSearch() {

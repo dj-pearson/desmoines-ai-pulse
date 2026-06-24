@@ -138,6 +138,10 @@ struct OnboardingView: View {
                     Spacer()
 
                     Button("Skip") {
+                        // Emit a funnel event so skipping the value pages isn't a
+                        // blind spot like the instrumented trial step
+                        // (IOS-AUDIT-UX-029).
+                        analytics.trackOnboardingTrial(action: "skipped_value_pages")
                         complete()
                     }
                     .buttonStyle(.brandGhost(size: .compact))

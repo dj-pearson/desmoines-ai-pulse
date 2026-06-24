@@ -12,6 +12,8 @@ struct ReviewsSection: View {
     @State private var showComposer = false
     @State private var showPaywall = false
     @State private var reportTarget: UserRating?
+    @State private var showDeleteConfirmation = false
+    @State private var toast: ToastMessage?
 
     init(contentType: String, contentId: String) {
         self.contentType = contentType
@@ -60,12 +62,32 @@ struct ReviewsSection: View {
         ), titleVisibility: .visible) {
             Button("Report as inappropriate", role: .destructive) {
                 if let target = reportTarget {
-                    Task { await viewModel.report(target) }
+                    // Confirm the outcome instead of fire-and-forget (UX-023).
+                    Task {
+                        let ok = await viewModel.report(target)
+                        toast = ok
+                            ? .success("Thanks — we'll review this.")
+                            : .error(viewModel.errorMessage ?? "Couldn't submit your report.")
+                    }
                 }
                 reportTarget = nil
             }
             Button("Cancel", role: .cancel) { reportTarget = nil }
         }
+        // Confirm before deleting and report the outcome (UX-023).
+        .confirmationDialog("Delete your review?", isPresented: $showDeleteConfirmation,
+                            titleVisibility: .visible) {
+            Button("Delete", role: .destructive) {
+                Task {
+                    let ok = await viewModel.deleteOwnReview()
+                    toast = ok
+                        ? .success("Your review was deleted.")
+                        : .error(viewModel.errorMessage ?? "Couldn't delete your review.")
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .toastOverlay(message: $toast)
     }
 
     // MARK: - Header
@@ -143,7 +165,7 @@ struct ReviewsSection: View {
                     if isOwn {
                         Button("Edit", systemImage: "pencil") { showComposer = true }
                         Button("Delete", systemImage: "trash", role: .destructive) {
-                            Task { await viewModel.deleteOwnReview() }
+                            showDeleteConfirmation = true
                         }
                     } else {
                         Button("Report", systemImage: "flag") { reportTarget = review }

@@ -27,16 +27,23 @@ struct DealsView: View {
                 } else if viewModel.isLoading && viewModel.allDeals.isEmpty {
                     ForEach(0..<4, id: \.self) { _ in dealSkeleton }
                 } else if viewModel.filteredDeals.isEmpty {
-                    EmptyStateView(
-                        icon: "tag",
-                        title: "No Deals Found",
-                        message: viewModel.activeFilterCount > 0 || !viewModel.searchText.isEmpty
-                            ? "Try clearing your filters to see more deals."
-                            : "Check back soon for local deals and happy hours.",
-                        actionTitle: viewModel.activeFilterCount > 0 ? "Clear Filters" : nil,
-                        action: viewModel.activeFilterCount > 0 ? { viewModel.clearFilters() } : nil
-                    )
-                    .padding(.top, 36)
+                    if let error = viewModel.errorMessage {
+                        // A refresh failed while the filtered list is empty —
+                        // show the real error+retry, not a misleading
+                        // "No Deals Found" empty state (IOS-AUDIT-UX-016).
+                        errorBanner(error)
+                    } else {
+                        EmptyStateView(
+                            icon: "tag",
+                            title: "No Deals Found",
+                            message: viewModel.activeFilterCount > 0 || !viewModel.searchText.isEmpty
+                                ? "Try clearing your filters to see more deals."
+                                : "Check back soon for local deals and happy hours.",
+                            actionTitle: viewModel.activeFilterCount > 0 ? "Clear Filters" : nil,
+                            action: viewModel.activeFilterCount > 0 ? { viewModel.clearFilters() } : nil
+                        )
+                        .padding(.top, 36)
+                    }
                 } else {
                     LazyVStack(spacing: 12) {
                         ForEach(Array(viewModel.filteredDeals.enumerated()), id: \.element.id) { index, deal in
@@ -61,7 +68,13 @@ struct DealsView: View {
         .navigationTitle("Deals")
         .navigationBarTitleDisplayMode(.large)
         .searchable(text: $viewModel.searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search deals…")
-        .refreshable { await viewModel.refresh() }
+        .refreshable {
+            await viewModel.refresh()
+            // Give pull-to-refresh success/error feedback like the other
+            // hubs (IOS-AUDIT-UX-015).
+            UINotificationFeedbackGenerator()
+                .notificationOccurred(viewModel.errorMessage == nil ? .success : .error)
+        }
         .navigationDestination(item: $entityTarget) { target in
             switch target {
             case .restaurant(let r): RestaurantDetailView(restaurant: r)

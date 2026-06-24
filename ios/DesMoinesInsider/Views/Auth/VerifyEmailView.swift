@@ -5,8 +5,10 @@ import SwiftUI
 /// Apple Sign-In users skip this screen entirely — their email is pre-verified
 /// by Apple.
 struct VerifyEmailView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @State private var auth = AuthService.shared
     @State private var isResending = false
+    @State private var isChecking = false
     @State private var resendCooldown = 0
     @State private var toastMessage: String?
     @State private var resendTimer: Task<Void, Never>?
@@ -75,6 +77,25 @@ struct VerifyEmailView: View {
                     .accessibilityLabel(resendButtonLabel)
 
                     Button {
+                        Task { await handleManualCheck() }
+                    } label: {
+                        HStack {
+                            if isChecking { ProgressView().tint(.white) }
+                            Label("I've verified — refresh", systemImage: "arrow.clockwise")
+                                .font(.subheadline.weight(.medium))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .foregroundStyle(.white)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.white.opacity(0.25), lineWidth: 1)
+                        )
+                    }
+                    .disabled(isChecking)
+                    .accessibilityLabel("I've verified my email — check now")
+
+                    Button {
                         openMailApp()
                     } label: {
                         Label("Open Mail app", systemImage: "arrow.up.right.square")
@@ -118,8 +139,38 @@ struct VerifyEmailView: View {
                 }
             }
         }
+        // Poll for verification while the screen is shown; the app shell routes
+        // away automatically once needsEmailVerification flips false. This makes
+        // the "refreshes automatically" copy true even when the user verified on
+        // another device (IOS-AUDIT-FEAT-020).
+        .task { await pollForVerification() }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                Task { await auth.refreshUser() }
+            }
+        }
         .onDisappear {
             resendTimer?.cancel()
+        }
+    }
+
+    private func pollForVerification() async {
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(5))
+            guard !Task.isCancelled else { return }
+            _ = await auth.refreshUser()
+        }
+    }
+
+    private func handleManualCheck() async {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        isChecking = true
+        defer { isChecking = false }
+        let verified = await auth.refreshUser()
+        // When verified, the app shell navigates away on its own; otherwise
+        // tell the user we're still waiting.
+        if !verified {
+            showToast("Still waiting — tap the link in your email.")
         }
     }
 

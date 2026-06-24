@@ -24,6 +24,9 @@ struct DiscoverView: View {
     @State private var showGroupSession = false
     @AppStorage("discover.hasSeenIntro.v1") private var hasSeenIntro = false
     @State private var stackId = UUID()
+    /// Drives the action-bar buttons through the swipe-deck's animated commit
+    /// path so taps fly the card off like a gesture (IOS-AUDIT-UX-018).
+    @State private var swipeCommand: SwipeCardStack.Command?
 
     init(
         initialFilter: DiscoverFilterContext = .init(),
@@ -55,6 +58,17 @@ struct DiscoverView: View {
 
                 deckArea
 
+                // Saved count lives here rather than the toolbar so it doesn't
+                // collide with the inline title on narrow widths (IOS-AUDIT-UX-030).
+                if viewModel.likedItems.count > 0 {
+                    Text("Saved \(viewModel.likedItems.count)")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .padding(.horizontal, 28)
+                        .accessibilityLabel("\(viewModel.likedItems.count) saved")
+                }
+
                 actionBar
                     .padding(.horizontal, 24)
                     .padding(.bottom, 16)
@@ -82,11 +96,6 @@ struct DiscoverView: View {
                             .font(.subheadline.weight(.semibold))
                     }
                     .accessibilityLabel("Start or join a group session")
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Text("Saved \(viewModel.likedItems.count)")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.secondary)
                 }
             }
             .sheet(isPresented: $showGroupSession) {
@@ -173,7 +182,8 @@ struct DiscoverView: View {
                             case .event(let e): navigationPath.append(e)
                             case .restaurant(let r): navigationPath.append(r)
                             }
-                        }
+                        },
+                        command: $swipeCommand
                     )
                     .id(stackId)
                 }
@@ -216,20 +226,20 @@ struct DiscoverView: View {
 
     private var actionBar: some View {
         HStack(spacing: 24) {
+            // Buttons drive the deck's animated commit (which fires the matching
+            // haptic and calls viewModel.skip/like/boost after the fly-off), so
+            // a tap looks identical to a swipe (IOS-AUDIT-UX-018).
             actionButton(systemImage: "xmark", color: .red, label: "Skip", size: 56) {
-                guard let top = viewModel.deck.first else { return }
-                HapticFeedback.shared.medium()
-                viewModel.skip(top)
+                guard !viewModel.deck.isEmpty else { return }
+                swipeCommand = .skip
             }
             actionButton(systemImage: "arrow.up", color: .blue, label: "More like this", size: 64) {
-                guard let top = viewModel.deck.first else { return }
-                HapticFeedback.shared.premiumUnlock()
-                viewModel.boost(top)
+                guard !viewModel.deck.isEmpty else { return }
+                swipeCommand = .boost
             }
             actionButton(systemImage: "heart.fill", color: .green, label: "Save", size: 56) {
-                guard let top = viewModel.deck.first else { return }
-                HapticFeedback.shared.medium()
-                viewModel.like(top)
+                guard !viewModel.deck.isEmpty else { return }
+                swipeCommand = .like
             }
         }
         .disabled(viewModel.deck.isEmpty)

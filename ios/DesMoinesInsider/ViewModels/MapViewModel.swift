@@ -368,6 +368,18 @@ final class MapViewModel {
         let lng: Int
     }
 
+    /// Resolves a cluster's member ids back to their models so the UI can offer
+    /// a disambiguation list when zooming can't separate co-located pins
+    /// (IOS-AUDIT-UX-027).
+    func members(in cluster: MapCluster) -> [MapMember] {
+        let ids = Set(cluster.memberIds)
+        var members: [MapMember] = []
+        members += eventAnnotations.filter { ids.contains($0.id) }.map { .event($0.event) }
+        members += restaurantAnnotations.filter { ids.contains($0.id) }.map { .restaurant($0.restaurant) }
+        members += attractionAnnotations.filter { ids.contains($0.id) }.map { .attraction($0.attraction) }
+        return members
+    }
+
     var isEmpty: Bool {
         hasLoadedOnce && !isLoading && totalPinCount == 0
     }
@@ -467,5 +479,45 @@ struct MapCluster: Identifiable {
         if kinds.contains(.event) { return .red }
         if kinds.contains(.restaurant) { return .orange }
         return .green
+    }
+}
+
+/// A single resolved member of a `MapCluster`, used by the disambiguation sheet
+/// so co-located pins remain selectable (IOS-AUDIT-UX-027).
+enum MapMember: Identifiable {
+    case event(Event)
+    case restaurant(Restaurant)
+    case attraction(Attraction)
+
+    var id: String {
+        switch self {
+        case .event(let e): return "event-\(e.id)"
+        case .restaurant(let r): return "restaurant-\(r.id)"
+        case .attraction(let a): return "attraction-\(a.id)"
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .event(let e): return e.title
+        case .restaurant(let r): return r.name
+        case .attraction(let a): return a.name
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .event: return "calendar"
+        case .restaurant: return "fork.knife"
+        case .attraction: return "star.fill"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .event: return .red
+        case .restaurant: return .orange
+        case .attraction: return .green
+        }
     }
 }

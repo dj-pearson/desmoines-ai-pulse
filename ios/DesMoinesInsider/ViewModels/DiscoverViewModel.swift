@@ -243,8 +243,15 @@ final class DiscoverViewModel {
         hasMoreEvents = true
         hasMoreRestaurants = true
         totalSwipes += 1
+        // Show the loading state while the narrowed batch loads instead of
+        // flashing the "you've seen everything" empty state, which the deck-
+        // empty branch would otherwise render mid-boost (IOS-AUDIT-UX-019).
+        isLoading = true
         Task { await self.record(.boost, item: item) }
-        Task { await self.fetchMore() }
+        Task {
+            await self.fetchMore()
+            self.isLoading = false
+        }
     }
 
     /// Tap → opened detail view. Logged as a positive but weaker signal.

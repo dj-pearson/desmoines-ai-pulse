@@ -89,18 +89,33 @@ final class ReviewsViewModel {
         }
     }
 
-    func deleteOwnReview() async {
-        guard let review = userReview else { return }
+    /// Delete the user's own review. Returns true on success so the view can
+    /// confirm (IOS-AUDIT-UX-023).
+    @discardableResult
+    func deleteOwnReview() async -> Bool {
+        guard let review = userReview else { return false }
         do {
             try await service.deleteRating(id: review.id)
             await load()
+            return true
         } catch {
             errorMessage = "Couldn't delete your review."
+            return false
         }
     }
 
-    func report(_ review: UserRating, reason: String = "Inappropriate content") async {
-        guard let userId = currentUserId else { return }
-        try? await service.reportRating(ratingId: review.id, reportedBy: userId, reason: reason)
+    /// Report a review. Returns true on success so the view can confirm; no
+    /// longer swallows the error with try? (IOS-AUDIT-UX-023 — RatingsService
+    /// throws specifically so the UI can confirm).
+    @discardableResult
+    func report(_ review: UserRating, reason: String = "Inappropriate content") async -> Bool {
+        guard let userId = currentUserId else { return false }
+        do {
+            try await service.reportRating(ratingId: review.id, reportedBy: userId, reason: reason)
+            return true
+        } catch {
+            errorMessage = "Couldn't submit your report. Please try again."
+            return false
+        }
     }
 }

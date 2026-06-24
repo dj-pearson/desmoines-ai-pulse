@@ -15,6 +15,8 @@ struct SettingsView: View {
     @State private var showOfferCodeRedeem = false
     @State private var showDeleteConfirmation = false
     @State private var isDeleting = false
+    @State private var isRestoring = false
+    @State private var restoreResultMessage: String?
     @State private var errorMessage: String?
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
 
@@ -40,12 +42,20 @@ struct SettingsView: View {
                         }
 
                         Button {
-                            Task {
-                                await storeKit.restorePurchases()
-                            }
+                            Task { await restorePurchases() }
                         } label: {
-                            Label("Restore Purchases", systemImage: "arrow.clockwise")
+                            Label {
+                                Text(isRestoring ? "Restoring…" : "Restore Purchases")
+                            } icon: {
+                                if isRestoring {
+                                    ProgressView()
+                                } else {
+                                    Image(systemName: "arrow.clockwise")
+                                }
+                            }
                         }
+                        .disabled(isRestoring)
+                        .accessibilityLabel("Restore previous purchases")
 
                         // Offer-code redemption — win-back / promo codes (IOS-SUB-014)
                         Button {
@@ -115,7 +125,9 @@ struct SettingsView: View {
                     }
 
                     if notificationStatus == .authorized {
-                        @AppStorage("eventRemindersEnabled") var remindersEnabled = true
+                        // The toggle drives UserDefaults directly via the binding
+                        // below; no separate @AppStorage local (which wouldn't be
+                        // installed as view state anyway) — IOS-AUDIT-UX-029.
                         Toggle(isOn: Binding(
                             get: { UserDefaults.standard.bool(forKey: "eventRemindersEnabled") },
                             set: { UserDefaults.standard.set($0, forKey: "eventRemindersEnabled") }
@@ -261,6 +273,14 @@ struct SettingsView: View {
             } message: {
                 Text(errorMessage ?? "")
             }
+            .alert("Restore Purchases", isPresented: .init(
+                get: { restoreResultMessage != nil },
+                set: { if !$0 { restoreResultMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(restoreResultMessage ?? "")
+            }
         }
     }
 
@@ -309,6 +329,25 @@ struct SettingsView: View {
             return
         }
         AppStore.requestReview(in: scene)
+    }
+
+    /// Restores previous purchases and reports the outcome. Distinguishes a
+    /// genuine restore failure (e.g. AppStore.sync network error) from a
+    /// successful sync that simply found no active subscription
+    /// (IOS-AUDIT-FEAT-016).
+    private func restorePurchases() async {
+        isRestoring = true
+        await storeKit.restorePurchases()
+        isRestoring = false
+
+        if let error = storeKit.errorMessage {
+            // restorePurchases() sets errorMessage only when AppStore.sync fails.
+            restoreResultMessage = error
+        } else if storeKit.currentTier != .free {
+            restoreResultMessage = "Your \(storeKit.currentTier.displayName) subscription has been restored."
+        } else {
+            restoreResultMessage = "No previous purchases were found to restore."
+        }
     }
 
     private func deleteAccount() async {

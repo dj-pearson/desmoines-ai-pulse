@@ -47,6 +47,25 @@ final class AuthService {
         try await supabase.auth.resend(email: email, type: .signup)
     }
 
+    /// Force-refresh the session from Supabase so a freshly-confirmed email is
+    /// reflected (updated `emailConfirmedAt`) without waiting for a passive
+    /// auth-state change — e.g. when the user verified on another device. Used
+    /// by the verify-email screen's foreground/poll refresh (IOS-AUDIT-FEAT-020).
+    /// Returns true when the refreshed user is verified.
+    @discardableResult
+    func refreshUser() async -> Bool {
+        guard let supabase else { return false }
+        do {
+            let session = try await supabase.auth.refreshSession()
+            currentUser = session.user
+            isAuthenticated = true
+        } catch {
+            // Keep the existing session on failure (offline / transient).
+            return false
+        }
+        return !needsEmailVerification
+    }
+
     @ObservationIgnored private var authListener: Task<Void, Never>?
     private let supabase: SupabaseClient?
 
