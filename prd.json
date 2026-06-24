@@ -1846,8 +1846,8 @@
         "Genuinely-empty results still show the empty state after the search resolves"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Found by iOS UX audit. SavedSearchResultsView.swift:36 .task sets viewModel.searchText = savedSearch.query; performSearch sleeps 300ms before isSearching=true, so during the window isSearching=false & hasSearched=false \u2192 none of the states render."
+      "passes": true,
+      "notes": "Found by iOS UX audit. SavedSearchResultsView.swift:36 .task sets viewModel.searchText = savedSearch.query; performSearch sleeps 300ms before isSearching=true, so during the window isSearching=false & hasSearched=false \u2192 none of the states render. | DONE (2026-06-24): SearchViewModel.performSearch now sets isSearching=true synchronously before the 300ms debounce (and clearResults sets it false), so SavedSearchResultsView/SearchView show their ProgressView during the debounce window instead of a blank screen."
     },
     {
       "id": "IOS-AUDIT-UX-021",
@@ -1883,8 +1883,8 @@
         "Deleting your own review shows a confirmationDialog first (consistent with Report) and a success toast after reload (ReviewsSection.swift:145, ReviewsViewModel.swift:92)"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Found by iOS UX audit. ReviewsViewModel.swift:102 report uses try? (no feedback) though RatingsService.swift:87 documents it throws so the UI can confirm. ReviewsSection.swift:145 Delete fires with no confirmation; deleteOwnReview only sets errorMessage on failure, no success toast."
+      "passes": true,
+      "notes": "Found by iOS UX audit. ReviewsViewModel.swift:102 report uses try? (no feedback) though RatingsService.swift:87 documents it throws so the UI can confirm. ReviewsSection.swift:145 Delete fires with no confirmation; deleteOwnReview only sets errorMessage on failure, no success toast. | DONE (2026-06-24): ReviewsViewModel.report and deleteOwnReview now return Bool and stop swallowing the throw; ReviewsSection added a delete confirmationDialog and toastOverlay, showing success/error toasts for both report and delete."
     },
     {
       "id": "IOS-AUDIT-UX-024",
@@ -1896,8 +1896,8 @@
         "On a slow cold-GPS fix, sorting still applies once the location resolves"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Found by iOS UX audit. NeighborhoodViewModel.swift:66 enableNearby(): requestPermission(); try? await Task.sleep(.seconds(1)); await refresh() \u2014 refresh runs with userLocation==nil on slow fixes, usingLocation stays false, button reverts silently."
+      "passes": true,
+      "notes": "Found by iOS UX audit. NeighborhoodViewModel.swift:66 enableNearby(): requestPermission(); try? await Task.sleep(.seconds(1)); await refresh() \u2014 refresh runs with userLocation==nil on slow fixes, usingLocation stays false, button reverts silently. | DONE (2026-06-24): NeighborhoodViewModel.enableNearby now sets isLoading, waits (bounded) for the permission dialog to resolve, then awaits a real fix via LocationService.getCurrentLocation() (which has its own timeout and sets userLocation) before refresh \u2014 replacing the fixed 1s sleep."
     },
     {
       "id": "IOS-AUDIT-UX-025",
