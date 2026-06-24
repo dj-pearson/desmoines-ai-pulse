@@ -1715,8 +1715,8 @@
         "Each premium filter visibly changes results when toggled, or is removed"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Found by iOS UX audit. EventsViewModel.swift:255 applyPremiumFilters has '// minRating is available for future use when events have ratings' and never filters by it, though FilterSheet binds it to a premium slider and counts it active. EventsViewModel.swift:246 distance filter runs only 'if let userLocation = LocationService.shared.userLocation', so it's a no-op without a fix while still counting as active."
+      "passes": true,
+      "notes": "Found by iOS UX audit. EventsViewModel.swift:255 applyPremiumFilters has '// minRating is available for future use when events have ratings' and never filters by it, though FilterSheet binds it to a premium slider and counts it active. EventsViewModel.swift:246 distance filter runs only 'if let userLocation = LocationService.shared.userLocation', so it's a no-op without a fix while still counting as active. | DONE (2026-06-24): Resolved via removal \u2014 the Min Rating + Max Distance event controls existed only in the orphaned FilterSheet (deleted, see FEAT-021). Event has no rating field so min-rating could never work; with FilterSheet gone nothing sets EventsViewModel.minRating/maxDistance, so no active-filter chip appears for a no-op filter. (Attractions rating filter is a separate, working AttractionsViewModel path, untouched.)"
     },
     {
       "id": "IOS-AUDIT-FEAT-020",
@@ -1742,8 +1742,8 @@
         "Relates to IOS-AUDIT-UX-006 (apply/cancel semantics) \u2014 that work only matters if this sheet is reachable"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Found by iOS UX audit. Grep for 'FilterSheet(' matches only FilterSheet.swift's own #Preview (line 219). Shipping an unreachable filter screen with a paywall is a maintenance trap; its filter bugs are hidden because the screen can't be opened."
+      "passes": true,
+      "notes": "Found by iOS UX audit. Grep for 'FilterSheet(' matches only FilterSheet.swift's own #Preview (line 219). Shipping an unreachable filter screen with a paywall is a maintenance trap; its filter bugs are hidden because the screen can't be opened. | DONE (2026-06-24): Deleted Views/Search/FilterSheet.swift \u2014 confirmed referenced only by its own declaration + #Preview (live Home filters use EventInlineFilters). Removes unreachable UI that shipped its own PremiumGate and the no-op distance/rating sliders. XcodeGen globs the DesMoinesInsider directory so no project file edit needed."
     },
     {
       "id": "IOS-AUDIT-FEAT-022",
@@ -1768,8 +1768,8 @@
         "Trip delete awaits the backend result before mutating savedTrips (or re-inserts + shows an error on failure) so deleted trips don't reappear unexplained (TripPlannerView.swift:311, TripPlannerService.swift:143)"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Found by iOS UX audit. ItineraryDetailView.swift:187 sets loadFailed only when items.isEmpty && !network.isConnected; an online RPC failure yields a blank itinerary. move()/persistOrder and deleteTrips mutate local state optimistically and swallow errors (DEBUG-only logging), so the visible order/list can permanently disagree with the server."
+      "passes": true,
+      "notes": "Found by iOS UX audit. ItineraryDetailView.swift:187 sets loadFailed only when items.isEmpty && !network.isConnected; an online RPC failure yields a blank itinerary. move()/persistOrder and deleteTrips mutate local state optimistically and swallow errors (DEBUG-only logging), so the visible order/list can permanently disagree with the server. | DONE (2026-06-24): TripPlannerService.fetchItems now throws (caller distinguishes fetch-failure\u2192loadFailed error+retry from genuinely empty); persistOrder returns Bool and deleteTrip returns Bool (@discardableResult). ItineraryDetailView.move reloads server truth + shows an error toast on persist failure (added toastOverlay + refetchItems). TripPlannerView.deleteTrips awaits each delete, and on any failure reloads server truth and sets errorMessage instead of silently dropping the trip."
     },
     {
       "id": "IOS-AUDIT-UX-015",

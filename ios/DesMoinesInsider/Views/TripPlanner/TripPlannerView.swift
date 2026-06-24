@@ -311,8 +311,16 @@ struct TripPlannerView: View {
     private func deleteTrips(at offsets: IndexSet) async {
         let toDelete = offsets.map { savedTrips[$0] }
         savedTrips.remove(atOffsets: offsets)
+        var anyFailed = false
         for trip in toDelete {
-            await service.deleteTrip(id: trip.id)
+            if await service.deleteTrip(id: trip.id) == false { anyFailed = true }
+        }
+        if anyFailed {
+            // A failed delete must not silently vanish from the list and then
+            // reappear on next load — reconcile with server truth and tell the
+            // user (IOS-AUDIT-FEAT-023).
+            await reload()
+            errorMessage = "Couldn't delete the itinerary. Please try again."
         }
     }
 }

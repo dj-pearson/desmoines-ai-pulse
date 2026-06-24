@@ -94,21 +94,17 @@ final class TripPlannerService {
         }
     }
 
-    func fetchItems(tripId: String) async -> [TripPlanItem] {
+    /// Fetches a trip's items. Throws on a real fetch failure so the caller can
+    /// distinguish "fetch failed" (show error+retry) from a genuinely empty
+    /// itinerary (IOS-AUDIT-FEAT-023). Returns [] only when there is no client.
+    func fetchItems(tripId: String) async throws -> [TripPlanItem] {
         guard let client = supabase else { return [] }
         struct Params: Encodable { let p_trip_id: String }
-        do {
-            let items: [TripPlanItem] = try await client
-                .rpc("get_trip_itinerary", params: Params(p_trip_id: tripId))
-                .execute()
-                .value
-            return items
-        } catch {
-            #if DEBUG
-            AppLogger.network.warning("fetchItems failed: \(error.localizedDescription)")
-            #endif
-            return []
-        }
+        let items: [TripPlanItem] = try await client
+            .rpc("get_trip_itinerary", params: Params(p_trip_id: tripId))
+            .execute()
+            .value
+        return items
     }
 
     // MARK: - Quota (IOS-SUB-011)
@@ -140,22 +136,30 @@ final class TripPlannerService {
 
     // MARK: - Mutations
 
-    func deleteTrip(id: String) async {
-        guard let client = supabase else { return }
+    /// Deletes a trip. Returns true on success so the caller can roll back an
+    /// optimistic removal on failure (IOS-AUDIT-FEAT-023).
+    @discardableResult
+    func deleteTrip(id: String) async -> Bool {
+        guard let client = supabase else { return false }
         do {
             try await client.from("trip_plans").delete().eq("id", value: id).execute()
+            return true
         } catch {
             #if DEBUG
             AppLogger.network.warning("deleteTrip failed: \(error.localizedDescription)")
             #endif
+            return false
         }
     }
 
     /// Persists a new ordering of items within a day by writing each item's
-    /// `order_index`. Best-effort per item.
-    func persistOrder(_ items: [TripPlanItem]) async {
-        guard let client = supabase else { return }
+    /// `order_index`. Returns true only if every write succeeded so the caller
+    /// can reconcile the UI with server truth on failure (IOS-AUDIT-FEAT-023).
+    @discardableResult
+    func persistOrder(_ items: [TripPlanItem]) async -> Bool {
+        guard let client = supabase else { return false }
         struct OrderUpdate: Encodable { let order_index: Int }
+        var allSucceeded = true
         for (index, item) in items.enumerated() {
             do {
                 try await client
@@ -164,11 +168,13 @@ final class TripPlannerService {
                     .eq("id", value: item.itemId)
                     .execute()
             } catch {
+                allSucceeded = false
                 #if DEBUG
                 AppLogger.network.warning("persistOrder failed for \(item.itemId): \(error.localizedDescription)")
                 #endif
             }
         }
+        return allSucceeded
     }
 
     /// Makes a trip public and returns its share code (web parity:
