@@ -53,8 +53,13 @@ struct BestOfCategoryView: View {
             } else {
                 if let vote = viewModel.userVote {
                     // Name the current pick so the user knows what they voted for,
-                    // and how to change it (IOS-AUDIT-UX-031).
-                    Label("You voted for \(vote.displayName) — search or write in to change.",
+                    // and how to change it (IOS-AUDIT-UX-031). Vote itself has no
+                    // display name — resolve it from the leaderboard row, falling
+                    // back to a custom write-in or generic copy.
+                    let pickName = viewModel.results.first { $0.id == vote.resultKey }?.displayName
+                        ?? vote.customEntry
+                    Label(pickName.map { "You voted for \($0) — search or write in to change." }
+                            ?? "You've voted — search or write in to change your pick.",
                           systemImage: "checkmark.seal.fill")
                         .font(.footnote.weight(.medium))
                         .foregroundStyle(.green)
