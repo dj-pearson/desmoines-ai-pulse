@@ -342,6 +342,7 @@ struct EventMapView: View {
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
             }
+            .accessibilityElement(children: .combine)
 
             Spacer()
 
@@ -352,6 +353,8 @@ struct EventMapView: View {
                     .font(.title2)
                     .foregroundStyle(Color.accentColor)
             }
+            .minHitTarget()
+            .accessibilityLabel("Open \(event.title)")
 
             Button {
                 viewModel.selectedEvent = nil
@@ -360,6 +363,8 @@ struct EventMapView: View {
                     .font(.title3)
                     .foregroundStyle(.secondary)
             }
+            .minHitTarget()
+            .accessibilityLabel("Close")
         }
         .padding(14)
         .background(.ultraThickMaterial, in: RoundedRectangle(cornerRadius: 16))
@@ -409,6 +414,7 @@ struct EventMapView: View {
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
             }
+            .accessibilityElement(children: .combine)
 
             Spacer()
 
@@ -418,6 +424,8 @@ struct EventMapView: View {
                         .font(.title2)
                         .foregroundStyle(.green)
                 }
+                .minHitTarget()
+                .accessibilityLabel("Call \(restaurant.name)")
             }
 
             Button {
@@ -427,6 +435,8 @@ struct EventMapView: View {
                     .font(.title3)
                     .foregroundStyle(.secondary)
             }
+            .minHitTarget()
+            .accessibilityLabel("Close")
         }
         .padding(14)
         .background(.ultraThickMaterial, in: RoundedRectangle(cornerRadius: 16))
@@ -468,6 +478,7 @@ struct EventMapView: View {
                     }
                 }
             }
+            .accessibilityElement(children: .combine)
 
             Spacer()
 
@@ -477,6 +488,8 @@ struct EventMapView: View {
                         .font(.title2)
                         .foregroundStyle(Color.accentColor)
                 }
+                .minHitTarget()
+                .accessibilityLabel("Open \(attraction.name) website")
             }
 
             Button {
@@ -486,6 +499,8 @@ struct EventMapView: View {
                     .font(.title3)
                     .foregroundStyle(.secondary)
             }
+            .minHitTarget()
+            .accessibilityLabel("Close")
         }
         .padding(14)
         .background(.ultraThickMaterial, in: RoundedRectangle(cornerRadius: 16))

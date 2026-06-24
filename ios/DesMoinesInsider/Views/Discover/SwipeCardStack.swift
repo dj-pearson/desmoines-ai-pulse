@@ -90,6 +90,19 @@ struct SwipeCardStack: View {
                 .gesture(dragGesture(for: item), including: index == 0 ? .gesture : .none)
                 .onTapGesture { if index == 0 { onTap(item) } }
                 .allowsHitTesting(index == 0 && !isDismissing)
+                // VoiceOver can't perform the raw drag gesture or the bare
+                // onTapGesture, so expose the top card as an activatable button
+                // (double-tap opens detail) with named rotor actions mirroring
+                // the swipe commits. Back cards are hidden (IOS-AUDIT-UX-037).
+                .accessibilityHidden(index != 0)
+                .accessibilityAddTraits(index == 0 ? .isButton : [])
+                .accessibilityHint(index == 0
+                    ? "Double tap to open details. Use the rotor for Save, Skip, and More like this."
+                    : "")
+                .accessibilityAction { if index == 0 { onTap(item) } }
+                .accessibilityAction(named: Text("Save")) { if index == 0 { programmaticLike() } }
+                .accessibilityAction(named: Text("Skip")) { if index == 0 { programmaticSkip() } }
+                .accessibilityAction(named: Text("More like this")) { if index == 0 { programmaticBoost() } }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
