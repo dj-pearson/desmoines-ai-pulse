@@ -114,7 +114,18 @@ enum JailbreakDetector {
     /// compromised (a strong jailbreak indicator). The child exits immediately
     /// and the parent reaps it. Still advisory and bypassable.
     private static func checkForkRestriction() -> Bool {
-        let pid = fork()
+        // `fork()` is marked unavailable in the iOS SDK ("Please use threads or
+        // posix_spawn*()"), so calling it directly fails to compile. Resolve the
+        // symbol at runtime via dlsym(RTLD_DEFAULT) to keep this sandbox-escape
+        // signal while still building. (_exit / waitpid remain available.)
+        typealias ForkFn = @convention(c) () -> Int32
+        let rtldDefault = UnsafeMutableRawPointer(bitPattern: -2)
+        guard let symbol = dlsym(rtldDefault, "fork") else {
+            // Couldn't resolve fork — treat as restricted (no signal).
+            return false
+        }
+        let forkFn = unsafeBitCast(symbol, to: ForkFn.self)
+        let pid = forkFn()
         if pid < 0 {
             // fork() denied by the sandbox — expected on a stock device.
             return false
