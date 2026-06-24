@@ -73,6 +73,28 @@ final class DeepLinkHandler {
         return false
     }
 
+    // MARK: - Spotlight (IOS-AUDIT-FEAT-027)
+
+    /// Routes a Spotlight result tap. CoreSpotlight delivers the indexed item's
+    /// `uniqueIdentifier` (e.g. "event-<uuid>") via CSSearchableItemActivityIdentifier.
+    /// Parses the "<type>-<id>" form SpotlightService writes and routes the three
+    /// content types that have detail destinations. Returns true if handled.
+    @discardableResult
+    func handleSpotlightIdentifier(_ identifier: String) -> Bool {
+        guard let dash = identifier.firstIndex(of: "-") else { return false }
+        let type = String(identifier[..<dash])
+        let rawId = String(identifier[identifier.index(after: dash)...])
+        switch type {
+        case "event", "restaurant", "attraction":
+            return routeTyped(type: type, rawId: rawId)
+        default:
+            // article/hotel are indexed but have no detail destination yet —
+            // open the app without crashing rather than route to the wrong place.
+            AppLogger.nav.warning("Unrouted Spotlight identifier type: \(type)")
+            return false
+        }
+    }
+
     private func routeTyped(type: String, rawId: String) -> Bool {
         switch type {
         case "event":

@@ -43,6 +43,27 @@ final class DeepLinkHandlerTests: XCTestCase {
         XCTAssertEqual(dest, .tab(.home)) // Invalid event ID falls back to home
     }
 
+    // MARK: - Spotlight (IOS-AUDIT-FEAT-027)
+
+    func testSpotlightEventIdentifierRoutes() {
+        let id = "550e8400-e29b-41d4-a716-446655440000"
+        XCTAssertTrue(handler.handleSpotlightIdentifier("event-\(id)"))
+        XCTAssertEqual(handler.consumeDestination(), .event(id: id))
+    }
+
+    func testSpotlightRestaurantIdentifierRoutes() {
+        let id = "550e8400-e29b-41d4-a716-446655440000"
+        XCTAssertTrue(handler.handleSpotlightIdentifier("restaurant-\(id)"))
+        XCTAssertEqual(handler.consumeDestination(), .restaurant(id: id))
+    }
+
+    func testSpotlightUnknownTypeIsNotRouted() {
+        // article/hotel have no detail destination yet — must not crash or
+        // route to the wrong screen.
+        XCTAssertFalse(handler.handleSpotlightIdentifier("article-550e8400-e29b-41d4-a716-446655440000"))
+        XCTAssertNil(handler.consumeDestination())
+    }
+
     // MARK: - Custom Scheme
 
     func testValidEventCustomScheme() {

@@ -1,5 +1,6 @@
 import SwiftUI
 import StoreKit
+import CoreSpotlight
 
 @main
 struct DesMoinesInsiderApp: App {
@@ -108,6 +109,13 @@ struct DesMoinesInsiderApp: App {
                 // Universal links (https://desmoinesinsider.com/...) (IOS-AUDIT-FEAT-002).
                 if let url = activity.webpageURL {
                     DeepLinkHandler.shared.handle(url)
+                }
+            }
+            .onContinueUserActivity(CSSearchableItemActionType) { activity in
+                // Spotlight result tap → route to the item's detail screen
+                // (IOS-AUDIT-FEAT-027). MainTabView observes pendingDestination.
+                if let id = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String {
+                    DeepLinkHandler.shared.handleSpotlightIdentifier(id)
                 }
             }
             .task {

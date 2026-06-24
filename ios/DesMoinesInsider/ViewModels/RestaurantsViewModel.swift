@@ -106,6 +106,10 @@ final class RestaurantsViewModel {
             if reset {
                 allRestaurants = response.restaurants
                 await cache.set(restaurantsCacheKey(), value: response.restaurants)
+                // Keep Spotlight in sync so restaurants show up in system search
+                // (IOS-AUDIT-FEAT-026).
+                let toIndex = response.restaurants
+                Task { await SpotlightService.shared.indexRestaurants(toIndex) }
             } else {
                 allRestaurants.append(contentsOf: response.restaurants)
             }
