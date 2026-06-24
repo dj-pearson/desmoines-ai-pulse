@@ -53,6 +53,24 @@ final class StoreKitService {
     private(set) var isLoading = false
     private(set) var errorMessage: String?
 
+    /// Product IDs the server has *definitively* rejected (validate-ios-receipt
+    /// returned `valid:false`, e.g. refunded/revoked/tampered receipt). These are
+    /// excluded from `localTier` so a rejected receipt can no longer keep premium
+    /// unlocked on-device (IOS-AUDIT-SEC-011). Transient/network failures do NOT
+    /// populate this set — those keep the grace period. Cleared when the same
+    /// product later validates successfully or leaves StoreKit entitlements.
+    private(set) var serverRevokedProductIDs: Set<String> = []
+
+    /// True when a locally-present StoreKit entitlement has been revoked by the
+    /// server. UI can surface a "subscription could not be verified" state.
+    var hasServerRevokedEntitlement: Bool {
+        !serverRevokedProductIDs.isEmpty
+            && !purchasedProductIDs.subtracting(serverRevokedProductIDs).contains(where: {
+                Self.insiderProductIDs.contains($0) || Self.vipProductIDs.contains($0)
+                    || $0.contains("insider") || $0.contains("vip")
+            })
+    }
+
     /// Tier resolved from the user's `user_subscriptions` rows in Supabase.
     /// Picks up entitlements from other platforms (e.g. Stripe purchase on web,
     /// Google Play on Android) so the iOS UI honors them too.
@@ -95,19 +113,22 @@ final class StoreKitService {
         return Self.tierRank(local) >= Self.tierRank(backendTier) ? local : backendTier
     }
 
-    /// Tier resolved from local StoreKit entitlements only.
+    /// Tier resolved from local StoreKit entitlements only. Server-revoked
+    /// products are subtracted so an explicitly-rejected receipt can't keep
+    /// premium unlocked locally (IOS-AUDIT-SEC-011).
     private var localTier: SubscriptionTier {
-        for id in purchasedProductIDs {
+        let effective = purchasedProductIDs.subtracting(serverRevokedProductIDs)
+        for id in effective {
             if Self.vipProductIDs.contains(id) { return .vip }
         }
-        for id in purchasedProductIDs {
+        for id in effective {
             if Self.insiderProductIDs.contains(id) { return .insider }
         }
         // Fallback for legacy product IDs
-        for id in purchasedProductIDs {
+        for id in effective {
             if id.contains("vip") { return .vip }
         }
-        for id in purchasedProductIDs {
+        for id in effective {
             if id.contains("insider") { return .insider }
         }
         return .free
@@ -298,6 +319,9 @@ final class StoreKitService {
         }
 
         purchasedProductIDs = purchased
+        // Drop revocations for products the user no longer holds — a fresh
+        // purchase of the same product will re-validate and re-clear anyway.
+        serverRevokedProductIDs.formIntersection(purchased)
         await refreshRenewalState()
     }
 
@@ -486,12 +510,20 @@ final class StoreKitService {
                     #if DEBUG
                     AppLogger.storekit.info("Server validation succeeded: tier=\(decoded.entitlement?.tier ?? "unknown"), expires=\(decoded.entitlement?.expiresAt ?? "none")")
                     #endif
+                    // Clear any prior revocation for this product (e.g. the user
+                    // re-subscribed after a refund).
+                    serverRevokedProductIDs.remove(productId)
                     return
                 } else {
-                    // Server explicitly said the receipt is invalid.
-                    // Log a warning but do NOT revoke local access (grace period).
+                    // Server *definitively* rejected the receipt (refunded /
+                    // revoked / tampered). Revoke the local entitlement rather
+                    // than granting an indefinite grace period (IOS-AUDIT-SEC-011).
+                    // Transient/network failures fall to the catch block below and
+                    // keep grace; this branch is only reached on a clean
+                    // `valid:false` response.
                     let reason = decoded.reason ?? "unknown"
-                    AppLogger.storekit.warning("Server validation returned invalid (grace period): reason=\(reason)")
+                    AppLogger.storekit.warning("Server validation returned invalid; revoking local entitlement for \(productId): reason=\(reason)")
+                    serverRevokedProductIDs.insert(productId)
                     return
                 }
             } catch {
