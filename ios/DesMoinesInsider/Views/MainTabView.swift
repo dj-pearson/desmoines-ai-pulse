@@ -71,6 +71,13 @@ struct MainTabView: View {
     @State private var deepLink = DeepLinkHandler.shared
     @State private var deepLinkPresentation: DeepLinkPresentation?
 
+    /// Siri / Shortcuts intents (IOS-AUDIT-FEAT-025). Intents set
+    /// `PulseIntentDispatcher.shared.pending` and open the app; only SearchView
+    /// consumes it, so if the app opens on another tab the intent is lost. We
+    /// observe here and switch to the Search tab (leaving `pending` set for
+    /// SearchView to read and apply) so intents work from any launch state.
+    @State private var intentDispatcher = PulseIntentDispatcher.shared
+
     enum DeepLinkPresentation: Identifiable {
         case event(String)
         case restaurant(String)
@@ -112,9 +119,14 @@ struct MainTabView: View {
             // Consume any deep link that arrived before this view appeared
             // (cold launch from a link or notification).
             routeDeepLink()
+            // Same for a Siri/Shortcuts intent fired on cold launch.
+            routeIntent(intentDispatcher.pending)
         }
         .onChange(of: deepLink.pendingDestination) { _, _ in
             routeDeepLink()
+        }
+        .onChange(of: intentDispatcher.pending) { _, pending in
+            routeIntent(pending)
         }
         .sheet(item: $deepLinkPresentation) { presentation in
             DeepLinkResolverView(presentation: presentation)
@@ -167,6 +179,15 @@ struct MainTabView: View {
         case .discover(let d): deepLinkPresentation = .discover(d)
         case .tab(let tab): selectedTab = tab
         }
+    }
+
+    /// Routes a pending Siri/Shortcuts intent to the Search tab. We deliberately
+    /// do NOT consume the payload here — SearchView reads and clears it once it
+    /// appears (IOS-AUDIT-FEAT-025). The iPad sidebar stays in sync via the
+    /// existing `selectedTab` ↔ `sidebarSelection` observers.
+    private func routeIntent(_ pending: PulseIntentDispatcher.Pending?) {
+        guard pending != nil else { return }
+        if selectedTab != .search { selectedTab = .search }
     }
 
     /// Maps a SoftPaywallService context id to its PaywallContext preset.
