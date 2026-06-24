@@ -51,8 +51,11 @@ struct BestOfCategoryView: View {
             if !viewModel.isAuthenticated {
                 signInPrompt
             } else {
-                if viewModel.userVote != nil {
-                    Label("You've voted — search again to change your pick.", systemImage: "checkmark.seal.fill")
+                if let vote = viewModel.userVote {
+                    // Name the current pick so the user knows what they voted for,
+                    // and how to change it (IOS-AUDIT-UX-031).
+                    Label("You voted for \(vote.displayName) — search or write in to change.",
+                          systemImage: "checkmark.seal.fill")
                         .font(.footnote.weight(.medium))
                         .foregroundStyle(.green)
                 }

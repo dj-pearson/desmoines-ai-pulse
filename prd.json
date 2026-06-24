@@ -1920,8 +1920,8 @@
         "Offline users can type a query and tap categories/recents; the existing 'You're Offline' empty state shows on submit"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Found by iOS UX audit. SearchView.swift:75 .disabled(!NetworkMonitor.shared.isConnected && !viewModel.hasSearched) wraps the whole NavigationStack content including .searchable and the suggestions list."
+      "passes": true,
+      "notes": "Found by iOS UX audit. SearchView.swift:75 .disabled(!NetworkMonitor.shared.isConnected && !viewModel.hasSearched) wraps the whole NavigationStack content including .searchable and the suggestions list. | DONE (2026-06-24): Removed the broad .disabled(!isConnected && !hasSearched) on SearchView so offline users can type and tap suggestions/recents; the searchable prompt + 'You're Offline' empty state already communicate offline state on submit."
     },
     {
       "id": "IOS-AUDIT-UX-027",
@@ -1971,8 +1971,8 @@
         "The 'Saved N' count is moved out of the toolbar (subtitle or badge on the group-session button) so the inline title and trailing controls don't compete for width (DiscoverView.swift:86)"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Found by iOS UX audit. SwipeCardStack.swift:56 cardHeight = min(cardWidth, fromHeight*scale)/0.7 can exceed containerHeight when cardWidth wins the min(). DiscoverView.swift:86 has two trailing toolbar items plus a 'Saved N' Text alongside the inline title."
+      "passes": true,
+      "notes": "Found by iOS UX audit. SwipeCardStack.swift:56 cardHeight = min(cardWidth, fromHeight*scale)/0.7 can exceed containerHeight when cardWidth wins the min(). DiscoverView.swift:86 has two trailing toolbar items plus a 'Saved N' Text alongside the inline title. | DONE (2026-06-24): SwipeCardStack.cardHeight now clamps to availableH (min(computed, availableH)) so cards never exceed the measured deck area on wide/short layouts. The 'Saved N' count moved out of the DiscoverView toolbar to a trailing caption above the action bar."
     },
     {
       "id": "IOS-AUDIT-UX-031",
@@ -1984,8 +1984,8 @@
         "The search field stays focusable so re-voting is discoverable"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Found by iOS UX audit. BestOfCategoryView.swift:55 generic 'search again' label; castVote clears searchResults/searchQuery (BestOfCategoryViewModel.swift:128-129); write-in collapses (showWriteIn=false) with no confirmation of the cast vote."
+      "passes": true,
+      "notes": "Found by iOS UX audit. BestOfCategoryView.swift:55 generic 'search again' label; castVote clears searchResults/searchQuery (BestOfCategoryViewModel.swift:128-129); write-in collapses (showWriteIn=false) with no confirmation of the cast vote. | DONE (2026-06-24): BestOfCategoryView post-vote confirmation now names the current pick via userVote.displayName ('You voted for X \u2014 search or write in to change'); the search field remains below for re-voting."
     },
     {
       "id": "IOS-AUDIT-UX-032",
@@ -2008,8 +2008,8 @@
         "A lookup 'not found' result maps to a friendly message instead of error.localizedDescription (GroupSessionView.swift:200)"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Found by iOS UX audit. GroupSessionView.swift:120 Join disabled only on trimmed isEmpty; placeholder is 'DSM-AB12' but any non-empty string is sent; invalid codes show raw localizedDescription at line 200."
+      "passes": true,
+      "notes": "Found by iOS UX audit. GroupSessionView.swift:120 Join disabled only on trimmed isEmpty; placeholder is 'DSM-AB12' but any non-empty string is sent; invalid codes show raw localizedDescription at line 200. | DONE (2026-06-24): GroupSessionView validates the join code shape client-side (DSM-XXXX, accepting a bare 4-char suffix by prefixing DSM-), shows an inline 'doesn't look right' hint, and gates Join on validity. lookupSession's notFound already returns a friendly message."
     },
     {
       "id": "IOS-AUDIT-UX-034",
@@ -2020,8 +2020,8 @@
         "With correct usage the button appears once the offset threshold is crossed; the silent-never-shows failure mode is eliminated"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Found by iOS UX audit. ScrollToTopButton.swift:63 ScrollOffsetTracker reads geo.frame(in: .named('scroll')).origin.y but neither the component nor its usage doc establishes .coordinateSpace(.named('scroll'))."
+      "passes": true,
+      "notes": "Found by iOS UX audit. ScrollToTopButton.swift:63 ScrollOffsetTracker reads geo.frame(in: .named('scroll')).origin.y but neither the component nor its usage doc establishes .coordinateSpace(.named('scroll')). | DONE (2026-06-24): ScrollOffsetTracker.coordinateSpaceName constant is now the single source of truth, with a new .scrollOffsetCoordinateSpace() helper and loud doc; all 5 callers (Attractions/Favorites/Search/Home/Restaurants) migrated off the magic string."
     }
   ]
 }

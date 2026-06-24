@@ -58,6 +58,17 @@ struct DiscoverView: View {
 
                 deckArea
 
+                // Saved count lives here rather than the toolbar so it doesn't
+                // collide with the inline title on narrow widths (IOS-AUDIT-UX-030).
+                if viewModel.likedItems.count > 0 {
+                    Text("Saved \(viewModel.likedItems.count)")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .padding(.horizontal, 28)
+                        .accessibilityLabel("\(viewModel.likedItems.count) saved")
+                }
+
                 actionBar
                     .padding(.horizontal, 24)
                     .padding(.bottom, 16)
@@ -85,11 +96,6 @@ struct DiscoverView: View {
                             .font(.subheadline.weight(.semibold))
                     }
                     .accessibilityLabel("Start or join a group session")
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Text("Saved \(viewModel.likedItems.count)")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.secondary)
                 }
             }
             .sheet(isPresented: $showGroupSession) {

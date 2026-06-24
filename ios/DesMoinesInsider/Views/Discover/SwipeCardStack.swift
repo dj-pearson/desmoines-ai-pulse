@@ -59,7 +59,12 @@ struct SwipeCardStack: View {
         let availableH = max(0, containerHeight - Self.backCardPeekRoom)
         let fromHeight = availableH * Self.cardAspectRatio
         // Use whichever axis is the binding constraint.
-        return (min(cardWidth, fromHeight * Self.rotationSafetyScale)) / Self.cardAspectRatio
+        let computed = (min(cardWidth, fromHeight * Self.rotationSafetyScale)) / Self.cardAspectRatio
+        // Never exceed the measured deck area: on wide/short layouts (landscape,
+        // iPad, large Dynamic Type) cardWidth can win the min() and make the card
+        // taller than its container, which the parent .clipped() would cut off
+        // (IOS-AUDIT-UX-030).
+        return min(computed, availableH)
     }
 
     var body: some View {
