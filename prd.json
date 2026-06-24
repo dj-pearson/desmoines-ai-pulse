@@ -1702,8 +1702,8 @@
         "The accessibility hint matches the actual behavior"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Found by iOS UX audit. AskPulseView.swift:300 NavigationLink(value: pick) { chevron } inside the view's own NavigationStack (line 30); project-wide grep shows no navigationDestination(for: Pick.self). AskPulsePickCard advertises accessibilityHint 'Tap to open this \u2026 in detail' but nothing happens."
+      "passes": true,
+      "notes": "Found by iOS UX audit. AskPulseView.swift:300 NavigationLink(value: pick) { chevron } inside the view's own NavigationStack (line 30); project-wide grep shows no navigationDestination(for: Pick.self). AskPulsePickCard advertises accessibilityHint 'Tap to open this \u2026 in detail' but nothing happens. | DONE (2026-06-24): Added .navigationDestination(for: AskPulseService.Pick.self) -> AskPulsePickDetailView, which resolves the pick by itemType to Event/Restaurant/Attraction via fetchEvent/fetchRestaurant/fetchAttraction(id:) with loading/failed/loaded phases. Chevron NavigationLink now reaches a real detail."
     },
     {
       "id": "IOS-AUDIT-FEAT-019",
@@ -1871,8 +1871,8 @@
         "Scrolling works with the keyboard up; picks rendered below the input become visible"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Found by iOS UX audit. AskPulseView.swift:32 conversation is ScrollView { VStack { conversationView; picksSection; followUpChips } } with no ScrollViewReader/scrollTo (grep confirms)."
+      "passes": true,
+      "notes": "Found by iOS UX audit. AskPulseView.swift:32 conversation is ScrollView { VStack { conversationView; picksSection; followUpChips } } with no ScrollViewReader/scrollTo (grep confirms). | DONE (2026-06-24): AskPulseView conversation wrapped in ScrollViewReader with a bottom Color.clear anchor (id); scrollToBottom(proxy) called .onChange of conversation.count, picks.count, and isLoading so the newest message/Thinking\u2026/picks scroll into view."
     },
     {
       "id": "IOS-AUDIT-UX-023",
