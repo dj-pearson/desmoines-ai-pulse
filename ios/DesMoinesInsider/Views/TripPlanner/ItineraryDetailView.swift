@@ -22,6 +22,7 @@ struct ItineraryDetailView: View {
     @State private var loadFailed = false
     @State private var shareItems: [Any]?
     @State private var calendarMessage: String?
+    @State private var shareErrorMessage: String?
     @State private var editMode: EditMode = .inactive
 
     private var days: [Int] { itemsByDay.keys.sorted() }
@@ -119,6 +120,11 @@ struct ItineraryDetailView: View {
         } message: {
             Text(calendarMessage ?? "")
         }
+        .alert("Couldn't Share", isPresented: Binding(get: { shareErrorMessage != nil }, set: { if !$0 { shareErrorMessage = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(shareErrorMessage ?? "")
+        }
         .task { await load() }
     }
 
@@ -208,7 +214,7 @@ struct ItineraryDetailView: View {
     private func share() async {
         guard let code = await service.share(tripId: trip.id),
               let url = service.shareURL(for: code) else {
-            calendarMessage = "Couldn't create a share link. Try again."
+            shareErrorMessage = "Couldn't create a share link. Try again."
             return
         }
         shareItems = ["Check out my Des Moines itinerary: \(trip.title)", url]

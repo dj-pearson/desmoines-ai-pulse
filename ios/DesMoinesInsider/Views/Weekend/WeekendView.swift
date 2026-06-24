@@ -38,6 +38,14 @@ struct WeekendView: View {
                     )
                     .padding(.top, 30)
                 } else {
+                    // Events fetch can fail while featured rails still load — in
+                    // that case isEmpty is false, so surface the error inline
+                    // instead of showing zero events with no explanation
+                    // (IOS-AUDIT-UX-016).
+                    if let error = viewModel.errorMessage, viewModel.populatedDays.isEmpty {
+                        errorBanner(error)
+                    }
+
                     ForEach(viewModel.populatedDays) { day in
                         daySection(day)
                     }
@@ -61,7 +69,9 @@ struct WeekendView: View {
         }
         .refreshable {
             await viewModel.refresh()
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            // Reflect the real outcome instead of always firing success (UX-015).
+            UINotificationFeedbackGenerator()
+                .notificationOccurred(viewModel.errorMessage == nil ? .success : .error)
         }
         .navigationDestination(for: Event.self) { EventDetailView(event: $0) }
         .navigationDestination(for: Restaurant.self) { RestaurantDetailView(restaurant: $0) }

@@ -128,7 +128,12 @@ struct SurpriseMeView: View {
         }
         .scaleEffect(revealed ? 1.0 : 0.92)
         .opacity(revealed ? 1.0 : 0)
-        .onAppear {
+        // Drive the reveal from the pick id, not .onAppear, so tapping "Try
+        // another" (which reuses this view with a new pick) re-triggers the
+        // animation instead of leaving the card stuck at opacity 0
+        // (IOS-AUDIT-UX-025).
+        .task(id: pick.id) {
+            revealed = false
             withAnimation(.spring(response: 0.55, dampingFraction: 0.75)) {
                 revealed = true
             }

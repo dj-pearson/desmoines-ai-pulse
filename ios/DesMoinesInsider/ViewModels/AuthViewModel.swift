@@ -18,6 +18,11 @@ final class AuthViewModel {
     var errorMessage: String?
     var showError = false
     var showVerificationAlert = false
+    /// Neutral, non-error informational feedback (e.g. "reset email sent") so
+    /// success messages aren't shown under the red "Sign In Error" alert
+    /// (IOS-AUDIT-UX-017).
+    var infoMessage: String?
+    var showInfo = false
 
     // MARK: - Rate Limiting
 
@@ -202,7 +207,7 @@ final class AuthViewModel {
         }
         do {
             try await auth.resetPassword(email: email)
-            setError("Password reset email sent. Check your inbox.")
+            setInfo("Password reset email sent. Check your inbox.")
         } catch {
             setError(error.localizedDescription)
         }
@@ -223,6 +228,14 @@ final class AuthViewModel {
         errorMessage = message
         showError = true
         UINotificationFeedbackGenerator().notificationOccurred(.error)
+    }
+
+    /// Neutral success/info feedback — distinct from setError so it isn't shown
+    /// as a "Sign In Error" with an error haptic (IOS-AUDIT-UX-017).
+    private func setInfo(_ message: String) {
+        infoMessage = message
+        showInfo = true
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
     }
 
     // MARK: - Rate Limiting

@@ -186,6 +186,11 @@ struct AuthView: View {
         } message: {
             Text("We've sent a verification link to your email. Please verify your account to continue.")
         }
+        .alert("Email Sent", isPresented: $viewModel.showInfo) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(viewModel.infoMessage ?? "")
+        }
     }
 
     // MARK: - Password field with show/hide toggle (IOS-AUDIT-UX-008)

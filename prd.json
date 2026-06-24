@@ -1634,8 +1634,8 @@
         "Outcome tracking (.saved) still fires, and the button label matches what it does"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Found by iOS UX audit. SurpriseMeView.swift:220 save(_:) calls notificationOccurred(.success) + track(outcome:.saved) + dismiss() with inline comment 'The actual favorite-add wiring lives in EventDetailView / RestaurantDetailView; for now, dismiss and let the user navigate.' The primary CTA adds nothing to favorites and offers no navigation \u2014 a dead-end. Confirmed by two independent audit passes."
+      "passes": true,
+      "notes": "Found by iOS UX audit. SurpriseMeView.swift:220 save(_:) calls notificationOccurred(.success) + track(outcome:.saved) + dismiss() with inline comment 'The actual favorite-add wiring lives in EventDetailView / RestaurantDetailView; for now, dismiss and let the user navigate.' The primary CTA adds nothing to favorites and offers no navigation \u2014 a dead-end. Confirmed by two independent audit passes. | DONE (2026-06-24): SurpriseMeView save now calls performSave() which favorites the pick via FavoritesService by item type (event/restaurant/attraction), guarding against toggling an already-saved item off; success haptic + track(.saved) + dismiss only on real save; limitReached dismisses for the app-level paywall; other errors show a 'Couldn't Save' alert + error haptic. get_surprise_pick returns only 'event'/'restaurant' (verified in migration)."
     },
     {
       "id": "IOS-AUDIT-FEAT-014",
@@ -1647,8 +1647,8 @@
         "No regression to the rail's horizontal scroll/paging"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Found by iOS UX audit. ForYouRail.swift:46 renders ForYouCard(rec: rec) with no NavigationLink/Button/onTapGesture. A code comment claims navigation 'lives in the .navigationDestination on the parent \u2014 we deep-link via the rec.id', but ForYouCard has no tap handling and no matching navigationDestination exists. The entire personalized rail is non-interactive."
+      "passes": true,
+      "notes": "Found by iOS UX audit. ForYouRail.swift:46 renders ForYouCard(rec: rec) with no NavigationLink/Button/onTapGesture. A code comment claims navigation 'lives in the .navigationDestination on the parent \u2014 we deep-link via the rec.id', but ForYouCard has no tap handling and no matching navigationDestination exists. The entire personalized rail is non-interactive. | DONE (2026-06-24): ForYouRail cards wrapped in NavigationLink(value: rec); added .navigationDestination(for: ForYouService.Recommendation.self) -> ForYouRecommendationDetailView which fetches the full Event by id via EventsService.fetchEvent(id:) with loading/failed/loaded phases. Self-contained so it works in Home and Dashboard stacks."
     },
     {
       "id": "IOS-AUDIT-FEAT-015",
@@ -1661,8 +1661,8 @@
         "Manual verification documented (fresh-install run, choose each path)"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Found by iOS UX audit. ConsentService.swift:14-17 exposes hasCompletedConsent/*Consent as computed UserDefaults getters/setters; @Observable only tracks stored properties, so writes don't notify SwiftUI. DesMoinesInsiderApp.swift:47 presents ConsentView { } with an empty onComplete, and dismissal depends solely on needsConsentPrompt flipping \u2014 which never re-fires. Potential hard launch blocker."
+      "passes": true,
+      "notes": "Found by iOS UX audit. ConsentService.swift:14-17 exposes hasCompletedConsent/*Consent as computed UserDefaults getters/setters; @Observable only tracks stored properties, so writes don't notify SwiftUI. DesMoinesInsiderApp.swift:47 presents ConsentView { } with an empty onComplete, and dismissal depends solely on needsConsentPrompt flipping \u2014 which never re-fires. Potential hard launch blocker. | DONE (2026-06-24): Added locally-observed `consentCompleted` @State in DesMoinesInsiderApp; ConsentView presented with `{ consentCompleted = true }` and gate condition is now `consent.needsConsentPrompt && !consentCompleted`. Persisted hasCompletedConsent still suppresses the prompt next launch."
     },
     {
       "id": "IOS-AUDIT-FEAT-016",
@@ -1675,8 +1675,8 @@
         "Restore-failure (e.g. AppStore.sync() network error) is distinguished from a genuinely empty entitlement, not both shown as 'nothing to restore'"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Found by iOS UX audit. SettingsView.swift:42-48 Button { Task { await storeKit.restorePurchases() } } with no read of the service's isLoading/errorMessage. restorePurchases() (StoreKitService.swift:273) sets errorMessage and toggles isLoading but the view ignores both. Related: PaywallView.restore() masks AppStore.sync() failures as 'No active subscription found' (same fix for the distinguish-failure criterion)."
+      "passes": true,
+      "notes": "Found by iOS UX audit. SettingsView.swift:42-48 Button { Task { await storeKit.restorePurchases() } } with no read of the service's isLoading/errorMessage. restorePurchases() (StoreKitService.swift:273) sets errorMessage and toggles isLoading but the view ignores both. Related: PaywallView.restore() masks AppStore.sync() failures as 'No active subscription found' (same fix for the distinguish-failure criterion). | DONE (2026-06-24): SettingsView restorePurchases() helper shows a ProgressView label + 'Restore Purchases' result alert; branches on storeKit.errorMessage (sync failure) vs currentTier != .free (restored) vs free (nothing found)."
     },
     {
       "id": "IOS-AUDIT-FEAT-017",
@@ -1689,8 +1689,8 @@
         "Implemented via a pending-removal queue or immediate commit-of-prior when a new removal starts (FavoritesView.swift:75/95/113)"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Found by iOS UX audit. FavoritesView.swift removeEventWithUndo/removeRestaurantWithUndo/removeAttractionWithUndo (lines 75, 95, 113) call undoState?.commitTask?.cancel() before replacing undoState, but never await the prior remove* call. Data-integrity bug: the optimistically-removed item is dropped from the array yet never deleted on the backend."
+      "passes": true,
+      "notes": "Found by iOS UX audit. FavoritesView.swift removeEventWithUndo/removeRestaurantWithUndo/removeAttractionWithUndo (lines 75, 95, 113) call undoState?.commitTask?.cancel() before replacing undoState, but never await the prior remove* call. Data-integrity bug: the optimistically-removed item is dropped from the array yet never deleted on the backend. | DONE (2026-06-24): Added flushPendingRemoval() in FavoritesView; the three remove*WithUndo paths now flush (commit) the prior pending removal to the backend before starting a new undo instead of cancelling its commitTask uncommitted."
     },
     {
       "id": "IOS-AUDIT-FEAT-018",
@@ -1781,8 +1781,8 @@
         "Behavior matches the already-fixed RestaurantsView/AttractionsView pattern"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Found by iOS UX audit. HotelsView.swift:76, WeekendView.swift:62, ArticlesView.swift:79 all call notificationOccurred(.success) unconditionally while their VMs set errorMessage on failure (HotelsViewModel:82, WeekendViewModel:52, ArticlesViewModel:106). DealsView.swift:64 has no refresh haptic at all."
+      "passes": true,
+      "notes": "Found by iOS UX audit. HotelsView.swift:76, WeekendView.swift:62, ArticlesView.swift:79 all call notificationOccurred(.success) unconditionally while their VMs set errorMessage on failure (HotelsViewModel:82, WeekendViewModel:52, ArticlesViewModel:106). DealsView.swift:64 has no refresh haptic at all. | DONE (2026-06-24): HotelsView/ArticlesView/WeekendView refresh haptics now branch on viewModel.errorMessage == nil ? .success : .error (canonical UX-005 pattern). DealsView .refreshable gained the same success/error haptic."
     },
     {
       "id": "IOS-AUDIT-UX-016",
@@ -1794,8 +1794,8 @@
         "Genuine empty (no error) still shows the empty state; failures always offer retry"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Found by iOS UX audit. DealsView.swift:25 only shows the error when allDeals.isEmpty. WeekendView.swift:29 gates errorBanner on 'errorMessage != nil && isEmpty' where isEmpty also requires featured rails empty \u2014 so an events-fetch failure with featured rails present hides the error and shows zero events with no explanation."
+      "passes": true,
+      "notes": "Found by iOS UX audit. DealsView.swift:25 only shows the error when allDeals.isEmpty. WeekendView.swift:29 gates errorBanner on 'errorMessage != nil && isEmpty' where isEmpty also requires featured rails empty \u2014 so an events-fetch failure with featured rails present hides the error and shows zero events with no explanation. | DONE (2026-06-24): WeekendView shows errorBanner inline when errorMessage != nil && populatedDays.isEmpty (events failed but featured rails loaded). DealsView shows errorBanner instead of 'No Deals Found' when filteredDeals empty and errorMessage != nil. Both banners already include Retry."
     },
     {
       "id": "IOS-AUDIT-UX-017",
@@ -1807,8 +1807,8 @@
         "Error cases still use the error alert + haptic"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Found by iOS UX audit. AuthViewModel.swift:204-205 success calls setError('Password reset email sent...'); setError (222-226) sets showError=true + notificationOccurred(.error); AuthView.swift:179 renders .alert('Sign In Error', isPresented: $viewModel.showError)."
+      "passes": true,
+      "notes": "Found by iOS UX audit. AuthViewModel.swift:204-205 success calls setError('Password reset email sent...'); setError (222-226) sets showError=true + notificationOccurred(.error); AuthView.swift:179 renders .alert('Sign In Error', isPresented: $viewModel.showError). | DONE (2026-06-24): AuthViewModel gained infoMessage/showInfo + setInfo() (success haptic); resetPassword success now calls setInfo. AuthView renders an 'Email Sent' info alert separate from 'Sign In Error'."
     },
     {
       "id": "IOS-AUDIT-UX-018",
@@ -1833,8 +1833,8 @@
         "Genuine end-of-deck still shows the empty state"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Found by iOS UX audit. DiscoverViewModel.swift:235 boost() does deck = [] then Task { fetchMore() } with no isLoading; DiscoverView.swift:158-162 then falls through to the empty/all-done branch because 'isLoading && deck.isEmpty' is false."
+      "passes": true,
+      "notes": "Found by iOS UX audit. DiscoverViewModel.swift:235 boost() does deck = [] then Task { fetchMore() } with no isLoading; DiscoverView.swift:158-162 then falls through to the empty/all-done branch because 'isLoading && deck.isEmpty' is false. | DONE (2026-06-24): DiscoverViewModel.boost() sets isLoading=true before clearing the deck and clears it after fetchMore(), so the loading state shows instead of flashing the all-done empty state mid-boost."
     },
     {
       "id": "IOS-AUDIT-UX-020",
@@ -1858,8 +1858,8 @@
         "Calendar-add errors remain under the Calendar alert; share errors read as share errors"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Found by iOS UX audit. ItineraryDetailView.swift:211 share() failure sets calendarMessage='Couldn't create a share link...'; the only alert is .alert('Calendar', isPresented: ... calendarMessage ...) at line 117."
+      "passes": true,
+      "notes": "Found by iOS UX audit. ItineraryDetailView.swift:211 share() failure sets calendarMessage='Couldn't create a share link...'; the only alert is .alert('Calendar', isPresented: ... calendarMessage ...) at line 117. | DONE (2026-06-24): ItineraryDetailView share() now sets a separate shareErrorMessage surfaced by a 'Couldn't Share' alert instead of reusing calendarMessage under the 'Calendar' alert."
     },
     {
       "id": "IOS-AUDIT-UX-022",
@@ -1908,8 +1908,8 @@
         "Every new pick (initial roll and 'Try another') re-triggers the reveal reliably"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Found by iOS UX audit. SurpriseMeView.swift:117 revealCard uses .scaleEffect(revealed ?1:0.92).opacity(revealed ?1:0) with .onAppear setting revealed=true; load() resets revealed=false on every roll but tryAnother reuses the same view, so onAppear may not re-fire."
+      "passes": true,
+      "notes": "Found by iOS UX audit. SurpriseMeView.swift:117 revealCard uses .scaleEffect(revealed ?1:0.92).opacity(revealed ?1:0) with .onAppear setting revealed=true; load() resets revealed=false on every roll but tryAnother reuses the same view, so onAppear may not re-fire. | DONE (2026-06-24): SurpriseMe revealCard reveal now driven by .task(id: pick.id) instead of .onAppear, so 'Try another' re-triggers the scale/opacity animation per pick."
     },
     {
       "id": "IOS-AUDIT-UX-026",

@@ -78,7 +78,9 @@ struct ArticlesView: View {
         }
         .refreshable {
             await viewModel.refresh()
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            // Reflect the real outcome instead of always firing success (UX-015).
+            UINotificationFeedbackGenerator()
+                .notificationOccurred(viewModel.errorMessage == nil ? .success : .error)
         }
         .navigationTitle("Articles & Guides")
         .navigationBarTitleDisplayMode(.large)
