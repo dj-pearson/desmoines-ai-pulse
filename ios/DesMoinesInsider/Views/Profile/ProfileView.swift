@@ -155,6 +155,9 @@ struct ProfileView: View {
                     Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
                         .foregroundStyle(.red)
                 }
+                // Don't let Sign Out race an in-flight delete/save, which both
+                // call auth.signOut() (IOS-AUDIT-UX-029).
+                .disabled(viewModel.isDeleting || viewModel.isSaving)
 
                 Button(role: .destructive) {
                     viewModel.showDeleteConfirmation = true

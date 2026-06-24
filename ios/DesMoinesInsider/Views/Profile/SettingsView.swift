@@ -125,7 +125,9 @@ struct SettingsView: View {
                     }
 
                     if notificationStatus == .authorized {
-                        @AppStorage("eventRemindersEnabled") var remindersEnabled = true
+                        // The toggle drives UserDefaults directly via the binding
+                        // below; no separate @AppStorage local (which wouldn't be
+                        // installed as view state anyway) — IOS-AUDIT-UX-029.
                         Toggle(isOn: Binding(
                             get: { UserDefaults.standard.bool(forKey: "eventRemindersEnabled") },
                             set: { UserDefaults.standard.set($0, forKey: "eventRemindersEnabled") }

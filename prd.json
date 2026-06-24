@@ -1755,8 +1755,8 @@
         "No dead count-formatting code left carrying a permanent 0"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Found by iOS UX audit (two passes). RightNowRibbon.swift:186 \u2014 every Template countFetcher is { return 0 } (patios/cozy/comfortFood/liveMusic/lunch/openNow), so headlineFn always takes the generic branch and the count-based copy (documented at lines 102-103) never appears."
+      "passes": true,
+      "notes": "Found by iOS UX audit (two passes). RightNowRibbon.swift:186 \u2014 every Template countFetcher is { return 0 } (patios/cozy/comfortFood/liveMusic/lunch/openNow), so headlineFn always takes the generic branch and the count-based copy (documented at lines 102-103) never appears. | DONE (2026-06-24): Removed the dead count machinery from RightNowRibbon (countFetcher/estimateCount all returned 0) \u2014 headlineFn no longer takes a count, matchingCount state removed, refresh no longer calls estimateCount, and all 6 templates commit to their generic copy. No dead count-formatting code remains."
     },
     {
       "id": "IOS-AUDIT-FEAT-023",
@@ -1959,8 +1959,8 @@
         "The onboarding value-page Skip emits an analytics event for funnel parity with the trial step (OnboardingView.swift:140-142)"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Found by iOS UX audit. Four discrete small defects in the auth/settings/onboarding area, each independently verifiable; grouped as one polish story."
+      "passes": true,
+      "notes": "Found by iOS UX audit. Four discrete small defects in the auth/settings/onboarding area, each independently verifiable; grouped as one polish story. | DONE (2026-06-24): (1) handleAppleSignIn suppresses .canceled/.unknown/.notInteractive dismissals instead of showing a hard error. (2) ProfileView Sign Out is disabled while viewModel.isDeleting||isSaving. (3) Removed the dead local @AppStorage('eventRemindersEnabled') in SettingsView (the Toggle uses a manual UserDefaults binding). (4) Onboarding value-page Skip now emits analytics.trackOnboardingTrial(action: 'skipped_value_pages')."
     },
     {
       "id": "IOS-AUDIT-UX-030",
@@ -1996,8 +1996,8 @@
         "If the component is preview-only, it is clearly scoped/annotated as such and not used on a live screen"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Found by iOS UX audit. SubscriptionTierCard.swift BillingCycleToggle hardcodes 'Annual \u00b7 save 20%' and the card takes raw price/strikethroughPrice strings; PaywallView computes a real annualSavingsPercent the component ignores."
+      "passes": true,
+      "notes": "Found by iOS UX audit. SubscriptionTierCard.swift BillingCycleToggle hardcodes 'Annual \u00b7 save 20%' and the card takes raw price/strikethroughPrice strings; PaywallView computes a real annualSavingsPercent the component ignores. | DONE (2026-06-24): BillingCycleToggle no longer hardcodes 'Annual \u00b7 save 20%' \u2014 it takes an annualLabel (default neutral 'Annual') to be supplied from StoreKit at the call site; added a prominent doc note that SubscriptionTierCard/BillingCycleToggle (currently unused / mirrors Android) must be driven by Product.displayPrice + computed annualSavingsPercent before production use, not the placeholder strings."
     },
     {
       "id": "IOS-AUDIT-UX-033",

@@ -182,7 +182,15 @@ final class AuthViewModel {
                 setError(error.localizedDescription)
             }
         case .failure(let error):
-            if (error as NSError).code != ASAuthorizationError.canceled.rawValue {
+            // Treat user-initiated dismissals (cancel, or the sheet being
+            // dismissed → .unknown / .notInteractive) as no-ops rather than
+            // presenting a hard "Sign In Error" (IOS-AUDIT-UX-029).
+            let dismissCodes: Set<Int> = [
+                ASAuthorizationError.canceled.rawValue,
+                ASAuthorizationError.unknown.rawValue,
+                ASAuthorizationError.notInteractive.rawValue,
+            ]
+            if !dismissCodes.contains((error as NSError).code) {
                 setError(error.localizedDescription)
             }
         }
