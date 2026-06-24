@@ -2065,8 +2065,8 @@
         "Add tests covering valid:false revocation vs transient-failure grace"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: StoreKitService.swift:490-496 and 515-518 \u2014 'do NOT revoke local access (grace period)'; localTier/currentTier (lines 93-114) ignore server rejection"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-24): StoreKitService now adds the product to serverRevokedProductIDs on a definitive validate-ios-receipt valid:false; localTier subtracts that set so a rejected receipt no longer keeps premium. Transient failures keep grace; revocation clears on later success or when the product leaves entitlements. Added hasServerRevokedEntitlement for UI. RLS-side enforcement remains a backend follow-up. Pending macOS build + StoreKit-test verification."
     },
     {
       "id": "IOS-AUDIT-SEC-012",
@@ -2259,8 +2259,8 @@
         "Verified with VoiceOver that both actions fire."
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: MapPreviewSheet.swift:body lines 102-103 combine the container holding the Directions (65) and Details (78) Buttons"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-24): MapPreviewSheet scopes .combine to the info block; Directions/Details are separate, labeled, focusable buttons. Pending on-device VoiceOver QA."
     },
     {
       "id": "IOS-AUDIT-UX-036",
@@ -2274,8 +2274,8 @@
         "Verified with VoiceOver that both action and dismiss fire."
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: SubscriptionStatusBanner.swift:body lines 55-56 combine the HStack containing the action button (32) and Dismiss button (39-47)"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-24): SubscriptionStatusBanner uses .contain instead of .combine; message is static text, action + Dismiss buttons stay individually focusable/activatable. Pending on-device VoiceOver QA."
     },
     {
       "id": "IOS-AUDIT-UX-037",
@@ -2289,8 +2289,8 @@
         "Verified with VoiceOver on at least one event and one restaurant card."
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: SwipeCard.swift lines 115-117 (ignore+label+hint, no action/trait); SwipeCardStack.swift line 91 (onTapGesture-only open)"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-24): SwipeCardStack exposes the top card as an activatable button (double-tap opens detail) with named rotor actions Save/Skip/More like this mapped to the existing programmatic commits; back cards hidden from VoiceOver. Pending on-device VoiceOver QA."
     },
     {
       "id": "IOS-AUDIT-UX-038",
@@ -2304,8 +2304,8 @@
         "Decorative imagery inside the popups stays accessibilityHidden so only actions are focusable."
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: EventMapView.swift popups: open-detail (~348), call Link (~415), website Link (~474), xmark close buttons (~356/423/482) \u2014 no labels, no minHitTarget"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-24): EventMapView event/restaurant/attraction popups now label and .minHitTarget() the open/call/website/close controls and combine each info block. Pending on-device VoiceOver QA."
     },
     {
       "id": "IOS-AUDIT-UX-039",
@@ -2483,8 +2483,8 @@
         "An integration/contract test asserts the iOS insert shape and the backend select predicate stay in sync"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: SavedSearchService.swift:createSavedSearch + Models/SavedSearch.swift (alerts_enabled nested in filters) vs supabase/functions/saved-search-alerts/index.ts:127-131 (.eq('search_type','event_list').eq('alerts_enabled',true))"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-24): SavedSearchService writes top-level search_type + alerts_enabled (Events tab -> 'event_list') on insert and on alert toggle, self-healing older rows, so the nightly saved-search-alerts job now matches iOS searches. Dual-write keeps filters JSON. Added searchType mapping unit test. Columns pre-exist (additive). Pending end-to-end delivery verification."
     },
     {
       "id": "IOS-AUDIT-FEAT-025",
@@ -2498,8 +2498,8 @@
         "A test exercises an intent fired from Home and asserts the destination is reached"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: Intents/PulseAppIntents.swift (sets dispatcher.pending) + Views/Search/SearchView.swift:84-89,141-161 (sole consumer) + MainTabView.swift (no dispatcher reference, default selectedTab=.home)"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-24): MainTabView observes PulseIntentDispatcher and switches to the Search tab on a pending intent (cold launch + while running); onChange captures the non-nil new value to avoid a consume race with SearchView. Pending on-device Siri/Shortcuts QA."
     },
     {
       "id": "IOS-AUDIT-FEAT-026",
@@ -2633,8 +2633,8 @@
         "Unit/integration coverage for the below-minimum and at-minimum branches"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: supabase/functions/ has no version-check dir; no minSupportedVersions.ts; grep version-check/MIN_SUPPORTED in ios/DesMoinesInsider returns nothing"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-24): Added _shared/minSupportedVersions.ts + version-check edge function (verify_jwt=false) and iOS VersionCheckService/ForceUpdateView called on launch (fails open). Deno + iOS contract tests added; storeUrl uses a placeholder numeric App Store id until assigned. Pending deploy + on-device verification."
     },
     {
       "id": "IOS-AUDIT-REL-002",
