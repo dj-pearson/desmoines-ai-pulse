@@ -53,6 +53,12 @@ enum Config {
     static let siteURL = URL(string: "https://desmoinesinsider.com")!
     static let supportEmail = "support@desmoinesinsider.com"
 
+    /// Marketing version (CFBundleShortVersionString), e.g. "1.2.0". Sent to the
+    /// `version-check` edge function on launch (IOS-AUDIT-REL-001).
+    static var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+    }
+
     // MARK: - Defaults
 
     /// Des Moines, Iowa center coordinates

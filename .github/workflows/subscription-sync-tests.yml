@@ -42,3 +42,4 @@ jobs:
         with:
           deno-version: v1.x
       - run: deno test --allow-read supabase/functions/_tests/cross-platform-sync.test.ts
+      - run: deno test --allow-none supabase/functions/_tests/version-check.test.ts
