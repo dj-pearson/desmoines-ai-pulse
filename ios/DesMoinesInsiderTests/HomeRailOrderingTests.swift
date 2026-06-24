@@ -28,7 +28,7 @@ final class HomeRailOrderingTests: XCTestCase {
     }
 
     func testCanonicalStrategyAlwaysReturnsCanonical() {
-        let order = HomeRailOrdering.order(for: signals(favRestaurants: 9, engaged: true), strategy: .canonical)
+        let order = HomeRailOrdering.order(for: signals(engaged: true, favRestaurants: 9), strategy: .canonical)
         XCTAssertEqual(order, canonical)
     }
 
