@@ -7,6 +7,8 @@ struct EventMapView: View {
     @State private var viewModel = MapViewModel()
     @State private var navigationPath = NavigationPath()
     @State private var isSearchFocused = false
+    /// Cluster whose members are being disambiguated in a sheet (IOS-AUDIT-UX-027).
+    @State private var disambiguationCluster: MapCluster?
     @State private var currentRegion = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: Config.defaultLatitude, longitude: Config.defaultLongitude),
         span: MKCoordinateSpan(latitudeDelta: 0.15, longitudeDelta: 0.15)
@@ -107,11 +109,19 @@ struct EventMapView: View {
                 ForEach(viewModel.clusters(for: currentRegion)) { cluster in
                     Annotation("\(cluster.count) places", coordinate: cluster.coordinate) {
                         Button {
-                            zoomTo(cluster: cluster)
+                            // Small clusters: list the members so co-located pins
+                            // (which more zoom can't separate) stay selectable.
+                            // Large clusters: zoom to break them up first
+                            // (IOS-AUDIT-UX-027).
+                            if cluster.count <= 25 {
+                                disambiguationCluster = cluster
+                            } else {
+                                zoomTo(cluster: cluster)
+                            }
                         } label: {
                             ClusterMapPin(count: cluster.count, tint: cluster.tintColor)
                         }
-                        .accessibilityLabel("\(cluster.count) places at this location. Tap to zoom in.")
+                        .accessibilityLabel("\(cluster.count) places here. Tap to choose one or zoom in.")
                     }
                 }
             } else {
@@ -168,6 +178,18 @@ struct EventMapView: View {
         }
         .onMapCameraChange { context in
             currentRegion = context.region
+        }
+        .sheet(item: $disambiguationCluster) { cluster in
+            ClusterDisambiguationSheet(members: viewModel.members(in: cluster)) { member in
+                viewModel.clearSelection()
+                switch member {
+                case .event(let e): viewModel.selectedEvent = e
+                case .restaurant(let r): viewModel.selectedRestaurant = r
+                case .attraction(let a): viewModel.selectedAttraction = a
+                }
+                disambiguationCluster = nil
+            }
+            .presentationDetents([.medium, .large])
         }
     }
 
@@ -576,6 +598,48 @@ private struct AttractionMapPin: View {
                 .foregroundStyle(.white)
         }
         .animation(.spring(response: 0.3), value: isSelected)
+    }
+}
+
+// MARK: - Cluster Disambiguation Sheet
+
+/// Lists the members of a tapped cluster so co-located pins stay selectable even
+/// when the map is in clustering mode (IOS-AUDIT-UX-027).
+private struct ClusterDisambiguationSheet: View {
+    let members: [MapMember]
+    let onSelect: (MapMember) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List(members) { member in
+                Button {
+                    onSelect(member)
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: member.icon)
+                            .foregroundStyle(member.tint)
+                            .frame(width: 24)
+                            .accessibilityHidden(true)
+                        Text(member.title)
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .accessibilityHint("Opens this place")
+            }
+            .navigationTitle("\(members.count) places here")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Close") { dismiss() }
+                }
+            }
+        }
     }
 }
 

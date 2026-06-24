@@ -255,6 +255,11 @@ struct PaywallView: View {
             }
             .task {
                 await storeKit.loadProducts()
+                // Validate the initial preferredPeriod against the periods that
+                // actually loaded, so selectedPeriod can't stay .annual while the
+                // toggle is hidden and the price falls back to monthly
+                // (IOS-AUDIT-UX-028).
+                clampPeriod()
                 await refreshTrialCopy()
             }
             .onChange(of: selectedTier) { _, _ in
@@ -605,6 +610,10 @@ struct PaywallView: View {
         if storeKit.currentTier != .free {
             didConvert = true
             dismiss()
+        } else if let storeError = storeKit.errorMessage {
+            // A real restore failure (e.g. AppStore.sync network error) — don't
+            // mask it as "nothing to restore" (IOS-AUDIT-UX-028).
+            errorMessage = storeError
         } else {
             errorMessage = "No active subscription found to restore."
         }

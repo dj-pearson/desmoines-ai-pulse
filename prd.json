@@ -1932,8 +1932,8 @@
         "When a tapped cluster's members share (nearly) one coordinate, present a disambiguation list/sheet instead of only zooming, so co-located items are selectable (EventMapView.swift:104; shouldCluster at MapViewModel.swift:319)"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Found by iOS UX audit. MapTimeSlider.swift:64 '\\(eventCount) events + \\(restaurantCount) restaurants open at ...' mislabels event filtering. EventMapView.swift:104 only renders individual tappable Annotations when !shouldCluster; zoomTo halves the span and can't resolve a co-located cluster, leaving members unselectable."
+      "passes": true,
+      "notes": "Found by iOS UX audit. MapTimeSlider.swift:64 '\\(eventCount) events + \\(restaurantCount) restaurants open at ...' mislabels event filtering. EventMapView.swift:104 only renders individual tappable Annotations when !shouldCluster; zoomTo halves the span and can't resolve a co-located cluster, leaving members unselectable. | DONE (2026-06-24): MapTimeSlider pill reworded to 'N events near {time} \u00b7 M restaurants open' (no false 'open at' for events). Added MapMember enum + MapViewModel.members(in:) resolver and a ClusterDisambiguationSheet: tapping a cluster of <=25 lists its members (selecting sets selectedEvent/Restaurant/Attraction) so co-located pins stay selectable even though shouldCluster is total-count based; larger clusters still zoom."
     },
     {
       "id": "IOS-AUDIT-UX-028",
@@ -1945,8 +1945,8 @@
         "Restore in the paywall distinguishes 'restore failed' (surface storeKit.errorMessage) from 'no subscription found' (PaywallView.swift:599-611)"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Found by iOS UX audit. PaywallView init sets selectedPeriod=preferredPeriod (onboarding passes .annual) but clampPeriod() runs only on tier change, not after products load; periods falls back to [.monthly], the toggle hides, yet selectedPeriod stays .annual and price/footer mismatch."
+      "passes": true,
+      "notes": "Found by iOS UX audit. PaywallView init sets selectedPeriod=preferredPeriod (onboarding passes .annual) but clampPeriod() runs only on tier change, not after products load; periods falls back to [.monthly], the toggle hides, yet selectedPeriod stays .annual and price/footer mismatch. | DONE (2026-06-24): PaywallView .task now calls clampPeriod() after loadProducts() so the initial preferredPeriod is validated against available periods; restore() distinguishes a real restore failure (surfaces storeKit.errorMessage) from 'No active subscription found'."
     },
     {
       "id": "IOS-AUDIT-UX-029",

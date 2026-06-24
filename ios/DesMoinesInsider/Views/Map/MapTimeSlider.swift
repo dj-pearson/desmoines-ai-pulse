@@ -61,7 +61,10 @@ struct MapTimeSlider: View {
 
     private var countPillText: String {
         guard let mapTime else { return "" }
-        return "\(eventCount) events + \(restaurantCount) restaurants open at \(Self.pillTimeFormatter.string(from: mapTime))"
+        // Events are filtered to a window around the slider time (not opening
+        // hours), so don't claim they're "open at" it (IOS-AUDIT-UX-027).
+        let time = Self.pillTimeFormatter.string(from: mapTime)
+        return "\(eventCount) events near \(time) · \(restaurantCount) restaurants open"
     }
 
     private func isActive(_ stop: MapTimeSliderStop) -> Bool {
