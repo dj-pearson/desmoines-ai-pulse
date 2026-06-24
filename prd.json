@@ -1729,8 +1729,8 @@
         "Users who verify on another device can reach the app without signing out"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Found by iOS UX audit. VerifyEmailView.swift:50 promises auto-refresh but the view has no polling Task, no .onChange(scenePhase), and no refresh call. Verification only clears via onOpenURL\u2192client.handle(url) in DesMoinesInsiderApp.swift:88-90 (same-device link tap). Only escape today is 'Use a different account' (sign out)."
+      "passes": true,
+      "notes": "Found by iOS UX audit. VerifyEmailView.swift:50 promises auto-refresh but the view has no polling Task, no .onChange(scenePhase), and no refresh call. Verification only clears via onOpenURL\u2192client.handle(url) in DesMoinesInsiderApp.swift:88-90 (same-device link tap). Only escape today is 'Use a different account' (sign out). | DONE (2026-06-24): Added AuthService.refreshUser() (auth.refreshSession() \u2192 updates currentUser, returns verified bool). VerifyEmailView now polls every 5s via .task, refreshes on scenePhase==.active, and has an 'I've verified \u2014 refresh' button; the app shell routes away once needsEmailVerification flips false. Copy is now accurate."
     },
     {
       "id": "IOS-AUDIT-FEAT-021",
@@ -1820,8 +1820,8 @@
         "No visual snap/jump on button taps"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Found by iOS UX audit. DiscoverView.swift:219 button handlers call viewModel.skip/like/boost directly (instant removal); the animated programmatic* methods in SwipeCardStack are defined but grep confirms zero call sites."
+      "passes": true,
+      "notes": "Found by iOS UX audit. DiscoverView.swift:219 button handlers call viewModel.skip/like/boost directly (instant removal); the animated programmatic* methods in SwipeCardStack are defined but grep confirms zero call sites. | DONE (2026-06-24): SwipeCardStack gained a @Binding command (enum Command: skip/like/boost) consumed via .onChange to drive the existing programmaticSkip/Like/Boost animated commit (guarded against re-entrancy). DiscoverView action buttons now set swipeCommand instead of calling viewModel directly, so a tap animates the fly-off identically to a swipe (commit() still fires the haptic + viewModel.skip/like/boost)."
     },
     {
       "id": "IOS-AUDIT-UX-019",

@@ -20,6 +20,12 @@ struct SwipeCardStack: View {
     var onSkip: (SwipeItem) -> Void
     var onBoost: (SwipeItem) -> Void
     var onTap: (SwipeItem) -> Void
+    /// Set by the parent's action-bar buttons to drive the same animated fly-off
+    /// as a gesture swipe (IOS-AUDIT-UX-018). Reset to nil once consumed.
+    @Binding var command: Command?
+
+    /// A button-driven swipe, mapped to the matching commit direction.
+    enum Command: Equatable { case skip, like, boost }
 
     @State private var dragOffset: CGSize = .zero
     @State private var isDismissing = false
@@ -82,6 +88,16 @@ struct SwipeCardStack: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Drive button taps through the same animated commit path as a swipe.
+        .onChange(of: command) { _, newValue in
+            guard let newValue else { return }
+            switch newValue {
+            case .skip: programmaticSkip()
+            case .like: programmaticLike()
+            case .boost: programmaticBoost()
+            }
+            command = nil
+        }
     }
 
     // MARK: - Stack geometry
@@ -177,7 +193,7 @@ struct SwipeCardStack: View {
     func programmaticBoost() { triggerProgrammatic(.up) }
 
     private func triggerProgrammatic(_ direction: CommitDirection) {
-        guard let item = items.first else { return }
+        guard !isDismissing, let item = items.first else { return }
         let action: (SwipeItem) -> Void
         switch direction {
         case .left: action = onSkip
