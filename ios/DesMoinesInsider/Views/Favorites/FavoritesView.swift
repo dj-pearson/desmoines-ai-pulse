@@ -70,9 +70,30 @@ struct FavoritesView: View {
 
     // MARK: - Undo Support
 
+    /// Commits the currently-pending removal to the backend immediately instead
+    /// of letting its delayed task do it. Called when a new removal starts so the
+    /// prior optimistic removal is persisted rather than silently dropped when its
+    /// timer task is cancelled (IOS-AUDIT-FEAT-017). The item is already gone from
+    /// the local arrays; this only fires the backend delete.
+    private func flushPendingRemoval() {
+        guard let pending = undoState else { return }
+        pending.commitTask?.cancel()
+        let kind = pending.kind
+        Task {
+            switch kind {
+            case .event(let event):
+                await viewModel.removeEventFavorite(eventId: event.id)
+            case .restaurant(let restaurant):
+                await viewModel.removeRestaurantFavorite(restaurantId: restaurant.id)
+            case .attraction(let attraction):
+                await viewModel.removeAttractionFavorite(attractionId: attraction.id)
+            }
+        }
+    }
+
     private func removeEventWithUndo(event: Event) {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        undoState?.commitTask?.cancel()
+        flushPendingRemoval()
 
         // Optimistically remove from UI
         viewModel.upcomingEvents.removeAll { $0.id == event.id }
@@ -92,7 +113,7 @@ struct FavoritesView: View {
 
     private func removeRestaurantWithUndo(restaurant: Restaurant) {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        undoState?.commitTask?.cancel()
+        flushPendingRemoval()
 
         viewModel.favoriteRestaurants.removeAll { $0.id == restaurant.id }
 
@@ -110,7 +131,7 @@ struct FavoritesView: View {
 
     private func removeAttractionWithUndo(attraction: Attraction) {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        undoState?.commitTask?.cancel()
+        flushPendingRemoval()
 
         viewModel.favoriteAttractions.removeAll { $0.id == attraction.id }
 
