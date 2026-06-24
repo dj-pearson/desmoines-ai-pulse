@@ -145,7 +145,12 @@ struct AttractionsView: View {
                         .background(selected ? Color.accentColor : Color(.systemGray6), in: Capsule())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("\(type.displayName) \(selected ? "selected" : "")")
+                    // Use the .isSelected trait instead of an embedded English
+                    // word (which also left a trailing space when unselected) so
+                    // VoiceOver announces the toggle state correctly and it stays
+                    // localizable (IOS-AUDIT-UX-041).
+                    .accessibilityLabel(type.displayName)
+                    .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
                 }
             }
         }

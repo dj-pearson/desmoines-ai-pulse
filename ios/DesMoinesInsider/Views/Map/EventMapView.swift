@@ -530,6 +530,8 @@ struct EventMapView: View {
 private struct EventMapPin: View {
     let category: EventCategory
     var isSelected: Bool = false
+    // Drop the selection spring under Reduce Motion (IOS-AUDIT-UX-047).
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
@@ -542,12 +544,13 @@ private struct EventMapPin: View {
                 .font(.system(size: isSelected ? 16 : 12, weight: .semibold))
                 .foregroundStyle(.white)
         }
-        .animation(.spring(response: 0.3), value: isSelected)
+        .animation(reduceMotion ? nil : .spring(response: 0.3), value: isSelected)
     }
 }
 
 private struct RestaurantMapPin: View {
     var isSelected: Bool = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
@@ -560,7 +563,7 @@ private struct RestaurantMapPin: View {
                 .font(.system(size: isSelected ? 14 : 11, weight: .semibold))
                 .foregroundStyle(.white)
         }
-        .animation(.spring(response: 0.3), value: isSelected)
+        .animation(reduceMotion ? nil : .spring(response: 0.3), value: isSelected)
     }
 }
 
@@ -600,6 +603,7 @@ private struct ClusterMapPin: View {
 private struct AttractionMapPin: View {
     let type: AttractionType
     var isSelected: Bool = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
@@ -612,7 +616,7 @@ private struct AttractionMapPin: View {
                 .font(.system(size: isSelected ? 14 : 11, weight: .semibold))
                 .foregroundStyle(.white)
         }
-        .animation(.spring(response: 0.3), value: isSelected)
+        .animation(reduceMotion ? nil : .spring(response: 0.3), value: isSelected)
     }
 }
 

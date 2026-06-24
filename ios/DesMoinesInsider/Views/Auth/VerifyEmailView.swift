@@ -220,7 +220,13 @@ struct VerifyEmailView: View {
 
     private func openMailApp() {
         guard let url = URL(string: "message://") else { return }
-        UIApplication.shared.open(url)
+        // Handle the failure path so the button never silently no-ops on a
+        // device with no Mail-capable app installed (IOS-AUDIT-UX-046).
+        UIApplication.shared.open(url) { success in
+            if !success {
+                showToast("No mail app found. Check your email in your browser to verify.")
+            }
+        }
     }
 }
 

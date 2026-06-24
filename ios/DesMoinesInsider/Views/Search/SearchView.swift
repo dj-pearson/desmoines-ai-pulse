@@ -384,6 +384,10 @@ struct SearchView: View {
                                 .font(.caption2)
                                 .foregroundStyle(.tertiary)
                         }
+                        .buttonStyle(.plain)
+                        // 44pt target so the glyph-sized delete isn't mis-tapped
+                        // next to the apply-search row (IOS-AUDIT-UX-043).
+                        .minHitTarget()
                         .accessibilityLabel("Remove \(query) from recent searches")
                     }
                     .padding(.horizontal)
