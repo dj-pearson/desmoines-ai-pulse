@@ -121,6 +121,13 @@ struct DesMoinesInsiderApp: App {
             .task {
                 launchCount += 1
 
+                // Install crash/non-fatal capture handlers as early as possible so
+                // an early-launch crash is still recorded (IOS-AUDIT-FEAT-010).
+                CrashReportingService.shared.configure()
+                if authService.isAuthenticated, let uid = authService.currentUser?.id.uuidString {
+                    CrashReportingService.shared.setUserId(uid)
+                }
+
                 // Launch-time minimum-supported-version gate (IOS-AUDIT-REL-001).
                 // Fails open, so a backend hiccup never blocks a supported build.
                 await versionCheck.checkOnLaunch()

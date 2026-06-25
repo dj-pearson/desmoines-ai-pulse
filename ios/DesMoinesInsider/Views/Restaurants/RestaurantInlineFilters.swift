@@ -238,6 +238,7 @@ private struct RatingPill: View {
                                 .clipShape(Capsule())
                             }
                             .buttonStyle(.plain)
+                            .accessibilityAddTraits(selected ? .isSelected : [])
                         }
                     }
                     Slider(
@@ -245,6 +246,8 @@ private struct RatingPill: View {
                         in: 0...5,
                         step: 0.5
                     )
+                    .accessibilityLabel("Minimum rating")
+                    .accessibilityValue(viewModel.minRating == 0 ? "Any" : "\(formatted(viewModel.minRating)) stars and up")
                     HStack {
                         Text("Any").font(.caption2).foregroundStyle(.secondary)
                         Spacer()

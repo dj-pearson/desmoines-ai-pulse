@@ -133,6 +133,11 @@ struct HomeView: View {
                 prompt: "Search events"
             )
             .toolbar {
+                if viewModel.activeFilterCount > 0 {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        filterToolbarButton
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     sortMenu
                 }
@@ -223,6 +228,24 @@ struct HomeView: View {
         case .forYou:
             break
         }
+    }
+
+    // MARK: - Filter Entry Point (IOS-AUDIT-UX-007)
+
+    /// Filter glyph in the toolbar with a count badge so the number of active
+    /// filters is visible at a glance. Tapping clears all filters (mirrors the
+    /// "Clear all" affordance in the active-filter chip bar).
+    private var filterToolbarButton: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            withAnimation { viewModel.clearFilters() }
+        } label: {
+            Image(systemName: "line.3.horizontal.decrease.circle")
+                .overlay(alignment: .topTrailing) {
+                    FilterCountBadge(count: viewModel.activeFilterCount)
+                }
+        }
+        .accessibilityLabel("Filters, \(viewModel.activeFilterCount) active")
     }
 
     // MARK: - Sort Menu (IOS-DISCOVER-2026-003)
@@ -402,7 +425,7 @@ struct HomeView: View {
                 .padding(.top, 40)
             } else {
                 LazyVStack(spacing: 12) {
-                    ForEach(Array(arrangedEvents.enumerated()), id: \.element.id) { index, event in
+                    ForEach(Array(viewModel.arrangedEvents.enumerated()), id: \.element.id) { index, event in
                         Button {
                             if event.isActivelySponsored {
                                 AdTrackingService.shared.logSponsoredClick(listingType: "event", listingId: event.id)
@@ -439,12 +462,6 @@ struct HomeView: View {
             }
         }
         .padding(.bottom, 20)
-    }
-
-    /// Sponsored listings (IOS-ADS-011) pulled to the front of the main events
-    /// feed; organic order is otherwise preserved.
-    private var arrangedEvents: [Event] {
-        SponsoredArranger.arrange(viewModel.events, isSponsored: { $0.isActivelySponsored })
     }
 
     /// Native in-feed ad cadence (IOS-ADS-012): the first ad appears after

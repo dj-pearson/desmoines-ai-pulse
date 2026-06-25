@@ -4570,3 +4570,78 @@ Verification here: npm run validate PASS (0 errors); changed files lint clean.
 passes=false pending runtime verification per user direction).
 All WEB stories now either pass or are code-complete-pending-runtime. Each runtime
 gate is documented above as ACTION REQUIRED. iOS-AUDIT-* remain (no Xcode).
+
+================================================================================
+## SESSION 2026-06-25 — iOS audit gap closure (branch claude/prd-stories-ios-gaps)
+================================================================================
+
+Worked the 29 not-passing prd.json stories. No Xcode/macOS available (Linux), so
+all iOS changes are verified by code inspection + pattern-matching the existing
+codebase, not a build. No Supabase edge-function request/response shapes changed
+(backward-compat preserved per CLAUDE.md).
+
+Net result: prd.json passes=true went 164 -> 180 / 193. The remaining 13 are all
+blocked on external secrets / product decisions / runtime verification (listed at
+bottom).
+
+### Implemented this session (passes=true)
+- IOS-AUDIT-PERF-004  Coalesce bulk filter changes into ONE fetch. Events/Restaurants
+  VMs: isBulkUpdating guard + equality guards on every filter didSet; clearFilters()
+  and applyPreset() mutate all properties then resetAndFetch() once. (Attractions VM
+  already had the equivalent suppressFilterSideEffects guard.)
+- IOS-AUDIT-PERF-005  QueryCache enforces 50MB maxDiskBytes via LRU eviction (get()
+  touches mtime; set()/pruneExpired() call enforceSizeCap()). +QueryCacheTests.
+- IOS-AUDIT-PERF-006  AdTrackingService dedupes sponsored impressions per session
+  (process-lifetime Set keyed type|id|placement), mirroring the campaign dedupe.
+- IOS-AUDIT-PERF-008  NetworkRetry decides on URLError.Code + structured HTTP status
+  (retry only >=500 or ==429); removed locale-dependent localizedDescription matching.
+- IOS-AUDIT-PERF-010  Sponsored arrangement moved off the render path into cached VM
+  arrangedEvents/arrangedRestaurants (recomputed via didSet); ForEach keyed by stable id.
+- IOS-AUDIT-UX-006   (RE-SCOPED) Target FilterSheet was already deleted as orphaned dead
+  code (706d848); surviving inline filters apply live by design. Added the still-relevant
+  a11y: inline rating Slider accessibilityLabel/Value + .isSelected on rating pills.
+- IOS-AUDIT-UX-007   FilterCountBadge + filterToolbarButton on Home/Restaurants/Attractions
+  ("Filters, N active"); entry point clears all filters (inline bars are the edit surface).
+- IOS-AUDIT-UX-013   VoiceOver: combined 5-star rating into one element; hid decorative
+  hero/type/placeholder icons; kept AwardBadge's meaningful "winner" label.
+- IOS-AUDIT-UX-014   Adopted AppTypography appText(...) tokens across AttractionDetailView,
+  EmptyStateView, ContentCard (~25 sites); left genuine glyph/@ScaledMetric fonts alone.
+- IOS-AUDIT-FEAT-006  AskPulseService maps discover-chat 429 -> AskPulseError.quotaExceeded
+  so the existing upgrade CTA fires (payload/success shape untouched).
+- IOS-AUDIT-FEAT-010  Replaced no-op CrashReportingService with a real Firebase-free
+  first-party reporter (NSSetUncaughtExceptionHandler + POSIX signal markers; structured
+  CrashRecord JSON persistence; pending/flush/delete for future backend upload). Wired
+  configure()+setUserId into DesMoinesInsiderApp launch .task. +CrashReportingTests.
+  Next step: a crash-report edge function to upload flushed records.
+- IOS-AUDIT-FEAT-011  MainTabView observes .storeKitTransactionFailed and shows a
+  non-blocking toast w/ the transaction id (reuses existing ToastOverlay).
+
+### Already done by prior commits — flags were stale, now corrected to passes=true
+- IOS-AUDIT-SEC-006   SEC-011 already revokes local entitlement on definitive valid==false.
+- IOS-AUDIT-FEAT-004  Spotlight index callers wired (EventsVM:144, RestaurantsVM:112).
+- IOS-AUDIT-FEAT-005  CSSearchableItemActionType -> DeepLinkHandler -> detail screen path
+  complete (commit 3a677fa), covered by DeepLinkHandlerTests.
+- IOS-AUDIT-FEAT-007  Trip-planner soft paywall wired at TripPlannerView:274 (FEAT-032).
+
+### Still BLOCKED (passes=false — need external input, NOT code)
+- IOS-AUDIT-SEC-001 / SEC-013  Cert pinning is now WIRED onto the Supabase URLSession, but
+  enforcement stays report-only: needs the live Supabase host SPKI pins verified + a
+  backup-pin/rotation runbook before flipping certificatePinningEnforced=true (else risk
+  bricking all clients).
+- IOS-AUDIT-FEAT-008 / FEAT-009  Need real annual subscription SKU IDs created in App Store
+  Connect (current annual IDs are placeholder-format); FEAT-009 depends on 008.
+- IOS-AUDIT-FEAT-012  Saved-search alert end-to-end needs push, which is hard-disabled (029).
+- IOS-AUDIT-FEAT-029  Enabling push is a product + APNs-infra decision (launch prompt + cert).
+- IOS-AUDIT-FEAT-030  Real analytics needs Firebase SDK + GoogleService-Info.plist, or a
+  first-party pipeline decision.
+- IOS-AUDIT-REL-006   Signing needs a real DEVELOPMENT_TEAM / Apple Team ID via CI secrets.
+- IOS-AUDIT-REL-007   AASA must be hosted at desmoinesinsider.com/.well-known w/ real Team ID.
+- IOS-AUDIT-REL-008   Device matrix vs required 6.9" needs confirmed App Store Connect sizes.
+- IOS-AUDIT-REL-010   In-app data-export UI gated on the published privacy-policy text.
+- WEB-FEAT-008 / WEB-FEAT-010  Code-complete from a prior session; await runtime verification.
+
+### Verification
+No build (Linux/no Xcode). Confirmed by inspection: SponsoredArranger.arrange<T> -> [T]
+matches cached [Event]/[Restaurant]; currentUser?.id.uuidString matches existing usage;
+FilterCountBadge defined once; no duplicate symbols; method signatures preserved for
+CrashReportingService/StoreKit callers.

@@ -81,6 +81,12 @@ struct MainTabView: View {
     /// Pending "Ask Pulse" Siri intent to present as the AI chat (FEAT-028).
     @State private var askPulseLaunch: AskPulseLaunch?
 
+    /// Non-blocking toast for StoreKit transaction failures (IOS-AUDIT-FEAT-011).
+    /// StoreKitService posts `.storeKitTransactionFailed` from its global
+    /// `Transaction.updates` listener, which can fire at any time, so the
+    /// observer lives on this always-present root rather than the paywall.
+    @State private var transactionFailureToast: ToastMessage?
+
     struct AskPulseLaunch: Identifiable {
         let id = UUID()
         let query: String
@@ -167,6 +173,16 @@ struct MainTabView: View {
         .sheet(item: $askPulseLaunch) { launch in
             AskPulseView(initialQuery: launch.query)
         }
+        // Surface StoreKit transaction failures as a non-blocking toast with a
+        // short support reference (the transaction id) (IOS-AUDIT-FEAT-011).
+        .onReceive(NotificationCenter.default.publisher(for: .storeKitTransactionFailed)) { note in
+            let txId = note.userInfo?["transactionId"] as? String
+            let reference = txId.map { " (ref \($0))" } ?? ""
+            transactionFailureToast = .error(
+                "There was a problem with your purchase. Please try again or contact support\(reference)."
+            )
+        }
+        .toastOverlay(message: $transactionFailureToast)
         // Fastlane Snapshot screenshot destinations (IOS-COMPLY-005).
         .fullScreenCover(item: $uiTestCover) { cover in
             switch cover {

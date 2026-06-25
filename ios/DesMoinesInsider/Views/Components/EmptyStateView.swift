@@ -36,10 +36,10 @@ struct EmptyStateView: View {
             .scaleEffect((visible || reduceMotion) ? 1 : 0.85)
 
             Text(title)
-                .font(.title3.bold())
+                .appText(.title)
 
             Text(message)
-                .font(.subheadline)
+                .appText(.bodySmall)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
@@ -49,7 +49,7 @@ struct EmptyStateView: View {
                     HapticFeedback.shared.light()
                     action()
                 }
-                .font(.subheadline.weight(.semibold))
+                .appText(.bodyEmphasized)
                 .padding(.horizontal, 26)
                 .padding(.vertical, 12)
                 .foregroundStyle(Color.accentColor)
@@ -62,7 +62,7 @@ struct EmptyStateView: View {
                 Button(secondaryActionTitle) {
                     secondaryAction()
                 }
-                .font(.subheadline)
+                .appText(.bodySmall)
                 .foregroundStyle(.secondary)
             }
         }

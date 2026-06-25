@@ -7,7 +7,13 @@ import CoreLocation
 final class EventsViewModel {
     // MARK: - State
 
-    private(set) var events: [Event] = []
+    private(set) var events: [Event] = [] {
+        didSet { recomputeArrangedEvents() }
+    }
+    /// Sponsored-arranged view of `events`, cached so the arrangement
+    /// (SponsoredArranger.arrange) runs only when `events` changes — not on
+    /// every SwiftUI body pass (IOS-AUDIT-PERF-010).
+    private(set) var arrangedEvents: [Event] = []
     private(set) var featuredEvents: [Event] = []
     private(set) var isLoading = false
     private(set) var isLoadingMore = false
@@ -18,19 +24,19 @@ final class EventsViewModel {
     // MARK: - Filters
 
     var searchText = "" {
-        didSet { resetAndFetch() }
+        didSet { if oldValue != searchText { resetAndFetch() } }
     }
     var selectedCategory: EventCategory? {
-        didSet { resetAndFetch() }
+        didSet { if oldValue != selectedCategory { resetAndFetch() } }
     }
     var selectedDatePreset: DateFilterPreset? {
-        didSet { resetAndFetch() }
+        didSet { if oldValue != selectedDatePreset { resetAndFetch() } }
     }
     var showFeaturedOnly = false {
-        didSet { resetAndFetch() }
+        didSet { if oldValue != showFeaturedOnly { resetAndFetch() } }
     }
     var selectedCities: Set<String> = [] {
-        didSet { resetAndFetch() }
+        didSet { if oldValue != selectedCities { resetAndFetch() } }
     }
     /// Sort order for the events list. IOS-DISCOVER-2026-003.
     var sortBy: EventSortOption = .soonest {
@@ -43,14 +49,20 @@ final class EventsViewModel {
 
     // Premium filters (Insider+ only)
     var showFreeOnly = false {
-        didSet { resetAndFetch() }
+        didSet { if oldValue != showFreeOnly { resetAndFetch() } }
     }
     var maxDistance: Double? {
-        didSet { resetAndFetch() }
+        didSet { if oldValue != maxDistance { resetAndFetch() } }
     }
     var minRating: Double? {
-        didSet { resetAndFetch() }
+        didSet { if oldValue != minRating { resetAndFetch() } }
     }
+
+    /// Set while a bulk update (`clearFilters` / `applyPreset`) mutates many
+    /// filter properties at once, so each individual `didSet` skips its own
+    /// debounced fetch. The bulk operation fires exactly one `resetAndFetch()`
+    /// at the end (IOS-AUDIT-PERF-004).
+    private var isBulkUpdating = false
 
     // MARK: - Pagination
 
@@ -209,6 +221,9 @@ final class EventsViewModel {
     }
 
     func clearFilters() {
+        // Coalesce the many property mutations into a single debounced fetch
+        // (IOS-AUDIT-PERF-004).
+        isBulkUpdating = true
         selectedCategory = nil
         selectedDatePreset = nil
         showFeaturedOnly = false
@@ -218,6 +233,8 @@ final class EventsViewModel {
         maxDistance = nil
         minRating = nil
         activePreset = nil
+        isBulkUpdating = false
+        resetAndFetch()
     }
 
     // MARK: - Smart Presets
@@ -229,6 +246,9 @@ final class EventsViewModel {
             clearFilters()
             return
         }
+        // Coalesce the bundled mutations into a single debounced fetch
+        // (IOS-AUDIT-PERF-004).
+        isBulkUpdating = true
         selectedCategory = preset.category
         selectedDatePreset = preset.datePreset
         showFeaturedOnly = preset.featured
@@ -238,6 +258,17 @@ final class EventsViewModel {
         minRating = nil
         searchText = ""
         activePreset = preset
+        isBulkUpdating = false
+        resetAndFetch()
+    }
+
+    // MARK: - Sponsored Arrangement (IOS-AUDIT-PERF-010)
+
+    /// Recomputes `arrangedEvents` off the render path whenever `events`
+    /// changes. Sponsored listings are pulled to the front; organic order is
+    /// otherwise preserved.
+    private func recomputeArrangedEvents() {
+        arrangedEvents = SponsoredArranger.arrange(events, isSponsored: { $0.isActivelySponsored })
     }
 
     // MARK: - Premium Filters (applied client-side)
@@ -263,6 +294,9 @@ final class EventsViewModel {
     // MARK: - Debounced Search
 
     private func resetAndFetch() {
+        // Bulk updates (clearFilters / applyPreset) mutate many properties in
+        // one go; suppress their per-property fetches and fire one at the end.
+        guard !isBulkUpdating else { return }
         fetchTask?.cancel()
         fetchTask = Task {
             try? await Task.sleep(for: .milliseconds(300))
