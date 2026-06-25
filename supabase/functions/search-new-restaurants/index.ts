@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { errorResponse } from "../_shared/errorResponse.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -351,18 +352,11 @@ serve(async (req) => {
       name: error.name,
     });
 
-    return new Response(
-      JSON.stringify({
-        error: error.message || "An unexpected error occurred",
-        details:
-          globalThis.Deno?.env?.get("NODE_ENV") === "development"
-            ? error.stack
-            : undefined,
-      }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 500,
-      }
-    );
+    return errorResponse(error, {
+      status: 500,
+      headers: corsHeaders,
+      clientMessage: "An unexpected error occurred",
+      logContext: "search-new-restaurants",
+    });
   }
 });

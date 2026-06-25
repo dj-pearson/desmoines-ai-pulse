@@ -122,6 +122,7 @@ export function NLPSearchBar({
         <Input
           ref={inputRef}
           type="text"
+          aria-label="Search naturally for events, restaurants, and things to do"
           placeholder={placeholder}
           value={query}
           onChange={(e) => setQuery(e.target.value)}

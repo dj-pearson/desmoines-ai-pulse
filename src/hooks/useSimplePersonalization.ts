@@ -174,43 +174,56 @@ export function useSimplePersonalization(options: RecommendationOptions = {}) {
     const recommendations: SimpleRecommendation[] = [];
     const seenContentIds = new Set<string>();
 
-    // Add trending content with preference boost
+    // Candidate trending items (dedup, preserve order/score).
+    const candidates: any[] = [];
     for (const item of trending.slice(0, limit * 2)) {
       if (seenContentIds.has(item.content_id)) continue;
-      
+      seenContentIds.add(item.content_id);
+      candidates.push(item);
+    }
+
+    // Batch-fetch the actual content by content_type (.in) instead of one
+    // round-trip per item — same rows, ~N fewer requests. Parallel per type.
+    const idsByType = new Map<string, string[]>();
+    for (const item of candidates) {
+      const arr = idsByType.get(item.content_type) ?? [];
+      arr.push(item.content_id);
+      idsByType.set(item.content_type, arr);
+    }
+    const contentById = new Map<string, any>();
+    await Promise.all(
+      Array.from(idsByType.entries()).map(async ([type, ids]) => {
+        try {
+          const { data } = await supabase
+            .from(getTableName(type) as any)
+            .select('*')
+            .in('id', ids);
+          (data ?? []).forEach((row: any) => contentById.set(`${type}:${row.id}`, row));
+        } catch {
+          console.log(`Could not batch-fetch content for ${type}`);
+        }
+      }),
+    );
+
+    // Rebuild in the original trending order with the preference boost.
+    for (const item of candidates) {
+      const content = contentById.get(`${item.content_type}:${item.content_id}`);
+      if (!content) continue;
+
       let score = item.score;
       let reason = 'Popular right now';
-
-      // Boost score based on user preferences
-      if (preferences) {
-        if (preferences.preferredCategories.includes(item.content_type)) {
-          score *= 1.5;
-          reason = 'Matches your interests';
-        }
+      if (preferences && preferences.preferredCategories.includes(item.content_type)) {
+        score *= 1.5;
+        reason = 'Matches your interests';
       }
 
-      // Get actual content
-      try {
-        const tableName = getTableName(item.content_type);
-        const { data: content } = await supabase
-          .from(tableName as any)
-          .select('*')
-          .eq('id', item.content_id)
-          .single();
-
-        if (content) {
-          recommendations.push({
-            id: `rec-${item.content_id}`,
-            contentType: item.content_type,
-            content,
-            score,
-            reason
-          });
-          seenContentIds.add(item.content_id);
-        }
-      } catch (error) {
-        console.log(`Could not fetch content for ${item.content_type}:${item.content_id}`);
-      }
+      recommendations.push({
+        id: `rec-${item.content_id}`,
+        contentType: item.content_type,
+        content,
+        score,
+        reason,
+      });
     }
 
     // If we don't have enough recommendations, add popular content
@@ -230,27 +243,32 @@ export function useSimplePersonalization(options: RecommendationOptions = {}) {
     
     try {
       const tables = contentType ? [getTableName(contentType)] : ['events', 'restaurants', 'attractions', 'playgrounds'];
-      
-      for (const table of tables) {
-        const { data: content } = await supabase
-          .from(table as any)
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(needed);
 
-        if (content) {
-          content.forEach((item: any) => {
-            if (!excludeIds.has(item.id) && popular.length < needed) {
-              popular.push({
-                id: `pop-${item.id}`,
-                contentType: getContentTypeFromTable(table),
-                content: item,
-                score: 10, // Base score for popular content
-                reason: 'Recently added'
-              });
-            }
-          });
-        }
+      // Fetch the candidate tables in parallel instead of one after another;
+      // then fill in the same table-priority order to preserve behavior.
+      const perTable = await Promise.all(
+        tables.map(async (table) => {
+          const { data } = await supabase
+            .from(table as any)
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(needed);
+          return { table, rows: data ?? [] };
+        }),
+      );
+
+      for (const { table, rows } of perTable) {
+        rows.forEach((item: any) => {
+          if (!excludeIds.has(item.id) && popular.length < needed) {
+            popular.push({
+              id: `pop-${item.id}`,
+              contentType: getContentTypeFromTable(table),
+              content: item,
+              score: 10, // Base score for popular content
+              reason: 'Recently added'
+            });
+          }
+        });
       }
     } catch (error) {
       console.log('Error getting popular content:', error);

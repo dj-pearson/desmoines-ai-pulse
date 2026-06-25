@@ -2,6 +2,7 @@ import { useParams, Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { ATTRACTION_LIST_COLUMNS } from "@/lib/listColumns";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -92,16 +93,26 @@ export default function AttractionDetails() {
   } = useQuery({
     queryKey: ["attraction", slug],
     queryFn: async () => {
-      const { data: attractions, error } = await supabase
+      // attractions has no slug column, so we match the createSlug(name) the
+      // routes use. Scan only (id, name) instead of downloading every full row,
+      // then fetch the single matched attraction's full row (SEO/GEO intact).
+      const { data: index, error } = await supabase
         .from("attractions")
-        .select("*");
+        .select("id, name");
 
       if (error) throw error;
 
-      const foundAttraction = attractions?.find(
-        (a) => createSlug(a.name) === slug
-      );
-      return foundAttraction || null;
+      const match = index?.find((a) => createSlug(a.name) === slug);
+      if (!match) return null;
+
+      const { data, error: rowError } = await supabase
+        .from("attractions")
+        .select("*")
+        .eq("id", match.id)
+        .maybeSingle();
+
+      if (rowError) throw rowError;
+      return data || null;
     },
   });
 
@@ -114,7 +125,7 @@ export default function AttractionDetails() {
       if (!attraction) return [];
       const { data, error } = await supabase
         .from("attractions")
-        .select("*")
+        .select(ATTRACTION_LIST_COLUMNS)
         .eq("type", attraction.type)
         .neq("id", attraction.id)
         .limit(4);
@@ -131,7 +142,7 @@ export default function AttractionDetails() {
       if (!attraction) return [];
       const { data, error } = await supabase
         .from("attractions")
-        .select("*")
+        .select(ATTRACTION_LIST_COLUMNS)
         .neq("id", attraction.id)
         .neq("type", attraction.type)
         .order("rating", { ascending: false })

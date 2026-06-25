@@ -8,6 +8,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
+import { errorResponse } from "../_shared/errorResponse.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -279,15 +281,10 @@ View details in the SEO Dashboard: ${Deno.env.get("VITE_SITE_URL") || "https://d
   } catch (error) {
     console.error("Error in send-seo-notification function:", error);
 
-    return new Response(
-      JSON.stringify({
-        error: error.message,
-        details: error.stack,
-      }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+    return errorResponse(error, {
+      status: 500,
+      headers: corsHeaders,
+      logContext: "send-seo-notification",
+    });
   }
 });

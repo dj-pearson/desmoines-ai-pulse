@@ -14,6 +14,7 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
+import { requireAdminOrApiKey } from '../_shared/apiKeyAuth.ts';
 import { runJob } from '../_shared/jobRunner.ts';
 
 // Minimum pixel dimensions per placement.
@@ -209,6 +210,13 @@ Deno.serve(async (req) => {
   if (corsResponse) return corsResponse;
   const origin = req.headers.get('origin') || undefined;
   const corsHeaders = getCorsHeaders(origin);
+
+  // Authz: this runs cost-bearing AI review work, so only the DB trigger / cron
+  // sweep (both send Authorization: Bearer <service_role_key>), the shared
+  // EDGE_FUNCTION_API_KEY, or an admin JWT may call it. Blocks arbitrary
+  // authenticated users from triggering reviews (cost/DoS, metric manipulation).
+  const authFail = await requireAdminOrApiKey(req, corsHeaders);
+  if (authFail) return authFail;
 
   const url = Deno.env.get('SUPABASE_URL')!;
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;

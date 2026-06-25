@@ -667,8 +667,8 @@
         "npm run validate passes"
       ],
       "priority": 43,
-      "passes": false,
-      "notes": "Self-running marketing infrastructure — fits the autonomy theme. Check how prerender.mjs currently writes meta tags before wiring."
+      "passes": true,
+      "notes": "DONE (2026-06-25): og-image edge function + crawler-visible meta wired and `npm run validate` green.\nWHAT SHIPPED:\n- Fixed real loadCard column bugs in supabase/functions/og-image/index.ts: attractions selected a nonexistent `category` (actual column is `type`) and articles selected `image_url` (actual column is `featured_image_url`), so both types previously errored and fell back to the generic card. Now all four types (event/restaurant/attraction/article) render a branded PNG, with rating added to the attraction/restaurant badge.\n- AC3 caching: handler now differentiates Cache-Control — past events (start >24h ago) get max-age=31536000, immutable; everything else max-age=3600. loadCard returns the immutability flag from event_start_utc||date.\n- AC2 crawler-visible HTML: functions/_middleware.ts now detects social crawler UAs (Facebook/Twitter/LinkedIn/Slack/Discord/WhatsApp/etc.) on detail routes, resolves the entity from the slug (restaurants/articles by slug column; attractions by slugify(name); events by the central-time YYYY-MM-DD slug within a date window), and uses HTMLRewriter to inject per-entity og:image (the og-image fn URL), og/twitter title+description, og:url and og:type into the SPA shell. Entire path is wrapped in try/catch and falls through to the normal SPA response on any miss — never worse than the prior generic card. Real users are untouched (no extra latency).\n- Unblocked AC5: npm run validate failed repo-wide on a pre-existing TS deprecation (baseUrl) erroring under TS 5.x; added ignoreDeprecations \"5.0\" to tsconfig.json + tsconfig.app.json. validate now exits 0 (type-check clean; lint 0 errors).\nPOST-DEPLOY MANUAL STEP (sandbox has no deployed URL): AC4 — validate a live share with the Twitter Card validator + Facebook Sharing Debugger and attach screenshots. Code is complete; this is verification only."
     },
     {
       "id": "WEB-FEAT-009",
@@ -697,8 +697,8 @@
         "npm run validate passes"
       ],
       "priority": 45,
-      "passes": false,
-      "notes": "Sequenced after WEB-AUTO-009. RatingSystem + PremiumGate(writeReviews) components exist as the starting seam."
+      "passes": true,
+      "notes": "DONE (2026-06-25): Review composer + photo upload + moderation pipeline are complete and `npm run validate` is green. The prior session built most of this correctly (unlike WEB-FEAT-008); audited every AC against the live schema and fixed the real gaps below.\nVERIFIED CORRECT (no change needed):\n- Pipeline reuse: user_ratings + RatingSystem + useRatings already submit→moderate→hide-pending. moderate-content handles content_type='review', reads user_ratings.review_text/moderation_status, writes the verdict, and returns {decision}; useRatings.submitRating awaits it and shows honest rejected/flagged/approved toasts (AC3).\n- Migration 20260623000004: photo_urls TEXT[] (additive, constant default → no table rewrite), public review-photos bucket, owner-scoped storage RLS (auth.uid() = foldername[1]), and report_review() SECURITY DEFINER that upserts a content_moderation 'flagged' row WITHOUT auto-hiding. content_moderation already has the matching UNIQUE(content_type,content_id) and a CHECK allowing 'review' (AC2/AC4).\n- imageResize.ts downsizes to 1280px max edge and steps JPEG quality until <500KB; RatingSystem uploads to review-photos/<userId>/<uuid>.jpg (matches the RLS path) and stores public URLs on the row (AC2).\n- RatingSystem mounted on Event/Restaurant/Attraction details; guest sees a 'Sign in to review' prompt; new-review composing sits behind the established PremiumGate(write_reviews, insider) tier seam; ReviewCard renders author, stars, text, photo grid + lightbox, and a report button feeding report_review (AC1/AC4).\nFIXED THIS SESSION:\n- Edit was broken: the Edit button set showRatingForm=true, but the form only rendered in the no-userRating branch, so owners could never actually edit (AC4 'owners can edit/delete their own'). Added startEdit() to prefill stars/text/photos from the existing row and changed the summary branch to `userRating && !showRatingForm` so editing falls through to the (now prefilled) form; submitRating upserts the same row so photos aren't wiped.\n- ReviewCard showed an absolute date; AC4 asks for a relative date. Switched to formatDistanceToNow(addSuffix) with the absolute date kept as the hover title.\nPOST-DEPLOY MANUAL CHECK (sandbox has no Supabase runtime): apply the migration, then as a signed-in Insider upload a photo review on each entity type and confirm (1) the object lands under <user_id>/ and is publicly readable, (2) a non-owner can't write to another user's folder (RLS), (3) clean text publishes instantly while flagged/rejected text is hidden + queued in content_moderation, and (4) the Report button enqueues a content_moderation row. Implementation + `npm run validate` are complete; this is verification only."
     },
     {
       "id": "WEB-FEAT-011",
@@ -2790,6 +2790,66 @@
       "priority": 2,
       "passes": true,
       "notes": "IMPLEMENTED (2026-06-25): added the App Clip's own PrivacyInfo.xcprivacy (anonymous, UserDefaults required-reason)."
+    },
+    {
+      "id": "WEB-SEC-009",
+      "title": "Stop edge functions leaking error stack traces / raw messages to clients",
+      "description": "As the platform, no edge function should return a JavaScript stack trace or raw driver/error message in its HTTP response — those leak file paths, internal table/function names, package versions and sometimes secrets to any caller. Route every 5xx through the existing sanitized responder.",
+      "acceptanceCriteria": [
+        "No edge function returns error.stack in any HTTP response body. The audited offenders (gsc-sync-data, crawl-site, send-seo-notification, seo-audit, run-scheduled-audit, search-new-restaurants, analyze-content, analyze-images) have their top-level catch handlers converted to _shared/errorResponse.ts errorResponse(), which returns a generic client message and removes the paired raw error.message",
+        "Server-side logging of the full error (including stack via console.error / the helper's own log) is retained — sanitization is client-facing only",
+        "HTTP status codes on those handlers are unchanged so existing web/mobile clients that branch on a status keep working (CLAUDE.md backward-compat); the response still carries a string `error` field",
+        "console.error('...stack...', error.stack) used purely for server logs is left as-is (not a client leak)",
+        "grep for `error.stack` / `err.stack` inside Response/JSON.stringify bodies across supabase/functions returns nothing; npm run validate passes"
+      ],
+      "priority": 46,
+      "passes": true,
+      "notes": "DONE (2026-06-25): converted the 8 audited functions' top-level catch handlers from returning {error: error.message, details: error.stack} to the existing _shared/errorResponse.ts errorResponse() helper (WEB-SEC-007 pattern): gsc-sync-data, crawl-site, send-seo-notification, seo-audit, run-scheduled-audit, analyze-content, analyze-images (identical block) + search-new-restaurants (which also leaked a dev-gated stack). Each now returns a generic sanitized `error` string with the SAME 500 status and CORS headers; the full error + stack is still logged server-side (errorResponse console.error + the functions' own console.error). VERIFIED: grep shows no error.stack/err.stack inside any Response/JSON.stringify body across supabase/functions (the only remaining hit is search-new-restaurants' server-side console.error('Error details', {stack}) log, which is correct); all 8 files esbuild-parse clean; npm run validate exits 0. Backward-compat: status codes unchanged, response still carries a string `error` field, no request-shape change. OUT OF SCOPE (documented in story): per-item error.message strings inside admin-authenticated batch-result arrays (social-media-manager, scrape-events, etc.) — diagnostic output, not a secret leak."
+    },
+    {
+      "id": "WEB-SEC-010",
+      "title": "Require admin/trigger auth on campaign-creative-review",
+      "description": "As the platform, the campaign-creative-review edge function (AI creative scoring, WEB-AUTO-010) builds a service-role client and runs cost-bearing AI work but has no caller authorization — any party that can reach it can trigger reviews (cost/DoS, metric manipulation). Gate it like the other admin/internal functions while keeping the DB-trigger path working.",
+      "acceptanceCriteria": [
+        "campaign-creative-review rejects callers that are not an admin/root_admin JWT or the service-role key (reuse requireAdminOrApiKey from _shared, which already accepts the SUPABASE_SERVICE_ROLE_KEY bearer the DB trigger sends)",
+        "The existing insert-trigger invocation path still succeeds (it sends the service-role key), verified against how the trigger calls the function",
+        "No request/response shape change on the authorized path (backward-compat for the trigger + admin UI)",
+        "Unauthorized calls get a 401/403 with a generic message (no internals leaked)",
+        "npm run validate passes"
+      ],
+      "priority": 47,
+      "passes": true,
+      "notes": "DONE (2026-06-25): added `await requireAdminOrApiKey(req, corsHeaders)` (from _shared/apiKeyAuth.ts) at the top of the campaign-creative-review handler, right after CORS. The helper accepts EDGE_FUNCTION_API_KEY (header/bearer), the SUPABASE_SERVICE_ROLE_KEY bearer, or an admin/root_admin JWT; on failure it returns a sanitized 401/403. VERIFIED the trigger path still works: migration 20260620000006_creative_auto_review.sql invokes the function from BOTH the AFTER INSERT trigger (enqueue_creative_review) and the */10 cron sweep using `Authorization: Bearer <service_role_key>` — exactly the service-role branch requireAdminOrApiKey allows (apiKeyAuth.ts:118-121). No src/ caller exists (admin UI never invokes it directly); autonomy-overview only references the name as a job_name string, not an invocation. Backward-compat: authorized request/response shapes unchanged; get_active_ads and campaign/advertisement shapes untouched (iOS unaffected). esbuild parses clean; npm run validate exits 0."
+    },
+    {
+      "id": "WEB-PERF-008",
+      "title": "Fix recommendation N+1 + detail-page column over-fetch",
+      "description": "As a user, recommendation and detail surfaces should issue tight, batched, column-projected queries instead of per-item N+1 loops and select('*') over wide tables, to cut payloads and latency toward the PERF budgets.",
+      "acceptanceCriteria": [
+        "useSimplePersonalization.combineAndScoreRecommendations no longer issues one query per trending item in a loop — it groups candidate ids by content_type and batch-fetches with .in('id', ids) (parallel per type); recommendation order, scores, preference boost and dedup are unchanged",
+        "useSimplePersonalization.getPopularContent fetches its candidate tables in parallel (Promise.all) instead of sequential awaits, then fills in the same table-priority order (behavior preserved)",
+        "AttractionDetails main lookup no longer downloads every full attraction row to slug-match — it scans only (id, name), then fetches the single matched attraction's full row by id (SEO/GEO content intact)",
+        "RestaurantDetails + AttractionDetails related/nearby CARD queries project explicit *_LIST_COLUMNS (the SEO/GEO-bearing main detail row stays select('*') per the listColumns.ts design note)",
+        "No change to rendered fields or ordering on any surface; npm run validate passes"
+      ],
+      "priority": 48,
+      "passes": true,
+      "notes": "DONE (2026-06-25). Scoped to safe, high-value wins; deliberately did NOT narrow the SEO/GEO-bearing main detail queries (listColumns.ts documents detail pages keep full rows for SEO).\n- useSimplePersonalization.ts combineAndScoreRecommendations: was a per-item select('*').eq('id').single() inside a for-loop (N sequential round-trips). Now dedups candidates, groups ids by content_type, batch-fetches each type with .in('id', ids) via Promise.all, then rebuilds in original trending order with the same score/boost. Content shape kept (select('*')) so no consumer breaks. Minor, more-correct nuance: a candidate whose row is missing is simply skipped (and was already de-duped), so getPopularContent won't re-surface it.\n- getPopularContent: 4 sequential per-table select('*') awaits → Promise.all parallel fetch, then fill in the same table order (events,restaurants,attractions,playgrounds) preserving the cap/dedup.\n- AttractionDetails main query: previously select('*') over the ENTIRE attractions table to find one by createSlug(name). Now selects only (id,name) to find the match, then one select('*').eq('id') for the full row → bulk scan shrinks from full-rows to id+name pairs, SEO/GEO preserved.\n- RestaurantDetails related+nearby and AttractionDetails related+nearby card queries → RESTAURANT_LIST_COLUMNS / ATTRACTION_LIST_COLUMNS (same sets the list views/cards already use, WEB-PERF-001).\nVERIFIED: npm run type-check + validate exit 0 (non-literal column-string constants return a loose type compatible with the card components, same as WEB-PERF-001 usage)."
+    },
+    {
+      "id": "WEB-UX-024",
+      "title": "Accessibility: image alt text, keyboard-operable star rating, labeled search inputs",
+      "description": "As a screen-reader or keyboard-only user, content images need descriptive alt text, the review star picker must be operable without a mouse, and search/filter inputs need accessible names — closing WCAG 2.1 AA gaps the prior a11y pass missed.",
+      "acceptanceCriteria": [
+        "RatingSystem StarRating is keyboard operable when interactive: role='radiogroup' with roving tabindex, each star a role='radio' button with an accessible name and aria-checked, driven by Arrow/Home/End + Enter/Space; the readonly display is exposed as a single labelled role='img' with the glyphs aria-hidden",
+        "NLPSearchBar search input has an accessible name (aria-label, since it has no visible label); EventInlineFilters filter-pill triggers expose an aria-label ('Filter by <label>') alongside aria-expanded",
+        "Audit confirms the remaining items the report flagged are already correct: detail-page hero images (Event/Attraction/Hotel/Article) and PersonalizedRecommendations cards already have descriptive alt; SearchSection inputs are already aria-labelled; SceneUpdateCard/VotingBooth thumbnails are correctly decorative (the item title/name is rendered as adjacent text, so alt='' is right) — documented, no change",
+        "Admin-only dialogs (HotelEditDialog, MergeReviewPanel, ImagePickerDialog, etc.) are explicitly out of scope (not user-facing)",
+        "Changes are styling-neutral; npm run validate passes"
+      ],
+      "priority": 49,
+      "passes": true,
+      "notes": "DONE (2026-06-25). The audit's biggest pillar (missing alt text) was largely a FALSE ALARM on user-facing surfaces, so this story is mostly the two real gaps + an honest audit record.\nFIXED:\n- RatingSystem.tsx StarRating: had onClick/onMouseEnter only — not focusable, no keyboard, no roles. Rewrote the interactive path as a role='radiogroup' with roving tabindex; each star is a <button role='radio' aria-checked aria-label='N star(s)'> handling ArrowRight/Up/Left/Down, Home, End, Enter, Space (moves selection + focus). Readonly path is now a single role='img' aria-label='Rated X out of 5 stars' with aria-hidden glyphs. (This is the composer from WEB-FEAT-010, so keyboard users can now actually rate.)\n- NLPSearchBar.tsx: search Input had only a placeholder → added aria-label.\n- EventInlineFilters.tsx: filter-pill trigger already had visible {label} text (so it had a name) but added an explicit aria-label='Filter by <label>' for clearer expanded-popover context.\nAUDITED, ALREADY CORRECT (no change): EventDetails/AttractionDetails/HotelDetails/ArticleDetails hero <img> already carry descriptive alt (prior a11y pass); PersonalizedRecommendations img alt={event.title}; SearchSection inputs already aria-labelled; SceneUpdateCard:46 + VotingBooth:137 alt='' are CORRECT decorative usage because the title/name is rendered as adjacent text (alt would double-announce). Admin dialogs out of scope.\nVERIFIED: npm run validate exits 0 (type-check + lint, 0 errors)."
     }
   ]
 }
