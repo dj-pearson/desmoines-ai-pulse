@@ -2889,7 +2889,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Evidence: StoreKitService.swift:593-597 exact switch on lowercased plan name; localTier already uses contains(). | STATUS: implemented on branch claude/ios-app-review-prd-25ygbb (commit d9dd6ac); passes still false pending Xcode build + test verification on macOS CI (no Swift toolchain in this env). Impl: refreshBackendTier now matches plan name via contains(vip/insider), mirroring localTier"
+      "notes": "Evidence: StoreKitService.swift:593-597 exact switch on lowercased plan name; localTier already uses contains(). | STATUS: implemented on branch claude/ios-app-review-prd-25ygbb (commit d9dd6ac); passes still false pending Xcode build + test verification on macOS CI (no Swift toolchain in this env). Impl: refreshBackendTier now matches plan name via contains(vip/insider), mirroring localTier Now covered by StoreKitTests.tier(forPlanName:) regression tests."
     },
     {
       "id": "IOS-AUDIT-BUG-004",
@@ -3483,7 +3483,7 @@
       ],
       "priority": 1,
       "passes": false,
-      "notes": "Evidence: StoreKitService.swift has no StoreKitTests.swift in DesMoinesInsiderTests/ — the most revenue/security-critical service is untested."
+      "notes": "Evidence: StoreKitService.swift has no StoreKitTests.swift in DesMoinesInsiderTests/ — the most revenue/security-critical service is untested. | STATUS: implemented on branch claude/ios-app-review-prd-25ygbb; passes false pending macOS CI build+test run (no Swift toolchain here). Impl: Added StoreKitTests.swift (24 cases). Refactor: extracted static tier(forEntitledProductIDs:)/tier(forPlanName:), made isTransientError internal-static, lifted ValidationResponse to file scope. Covers tier resolution, SEC-011 revocation subtraction, transient/definitive error classification, validate-ios-receipt decode, product-ID set integrity. NOTE: live StoreKit Transaction/purchase() paths still untested (need StoreKitTest framework / .storekit config harness)."
     },
     {
       "id": "IOS-AUDIT-TEST-002",
@@ -3496,7 +3496,7 @@
       ],
       "priority": 1,
       "passes": false,
-      "notes": "Evidence: AuthService.swift and AuthViewModel.swift have no tests despite gating all authenticated features."
+      "notes": "Evidence: AuthService.swift and AuthViewModel.swift have no tests despite gating all authenticated features. | STATUS: implemented on branch claude/ios-app-review-prd-25ygbb; passes false pending macOS CI build+test run (no Swift toolchain here). Impl: Added AuthTests.swift (16 cases): sha256 NIST vector+determinism, Apple nonce length/charset/uniqueness + SEC-015 full-A-Z regression guard, email validation, password-strength scoring, confirmation match. NOTE: signIn/resetPassword error-state routing not yet covered (needs an AuthService mock/protocol seam)."
     },
     {
       "id": "IOS-AUDIT-TEST-003",
