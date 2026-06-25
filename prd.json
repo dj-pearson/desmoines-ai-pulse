@@ -2929,7 +2929,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Evidence: AttractionsViewModel.swift:111-113,142-155; EventsViewModel.swift:140-157,276-292; RestaurantsViewModel.swift:74-78."
+      "notes": "Evidence: AttractionsViewModel.swift:111-113,142-155; EventsViewModel.swift:140-157,276-292; RestaurantsViewModel.swift:74-78. | STATUS: implemented on branch claude/ios-app-review-prd-25ygbb; passes still false pending Xcode build+test verify on macOS CI. Impl: AttractionsViewModel accumulates rawAttractions and pages off rawAttractions.count; EventsViewModel adds rawFetchedCount and pages off it (premium maxDistance); RestaurantsViewModel cache-hit applies applyClientSide(openNow+dietary). NOTE: multi-type empty-page auto-advance not added (inherent without server in-clause)."
     },
     {
       "id": "IOS-AUDIT-BUG-007",
@@ -2956,7 +2956,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Evidence: SavedSearchesViewModel.swift:108-111 optimistic remove then try? swallows error."
+      "notes": "Evidence: SavedSearchesViewModel.swift:108-111 optimistic remove then try? swallows error. | STATUS: implemented on branch claude/ios-app-review-prd-25ygbb; passes still false pending Xcode build+test verify on macOS CI. Impl: SavedSearchesViewModel.delete now awaits delete, re-inserts removed item at original index on failure, sets errorMessage."
     },
     {
       "id": "IOS-AUDIT-BUG-009",
@@ -3366,7 +3366,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Evidence: ConsentService.swift:36-42 analyticsConsent = UserDefaults.bool (defaults false); :58-60 needsConsentPrompt gated on isLikelyEU; AdTrackingService gates all events on consent."
+      "notes": "Evidence: ConsentService.swift:36-42 analyticsConsent = UserDefaults.bool (defaults false); :58-60 needsConsentPrompt gated on isLikelyEU; AdTrackingService gates all events on consent. | STATUS: implemented on branch claude/ios-app-review-prd-25ygbb; passes still false pending Xcode build+test verify on macOS CI. Impl: ConsentService.init now register(defaults:[analytics:true]) for non-EU; AdTrackingService consent gate (3 sites) now passes for non-EU by default. EU opt-in + explicit opt-out preserved."
     },
     {
       "id": "IOS-AUDIT-FEAT-035",
