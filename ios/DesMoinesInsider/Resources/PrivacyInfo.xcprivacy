@@ -54,7 +54,11 @@
 				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
 			</array>
 		</dict>
-		<!-- User ID — used for authentication (Supabase Auth) -->
+		<!-- User ID — used for authentication (Supabase Auth). Declared Linked
+		     because AdTrackingService writes the raw user_id (uuid) to the
+		     first-party ad_impressions table, linked to the account. (The
+		     AnalyticsService pipeline hashes the id, but the ad-telemetry link is
+		     what makes UserID Linked accurate here — IOS-AUDIT-REL-011.) -->
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypeUserID</string>
