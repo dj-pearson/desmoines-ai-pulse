@@ -283,7 +283,10 @@ final class DiscoverViewModel {
         // Drop the top card. SwipeCardStack also removes it visually; this
         // call is the single source of truth for the data model.
         if !deck.isEmpty { deck.removeFirst() }
-        if deck.count <= prefetchThreshold { enqueueFetch() }
+        // Throttle background prefetch: only enqueue when nothing is already
+        // fetching, so rapid swipes don't queue N sequential page fetches.
+        // (reload/boost call enqueueFetch unconditionally — they must always run.)
+        if deck.count <= prefetchThreshold && !isPrefetching { enqueueFetch() }
     }
 
     private func record(_ action: SwipeInteractionService.Action, item: SwipeItem) async {
