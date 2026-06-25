@@ -117,20 +117,29 @@ final class StoreKitService {
     /// products are subtracted so an explicitly-rejected receipt can't keep
     /// premium unlocked locally (IOS-AUDIT-SEC-011).
     private var localTier: SubscriptionTier {
-        let effective = purchasedProductIDs.subtracting(serverRevokedProductIDs)
-        for id in effective {
-            if Self.vipProductIDs.contains(id) { return .vip }
-        }
-        for id in effective {
-            if Self.insiderProductIDs.contains(id) { return .insider }
-        }
+        Self.tier(forEntitledProductIDs: purchasedProductIDs.subtracting(serverRevokedProductIDs))
+    }
+
+    /// Pure tier resolution from a set of *effective* (non-revoked) product IDs.
+    /// Internal + static so it can be unit-tested without StoreKit/network state.
+    /// Order matters: VIP outranks Insider; known IDs are checked before the
+    /// legacy substring fallback.
+    static func tier(forEntitledProductIDs effective: Set<String>) -> SubscriptionTier {
+        for id in effective where vipProductIDs.contains(id) { return .vip }
+        for id in effective where insiderProductIDs.contains(id) { return .insider }
         // Fallback for legacy product IDs
-        for id in effective {
-            if id.contains("vip") { return .vip }
-        }
-        for id in effective {
-            if id.contains("insider") { return .insider }
-        }
+        for id in effective where id.contains("vip") { return .vip }
+        for id in effective where id.contains("insider") { return .insider }
+        return .free
+    }
+
+    /// Resolve a backend plan name (e.g. "VIP Annual", "Insider Monthly") to a
+    /// tier by substring, mirroring `tier(forEntitledProductIDs:)` so a
+    /// cross-platform plan name never downgrades to `.free` (IOS-AUDIT-BUG-003).
+    static func tier(forPlanName name: String?) -> SubscriptionTier {
+        let planName = (name ?? "free").lowercased()
+        if planName.contains("vip") { return .vip }
+        if planName.contains("insider") { return .insider }
         return .free
     }
 
@@ -479,17 +488,6 @@ final class StoreKitService {
             let userId: String
         }
 
-        struct ValidationResponse: Decodable {
-            let valid: Bool
-            let reason: String?
-            let entitlement: Entitlement?
-
-            struct Entitlement: Decodable {
-                let tier: String?
-                let expiresAt: String?
-            }
-        }
-
         let payload = ValidationPayload(
             transactionId: String(transaction.id),
             originalTransactionId: String(transaction.originalID),
@@ -528,7 +526,7 @@ final class StoreKitService {
                 }
             } catch {
                 lastError = error
-                let isTransient = isTransientError(error)
+                let isTransient = Self.isTransientError(error)
 
                 if isTransient && attempt < Self.maxRetries - 1 {
                     let delay = Self.baseRetryDelay * pow(2.0, Double(attempt))
@@ -591,16 +589,8 @@ final class StoreKitService {
             for row in rows {
                 // Match by substring (not exact equality) so backend plan names
                 // like "VIP Annual" / "Insider Monthly" still resolve to the right
-                // tier instead of silently downgrading to .free. Mirrors localTier.
-                let planName = (row.plan?.name ?? "free").lowercased()
-                let resolved: SubscriptionTier
-                if planName.contains("vip") {
-                    resolved = .vip
-                } else if planName.contains("insider") {
-                    resolved = .insider
-                } else {
-                    resolved = .free
-                }
+                // tier instead of silently downgrading to .free.
+                let resolved = Self.tier(forPlanName: row.plan?.name)
                 if Self.tierRank(resolved) > Self.tierRank(maxTier) {
                     maxTier = resolved
                 }
@@ -636,7 +626,10 @@ final class StoreKitService {
     /// NSURLErrorDomain as retryable — cancellation and auth-required are NOT
     /// transient, so a cancelled receipt validation no longer backs off 3x
     /// (IOS-AUDIT-PERF-018).
-    private func isTransientError(_ error: Error) -> Bool {
+    /// Internal + static so receipt-validation retry classification can be
+    /// unit-tested with synthetic NSErrors (IOS-AUDIT-TEST-001). Uses no
+    /// instance state.
+    static func isTransientError(_ error: Error) -> Bool {
         let nsError = error as NSError
 
         if nsError.domain == NSURLErrorDomain {
@@ -694,4 +687,18 @@ final class StoreKitService {
 
 extension Notification.Name {
     static let storeKitTransactionFailed = Notification.Name("storeKitTransactionFailed")
+}
+
+/// Response contract for the `validate-ios-receipt` edge function. File-scope
+/// (was nested in `syncEntitlementToBackend`) so the decode is contract-locked
+/// by a unit test (IOS-AUDIT-TEST-001 / -003) and can't silently drift.
+struct ValidationResponse: Decodable {
+    let valid: Bool
+    let reason: String?
+    let entitlement: Entitlement?
+
+    struct Entitlement: Decodable {
+        let tier: String?
+        let expiresAt: String?
+    }
 }
