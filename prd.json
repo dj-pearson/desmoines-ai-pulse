@@ -2876,7 +2876,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Evidence: VotingService.swift:143-170 deletes then inserts as two separate requests; RatingsService.submitRating already uses upsert."
+      "notes": "Evidence: VotingService.swift:143-170 deletes then inserts as two separate requests; RatingsService.submitRating already uses upsert. | STATUS: implemented on branch claude/ios-app-review-prd-25ygbb; passes false pending macOS CI build+test verify. Impl: VotingService.castVote now single .upsert(onConflict: \"category_id,user_id\") (constraint verified in migration 20260226000003). Replaces delete-then-insert."
     },
     {
       "id": "IOS-AUDIT-BUG-003",
@@ -2943,7 +2943,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Evidence: MapViewModel.swift:163-219 no cancellation/debounce; DiscoverViewModel.swift:235-269 boost races fetchMore; SearchViewModel.swift:53-73 records live searchText after awaits."
+      "notes": "Evidence: MapViewModel.swift:163-219 no cancellation/debounce; DiscoverViewModel.swift:235-269 boost races fetchMore; SearchViewModel.swift:53-73 records live searchText after awaits. | STATUS: implemented on branch claude/ios-app-review-prd-25ygbb; passes false pending macOS CI build+test verify. Impl: MapViewModel.search routes through fetchTask with captured query + Task.isCancelled guards; SearchViewModel captures query once and threads through sub-searches + history record; DiscoverViewModel adds fetchGeneration token (in-flight pre-reset fetches discard) + serialized enqueueFetch() so reload/boost refetch isn't skipped by isPrefetching."
     },
     {
       "id": "IOS-AUDIT-BUG-008",
