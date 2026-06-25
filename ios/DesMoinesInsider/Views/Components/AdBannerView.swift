@@ -244,10 +244,21 @@ struct HouseAdCopy: Identifiable {
 }
 
 /// Identifiable URL wrapper so the in-app browser can be presented via
-/// `.sheet(item:)`.
+/// `.sheet(item:)`. Server-supplied creative/sponsored URLs flow through here,
+/// so the failable initializer enforces the http/https allowlist centrally — a
+/// malicious campaign row can't push a non-web scheme into the in-app browser
+/// (IOS-AUDIT-SEC-012).
 struct AdTarget: Identifiable {
     let id = UUID()
     let url: URL
+
+    init?(url: URL) {
+        guard url.isSafeWebLink else {
+            AppLogger.nav.warning("Dropped unsafe ad/sponsored target URL (scheme: \(url.scheme ?? "nil"))")
+            return nil
+        }
+        self.url = url
+    }
 }
 
 #Preview {

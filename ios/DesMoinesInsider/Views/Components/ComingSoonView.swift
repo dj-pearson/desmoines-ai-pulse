@@ -31,6 +31,13 @@ struct ComingSoonView: View {
             if let webURL {
                 NavigationStack {
                     WebViewPage(title: title, url: webURL)
+                        // Explicit, labeled dismissal so VoiceOver/Switch-Control
+                        // users aren't reliant on swipe-to-dismiss (IOS-AUDIT-UX-049).
+                        .toolbar {
+                            ToolbarItem(placement: .topBarLeading) {
+                                Button("Done") { showWeb = false }
+                            }
+                        }
                 }
             }
         }

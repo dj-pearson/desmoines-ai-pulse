@@ -1,5 +1,13 @@
 # iOS Native App — Progress Log
 
+> ⚠️ LEGACY (IOS-AUDIT-REL-009): The "Codebase Patterns" section below
+> documents the OLD Capacitor/WKWebView wrapper (mobile-app/ios/App,
+> capacitor.config.ts, window.Capacitor.Plugins) — NOT the native SwiftUI app
+> that actually ships. The app under submission is the native target at
+> ios/DesMoinesInsider (XcodeGen project.yml, Fastlane lanes in ios/fastlane,
+> Supabase secrets via scripts/generate-secrets.sh). Treat anything below that
+> references Capacitor as historical; cross-check the native config, not this.
+
 ## Codebase Patterns (iOS-Specific)
 
 ### Platform Detection

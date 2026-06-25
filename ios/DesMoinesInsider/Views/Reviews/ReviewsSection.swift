@@ -249,6 +249,9 @@ private struct ReviewComposer: View {
                                     .foregroundStyle(i <= rating ? .yellow : .gray.opacity(0.4))
                             }
                             .buttonStyle(.plain)
+                            // 44pt target so the required rating isn't mis-tapped
+                            // (IOS-AUDIT-UX-040).
+                            .minHitTarget()
                             .accessibilityLabel("\(i) star\(i == 1 ? "" : "s")")
                         }
                     }
@@ -259,6 +262,9 @@ private struct ReviewComposer: View {
                         .lineLimit(4...10)
                 }
             }
+            // Dismiss the keyboard by dragging so the Post action stays reachable
+            // while the multiline field is focused (IOS-AUDIT-UX-040).
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle(existing == nil ? "Write a Review" : "Edit Review")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

@@ -31,8 +31,11 @@ final class SoftPaywallService {
         present(source: "favorites", context: .unlimitedFavorites)
     }
 
-    /// Seam for IOS-PARITY-001: call on the first AI Trip Planner attempt.
-    func considerAfterTripPlannerAttempt() {
+    /// Seam for IOS-PARITY-001: call on a free user's AI Trip Planner attempt.
+    /// Returns whether a soft paywall was presented (frequency-capped), so the
+    /// caller can fall back to its hard gate when it wasn't (IOS-AUDIT-FEAT-032).
+    @discardableResult
+    func considerAfterTripPlannerAttempt() -> Bool {
         present(source: "trip_planner", context: .tripPlanner)
     }
 
@@ -45,8 +48,9 @@ final class SoftPaywallService {
 
     // MARK: - Internals
 
-    private func present(source: String, context: PaywallContext) {
-        guard isEligible() else { return }
+    @discardableResult
+    private func present(source: String, context: PaywallContext) -> Bool {
+        guard isEligible() else { return false }
         let defaults = UserDefaults.standard
         defaults.set(Date(), forKey: lastShownKey)
         defaults.set(defaults.integer(forKey: countKey) + 1, forKey: countKey)
@@ -56,6 +60,7 @@ final class SoftPaywallService {
             object: nil,
             userInfo: ["context": context.id]
         )
+        return true
     }
 
     /// Gates: onboarding done, still free, under the lifetime cap, past cooldown.

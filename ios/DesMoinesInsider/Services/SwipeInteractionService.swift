@@ -13,15 +13,26 @@ final class SwipeInteractionService {
     static let shared = SwipeInteractionService()
 
     /// Set of `itemType:itemId` keys the user has already swiped on. Used by
-    /// the Discover deck to skip items it has already shown the user.
+    /// the Discover deck to skip items it has already shown the user. Backed by
+    /// an ordered, bounded list so it can't grow without limit (IOS-AUDIT-PERF-019).
     private(set) var swipedItemKeys: Set<String> = []
+
+    /// Insertion-ordered (most-recent-last) mirror of `swipedItemKeys`, capped at
+    /// `maxSwipedKeys` so the in-memory set and the persisted UserDefaults blob
+    /// stay bounded for engaged users.
+    private var swipedOrder: [String] = []
+
+    /// Retain the most recent N swipes for dedupe; older ones age out.
+    private static let maxSwipedKeys = 1000
 
     private let supabase: SupabaseClient? = SupabaseService.shared.client
     private let localKey = "discover.swipedItems.v1"
     private let pendingKey = "discover.pendingSwipes.v1"
 
     private init() {
-        swipedItemKeys = Self.loadLocal(localKey)
+        // Tolerate the legacy unordered array; cap on load.
+        swipedOrder = Self.loadLocalArray(localKey).suffix(Self.maxSwipedKeys)
+        swipedItemKeys = Set(swipedOrder)
     }
 
     // MARK: - Public API
@@ -43,8 +54,15 @@ final class SwipeInteractionService {
         sourceContext: [String: [String]]? = nil
     ) async {
         let key = Self.key(itemType: itemType, itemId: itemId)
-        swipedItemKeys.insert(key)
-        Self.saveLocal(localKey, set: swipedItemKeys)
+        if swipedItemKeys.insert(key).inserted {
+            swipedOrder.append(key)
+            if swipedOrder.count > Self.maxSwipedKeys {
+                let overflow = swipedOrder.count - Self.maxSwipedKeys
+                for stale in swipedOrder.prefix(overflow) { swipedItemKeys.remove(stale) }
+                swipedOrder.removeFirst(overflow)
+            }
+            Self.saveLocal(localKey, order: swipedOrder)
+        }
 
         let row = PendingSwipe(
             itemType: itemType.rawValue,
@@ -69,6 +87,7 @@ final class SwipeInteractionService {
     /// Clears local swipe history. Sign-out hook + privacy controls call this.
     func reset() {
         swipedItemKeys = []
+        swipedOrder = []
         UserDefaults.standard.removeObject(forKey: localKey)
         UserDefaults.standard.removeObject(forKey: pendingKey)
     }
@@ -117,12 +136,12 @@ final class SwipeInteractionService {
         "\(itemType.rawValue):\(itemId)"
     }
 
-    private static func loadLocal(_ key: String) -> Set<String> {
-        Set(UserDefaults.standard.stringArray(forKey: key) ?? [])
+    private static func loadLocalArray(_ key: String) -> [String] {
+        UserDefaults.standard.stringArray(forKey: key) ?? []
     }
 
-    private static func saveLocal(_ key: String, set: Set<String>) {
-        UserDefaults.standard.set(Array(set), forKey: key)
+    private static func saveLocal(_ key: String, order: [String]) {
+        UserDefaults.standard.set(order, forKey: key)
     }
 
     private struct PendingSwipe: Codable {

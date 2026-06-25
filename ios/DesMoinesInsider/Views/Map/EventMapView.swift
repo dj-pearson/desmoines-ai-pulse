@@ -13,6 +13,12 @@ struct EventMapView: View {
         center: CLLocationCoordinate2D(latitude: Config.defaultLatitude, longitude: Config.defaultLongitude),
         span: MKCoordinateSpan(latitudeDelta: 0.15, longitudeDelta: 0.15)
     )
+    /// Clusters computed off the render path (IOS-AUDIT-PERF-014). Recomputed
+    /// only when the zoom bucket or annotation set changes — never per camera
+    /// frame. Clustering depends on `region.span` (grid size) not the center,
+    /// so panning never invalidates them.
+    @State private var clusters: [MapCluster] = []
+    @State private var lastZoomBucket: Int = .min
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
@@ -105,8 +111,10 @@ struct EventMapView: View {
 
             if viewModel.shouldCluster {
                 // Dense map (>clusterThreshold pins): aggregate into grid
-                // clusters that zoom the user in when tapped.
-                ForEach(viewModel.clusters(for: currentRegion)) { cluster in
+                // clusters that zoom the user in when tapped. Read from cached
+                // @State (recomputed off the render path) — not recomputed here
+                // on every camera frame (IOS-AUDIT-PERF-014).
+                ForEach(clusters) { cluster in
                     Annotation("\(cluster.count) places", coordinate: cluster.coordinate) {
                         Button {
                             // Small clusters: list the members so co-located pins
@@ -178,6 +186,16 @@ struct EventMapView: View {
         }
         .onMapCameraChange { context in
             currentRegion = context.region
+            refreshClustersIfNeeded()
+        }
+        .onChange(of: viewModel.totalPinCount) { _, _ in
+            // Data reloaded — force a recompute regardless of zoom bucket.
+            lastZoomBucket = .min
+            refreshClustersIfNeeded()
+        }
+        .onChange(of: viewModel.shouldCluster) { _, _ in
+            lastZoomBucket = .min
+            refreshClustersIfNeeded()
         }
         .sheet(item: $disambiguationCluster) { cluster in
             ClusterDisambiguationSheet(members: viewModel.members(in: cluster)) { member in
@@ -206,6 +224,23 @@ struct EventMapView: View {
                 span: newSpan
             ))
         }
+    }
+
+    /// Recomputes clusters only when the zoom bucket changes (clusters depend on
+    /// span, not center) or the data reloaded — keeping the O(n) bucketing off
+    /// the per-frame render/pan path (IOS-AUDIT-PERF-014).
+    private func refreshClustersIfNeeded() {
+        guard viewModel.shouldCluster else {
+            if !clusters.isEmpty { clusters = [] }
+            return
+        }
+        // Quantize zoom to an integer level so panning (constant span) is a no-op
+        // and zooming only recomputes at integer steps.
+        let delta = max(currentRegion.span.latitudeDelta, 0.0001)
+        let bucket = Int((log2(1.0 / delta)).rounded())
+        guard bucket != lastZoomBucket || clusters.isEmpty else { return }
+        lastZoomBucket = bucket
+        clusters = viewModel.clusters(for: currentRegion)
     }
 
     // MARK: - Search Bar
@@ -342,6 +377,7 @@ struct EventMapView: View {
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
             }
+            .accessibilityElement(children: .combine)
 
             Spacer()
 
@@ -352,6 +388,8 @@ struct EventMapView: View {
                     .font(.title2)
                     .foregroundStyle(Color.accentColor)
             }
+            .minHitTarget()
+            .accessibilityLabel("Open \(event.title)")
 
             Button {
                 viewModel.selectedEvent = nil
@@ -360,6 +398,8 @@ struct EventMapView: View {
                     .font(.title3)
                     .foregroundStyle(.secondary)
             }
+            .minHitTarget()
+            .accessibilityLabel("Close")
         }
         .padding(14)
         .background(.ultraThickMaterial, in: RoundedRectangle(cornerRadius: 16))
@@ -409,6 +449,7 @@ struct EventMapView: View {
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
             }
+            .accessibilityElement(children: .combine)
 
             Spacer()
 
@@ -418,6 +459,8 @@ struct EventMapView: View {
                         .font(.title2)
                         .foregroundStyle(.green)
                 }
+                .minHitTarget()
+                .accessibilityLabel("Call \(restaurant.name)")
             }
 
             Button {
@@ -427,6 +470,8 @@ struct EventMapView: View {
                     .font(.title3)
                     .foregroundStyle(.secondary)
             }
+            .minHitTarget()
+            .accessibilityLabel("Close")
         }
         .padding(14)
         .background(.ultraThickMaterial, in: RoundedRectangle(cornerRadius: 16))
@@ -468,6 +513,7 @@ struct EventMapView: View {
                     }
                 }
             }
+            .accessibilityElement(children: .combine)
 
             Spacer()
 
@@ -477,6 +523,8 @@ struct EventMapView: View {
                         .font(.title2)
                         .foregroundStyle(Color.accentColor)
                 }
+                .minHitTarget()
+                .accessibilityLabel("Open \(attraction.name) website")
             }
 
             Button {
@@ -486,6 +534,8 @@ struct EventMapView: View {
                     .font(.title3)
                     .foregroundStyle(.secondary)
             }
+            .minHitTarget()
+            .accessibilityLabel("Close")
         }
         .padding(14)
         .background(.ultraThickMaterial, in: RoundedRectangle(cornerRadius: 16))
@@ -515,6 +565,8 @@ struct EventMapView: View {
 private struct EventMapPin: View {
     let category: EventCategory
     var isSelected: Bool = false
+    // Drop the selection spring under Reduce Motion (IOS-AUDIT-UX-047).
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
@@ -527,12 +579,13 @@ private struct EventMapPin: View {
                 .font(.system(size: isSelected ? 16 : 12, weight: .semibold))
                 .foregroundStyle(.white)
         }
-        .animation(.spring(response: 0.3), value: isSelected)
+        .animation(reduceMotion ? nil : .spring(response: 0.3), value: isSelected)
     }
 }
 
 private struct RestaurantMapPin: View {
     var isSelected: Bool = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
@@ -545,7 +598,7 @@ private struct RestaurantMapPin: View {
                 .font(.system(size: isSelected ? 14 : 11, weight: .semibold))
                 .foregroundStyle(.white)
         }
-        .animation(.spring(response: 0.3), value: isSelected)
+        .animation(reduceMotion ? nil : .spring(response: 0.3), value: isSelected)
     }
 }
 
@@ -585,6 +638,7 @@ private struct ClusterMapPin: View {
 private struct AttractionMapPin: View {
     let type: AttractionType
     var isSelected: Bool = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
@@ -597,7 +651,7 @@ private struct AttractionMapPin: View {
                 .font(.system(size: isSelected ? 14 : 11, weight: .semibold))
                 .foregroundStyle(.white)
         }
-        .animation(.spring(response: 0.3), value: isSelected)
+        .animation(reduceMotion ? nil : .spring(response: 0.3), value: isSelected)
     }
 }
 

@@ -56,8 +56,10 @@ xcargs("CODE_SIGN_IDENTITY='' CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO")
 # ──────────────────────────────────────────────────
 # Behavior
 # ──────────────────────────────────────────────────
-stop_after_first_error(true)
-number_of_retries(0)
+# Don't let a single flaky screen zero out every device's assets, and retry
+# transient simulator failures (IOS-AUDIT-REL-008).
+stop_after_first_error(false)
+number_of_retries(1)
 override_status_bar(true)
 override_status_bar_arguments("--time 9:41 --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4")
 

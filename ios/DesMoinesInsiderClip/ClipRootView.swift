@@ -8,8 +8,18 @@ struct ClipRootView: View {
 
     @State private var viewModel = ClipEventsViewModel()
 
-    private let appStoreURL = URL(string: "https://apps.apple.com/app/id/com.desmoines.aipulse")!
-    private let fullAppURL  = URL(string: "https://desmoinesinsider.com")!
+    // App Store product URLs require the numeric app ID (id1234567890), not the
+    // bundle id — the previous "/app/id/com.desmoines.aipulse" never resolved
+    // (IOS-AUDIT-FEAT-031). TODO(REL): set the real id once App Store Connect
+    // assigns it; until then the primary CTA points at the website so it always
+    // resolves.
+    private static let appStoreAppID = "0000000000"
+    private var appStoreURL: URL {
+        Self.appStoreAppID == "0000000000"
+            ? fullAppURL
+            : URL(string: "https://apps.apple.com/app/id\(Self.appStoreAppID)") ?? fullAppURL
+    }
+    private let fullAppURL = URL(string: "https://desmoinesinsider.com")!
 
     var body: some View {
         NavigationStack {

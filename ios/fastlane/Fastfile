@@ -176,8 +176,9 @@ platform :ios do
       clear_previous_screenshots: true,
       override_status_bar: true,
       override_status_bar_arguments: "--time 9:41 --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4",
-      stop_after_first_error: true,
-      number_of_retries: 0,
+      # One flaky screen shouldn't zero out every device's assets (REL-008).
+      stop_after_first_error: false,
+      number_of_retries: 1,
       ios_version: detected_ios_version,
       devices: [
         "iPhone 11 Pro Max",

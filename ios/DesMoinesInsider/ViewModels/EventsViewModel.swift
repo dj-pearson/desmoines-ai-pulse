@@ -132,6 +132,10 @@ final class EventsViewModel {
                 // Cache the first page for offline/cold-start use
                 let cacheKey = eventsCacheKey()
                 await cache.set(cacheKey, value: response.events)
+                // Keep Spotlight in sync with what the user is browsing so events
+                // are discoverable in system search (IOS-AUDIT-FEAT-026).
+                let toIndex = response.events
+                Task { await SpotlightService.shared.indexEvents(toIndex) }
             } else {
                 events.append(contentsOf: filtered)
             }

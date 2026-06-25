@@ -44,4 +44,14 @@ final class SavedSearchTests: XCTestCase {
         let str = String(data: data, encoding: .utf8)!
         XCTAssertTrue(str.contains("alerts_enabled"))
     }
+
+    /// IOS-AUDIT-FEAT-024: only Events-tab saves map to the top-level
+    /// `search_type = 'event_list'` the nightly alert job scans; every other tab
+    /// stays 'advanced' so it isn't (incorrectly) picked up by the event pipeline.
+    func testSearchTypeMappingForAlertEligibility() {
+        XCTAssertEqual(SavedSearchService.searchType(for: "Events"), "event_list")
+        XCTAssertEqual(SavedSearchService.searchType(for: "Restaurants"), "advanced")
+        XCTAssertEqual(SavedSearchService.searchType(for: "Attractions"), "advanced")
+        XCTAssertEqual(SavedSearchService.searchType(for: nil), "advanced")
+    }
 }

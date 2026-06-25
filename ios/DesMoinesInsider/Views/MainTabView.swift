@@ -71,6 +71,21 @@ struct MainTabView: View {
     @State private var deepLink = DeepLinkHandler.shared
     @State private var deepLinkPresentation: DeepLinkPresentation?
 
+    /// Siri / Shortcuts intents (IOS-AUDIT-FEAT-025). Intents set
+    /// `PulseIntentDispatcher.shared.pending` and open the app; only SearchView
+    /// consumes it, so if the app opens on another tab the intent is lost. We
+    /// observe here and switch to the Search tab (leaving `pending` set for
+    /// SearchView to read and apply) so intents work from any launch state.
+    @State private var intentDispatcher = PulseIntentDispatcher.shared
+
+    /// Pending "Ask Pulse" Siri intent to present as the AI chat (FEAT-028).
+    @State private var askPulseLaunch: AskPulseLaunch?
+
+    struct AskPulseLaunch: Identifiable {
+        let id = UUID()
+        let query: String
+    }
+
     enum DeepLinkPresentation: Identifiable {
         case event(String)
         case restaurant(String)
@@ -112,9 +127,14 @@ struct MainTabView: View {
             // Consume any deep link that arrived before this view appeared
             // (cold launch from a link or notification).
             routeDeepLink()
+            // Same for a Siri/Shortcuts intent fired on cold launch.
+            routeIntent(intentDispatcher.pending)
         }
         .onChange(of: deepLink.pendingDestination) { _, _ in
             routeDeepLink()
+        }
+        .onChange(of: intentDispatcher.pending) { _, pending in
+            routeIntent(pending)
         }
         .sheet(item: $deepLinkPresentation) { presentation in
             DeepLinkResolverView(presentation: presentation)
@@ -144,6 +164,9 @@ struct MainTabView: View {
         .sheet(item: $softPaywallContext) { ctx in
             PaywallView(context: ctx)
         }
+        .sheet(item: $askPulseLaunch) { launch in
+            AskPulseView(initialQuery: launch.query)
+        }
         // Fastlane Snapshot screenshot destinations (IOS-COMPLY-005).
         .fullScreenCover(item: $uiTestCover) { cover in
             switch cover {
@@ -166,6 +189,23 @@ struct MainTabView: View {
         case .attraction(let id): deepLinkPresentation = .attraction(id)
         case .discover(let d): deepLinkPresentation = .discover(d)
         case .tab(let tab): selectedTab = tab
+        }
+    }
+
+    /// Routes a pending Siri/Shortcuts intent. Ask Pulse opens the AI chat
+    /// surface here (FEAT-028); Find Restaurants/Events route to the Search tab,
+    /// which reads and clears the payload once it appears (FEAT-025). The iPad
+    /// sidebar stays in sync via the existing selectedTab ↔ sidebarSelection
+    /// observers.
+    private func routeIntent(_ pending: PulseIntentDispatcher.Pending?) {
+        guard let pending else { return }
+        switch pending {
+        case .askPulse(let query):
+            // Own this payload — consume so SearchView doesn't also see it.
+            _ = intentDispatcher.consume()
+            askPulseLaunch = AskPulseLaunch(query: query)
+        case .findRestaurants, .findEvents:
+            if selectedTab != .search { selectedTab = .search }
         }
     }
 

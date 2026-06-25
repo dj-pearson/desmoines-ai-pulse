@@ -1,5 +1,11 @@
 project_id = "wtkhfqpmcegzcbngroui"
 
+# Launch-time min-supported-version gate (IOS-AUDIT-REL-001). Called by the
+# mobile apps BEFORE the user signs in, so JWT must be optional. Does no DB work
+# and holds no secrets — only returns compile-time version constants.
+[functions.version-check]
+verify_jwt = false
+
 # Sponsored picks for AI discovery flows (IOS-ADS-015). Public sponsored content,
 # so JWT is optional — tier is resolved opportunistically from the bearer token
 # when present (premium users get no ads); anonymous/free callers are eligible.

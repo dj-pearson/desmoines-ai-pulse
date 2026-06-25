@@ -139,11 +139,16 @@ struct VerifyEmailView: View {
                 }
             }
         }
-        // Poll for verification while the screen is shown; the app shell routes
-        // away automatically once needsEmailVerification flips false. This makes
-        // the "refreshes automatically" copy true even when the user verified on
-        // another device (IOS-AUDIT-FEAT-020).
-        .task { await pollForVerification() }
+        // Poll for verification while the screen is shown AND the app is in the
+        // foreground; the app shell routes away automatically once
+        // needsEmailVerification flips false. Keying the task on scenePhase
+        // suspends polling while backgrounded so we don't fire a refresh every 5s
+        // off-screen (IOS-AUDIT-PERF-017); it also makes the "refreshes
+        // automatically" copy true when verified on another device (FEAT-020).
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            await pollForVerification()
+        }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
                 Task { await auth.refreshUser() }
@@ -220,7 +225,13 @@ struct VerifyEmailView: View {
 
     private func openMailApp() {
         guard let url = URL(string: "message://") else { return }
-        UIApplication.shared.open(url)
+        // Handle the failure path so the button never silently no-ops on a
+        // device with no Mail-capable app installed (IOS-AUDIT-UX-046).
+        UIApplication.shared.open(url) { success in
+            if !success {
+                showToast("No mail app found. Check your email in your browser to verify.")
+            }
+        }
     }
 }
 

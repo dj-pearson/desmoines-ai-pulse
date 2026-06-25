@@ -56,6 +56,14 @@ on:
         options:
           - 'false'
           - 'true'
+      upload_metadata:
+        description: 'Upload App Store metadata + screenshots (overwrites the live listing)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
 
 env:
@@ -582,28 +590,36 @@ jobs:
       # ==============================================================
       # 12. (OPTIONAL) SUBMIT FOR APP STORE REVIEW
       # ==============================================================
-      - name: Submit for App Store Review
-        if: ${{ github.event.inputs.submit_for_review == 'true' }}
+      # Upload App Store metadata + screenshots from ios/fastlane/metadata via the
+      # existing `upload_metadata` lane (deliver). Gated + default-off because it
+      # overwrites the live App Store listing (IOS-AUDIT-REL-004). The binary is
+      # already on TestFlight, so this skips the binary upload.
+      - name: Upload App Store metadata & screenshots
+        if: ${{ github.event.inputs.upload_metadata == 'true' }}
+        working-directory: ${{ env.PROJECT_DIR }}
         env:
-          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
-          APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
-          APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+          APP_STORE_CONNECT_API_KEY_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APP_STORE_CONNECT_API_KEY_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
         run: |
-          echo "Waiting 60s for build processing before submitting for review..."
-          sleep 60
+          set -euo pipefail
+          # precheck first so a metadata problem fails loudly before any upload
+          bundle exec fastlane upload_metadata 2>/dev/null \
+            || fastlane upload_metadata
 
-          # Create API key JSON for App Store Connect API
-          python3 -c "
-          import json, subprocess, time, urllib.request, jwt, datetime
-
-          # Build JWT for App Store Connect API
-          key_id = '$APPSTORE_API_KEY_ID'
-          issuer_id = '$APPSTORE_ISSUER_ID'
-
-          print('⏳ Submitting build for App Store review...')
-          print('Note: The build must finish processing in App Store Connect first.')
-          print('If this step fails, submit manually from App Store Connect.')
-          " || echo "::warning::Auto-submission skipped. Submit manually from App Store Connect."
+      # NOTE: automated App Store submission is NOT implemented here. The prior
+      # version of this step printed "Submitting build..." and exited 0 without
+      # calling the App Store Connect API, which falsely reported success
+      # (IOS-AUDIT-REL-005). Until a real submission (fastlane deliver
+      # submit_for_review:true, or the ASC API) is wired and tested, fail loudly
+      # so an operator who sets submit_for_review=true is never misled.
+      - name: Submit for App Store Review (not implemented)
+        if: ${{ github.event.inputs.submit_for_review == 'true' }}
+        run: |
+          echo "::error::Automated App Store submission is not implemented in this workflow."
+          echo "The binary was uploaded to TestFlight. Submit for review manually in"
+          echo "App Store Connect, or wire fastlane deliver(submit_for_review: true)."
+          exit 1
 
       # ==============================================================
       # 13. UPLOAD ARTIFACT

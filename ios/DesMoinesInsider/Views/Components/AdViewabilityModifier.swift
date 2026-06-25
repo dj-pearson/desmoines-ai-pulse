@@ -38,15 +38,29 @@ struct AdViewabilityModifier: ViewModifier {
         }
     }
 
-    /// Fraction of the view's area currently inside the device screen bounds.
+    /// Fraction of the view's area currently inside the visible window. Uses the
+    /// app's own window bounds rather than the deprecated, multi-scene-unsafe
+    /// UIScreen.main, so viewability (and billed impressions) is correct under
+    /// iPad Split View / Stage Manager (IOS-AUDIT-PERF-015). `.global` frames are
+    /// already in this window's coordinate space.
     private func visibleFraction(of frame: CGRect) -> CGFloat {
         guard frame.width > 0, frame.height > 0 else { return 0 }
-        let screen = UIScreen.main.bounds
-        let intersection = frame.intersection(screen)
+        let container = Self.activeWindowBounds()
+        let intersection = frame.intersection(container)
         guard !intersection.isNull else { return 0 }
         let visibleArea = intersection.width * intersection.height
         let totalArea = frame.width * frame.height
         return totalArea > 0 ? visibleArea / totalArea : 0
+    }
+
+    /// The bounds of the foreground-active key window (falls back to any window,
+    /// then the screen). Reflects the app's actual visible region in multi-window
+    /// layouts, unlike UIScreen.main.
+    private static func activeWindowBounds() -> CGRect {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        let active = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
+        let window = active?.windows.first { $0.isKeyWindow } ?? active?.windows.first
+        return window?.bounds ?? active?.coordinateSpace.bounds ?? .zero
     }
 
     private func startDwellIfNeeded() {

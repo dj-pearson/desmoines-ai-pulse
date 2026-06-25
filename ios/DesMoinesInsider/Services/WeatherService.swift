@@ -71,8 +71,11 @@ final class WeatherService {
             return snap
         }
 
-        let lat = location.coordinate.latitude
-        let lon = location.coordinate.longitude
+        // Round to ~1km (2 decimal places) before sending to the third-party
+        // Open-Meteo host — city-level weather doesn't need exact coordinates and
+        // we shouldn't transmit precise location off-device (IOS-AUDIT-SEC-010).
+        let lat = (location.coordinate.latitude * 100).rounded() / 100
+        let lon = (location.coordinate.longitude * 100).rounded() / 100
         let urlString =
             "https://api.open-meteo.com/v1/forecast?latitude=\(lat)&longitude=\(lon)" +
             "&current=temperature_2m,weather_code&temperature_unit=fahrenheit"

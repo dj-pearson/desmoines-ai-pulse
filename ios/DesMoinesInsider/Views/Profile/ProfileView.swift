@@ -181,6 +181,9 @@ struct ProfileView: View {
                 .accessibilityLabel("Delete your account")
             }
         }
+        // The phone field uses .phonePad (no return key); without this the user
+        // can be stranded with the keyboard covering Save (IOS-AUDIT-UX-039).
+        .scrollDismissesKeyboard(.interactively)
         .alert("Profile Updated", isPresented: $viewModel.showSaveSuccess) {
             Button("OK", role: .cancel) {}
         }

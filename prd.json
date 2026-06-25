@@ -2022,6 +2022,774 @@
       "priority": 3,
       "passes": true,
       "notes": "Found by iOS UX audit. ScrollToTopButton.swift:63 ScrollOffsetTracker reads geo.frame(in: .named('scroll')).origin.y but neither the component nor its usage doc establishes .coordinateSpace(.named('scroll')). | DONE (2026-06-24): ScrollOffsetTracker.coordinateSpaceName constant is now the single source of truth, with a new .scrollOffsetCoordinateSpace() helper and loud doc; all 5 callers (Attractions/Favorites/Search/Home/Restaurants) migrated off the magic string."
+    },
+    {
+      "id": "IOS-AUDIT-SEC-009",
+      "title": "Microphone/speech audio collection not declared in PrivacyInfo.xcprivacy",
+      "description": "Info.plist declares NSMicrophoneUsageDescription and NSSpeechRecognitionUsageDescription (lines 53-56) and SpeechDictationService.swift records live audio via AVAudioEngine and sends it to SFSpeechRecognizer for the search dictation feature. The privacy manifest (PrivacyInfo.xcprivacy) declares only Location, Email, UserID, Name, and Product Interaction \u2014 there is no Audio Data collected-data-type entry. This is a privacy-manifest/nutrition-label completeness gap that can trigger App Store review questions.",
+      "acceptanceCriteria": [
+        "Determine whether speech audio leaves the device (SFSpeechRecognizer may use server-based recognition) and declare accordingly",
+        "Add the appropriate NSPrivacyCollectedDataType (e.g. Audio Data) entry to PrivacyInfo.xcprivacy with correct Linked/Tracking flags and AppFunctionality purpose, or document why none is required if on-device only",
+        "Ensure the App Store Connect privacy nutrition label matches the manifest",
+        "If recognition is server-based, set requiresOnDeviceRecognition where feasible to avoid transmitting audio",
+        "Add a regression note so future audio features update the manifest"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): SpeechDictationService prefers on-device recognition when supported so audio stays local; manifest documents no Audio Data type needed. Pending review confirmation."
+    },
+    {
+      "id": "IOS-AUDIT-SEC-010",
+      "title": "Precise user coordinates sent to third-party Open-Meteo at full precision, not disclosed as third-party transmission",
+      "description": "WeatherService.refresh(for:) builds a URL to api.open-meteo.com with the device's raw latitude/longitude at full precision (WeatherService.swift lines 74-78) for the Home 'Right Now' ribbon. The privacy manifest declares PreciseLocation only for AppFunctionality and lists no tracking domains; sending exact coordinates to an external host is undisclosed third-party data sharing and coarser precision would suffice for weather.",
+      "acceptanceCriteria": [
+        "Truncate/round the coordinates sent to Open-Meteo (e.g. 2 decimal places, ~1km) before building the request \u2014 sufficient for city weather",
+        "Confirm whether Open-Meteo usage needs declaration in the App Store privacy label and/or NSPrivacyTrackingDomains (it is not tracking, but is third-party location transmission)",
+        "Gate the weather fetch behind the existing location consent (ConsentService.locationConsent)",
+        "Document the third-party data flow in the privacy disclosures",
+        "Add a test asserting outbound coordinates are rounded"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): WeatherService rounds coordinates to ~1km before the third-party Open-Meteo request."
+    },
+    {
+      "id": "IOS-AUDIT-SEC-011",
+      "title": "Server receipt rejection still does not revoke local premium entitlement (existing story incompletely fixed)",
+      "description": "The existing IOS-AUDIT-SEC-006 story calls for revoking local entitlement on server receipt rejection, but StoreKitService.syncEntitlementToBackend() still treats an explicit server 'valid:false' as a grace period: it logs a warning and returns without downgrading the user (StoreKitService.swift lines 490-496, 515-518). currentTier is derived purely from local StoreKit entitlements, so a tampered/refunded receipt that the server rejects keeps premium unlocked on device.",
+      "acceptanceCriteria": [
+        "On an explicit server response of valid:false, downgrade the effective tier (clear/override local entitlement) rather than only logging",
+        "Distinguish transient/network failures (keep grace) from definitive server rejection (revoke)",
+        "Make currentTier respect a server-authoritative 'revoked' signal, not only local StoreKit entitlements",
+        "Surface a clear UI state when entitlement is revoked server-side",
+        "Add tests covering valid:false revocation vs transient-failure grace"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-24): StoreKitService now adds the product to serverRevokedProductIDs on a definitive validate-ios-receipt valid:false; localTier subtracts that set so a rejected receipt no longer keeps premium. Transient failures keep grace; revocation clears on later success or when the product leaves entitlements. Added hasServerRevokedEntitlement for UI. RLS-side enforcement remains a backend follow-up. Pending macOS build + StoreKit-test verification."
+    },
+    {
+      "id": "IOS-AUDIT-SEC-012",
+      "title": "Server-supplied ad/sponsored clickout URLs bypass scheme validation before SFSafariViewController (IOS-AUDIT-SEC-002 partially fixed)",
+      "description": "The URL safety helper (URL+SafeWebLink.isSafeWebLink) is applied to article links, event source URLs, and restaurant/hotel/attraction websites, but campaign creative targetURLs (AdBannerView.swift line 105, InterstitialAdView.swift line 117) and sponsored listing URLs (SponsoredPickCard.swift line 26) are passed straight into AdTarget/SafariView with no isSafeWebLink check. These URLs come from server-side campaign_creatives/sponsored tables, so a compromised or malicious creative row could supply a non-http(s) or otherwise unsafe URL into the in-app browser path.",
+      "acceptanceCriteria": [
+        "Guard creative.targetURL and sponsored listingURL with isSafeWebLink (drop+log otherwise) before assigning AdTarget, matching the article-link path",
+        "Add the same guard inside SafariView (or an AdTarget factory) so all clickout call sites are protected centrally",
+        "Cover AdBannerView, InterstitialAdView, SponsoredPickCard, PromoteListing, and HotelDetailView book CTA",
+        "Add a unit test that a non-https creative URL is rejected",
+        "Confirm no other SafariView/AdTarget call site accepts unvalidated server URLs"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): AdTarget failable init enforces the http/https allowlist centrally for all server-supplied creative/sponsored clickout URLs."
+    },
+    {
+      "id": "IOS-AUDIT-SEC-013",
+      "title": "Certificate pinning ships disabled (report-only) by default (IOS-AUDIT-SEC-001 wired but not enforcing)",
+      "description": "Pinning is now installed on the Supabase URLSession (SupabaseService.swift lines 30-41), but Config.certificatePinningEnforced = false, so in Release the delegate runs report-only and allows any valid CA chain (CertificatePinningService.reportOnly returns !certificatePinningEnforced; mismatches are allowed with only a warning at lines 104-107). As shipped, the app gets no MITM protection from pinning despite the machinery being present.",
+      "acceptanceCriteria": [
+        "Verify the five pinned SPKI hashes against the live Supabase host (the Google Trust Services WE1 / GTS R4 set) and document the verification",
+        "Flip Config.certificatePinningEnforced to true for Release once verified",
+        "Add at least one backup/rotation pin and a documented rotation runbook to avoid bricking connectivity",
+        "Add monitoring/telemetry for pinning-mismatch events during the report-only window before enforcing",
+        "Add a test or CI check that Release builds enforce pinning"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "BLOCKED (needs verification): enabling cert pinning requires verifying the live Supabase host SPKI pins + a backup-pin/rotation runbook first. Flipping certificatePinningEnforced=true with unverified pins risks bricking all clients' connectivity, so left false pending verified pins."
+    },
+    {
+      "id": "IOS-AUDIT-SEC-014",
+      "title": "Analytics/ad telemetry has no opt-out for non-EU users and consent is stored in plaintext UserDefaults",
+      "description": "ConsentService gates analytics and ad telemetry on analyticsConsent, but needsConsentPrompt is true only for EU/EEA/UK locales (isLikelyEU, lines 45-60); non-EU users never see the consent screen. Because UserDefaults.bool defaults to false, analyticsConsent defaults off for them \u2014 but there is no in-app toggle path guaranteed for non-EU users to change it, and consent flags live in plain UserDefaults keyed by region detection that is trivially spoofable. For App Store compliance and ATT-free first-party analytics this should still offer a universal settings toggle.",
+      "acceptanceCriteria": [
+        "Expose an always-available analytics/ad-telemetry toggle in SettingsView for all users, not only EU",
+        "Confirm the default state and document it (currently false because UserDefaults.bool defaults false)",
+        "Verify AnalyticsService and AdTrackingService consistently honor the toggle (they do gate on analyticsConsent)",
+        "Consider persisting consent server-side or in a tamper-evident store if it has compliance weight",
+        "Ensure the privacy nutrition label reflects that Product Interaction analytics is collected and user-controllable"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): Usage Analytics opt-out surfaced in a Privacy section visible to all users (was gated behind auth); de-duplicated from the authenticated section. AnalyticsService + AdTrackingService gate on the flag."
+    },
+    {
+      "id": "IOS-AUDIT-SEC-015",
+      "title": "Apple Sign-In nonce charset is missing the letter 'W' (copy-paste defect)",
+      "description": "AuthService.randomNonceString uses the charset '0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._' (AuthService.swift line 227) \u2014 the uppercase run skips 'W' (\u2026U V X Y Z). The nonce is still backed by 32 SecRandomCopyBytes and SHA-256 hashed, so security impact is negligible, but it is a clear correctness defect indicating the alphabet was hand-typed and should be corrected to avoid surprising downstream assumptions about the charset.",
+      "acceptanceCriteria": [
+        "Fix the charset to include 'W' (full A-Z) or use a base32/base64url alphabet",
+        "Add a unit test asserting the charset has the expected length and contains all A-Z",
+        "Confirm the nonce is still SHA-256 hashed for request.nonce and sent raw to Supabase",
+        "Re-verify Apple Sign-In still succeeds end-to-end after the change"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): Apple Sign-In nonce charset now includes the previously-missing 'W' (full A-Z)."
+    },
+    {
+      "id": "IOS-AUDIT-PERF-014",
+      "title": "Map cluster bucketing recomputed on every camera frame (render storm)",
+      "description": "In EventMapView.mapContent, ForEach(viewModel.clusters(for: currentRegion)) calls MapViewModel.clusters(for:), an O(n) function that re-buckets every event/restaurant/attraction annotation into a fresh dictionary on each evaluation. currentRegion is a @State updated inside .onMapCameraChange { currentRegion = context.region }, which fires continuously during pan/zoom, so the entire bucket recomputation (plus a full Map re-render) runs on the main thread on every camera frame whenever shouldCluster is true (>60 pins). The function's own doc comment admits it 'recomputes on each read'.",
+      "acceptanceCriteria": [
+        "Cluster results are computed off the render path (stored property recomputed only when annotations or the quantized region bucket changes), not inside ForEach",
+        "Camera-change-driven recomputation is throttled/debounced so continuous panning does not trigger per-frame O(n) work",
+        "Clusters expose stable ids so SwiftUI diffing does not rebuild all annotations every frame",
+        "Panning a dense (>60 pin) map sustains ~60fps with no main-thread cluster work spikes in Instruments",
+        "Behavior of tap-to-zoom and disambiguation sheet is unchanged"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): EventMapView caches clusters in @State, recomputing only on zoom-bucket or data change (panning is a no-op); stable cluster ids. Pending profiling."
+    },
+    {
+      "id": "IOS-AUDIT-PERF-015",
+      "title": "AdViewabilityModifier reads deprecated UIScreen.main on every scroll frame",
+      "description": "AdViewabilityModifier.visibleFraction uses UIScreen.main.bounds to compute on-screen intersection. This is the deprecated, multi-scene-unsafe API the team already removed from CachedAsyncImage (IOS-AUDIT-PERF-002), but it survives here. On iPad Split View / Stage Manager it returns the wrong screen, so viewability (and therefore billed ad impressions) is miscounted. It is also evaluated inside onChange(of: proxy.frame(in: .global)), which fires for every tracked ad slot on every scroll tick.",
+      "acceptanceCriteria": [
+        "Viewable-fraction math uses the view's own window/scene bounds (connectedScenes window), not UIScreen.main",
+        "Correct viewability is computed in iPad multi-window / Stage Manager layouts",
+        "No deprecated UIScreen.main usage remains in the file (grep clean)",
+        "Per-frame onChange work is minimized (e.g. quantize/throttle frame updates) so scrolling a feed of ad slots does not spike CPU",
+        "Impression-once semantics and the >=50%-for-1s dwell rule are preserved"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): AdViewabilityModifier uses active window-scene bounds instead of UIScreen.main (multi-window correct)."
+    },
+    {
+      "id": "IOS-AUDIT-PERF-016",
+      "title": "SpeechDictationService leaves the AVAudioSession active after stopping",
+      "description": "SpeechDictationService.start() activates the audio session with .record mode and .duckOthers, but stop() only stops the engine, removes the tap, and ends the request \u2014 it never calls AVAudioSession.setActive(false, options: .notifyOthersOnDeactivation). After a single dictation the recording session stays active, holding the microphone hardware engaged, keeping other apps' audio ducked, and draining battery until the app is killed. Repeated mic toggles compound this.",
+      "acceptanceCriteria": [
+        "stop() deactivates the AVAudioSession with .notifyOthersOnDeactivation",
+        "Other apps' audio un-ducks (resumes full volume) after dictation ends",
+        "Session deactivation also runs on the error/isFinal paths and on view dismissal",
+        "No mic-in-use indicator persists after stop()",
+        "Energy log shows audio subsystem idle after dictation completes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): SpeechDictationService deactivates the AVAudioSession on stop so the mic releases and other apps un-duck."
+    },
+    {
+      "id": "IOS-AUDIT-PERF-017",
+      "title": "Email-verification screen polls the network every 5s even while backgrounded",
+      "description": "VerifyEmailView.pollForVerification runs while !Task.isCancelled { sleep 5s; await auth.refreshUser() } via .task. SwiftUI .task is tied to the view's lifetime, not scene phase, so while this screen is showing the app keeps firing a Supabase refreshSession() network call every 5 seconds even when the app is in the background \u2014 a steady battery/data drain for a user who left the app on the verify screen. It also already refreshes on .active scenePhase, so foregrounding triggers an immediate refresh plus the resumed poll.",
+      "acceptanceCriteria": [
+        "Polling pauses when scenePhase is not .active and resumes on foreground",
+        "No refreshUser() network calls fire while the app is backgrounded",
+        "Foregrounding does not double-fire (scenePhase refresh + immediate poll) redundant requests",
+        "Poll still completes the auto-advance when the user verifies on another device",
+        "Poll loop is cancelled on view disappear"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): VerifyEmailView poll keyed on scenePhase via .task(id:) so it suspends while backgrounded (was hitting the network every 5s off-screen)."
+    },
+    {
+      "id": "IOS-AUDIT-PERF-018",
+      "title": "StoreKit receipt-validation retries on non-transient URL errors (including cancellation)",
+      "description": "StoreKitService.isTransientError returns true for ANY error whose NSError domain is NSURLErrorDomain ((error as NSError).domain == NSURLErrorDomain -> return true). That includes non-transient/permanent codes like NSURLErrorCancelled (-999) and NSURLErrorUserAuthenticationRequired, so a cancelled or auth-rejected validate-ios-receipt call is retried 3x with exponential backoff (1s/2s/4s) before giving up. This is the same localized-string/coarse-classification anti-pattern flagged for NetworkRetry, duplicated and slightly worse here. It wastes battery/time on the purchase path and can delay the user-visible result of a purchase.",
+      "acceptanceCriteria": [
+        "isTransientError checks specific retryable NSURLError codes (timeout, connection lost, DNS, not-connected) rather than the whole domain",
+        "NSURLErrorCancelled and auth-required errors are treated as non-transient (no retry)",
+        "5xx detection uses an actual status code from the Supabase FunctionsError, not substring matching on localizedDescription",
+        "A cancelled purchase-validation call returns immediately without backoff",
+        "Shared with NetworkRetry's logic so the rule is defined once"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): StoreKit isTransientError classifies on structured NSURLError codes; cancellation/auth-required no longer retry 3x."
+    },
+    {
+      "id": "IOS-AUDIT-PERF-019",
+      "title": "SwipeInteractionService swipedItemKeys grows without bound in UserDefaults",
+      "description": "SwipeInteractionService keeps every itemType:itemId the user has ever swiped in swipedItemKeys (a Set persisted to UserDefaults under 'discover.swipedItems.v1') and only ever inserts, never trims. For an engaged Discover user this set grows indefinitely, is reloaded fully into memory at launch, and is re-serialized to UserDefaults on every single swipe (saveLocal writes the whole array each time). Over months this becomes a large UserDefaults blob written on the hot swipe path and an ever-growing in-memory Set consulted for dedupe.",
+      "acceptanceCriteria": [
+        "swipedItemKeys is capped (e.g. most-recent-N or time-windowed) so it cannot grow unbounded",
+        "Persisting on each swipe is debounced/batched rather than rewriting the full array every swipe",
+        "Launch-time decode cost stays bounded regardless of lifetime swipe volume",
+        "reset() still clears all keys",
+        "Dedupe ('don't show the same item twice') behavior is preserved within the retained window"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): SwipeInteractionService caps swiped keys to a most-recent-1000 ordered window; in-memory set + UserDefaults blob bounded. reset() clears both."
+    },
+    {
+      "id": "IOS-AUDIT-PERF-020",
+      "title": "ImageCache disk cap (200 MB) only enforced opportunistically, not on the write path",
+      "description": "ImageCache.pruneDiskIfNeeded (LRU by modification date) runs only on init and on didEnterBackground. setDisk() writes new image bytes without ever checking the 200 MB cap, so during a long foreground session of heavy scrolling (lots of distinct Supabase images) the on-disk cache can grow well past 200 MB until the app is next backgrounded or relaunched. This is the foreground gap left by the existing 'prune disk on background' story.",
+      "acceptanceCriteria": [
+        "Disk usage is bounded during a long foreground session, not only at init/background",
+        "setDisk triggers (throttled) prune-if-needed when cumulative writes risk exceeding the cap",
+        "Pruning runs off the main thread and does not stall image writes",
+        "LRU eviction order (oldest modification first) is preserved",
+        "Sustained scrolling through hundreds of unique images keeps disk cache at/under 200 MB"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): ImageCache enforces the 200 MB disk cap on the write path (throttled at 25 MB written) so it holds during long foreground sessions."
+    },
+    {
+      "id": "IOS-AUDIT-PERF-021",
+      "title": "Restaurant.isOpenNow re-parses business-hours strings on every call (memoization incomplete)",
+      "description": "The IOS-AUDIT-PERF-009 fix cached Calendar.current and collapsed three component reads into one, but isOpenNow() still re-parses the business_hours string each call: it splits the day's hours on ' - ' and runs parseTime() (string trimming, AM/PM suffix logic, Int conversions) for open and close every invocation. On a 100+ restaurant list this string work re-runs for every visible row on each filter toggle / 'Open Now' evaluation. The parsed open/close minute pair per day is never memoized on the model.",
+      "acceptanceCriteria": [
+        "Parsed open/close minute ranges per weekday are computed once and cached (e.g. lazily on the model), not re-parsed per isOpenNow() call",
+        "isOpenNow() at a given date does only the cheap minute comparison against cached ranges",
+        "Open/Closed/overnight/unknown results are unchanged for representative business_hours formats",
+        "Filtering a 100+ restaurant list by Open Now shows no per-row string-parsing cost in Instruments",
+        "Caching is concurrency-safe given filtering runs in a detached task"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): Restaurant.isOpenNow memoizes parsed open/close ranges by hours string in an NSLock-guarded static cache (concurrency-safe for off-main filtering)."
+    },
+    {
+      "id": "IOS-AUDIT-UX-035",
+      "title": "Map preview sheet's Directions and Details buttons are unreachable by VoiceOver",
+      "description": "In MapPreviewSheet.swift the outer VStack carries .accessibilityElement(children: .combine) + .accessibilityLabel(\"<name>, <category>\") (lines 102-103), but that container also wraps the two action Buttons \u2014 Directions (line 65) and Details (line 78). .combine flattens descendants into one non-actionable text element, so VoiceOver users can read the place name but cannot focus or activate either button.",
+      "acceptanceCriteria": [
+        "The .accessibilityElement(children: .combine) wraps only the info block (image/name/category/rating/distance), not the action button row.",
+        "Directions and Details are each independently focusable and activatable under VoiceOver.",
+        "Each button has a descriptive label (e.g. 'Directions to <name>', 'View details for <name>').",
+        "VoiceOver focus order is place summary, then Directions, then Details.",
+        "Verified with VoiceOver that both actions fire."
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-24): MapPreviewSheet scopes .combine to the info block; Directions/Details are separate, labeled, focusable buttons. Pending on-device VoiceOver QA."
+    },
+    {
+      "id": "IOS-AUDIT-UX-036",
+      "title": "Subscription renewal/win-back banner swallows its action and Dismiss buttons for VoiceOver",
+      "description": "In SubscriptionStatusBanner.swift the banner HStack applies .accessibilityElement(children: .combine) with .accessibilityLabel(config.message) (lines 55-56), which absorbs both the primary action Button (Renew/Update/See offer, line 32) and the Dismiss xmark Button (lines 39-47). The Dismiss button's own .accessibilityLabel(\"Dismiss\") (line 47) is overridden, leaving VoiceOver users unable to recover a failing subscription or clear the banner.",
+      "acceptanceCriteria": [
+        "Replace the container children: .combine with grouping that keeps the action and dismiss buttons as separate accessibility elements.",
+        "The message text is announced as a static label.",
+        "The action button (Renew/Update/See offer) is independently focusable and activatable.",
+        "The Dismiss button retains its 'Dismiss' label and is independently activatable.",
+        "Verified with VoiceOver that both action and dismiss fire."
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-24): SubscriptionStatusBanner uses .contain instead of .combine; message is static text, action + Dismiss buttons stay individually focusable/activatable. Pending on-device VoiceOver QA."
+    },
+    {
+      "id": "IOS-AUDIT-UX-037",
+      "title": "Discover swipe-card detail-open is gesture-only and inaccessible to VoiceOver",
+      "description": "The top SwipeCard sets .accessibilityElement(children: .ignore) with a label and a hint that promises 'use the buttons below' (SwipeCard.swift lines 115-117) but exposes no .isButton trait and no accessibilityAction. Opening detail is wired purely as .onTapGesture { if index == 0 { onTap(item) } } (SwipeCardStack.swift line 91), a raw gesture VoiceOver cannot perform, so a VoiceOver user can never open an item's detail screen from the deck.",
+      "acceptanceCriteria": [
+        "The top card exposes an .accessibilityAction(named: \"Open details\") (or default activation) calling the same onTap handler.",
+        "The card advertises an activatable trait so VoiceOver double-tap navigates to detail.",
+        "Per-card named actions for Save / Skip / More-like-this are also exposed so swipe commits have VoiceOver equivalents on the card element.",
+        "The accessibilityHint describes the available actions accurately.",
+        "Verified with VoiceOver on at least one event and one restaurant card."
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-24): SwipeCardStack exposes the top card as an activatable button (double-tap opens detail) with named rotor actions Save/Skip/More like this mapped to the existing programmatic commits; back cards hidden from VoiceOver. Pending on-device VoiceOver QA."
+    },
+    {
+      "id": "IOS-AUDIT-UX-038",
+      "title": "Map detail popups have unlabeled, sub-44pt icon-only Close / open / call / website controls",
+      "description": "In EventMapView.swift the event/restaurant/attraction popups use icon-only controls with no accessibilityLabel and no .minHitTarget(): the chevron open-detail button (~line 348), the call Link (~line 415), the website Link (~line 474), and the three xmark close buttons (~lines 356, 423, 482). VoiceOver announces them only as generic 'button'/'link', and the small glyphs sit below the 44pt target.",
+      "acceptanceCriteria": [
+        "Each xmark close control has an accessibilityLabel ('Close') and a 44pt hit target via .minHitTarget().",
+        "The chevron open-detail control is labeled (e.g. 'Open <title>').",
+        "The phone Link is labeled 'Call <name>' and the website Link 'Open <name> website'.",
+        "All four control types meet the 44pt minimum tap target.",
+        "Decorative imagery inside the popups stays accessibilityHidden so only actions are focusable."
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-24): EventMapView event/restaurant/attraction popups now label and .minHitTarget() the open/call/website/close controls and combine each info block. Pending on-device VoiceOver QA."
+    },
+    {
+      "id": "IOS-AUDIT-UX-039",
+      "title": "ProfileView Personal Info form has no keyboard dismissal (phone pad keyboard trap)",
+      "description": "ProfileView.swift's 'Personal Info' Section (lines 71-77) has four TextFields including a Phone field with .keyboardType(.phonePad) (line 75). The .phonePad keyboard has no return/Done key, and the Form applies no .scrollDismissesKeyboard and no keyboard toolbar, so once the phone field is focused the user can be stranded with the keyboard covering the Save action.",
+      "acceptanceCriteria": [
+        "The form supports keyboard dismissal (e.g. .scrollDismissesKeyboard(.interactively) and/or a 'Done' keyboard toolbar).",
+        "The phone-pad field can be dismissed without switching to another field.",
+        "The Save Changes action remains reachable while editing.",
+        "Focus order across the four fields is logical with VoiceOver/keyboard.",
+        "Verified on a small device with each field focused."
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): .scrollDismissesKeyboard(.interactively) on the ProfileView form so the phone-pad field can't trap the keyboard. Pending on-device QA."
+    },
+    {
+      "id": "IOS-AUDIT-UX-040",
+      "title": "ReviewComposer multiline field has no keyboard dismissal and star rating buttons are below 44pt",
+      "description": "In ReviewsSection.swift the ReviewComposer review TextField uses axis: .vertical with lineLimit(4...10) inside a Form (~lines 257-260) but offers no keyboard dismissal, and the required star-rating buttons wrap Image(...).font(.title2) with .buttonStyle(.plain) and only HStack(spacing: 8), no .minHitTarget() (~lines 242-253). Posting is blocked until a rating is set, yet the ~22pt, tightly-packed stars are easy to mis-tap.",
+      "acceptanceCriteria": [
+        "The composer supports keyboard dismissal (interactive scroll-dismiss or a Done toolbar) without losing entered text.",
+        "Each star button has a >=44x44 hit target (e.g. .minHitTarget()).",
+        "Adjacent star hit areas don't overlap such that the wrong value is selected.",
+        "Each star keeps its 'N star(s)' VoiceOver label and the Cancel/Post actions stay reachable with the keyboard up.",
+        "Verified that every value 1-5 is reliably selectable and the keyboard can be dismissed."
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): ReviewComposer keyboard dismissal + 44pt star hit targets via .minHitTarget(). Pending on-device QA."
+    },
+    {
+      "id": "IOS-AUDIT-UX-041",
+      "title": "AttractionsView type-filter chips emit malformed labels and lack the selected trait",
+      "description": "In AttractionsView.swift typeChips each chip sets .accessibilityLabel(\"<type.displayName> <selected ? 'selected' : ''>\") (~line 148). Unselected chips produce a trailing-space artifact (e.g. 'Museums '), and selection is conveyed only by an embedded English word rather than .isSelected, so VoiceOver never announces these as selectable toggle buttons and the state isn't localizable.",
+      "acceptanceCriteria": [
+        "The chip label is just the type name (no embedded state word, no trailing space).",
+        "Selected chips add .accessibilityAddTraits(.isSelected); unselected ones omit it.",
+        "VoiceOver announces '<type>, selected, button' / '<type>, button' correctly as the filter toggles.",
+        "The pattern matches the favorite button's existing .isSelected usage."
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): AttractionsView chips use .isSelected trait instead of an embedded 'selected' word/trailing space. Pending VoiceOver QA."
+    },
+    {
+      "id": "IOS-AUDIT-UX-042",
+      "title": "ItineraryDetailView reorder-stops mode is inaccessible to VoiceOver with no state announcement",
+      "description": "ItineraryDetailView.swift enables .onMove drag-reordering when editMode is toggled from the options menu (~line 105), but entering the mode only runs a withAnimation visual change \u2014 no VoiceOver announcement and no accessibility action alternative to the drag gesture. A VoiceOver user selects 'Reorder stops', hears no confirmation, and cannot perform the drag the feature requires.",
+      "acceptanceCriteria": [
+        "Entering/exiting reorder mode posts a VoiceOver announcement (e.g. 'Reordering stops' / 'Done reordering').",
+        "Each draggable row exposes accessibility actions (e.g. 'Move up' / 'Move down') so reordering works without a drag gesture.",
+        "The menu item label reflects the current mode state.",
+        "Reduce Motion is respected for the mode-change animation.",
+        "Verified with VoiceOver: a stop can be moved without a physical drag."
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): ItineraryDetailView per-stop Move up/Move down accessibility actions + reorder-mode VoiceOver announcement; drag kept for sighted users. Pending VoiceOver QA."
+    },
+    {
+      "id": "IOS-AUDIT-UX-043",
+      "title": "SearchView recent-search remove (xmark) button is below the 44pt hit target",
+      "description": "In SearchView.swift recentSearchesSection (~line 380) each row's delete control renders Image(systemName: \"xmark\").font(.caption2) with no .minHitTarget() and no explicit frame, so its tappable area is roughly the glyph size, well under 44x44, and it sits adjacent to the row's apply-search target.",
+      "acceptanceCriteria": [
+        "The xmark remove button uses .minHitTarget() (or an equivalent 44x44 frame + contentShape).",
+        "Tapping anywhere in the 44pt area removes that recent search.",
+        "The expanded hit area does not trigger the adjacent search-apply action.",
+        "The VoiceOver label ('Remove <query> from recent searches') is preserved.",
+        "Row layout is not visibly disrupted."
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): SearchView recent-search xmark gets .minHitTarget(). Pending on-device QA."
+    },
+    {
+      "id": "IOS-AUDIT-UX-044",
+      "title": "SavedSearchesList bell/trash and SaveSearchSheet name field: sub-44pt targets and missing validation",
+      "description": "In SavedSearchUI.swift the SavedSearchesList row's alerts-toggle (bell) and delete (trash) buttons wrap bare Images with .buttonStyle(.plain) and no .minHitTarget() (~lines 131-149), placing a destructive delete at a glyph-sized target next to the row's NavigationLink. Separately, SaveSearchSheet (~lines 63-89) has no keyboard dismissal and only disables Save while saving, so a whitespace-only name can be saved, yielding an unlabeled saved search.",
+      "acceptanceCriteria": [
+        "The bell and trash buttons each have a >=44x44 hit target and their hit areas don't overlap each other or the NavigationLink.",
+        "Existing VoiceOver labels ('Turn on alerts...', 'Delete ...') are preserved.",
+        "SaveSearchSheet disables Save when the trimmed name is empty and trims before calling onSave.",
+        "The save sheet supports keyboard dismissal (interactive scroll-dismiss or Done toolbar).",
+        "Verified that a whitespace-only name cannot be saved and each control is independently tappable."
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): SavedSearchUI bell/trash 44pt targets; SaveSearchSheet trims + blocks empty names + keyboard dismissal. Pending QA."
+    },
+    {
+      "id": "IOS-AUDIT-UX-045",
+      "title": "AuthView form lacks keyboard dismissal and keyboard-avoidance for lower fields",
+      "description": "In AuthView.swift the form lives in a ScrollView (~line 13) with no .scrollDismissesKeyboard and no keyboard toolbar. In sign-up mode the lower fields (Confirm Password, interests) and the Create Account button sit below the keyboard with no field-to-field submitLabel chaining, so dismissing the keyboard requires tapping empty space that may not exist.",
+      "acceptanceCriteria": [
+        "The auth ScrollView supports keyboard dismissal (e.g. .scrollDismissesKeyboard(.interactively) or a Done toolbar).",
+        "The primary action button and inline validation messages stay reachable while editing.",
+        "Email/password fields use sensible submitLabel values (e.g. .next / .go) where practical.",
+        "Sign-up mode's lower fields are reachable without the keyboard permanently obscuring them.",
+        "Verified in both sign-in and sign-up modes with the keyboard up."
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): AuthView ScrollView .scrollDismissesKeyboard(.interactively). Pending on-device QA."
+    },
+    {
+      "id": "IOS-AUDIT-UX-046",
+      "title": "VerifyEmailView 'Open Mail app' button can silently no-op",
+      "description": "In VerifyEmailView.swift openMailApp() (~line 221) opens URL(string: \"message://\") via UIApplication.shared.open with no completion handler. If no Mail-capable app is installed or the scheme can't be opened, the tap does nothing and the user gets no feedback while stuck on this blocking verification interstitial.",
+      "acceptanceCriteria": [
+        "openMailApp() uses open(_:options:completionHandler:) and handles the false (couldn't open) result.",
+        "When Mail can't be opened, the user sees feedback (e.g. the existing toast) rather than nothing.",
+        "Optionally gate the button on canOpenURL, hiding/disabling it when Mail is unavailable.",
+        "The button exposes a clear VoiceOver label ('Open Mail app').",
+        "The happy path (Mail installed) still opens Mail."
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): VerifyEmailView openMailApp uses the open completion handler and shows a toast on failure instead of silently no-op'ing."
+    },
+    {
+      "id": "IOS-AUDIT-UX-047",
+      "title": "Map pin selection and MapTimeSlider stop animations ignore Reduce Motion",
+      "description": "EventMapView.swift's pin views spring-animate scale/shadow on selection with .animation(.spring(...), value: isSelected) and no Reduce Motion guard (EventMapPin ~line 530, RestaurantMapPin ~548, AttractionMapPin ~600), and MapTimeSlider.swift runs withAnimation(.easeInOut(duration: 0.2)) on every stop tap (~line 30) without reading accessibilityReduceMotion. The rest of the app (OnboardingView, SwipeCardStack) already gates such motion.",
+      "acceptanceCriteria": [
+        "Each pin view and MapTimeSlider read @Environment(\\.accessibilityReduceMotion).",
+        "Selection springs and the stop-tap animation are nil (or a cross-fade) when Reduce Motion is on.",
+        "Pins still visually indicate selection without motion, and the selected stop still updates.",
+        "Behavior with Reduce Motion off is unchanged.",
+        "Verified with Reduce Motion toggled across a dense map and the time slider."
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): Reduce Motion gates on MapTimeSlider stop animation and the three EventMapView pin selection springs. Pending QA."
+    },
+    {
+      "id": "IOS-AUDIT-UX-048",
+      "title": "AttractionsView/WeekendView stale-data Retry buttons are below 44pt and scroll-to-top ignores Reduce Motion",
+      "description": "The error banners use caption-sized text-only Retry buttons with no hit-target padding: AttractionsView.swift errorBanner (~lines 271-277, .font(.caption.bold())) and WeekendView.swift errorBanner (~lines 193-195); neither applies .minHitTarget(), giving a ~16-18pt tall target for the primary recovery action. Separately, AttractionsView's ScrollToTopButton action runs withAnimation { proxy.scrollTo(\"top\") } (~line 71) with no Reduce Motion check.",
+      "acceptanceCriteria": [
+        "Both Retry buttons apply .minHitTarget() (or >=44x44 padding) without clipping the banner message.",
+        "AttractionsView reads accessibilityReduceMotion and calls proxy.scrollTo without withAnimation when it's on.",
+        "Animated scroll is preserved when Reduce Motion is off.",
+        "Retry tap targets measure >=44pt in both dimensions.",
+        "Applied consistently to both AttractionsView and WeekendView banners."
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): AttractionsView/WeekendView Retry buttons get .minHitTarget(); AttractionsView scroll-to-top honors Reduce Motion."
+    },
+    {
+      "id": "IOS-AUDIT-UX-049",
+      "title": "ComingSoonView web sheet has no in-sheet dismissal control",
+      "description": "ComingSoonView.swift presents web content via .sheet(isPresented: $showWeb) wrapping WebViewPage in a NavigationStack (~line 30) without adding an explicit Close/Done toolbar button. Unless WebViewPage provides one, the sheet relies solely on swipe-to-dismiss, which is unreliable for VoiceOver and switch-control users once the web page is scrolled.",
+      "acceptanceCriteria": [
+        "The web sheet exposes an explicit, labeled Done/Close control (here or guaranteed within WebViewPage).",
+        "The control is reachable and labeled for VoiceOver.",
+        "Swipe-to-dismiss remains a secondary path.",
+        "Verified that WebViewPage provides a close affordance or one is added in ComingSoonView.",
+        "Tested with VoiceOver."
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): ComingSoonView web sheet gets an explicit labeled Done button (not swipe-only dismissal)."
+    },
+    {
+      "id": "IOS-AUDIT-FEAT-024",
+      "title": "Saved-search alerts never fire: iOS writes the alert flag into filters JSON, backend reads top-level search_type/alerts_enabled columns",
+      "description": "SavedSearchService.createSavedSearch inserts only user_id, name, and a filters JSONB blob (with alerts_enabled nested inside it), and never sets a top-level search_type. The saved-search-alerts edge function selects rows with .eq('search_type','event_list').eq('alerts_enabled', true) on top-level columns. iOS-created saved searches match neither predicate, so they are silently excluded from every alert run. The Insider/VIP 'custom alerts' paywall feature therefore delivers nothing for any search created in the app.",
+      "acceptanceCriteria": [
+        "Saved searches created on iOS set the top-level search_type column (e.g. 'event_list') the alert job filters on",
+        "Toggling alerts on a saved search writes the top-level alerts_enabled boolean column, not just filters.alerts_enabled",
+        "An iOS saved search with alerts on is returned by the saved-search-alerts job's query and produces a digest when a new matching event is created",
+        "Existing iOS rows are backfilled/migrated so previously saved searches with alerts on also become eligible",
+        "An integration/contract test asserts the iOS insert shape and the backend select predicate stay in sync"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-24): SavedSearchService writes top-level search_type + alerts_enabled (Events tab -> 'event_list') on insert and on alert toggle, self-healing older rows, so the nightly saved-search-alerts job now matches iOS searches. Dual-write keeps filters JSON. Added searchType mapping unit test. Columns pre-exist (additive). Pending end-to-end delivery verification."
+    },
+    {
+      "id": "IOS-AUDIT-FEAT-025",
+      "title": "Siri/Shortcuts intents are dropped unless the user is already on the Search tab",
+      "description": "FindRestaurantsIntent/FindEventsIntent/AskPulseIntent each set PulseIntentDispatcher.shared.pending and open the app (openAppWhenRun=true), but the only observer of dispatcher.pending is SearchView. The app opens to selectedTab (default .home); MainTabView never observes the dispatcher and never switches to the Search tab on an intent. SearchView's .task/.onChange only run once that tab is in the hierarchy, so an intent fired while Home is active is silently ignored.",
+      "acceptanceCriteria": [
+        "Running any Pulse App Intent while the app is on a non-Search tab routes the user to the relevant screen and applies the parameters",
+        "MainTabView observes PulseIntentDispatcher and switches to the Search tab (or the appropriate destination) when a pending intent exists",
+        "The pending intent is consumed exactly once and not re-applied on subsequent tab visits",
+        "Cold-launch via an intent (app not running) also applies the intent after launch",
+        "A test exercises an intent fired from Home and asserts the destination is reached"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-24): MainTabView observes PulseIntentDispatcher and switches to the Search tab on a pending intent (cold launch + while running); onChange captures the non-nil new value to avoid a consume race with SearchView. Pending on-device Siri/Shortcuts QA."
+    },
+    {
+      "id": "IOS-AUDIT-FEAT-026",
+      "title": "Spotlight indexing for events & restaurants is dead code \u2014 no caller ever invokes it",
+      "description": "SpotlightService.indexEvents and indexRestaurants are fully implemented but have zero call sites; only indexArticles and indexHotels are actually invoked. Events and restaurants \u2014 the app's primary content \u2014 are never added to the Spotlight index, so they will not appear in iOS system search despite the implemented support.",
+      "acceptanceCriteria": [
+        "EventsViewModel/RestaurantsViewModel (or their detail views) call SpotlightService.indexEvents/indexRestaurants after loading content",
+        "Browsing the events and restaurants lists results in those items appearing in iOS Spotlight search",
+        "Indexing is incremental/de-duplicated so it does not re-index the full set on every load",
+        "Stale items are removed (or re-indexed) so deleted/hidden content does not linger in Spotlight",
+        "A test or manual QA step confirms an event and a restaurant are discoverable via Spotlight"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): EventsViewModel/RestaurantsViewModel index into Spotlight on reset load. Pending on-device verification."
+    },
+    {
+      "id": "IOS-AUDIT-FEAT-027",
+      "title": "Tapping a Spotlight result does not open the linked content",
+      "description": "Spotlight items are created with uniqueIdentifiers like 'event-<id>' but no contentURL/relatedUniqueIdentifier, and the app handles only onContinueUserActivity(NSUserActivityTypeBrowsingWeb). There is no CSSearchableItemActionType handler anywhere, so a tap on a Spotlight result just launches the app to the default tab and the user lands nowhere relevant.",
+      "acceptanceCriteria": [
+        "The app handles NSUserActivity of type CSSearchableItemActionType and reads CSSearchableItemActivityIdentifier",
+        "The 'event-<id>'/'restaurant-<id>'/'attraction-<id>'/'article-<id>'/'hotel-<id>' identifier is parsed and routed via DeepLinkHandler to the matching detail screen",
+        "Tapping each indexed content type's Spotlight result opens its detail view",
+        "Unknown/malformed identifiers fail gracefully (no crash, no wrong destination)",
+        "A test covers at least one Spotlight identifier round-trip to a destination"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): DeepLinkHandler.handleSpotlightIdentifier + CSSearchableItemActionType routing for event/restaurant/attraction (article/hotel are graceful no-ops pending their own destinations). Tests added."
+    },
+    {
+      "id": "IOS-AUDIT-FEAT-028",
+      "title": "Siri 'Ask Pulse' intent routes to plain text search instead of the Ask Pulse AI chat",
+      "description": "AskPulseIntent is described as 'Ask Pulse, your local Des Moines AI ... curated picks out', but applyIntent in SearchView handles .askPulse by simply setting viewModel.searchText = query. It runs a normal keyword search rather than opening AskPulseView and sending the query to the discover-chat AI. The advertised Siri experience (and the AskPulseService backend) is never reached from the intent.",
+      "acceptanceCriteria": [
+        "Invoking AskPulseIntent opens AskPulseView (or presents the Ask Pulse experience) with the spoken query prefilled",
+        "The query is sent through AskPulseService.ask (discover-chat), not the keyword SearchViewModel",
+        "Quota/upsell behavior for Ask Pulse applies the same as in-app usage",
+        "Find Restaurants / Find Events intents continue to route to search as today",
+        "A test asserts AskPulseIntent reaches the Ask Pulse chat, not the search tab"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): AskPulse Siri intent opens AskPulseView with the query auto-submitted via discover-chat; MainTabView owns the payload. Find* still route to Search."
+    },
+    {
+      "id": "IOS-AUDIT-FEAT-029",
+      "title": "Push notifications are hard-disabled (Config.enablePushNotifications = false)",
+      "description": "Config.enablePushNotifications is a compile-time false, and DesMoinesInsiderApp only calls requestPermissionIfAppropriate() / remote registration when that flag is true. As a result the APNs device token is never obtained or synced to register-device-token, and the premium 'Custom alerts' paywall benefit ('Push notifications for new matching events') cannot be fulfilled \u2014 the only alert delivery path that works is the server email digest.",
+      "acceptanceCriteria": [
+        "Push is enabled for production builds (or the flag is documented as intentionally off with the paywall copy adjusted to not promise push)",
+        "On an authenticated post-onboarding launch the app registers for remote notifications and syncs the token to register-device-token",
+        "device_tokens contains a row for the signed-in iOS user after registration",
+        "A push payload routes through AppDelegate -> DeepLinkHandler.handleNotification to the correct screen",
+        "Paywall 'custom alerts' copy matches the actually-delivered channel (push and/or email)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "BLOCKED (needs decision): enabling push is a product + APNs-infra decision. Flipping Config.enablePushNotifications adds a launch permission prompt and the paywall promises push that needs the APNs cert + backend delivery verified. Awaiting confirmation, or adjust paywall copy instead."
+    },
+    {
+      "id": "IOS-AUDIT-FEAT-030",
+      "title": "AnalyticsService is a no-op stub \u2014 every tracked event (including paywall conversion analytics) goes nowhere",
+      "description": "AnalyticsService wraps Firebase Analytics but all Analytics.logEvent calls are commented out; trackEvent/trackScreenView only write a local debug log. All instrumentation \u2014 screen views, search, save_favorite, and the paywall funnel (trackPaywallPresented/PurchaseStart/PurchaseComplete) called from PaywallView \u2014 is effectively dropped, so the team will have no conversion/usage data at launch.",
+      "acceptanceCriteria": [
+        "AnalyticsService forwards events to a real analytics backend (Firebase or equivalent) in production",
+        "Paywall funnel events (present/start/complete/dismiss/restore) are received by the analytics backend",
+        "Analytics remains gated on ConsentService.analyticsConsent",
+        "PrivacyInfo.xcprivacy declares the analytics data collection that is actually performed",
+        "If analytics is intentionally deferred, the stub is documented and the paywall/funnel reporting expectations are adjusted"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "BLOCKED (needs config/decision): real analytics needs the Firebase SDK + GoogleService-Info.plist (not in repo) or a new first-party pipeline. Stub left in place pending a Firebase-vs-first-party decision."
+    },
+    {
+      "id": "IOS-AUDIT-FEAT-031",
+      "title": "App Clip 'Get the full app' CTA uses a malformed App Store URL",
+      "description": "ClipRootView.appStoreURL is 'https://apps.apple.com/app/id/com.desmoines.aipulse'. App Store product URLs require a numeric app ID (e.g. id1234567890), not 'id/<bundleId>'. This link will not resolve to the App Store listing, breaking the App Clip's primary conversion CTA.",
+      "acceptanceCriteria": [
+        "appStoreURL uses the real numeric App Store app ID (https://apps.apple.com/app/id<number>)",
+        "Tapping 'Get Des Moines Insider \u2014 Free' opens the correct App Store product page",
+        "The URL is sourced from config so it can be set once the app ID is assigned",
+        "A fallback to the website is retained only if the App Store URL is genuinely unavailable",
+        "Manual QA confirms the CTA opens the listing on a device"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): fixed the malformed App Clip App Store CTA URL; centralized in appStoreAppID, website fallback until the numeric id is assigned."
+    },
+    {
+      "id": "IOS-AUDIT-FEAT-032",
+      "title": "Trip Planner soft-paywall seam is never triggered",
+      "description": "SoftPaywallService.considerAfterTripPlannerAttempt() exists (and its sibling considerAfterFavorite is called from FavoritesService), but considerAfterTripPlannerAttempt has zero call sites \u2014 no Trip Planner view or service invokes it on the first generate attempt. The intended post-onboarding upsell on first Trip Planner use therefore never appears.",
+      "acceptanceCriteria": [
+        "The first AI Trip Planner attempt by a free user calls SoftPaywallService.considerAfterTripPlannerAttempt()",
+        "When eligibility/cooldown gates pass, the .tripPlanner soft paywall is presented via MainTabView's presenter",
+        "Free users are still able to reach the Trip Planner gate copy and convert",
+        "The seam respects maxPresentations/cooldown like the favorites path",
+        "A test asserts the first trip-planner attempt posts .softPaywallTriggered when eligible"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): a free user's Trip Planner generate attempt calls considerAfterTripPlannerAttempt() (now wired), preferring the frequency-capped soft paywall and falling back to the hard gate on cooldown. Seam returns whether it presented."
+    },
+    {
+      "id": "IOS-AUDIT-FEAT-033",
+      "title": "App Clip ignores its invocation URL \u2014 deep-linked event invocations land on a generic list",
+      "description": "ClipEventsViewModel.loadEvents receives invocationURL but discards it ('For now we always show today's highlights') and always loads the featured-events list. An App Clip invoked from a specific event URL (e.g. via App Clip code or universal link) does not surface that event, undercutting the targeted-invocation value proposition.",
+      "acceptanceCriteria": [
+        "When invocationURL points to a specific event, the clip surfaces that event prominently",
+        "Non-specific invocations continue to show today's featured highlights",
+        "Malformed/unknown invocation URLs fall back gracefully to the highlights list",
+        "The event tapped/surfaced links to the correct full-app/website URL",
+        "Manual QA covers an event-specific invocation and a generic invocation"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): ClipEventsViewModel parses .../events/<id> invocation URLs and surfaces that event first (deduped against highlights); generic/malformed invocations fall back to highlights."
+    },
+    {
+      "id": "IOS-AUDIT-REL-001",
+      "title": "Mandatory version-check / force-update mechanism is entirely missing (backend + iOS)",
+      "description": "CLAUDE.md mandates a MIN_SUPPORTED_APP_VERSION constant in supabase/functions/_shared/minSupportedVersions.ts returned by a version-check edge function the app calls on launch. Neither exists: there is no version-check directory under supabase/functions/, no minSupportedVersions.ts, and grep for version-check/MIN_SUPPORTED/forceUpdate across ios/DesMoinesInsider returns zero hits. Without it there is no way to force-upgrade older binaries before a backward-incompatible backend change, which the project's own backward-compatibility policy depends on.",
+      "acceptanceCriteria": [
+        "supabase/functions/_shared/minSupportedVersions.ts defines per-platform MIN_SUPPORTED_APP_VERSION",
+        "A version-check edge function returns the minimum supported version and a force-upgrade payload",
+        "The iOS app calls version-check on launch and presents a blocking upgrade screen when below minimum",
+        "CFBundleShortVersionString (1.2.0) is sent and compared correctly",
+        "Unit/integration coverage for the below-minimum and at-minimum branches"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-24): Added _shared/minSupportedVersions.ts + version-check edge function (verify_jwt=false) and iOS VersionCheckService/ForceUpdateView called on launch (fails open). Deno + iOS contract tests added; storeUrl uses a placeholder numeric App Store id until assigned. Pending deploy + on-device verification."
+    },
+    {
+      "id": "IOS-AUDIT-REL-002",
+      "title": "Privacy manifest declares Precise Location but app only collects Coarse Location",
+      "description": "ios/DesMoinesInsider/Resources/PrivacyInfo.xcprivacy declares NSPrivacyCollectedDataTypePreciseLocation, but LocationService.swift sets desiredAccuracy = kCLLocationAccuracyHundredMeters and only ever calls requestWhenInUseAuthorization() \u2014 no requestTemporaryFullAccuracy / kCLLocationAccuracyBest anywhere in the target. The privacy manifest and the App Store privacy nutrition label it feeds therefore overstate the data collected, which is exactly the kind of inaccuracy Apple flags during review.",
+      "acceptanceCriteria": [
+        "Privacy manifest declares NSPrivacyCollectedDataTypeCoarseLocation instead of Precise (or app is changed to actually request full accuracy)",
+        "App Store Connect privacy label matches the manifest",
+        "Location purpose remains AppFunctionality and Tracking stays false",
+        "Decision documented in metadata/app_review_notes.md"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): PrivacyInfo.xcprivacy declares Coarse (not Precise) location to match LocationService's 100m/when-in-use usage."
+    },
+    {
+      "id": "IOS-AUDIT-REL-003",
+      "title": "App Clip Info.plist references SUPABASE_URL/SUPABASE_ANON_KEY build vars that are never supplied",
+      "description": "ios/DesMoinesInsiderClip/Info.plist embeds <key>SUPABASE_URL</key><string>$(SUPABASE_URL)</string> and the same for SUPABASE_ANON_KEY, but secrets are injected into the main app via scripts/generate-secrets.sh -> Secrets.generated.swift, not via build settings, and there is no xcconfig feeding SUPABASE_URL/SUPABASE_ANON_KEY into the Clip's plist preprocessing. The Clip will ship with empty/unresolved values and fail to reach the backend, breaking the App Clip experience reviewers test via the appclip: associated domain.",
+      "acceptanceCriteria": [
+        "Clip obtains Supabase config through the same generated-Swift mechanism as the main app, or",
+        "An xcconfig/build setting actually defines SUPABASE_URL and SUPABASE_ANON_KEY for the Clip target",
+        "A built Clip resolves to non-empty credentials and can fetch events",
+        "No live secret is committed in plaintext to a plist"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): generate-secrets.sh emits a Clip copy (ClipSecrets.generated.swift), Clip pre-build script runs it, ClipEventsViewModel reads GeneratedSecrets first. Verified script emits both files."
+    },
+    {
+      "id": "IOS-AUDIT-REL-004",
+      "title": "Release workflow uploads the binary but never uploads App Store metadata or screenshots",
+      "description": ".github/workflows/ios-native-release.yml builds the IPA and pushes it to TestFlight via xcrun altool, but contains no deliver / upload_metadata / upload_screenshots step. The metadata in ios/fastlane/metadata/en-US and screenshots are only uploadable by running the Fastlane upload_metadata/upload_screenshots lanes manually, so a release driven solely by the workflow ships with stale or missing store listing assets.",
+      "acceptanceCriteria": [
+        "Release workflow invokes upload_metadata (deliver) for description/keywords/release_notes/URLs",
+        "Release workflow uploads screenshots for all required device sizes",
+        "Metadata/screenshot upload is gated so it only runs on intended releases",
+        "A dry-run or precheck validates metadata before binary submission"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): added a gated (default-off) 'Upload App Store metadata & screenshots' step to ios-native-release.yml calling the existing upload_metadata fastlane lane."
+    },
+    {
+      "id": "IOS-AUDIT-REL-005",
+      "title": "'Submit for App Store Review' step in release workflow is a no-op stub",
+      "description": ".github/workflows/ios-native-release.yml exposes a submit_for_review workflow_dispatch input and a 'Submit for App Store Review' step (lines ~583-606), but the step's python only prints 'Submitting build for App Store review...' and never calls the App Store Connect API to create or submit a review version. Operators toggling submit_for_review=true will believe the app was submitted when nothing happened, and no metadata/screenshots were uploaded to back a submission anyway.",
+      "acceptanceCriteria": [
+        "The step actually creates/submits an App Store version via the ASC API (or fails loudly)",
+        "It verifies the build finished processing before submitting",
+        "When the API call is not implemented, the input is removed or the step errors instead of silently no-op'ing",
+        "Successful submission is confirmed in the workflow logs"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): the submit-for-review step no longer prints false success \u2014 it now fails loudly stating automated submission isn't implemented and manual submission is required."
+    },
+    {
+      "id": "IOS-AUDIT-REL-006",
+      "title": "Signing not configured: DEVELOPMENT_TEAM empty and Appfile/Fastfile have placeholder identifiers",
+      "description": "project.yml sets DEVELOPMENT_TEAM: \"\" for both the app and Clip with CODE_SIGN_STYLE Automatic, and fastlane/Appfile falls back to apple_id 'your-apple-id@example.com' and empty team_id when env vars are absent. A release/beta build (build_app with export_method app-store) cannot sign or upload without a real team, so the release lane will fail unless every value is provided via environment at run time.",
+      "acceptanceCriteria": [
+        "DEVELOPMENT_TEAM is supplied (env-injected or set) for app and Clip targets",
+        "team_id / itc_team_id resolve to real values in CI via secrets",
+        "An app-store export produces a signed IPA in a clean checkout",
+        "Provisioning for both app and App Clip bundle ids is documented in SECRETS.md"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "BLOCKED (needs secret): signing requires a real DEVELOPMENT_TEAM / Apple Developer Team ID + provisioning supplied via CI secrets; can't be hardcoded in project.yml."
+    },
+    {
+      "id": "IOS-AUDIT-REL-007",
+      "title": "Associated-domains entitlement uses desmoinesinsider.com while bundle id / app are aipulse \u2014 verify AASA",
+      "description": "DesMoinesInsider.entitlements declares applinks:/webcredentials:desmoinesinsider.com and the Clip declares appclip:desmoinesinsider.com, but the bundle identifiers are com.desmoines.aipulse(.Clip). Universal Links, Sign in with Apple webcredentials, and App Clip invocation all require a matching apple-app-site-association file at desmoinesinsider.com listing TEAMID.com.desmoines.aipulse and the Clip id. If the AASA isn't published/correct, universal links and the App Clip silently fail review/testing.",
+      "acceptanceCriteria": [
+        "apple-app-site-association served at https://desmoinesinsider.com/.well-known/ with correct appIDs for app and Clip",
+        "AASA includes applinks, webcredentials, and appclips sections",
+        "TEAMID prefix in AASA matches the signing team",
+        "Universal link and App Clip invocation verified on device/TestFlight"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "BLOCKED (needs hosting+secret): AASA requires apple-app-site-association hosted at desmoinesinsider.com/.well-known with the real Team ID prefix \u2014 external web deploy + Team ID needed before universal links/App Clip invocation verify."
+    },
+    {
+      "id": "IOS-AUDIT-REL-008",
+      "title": "No App Store screenshots committed and screenshot lane lists no 6.9-inch device",
+      "description": "There are no PNGs under ios/fastlane/screenshots or fastlane/metadata. Screenshots are generated only at run time by the screenshots lane/ios-screenshots.yml. The Fastfile/Snapfile device set is iPhone 11 Pro Max (6.5in), iPhone 16 Plus (6.7in), iPad Pro 13in \u2014 App Store Connect for new submissions now centers on the 6.7in/6.9in iPhone and 13in iPad sizes; if the screenshot lane fails (it has stop_after_first_error true, number_of_retries 0), the release has no fallback assets.",
+      "acceptanceCriteria": [
+        "Screenshots exist for every currently-required device size at submission time",
+        "Device list reconciled with current App Store Connect required sizes",
+        "Screenshot generation has retries or a fallback so a single flaky screen doesn't zero out all assets",
+        "Generated screenshots verified to be accepted (no non-standard Pro Max dimensions)"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "PARTIAL (2026-06-25): screenshot lane + Snapfile now stop_after_first_error=false, number_of_retries=1 so a flaky screen can't zero all assets. STILL OPEN: device matrix (6.5/6.7/13) vs the now-required 6.9\" \u2014 the repo comment claims Pro Max dimensions are ASC-rejected, contradicting current guidance; needs confirmed App Store Connect required sizes before changing."
+    },
+    {
+      "id": "IOS-AUDIT-REL-009",
+      "title": "ios_progress.txt documents the old Capacitor wrapper, not the native SwiftUI app being submitted",
+      "description": "ios_progress.txt's 'Codebase Patterns' and progress log describe Capacitor (isCapacitor(), window.Capacitor.Plugins, mobile-app/ios/App/, capacitor.config.ts) \u2014 the prior WKWebView wrapper \u2014 not the native target at ios/DesMoinesInsider. Anyone using it as the source of truth for the submission will be misled about what actually ships, and it cannot be cross-checked against the native config.",
+      "acceptanceCriteria": [
+        "ios_progress.txt either targets the native app or clearly scopes the Capacitor section as legacy",
+        "Native build/config facts (XcodeGen, Fastlane lanes, secrets injection) are documented",
+        "References to mobile-app/ios/App are marked obsolete if that path is deprecated",
+        "Checklist items reflect the native submission pipeline"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): ios_progress.txt header flags the Capacitor section as LEGACY and points to the native target that ships."
+    },
+    {
+      "id": "IOS-AUDIT-REL-010",
+      "title": "Backend has account-deletion, data-export, and social-account functions, but only deletion is wired into the app",
+      "description": "supabase/functions exposes delete-user-account, export-analytics-data, and manage-social-account. SettingsView.swift wires only delete-user-account (the Apple-required in-app deletion, correctly present). There is no data-export entry point in SettingsView and no marketing/email opt-in control, and manage-social-account suggests social-account linking that isn't surfaced.",
+      "acceptanceCriteria": [
+        "Confirm whether in-app data export is required by the published privacy policy; if so, add it to SettingsView calling export-analytics-data",
+        "If manage-social-account implies linked social logins, surface/manage them in Settings",
+        "Marketing/email opt-in (if any) has an in-app toggle reflecting consent",
+        "Any backend endpoint not used by v1 is documented as intentionally web-only"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "OPEN (needs confirmation): backend export-analytics-data + manage-social-account exist but aren't surfaced in-app. Apple only requires in-app account deletion (present). Whether in-app data export is required depends on the published privacy policy text \u2014 needs confirmation before adding UI; otherwise document as intentionally web-only for v1."
+    },
+    {
+      "id": "IOS-AUDIT-REL-011",
+      "title": "UserID linkage classification in privacy manifest inconsistent with hashed vs raw uuid transmission",
+      "description": "AnalyticsService.swift setUserId hashes the user id with SHA256, but PrivacyInfo.xcprivacy declares NSPrivacyCollectedDataTypeUserID with Linked=true, while AdTrackingService writes the raw user_id uuid to ad_impressions. The manifest should precisely match what each pipeline actually transmits so the App Store privacy label is accurate.",
+      "acceptanceCriteria": [
+        "Audit every place user_id leaves the device (AnalyticsService hashed vs AdTrackingService raw uuid)",
+        "Privacy manifest UserID Linked/Tracking flags match the actual transmitted identifiers",
+        "Product Interaction (ad telemetry) linkage matches AdTrackingService's user_id usage",
+        "App Store Connect privacy label updated to match"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): documented in the privacy manifest that UserID is Linked because AdTrackingService writes the raw user_id to ad_impressions \u2014 the declaration is accurate; no functional change needed."
+    },
+    {
+      "id": "IOS-AUDIT-REL-012",
+      "title": "App Clip target ships no PrivacyInfo.xcprivacy privacy manifest",
+      "description": "The DesMoinesInsiderClip target (ios/DesMoinesInsiderClip/) contains no .xcprivacy file, while the main app does (ios/DesMoinesInsider/Resources/PrivacyInfo.xcprivacy). The Clip uses Supabase networking and UserDefaults (a required-reason API) and is a separately-reviewed bundle, so Apple expects its own privacy manifest; project.yml builds and embeds the Clip into the app, so it currently ships without the declaration.",
+      "acceptanceCriteria": [
+        "ios/DesMoinesInsiderClip has its own PrivacyInfo.xcprivacy",
+        "It declares the required-reason APIs the Clip actually uses (e.g. UserDefaults CA92.1)",
+        "Collected data types and tracking flags match the Clip's behavior and are a subset of the main app's manifest",
+        "The manifest is included in the Clip target's sources/resources in project.yml so it is bundled",
+        "Validated that a built Clip contains the manifest"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): added the App Clip's own PrivacyInfo.xcprivacy (anonymous, UserDefaults required-reason)."
     }
   ]
 }

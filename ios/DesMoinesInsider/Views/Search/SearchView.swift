@@ -154,8 +154,11 @@ struct SearchView: View {
             parts.append("events")
             if let datePreset, !datePreset.isEmpty { parts.append(datePreset) }
             viewModel.searchText = parts.joined(separator: " ")
-        case .askPulse(let query):
-            viewModel.searchText = query
+        case .askPulse:
+            // Ask Pulse opens the AI chat surface, presented by MainTabView —
+            // not a keyword search (IOS-AUDIT-FEAT-028). Leave the payload for
+            // MainTabView to consume; don't handle it here.
+            return
         }
         // Clear the pending payload — handled.
         _ = dispatcher.consume()
@@ -384,6 +387,10 @@ struct SearchView: View {
                                 .font(.caption2)
                                 .foregroundStyle(.tertiary)
                         }
+                        .buttonStyle(.plain)
+                        // 44pt target so the glyph-sized delete isn't mis-tapped
+                        // next to the apply-search row (IOS-AUDIT-UX-043).
+                        .minHitTarget()
                         .accessibilityLabel("Remove \(query) from recent searches")
                     }
                     .padding(.horizontal)

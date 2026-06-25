@@ -10,6 +10,9 @@ struct MapTimeSlider: View {
     let eventCount: Int
     let restaurantCount: Int
 
+    // Honor Reduce Motion like the rest of the app (IOS-AUDIT-UX-047).
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         VStack(spacing: 8) {
             // Top pill — count summary for the current slider position
@@ -27,7 +30,7 @@ struct MapTimeSlider: View {
                 ForEach(MapTimeSliderStop.stops()) { stop in
                     Button {
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        withAnimation(.easeInOut(duration: 0.2)) {
+                        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
                             mapTime = stop.date
                         }
                     } label: {

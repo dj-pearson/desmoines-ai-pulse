@@ -180,6 +180,23 @@ struct SettingsView: View {
                     }
                 }
 
+                // Analytics/ad-telemetry opt-out, available to EVERY user — not
+                // just EU (who get the consent prompt) or authenticated users
+                // (IOS-AUDIT-SEC-014). AnalyticsService + AdTrackingService both
+                // gate on this flag.
+                Section {
+                    Toggle(isOn: Binding(
+                        get: { ConsentService.shared.analyticsConsent },
+                        set: { ConsentService.shared.analyticsConsent = $0 }
+                    )) {
+                        Label("Usage Analytics", systemImage: "chart.bar")
+                    }
+                } header: {
+                    Text("Privacy")
+                } footer: {
+                    Text("Help improve the app with anonymous usage and ad-performance analytics. You can turn this off anytime.")
+                }
+
                 // Data & Privacy section (authenticated users only)
                 if auth.isAuthenticated {
                     Section("Privacy & Data") {
@@ -195,13 +212,6 @@ struct SettingsView: View {
                             set: { ConsentService.shared.emailConsent = $0 }
                         )) {
                             Label("Email Communications", systemImage: "envelope")
-                        }
-
-                        Toggle(isOn: Binding(
-                            get: { ConsentService.shared.analyticsConsent },
-                            set: { ConsentService.shared.analyticsConsent = $0 }
-                        )) {
-                            Label("Analytics", systemImage: "chart.bar")
                         }
                     }
 

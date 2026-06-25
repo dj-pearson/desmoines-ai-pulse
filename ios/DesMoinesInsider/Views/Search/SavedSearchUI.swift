@@ -72,6 +72,7 @@ private struct SaveSearchSheet: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Save Search")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -79,9 +80,13 @@ private struct SaveSearchSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
                         saving = true
-                        Task { await onSave(name); saving = false }
+                        // Trim before saving and block empty/whitespace-only
+                        // names so we don't create an unlabeled search
+                        // (IOS-AUDIT-UX-044).
+                        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+                        Task { await onSave(trimmed); saving = false }
                     }
-                    .disabled(saving)
+                    .disabled(saving || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
             .onAppear { if name.isEmpty { name = defaultName } }
@@ -138,6 +143,9 @@ struct SavedSearchesList: View {
                     .foregroundStyle(search.alertsEnabled ? Color.accentColor : .secondary)
             }
             .buttonStyle(.plain)
+            // 44pt targets so the bell and the destructive trash aren't
+            // mis-tapped against each other or the row link (IOS-AUDIT-UX-044).
+            .minHitTarget()
             .accessibilityLabel(search.alertsEnabled ? "Alerts on for \(search.name)" : "Turn on alerts for \(search.name)")
 
             Button(role: .destructive) {
@@ -146,6 +154,7 @@ struct SavedSearchesList: View {
                 Image(systemName: "trash").foregroundStyle(.red)
             }
             .buttonStyle(.plain)
+            .minHitTarget()
             .accessibilityLabel("Delete \(search.name)")
         }
         .padding(12)

@@ -267,9 +267,13 @@ struct TripPlannerView: View {
     private func generate() async {
         errorMessage = nil
 
-        // Gate 1: feature access (free → paywall).
+        // Gate 1: feature access (free → paywall). Prefer the gentler,
+        // frequency-capped soft paywall on the attempt; fall back to the hard
+        // gate when it's on cooldown (IOS-AUDIT-FEAT-032).
         guard storeKit.hasFeature(.tripPlanner) else {
-            paywallContext = .tripPlanner
+            if !SoftPaywallService.shared.considerAfterTripPlannerAttempt() {
+                paywallContext = .tripPlanner
+            }
             return
         }
         // Gate 2: monthly quota (exhausted → paywall to upgrade).

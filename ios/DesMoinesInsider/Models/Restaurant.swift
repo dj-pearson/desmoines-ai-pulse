@@ -69,25 +69,60 @@ struct Restaurant: Identifiable, Codable, Hashable {
         let dayName = Self.dayNames[weekday - 1] // 1=Sun, 2=Mon...
 
         guard let dayHours = hours.hours(for: dayName) else { return nil }
-        if dayHours.isEmpty || dayHours.lowercased() == "closed" { return false }
 
-        // Parse "HH:mm - HH:mm" or "11:00 AM - 10:00 PM" format
-        let components = dayHours.components(separatedBy: " - ")
-        guard components.count == 2,
-              let open = Self.parseTime(components[0].trimmingCharacters(in: .whitespaces)),
-              let close = Self.parseTime(components[1].trimmingCharacters(in: .whitespaces)) else {
-            // Can't parse → unknown
+        // The parsed open/close range is memoized by the hours string so the
+        // string-splitting + AM/PM parsing doesn't re-run for every restaurant on
+        // every "Open Now" evaluation (IOS-AUDIT-PERF-021).
+        switch Self.dayRange(for: dayHours) {
+        case .closed:
+            return false
+        case .unknown:
             return nil
+        case .open(let open, let close):
+            let currentMinutes = hour * 60 + minute
+            // Handle overnight hours (close < open means past midnight)
+            if close < open {
+                return currentMinutes >= open || currentMinutes < close
+            }
+            return currentMinutes >= open && currentMinutes < close
+        }
+    }
+
+    /// Parsed open/close minutes for a day's hours string.
+    private enum DayRange { case open(Int, Int), closed, unknown }
+
+    private static let rangeCacheLock = NSLock()
+    private static var rangeCache: [String: DayRange] = [:]
+
+    /// Memoized parse of a "11:00 AM - 10:00 PM"-style string into minutes.
+    /// Thread-safe: the Open Now filter runs on a detached task.
+    private static func dayRange(for dayHours: String) -> DayRange {
+        rangeCacheLock.lock()
+        if let cached = rangeCache[dayHours] {
+            rangeCacheLock.unlock()
+            return cached
+        }
+        rangeCacheLock.unlock()
+
+        let computed: DayRange
+        let trimmed = dayHours.trimmingCharacters(in: .whitespaces)
+        if trimmed.isEmpty || trimmed.lowercased() == "closed" {
+            computed = .closed
+        } else {
+            let components = dayHours.components(separatedBy: " - ")
+            if components.count == 2,
+               let open = parseTime(components[0].trimmingCharacters(in: .whitespaces)),
+               let close = parseTime(components[1].trimmingCharacters(in: .whitespaces)) {
+                computed = .open(open, close)
+            } else {
+                computed = .unknown
+            }
         }
 
-        let currentMinutes = hour * 60 + minute
-
-        // Handle overnight hours (close < open means past midnight)
-        if close < open {
-            return currentMinutes >= open || currentMinutes < close
-        }
-
-        return currentMinutes >= open && currentMinutes < close
+        rangeCacheLock.lock()
+        rangeCache[dayHours] = computed
+        rangeCacheLock.unlock()
+        return computed
     }
 
     var openStatusText: String {

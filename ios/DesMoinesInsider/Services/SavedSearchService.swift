@@ -34,6 +34,17 @@ actor SavedSearchService {
         }
     }
 
+    /// The nightly alert job (`saved-search-alerts`) only scans rows where the
+    /// top-level columns are `search_type = 'event_list' AND alerts_enabled = true`
+    /// (see 20260623000003_saved_search_alerts.sql). Writing the alert flag only
+    /// inside the `filters` JSON — as the app used to — meant iOS-created searches
+    /// were never delivered alerts (IOS-AUDIT-FEAT-024). We now populate the
+    /// top-level columns too. Only Events-tab searches map to the event pipeline;
+    /// other tabs stay 'advanced' (no alert pipeline exists for them yet).
+    static func searchType(for tab: String?) -> String {
+        tab == "Events" ? "event_list" : "advanced"
+    }
+
     @discardableResult
     func createSavedSearch(userId: String, name: String, filters: SavedSearchFilters) async throws -> SavedSearch {
         let client = try db()
@@ -41,10 +52,18 @@ actor SavedSearchService {
             let user_id: String
             let name: String
             let filters: SavedSearchFilters
+            let search_type: String
+            let alerts_enabled: Bool
         }
         let created: SavedSearch = try await client
             .from("saved_searches")
-            .insert(InsertRow(user_id: userId, name: name, filters: filters))
+            .insert(InsertRow(
+                user_id: userId,
+                name: name,
+                filters: filters,
+                search_type: Self.searchType(for: filters.tab),
+                alerts_enabled: filters.alertsEnabled
+            ))
             .select()
             .single()
             .execute()
@@ -52,13 +71,23 @@ actor SavedSearchService {
         return created
     }
 
-    /// Persist a new filters payload (used to toggle the alert flag).
+    /// Persist a new filters payload (used to toggle the alert flag). Mirrors the
+    /// alert flag and search type into the top-level columns the nightly job
+    /// reads, self-healing rows written before IOS-AUDIT-FEAT-024.
     func updateFilters(id: String, filters: SavedSearchFilters) async throws {
         let client = try db()
-        struct UpdateRow: Encodable { let filters: SavedSearchFilters }
+        struct UpdateRow: Encodable {
+            let filters: SavedSearchFilters
+            let search_type: String
+            let alerts_enabled: Bool
+        }
         try await client
             .from("saved_searches")
-            .update(UpdateRow(filters: filters))
+            .update(UpdateRow(
+                filters: filters,
+                search_type: Self.searchType(for: filters.tab),
+                alerts_enabled: filters.alertsEnabled
+            ))
             .eq("id", value: id)
             .execute()
     }

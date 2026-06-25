@@ -12,6 +12,7 @@ import EventKit
 struct ItineraryDetailView: View {
     let trip: TripPlan
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var service = TripPlannerService.shared
     @State private var network = NetworkMonitor.shared
     @State private var itemsByDay: [Int: [TripPlanItem]] = [:]
@@ -48,8 +49,23 @@ struct ItineraryDetailView: View {
 
                 ForEach(days, id: \.self) { day in
                     Section("Day \(day)") {
-                        ForEach(itemsByDay[day] ?? []) { item in
+                        let dayItems = itemsByDay[day] ?? []
+                        ForEach(Array(dayItems.enumerated()), id: \.element.id) { index, item in
                             ItineraryItemRow(item: item)
+                                // Drag-reordering is inaccessible to VoiceOver, so
+                                // expose explicit move actions (IOS-AUDIT-UX-042).
+                                .accessibilityActions {
+                                    if index > 0 {
+                                        Button("Move up") {
+                                            move(day: day, from: IndexSet(integer: index), to: index - 1)
+                                        }
+                                    }
+                                    if index < dayItems.count - 1 {
+                                        Button("Move down") {
+                                            move(day: day, from: IndexSet(integer: index), to: index + 2)
+                                        }
+                                    }
+                                }
                         }
                         .onMove { offsets, destination in
                             move(day: day, from: offsets, to: destination)
@@ -103,7 +119,18 @@ struct ItineraryDetailView: View {
                     Button { Task { await share() } } label: { Label("Share itinerary", systemImage: "square.and.arrow.up") }
                     Button { Task { await addToCalendar() } } label: { Label("Add to Calendar", systemImage: "calendar.badge.plus") }
                     Button {
-                        withAnimation { editMode = editMode.isEditing ? .inactive : .active }
+                        let entering = !editMode.isEditing
+                        withAnimation(reduceMotion ? nil : .default) {
+                            editMode = entering ? .active : .inactive
+                        }
+                        // Announce the state change — without it VoiceOver users
+                        // get no confirmation they entered reorder mode (UX-042).
+                        UIAccessibility.post(
+                            notification: .announcement,
+                            argument: entering
+                                ? "Reordering stops. Use each stop's actions to move it up or down."
+                                : "Done reordering."
+                        )
                     } label: {
                         Label(editMode.isEditing ? "Done reordering" : "Reorder stops", systemImage: "arrow.up.arrow.down")
                     }

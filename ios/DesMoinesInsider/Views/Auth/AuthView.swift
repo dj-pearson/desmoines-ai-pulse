@@ -175,6 +175,9 @@ struct AuthView: View {
             }
             .padding(.bottom, 40)
         }
+        // Let the user dismiss the keyboard by dragging; in sign-up mode the
+        // lower fields + Create Account button sit below it (IOS-AUDIT-UX-045).
+        .scrollDismissesKeyboard(.interactively)
         .navigationBarTitleDisplayMode(.inline)
         .alert("Sign In Error", isPresented: $viewModel.showError) {
             Button("OK", role: .cancel) {}

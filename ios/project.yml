@@ -89,6 +89,17 @@ targets:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
         Release:
           SWIFT_OPTIMIZATION_LEVEL: -O
+    preBuildScripts:
+      # The Clip is a separate module, so it needs its own generated secrets
+      # (IOS-AUDIT-REL-003) — without this its Supabase credentials resolve empty.
+      - name: Generate Supabase Secrets (Clip)
+        script: |
+          if [ -f "$PROJECT_DIR/scripts/generate-secrets.sh" ]; then
+            bash "$PROJECT_DIR/scripts/generate-secrets.sh"
+          else
+            echo "warning: generate-secrets.sh not found — using placeholder secrets"
+          fi
+        basedOnDependencyAnalysis: false
     dependencies:
       - package: Supabase
     entitlements:

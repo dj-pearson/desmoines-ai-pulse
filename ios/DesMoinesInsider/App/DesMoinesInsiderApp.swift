@@ -1,5 +1,6 @@
 import SwiftUI
 import StoreKit
+import CoreSpotlight
 
 @main
 struct DesMoinesInsiderApp: App {
@@ -13,6 +14,7 @@ struct DesMoinesInsiderApp: App {
     @State private var biometricService = BiometricAuthService.shared
     @State private var consent = ConsentService.shared
     @State private var sessionTimeout = SessionTimeoutService.shared
+    @State private var versionCheck = VersionCheckService.shared
 
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage("appLaunchCount") private var launchCount = 0
@@ -46,6 +48,10 @@ struct DesMoinesInsiderApp: App {
                         error: SupabaseService.shared.configurationError
                             ?? "Supabase credentials are missing."
                     )
+                } else if versionCheck.forceUpgrade {
+                    // Binary is below the server's minimum-supported version —
+                    // block until the user updates (IOS-AUDIT-REL-001).
+                    ForceUpdateView(message: versionCheck.message, storeURL: versionCheck.storeURL)
                 } else if authService.isLoading {
                     LaunchScreenView()
                 } else if !hasCompletedOnboarding {
@@ -105,8 +111,19 @@ struct DesMoinesInsiderApp: App {
                     DeepLinkHandler.shared.handle(url)
                 }
             }
+            .onContinueUserActivity(CSSearchableItemActionType) { activity in
+                // Spotlight result tap → route to the item's detail screen
+                // (IOS-AUDIT-FEAT-027). MainTabView observes pendingDestination.
+                if let id = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String {
+                    DeepLinkHandler.shared.handleSpotlightIdentifier(id)
+                }
+            }
             .task {
                 launchCount += 1
+
+                // Launch-time minimum-supported-version gate (IOS-AUDIT-REL-001).
+                // Fails open, so a backend hiccup never blocks a supported build.
+                await versionCheck.checkOnLaunch()
 
                 // One-time migration of Keychain items to the stricter
                 // WhenUnlockedThisDeviceOnly accessibility flag. Runs before

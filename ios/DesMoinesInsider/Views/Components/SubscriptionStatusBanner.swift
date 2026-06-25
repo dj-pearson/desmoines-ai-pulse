@@ -26,6 +26,7 @@ struct SubscriptionStatusBanner: View {
                 Text(config.message)
                     .font(.caption.weight(.medium))
                     .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isStaticText)
 
                 Spacer(minLength: 8)
 
@@ -52,8 +53,10 @@ struct SubscriptionStatusBanner: View {
             .frame(maxWidth: .infinity)
             .background(config.color)
             .transition(.move(edge: .top).combined(with: .opacity))
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(config.message)
+            // Group as a container but keep the message, action and Dismiss button
+            // as separate focusable elements (IOS-AUDIT-UX-036). `.combine` here
+            // previously flattened the buttons into one unactionable label.
+            .accessibilityElement(children: .contain)
             .onAppear {
                 AnalyticsService.shared.trackRenewalBanner(action: "shown", state: config.stateKey)
             }
