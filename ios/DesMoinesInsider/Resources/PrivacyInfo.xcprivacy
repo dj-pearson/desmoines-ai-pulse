@@ -22,10 +22,16 @@
 	<!-- NSPrivacyCollectedDataTypes: What data the app collects -->
 	<key>NSPrivacyCollectedDataTypes</key>
 	<array>
-		<!-- Location data — used for nearby events/restaurants on the map -->
+		<!-- Location data — used for nearby events/restaurants on the map.
+		     Declared Coarse: LocationService requests when-in-use authorization
+		     with kCLLocationAccuracyHundredMeters and never requests full/best
+		     accuracy, so Precise would overstate collection (IOS-AUDIT-REL-002).
+		     Speech dictation prefers on-device recognition (requiresOnDeviceRecognition
+		     when supported), so recorded audio is not collected/transmitted by us;
+		     no Audio Data type is declared (IOS-AUDIT-SEC-009). -->
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
-			<string>NSPrivacyCollectedDataTypePreciseLocation</string>
+			<string>NSPrivacyCollectedDataTypeCoarseLocation</string>
 			<key>NSPrivacyCollectedDataTypeLinked</key>
 			<false/>
 			<key>NSPrivacyCollectedDataTypeTracking</key>
