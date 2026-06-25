@@ -70,6 +70,7 @@ struct OnboardingNavRow: View {
         HStack {
             Button("Skip", action: onSkip)
                 .foregroundStyle(.secondary)
+                .minHitTarget()
             Spacer()
             Button {
                 HapticFeedback.shared.light()

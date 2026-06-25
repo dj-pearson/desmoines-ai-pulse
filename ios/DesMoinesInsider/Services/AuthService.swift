@@ -180,6 +180,9 @@ final class AuthService {
             SessionTimeoutService.shared.stopTracking()
             SearchHistoryService.shared.clearAll()
             FavoritesService.shared.reset()
+            // Clear the Dashboard "Jump back in" rail so the next person on a
+            // shared device can't see what the previous user browsed.
+            RecentlyViewedService.shared.clear()
 
             // Spotlight + QueryCache are actor-isolated; fire-and-forget detached tasks.
             Task.detached {

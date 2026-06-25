@@ -33,6 +33,7 @@ struct SessionTimeoutBanner: View {
                         .background(Color.white.opacity(0.2))
                         .clipShape(Capsule())
                 }
+                .minHitTarget()
                 .accessibilityLabel("Stay signed in. Resets your inactivity timer.")
             }
             .foregroundStyle(.white)

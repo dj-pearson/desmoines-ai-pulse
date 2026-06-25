@@ -589,11 +589,17 @@ final class StoreKitService {
             var maxTier: SubscriptionTier = .free
             var breakdown: [CrossPlatformSubscription] = []
             for row in rows {
+                // Match by substring (not exact equality) so backend plan names
+                // like "VIP Annual" / "Insider Monthly" still resolve to the right
+                // tier instead of silently downgrading to .free. Mirrors localTier.
+                let planName = (row.plan?.name ?? "free").lowercased()
                 let resolved: SubscriptionTier
-                switch (row.plan?.name ?? "free").lowercased() {
-                case "vip": resolved = .vip
-                case "insider": resolved = .insider
-                default: resolved = .free
+                if planName.contains("vip") {
+                    resolved = .vip
+                } else if planName.contains("insider") {
+                    resolved = .insider
+                } else {
+                    resolved = .free
                 }
                 if Self.tierRank(resolved) > Self.tierRank(maxTier) {
                     maxTier = resolved

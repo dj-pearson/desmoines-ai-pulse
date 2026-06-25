@@ -105,6 +105,7 @@ struct ProfileView: View {
                                 .clipShape(Capsule())
                         }
                         .buttonStyle(.plain)
+                    .minHitTarget()
                     .accessibilityAddTraits(viewModel.selectedInterests.contains(interest) ? .isSelected : [])
                     .accessibilityLabel(interest)
                     }

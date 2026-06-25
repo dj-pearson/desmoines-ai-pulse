@@ -241,8 +241,14 @@ struct AttractionDetailView: View {
     private func openInMaps() {
         guard let coord = attraction.coordinate else { return }
         let name = attraction.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-        let url = URL(string: "maps://?daddr=\(coord.latitude),\(coord.longitude)&q=\(name)")!
-        UIApplication.shared.open(url)
+        let query = "daddr=\(coord.latitude),\(coord.longitude)&q=\(name)"
+        // Prefer the Apple Maps app, but fall back to the universal https link so
+        // we never force-unwrap and never silently no-op if Maps is unavailable.
+        if let appURL = URL(string: "maps://?\(query)"), UIApplication.shared.canOpenURL(appURL) {
+            UIApplication.shared.open(appURL)
+        } else if let webURL = URL(string: "https://maps.apple.com/?\(query)") {
+            UIApplication.shared.open(webURL)
+        }
     }
 
     private var shareText: String {

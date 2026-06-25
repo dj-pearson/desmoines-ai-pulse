@@ -89,6 +89,8 @@ struct PromoteListingButton: View {
                 .foregroundStyle(.white)
         case .row:
             Label("Promote your business", systemImage: "megaphone.fill")
+                .contentShape(Rectangle())
+                .minHitTarget()
         }
     }
 

@@ -54,6 +54,7 @@ struct ErrorStateView: View {
             .foregroundStyle(Color.accentColor)
             .glassChip()
             .buttonStyle(.pressableCard)
+            .minHitTarget()
             .padding(.top, 8)
         }
         .padding(.vertical, 32)

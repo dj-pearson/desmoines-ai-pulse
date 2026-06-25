@@ -218,6 +218,7 @@ struct FavoritesLimitBanner: View {
                                 .padding(.vertical, 5)
                                 .background(Color.accentColor, in: Capsule())
                         }
+                        .minHitTarget()
                         .accessibilityLabel("Upgrade to premium for unlimited saves")
                     }
                 }

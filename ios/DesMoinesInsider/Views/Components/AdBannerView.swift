@@ -186,6 +186,7 @@ struct AdBannerView: View {
                     .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 8))
                     .foregroundStyle(.white)
             }
+            .minHitTarget()
             .accessibilityLabel(house.cta)
         }
         .padding(14)
