@@ -48,12 +48,18 @@ final class ClipEventsViewModel {
     // MARK: - Supabase client
 
     private var client: SupabaseClient? {
-        // Reuse resolved credentials via Info.plist / GeneratedSecrets
+        // Prefer build-time generated secrets (IOS-AUDIT-REL-003) — the Info.plist
+        // $(SUPABASE_URL) substitution was never supplied for the Clip target, so
+        // it resolved empty. Fall back to Info.plist for any build that does set it.
+        let urlString = !GeneratedSecrets.supabaseURL.isEmpty
+            ? GeneratedSecrets.supabaseURL
+            : (Bundle.main.infoDictionary?["SUPABASE_URL"] as? String ?? "")
+        let key = !GeneratedSecrets.supabaseAnonKey.isEmpty
+            ? GeneratedSecrets.supabaseAnonKey
+            : (Bundle.main.infoDictionary?["SUPABASE_ANON_KEY"] as? String ?? "")
         guard
-            let urlString = Bundle.main.infoDictionary?["SUPABASE_URL"] as? String,
             !urlString.isEmpty, !urlString.hasPrefix("$("),
             let url = URL(string: urlString),
-            let key = Bundle.main.infoDictionary?["SUPABASE_ANON_KEY"] as? String,
             !key.isEmpty, !key.hasPrefix("$(")
         else { return nil }
         return SupabaseClient(supabaseURL: url, supabaseKey: key)
