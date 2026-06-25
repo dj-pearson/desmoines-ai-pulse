@@ -36,6 +36,7 @@ struct SubscriptionStatusBanner: View {
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
                     .background(.white.opacity(0.25), in: Capsule())
+                    .minHitTarget()
 
                 Button {
                     dismissedState = storeKit.renewalState
@@ -45,6 +46,7 @@ struct SubscriptionStatusBanner: View {
                         .font(.caption2.weight(.bold))
                 }
                 .buttonStyle(.plain)
+                .minHitTarget()
                 .accessibilityLabel("Dismiss")
             }
             .foregroundStyle(.white)

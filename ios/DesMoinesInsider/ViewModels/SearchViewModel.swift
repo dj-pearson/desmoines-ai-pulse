@@ -54,13 +54,19 @@ final class SearchViewModel {
             try? await Task.sleep(for: .milliseconds(300))
             guard !Task.isCancelled else { return }
 
+            // Capture the query once so every sub-search AND the history record
+            // use the SAME term — searchText can change mid-flight and would
+            // otherwise record/search a different value than the user typed.
+            let query = searchText
+
             hasSearched = true
 
-            async let events = searchEvents()
-            async let restaurants = searchRestaurants()
-            async let attractions = searchAttractions()
+            async let events = searchEvents(query)
+            async let restaurants = searchRestaurants(query)
+            async let attractions = searchAttractions(query)
 
             let (e, r, a) = await (events, restaurants, attractions)
+            guard !Task.isCancelled else { return }
             eventResults = e
             restaurantResults = r
             attractionResults = a
@@ -69,18 +75,18 @@ final class SearchViewModel {
 
             // Record successful searches to history
             if !e.isEmpty || !r.isEmpty || !a.isEmpty {
-                SearchHistoryService.shared.record(searchText)
+                SearchHistoryService.shared.record(query)
             }
         }
     }
 
-    private func searchEvents() async -> [Event] {
+    private func searchEvents(_ query: String) async -> [Event] {
         do {
             let response = try await EventsService.shared.fetchEvents(
-                query: .init(searchText: searchText, limit: 20)
+                query: .init(searchText: query, limit: 20)
             )
             if response.events.isEmpty {
-                return try await EventsService.shared.fuzzySearchEvents(query: searchText)
+                return try await EventsService.shared.fuzzySearchEvents(query: query)
             }
             return response.events
         } catch {
@@ -88,13 +94,13 @@ final class SearchViewModel {
         }
     }
 
-    private func searchRestaurants() async -> [Restaurant] {
+    private func searchRestaurants(_ query: String) async -> [Restaurant] {
         do {
             let response = try await RestaurantsService.shared.fetchRestaurants(
-                query: .init(searchText: searchText, limit: 20)
+                query: .init(searchText: query, limit: 20)
             )
             if response.restaurants.isEmpty {
-                return try await RestaurantsService.shared.fuzzySearchRestaurants(query: searchText)
+                return try await RestaurantsService.shared.fuzzySearchRestaurants(query: query)
             }
             return response.restaurants
         } catch {
@@ -102,10 +108,10 @@ final class SearchViewModel {
         }
     }
 
-    private func searchAttractions() async -> [Attraction] {
+    private func searchAttractions(_ query: String) async -> [Attraction] {
         do {
             let response = try await AttractionsService.shared.fetchAttractions(
-                query: .init(searchText: searchText, limit: 20)
+                query: .init(searchText: query, limit: 20)
             )
             return response.attractions
         } catch {

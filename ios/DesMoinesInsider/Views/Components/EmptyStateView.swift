@@ -55,6 +55,7 @@ struct EmptyStateView: View {
                 .foregroundStyle(Color.accentColor)
                 .glassChip()
                 .buttonStyle(.pressableCard)
+                .minHitTarget()
                 .padding(.top, 8)
             }
 
@@ -64,6 +65,7 @@ struct EmptyStateView: View {
                 }
                 .appText(.bodySmall)
                 .foregroundStyle(.secondary)
+                .minHitTarget()
             }
         }
         .padding(.vertical, 32)

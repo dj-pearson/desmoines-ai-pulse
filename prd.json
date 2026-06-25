@@ -2850,6 +2850,692 @@
       "priority": 49,
       "passes": true,
       "notes": "DONE (2026-06-25). The audit's biggest pillar (missing alt text) was largely a FALSE ALARM on user-facing surfaces, so this story is mostly the two real gaps + an honest audit record.\nFIXED:\n- RatingSystem.tsx StarRating: had onClick/onMouseEnter only — not focusable, no keyboard, no roles. Rewrote the interactive path as a role='radiogroup' with roving tabindex; each star is a <button role='radio' aria-checked aria-label='N star(s)'> handling ArrowRight/Up/Left/Down, Home, End, Enter, Space (moves selection + focus). Readonly path is now a single role='img' aria-label='Rated X out of 5 stars' with aria-hidden glyphs. (This is the composer from WEB-FEAT-010, so keyboard users can now actually rate.)\n- NLPSearchBar.tsx: search Input had only a placeholder → added aria-label.\n- EventInlineFilters.tsx: filter-pill trigger already had visible {label} text (so it had a name) but added an explicit aria-label='Filter by <label>' for clearer expanded-popover context.\nAUDITED, ALREADY CORRECT (no change): EventDetails/AttractionDetails/HotelDetails/ArticleDetails hero <img> already carry descriptive alt (prior a11y pass); PersonalizedRecommendations img alt={event.title}; SearchSection inputs already aria-labelled; SceneUpdateCard:46 + VotingBooth:137 alt='' are CORRECT decorative usage because the title/name is rendered as adjacent text (alt would double-announce). Admin dialogs out of scope.\nVERIFIED: npm run validate exits 0 (type-check + lint, 0 errors)."
+    },
+    {
+      "id": "IOS-AUDIT-BUG-001",
+      "title": "Eliminate force-unwrapped Maps/directions URLs that can crash on tap",
+      "description": "As a user tapping Directions/Open in Maps, I need the app to never crash when a place name or coordinate produces a malformed URL.",
+      "acceptanceCriteria": [
+        "RestaurantDetailView.swift directions URL no longer uses URL(string:)!",
+        "AttractionDetailView Apple Maps URL uses if-let with a maps.apple.com https fallback (mirror HotelDetailView pattern)",
+        "All map/website/phone URLs built from interpolated user/content strings are percent-encoded and guarded",
+        "No crash when name contains spaces, ampersands, emoji, or non-ASCII"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: RestaurantDetailView.swift:98 URL(string:)!; AttractionDetailView.swift:244 URL(string:\"maps://...&q=\\(name)\")!; HotelDetailView.swift:253 openInMaps has no canOpenURL/https fallback. | STATUS: implemented on branch claude/ios-app-review-prd-25ygbb (commit d9dd6ac); passes still false pending Xcode build + test verification on macOS CI (no Swift toolchain in this env). Impl: maps:// force-unwraps removed in RestaurantDetailView/AttractionDetailView/HotelDetailView with canOpenURL + https://maps.apple.com fallback"
+    },
+    {
+      "id": "IOS-AUDIT-BUG-002",
+      "title": "Make vote casting atomic via upsert to prevent vote loss",
+      "description": "As a user changing my Best-Of vote, I need my prior vote swapped atomically so a crash mid-change never leaves me with no vote and tallies never momentarily double/zero.",
+      "acceptanceCriteria": [
+        "VotingService.castVote replaces delete-then-insert with a single upsert on (category_id,user_id) unique key (mirror RatingsService.submitRating)",
+        "Concurrent fetchResults cannot observe a transient no-vote/double-vote window",
+        "Vote change still reflected optimistically in UI"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: VotingService.swift:143-170 deletes then inserts as two separate requests; RatingsService.submitRating already uses upsert. | STATUS: implemented on branch claude/ios-app-review-prd-25ygbb; passes false pending macOS CI build+test verify. Impl: VotingService.castVote now single .upsert(onConflict: \"category_id,user_id\") (constraint verified in migration 20260226000003). Replaces delete-then-insert."
+    },
+    {
+      "id": "IOS-AUDIT-BUG-003",
+      "title": "Fix StoreKit backend-tier resolution downgrading annual/monthly plan names",
+      "description": "As a cross-platform subscriber (web/Android) opening iOS, I need my VIP/Insider tier recognized even when the backend plan is named 'VIP Annual' or 'Insider Monthly'.",
+      "acceptanceCriteria": [
+        "StoreKitService.refreshBackendTier matches plan name with contains(\"vip\")/contains(\"insider\") (same as localTier)",
+        "A plan named 'VIP Annual' resolves to .vip, not .free",
+        "Unknown plan names still fall through to .free"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: StoreKitService.swift:593-597 exact switch on lowercased plan name; localTier already uses contains(). | STATUS: implemented on branch claude/ios-app-review-prd-25ygbb (commit d9dd6ac); passes still false pending Xcode build + test verification on macOS CI (no Swift toolchain in this env). Impl: refreshBackendTier now matches plan name via contains(vip/insider), mirroring localTier Now covered by StoreKitTests.tier(forPlanName:) regression tests."
+    },
+    {
+      "id": "IOS-AUDIT-BUG-004",
+      "title": "Clear recently-viewed history on sign-out (shared-device privacy leak)",
+      "description": "As someone signing out on a shared device, I need my recently-viewed events/restaurants/hotels cleared so the next person can't see what I browsed.",
+      "acceptanceCriteria": [
+        "AuthService.signOut defer block calls RecentlyViewedService.shared.clear()",
+        "Dashboard 'Jump back in' rail is empty for the next signed-in user",
+        "Consistent with existing favorites/search-history/spotlight resets already in signOut"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: AuthService.swift:170-193 resets favorites/search/spotlight/keychain but never RecentlyViewedService.shared.clear() (clear() exists at RecentlyViewedService.swift:57). | STATUS: implemented on branch claude/ios-app-review-prd-25ygbb (commit d9dd6ac); passes still false pending Xcode build + test verification on macOS CI (no Swift toolchain in this env). Impl: AuthService.signOut defer now calls RecentlyViewedService.shared.clear()"
+    },
+    {
+      "id": "IOS-AUDIT-BUG-005",
+      "title": "Tolerate null/empty article content so one bad row can't break the Articles screen",
+      "description": "As a reader, I need the Articles list to render even if one published article has a null or empty body, instead of the whole screen failing to decode.",
+      "acceptanceCriteria": [
+        "Article.content is optional (or list decodes element-by-element, skipping malformed rows)",
+        "A row with null content no longer throws during array decode",
+        "ArticleDetailView shows an 'open on web'/empty-body fallback when content is missing"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: Models/Article.swift:8-12 content is non-optional let; ArticleDetailView.swift:29 renders empty VStack for blank body."
+    },
+    {
+      "id": "IOS-AUDIT-BUG-006",
+      "title": "Fix pagination desync when client-side filters/sorts shrink server pages",
+      "description": "As a user browsing filtered/sorted lists, I need pagination to keep loading correct results instead of repeating, skipping, or showing near-empty pages.",
+      "acceptanceCriteria": [
+        "AttractionsViewModel pushes sort to the query (or loads all before client sort) so offset windows stay consistent",
+        "Multi-type attraction filter pages until the filtered target is met (or filters server-side via in-clause); hasMore/loadMore driven by filtered counts",
+        "EventsViewModel tracks raw fetched offset separately from filtered display count for the premium maxDistance filter",
+        "RestaurantsViewModel cache-hit path applies dietary filter too, not only openNow"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: AttractionsViewModel.swift:111-113,142-155; EventsViewModel.swift:140-157,276-292; RestaurantsViewModel.swift:74-78. | STATUS: implemented on branch claude/ios-app-review-prd-25ygbb; passes still false pending Xcode build+test verify on macOS CI. Impl: AttractionsViewModel accumulates rawAttractions and pages off rawAttractions.count; EventsViewModel adds rawFetchedCount and pages off it (premium maxDistance); RestaurantsViewModel cache-hit applies applyClientSide(openNow+dietary). NOTE: multi-type empty-page auto-advance not added (inherent without server in-clause)."
+    },
+    {
+      "id": "IOS-AUDIT-BUG-007",
+      "title": "Add task cancellation and stable captures to Map/Discover/Search async flows",
+      "description": "As a user typing or swiping quickly, I need stale results to never overwrite newer ones and analytics to record the term I actually searched.",
+      "acceptanceCriteria": [
+        "MapViewModel.search routes through a cancellable fetchTask and checks Task.isCancelled before assigning results (mirror loadNearbyContent)",
+        "DiscoverViewModel.boost/reload cancel any in-flight fetchTask and guard appends with a generation token",
+        "SearchViewModel captures `let query = searchText` before awaits and records that captured value in history",
+        "No regression to debounce behavior"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: MapViewModel.swift:163-219 no cancellation/debounce; DiscoverViewModel.swift:235-269 boost races fetchMore; SearchViewModel.swift:53-73 records live searchText after awaits. | STATUS: implemented on branch claude/ios-app-review-prd-25ygbb; passes false pending macOS CI build+test verify. Impl: MapViewModel.search routes through fetchTask with captured query + Task.isCancelled guards; SearchViewModel captures query once and threads through sub-searches + history record; DiscoverViewModel adds fetchGeneration token (in-flight pre-reset fetches discard) + serialized enqueueFetch() so reload/boost refetch isn't skipped by isPrefetching."
+    },
+    {
+      "id": "IOS-AUDIT-BUG-008",
+      "title": "Roll back optimistic saved-search delete on backend failure",
+      "description": "As a user deleting a saved search, I need a failed delete to restore the row and tell me, instead of silently reappearing on next load.",
+      "acceptanceCriteria": [
+        "SavedSearchesViewModel.delete awaits the backend delete and re-inserts the removed item on failure",
+        "errorMessage is set on failure (no try? swallow)",
+        "Successful delete leaves the row gone after reload"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: SavedSearchesViewModel.swift:108-111 optimistic remove then try? swallows error. | STATUS: implemented on branch claude/ios-app-review-prd-25ygbb; passes still false pending Xcode build+test verify on macOS CI. Impl: SavedSearchesViewModel.delete now awaits delete, re-inserts removed item at original index on failure, sets errorMessage."
+    },
+    {
+      "id": "IOS-AUDIT-BUG-009",
+      "title": "Key list rows by identity, not array offset, for safe deletion",
+      "description": "As a user deleting a recent search or a review, I need the correct item removed even if the underlying collection changed between render and tap.",
+      "acceptanceCriteria": [
+        "SearchView recent-search ForEach keys on the query value and deletes by value, not remove(at: offset)",
+        "ReviewsSection captures the target review id at delete-tap time and the confirm dialog deletes that captured id",
+        "No wrong-item deletion under concurrent mutation"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: SearchView.swift:363 ForEach keyed on \\.offset + remove(at:index); ReviewsSection.swift:167 deleteOwnReview with no captured id. | STATUS: implemented on branch claude/ios-app-review-prd-25ygbb; passes false pending macOS CI build+test verify. Impl: SearchView recent searches keyed by \\.self value, delete via new SearchHistoryService.remove(_:). ReviewsSection delete reviewed: deletes by currentUserId server-side, already safe, unchanged."
+    },
+    {
+      "id": "IOS-AUDIT-BUG-010",
+      "title": "Use identity tokens for one-shot UI commands so rapid repeats aren't dropped",
+      "description": "As a user, I need repeated identical actions (swipe command, sponsored reveal) to fire every time instead of being swallowed by onChange/onAppear de-duplication.",
+      "acceptanceCriteria": [
+        "SwipeCardStack Command carries a UUID token so issuing the same direction twice re-fires onChange",
+        "SurpriseMe sponsored reveal is driven by .task(id: sponsored.id) instead of onAppear so back-to-back sponsored rolls animate in",
+        "No card is left stuck at opacity 0"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: SwipeCardStack.swift:110 command consumed via onChange then nil; SurpriseMeView.swift:171 sponsoredReveal via onAppear doesn't refire."
+    },
+    {
+      "id": "IOS-AUDIT-BUG-011",
+      "title": "Validate affiliate ad URLs against the isSafeWebLink allowlist",
+      "description": "As a user, I need affiliate/sponsored links to pass the same scheme allowlist as other ad targets so a non-http(s) URL is never handed to the system.",
+      "acceptanceCriteria": [
+        "AffiliateAdBanner validates affiliateURL.isSafeWebLink before rendering the Link (or routes through AdTarget/in-app browser)",
+        "Non-http(s) affiliate URLs are not opened",
+        "Consistent with IOS-AUDIT-SEC-012 AdTarget scheme guard"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: AffiliateAdBanner.swift:43 raw Link(destination: affiliateURL) with no scheme validation. | STATUS: implemented on branch claude/ios-app-review-prd-25ygbb (commit d9dd6ac); passes still false pending Xcode build + test verification on macOS CI (no Swift toolchain in this env). Impl: AffiliateAdBanner now requires affiliateURL.isSafeWebLink before rendering the Link"
+    },
+    {
+      "id": "IOS-AUDIT-BUG-012",
+      "title": "Back notification/reminder settings toggles with reactive storage",
+      "description": "As a user toggling reminders in Settings, I need the row and any observers to update immediately and persist reliably.",
+      "acceptanceCriteria": [
+        "SettingsView reminder/notification toggles use @AppStorage or a service-published property instead of direct UserDefaults.standard reads/writes",
+        "Toggling updates dependent UI without a manual refresh",
+        "Stored values still persist across launches"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: SettingsView.swift:131 toggle reads/writes UserDefaults.standard directly with no published state. | REVIEW: REVIEWED — not changed: SettingsView reminder Toggle uses a get/set Binding to UserDefaults by deliberate design (documented at SettingsView.swift:128-130, IOS-AUDIT-UX-029) and persists/reads correctly. No in-view observer depends on reactive propagation. Recommend close/downgrade unless a concrete cross-observer requirement emerges."
+    },
+    {
+      "id": "IOS-AUDIT-BUG-013",
+      "title": "Harden ProfileView profile reload against clobbering in-progress edits",
+      "description": "As a user editing my profile, I need a background reload to not overwrite my unsaved field edits or loop on itself.",
+      "acceptanceCriteria": [
+        "ProfileView guards loadProfile() so its own writes to `profile` don't re-trigger the onChange reload",
+        "Active text-field edits are preserved across an incidental reload",
+        "No reload loop when profile?.userId is stable"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Evidence: ProfileView.swift:206 .task loadProfile + onChange(of: profile?.userId) re-invokes loadProfile which mutates profile."
+    },
+    {
+      "id": "IOS-AUDIT-BUG-014",
+      "title": "Fix Best-Of vote bar overflow and reconcile the 'your pick' key",
+      "description": "As a voter, I need the result bars to never overflow and the 'your pick' badge to agree between the booth and the leaderboard.",
+      "acceptanceCriteria": [
+        "BestOfCategoryView progress-bar ratio is wrapped with min(1, voteCount/total)",
+        "The booth label and leaderboard highlight derive the user's pick from one canonical key (write-in vs resolved id reconciled)",
+        "Optimistic vote counts cannot exceed the displayed total"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Evidence: BestOfCategoryView.swift:246 width = voteCount/total unclamped; :219 booth uses userVote.resultKey while leaderboard uses votedKey==result.id. | STATUS: implemented on branch claude/ios-app-review-prd-25ygbb; passes false pending macOS CI build+test verify. Impl: BestOfCategoryView bar width clamped to CGFloat(total>0 ? min(1, voteCount/total) : 0)."
+    },
+    {
+      "id": "IOS-AUDIT-BUG-015",
+      "title": "Correct Location/Weather staleness and concurrency edge cases",
+      "description": "As a user, I need accurate location/weather behavior: no stale coordinates after I revoke permission, no other city's weather, and reliable spinners.",
+      "acceptanceCriteria": [
+        "LocationService checks authorization before returning the <5min cached location",
+        "LocationService.isLocating is derived from in-flight request state, not a per-call defer that overlapping callers corrupt",
+        "WeatherService validates cached-snapshot proximity before serving it as a network-failure fallback"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Evidence: LocationService.swift:44-53 cache shortcut precedes perm guard; :39-42 defer flips isLocating; WeatherService.swift:67-72 returns cached snapshot with no proximity check."
+    },
+    {
+      "id": "IOS-AUDIT-BUG-016",
+      "title": "Distinguish null coordinates from a literal 0.0",
+      "description": "As a data consumer, I need a missing coordinate (null in DB) treated differently from a valid 0.0 so bad data is surfaced, not silently masked.",
+      "acceptanceCriteria": [
+        "Event/Restaurant/Attraction coordinate returns nil only when the lat/lng column is actually null, not when value==0",
+        "Decoding keeps lat/lng optionality so null vs 0.0 is distinguishable",
+        "Des Moines records unaffected"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Evidence: Event.swift:75-79, Restaurant.swift:159-163, Attraction.swift:33-37 return nil when lat==0 || lng==0."
+    },
+    {
+      "id": "IOS-AUDIT-BUG-017",
+      "title": "Add idempotency keys to queued swipe/impression inserts",
+      "description": "As an analytics consumer, I need queued swipe and ad-impression flushes to not double-count when a successful insert's response is lost.",
+      "acceptanceCriteria": [
+        "SwipeInteractionService.flushPending attaches a client-generated UUID per queued row and the server upserts/dedupes",
+        "AdTrackingService flush uses the same idempotency approach",
+        "A lost response no longer re-inserts the same rows on the next flush"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Evidence: SwipeInteractionService.swift:124-130 (and AdTrackingService flush) leave queue intact on lost response with no idempotency key."
+    },
+    {
+      "id": "IOS-AUDIT-BUG-018",
+      "title": "Consolidate delete-user-account into one service and handle partial failure",
+      "description": "As a user deleting my account, I need a single reliable path that leaves me locally signed out even if the post-delete sign-out throws.",
+      "acceptanceCriteria": [
+        "A single AccountService.deleteAccount() wraps the delete-user-account invoke; ProfileViewModel and SettingsView both call it",
+        "After a successful server delete, local session/state is force-cleared regardless of whether auth.signOut() throws",
+        "Errors are surfaced with a retry affordance"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: ProfileViewModel.swift:69-91 (signOut after delete unhandled) and SettingsView.swift:374 invoke delete-user-account separately."
+    },
+    {
+      "id": "IOS-AUDIT-PERF-022",
+      "title": "Stop recomputing derived list/strength state on every SwiftUI render",
+      "description": "As a user scrolling Deals or typing a password, I need derived values computed only when inputs change, not on every body pass.",
+      "acceptanceCriteria": [
+        "DealsViewModel.filteredDeals and .categories are recomputed into stored properties via didSet on filter inputs (mirror EventsVM arrangedEvents), not computed each read",
+        "AuthViewModel.passwordStrength is computed in password didSet and stored, not a computed property running regex on every render",
+        "No behavior change to the resulting values"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: DealsViewModel.swift:23-45 computed filteredDeals/categories (isActiveNow calendar work + Set().sorted()); AuthViewModel.swift:54-69 passwordStrength runs up to 6 regex scans per read."
+    },
+    {
+      "id": "IOS-AUDIT-PERF-023",
+      "title": "Parse article markdown once instead of in the view body",
+      "description": "As a reader, I need article markdown parsed a single time so scrolling and Dynamic Type changes stay smooth.",
+      "acceptanceCriteria": [
+        "ArticleMarkdownView parses blocks once in init and stores them as a let (not a computed property)",
+        "Divider block ids are position-stable (no UUID() per access) so diffing/animation work",
+        "Rendered output is unchanged"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: ArticleMarkdownView.swift:16 blocks computed runs full parser + AttributedString(markdown:) every render; :160 divider id = \"hr-\\(UUID())\"."
+    },
+    {
+      "id": "IOS-AUDIT-PERF-024",
+      "title": "Cache Trip Planner map geocoding instead of re-running on every appearance",
+      "description": "As a user opening an itinerary, I need stop coordinates resolved once and reused so I don't hit CLGeocoder rate limits or lag.",
+      "acceptanceCriteria": [
+        "TripMapPreview caches geocoded coordinates by location string and reuses them across appearances",
+        "Geocoding is cancellable and does not re-run the full batch on each .task",
+        "No more than necessary CLGeocoder calls per unique location"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: ItineraryDetailView.swift:413 up to 8 sequential CLGeocoder calls in .task on each appearance, no cache/cancellation."
+    },
+    {
+      "id": "IOS-AUDIT-PERF-025",
+      "title": "Back filter-chip distinct values with an RPC instead of fetching whole tables",
+      "description": "As a user opening filters, I need the chip values built server-side so the app doesn't download one row per table record.",
+      "acceptanceCriteria": [
+        "Distinct cuisine/location/category/tag chip queries use a distinct-values RPC or a small view (not select-one-column with no limit + client Set dedupe)",
+        "Restaurants, Articles, and Hotels filter sources are converted",
+        "Backward compatible (additive RPC; old code paths untouched for shipped binaries)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: RestaurantsService.swift:301-327, ArticlesService.swift:168-177, HotelsService.swift:137-147 select a single column with no limit and Set-dedupe in memory."
+    },
+    {
+      "id": "IOS-AUDIT-PERF-026",
+      "title": "Aggregate Best-Of vote tallies server-side",
+      "description": "As a user opening a Best-Of screen, I need vote counts aggregated by the database so the app doesn't pull every votes row app-wide.",
+      "acceptanceCriteria": [
+        "VotingService.fetchCategories/fetchWinners use a COUNT ... GROUP BY RPC instead of selecting all votes rows and counting in Swift",
+        "Tally load time is independent of total votes cast app-wide",
+        "Additive RPC; no breaking change to shipped clients"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: VotingService.swift:44-51 and :198-234 select all rows from votes with no aggregation."
+    },
+    {
+      "id": "IOS-AUDIT-PERF-027",
+      "title": "Apply radius bounding-box before the row limit on nearby table-fallbacks",
+      "description": "As a user requesting nearby content, I need in-radius results to fill the page instead of being truncated by a limit applied before the radius filter.",
+      "acceptanceCriteria": [
+        "Nearby table-fallback queries apply a lat/lng bounding-box predicate before .limit (or rely on the PostGIS RPC)",
+        "AttractionsService gains an attractions_within_radius RPC path (currently missing)",
+        "Nearby results no longer come back short/empty when many in-radius rows exist past the cutoff"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: AttractionsService.swift:84-101 and EventsService.swift:253-275 take first `limit` rows then filter by radius client-side; AttractionsService has no RPC path."
+    },
+    {
+      "id": "IOS-AUDIT-PERF-028",
+      "title": "Stop per-frame/per-read system work in ad viewability and session tracking",
+      "description": "As a user scrolling ad-bearing feeds, I need viewability and session bookkeeping to avoid repeated scene-graph walks and disk writes.",
+      "acceptanceCriteria": [
+        "AdViewabilityModifier caches active window bounds (invalidated on scene/size change) instead of walking connectedScenes/windows per scroll frame, and short-circuits once hasFired",
+        "AdTrackingService session-window extension is an explicit method (or only persists when the id changes), not a disk write on every sessionId read",
+        "No change to impression/viewability accuracy"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Evidence: AdViewabilityModifier.swift:24-26,59-64 evaluate on every frame; AdTrackingService.swift:69-80 sessionId getter re-encodes/writes AdSession to UserDefaults on each read."
+    },
+    {
+      "id": "IOS-AUDIT-PERF-029",
+      "title": "Move image thumbnail blur-up generation off the main actor",
+      "description": "As a user scrolling image-dense feeds, I need thumbnail generation to not add a synchronous main-actor render pass per image.",
+      "acceptanceCriteria": [
+        "CachedAsyncImage generates the blur-up thumbnail in the Task.detached decode path, not synchronously inside loadImage on the main actor",
+        "Small list thumbnails can skip blur-up where imperceptible",
+        "No visual regression to the blur-up effect for hero images"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Evidence: CachedAsyncImage.swift:124-127,159-165 generateThumbnail runs UIGraphicsImageRenderer.image synchronously for every first-time network load."
+    },
+    {
+      "id": "IOS-AUDIT-PERF-030",
+      "title": "Dedupe in-flight For-You refreshes and batch Trip Planner reorder writes",
+      "description": "As a user, I need rails to fetch once and reorders to persist in a single request instead of N round-trips.",
+      "acceptanceCriteria": [
+        "ForYouService.refresh dedupes/guards concurrent in-flight calls so ForYouRail's .task can't trigger a double fetch",
+        "TripPlannerService.persistOrder writes all (id, order_index) rows via a single bulk upsert/RPC instead of one UPDATE per stop",
+        "A partial failure no longer leaves the list half-reordered"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Evidence: ForYouRail.swift:59 .task refresh may double-fire; TripPlannerService.swift:159-178 issues one UPDATE per stop."
+    },
+    {
+      "id": "IOS-AUDIT-PERF-031",
+      "title": "Lazy-render long review lists and parallelize the article view-count write",
+      "description": "As a user, I need detail screens to stay responsive with many reviews and to not block the related rail on a side-effecting write.",
+      "acceptanceCriteria": [
+        "ReviewsSection caps initial render (Show all / paginate) or uses a lazy container instead of building every review in a non-lazy VStack",
+        "ArticleDetailView fires incrementViewCount concurrently (async let/detached) rather than awaiting it before fetchRelated",
+        "Related content appears without waiting on the view-count write"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Evidence: ReviewsSection.swift:39 ForEach in non-lazy VStack; ArticleDetailView.swift:83 awaits incrementViewCount before fetchRelated."
+    },
+    {
+      "id": "IOS-AUDIT-UX-050",
+      "title": "Apply 44pt minimum hit targets to all secondary/inline buttons",
+      "description": "As a user (especially with motor or vision needs), I need every actionable control to meet the 44x44pt minimum, including dismiss/close, chips, and inline upgrade buttons.",
+      "acceptanceCriteria": [
+        ".minHitTarget() applied to: SubscriptionStatusBanner action+dismiss, InterstitialAdView close, FullScreenImageViewer close, suggestion/trending chips, ErrorStateView/EmptyStateView actions, AdBannerView house CTA, SubscriptionBanner+FavoritesLimitBanner upgrade, SessionTimeoutBanner, OnboardingPage Skip, PromoteListing .row, RecentSearchesList Clear-all, Profile interest chips, AskPulse pick-card chevron",
+        "Audited with Accessibility Inspector: no actionable control under 44x44pt",
+        "No visual layout regressions to the banners/chips"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: SubscriptionStatusBanner.swift:33,40; InterstitialAdView.swift:82; FullScreenImageViewer.swift:110; ChatBubble.swift:90-104; SearchSuggestions.swift:56-57,86-104; ErrorStateView.swift:47; EmptyStateView.swift:48; AdBannerView.swift:178; SubscriptionBanner.swift:151,211; SessionTimeoutBanner.swift:28; OnboardingPage.swift:71; PromoteListing.swift:90; ProfileView.swift:90; AskPulseView.swift:333. Helper exists at View+Accessibility.swift:12. | STATUS: implemented on branch claude/ios-app-review-prd-25ygbb (commit d9dd6ac); passes still false pending Xcode build + test verification on macOS CI (no Swift toolchain in this env). Impl: minHitTarget() applied to InterstitialAdView close, FullScreenImageViewer close, Error/EmptyStateView actions, SessionTimeoutBanner, SubscriptionStatusBanner (action+dismiss), FavoritesLimitBanner upgrade, SuggestionChip/ChatBubble chips, SearchSuggestions Clear-all, OnboardingPage Skip, PromoteListing .row, AdBannerView house CTA, AskPulse chevron, Profile interest chips. (Compact SubscriptionBanner pill left as-is: whole-banner is tappable.)"
+    },
+    {
+      "id": "IOS-AUDIT-UX-051",
+      "title": "Add missing empty / no-result / error states so screens never render blank",
+      "description": "As a user, I need every screen to tell me when there's nothing to show or a load failed, with a retry, instead of showing a blank area.",
+      "acceptanceCriteria": [
+        "SurpriseMe shows a no-result state with 'Try again' when pick==nil && error==nil",
+        "Search results show a per-tab empty state when one tab has zero matches",
+        "Discover 'Reset deck' shows progress and a failure toast/retry",
+        "NeighborhoodsView, Dashboard favorites counts (loading placeholder + load-error), and ArticleDetail empty-body each show an appropriate state"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: SurpriseMeView.swift:31 blank when pick nil; SearchView.swift:292 empty LazyVStack per tab; DiscoverView.swift:211 reset no feedback; NeighborhoodsView.swift:26; DashboardView.swift:123; ArticleDetailView.swift:29."
+    },
+    {
+      "id": "IOS-AUDIT-UX-052",
+      "title": "Close Dynamic Type and VoiceOver gaps in shared components",
+      "description": "As a VoiceOver / large-text user, I need shared components to scale and announce correctly so the whole app benefits.",
+      "acceptanceCriteria": [
+        "CategoryBadge uses @ScaledMetric/relative fonts and exposes .accessibilityLabel(category.displayName)",
+        "FullScreenImageViewer image has an accessibilityLabel and an .accessibilityAdjustableAction (or visible zoom buttons)",
+        "LoadingView exposes its message to VoiceOver (accessibilityLabel + announcement on appear)",
+        "PremiumGate locked overlay is aggregated with accessibilityElement(children: .contain) and a header label",
+        "Hotel gallery photos include position ('2 of 5') in their accessibility labels"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: CategoryBadge.swift:13-23,40 fixed sizes/no label; FullScreenImageViewer.swift:36 image no label/zoom; LoadingView.swift:4-17 no announce; PremiumGate.swift:42-71 not combined; HotelDetailView.swift:79 identical photo labels."
+    },
+    {
+      "id": "IOS-AUDIT-UX-053",
+      "title": "Add in-flight feedback and double-tap guards to async actions",
+      "description": "As a user, I need slow actions to show progress and not double-fire, so I don't create duplicates or think the app froze.",
+      "acceptanceCriteria": [
+        "Trip Planner Add-to-Calendar has an isAddingToCalendar disabled+progress state and cannot create duplicate EventKit events on re-tap",
+        "Group Session Join button mirrors the Host button's working/spinner state",
+        "Deals deep-link resolve shows an in-flight indicator on the tapped card",
+        "Saved-search save shows a ProgressView and disables Cancel while saving"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Evidence: ItineraryDetailView.swift:120 no in-flight guard; GroupSessionView.swift:119 Join no working state; DealsView.swift:143 resolving has no spinner; SavedSearchUI.swift:81 Cancel stays enabled."
+    },
+    {
+      "id": "IOS-AUDIT-UX-054",
+      "title": "Refresh search results in place instead of flashing the empty state",
+      "description": "As a user pulling to refresh search, I need results to update in place rather than blanking for ~300ms.",
+      "acceptanceCriteria": [
+        "SearchViewModel exposes a direct performSearchNow() path that re-runs queries without clearResults()+debounce",
+        "Pull-to-refresh keeps current results visible until new ones arrive",
+        "No duplicate search firing"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Evidence: SearchViewModel.swift:141-146 refresh() clears then re-enters 300ms-debounced performSearch."
+    },
+    {
+      "id": "IOS-AUDIT-UX-055",
+      "title": "Improve Restaurants filter affordances (reset, slider value, popover overflow)",
+      "description": "As a user filtering restaurants, I need to recover from zero-result searches, see my chosen rating, and reach all cuisines/locations.",
+      "acceptanceCriteria": [
+        "Empty-state offers a reset action when searchText is non-empty (not only when activeFilterCount>0)",
+        "Rating slider shows its live numeric value when off a quick-pick preset",
+        "Cuisine/location popovers add a search field or 'show all' when the list exceeds 40 items (no silent prefix(40) drop)",
+        "Choosing a sort no longer deactivates a still-applied preset highlight"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Evidence: RestaurantsView.swift:38 reset only when activeFilterCount>0; RestaurantInlineFilters.swift:222 slider no value; :78 prefix(40); RestaurantsView.swift:207 sort sets activePreset=nil."
+    },
+    {
+      "id": "IOS-AUDIT-UX-056",
+      "title": "Handle keyboard overlap on scrollable text-entry screens",
+      "description": "As a user entering text, I need the keyboard to be dismissible and to not cover the primary action.",
+      "acceptanceCriteria": [
+        "BestOf write-in/search ScrollView adds .scrollDismissesKeyboard(.interactively)",
+        "GroupSession host/join screen is wrapped in a ScrollView so content/error text stays reachable with the keyboard up and large Dynamic Type",
+        "Primary action buttons remain visible above the keyboard"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Evidence: BestOfCategoryView.swift:14 plain ScrollView no dismiss; GroupSessionView.swift:19 fixed VStack."
+    },
+    {
+      "id": "IOS-AUDIT-UX-057",
+      "title": "Surface silent failures and add small recovery affordances across detail flows",
+      "description": "As a user, I need feedback when a lookup or permission fails instead of a dead control or no response.",
+      "acceptanceCriteria": [
+        "Dashboard openRecent shows a toast/error when a recently-viewed lookup fails (not just a DEBUG log)",
+        "Neighborhood 'nearby' sort shows a toast/alert (or Settings prompt) when location permission is denied/unavailable",
+        "Discover 'like' surfaces a cap toast/paywall when a free-tier favorites-cap save fails",
+        "Group Session live code is copyable (textSelection or Copy button); duplicate Attraction website affordance removed"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Evidence: DashboardView.swift:262 swallows errors; NeighborhoodDetailView.swift:99 enableNearby silent; DiscoverViewModel.swift:281-297 swallows cap failure; GroupSessionView.swift:155 code display-only; AttractionDetailView.swift:179/192 duplicate website."
+    },
+    {
+      "id": "IOS-AUDIT-UX-058",
+      "title": "Backfill full event detail when opening from a prefetched list projection",
+      "description": "As a user opening an event from a list, I need the detail screen to fill in fields the list row didn't carry instead of showing gaps.",
+      "acceptanceCriteria": [
+        "EventDetailViewModel.loadEvent(prefetched:) shows the prefetched event immediately, then fetches the full event in the background to fill missing fields",
+        "isLoading reflects the background fill without blocking the visible content",
+        "No flicker/replace of already-correct fields"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Evidence: EventDetailViewModel.swift:35-48 prefetched path sets isLoading but only loads related events, never re-fetches the full row."
+    },
+    {
+      "id": "IOS-AUDIT-UX-059",
+      "title": "Report skipped stops and stabilize seeded sheet defaults",
+      "description": "As a user, I need to know when an itinerary stop couldn't be added to my calendar, and seeded text fields should respect my edits.",
+      "acceptanceCriteria": [
+        "Trip Planner Add-to-Calendar result reports skipped/unparseable stops (or falls back to an all-day event) instead of silently dropping them",
+        "SaveSearchSheet seeds the default name via the @State initializer, not onAppear, so clearing the field and re-presenting doesn't re-apply the default",
+        "WeekendViewModel uses an explicit hasLoadedOnce flag instead of inferring load state from emptiness"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Evidence: ItineraryDetailView.swift:320 combine() returns nil silently; SavedSearchUI.swift:92 onAppear reseeds name; WeekendViewModel.swift:34-37 empty-vs-loaded conflated."
+    },
+    {
+      "id": "IOS-AUDIT-FEAT-034",
+      "title": "Stop suppressing analytics/ad telemetry for the entire non-EU user base",
+      "description": "As the business, I need analytics and ad telemetry enabled by default for non-EU users (who never see the EU consent screen) so measurement and ad revenue aren't silently off in the largest market.",
+      "acceptanceCriteria": [
+        "analyticsConsent defaults to granted for non-EU regions (or a lightweight non-EU notice sets it), while EU users still get the opt-in flow",
+        "Consent-gated impression/click/screen events fire for non-EU users by default",
+        "SettingsView toggle reflects the correct default and still allows opt-out",
+        "Distinct from IOS-AUDIT-SEC-014 (EU opt-out) — this fixes the default-off-suppresses-all behavior"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: ConsentService.swift:36-42 analyticsConsent = UserDefaults.bool (defaults false); :58-60 needsConsentPrompt gated on isLikelyEU; AdTrackingService gates all events on consent. | STATUS: implemented on branch claude/ios-app-review-prd-25ygbb; passes still false pending Xcode build+test verify on macOS CI. Impl: ConsentService.init now register(defaults:[analytics:true]) for non-EU; AdTrackingService consent gate (3 sites) now passes for non-EU by default. EU opt-in + explicit opt-out preserved."
+    },
+    {
+      "id": "IOS-AUDIT-FEAT-035",
+      "title": "Guarantee Siri/App Intent delivery instead of relying on a watched property",
+      "description": "As a user invoking a Siri shortcut, I need the action to always route, even if no view is currently observing the dispatcher.",
+      "acceptanceCriteria": [
+        "PulseAppIntents route through a guaranteed mechanism (e.g. a deep-link the root app consumes on next active) rather than setting a plain `pending` property an arbitrary view may not be watching",
+        "An intent invoked while on an unrelated tab still navigates correctly",
+        "Builds on IOS-AUDIT-FEAT-025 by fixing the dispatcher's delivery guarantee itself"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: PulseAppIntents.swift:61-69,91-98,117-121 set PulseIntentDispatcher.shared.pending (plain stored property) with no notify/retry."
+    },
+    {
+      "id": "IOS-AUDIT-FEAT-036",
+      "title": "Wire subscription pricing cards to live StoreKit products (remove placeholders)",
+      "description": "As a prospective subscriber, I need the displayed prices and savings to come from real StoreKit products so they can never diverge from what I'm charged.",
+      "acceptanceCriteria": [
+        "SubscriptionTierCard/BillingCycleToggle require StoreKit-derived price/annual-savings at the call site (no defaultable hardcoded '$14.99'/'save 20%')",
+        "The subscription screen reads localized StoreKit price strings",
+        "Builds on IOS-AUDIT-UX-032 by actually wiring the component, not just flagging the risk"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: SubscriptionTierCard.swift:140-150,187 carry hardcoded placeholder pricing and header warns it is not wired to StoreKit."
+    },
+    {
+      "id": "IOS-AUDIT-FEAT-037",
+      "title": "Prune Spotlight index so expired events stop surfacing",
+      "description": "As a user searching iOS Spotlight, I need expired events to drop out instead of deep-linking me to missing detail pages.",
+      "acceptanceCriteria": [
+        "Indexed events set attributes.expirationDate to the event date",
+        "A re-index/cleanup (or removeItems(withDomain:) before re-indexing) removes past events",
+        "Tapping a Spotlight result never routes to a now-missing detail"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Evidence: SpotlightService.swift:14-55 indexes events with no expirationDate and no pruning."
+    },
+    {
+      "id": "IOS-AUDIT-REL-013",
+      "title": "Add explicit App Transport Security policy to app and App Clip plists",
+      "description": "As a security reviewer, I need an explicit ATS posture so third-party/Supabase traffic is provably TLS and any exception is documented.",
+      "acceptanceCriteria": [
+        "Info.plist declares an NSAppTransportSecurity dict (default-deny arbitrary loads; declare any required exception domains, e.g. Open-Meteo if needed)",
+        "App Clip Info.plist adds NSLocationWhenInUseUsageDescription (location-requesting clip) and the same ATS policy",
+        "No runtime TLS failures against Supabase/Open-Meteo after the policy is added"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: Resources/Info.plist has no NSAppTransportSecurity; DesMoinesInsiderClip/Info.plist:32-35 requests location with no usage string/ATS."
+    },
+    {
+      "id": "IOS-AUDIT-REL-014",
+      "title": "Reconcile the privacy manifest required-reason APIs against actual SDK usage",
+      "description": "As a submitter, I need PrivacyInfo.xcprivacy required-reason API categories to match what the built binary actually uses to avoid rejection.",
+      "acceptanceCriteria": [
+        "Run the App Store privacy-manifest linter against the built binary",
+        "Declared NSPrivacyAccessedAPICategory entries reconcile with actual usage (UserDefaults, FileTimestamp, DiskSpace, and any SystemBootTime/ActiveKeyboards)",
+        "Distinct from SEC-009/010/REL-002/011 (data-type declarations) — this covers the required-reason API set"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: Resources/PrivacyInfo.xcprivacy:106-129 declares UserDefaults/FileTimestamp/DiskSpace but usage isn't reconciled against 17 UserDefaults files + disk caching."
+    },
+    {
+      "id": "IOS-AUDIT-REL-015",
+      "title": "Run the UI/snapshot test target in CI, not just the screenshot lane",
+      "description": "As a maintainer, I need DesMoinesInsiderUITests executed on PRs so UI regressions are caught.",
+      "acceptanceCriteria": [
+        "The Makefile/Fastfile test invocation includes DesMoinesInsiderUITests (shared scheme includes the UITest target, or an explicit only-testing:DesMoinesInsiderUITests run is added)",
+        "A failing UI test fails the PR build",
+        "Snapshot lane behavior is preserved"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: Makefile:59-68 runs xcodebuild test with the app scheme but no UITest only-testing; Fastfile build lanes don't run a UI-test lane on PRs."
+    },
+    {
+      "id": "IOS-AUDIT-REL-016",
+      "title": "Establish a single source of truth for the iOS version vs backend LATEST_APP_VERSION",
+      "description": "As a release manager, I need the shipped MARKETING_VERSION and backend LATEST_APP_VERSION kept in sync so the update banner can't misfire.",
+      "acceptanceCriteria": [
+        "MARKETING_VERSION and supabase _shared/minSupportedVersions.ts LATEST_APP_VERSION[ios] derive from one committed constant, or a CI check asserts the released tag matches LATEST_APP_VERSION[ios]",
+        "Cutting a release updates both in lockstep",
+        "version-check optional-update banner reflects the actually-released version"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Evidence: Resources/Info.plist:21-24 uses $(MARKETING_VERSION); Fastfile increments build; minSupportedVersions.ts hardcodes LATEST_APP_VERSION with no sync."
+    },
+    {
+      "id": "IOS-AUDIT-REL-017",
+      "title": "Document/exercise register-device-token before re-enabling push",
+      "description": "As a maintainer, I need the push token-registration path either exercised or clearly marked unreachable while push is disabled, so re-enabling it isn't the first real test.",
+      "acceptanceCriteria": [
+        "When push is re-enabled (IOS-AUDIT-FEAT-029), the aps-environment entitlement is added and an integration test covers the register-device-token round-trip",
+        "Until then, PushNotificationService/register-device-token is documented as iOS-unreachable",
+        "No silent dead dependency"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: PushNotificationService.swift:69 calls register-device-token, but Config.enablePushNotifications=false and entitlements carry no aps-environment."
+    },
+    {
+      "id": "IOS-AUDIT-TEST-001",
+      "title": "Add StoreKit receipt-validation and entitlement-revocation tests",
+      "description": "As a maintainer of the revenue path, I need tests that lock the validate-ios-receipt handling and local revocation so regressions can't ship silently.",
+      "acceptanceCriteria": [
+        "A StoreKitTests suite mocks validate-ios-receipt responses (valid/invalid/refunded) and asserts entitlement grant vs revocation transitions",
+        "serverRevokedProductIDs handling and ValidationResponse decode are covered",
+        "isTransientError / tier-resolution helpers are unit-tested"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Evidence: StoreKitService.swift has no StoreKitTests.swift in DesMoinesInsiderTests/ — the most revenue/security-critical service is untested. | STATUS: implemented on branch claude/ios-app-review-prd-25ygbb; passes false pending macOS CI build+test run (no Swift toolchain here). Impl: Added StoreKitTests.swift (24 cases). Refactor: extracted static tier(forEntitledProductIDs:)/tier(forPlanName:), made isTransientError internal-static, lifted ValidationResponse to file scope. Covers tier resolution, SEC-011 revocation subtraction, transient/definitive error classification, validate-ios-receipt decode, product-ID set integrity. NOTE: live StoreKit Transaction/purchase() paths still untested (need StoreKitTest framework / .storekit config harness)."
+    },
+    {
+      "id": "IOS-AUDIT-TEST-002",
+      "title": "Add AuthService/AuthViewModel and Apple-Sign-In nonce tests",
+      "description": "As a maintainer, I need the auth gate covered so sign-in/up, nonce generation, reset, and error routing don't regress.",
+      "acceptanceCriteria": [
+        "Tests cover Apple-Sign-In nonce charset/length (per IOS-AUDIT-SEC-015)",
+        "Error-state mapping and reset-vs-error message routing are asserted",
+        "Email-verify state transitions are covered"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Evidence: AuthService.swift and AuthViewModel.swift have no tests despite gating all authenticated features. | STATUS: implemented on branch claude/ios-app-review-prd-25ygbb; passes false pending macOS CI build+test run (no Swift toolchain here). Impl: Added AuthTests.swift (16 cases): sha256 NIST vector+determinism, Apple nonce length/charset/uniqueness + SEC-015 full-A-Z regression guard, email validation, password-strength scoring, confirmation match. NOTE: signIn/resetPassword error-state routing not yet covered (needs an AuthService mock/protocol seam)."
+    },
+    {
+      "id": "IOS-AUDIT-TEST-003",
+      "title": "Add edge-function contract decode tests for the AI/monetization endpoints",
+      "description": "As a maintainer, I need decode/contract tests so backend response-shape drift surfaces in CI instead of breaking shipped binaries silently.",
+      "acceptanceCriteria": [
+        "Contract decode tests added for discover-chat, validate-ios-receipt, get-sponsored-pick, and generate-itinerary response envelopes (mirroring VersionCheckTests)",
+        "get-sponsored-pick test also covers impression-dedupe; generate-itinerary test covers the failure-path optimistic-write rollback",
+        "A renamed/removed response field fails the test"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: Only version-check is contract-locked (VersionCheckTests). AskPulseService.swift:99, SponsoredPickService.swift:61, TripPlannerService.swift:57 are untested for shape."
+    },
+    {
+      "id": "IOS-AUDIT-TEST-004",
+      "title": "Add Keychain and Consent persistence tests",
+      "description": "As a maintainer, I need credential persistence and consent-gating covered so a regression can't silently log users out or leak telemetry.",
+      "acceptanceCriteria": [
+        "KeychainService has save/load/delete and overwrite round-trip tests",
+        "ConsentService tests assert telemetry/tracking calls are suppressed when consent is absent/declined and fire when granted",
+        "Tests run without requiring a device keychain entitlement (or are skipped cleanly when unavailable)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: KeychainService.swift and ConsentService.swift have no tests; consent is plaintext UserDefaults gating ad/analytics."
+    },
+    {
+      "id": "IOS-AUDIT-TEST-005",
+      "title": "Add Discover/Swipe session regression tests",
+      "description": "As a maintainer, I need the swipe-session edge cases locked so prior fixes don't regress.",
+      "acceptanceCriteria": [
+        "Tests cover swipedItemKeys pruning cap (IOS-AUDIT-PERF-019) and boost/empty-state transitions (IOS-AUDIT-UX-019)",
+        "Generation-token/cancellation behavior from IOS-AUDIT-BUG-007 is asserted",
+        "Tests are deterministic (no real network)"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Evidence: DiscoverViewModel.swift and SwipeInteractionService.swift have no tests for key-pruning or empty-state transitions."
     }
   ]
 }

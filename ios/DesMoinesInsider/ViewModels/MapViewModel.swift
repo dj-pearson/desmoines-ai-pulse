@@ -167,6 +167,18 @@ final class MapViewModel {
             return
         }
 
+        // Cancel any in-flight search/nearby fetch and run this one as the new
+        // cancellable task. Without this, two rapid searches (or a search racing
+        // a nearby load) both run to completion and whichever finishes LAST wins,
+        // so a slow earlier search can overwrite newer results.
+        fetchTask?.cancel()
+        let query = searchText
+        let task = Task { await performSearch(query: query) }
+        fetchTask = task
+        await task.value
+    }
+
+    private func performSearch(query: String) async {
         isLoading = true
         errorMessage = nil
         clearSelection()
@@ -174,29 +186,33 @@ final class MapViewModel {
         // Search events by text
         let searchedEvents: [Event]
         do {
-            searchedEvents = try await eventsService.fuzzySearchEvents(query: searchText)
+            searchedEvents = try await eventsService.fuzzySearchEvents(query: query)
         } catch {
             searchedEvents = []
         }
+        guard !Task.isCancelled else { return }
 
         // Search restaurants by text
         let searchedRestaurants: [Restaurant]
         do {
-            searchedRestaurants = try await restaurantsService.fuzzySearchRestaurants(query: searchText)
+            searchedRestaurants = try await restaurantsService.fuzzySearchRestaurants(query: query)
         } catch {
             searchedRestaurants = []
         }
+        guard !Task.isCancelled else { return }
 
         // Search attractions by text
         let searchedAttractions: [Attraction]
         do {
             let response = try await attractionsService.fetchAttractions(
-                query: .init(searchText: searchText, limit: 50)
+                query: .init(searchText: query, limit: 50)
             )
             searchedAttractions = response.attractions
         } catch {
             searchedAttractions = []
         }
+        // Don't let a superseded search overwrite newer results.
+        guard !Task.isCancelled else { return }
 
         events = searchedEvents
         restaurants = searchedRestaurants
@@ -208,11 +224,12 @@ final class MapViewModel {
                          + restaurants.compactMap(\.coordinate)
                          + attractions.compactMap(\.coordinate))
         if let region = await Self.regionFitting(coordinates: allCoords) {
+            guard !Task.isCancelled else { return }
             cameraPosition = .region(region)
         }
 
         if events.isEmpty && restaurants.isEmpty && attractions.isEmpty {
-            errorMessage = "No results found for \"\(searchText)\""
+            errorMessage = "No results found for \"\(query)\""
         }
 
         isLoading = false

@@ -102,6 +102,8 @@ struct SuggestionChipsRow: View {
                             .clipShape(Capsule())
                     }
                     .buttonStyle(.plain)
+                    .minHitTarget()
+                    .accessibilityLabel(suggestion)
                 }
             }
             .padding(.horizontal, 16)

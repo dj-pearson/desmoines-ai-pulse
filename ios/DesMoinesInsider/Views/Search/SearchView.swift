@@ -360,7 +360,7 @@ struct SearchView: View {
                 }
                 .padding(.horizontal)
 
-                ForEach(Array(history.recentSearches.enumerated()), id: \.offset) { index, query in
+                ForEach(history.recentSearches, id: \.self) { query in
                     HStack {
                         Button {
                             UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -381,7 +381,7 @@ struct SearchView: View {
                         .buttonStyle(.plain)
 
                         Button {
-                            withAnimation { history.remove(at: index) }
+                            withAnimation { history.remove(query) }
                         } label: {
                             Image(systemName: "xmark")
                                 .font(.caption2)

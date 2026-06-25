@@ -84,6 +84,7 @@ struct InterstitialAdView: View {
                     .font(.title2)
                     .foregroundStyle(.secondary)
             }
+            .minHitTarget()
             .accessibilityLabel("Close ad")
         }
     }

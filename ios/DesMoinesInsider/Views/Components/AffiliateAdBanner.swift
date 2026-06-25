@@ -16,7 +16,11 @@ struct AffiliateAdBanner: View {
         if storeKit.currentTier == .free,
            let partner = affiliateService.currentPartner,
            let imageURL = affiliateService.imageURL(for: placement),
-           let affiliateURL = affiliateService.affiliateURL {
+           let affiliateURL = affiliateService.affiliateURL,
+           // Affiliate target is config/backend-supplied — gate it through the
+           // same http(s) allowlist as other content links so a non-web scheme
+           // is never handed to the system (IOS-AUDIT-SEC-002 / -012 parity).
+           affiliateURL.isSafeWebLink {
             adContent(partner: partner, imageURL: imageURL, affiliateURL: affiliateURL)
                 // Affiliate fill is tracked distinctly (IOS-ADS-014) on the same
                 // viewability bar as paid + house inventory.

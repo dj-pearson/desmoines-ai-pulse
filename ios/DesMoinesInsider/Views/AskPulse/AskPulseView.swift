@@ -333,6 +333,7 @@ private struct AskPulsePickCard: View {
                 NavigationLink(value: pick) {
                     Image(systemName: "chevron.right")
                         .foregroundStyle(.secondary)
+                        .minHitTarget()
                         .accessibilityLabel("Open details")
                 }
             }

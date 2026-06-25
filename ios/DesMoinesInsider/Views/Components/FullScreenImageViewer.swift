@@ -116,6 +116,7 @@ struct FullScreenImageViewer: View {
                                 .foregroundStyle(.white, .white.opacity(0.3))
                         }
                         .padding()
+                        .minHitTarget()
                         .accessibilityLabel("Close image viewer")
                     }
                     Spacer()

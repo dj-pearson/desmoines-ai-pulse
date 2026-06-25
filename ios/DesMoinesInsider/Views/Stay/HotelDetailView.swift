@@ -250,8 +250,13 @@ struct HotelDetailView: View {
     private func openInMaps(_ coordinate: CLLocationCoordinate2D) {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         let name = hotel.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-        if let url = URL(string: "maps://?daddr=\(coordinate.latitude),\(coordinate.longitude)&q=\(name)") {
-            UIApplication.shared.open(url)
+        let query = "daddr=\(coordinate.latitude),\(coordinate.longitude)&q=\(name)"
+        // Prefer the Apple Maps app, but fall back to the universal https link so
+        // tapping Directions still works when Apple Maps is unavailable.
+        if let appURL = URL(string: "maps://?\(query)"), UIApplication.shared.canOpenURL(appURL) {
+            UIApplication.shared.open(appURL)
+        } else if let webURL = URL(string: "https://maps.apple.com/?\(query)") {
+            UIApplication.shared.open(webURL)
         }
     }
 

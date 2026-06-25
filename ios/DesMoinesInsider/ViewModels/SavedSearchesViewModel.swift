@@ -106,7 +106,16 @@ final class SavedSearchesViewModel {
     // MARK: - Delete
 
     func delete(_ search: SavedSearch) async {
-        savedSearches.removeAll { $0.id == search.id }
-        try? await service.deleteSavedSearch(id: search.id)
+        // Optimistically remove, but remember where it was so we can restore it
+        // (and tell the user) if the backend delete fails — otherwise a failed
+        // delete silently reappears on the next load with no explanation.
+        guard let index = savedSearches.firstIndex(where: { $0.id == search.id }) else { return }
+        let removed = savedSearches.remove(at: index)
+        do {
+            try await service.deleteSavedSearch(id: search.id)
+        } catch {
+            savedSearches.insert(removed, at: min(index, savedSearches.count))
+            errorMessage = "Couldn't delete that saved search."
+        }
     }
 }

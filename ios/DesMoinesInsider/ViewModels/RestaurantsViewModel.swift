@@ -73,7 +73,10 @@ final class RestaurantsViewModel {
 
         if let cached: [Restaurant] = await cache.get(cacheKey, allowStale: isOffline) {
             allRestaurants = cached
-            restaurants = showOpenNowOnly ? cached.filter { $0.isOpenNow() == true } : cached
+            // Apply BOTH active client-side filters (open-now AND dietary) to the
+            // cached list, not just open-now — otherwise a cold start with a
+            // dietary filter active briefly shows non-matching restaurants.
+            restaurants = Self.applyClientSide(to: cached, openNow: showOpenNowOnly, dietary: selectedDietary)
             isLoading = false
         }
 
