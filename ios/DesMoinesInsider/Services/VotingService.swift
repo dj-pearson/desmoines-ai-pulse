@@ -139,18 +139,15 @@ actor VotingService {
 
     // MARK: - Cast vote (one per category per user)
 
-    /// Delete-then-insert, matching the web upsert. Throws if not signed in.
+    /// Atomic upsert on the (category_id, user_id) unique key, matching the web
+    /// onConflict behaviour. Replaces a delete-then-insert pair that left the
+    /// user with no vote if a crash/failure landed between the two requests and
+    /// let a concurrent tally read a transient zero/double count. Throws if not
+    /// signed in.
     func castVote(categoryId: String, userId: String, entityType: String, entityId: String?, customEntry: String?) async throws {
         let client = try db()
 
-        try await client
-            .from("votes")
-            .delete()
-            .eq("category_id", value: categoryId)
-            .eq("user_id", value: userId)
-            .execute()
-
-        struct InsertRow: Encodable {
+        struct VoteRow: Encodable {
             let category_id: String
             let entity_type: String
             let entity_id: String?
@@ -159,13 +156,16 @@ actor VotingService {
         }
         try await client
             .from("votes")
-            .insert(InsertRow(
-                category_id: categoryId,
-                entity_type: entityType,
-                entity_id: entityId,
-                custom_entry: customEntry,
-                user_id: userId
-            ))
+            .upsert(
+                VoteRow(
+                    category_id: categoryId,
+                    entity_type: entityType,
+                    entity_id: entityId,
+                    custom_entry: customEntry,
+                    user_id: userId
+                ),
+                onConflict: "category_id,user_id"
+            )
             .execute()
     }
 
