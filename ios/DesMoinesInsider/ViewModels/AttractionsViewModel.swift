@@ -71,6 +71,13 @@ final class AttractionsViewModel {
     private var offset = 0
     private var searchTask: Task<Void, Never>?
 
+    /// Raw server rows accumulated across pages, in server (created_at desc)
+    /// order. The displayed `attractions` are derived from this via client-side
+    /// filter+sort. Paging offsets are driven by this raw count — never the
+    /// filtered/sorted count — so client-side filtering can't desync pagination
+    /// (repeat/skip items) the way deriving offset from `attractions.count` did.
+    private var rawAttractions: [Attraction] = []
+
     // MARK: - Load
 
     func loadInitialData() async {
@@ -87,10 +94,12 @@ final class AttractionsViewModel {
 
         do {
             let response = try await attractionsService.fetchAttractions(query: buildQuery())
-            attractions = applySort(response.attractions)
+            rawAttractions = response.attractions
+            attractions = applySort(rawAttractions)
             hasMore = response.hasMore
         } catch {
             errorMessage = error.localizedDescription
+            rawAttractions = []
             attractions = []
             hasMore = false
         }
@@ -105,12 +114,15 @@ final class AttractionsViewModel {
               idx >= attractions.count - 5 else { return }
 
         isLoadingMore = true
-        offset = attractions.count
+        // Offset is the count of RAW server rows fetched so far, not the
+        // filtered/sorted display count — otherwise client-side filtering shifts
+        // the offset and the next page repeats or skips server rows.
+        offset = rawAttractions.count
 
         do {
             let response = try await attractionsService.fetchAttractions(query: buildQuery())
-            let merged = attractions + response.attractions
-            attractions = applySort(merged)
+            rawAttractions += response.attractions
+            attractions = applySort(rawAttractions)
             hasMore = response.hasMore
         } catch {
             // Pagination failures shouldn't break the main view — just stop loading more.

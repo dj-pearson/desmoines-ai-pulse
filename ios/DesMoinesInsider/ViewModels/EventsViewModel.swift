@@ -67,6 +67,10 @@ final class EventsViewModel {
     // MARK: - Pagination
 
     private var currentOffset = 0
+    /// Count of RAW server rows fetched so far. Pagination offset is driven by
+    /// this — not `events.count` — so the client-side premium maxDistance filter
+    /// dropping rows can't desync the server offset (repeat/skip events).
+    private var rawFetchedCount = 0
     private let pageSize = Config.defaultPageSize
     private var fetchTask: Task<Void, Never>?
 
@@ -109,6 +113,7 @@ final class EventsViewModel {
     func fetchEvents(reset: Bool = false) async {
         if reset {
             currentOffset = 0
+            rawFetchedCount = 0
             // Only show spinner if we have no cached data
             if events.isEmpty { isLoading = true }
         } else {
@@ -154,7 +159,10 @@ final class EventsViewModel {
 
             totalCount = response.totalCount
             hasMore = response.hasMore
-            currentOffset = events.count
+            // Advance the offset by RAW rows fetched, not the filtered display
+            // count, so the premium maxDistance filter can't shift the window.
+            rawFetchedCount += response.events.count
+            currentOffset = rawFetchedCount
         } catch {
             // If offline and we have cached data, don't overwrite with an error
             if events.isEmpty {
