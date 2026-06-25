@@ -4861,3 +4861,41 @@ FILES
   M src/pages/RestaurantDetails.tsx
   M src/pages/AttractionDetails.tsx
   M prd.json  (WEB-PERF-008 passes=true)
+
+================================================================================
+## 2026-06-25 — WEB-UX-024 (a11y: star keyboard, labeled inputs): DONE
+================================================================================
+The audit's headline "missing alt text everywhere" was largely a FALSE ALARM on
+user-facing surfaces, so this story is the two genuine gaps + an honest audit.
+
+FIXED
+- RatingSystem.tsx StarRating: had onClick/onMouseEnter only — not focusable, no
+  keyboard, no roles. Interactive path is now role='radiogroup' with roving
+  tabindex; each star is <button role='radio' aria-checked aria-label='N star(s)'>
+  handling Arrow/Home/End/Enter/Space (moves selection + focus). Readonly path is
+  a single role='img' aria-label='Rated X out of 5 stars' with aria-hidden glyphs.
+  (This is the WEB-FEAT-010 composer, so keyboard users can finally rate.)
+- NLPSearchBar.tsx: search Input had only a placeholder → added aria-label.
+- EventInlineFilters.tsx: filter pill already had visible {label} text; added an
+  explicit aria-label='Filter by <label>' for clearer expanded-popover context.
+
+AUDITED — ALREADY CORRECT (no change, documented to avoid churn)
+- Detail hero <img> (Event/Attraction/Hotel/Article) already have descriptive alt;
+  PersonalizedRecommendations img alt={event.title}; SearchSection inputs already
+  aria-labelled. SceneUpdateCard:46 + VotingBooth:137 alt='' are CORRECT decorative
+  usage (item title/name rendered as adjacent text — alt would double-announce).
+  Admin-only dialogs (HotelEditDialog/MergeReviewPanel/ImagePickerDialog) out of scope.
+
+VERIFIED: npm run validate exits 0 (type-check + lint, 0 errors).
+
+FILES
+  M src/components/RatingSystem.tsx
+  M src/components/NLPSearchBar.tsx
+  M src/components/EventInlineFilters.tsx
+  M prd.json  (WEB-UX-024 passes=true)
+
+--------------------------------------------------------------------------------
+SESSION TALLY (2026-06-25): closed WEB-FEAT-008, WEB-FEAT-010, and all 4 newly
+filed audit stories (WEB-SEC-009, WEB-SEC-010, WEB-PERF-008, WEB-UX-024). Every
+WEB-* story now passes (186 total true / 11 false). Remaining 11 are all
+IOS-AUDIT-* (no Xcode here; most blocked on external inputs).

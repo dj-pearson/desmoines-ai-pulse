@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { Link } from "react-router-dom";
 import { Star, ThumbsUp, ThumbsDown, Flag, Edit, Trash2, ImagePlus, X, Loader2 } from "lucide-react";
 import { hapticTap } from "@/lib/capacitorUtils";
@@ -35,32 +35,97 @@ interface StarRatingProps {
   size?: "sm" | "md" | "lg";
 }
 
-const StarRating: React.FC<StarRatingProps> = ({ 
-  rating, 
-  onRatingChange, 
+const StarRating: React.FC<StarRatingProps> = ({
+  rating,
+  onRatingChange,
   readonly = false,
-  size = "md" 
+  size = "md"
 }) => {
   const [hoverRating, setHoverRating] = useState(0);
-  
+  const starRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
   const starSize = size === "sm" ? "h-4 w-4" : size === "lg" ? "h-6 w-6" : "h-5 w-5";
-  
-  return (
-    <div className="flex gap-1">
-      {[1, 2, 3, 4, 5].map((star) => {
-        const isFilled = star <= (hoverRating || rating);
-        return (
+
+  // Read-only display: expose the value as a single labelled image and hide the
+  // decorative star glyphs from assistive tech.
+  if (readonly) {
+    return (
+      <div className="flex gap-1" role="img" aria-label={`Rated ${rating} out of 5 stars`}>
+        {[1, 2, 3, 4, 5].map((star) => (
           <Star
             key={star}
-            className={`${starSize} cursor-pointer transition-colors ${
-              isFilled 
-                ? "fill-yellow-400 text-yellow-400" 
-                : "text-muted-foreground hover:text-yellow-400"
-            } ${readonly ? "cursor-default" : ""}`}
-            onClick={() => { if (!readonly) { hapticTap(); onRatingChange?.(star.toString() as RatingValue); } }}
-            onMouseEnter={() => !readonly && setHoverRating(star)}
-            onMouseLeave={() => !readonly && setHoverRating(0)}
+            aria-hidden="true"
+            className={`${starSize} ${star <= rating ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"}`}
           />
+        ))}
+      </div>
+    );
+  }
+
+  const display = hoverRating || rating || 0;
+  const select = (star: number) => {
+    hapticTap();
+    onRatingChange?.(star.toString() as RatingValue);
+  };
+  const handleKey = (e: React.KeyboardEvent, star: number) => {
+    let next = 0;
+    switch (e.key) {
+      case "ArrowRight":
+      case "ArrowUp":
+        next = Math.min(5, (rating || star) + 1);
+        break;
+      case "ArrowLeft":
+      case "ArrowDown":
+        next = Math.max(1, (rating || star) - 1);
+        break;
+      case "Home":
+        next = 1;
+        break;
+      case "End":
+        next = 5;
+        break;
+      case " ":
+      case "Enter":
+        e.preventDefault();
+        select(star);
+        return;
+      default:
+        return;
+    }
+    e.preventDefault();
+    select(next);
+    starRefs.current[next - 1]?.focus();
+  };
+
+  // Interactive: a radiogroup with roving tabindex + arrow/Home/End/Enter/Space.
+  return (
+    <div className="flex gap-1" role="radiogroup" aria-label="Your rating">
+      {[1, 2, 3, 4, 5].map((star) => {
+        const isFilled = star <= display;
+        return (
+          <button
+            key={star}
+            type="button"
+            role="radio"
+            ref={(el) => (starRefs.current[star - 1] = el)}
+            aria-checked={rating === star}
+            aria-label={`${star} ${star === 1 ? "star" : "stars"}`}
+            tabIndex={star === (rating || 1) ? 0 : -1}
+            className="rounded p-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yellow-400"
+            onClick={() => select(star)}
+            onKeyDown={(e) => handleKey(e, star)}
+            onMouseEnter={() => setHoverRating(star)}
+            onMouseLeave={() => setHoverRating(0)}
+          >
+            <Star
+              aria-hidden="true"
+              className={`${starSize} cursor-pointer transition-colors ${
+                isFilled
+                  ? "fill-yellow-400 text-yellow-400"
+                  : "text-muted-foreground hover:text-yellow-400"
+              }`}
+            />
+          </button>
         );
       })}
     </div>

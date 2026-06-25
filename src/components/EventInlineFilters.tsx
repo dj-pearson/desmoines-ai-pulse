@@ -67,6 +67,7 @@ function FilterPill({
               : "bg-white/10 text-white/80 border-white/10 hover:bg-white/20 hover:text-white"
           }`}
           aria-expanded={open}
+          aria-label={`Filter by ${label}`}
         >
           <Icon className="h-3.5 w-3.5" />
           {label}
