@@ -174,6 +174,16 @@ final class DiscoverViewModel {
     private var hasMoreRestaurants = true
     private var isPrefetching = false
 
+    /// Bumped whenever the deck is reset (reload / boost). A fetch captures the
+    /// generation when it runs and discards its results if the generation has
+    /// since changed — so an in-flight pre-reset fetch can't append stale,
+    /// wrong-filter cards into the freshly-reset deck.
+    private var fetchGeneration = 0
+    /// The most recently enqueued fetch. New fetches chain after it so a reset's
+    /// refetch is never skipped by the `isPrefetching` guard while an older
+    /// fetch is still draining.
+    private var fetchTask: Task<Void, Never>?
+
     private let eventsService = EventsService.shared
     private let restaurantsService = RestaurantsService.shared
     private let swipeService = SwipeInteractionService.shared
@@ -197,7 +207,10 @@ final class DiscoverViewModel {
         restaurantOffset = 0
         hasMoreEvents = true
         hasMoreRestaurants = true
-        await fetchMore()
+        // Invalidate in-flight fetches and run the fresh fetch after they drain
+        // (so the isPrefetching guard can't skip it).
+        fetchGeneration += 1
+        await enqueueFetch().value
         isLoading = false
     }
 
@@ -243,13 +256,17 @@ final class DiscoverViewModel {
         hasMoreEvents = true
         hasMoreRestaurants = true
         totalSwipes += 1
+        // Invalidate any in-flight (pre-boost) fetch so its results are dropped
+        // instead of mixed into the narrowed deck.
+        fetchGeneration += 1
         // Show the loading state while the narrowed batch loads instead of
         // flashing the "you've seen everything" empty state, which the deck-
         // empty branch would otherwise render mid-boost (IOS-AUDIT-UX-019).
         isLoading = true
         Task { await self.record(.boost, item: item) }
+        let task = enqueueFetch()
         Task {
-            await self.fetchMore()
+            await task.value
             self.isLoading = false
         }
     }
@@ -266,7 +283,7 @@ final class DiscoverViewModel {
         // Drop the top card. SwipeCardStack also removes it visually; this
         // call is the single source of truth for the data model.
         if !deck.isEmpty { deck.removeFirst() }
-        if deck.count <= prefetchThreshold { Task { await self.fetchMore() } }
+        if deck.count <= prefetchThreshold { enqueueFetch() }
     }
 
     private func record(_ action: SwipeInteractionService.Action, item: SwipeItem) async {
@@ -309,24 +326,42 @@ final class DiscoverViewModel {
 
     // MARK: - Fetch
 
+    /// Enqueue a fetch that runs after any in-flight fetch drains, so a reset
+    /// (reload/boost) isn't skipped by the `isPrefetching` guard. Returns the
+    /// task so callers can await completion.
+    @discardableResult
+    private func enqueueFetch() -> Task<Void, Never> {
+        let previous = fetchTask
+        let task = Task {
+            await previous?.value
+            await self.fetchMore()
+        }
+        fetchTask = task
+        return task
+    }
+
     private func fetchMore() async {
         guard !isPrefetching else { return }
         isPrefetching = true
         defer { isPrefetching = false }
 
+        // Capture the deck generation for this run; the batch fetchers drop their
+        // results if a reset bumped it while we were awaiting the network.
+        let generation = fetchGeneration
+
         switch mode {
         case .events:
-            await fetchEventBatch()
+            await fetchEventBatch(generation)
         case .restaurants:
-            await fetchRestaurantBatch()
+            await fetchRestaurantBatch(generation)
         case .mixed:
-            async let events: () = fetchEventBatch()
-            async let restaurants: () = fetchRestaurantBatch()
+            async let events: () = fetchEventBatch(generation)
+            async let restaurants: () = fetchRestaurantBatch(generation)
             _ = await (events, restaurants)
         }
     }
 
-    private func fetchEventBatch() async {
+    private func fetchEventBatch(_ generation: Int) async {
         guard hasMoreEvents else { return }
         var query = EventsService.EventsQuery()
         query.category = filter.eventCategory?.rawValue
@@ -349,6 +384,9 @@ final class DiscoverViewModel {
 
         do {
             let response = try await eventsService.fetchEvents(query: query)
+            // A reload/boost reset the deck while we were awaiting — these results
+            // belong to the old filter/offset; drop them rather than mixing in.
+            guard generation == fetchGeneration else { return }
             let fresh = response.events
                 .filter { !swipeService.hasSwiped(itemType: .event, itemId: $0.id) }
                 .map { SwipeItem.event($0) }
@@ -356,11 +394,12 @@ final class DiscoverViewModel {
             eventOffset += response.events.count
             hasMoreEvents = response.hasMore
         } catch {
+            guard generation == fetchGeneration else { return }
             hasMoreEvents = false
         }
     }
 
-    private func fetchRestaurantBatch() async {
+    private func fetchRestaurantBatch(_ generation: Int) async {
         guard hasMoreRestaurants else { return }
         var query = RestaurantsService.RestaurantsQuery()
         query.cuisines = filter.cuisines.isEmpty ? nil : filter.cuisines
@@ -373,6 +412,8 @@ final class DiscoverViewModel {
 
         do {
             let response = try await restaurantsService.fetchRestaurants(query: query)
+            // Drop results if a reload/boost reset the deck mid-flight.
+            guard generation == fetchGeneration else { return }
             var fresh = response.restaurants
             if filter.openNow {
                 fresh = fresh.filter { $0.isOpenNow() == true }
@@ -384,6 +425,7 @@ final class DiscoverViewModel {
             restaurantOffset += response.restaurants.count
             hasMoreRestaurants = response.hasMore
         } catch {
+            guard generation == fetchGeneration else { return }
             hasMoreRestaurants = false
         }
     }
