@@ -2863,7 +2863,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Evidence: RestaurantDetailView.swift:98 URL(string:)!; AttractionDetailView.swift:244 URL(string:\"maps://...&q=\\(name)\")!; HotelDetailView.swift:253 openInMaps has no canOpenURL/https fallback."
+      "notes": "Evidence: RestaurantDetailView.swift:98 URL(string:)!; AttractionDetailView.swift:244 URL(string:\"maps://...&q=\\(name)\")!; HotelDetailView.swift:253 openInMaps has no canOpenURL/https fallback. | STATUS: implemented on branch claude/ios-app-review-prd-25ygbb (commit d9dd6ac); passes still false pending Xcode build + test verification on macOS CI (no Swift toolchain in this env). Impl: maps:// force-unwraps removed in RestaurantDetailView/AttractionDetailView/HotelDetailView with canOpenURL + https://maps.apple.com fallback"
     },
     {
       "id": "IOS-AUDIT-BUG-002",
@@ -2889,7 +2889,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Evidence: StoreKitService.swift:593-597 exact switch on lowercased plan name; localTier already uses contains()."
+      "notes": "Evidence: StoreKitService.swift:593-597 exact switch on lowercased plan name; localTier already uses contains(). | STATUS: implemented on branch claude/ios-app-review-prd-25ygbb (commit d9dd6ac); passes still false pending Xcode build + test verification on macOS CI (no Swift toolchain in this env). Impl: refreshBackendTier now matches plan name via contains(vip/insider), mirroring localTier"
     },
     {
       "id": "IOS-AUDIT-BUG-004",
@@ -2902,7 +2902,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Evidence: AuthService.swift:170-193 resets favorites/search/spotlight/keychain but never RecentlyViewedService.shared.clear() (clear() exists at RecentlyViewedService.swift:57)."
+      "notes": "Evidence: AuthService.swift:170-193 resets favorites/search/spotlight/keychain but never RecentlyViewedService.shared.clear() (clear() exists at RecentlyViewedService.swift:57). | STATUS: implemented on branch claude/ios-app-review-prd-25ygbb (commit d9dd6ac); passes still false pending Xcode build + test verification on macOS CI (no Swift toolchain in this env). Impl: AuthService.signOut defer now calls RecentlyViewedService.shared.clear()"
     },
     {
       "id": "IOS-AUDIT-BUG-005",
@@ -2995,7 +2995,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Evidence: AffiliateAdBanner.swift:43 raw Link(destination: affiliateURL) with no scheme validation."
+      "notes": "Evidence: AffiliateAdBanner.swift:43 raw Link(destination: affiliateURL) with no scheme validation. | STATUS: implemented on branch claude/ios-app-review-prd-25ygbb (commit d9dd6ac); passes still false pending Xcode build + test verification on macOS CI (no Swift toolchain in this env). Impl: AffiliateAdBanner now requires affiliateURL.isSafeWebLink before rendering the Link"
     },
     {
       "id": "IOS-AUDIT-BUG-012",
@@ -3229,7 +3229,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Evidence: SubscriptionStatusBanner.swift:33,40; InterstitialAdView.swift:82; FullScreenImageViewer.swift:110; ChatBubble.swift:90-104; SearchSuggestions.swift:56-57,86-104; ErrorStateView.swift:47; EmptyStateView.swift:48; AdBannerView.swift:178; SubscriptionBanner.swift:151,211; SessionTimeoutBanner.swift:28; OnboardingPage.swift:71; PromoteListing.swift:90; ProfileView.swift:90; AskPulseView.swift:333. Helper exists at View+Accessibility.swift:12."
+      "notes": "Evidence: SubscriptionStatusBanner.swift:33,40; InterstitialAdView.swift:82; FullScreenImageViewer.swift:110; ChatBubble.swift:90-104; SearchSuggestions.swift:56-57,86-104; ErrorStateView.swift:47; EmptyStateView.swift:48; AdBannerView.swift:178; SubscriptionBanner.swift:151,211; SessionTimeoutBanner.swift:28; OnboardingPage.swift:71; PromoteListing.swift:90; ProfileView.swift:90; AskPulseView.swift:333. Helper exists at View+Accessibility.swift:12. | STATUS: implemented on branch claude/ios-app-review-prd-25ygbb (commit d9dd6ac); passes still false pending Xcode build + test verification on macOS CI (no Swift toolchain in this env). Impl: minHitTarget() applied to InterstitialAdView close, FullScreenImageViewer close, Error/EmptyStateView actions, SessionTimeoutBanner, SubscriptionStatusBanner (action+dismiss), FavoritesLimitBanner upgrade, SuggestionChip/ChatBubble chips, SearchSuggestions Clear-all, OnboardingPage Skip, PromoteListing .row, AdBannerView house CTA, AskPulse chevron, Profile interest chips. (Compact SubscriptionBanner pill left as-is: whole-banner is tappable.)"
     },
     {
       "id": "IOS-AUDIT-UX-051",
