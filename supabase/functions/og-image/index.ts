@@ -16,12 +16,13 @@
  * Caching: immutable + 1y for past events (content frozen); ~1h for everything
  * else. Public (verify_jwt=false) — crawlers call it with no auth. Rate-limited.
  *
- * ACTION REQUIRED to fully satisfy the story (needs a runtime this env lacks):
- *   1. Deploy + confirm a 200 image/png from /og-image/event/<id>.
- *   2. Validate with the Twitter Card validator + Facebook Sharing Debugger and
- *      record screenshots in the PR/progress notes.
- *   3. Optionally enumerate detail routes in scripts/prerender.mjs so crawlers
- *      that don't run JS see the per-entity og:image in static HTML.
+ * Crawler-visible HTML: functions/_middleware.ts injects the per-entity og:image
+ * (this function's URL) plus og/twitter title+description into the static SPA
+ * shell for social crawlers, so bots that don't run JS still see the right card.
+ *
+ * POST-DEPLOY MANUAL CHECK (needs a deployed URL this sandbox lacks): validate a
+ * live share with the Twitter Card validator + Facebook Sharing Debugger and
+ * record screenshots in the PR/progress notes.
  */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -109,6 +110,8 @@ interface Card {
   title: string;
   badge: string;
   imageUrl: string | null;
+  /** Past events are content-frozen → cache immutably; everything else refreshes hourly. */
+  immutable?: boolean;
 }
 
 async function loadCard(supabase: ReturnType<typeof createClient>, type: string, id: string): Promise<Card | null> {
@@ -120,9 +123,17 @@ async function loadCard(supabase: ReturnType<typeof createClient>, type: string,
     }
   };
   if (type === "event") {
-    const { data } = await supabase.from("events").select("title, date, image_url, category").eq("id", id).maybeSingle();
+    // event_start_utc is the timezone-correct source; `date` is the legacy fallback.
+    const { data } = await supabase.from("events").select("title, date, event_start_utc, image_url, category").eq("id", id).maybeSingle();
     if (!data) return null;
-    return { title: (data as any).title, badge: central((data as any).date) || (data as any).category || "Event", imageUrl: (data as any).image_url };
+    const when = (data as any).event_start_utc || (data as any).date;
+    let immutable = false;
+    if (when) {
+      const t = Date.parse(when);
+      // Frozen once a day past the start (no further edits expected on old events).
+      immutable = Number.isFinite(t) && t < Date.now() - 24 * 60 * 60 * 1000;
+    }
+    return { title: (data as any).title, badge: (when && central(when)) || (data as any).category || "Event", imageUrl: (data as any).image_url, immutable };
   }
   if (type === "restaurant") {
     const { data } = await supabase.from("restaurants").select("name, cuisine, rating, image_url").eq("id", id).maybeSingle();
@@ -131,14 +142,18 @@ async function loadCard(supabase: ReturnType<typeof createClient>, type: string,
     return { title: (data as any).name, badge: r ? `★ ${Number(r).toFixed(1)} · ${(data as any).cuisine || "Restaurant"}` : ((data as any).cuisine || "Restaurant"), imageUrl: (data as any).image_url };
   }
   if (type === "attraction") {
-    const { data } = await supabase.from("attractions").select("name, category, image_url").eq("id", id).maybeSingle();
+    // attractions store the kind in `type` (not `category`); image in `image_url`.
+    const { data } = await supabase.from("attractions").select("name, type, rating, image_url").eq("id", id).maybeSingle();
     if (!data) return null;
-    return { title: (data as any).name, badge: (data as any).category || "Attraction", imageUrl: (data as any).image_url };
+    const r = (data as any).rating;
+    const kind = (data as any).type || "Attraction";
+    return { title: (data as any).name, badge: r ? `★ ${Number(r).toFixed(1)} · ${kind}` : kind, imageUrl: (data as any).image_url };
   }
   if (type === "article") {
-    const { data } = await supabase.from("articles").select("title, image_url, category").eq("id", id).maybeSingle();
+    // articles store the hero image in `featured_image_url` (not `image_url`).
+    const { data } = await supabase.from("articles").select("title, featured_image_url, category").eq("id", id).maybeSingle();
     if (!data) return null;
-    return { title: (data as any).title, badge: (data as any).category || "Article", imageUrl: (data as any).image_url };
+    return { title: (data as any).title, badge: (data as any).category || "Article", imageUrl: (data as any).featured_image_url };
   }
   return null;
 }
@@ -212,12 +227,17 @@ serve(async (req) => {
     });
     const png = resvg.render().asPng();
 
+    // Past events are content-frozen → cache for a year and mark immutable so CDNs
+    // and clients never re-fetch; everything else refreshes hourly.
+    const cacheControl = card.immutable
+      ? "public, max-age=31536000, s-maxage=31536000, immutable"
+      : "public, max-age=3600, s-maxage=3600";
+
     return new Response(png, {
       status: 200,
       headers: {
         "Content-Type": "image/png",
-        // Past events are immutable; everything else refreshes hourly.
-        "Cache-Control": "public, max-age=3600, s-maxage=3600",
+        "Cache-Control": cacheControl,
       },
     });
   } catch (err) {

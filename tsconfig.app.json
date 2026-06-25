@@ -21,6 +21,8 @@
     "noImplicitAny": false,
     "noFallthroughCasesInSwitch": false,
 
+    // See tsconfig.json: silence the TS 5.x baseUrl deprecation error.
+    "ignoreDeprecations": "5.0",
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
