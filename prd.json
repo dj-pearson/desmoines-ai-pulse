@@ -2110,8 +2110,8 @@
         "Ensure the privacy nutrition label reflects that Product Interaction analytics is collected and user-controllable"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: ConsentService.swift:45-60 isLikelyEU/needsConsentPrompt gate the prompt to EU only; consent stored via UserDefaults.standard (Keys lines 86-91); AnalyticsService.setUserId and AdTrackingService gate on analyticsConsent"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): Usage Analytics opt-out surfaced in a Privacy section visible to all users (was gated behind auth); de-duplicated from the authenticated section. AnalyticsService + AdTrackingService gate on the flag."
     },
     {
       "id": "IOS-AUDIT-SEC-015",
@@ -2124,8 +2124,8 @@
         "Re-verify Apple Sign-In still succeeds end-to-end after the change"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: AuthService.swift:227 charset 'ABCDEFGHIJKLMNOPQRSTUVXYZ' omits W between V and X"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): Apple Sign-In nonce charset now includes the previously-missing 'W' (full A-Z)."
     },
     {
       "id": "IOS-AUDIT-PERF-014",
@@ -2184,8 +2184,8 @@
         "Poll loop is cancelled on view disappear"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: VerifyEmailView.swift:146 .task { pollForVerification() }, :158-162 unconditional 5s loop, :147-151 also refreshes onChange scenePhase==.active"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): VerifyEmailView poll keyed on scenePhase via .task(id:) so it suspends while backgrounded (was hitting the network every 5s off-screen)."
     },
     {
       "id": "IOS-AUDIT-PERF-018",
@@ -2199,8 +2199,8 @@
         "Shared with NetworkRetry's logic so the rule is defined once"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: StoreKitService.swift:597-617 isTransientError returns true for any NSURLErrorDomain and substring-matches localizedDescription; used by syncEntitlementToBackend retry loop at :499"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): StoreKit isTransientError classifies on structured NSURLError codes; cancellation/auth-required no longer retry 3x."
     },
     {
       "id": "IOS-AUDIT-PERF-019",
@@ -2214,8 +2214,8 @@
         "Dedupe ('don't show the same item twice') behavior is preserved within the retained window"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: SwipeInteractionService.swift:46-47 insert + saveLocal on every record(); :17 swipedItemKeys never trimmed; loadLocal at :120 reads the full set on init"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): SwipeInteractionService caps swiped keys to a most-recent-1000 ordered window; in-memory set + UserDefaults blob bounded. reset() clears both."
     },
     {
       "id": "IOS-AUDIT-PERF-020",
@@ -2229,8 +2229,8 @@
         "Sustained scrolling through hundreds of unique images keeps disk cache at/under 200 MB"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: CachedAsyncImage.swift:303 setDisk writes with no cap check; pruneDiskIfNeeded at :321 invoked only from init (:208) and didEnterBackground (:222-227)"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): ImageCache enforces the 200 MB disk cap on the write path (throttled at 25 MB written) so it holds during long foreground sessions."
     },
     {
       "id": "IOS-AUDIT-PERF-021",
@@ -2244,8 +2244,8 @@
         "Caching is concurrency-safe given filtering runs in a detached task"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: Restaurant.swift:61-91 isOpenNow re-splits dayHours and calls parseTime() (:104-120) for open & close on every call; only Calendar and component-read were optimized"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): Restaurant.isOpenNow memoizes parsed open/close ranges by hours string in an NSLock-guarded static cache (concurrency-safe for off-main filtering)."
     },
     {
       "id": "IOS-AUDIT-UX-035",
@@ -2453,8 +2453,8 @@
         "Applied consistently to both AttractionsView and WeekendView banners."
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: AttractionsView.swift errorBanner ~271-277 & scroll-to-top ~71; WeekendView.swift errorBanner ~193-195 \u2014 no minHitTarget, unguarded scroll animation"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): AttractionsView/WeekendView Retry buttons get .minHitTarget(); AttractionsView scroll-to-top honors Reduce Motion."
     },
     {
       "id": "IOS-AUDIT-UX-049",
@@ -2468,8 +2468,8 @@
         "Tested with VoiceOver."
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: ComingSoonView.swift ~line 30 \u2014 .sheet wrapping WebViewPage with no explicit Close/Done toolbar item"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): ComingSoonView web sheet gets an explicit labeled Done button (not swipe-only dismissal)."
     },
     {
       "id": "IOS-AUDIT-FEAT-024",
@@ -2603,8 +2603,8 @@
         "A test asserts the first trip-planner attempt posts .softPaywallTriggered when eligible"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: SoftPaywallService.swift:35 considerAfterTripPlannerAttempt defined; callers only for considerAfterFavorite (FavoritesService.swift:133,278,409)"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): a free user's Trip Planner generate attempt calls considerAfterTripPlannerAttempt() (now wired), preferring the frequency-capped soft paywall and falling back to the hard gate on cooldown. Seam returns whether it presented."
     },
     {
       "id": "IOS-AUDIT-FEAT-033",
@@ -2618,8 +2618,8 @@
         "Manual QA covers an event-specific invocation and a generic invocation"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: DesMoinesInsiderClip/ClipEventsViewModel.swift:65-89 (invocationURL parameter unused)"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): ClipEventsViewModel parses .../events/<id> invocation URLs and surfaces that event first (deduped against highlights); generic/malformed invocations fall back to highlights."
     },
     {
       "id": "IOS-AUDIT-REL-001",
@@ -2732,7 +2732,7 @@
       ],
       "priority": 3,
       "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: no *.png under ios/fastlane; Snapfile/Fastfile devices: iPhone 11 Pro Max, iPhone 16 Plus, iPad Pro 13-inch (M4); stop_after_first_error true / number_of_retries 0"
+      "notes": "PARTIAL (2026-06-25): screenshot lane + Snapfile now stop_after_first_error=false, number_of_retries=1 so a flaky screen can't zero all assets. STILL OPEN: device matrix (6.5/6.7/13) vs the now-required 6.9\" \u2014 the repo comment claims Pro Max dimensions are ASC-rejected, contradicting current guidance; needs confirmed App Store Connect required sizes before changing."
     },
     {
       "id": "IOS-AUDIT-REL-009",
@@ -2745,8 +2745,8 @@
         "Checklist items reflect the native submission pipeline"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: ios_progress.txt top sections reference isCapacitor(), window.Capacitor.Plugins, mobile-app/ios/App/, capacitor.config.ts"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): ios_progress.txt header flags the Capacitor section as LEGACY and points to the native target that ships."
     },
     {
       "id": "IOS-AUDIT-REL-010",
@@ -2760,7 +2760,7 @@
       ],
       "priority": 3,
       "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: supabase/functions has delete-user-account, export-analytics-data, manage-social-account; SettingsView.swift calls only delete-user-account"
+      "notes": "OPEN (needs confirmation): backend export-analytics-data + manage-social-account exist but aren't surfaced in-app. Apple only requires in-app account deletion (present). Whether in-app data export is required depends on the published privacy policy text \u2014 needs confirmation before adding UI; otherwise document as intentionally web-only for v1."
     },
     {
       "id": "IOS-AUDIT-REL-011",
@@ -2773,8 +2773,8 @@
         "App Store Connect privacy label updated to match"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: AnalyticsService.swift ~142 SHA256.hash(user id); AdTrackingService.swift sends raw uuidString as user_id; PrivacyInfo.xcprivacy UserID Linked=true"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): documented in the privacy manifest that UserID is Linked because AdTrackingService writes the raw user_id to ad_impressions \u2014 the declaration is accurate; no functional change needed."
     },
     {
       "id": "IOS-AUDIT-REL-012",
