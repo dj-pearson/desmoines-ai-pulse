@@ -4830,3 +4830,34 @@ VERIFIED: esbuild parse clean; npm run validate exits 0.
 FILES
   M supabase/functions/campaign-creative-review/index.ts
   M prd.json  (WEB-SEC-010 passes=true)
+
+================================================================================
+## 2026-06-25 — WEB-PERF-008 (recommendation N+1 + detail over-fetch): DONE
+================================================================================
+Scoped to the safe, high-value wins. Deliberately did NOT narrow the SEO/GEO-
+bearing main detail queries — listColumns.ts documents that detail pages keep
+full rows because they render SEO/GEO content + structured data.
+
+- useSimplePersonalization.ts combineAndScoreRecommendations: was a per-item
+  select('*').eq('id').single() INSIDE a for-loop (N sequential round-trips per
+  recommendation render). Now dedups candidates, groups ids by content_type, and
+  batch-fetches each type with .in('id', ids) via Promise.all, then rebuilds in
+  the original trending order with the same score/preference-boost/dedup. Content
+  shape preserved (still select('*')) so no consumer breaks.
+- getPopularContent: 4 sequential per-table select('*') awaits → Promise.all
+  parallel fetch, filled in the same table-priority order (cap/dedup preserved).
+- AttractionDetails main query: previously select('*') over the ENTIRE attractions
+  table to find one row by createSlug(name) (no slug column exists). Now scans only
+  (id,name), then fetches the single matched full row by id — bulk download shrinks
+  from full-rows×all to id+name×all, SEO/GEO intact.
+- RestaurantDetails + AttractionDetails related/nearby CARD queries → projected
+  RESTAURANT_LIST_COLUMNS / ATTRACTION_LIST_COLUMNS (same sets the list cards use).
+
+VERIFIED: npm run type-check + validate exit 0. Main SEO detail queries left as
+select('*') by design (RestaurantDetails by slug/id; AttractionDetails step-2).
+
+FILES
+  M src/hooks/useSimplePersonalization.ts
+  M src/pages/RestaurantDetails.tsx
+  M src/pages/AttractionDetails.tsx
+  M prd.json  (WEB-PERF-008 passes=true)

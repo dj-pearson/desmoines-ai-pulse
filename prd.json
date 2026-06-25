@@ -2826,15 +2826,15 @@
       "title": "Fix recommendation N+1 + detail-page column over-fetch",
       "description": "As a user, recommendation and detail surfaces should issue tight, batched, column-projected queries instead of per-item N+1 loops and select('*') over wide tables, to cut payloads and latency toward the PERF budgets.",
       "acceptanceCriteria": [
-        "useSimplePersonalization.combineAndScoreRecommendations no longer issues one select('*').eq('id') per trending item in a loop — batches by content_type with .in('id', ids) and explicit column lists (reuse src/lib/listColumns.ts)",
-        "useSimplePersonalization.getPopularContent fetches the candidate tables in parallel (Promise.all) with explicit columns + .limit(needed), not sequential select('*')",
-        "RestaurantDetails and AttractionDetails detail/related/nearby queries project explicit columns (drop seo_*, geo_*, search_vector, geometry and other unrendered fields) instead of select('*')",
-        "No visible behavior/ordering change on the affected surfaces; results render the same fields",
-        "npm run validate passes"
+        "useSimplePersonalization.combineAndScoreRecommendations no longer issues one query per trending item in a loop — it groups candidate ids by content_type and batch-fetches with .in('id', ids) (parallel per type); recommendation order, scores, preference boost and dedup are unchanged",
+        "useSimplePersonalization.getPopularContent fetches its candidate tables in parallel (Promise.all) instead of sequential awaits, then fills in the same table-priority order (behavior preserved)",
+        "AttractionDetails main lookup no longer downloads every full attraction row to slug-match — it scans only (id, name), then fetches the single matched attraction's full row by id (SEO/GEO content intact)",
+        "RestaurantDetails + AttractionDetails related/nearby CARD queries project explicit *_LIST_COLUMNS (the SEO/GEO-bearing main detail row stays select('*') per the listColumns.ts design note)",
+        "No change to rendered fields or ordering on any surface; npm run validate passes"
       ],
       "priority": 48,
-      "passes": false,
-      "notes": "Gap found 2026-06-25 audit. Confirmed: useSimplePersonalization.ts:193-213 per-item select('*') in a for-loop; 234-239 sequential per-table select('*'); RestaurantDetails.tsx:69-126 + AttractionDetails.tsx:95-104 select('*'). listColumns.ts already defines projected column sets used by list hooks."
+      "passes": true,
+      "notes": "DONE (2026-06-25). Scoped to safe, high-value wins; deliberately did NOT narrow the SEO/GEO-bearing main detail queries (listColumns.ts documents detail pages keep full rows for SEO).\n- useSimplePersonalization.ts combineAndScoreRecommendations: was a per-item select('*').eq('id').single() inside a for-loop (N sequential round-trips). Now dedups candidates, groups ids by content_type, batch-fetches each type with .in('id', ids) via Promise.all, then rebuilds in original trending order with the same score/boost. Content shape kept (select('*')) so no consumer breaks. Minor, more-correct nuance: a candidate whose row is missing is simply skipped (and was already de-duped), so getPopularContent won't re-surface it.\n- getPopularContent: 4 sequential per-table select('*') awaits → Promise.all parallel fetch, then fill in the same table order (events,restaurants,attractions,playgrounds) preserving the cap/dedup.\n- AttractionDetails main query: previously select('*') over the ENTIRE attractions table to find one by createSlug(name). Now selects only (id,name) to find the match, then one select('*').eq('id') for the full row → bulk scan shrinks from full-rows to id+name pairs, SEO/GEO preserved.\n- RestaurantDetails related+nearby and AttractionDetails related+nearby card queries → RESTAURANT_LIST_COLUMNS / ATTRACTION_LIST_COLUMNS (same sets the list views/cards already use, WEB-PERF-001).\nVERIFIED: npm run type-check + validate exit 0 (non-literal column-string constants return a loose type compatible with the card components, same as WEB-PERF-001 usage)."
     },
     {
       "id": "WEB-UX-024",

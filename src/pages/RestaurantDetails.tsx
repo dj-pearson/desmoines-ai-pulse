@@ -2,6 +2,7 @@ import { useParams, Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -96,7 +97,7 @@ export default function RestaurantDetails() {
       if (!restaurant) return [];
       const { data, error } = await supabase
         .from("restaurants")
-        .select("*")
+        .select(RESTAURANT_LIST_COLUMNS)
         .eq("cuisine", restaurant.cuisine)
         .neq("id", restaurant.id)
         .limit(4);
@@ -113,7 +114,7 @@ export default function RestaurantDetails() {
       if (!restaurant) return [];
       const { data, error } = await supabase
         .from("restaurants")
-        .select("*")
+        .select(RESTAURANT_LIST_COLUMNS)
         .eq("city", restaurant.city || "Des Moines")
         .neq("id", restaurant.id)
         .neq("cuisine", restaurant.cuisine)
