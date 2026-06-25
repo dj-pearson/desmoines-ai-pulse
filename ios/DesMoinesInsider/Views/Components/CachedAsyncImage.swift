@@ -188,6 +188,12 @@ final class ImageCache: @unchecked Sendable {
     private let diskCacheDir: URL
     private let maxDiskBytes: Int = 200 * 1024 * 1024 // 200 MB
     private let diskQueue = DispatchQueue(label: "com.desmoines.aipulse.imagecache", qos: .utility)
+    /// Bytes written since the last write-path prune. Mutated only on the serial
+    /// diskQueue, so no extra lock is needed. When it crosses the threshold we
+    /// prune mid-session so the 200 MB cap holds during long foreground browsing,
+    /// not just at init/background (IOS-AUDIT-PERF-020).
+    private var bytesWrittenSincePrune = 0
+    private let pruneWriteThreshold = 25 * 1024 * 1024 // 25 MB
 
     private init() {
         memoryCache.countLimit = 200
@@ -306,10 +312,20 @@ final class ImageCache: @unchecked Sendable {
         let meta = DiskCacheMeta(expiresAt: Date().addingTimeInterval(ttl))
 
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            diskQueue.async {
+            diskQueue.async { [weak self] in
                 try? data.write(to: fileURL, options: .atomic)
                 if let metaData = try? JSONEncoder().encode(meta) {
                     try? metaData.write(to: metaURL, options: .atomic)
+                }
+                // Keep the disk cap enforced during long foreground sessions, not
+                // only at init/background (IOS-AUDIT-PERF-020). Throttled so we
+                // don't scan the directory on every single write.
+                if let self {
+                    self.bytesWrittenSincePrune += data.count
+                    if self.bytesWrittenSincePrune >= self.pruneWriteThreshold {
+                        self.bytesWrittenSincePrune = 0
+                        self.pruneDiskIfNeeded()
+                    }
                 }
                 continuation.resume()
             }

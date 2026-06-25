@@ -626,21 +626,36 @@ final class StoreKitService {
     }
 
     /// Determines whether an error is transient (5xx / network) and worth retrying.
+    /// Classifies on structured NSURLError codes rather than treating the whole
+    /// NSURLErrorDomain as retryable — cancellation and auth-required are NOT
+    /// transient, so a cancelled receipt validation no longer backs off 3x
+    /// (IOS-AUDIT-PERF-018).
     private func isTransientError(_ error: Error) -> Bool {
-        let description = error.localizedDescription.lowercased()
+        let nsError = error as NSError
 
-        // Network-level errors
-        if (error as NSError).domain == NSURLErrorDomain {
-            return true
+        if nsError.domain == NSURLErrorDomain {
+            switch nsError.code {
+            case NSURLErrorTimedOut,
+                 NSURLErrorCannotConnectToHost,
+                 NSURLErrorNetworkConnectionLost,
+                 NSURLErrorNotConnectedToInternet,
+                 NSURLErrorDNSLookupFailed,
+                 NSURLErrorResourceUnavailable,
+                 NSURLErrorCannotFindHost:
+                return true
+            default:
+                // e.g. NSURLErrorCancelled (-999), auth-required — don't retry.
+                return false
+            }
         }
 
-        // Supabase FunctionsError with 5xx status or timeout keywords
+        // Supabase FunctionsError with 5xx status or timeout keywords.
+        let description = error.localizedDescription.lowercased()
         if description.contains("500")
             || description.contains("502")
             || description.contains("503")
             || description.contains("504")
             || description.contains("timeout")
-            || description.contains("network")
             || description.contains("connection") {
             return true
         }

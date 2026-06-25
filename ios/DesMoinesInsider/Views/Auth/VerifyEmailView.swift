@@ -139,11 +139,16 @@ struct VerifyEmailView: View {
                 }
             }
         }
-        // Poll for verification while the screen is shown; the app shell routes
-        // away automatically once needsEmailVerification flips false. This makes
-        // the "refreshes automatically" copy true even when the user verified on
-        // another device (IOS-AUDIT-FEAT-020).
-        .task { await pollForVerification() }
+        // Poll for verification while the screen is shown AND the app is in the
+        // foreground; the app shell routes away automatically once
+        // needsEmailVerification flips false. Keying the task on scenePhase
+        // suspends polling while backgrounded so we don't fire a refresh every 5s
+        // off-screen (IOS-AUDIT-PERF-017); it also makes the "refreshes
+        // automatically" copy true when verified on another device (FEAT-020).
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            await pollForVerification()
+        }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
                 Task { await auth.refreshUser() }
