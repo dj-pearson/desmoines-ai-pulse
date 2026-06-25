@@ -243,7 +243,10 @@ struct BestOfCategoryView: View {
                     ZStack(alignment: .leading) {
                         Capsule().fill(Color(.systemGray5)).frame(height: 6)
                         Capsule().fill(Color.accentColor)
-                            .frame(width: geo.size.width * CGFloat(result.voteCount) / CGFloat(total), height: 6)
+                            // Clamp to [0,1]: guards divide-by-zero (total == 0 →
+                            // NaN width) and optimistic voteCount > stale total
+                            // overflowing the track.
+                            .frame(width: geo.size.width * CGFloat(total > 0 ? min(1, Double(result.voteCount) / Double(total)) : 0), height: 6)
                     }
                 }
                 .frame(height: 6)
