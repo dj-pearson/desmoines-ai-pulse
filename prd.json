@@ -2969,7 +2969,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Evidence: SearchView.swift:363 ForEach keyed on \\.offset + remove(at:index); ReviewsSection.swift:167 deleteOwnReview with no captured id."
+      "notes": "Evidence: SearchView.swift:363 ForEach keyed on \\.offset + remove(at:index); ReviewsSection.swift:167 deleteOwnReview with no captured id. | STATUS: implemented on branch claude/ios-app-review-prd-25ygbb; passes false pending macOS CI build+test verify. Impl: SearchView recent searches keyed by \\.self value, delete via new SearchHistoryService.remove(_:). ReviewsSection delete reviewed: deletes by currentUserId server-side, already safe, unchanged."
     },
     {
       "id": "IOS-AUDIT-BUG-010",
@@ -3008,7 +3008,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Evidence: SettingsView.swift:131 toggle reads/writes UserDefaults.standard directly with no published state."
+      "notes": "Evidence: SettingsView.swift:131 toggle reads/writes UserDefaults.standard directly with no published state. | REVIEW: REVIEWED — not changed: SettingsView reminder Toggle uses a get/set Binding to UserDefaults by deliberate design (documented at SettingsView.swift:128-130, IOS-AUDIT-UX-029) and persists/reads correctly. No in-view observer depends on reactive propagation. Recommend close/downgrade unless a concrete cross-observer requirement emerges."
     },
     {
       "id": "IOS-AUDIT-BUG-013",
@@ -3034,7 +3034,7 @@
       ],
       "priority": 3,
       "passes": false,
-      "notes": "Evidence: BestOfCategoryView.swift:246 width = voteCount/total unclamped; :219 booth uses userVote.resultKey while leaderboard uses votedKey==result.id."
+      "notes": "Evidence: BestOfCategoryView.swift:246 width = voteCount/total unclamped; :219 booth uses userVote.resultKey while leaderboard uses votedKey==result.id. | STATUS: implemented on branch claude/ios-app-review-prd-25ygbb; passes false pending macOS CI build+test verify. Impl: BestOfCategoryView bar width clamped to CGFloat(total>0 ? min(1, voteCount/total) : 0)."
     },
     {
       "id": "IOS-AUDIT-BUG-015",
