@@ -48,6 +48,11 @@ final class AdTrackingService {
     /// so a slot scrolling in and out of view doesn't double-count.
     private var loggedImpressions: Set<String> = []
 
+    /// Sponsored listings already logged this app session, keyed by
+    /// type+id, so a listing scrolling in and out of view (or reappearing
+    /// across feeds) is counted at most once per session (IOS-AUDIT-PERF-006).
+    private var loggedSponsoredImpressions: Set<String> = []
+
     // MARK: - Inventory classes (IOS-ADS-014)
 
     enum AdInventoryClass: String {
@@ -239,6 +244,12 @@ final class AdTrackingService {
     // MARK: - Sponsored listings (distinct, RLS-safe) — IOS-ADS-011 / IOS-ADS-015
 
     func logSponsoredImpression(listingType: String, listingId: String, placement: String = "feed") {
+        // De-dupe per app session so a listing scrolling in/out of view — or
+        // appearing in more than one feed — logs at most one impression
+        // (IOS-AUDIT-PERF-006), mirroring the campaign-creative dedupe above.
+        let dedupeKey = "\(listingType)|\(listingId)|\(placement)"
+        guard !loggedSponsoredImpressions.contains(dedupeKey) else { return }
+        loggedSponsoredImpressions.insert(dedupeKey)
         analytics.trackEvent("sponsored_listing_impression", parameters: [
             "inventory_class": AdInventoryClass.sponsoredListing.rawValue,
             "listing_type": listingType, "listing_id": listingId, "placement": placement,

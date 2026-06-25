@@ -52,6 +52,7 @@ struct AttractionDetailView: View {
                     Image(systemName: attraction.attractionType.icon)
                         .font(.system(size: 64))
                         .foregroundStyle(.teal.opacity(0.3))
+                        .accessibilityHidden(true)
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 300, maxHeight: 300)
@@ -67,8 +68,9 @@ struct AttractionDetailView: View {
                 HStack(spacing: 4) {
                     Image(systemName: attraction.attractionType.icon)
                         .font(.caption2)
+                        .accessibilityHidden(true)
                     Text(attraction.type)
-                        .font(.caption.bold())
+                        .appText(.caption)
                 }
                 .foregroundStyle(.white)
                 .padding(.horizontal, 10)
@@ -76,7 +78,7 @@ struct AttractionDetailView: View {
                 .background(.ultraThinMaterial, in: Capsule())
 
                 Text(attraction.name)
-                    .font(.title2.bold())
+                    .appText(.headline)
                     .foregroundStyle(.white)
                     .lineLimit(3)
             }
@@ -97,10 +99,11 @@ struct AttractionDetailView: View {
                             Image(systemName: Double(star) <= rating ? "star.fill" : (Double(star) - 0.5 <= rating ? "star.leadinghalf.filled" : "star"))
                                 .font(.system(size: 14))
                                 .foregroundStyle(Double(star) <= rating ? .yellow : .gray.opacity(0.3))
+                                .accessibilityHidden(true)
                         }
                     }
                     Text(String(format: "%.1f", rating))
-                        .font(.subheadline.weight(.semibold))
+                        .appText(.bodyEmphasized)
 
                     Spacer()
 
@@ -110,6 +113,14 @@ struct AttractionDetailView: View {
                             .foregroundStyle(.orange)
                     }
                 }
+                // Combine the star row + numeric value into one VoiceOver element
+                // (IOS-AUDIT-UX-013) so it announces the rating once instead of
+                // reading five individual star images.
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(
+                    "Rating: \(String(format: "%.1f", rating)) out of 5 stars"
+                    + (attraction.isFeatured == true ? ". Featured" : "")
+                )
             }
 
             Divider()
@@ -123,7 +134,7 @@ struct AttractionDetailView: View {
                         .frame(width: 28)
 
                     Text(location)
-                        .font(.subheadline)
+                        .appText(.bodySmall)
                         .foregroundStyle(.secondary)
 
                     Spacer()
@@ -151,7 +162,7 @@ struct AttractionDetailView: View {
                         .foregroundStyle(.blue)
                         .frame(width: 28)
                     Text(distance)
-                        .font(.subheadline)
+                        .appText(.bodySmall)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -166,7 +177,7 @@ struct AttractionDetailView: View {
                         .frame(width: 28)
 
                     Link("Visit Website", destination: url)
-                        .font(.subheadline)
+                        .appText(.bodySmall)
                 }
             }
         }
@@ -180,7 +191,7 @@ struct AttractionDetailView: View {
             if let websiteURL = attraction.websiteURL {
                 Link(destination: websiteURL) {
                     Label("Website", systemImage: "safari")
-                        .font(.subheadline.weight(.medium))
+                        .appText(.bodyEmphasized)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 12))
@@ -195,7 +206,7 @@ struct AttractionDetailView: View {
                     openInMaps()
                 } label: {
                     Label("Directions", systemImage: "map.fill")
-                        .font(.subheadline.weight(.medium))
+                        .appText(.bodyEmphasized)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .background(Color.blue, in: RoundedRectangle(cornerRadius: 12))
@@ -213,10 +224,10 @@ struct AttractionDetailView: View {
         VStack(alignment: .leading, spacing: 10) {
             if let description = attraction.description, !description.isEmpty {
                 Text("About")
-                    .font(.title3.bold())
+                    .appText(.title)
 
                 Text(description)
-                    .font(.body)
+                    .appText(.body)
                     .foregroundStyle(.secondary)
                     .lineSpacing(4)
             }

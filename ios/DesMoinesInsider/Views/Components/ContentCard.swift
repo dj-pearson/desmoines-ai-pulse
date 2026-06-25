@@ -173,6 +173,7 @@ struct ContentCard: View {
                         .font(.system(size: height > 130 ? 36 : 24))
                         .foregroundStyle(data.placeholderTint.opacity(0.4))
                 }
+                .accessibilityHidden(true)
             }
             .frame(maxWidth: width ?? .infinity, maxHeight: height)
             .frame(height: height)
@@ -229,7 +230,7 @@ struct ContentCard: View {
     private func meta(_ line: CardMetaLine?) -> some View {
         if let line {
             Label(line.text, systemImage: line.icon)
-                .font(.caption)
+                .appText(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
         }
@@ -246,7 +247,7 @@ struct ContentCard: View {
             }
 
             Text(data.title)
-                .font(.subheadline.weight(.semibold))
+                .appText(.bodyEmphasized)
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
 
@@ -269,7 +270,7 @@ struct ContentCard: View {
             }
 
             Text(data.title)
-                .font(.subheadline.weight(.semibold))
+                .appText(.bodyEmphasized)
                 .lineLimit(1)
 
             HStack(spacing: 6) {
@@ -300,7 +301,7 @@ struct ContentCard: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 Text(data.title)
-                    .font(.headline)
+                    .appText(.subtitle)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
                 meta(data.metaPrimary)
@@ -322,7 +323,7 @@ struct ContentCard: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .top) {
                     Text(data.title)
-                        .font(.subheadline.weight(.semibold))
+                        .appText(.bodyEmphasized)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                     Spacer(minLength: 0)
@@ -386,7 +387,7 @@ private struct PillView: View {
                 Text(pill.text)
             }
         }
-        .font(.caption.weight(.medium))
+        .appText(.caption)
         .foregroundStyle(pill.tint)
         .lineLimit(1)
         .padding(.horizontal, pill.filled ? 8 : 0)
@@ -425,6 +426,7 @@ struct AwardBadge: View {
         HStack(spacing: 3) {
             Image(systemName: "trophy.fill")
                 .font(.system(size: 9, weight: .bold))
+                .accessibilityHidden(true)
             Text(label)
                 .font(.caption2.weight(.semibold))
                 .lineLimit(1)

@@ -97,6 +97,9 @@ struct AttractionsView: View {
                 prompt: "Search museums, parks, places…"
             )
             .toolbar {
+                if viewModel.activeFilterCount > 0 {
+                    ToolbarItem(placement: .topBarTrailing) { filterToolbarButton }
+                }
                 ToolbarItem(placement: .topBarTrailing) { sortMenu }
             }
             .navigationDestination(for: Attraction.self) { attraction in
@@ -234,6 +237,24 @@ struct AttractionsView: View {
             }
             .padding(.vertical, 2)
         }
+    }
+
+    // MARK: - Filter Entry Point (IOS-AUDIT-UX-007)
+
+    /// Filter glyph in the toolbar with a count badge so the number of active
+    /// filters is visible without scanning the sticky chip row. Tapping clears
+    /// all filters (mirrors the "Clear all" chip affordance).
+    private var filterToolbarButton: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            viewModel.clearFilters()
+        } label: {
+            Image(systemName: "line.3.horizontal.decrease.circle")
+                .overlay(alignment: .topTrailing) {
+                    FilterCountBadge(count: viewModel.activeFilterCount)
+                }
+        }
+        .accessibilityLabel("Filters, \(viewModel.activeFilterCount) active")
     }
 
     // MARK: - Sort Menu

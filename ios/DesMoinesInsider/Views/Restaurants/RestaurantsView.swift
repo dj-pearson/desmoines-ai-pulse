@@ -46,7 +46,7 @@ struct RestaurantsView: View {
                             .padding(.top, 40)
                         } else {
                             LazyVStack(spacing: 12) {
-                                ForEach(Array(arrangedRestaurants.enumerated()), id: \.element.id) { index, restaurant in
+                                ForEach(Array(viewModel.arrangedRestaurants.enumerated()), id: \.element.id) { index, restaurant in
                                     NavigationLink(value: restaurant) {
                                         RestaurantCardView(restaurant: restaurant, toast: $toast)
                                     }
@@ -128,6 +128,11 @@ struct RestaurantsView: View {
                     }
                     .accessibilityLabel("Swipe through these restaurants")
                 }
+                if viewModel.activeFilterCount > 0 {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        filterToolbarButton
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     sortMenu
                 }
@@ -172,6 +177,24 @@ struct RestaurantsView: View {
         f.minRating = viewModel.minRating
         f.openNow = viewModel.showOpenNowOnly
         return f
+    }
+
+    // MARK: - Filter Entry Point (IOS-AUDIT-UX-007)
+
+    /// Filter glyph in the toolbar with a count badge so the number of active
+    /// filters is visible without scrolling to the sticky filter bar. Tapping
+    /// clears all filters (mirrors the "Clear all" chip affordance).
+    private var filterToolbarButton: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            viewModel.clearFilters()
+        } label: {
+            Image(systemName: "line.3.horizontal.decrease.circle")
+                .overlay(alignment: .topTrailing) {
+                    FilterCountBadge(count: viewModel.activeFilterCount)
+                }
+        }
+        .accessibilityLabel("Filters, \(viewModel.activeFilterCount) active")
     }
 
     // MARK: - Sort Menu (in toolbar)
@@ -288,17 +311,34 @@ struct RestaurantsView: View {
         .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
     }
 
-    /// Sponsored listings (IOS-ADS-011) pulled to the front of the Dining feed;
-    /// organic order is otherwise preserved.
-    private var arrangedRestaurants: [Restaurant] {
-        SponsoredArranger.arrange(viewModel.restaurants, isSponsored: { $0.isActivelySponsored })
-    }
-
     /// Native in-feed ad cadence (IOS-ADS-012), driven by the central AdConfig.
     private func shouldInsertInFeedAd(after index: Int) -> Bool {
         let position = index + 1
         guard position >= AdConfig.inFeedFirstSlot else { return false }
         return (position - AdConfig.inFeedFirstSlot) % AdConfig.inFeedInterval == 0
+    }
+}
+
+// MARK: - Filter Count Badge (IOS-AUDIT-UX-007)
+
+/// Small numeric badge overlaid on a filter toolbar button. Renders nothing
+/// when `count` is zero. Shared by the Dining, Explore, and Events filter
+/// entry points so the active-filter count is visible at the toolbar.
+struct FilterCountBadge: View {
+    let count: Int
+
+    var body: some View {
+        if count > 0 {
+            Text("\(count)")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(minWidth: 15, minHeight: 15)
+                .padding(.horizontal, 2)
+                .background(Color.red, in: Capsule())
+                .alignmentGuide(.top) { $0[.bottom] - $0.height * 0.5 }
+                .alignmentGuide(.trailing) { $0[.leading] + $0.width * 0.5 }
+                .accessibilityHidden(true)
+        }
     }
 }
 
