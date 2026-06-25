@@ -14,7 +14,7 @@ import { PremiumGate } from "@/components/PremiumGate";
 import { supabase } from "@/integrations/supabase/client";
 import { resizeImageFile } from "@/lib/imageResize";
 import { Database } from "@/integrations/supabase/types";
-import { format } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 
 const MAX_REVIEW_PHOTOS = 3;
 
@@ -172,6 +172,16 @@ export const RatingSystem: React.FC<RatingSystemProps> = ({
     setIsSubmitting(false);
   };
 
+  // Editing an existing review: prefill the form from the user's current row so
+  // their stars/text/photos aren't wiped on save (submitRating upserts the row).
+  const startEdit = () => {
+    if (!userRating) return;
+    setSelectedRating(userRating.rating);
+    setReviewText(userRating.review_text ?? "");
+    setPhotoUrls(Array.isArray(userRating.photo_urls) ? userRating.photo_urls : []);
+    setShowRatingForm(true);
+  };
+
   if (isLoading && !aggregate) {
     return (
       <Card className="w-full">
@@ -240,7 +250,8 @@ export const RatingSystem: React.FC<RatingSystemProps> = ({
           {/* User Rating Section */}
           {user && (
             <div className="mt-6 pt-4 border-t">
-              {userRating ? (
+              {/* Editing falls through to the form branch below (prefilled by startEdit). */}
+              {userRating && !showRatingForm ? (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -251,7 +262,7 @@ export const RatingSystem: React.FC<RatingSystemProps> = ({
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setShowRatingForm(true)}
+                        onClick={startEdit}
                         disabled={isSubmitting}
                       >
                         <Edit className="h-3 w-3 mr-1" />
@@ -432,8 +443,11 @@ const ReviewCard: React.FC<ReviewCardProps> = ({ rating, onVoteHelpful, onReport
         <div className="space-y-2">
           <div className="flex items-center gap-2">
             <StarRating rating={Number(rating.rating)} readonly size="sm" />
-            <span className="text-sm text-muted-foreground">
-              {format(new Date(rating.created_at), "MMM d, yyyy")}
+            <span
+              className="text-sm text-muted-foreground"
+              title={format(new Date(rating.created_at), "MMM d, yyyy")}
+            >
+              {formatDistanceToNow(new Date(rating.created_at), { addSuffix: true })}
             </span>
             {reputation && (
               <ReputationBadge

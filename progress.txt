@@ -4638,8 +4638,8 @@ bottom).
 - IOS-AUDIT-REL-007   AASA must be hosted at desmoinesinsider.com/.well-known w/ real Team ID.
 - IOS-AUDIT-REL-008   Device matrix vs required 6.9" needs confirmed App Store Connect sizes.
 - IOS-AUDIT-REL-010   In-app data-export UI gated on the published privacy-policy text.
-- WEB-FEAT-010  Code-complete from a prior session; await runtime verification.
-  (WEB-FEAT-008 finished + passes=true on 2026-06-25 — see dated entry at end of file.)
+  (WEB-FEAT-008 + WEB-FEAT-010 both finished + passes=true on 2026-06-25 — all WEB
+  stories now pass; remaining open work is IOS-AUDIT-*. See dated entries at end of file.)
 
 ### Verification
 No build (Linux/no Xcode). Confirmed by inspection: SponsoredArranger.arrange<T> -> [T]
@@ -4706,3 +4706,55 @@ FILES (this session)
   M functions/_middleware.ts               (crawler OG injection via HTMLRewriter)
   M tsconfig.json, tsconfig.app.json        (ignoreDeprecations so validate passes)
   M prd.json                                (WEB-FEAT-008 passes=true + notes)
+
+================================================================================
+## 2026-06-25 — WEB-FEAT-010 Review composer w/ photos: COMPLETED (passes=true)
+================================================================================
+Second open WEB story this session. The prior session built this one largely
+correctly (unlike WEB-FEAT-008), so I audited every AC against the live schema +
+code, confirmed the moderation/storage/RLS plumbing is sound, and fixed the two
+real gaps that remained, then flipped passes=true (validate green).
+
+AUDIT — VERIFIED CORRECT (no change needed)
+- moderate-content handles content_type='review' end to end (reads
+  user_ratings.review_text/moderation_status, writes verdict, returns {decision});
+  useRatings.submitRating stores photo_urls, sets moderation_status='pending' when
+  there's text, awaits moderate-content, and shows honest rejected/flagged/approved
+  toasts. Non-author views hide pending/flagged/rejected; author still sees own.
+- Migration 20260623000004_review_photos.sql is fully additive and its assumptions
+  hold against the real schema: user_ratings.review_text/photo_urls exist;
+  content_moderation has UNIQUE(content_type,content_id) + a CHECK that allows
+  'review', so report_review()'s ON CONFLICT upsert is valid. Storage RLS is
+  owner-scoped (auth.uid() = (storage.foldername(name))[1]); bucket is public-read.
+- imageResize.ts caps at 1280px / steps JPEG quality to <500KB; the composer
+  uploads to review-photos/<userId>/<uuid>.jpg (matches the RLS path) and persists
+  the public URLs on the row. Mounted on Event/Restaurant/Attraction. Guests get a
+  "Sign in to review" prompt; new reviews sit behind the existing
+  PremiumGate(write_reviews, insider) tier seam. ReviewCard renders author, stars,
+  text, photo grid + lightbox, and a Report button wired to report_review.
+
+FIXED THIS SESSION (src/components/RatingSystem.tsx)
+- Edit was a no-op: the Edit button set showRatingForm=true, but the form is only
+  rendered in the no-userRating branch, so an owner could never reach it — AC4
+  ("owners can edit/delete their own") was unmet for edit. Added startEdit() to
+  prefill stars/text/photos from the existing row, and changed the summary branch
+  guard to `userRating && !showRatingForm` so an edit falls through to the (now
+  prefilled) form. submitRating upserts the same row, so saving an edit keeps the
+  existing photos instead of wiping them.
+- Relative date (AC4): ReviewCard rendered an absolute "MMM d, yyyy". Switched to
+  formatDistanceToNow(..., {addSuffix:true}); kept the absolute date as hover title.
+
+VERIFIED
+- `npm run validate` → exit 0 (type-check clean; eslint 0 errors). Type compat of
+  setSelectedRating(userRating.rating) confirmed by tsc.
+
+POST-DEPLOY MANUAL CHECK (no Supabase runtime in sandbox)
+- Apply the migration, then as a signed-in Insider upload a photo review on each
+  entity type and confirm: object under <user_id>/ + publicly readable; a non-owner
+  cannot write to another user's folder (RLS); clean text publishes instantly while
+  flagged/rejected is hidden + queued; the Report button enqueues a
+  content_moderation row. This is verification only — code + validate are done.
+
+FILES (this session)
+  M src/components/RatingSystem.tsx   (Edit prefill/reachability fix; relative date)
+  M prd.json                          (WEB-FEAT-010 passes=true + notes)
