@@ -2818,8 +2818,8 @@
         "npm run validate passes"
       ],
       "priority": 47,
-      "passes": false,
-      "notes": "Gap found 2026-06-25 audit. campaign-creative-review/index.ts Deno.serve handler reads req.json().creativeId and acts with the service client; only auth-related env ref is SUPABASE_SERVICE_ROLE_KEY (to build the client). Not listed in config.toml so verify_jwt defaults true (authenticated-only) — but ANY authenticated user can trigger it; tighten to admin-or-service. Confirm the trigger's auth header before shipping."
+      "passes": true,
+      "notes": "DONE (2026-06-25): added `await requireAdminOrApiKey(req, corsHeaders)` (from _shared/apiKeyAuth.ts) at the top of the campaign-creative-review handler, right after CORS. The helper accepts EDGE_FUNCTION_API_KEY (header/bearer), the SUPABASE_SERVICE_ROLE_KEY bearer, or an admin/root_admin JWT; on failure it returns a sanitized 401/403. VERIFIED the trigger path still works: migration 20260620000006_creative_auto_review.sql invokes the function from BOTH the AFTER INSERT trigger (enqueue_creative_review) and the */10 cron sweep using `Authorization: Bearer <service_role_key>` — exactly the service-role branch requireAdminOrApiKey allows (apiKeyAuth.ts:118-121). No src/ caller exists (admin UI never invokes it directly); autonomy-overview only references the name as a job_name string, not an invocation. Backward-compat: authorized request/response shapes unchanged; get_active_ads and campaign/advertisement shapes untouched (iOS unaffected). esbuild parses clean; npm run validate exits 0."
     },
     {
       "id": "WEB-PERF-008",

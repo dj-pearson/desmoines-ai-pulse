@@ -4801,3 +4801,32 @@ FILES (this session, WEB-SEC-009)
   M supabase/functions/{gsc-sync-data,crawl-site,send-seo-notification,seo-audit,
     run-scheduled-audit,analyze-content,analyze-images,search-new-restaurants}/index.ts
   M prd.json   (+4 stories; WEB-SEC-009 passes=true)
+
+================================================================================
+## 2026-06-25 — WEB-SEC-010 (campaign-creative-review authz): DONE (passes=true)
+================================================================================
+campaign-creative-review (WEB-AUTO-010) ran cost-bearing AI creative scoring with
+a service-role client but no caller authorization — any authenticated user could
+POST {creativeId} to trigger reviews (cost/DoS, auto-approval-rate manipulation).
+
+FIX
+- Added `await requireAdminOrApiKey(req, corsHeaders)` (from _shared/apiKeyAuth.ts)
+  immediately after the CORS preflight in the Deno.serve handler. Unauthorized
+  callers now get a sanitized 401/403; the helper logs the real reason server-side.
+
+TRIGGER PATH PRESERVED (verified, not assumed)
+- migration 20260620000006_creative_auto_review.sql invokes the function from the
+  AFTER INSERT trigger (enqueue_creative_review) AND the */10 cron sweep, both with
+  `Authorization: Bearer <service_role_key>`. requireAdminOrApiKey explicitly
+  accepts the service-role-key bearer (apiKeyAuth.ts:118-121), so automation keeps
+  working with zero migration changes.
+- No src/ caller invokes this function (admin UI doesn't call it directly);
+  autonomy-overview only lists 'campaign-creative-review' as a job_name string.
+- Backward-compat: authorized request/response shapes unchanged; get_active_ads +
+  campaign/advertisement shapes untouched (iOS unaffected).
+
+VERIFIED: esbuild parse clean; npm run validate exits 0.
+
+FILES
+  M supabase/functions/campaign-creative-review/index.ts
+  M prd.json  (WEB-SEC-010 passes=true)
