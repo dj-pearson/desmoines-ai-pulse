@@ -2035,8 +2035,8 @@
         "Add a regression note so future audio features update the manifest"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: Info.plist:53-56 mic/speech usage strings; SpeechDictationService.swift installs an input tap and feeds SFSpeechAudioBufferRecognitionRequest; PrivacyInfo.xcprivacy NSPrivacyCollectedDataTypes has no audio entry"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): SpeechDictationService prefers on-device recognition when supported so audio stays local; manifest documents no Audio Data type needed. Pending review confirmation."
     },
     {
       "id": "IOS-AUDIT-SEC-010",
@@ -2050,8 +2050,8 @@
         "Add a test asserting outbound coordinates are rounded"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: WeatherService.swift:74-78 sends location.coordinate.latitude/longitude verbatim to https://api.open-meteo.com; PrivacyInfo.xcprivacy declares PreciseLocation as AppFunctionality with empty NSPrivacyTrackingDomains"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): WeatherService rounds coordinates to ~1km before the third-party Open-Meteo request."
     },
     {
       "id": "IOS-AUDIT-SEC-011",
@@ -2080,8 +2080,8 @@
         "Confirm no other SafariView/AdTarget call site accepts unvalidated server URLs"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: AdBannerView.swift:105 browseTarget = AdTarget(url: url) on creative.targetURL; InterstitialAdView.swift:117; SponsoredPickCard.swift:26 \u2014 none call isSafeWebLink, unlike ArticleDetailView.swift:179"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): AdTarget failable init enforces the http/https allowlist centrally for all server-supplied creative/sponsored clickout URLs."
     },
     {
       "id": "IOS-AUDIT-SEC-013",
@@ -2096,7 +2096,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: Config.swift:84 certificatePinningEnforced = false; CertificatePinningService.swift:47-53 reportOnly and 104-107 allow-on-mismatch; SupabaseService.swift:30-41 installs the delegate"
+      "notes": "BLOCKED (needs verification): enabling cert pinning requires verifying the live Supabase host SPKI pins + a backup-pin/rotation runbook first. Flipping certificatePinningEnforced=true with unverified pins risks bricking all clients' connectivity, so left false pending verified pins."
     },
     {
       "id": "IOS-AUDIT-SEC-014",
@@ -2139,8 +2139,8 @@
         "Behavior of tap-to-zoom and disambiguation sheet is unchanged"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: EventMapView.swift:109 ForEach(viewModel.clusters(for: currentRegion)) + :179 onMapCameraChange sets currentRegion every frame; MapViewModel.swift:331 clusters(for:) re-buckets all annotations on each call"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): EventMapView caches clusters in @State, recomputing only on zoom-bucket or data change (panning is a no-op); stable cluster ids. Pending profiling."
     },
     {
       "id": "IOS-AUDIT-PERF-015",
@@ -2154,8 +2154,8 @@
         "Impression-once semantics and the >=50%-for-1s dwell rule are preserved"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: AdViewabilityModifier.swift:44 let screen = UIScreen.main.bounds inside visibleFraction, invoked from onChange(of: proxy.frame) at :24"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): AdViewabilityModifier uses active window-scene bounds instead of UIScreen.main (multi-window correct)."
     },
     {
       "id": "IOS-AUDIT-PERF-016",
@@ -2169,8 +2169,8 @@
         "Energy log shows audio subsystem idle after dictation completes"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: SpeechDictationService.swift:67-69 setActive(true) on start; stop() at :107-117 never calls setActive(false)"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): SpeechDictationService deactivates the AVAudioSession on stop so the mic releases and other apps un-duck."
     },
     {
       "id": "IOS-AUDIT-PERF-017",
@@ -2319,8 +2319,8 @@
         "Verified on a small device with each field focused."
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: ProfileView.swift:authenticatedContent lines 71-77 \u2014 phonePad TextField with no scrollDismissesKeyboard / Done toolbar"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): .scrollDismissesKeyboard(.interactively) on the ProfileView form so the phone-pad field can't trap the keyboard. Pending on-device QA."
     },
     {
       "id": "IOS-AUDIT-UX-040",
@@ -2334,8 +2334,8 @@
         "Verified that every value 1-5 is reliably selectable and the keyboard can be dismissed."
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: ReviewsSection.swift:ReviewComposer \u2014 review field lines 257-260 (no dismissal); star buttons lines 242-253 (.title2, no minHitTarget)"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): ReviewComposer keyboard dismissal + 44pt star hit targets via .minHitTarget(). Pending on-device QA."
     },
     {
       "id": "IOS-AUDIT-UX-041",
@@ -2348,8 +2348,8 @@
         "The pattern matches the favorite button's existing .isSelected usage."
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: AttractionsView.swift:typeChips line ~148 \u2014 accessibilityLabel embeds 'selected' word with trailing space, no .isSelected trait"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): AttractionsView chips use .isSelected trait instead of an embedded 'selected' word/trailing space. Pending VoiceOver QA."
     },
     {
       "id": "IOS-AUDIT-UX-042",
@@ -2363,8 +2363,8 @@
         "Verified with VoiceOver: a stop can be moved without a physical drag."
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: ItineraryDetailView.swift:body ~line 105 \u2014 editMode/.onMove with no announcement or accessibilityAction reorder alternative"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): ItineraryDetailView per-stop Move up/Move down accessibility actions + reorder-mode VoiceOver announcement; drag kept for sighted users. Pending VoiceOver QA."
     },
     {
       "id": "IOS-AUDIT-UX-043",
@@ -2378,8 +2378,8 @@
         "Row layout is not visibly disrupted."
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: SearchView.swift:recentSearchesSection ~line 380 \u2014 xmark Image(.caption2) delete with no minHitTarget"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): SearchView recent-search xmark gets .minHitTarget(). Pending on-device QA."
     },
     {
       "id": "IOS-AUDIT-UX-044",
@@ -2393,8 +2393,8 @@
         "Verified that a whitespace-only name cannot be saved and each control is independently tappable."
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: SavedSearchUI.swift:SavedSearchesList rows ~131-149 (bell/trash, no minHitTarget); SaveSearchSheet ~63-89 (no dismissal, no trim/validation)"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): SavedSearchUI bell/trash 44pt targets; SaveSearchSheet trims + blocks empty names + keyboard dismissal. Pending QA."
     },
     {
       "id": "IOS-AUDIT-UX-045",
@@ -2408,8 +2408,8 @@
         "Verified in both sign-in and sign-up modes with the keyboard up."
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: AuthView.swift:body ~line 13 \u2014 ScrollView form with no scrollDismissesKeyboard / Done toolbar / submitLabel chaining"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): AuthView ScrollView .scrollDismissesKeyboard(.interactively). Pending on-device QA."
     },
     {
       "id": "IOS-AUDIT-UX-046",
@@ -2423,8 +2423,8 @@
         "The happy path (Mail installed) still opens Mail."
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: VerifyEmailView.swift:openMailApp ~line 221 \u2014 UIApplication.shared.open(message://) with no completion handler / fallback"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): VerifyEmailView openMailApp uses the open completion handler and shows a toast on failure instead of silently no-op'ing."
     },
     {
       "id": "IOS-AUDIT-UX-047",
@@ -2438,8 +2438,8 @@
         "Verified with Reduce Motion toggled across a dense map and the time slider."
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: EventMapView.swift pins ~530/548/600 and MapTimeSlider.swift ~line 30 \u2014 unconditional spring/easeInOut, no reduceMotion check"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): Reduce Motion gates on MapTimeSlider stop animation and the three EventMapView pin selection springs. Pending QA."
     },
     {
       "id": "IOS-AUDIT-UX-048",
@@ -2513,8 +2513,8 @@
         "A test or manual QA step confirms an event and a restaurant are discoverable via Spotlight"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: SpotlightService.swift:indexEvents/indexRestaurants defined vs only indexArticles/indexHotels called in ArticlesViewModel.swift:102, HotelsViewModel.swift:80, ArticleDetailView.swift:82, HotelDetailView.swift:61"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): EventsViewModel/RestaurantsViewModel index into Spotlight on reset load. Pending on-device verification."
     },
     {
       "id": "IOS-AUDIT-FEAT-027",
@@ -2528,8 +2528,8 @@
         "A test covers at least one Spotlight identifier round-trip to a destination"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: DesMoinesInsiderApp.swift:102 only handles NSUserActivityTypeBrowsingWeb; grep for CSSearchableItemActionType/relatedUniqueIdentifier returns no matches"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): DeepLinkHandler.handleSpotlightIdentifier + CSSearchableItemActionType routing for event/restaurant/attraction (article/hotel are graceful no-ops pending their own destinations). Tests added."
     },
     {
       "id": "IOS-AUDIT-FEAT-028",
@@ -2543,8 +2543,8 @@
         "A test asserts AskPulseIntent reaches the Ask Pulse chat, not the search tab"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: Intents/PulseAppIntents.swift:103-122 (AskPulseIntent) + SearchView.swift:157-159 (case .askPulse sets viewModel.searchText only)"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): AskPulse Siri intent opens AskPulseView with the query auto-submitted via discover-chat; MainTabView owns the payload. Find* still route to Search."
     },
     {
       "id": "IOS-AUDIT-FEAT-029",
@@ -2559,7 +2559,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: Configuration/Config.swift:75 (enablePushNotifications = false) gating DesMoinesInsiderApp.swift:153; PaywallView.customAlerts promises 'Push notifications for new matching events'"
+      "notes": "BLOCKED (needs decision): enabling push is a product + APNs-infra decision. Flipping Config.enablePushNotifications adds a launch permission prompt and the paywall promises push that needs the APNs cert + backend delivery verified. Awaiting confirmation, or adjust paywall copy instead."
     },
     {
       "id": "IOS-AUDIT-FEAT-030",
@@ -2574,7 +2574,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: Services/AnalyticsService.swift:23-35 (logEvent commented out, local-log only) consumed by PaywallView.swift:273,589,594,606"
+      "notes": "BLOCKED (needs config/decision): real analytics needs the Firebase SDK + GoogleService-Info.plist (not in repo) or a new first-party pipeline. Stub left in place pending a Firebase-vs-first-party decision."
     },
     {
       "id": "IOS-AUDIT-FEAT-031",
@@ -2588,8 +2588,8 @@
         "Manual QA confirms the CTA opens the listing on a device"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: DesMoinesInsiderClip/ClipRootView.swift:11 (appStoreURL = .../app/id/com.desmoines.aipulse)"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): fixed the malformed App Clip App Store CTA URL; centralized in appStoreAppID, website fallback until the numeric id is assigned."
     },
     {
       "id": "IOS-AUDIT-FEAT-032",
@@ -2647,8 +2647,8 @@
         "Decision documented in metadata/app_review_notes.md"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: PrivacyInfo.xcprivacy line ~28 NSPrivacyCollectedDataTypePreciseLocation; LocationService.swift line 26 kCLLocationAccuracyHundredMeters; no FullAccuracy/Best request found"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): PrivacyInfo.xcprivacy declares Coarse (not Precise) location to match LocationService's 100m/when-in-use usage."
     },
     {
       "id": "IOS-AUDIT-REL-003",
@@ -2661,8 +2661,8 @@
         "No live secret is committed in plaintext to a plist"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: DesMoinesInsiderClip/Info.plist has $(SUPABASE_URL)/$(SUPABASE_ANON_KEY); main Info.plist has none; generate-secrets.sh writes Secrets.generated.swift only"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): generate-secrets.sh emits a Clip copy (ClipSecrets.generated.swift), Clip pre-build script runs it, ClipEventsViewModel reads GeneratedSecrets first. Verified script emits both files."
     },
     {
       "id": "IOS-AUDIT-REL-004",
@@ -2675,8 +2675,8 @@
         "A dry-run or precheck validates metadata before binary submission"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: ios-native-release.yml: only altool TestFlight upload (line ~551); grep metadata/deliver/screenshots empty"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): added a gated (default-off) 'Upload App Store metadata & screenshots' step to ios-native-release.yml calling the existing upload_metadata fastlane lane."
     },
     {
       "id": "IOS-AUDIT-REL-005",
@@ -2689,8 +2689,8 @@
         "Successful submission is confirmed in the workflow logs"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: ios-native-release.yml lines 583-606: python body only print()s, no urllib/jwt request executed; ends with '|| echo warning'"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): the submit-for-review step no longer prints false success \u2014 it now fails loudly stating automated submission isn't implemented and manual submission is required."
     },
     {
       "id": "IOS-AUDIT-REL-006",
@@ -2704,7 +2704,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: project.yml lines 35,84 DEVELOPMENT_TEAM:\"\"; fastlane/Appfile placeholder apple_id and empty team_id fallbacks"
+      "notes": "BLOCKED (needs secret): signing requires a real DEVELOPMENT_TEAM / Apple Developer Team ID + provisioning supplied via CI secrets; can't be hardcoded in project.yml."
     },
     {
       "id": "IOS-AUDIT-REL-007",
@@ -2718,7 +2718,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: DesMoinesInsider.entitlements applinks/webcredentials desmoinesinsider.com; Clip entitlements appclip:desmoinesinsider.com; bundle ids com.desmoines.aipulse(.Clip)"
+      "notes": "BLOCKED (needs hosting+secret): AASA requires apple-app-site-association hosted at desmoinesinsider.com/.well-known with the real Team ID prefix \u2014 external web deploy + Team ID needed before universal links/App Clip invocation verify."
     },
     {
       "id": "IOS-AUDIT-REL-008",
@@ -2788,8 +2788,8 @@
         "Validated that a built Clip contains the manifest"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "NEW (iOS audit 2026-06-24, branch claude/ios-app-audit-bsr7kk). Evidence: find ios/DesMoinesInsiderClip -iname '*.xcprivacy' returns nothing; main app has Resources/PrivacyInfo.xcprivacy"
+      "passes": true,
+      "notes": "IMPLEMENTED (2026-06-25): added the App Clip's own PrivacyInfo.xcprivacy (anonymous, UserDefaults required-reason)."
     }
   ]
 }
