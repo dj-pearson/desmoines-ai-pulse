@@ -4,6 +4,7 @@ import SwiftUI
 /// horizontal type chips, featured toggle, rating floor, sort menu,
 /// paginated LazyVStack with skeleton + empty states.
 struct AttractionsView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var viewModel = AttractionsViewModel()
     @State private var showScrollToTop = false
     @State private var favoritesService = FavoritesService.shared
@@ -68,7 +69,7 @@ struct AttractionsView: View {
                 .scrollOffsetCoordinateSpace()
                 .overlay(alignment: .bottomTrailing) {
                     ScrollToTopButton(isVisible: showScrollToTop) {
-                        withAnimation { proxy.scrollTo("top") }
+                        withAnimation(reduceMotion ? nil : .default) { proxy.scrollTo("top") }
                     }
                 }
                 // Sticky type chips + featured/rating + active chips pinned
@@ -280,6 +281,7 @@ struct AttractionsView: View {
                     .font(.caption.bold())
                     .foregroundStyle(Color.accentColor)
             }
+            .minHitTarget()
         }
         .padding(12)
         .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))

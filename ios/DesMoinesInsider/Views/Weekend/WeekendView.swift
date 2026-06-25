@@ -193,6 +193,7 @@ struct WeekendView: View {
             Button { Task { await viewModel.refresh() } } label: {
                 Text("Retry").font(.caption.bold()).foregroundStyle(Color.accentColor)
             }
+            .minHitTarget()
         }
         .padding(12)
         .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
