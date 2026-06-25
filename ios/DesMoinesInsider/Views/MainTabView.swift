@@ -78,6 +78,14 @@ struct MainTabView: View {
     /// SearchView to read and apply) so intents work from any launch state.
     @State private var intentDispatcher = PulseIntentDispatcher.shared
 
+    /// Pending "Ask Pulse" Siri intent to present as the AI chat (FEAT-028).
+    @State private var askPulseLaunch: AskPulseLaunch?
+
+    struct AskPulseLaunch: Identifiable {
+        let id = UUID()
+        let query: String
+    }
+
     enum DeepLinkPresentation: Identifiable {
         case event(String)
         case restaurant(String)
@@ -156,6 +164,9 @@ struct MainTabView: View {
         .sheet(item: $softPaywallContext) { ctx in
             PaywallView(context: ctx)
         }
+        .sheet(item: $askPulseLaunch) { launch in
+            AskPulseView(initialQuery: launch.query)
+        }
         // Fastlane Snapshot screenshot destinations (IOS-COMPLY-005).
         .fullScreenCover(item: $uiTestCover) { cover in
             switch cover {
@@ -181,13 +192,21 @@ struct MainTabView: View {
         }
     }
 
-    /// Routes a pending Siri/Shortcuts intent to the Search tab. We deliberately
-    /// do NOT consume the payload here — SearchView reads and clears it once it
-    /// appears (IOS-AUDIT-FEAT-025). The iPad sidebar stays in sync via the
-    /// existing `selectedTab` ↔ `sidebarSelection` observers.
+    /// Routes a pending Siri/Shortcuts intent. Ask Pulse opens the AI chat
+    /// surface here (FEAT-028); Find Restaurants/Events route to the Search tab,
+    /// which reads and clears the payload once it appears (FEAT-025). The iPad
+    /// sidebar stays in sync via the existing selectedTab ↔ sidebarSelection
+    /// observers.
     private func routeIntent(_ pending: PulseIntentDispatcher.Pending?) {
-        guard pending != nil else { return }
-        if selectedTab != .search { selectedTab = .search }
+        guard let pending else { return }
+        switch pending {
+        case .askPulse(let query):
+            // Own this payload — consume so SearchView doesn't also see it.
+            _ = intentDispatcher.consume()
+            askPulseLaunch = AskPulseLaunch(query: query)
+        case .findRestaurants, .findEvents:
+            if selectedTab != .search { selectedTab = .search }
+        }
     }
 
     /// Maps a SoftPaywallService context id to its PaywallContext preset.

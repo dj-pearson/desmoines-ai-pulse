@@ -7,6 +7,10 @@ import SwiftUI
 ///
 /// IOS-DISCOVER-2026-001.
 struct AskPulseView: View {
+    /// Optional query to prefill and auto-submit on appear — used by the Siri
+    /// "Ask Pulse" intent so it reaches the chat, not keyword search (FEAT-028).
+    var initialQuery: String? = nil
+
     @Environment(\.dismiss) private var dismiss
     @State private var service = AskPulseService.shared
     @State private var input: String = ""
@@ -81,6 +85,16 @@ struct AskPulseView: View {
                 }
             }
             .onAppear { inputFocused = true }
+            .task {
+                // Auto-run a Siri/Shortcuts-provided query once (FEAT-028).
+                if let initialQuery, conversation.isEmpty {
+                    let q = initialQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !q.isEmpty {
+                        input = q
+                        await send()
+                    }
+                }
+            }
         }
     }
 
