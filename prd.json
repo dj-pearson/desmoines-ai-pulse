@@ -2790,6 +2790,66 @@
       "priority": 2,
       "passes": true,
       "notes": "IMPLEMENTED (2026-06-25): added the App Clip's own PrivacyInfo.xcprivacy (anonymous, UserDefaults required-reason)."
+    },
+    {
+      "id": "WEB-SEC-009",
+      "title": "Stop edge functions leaking error stack traces / raw messages to clients",
+      "description": "As the platform, no edge function should return a JavaScript stack trace or raw driver/error message in its HTTP response — those leak file paths, internal table/function names, package versions and sometimes secrets to any caller. Route every 5xx through the existing sanitized responder.",
+      "acceptanceCriteria": [
+        "No edge function returns error.stack in any HTTP response body. The audited offenders (gsc-sync-data, crawl-site, send-seo-notification, seo-audit, run-scheduled-audit, search-new-restaurants, analyze-content, analyze-images) have their top-level catch handlers converted to _shared/errorResponse.ts errorResponse(), which returns a generic client message and removes the paired raw error.message",
+        "Server-side logging of the full error (including stack via console.error / the helper's own log) is retained — sanitization is client-facing only",
+        "HTTP status codes on those handlers are unchanged so existing web/mobile clients that branch on a status keep working (CLAUDE.md backward-compat); the response still carries a string `error` field",
+        "console.error('...stack...', error.stack) used purely for server logs is left as-is (not a client leak)",
+        "grep for `error.stack` / `err.stack` inside Response/JSON.stringify bodies across supabase/functions returns nothing; npm run validate passes"
+      ],
+      "priority": 46,
+      "passes": true,
+      "notes": "DONE (2026-06-25): converted the 8 audited functions' top-level catch handlers from returning {error: error.message, details: error.stack} to the existing _shared/errorResponse.ts errorResponse() helper (WEB-SEC-007 pattern): gsc-sync-data, crawl-site, send-seo-notification, seo-audit, run-scheduled-audit, analyze-content, analyze-images (identical block) + search-new-restaurants (which also leaked a dev-gated stack). Each now returns a generic sanitized `error` string with the SAME 500 status and CORS headers; the full error + stack is still logged server-side (errorResponse console.error + the functions' own console.error). VERIFIED: grep shows no error.stack/err.stack inside any Response/JSON.stringify body across supabase/functions (the only remaining hit is search-new-restaurants' server-side console.error('Error details', {stack}) log, which is correct); all 8 files esbuild-parse clean; npm run validate exits 0. Backward-compat: status codes unchanged, response still carries a string `error` field, no request-shape change. OUT OF SCOPE (documented in story): per-item error.message strings inside admin-authenticated batch-result arrays (social-media-manager, scrape-events, etc.) — diagnostic output, not a secret leak."
+    },
+    {
+      "id": "WEB-SEC-010",
+      "title": "Require admin/trigger auth on campaign-creative-review",
+      "description": "As the platform, the campaign-creative-review edge function (AI creative scoring, WEB-AUTO-010) builds a service-role client and runs cost-bearing AI work but has no caller authorization — any party that can reach it can trigger reviews (cost/DoS, metric manipulation). Gate it like the other admin/internal functions while keeping the DB-trigger path working.",
+      "acceptanceCriteria": [
+        "campaign-creative-review rejects callers that are not an admin/root_admin JWT or the service-role key (reuse requireAdminOrApiKey from _shared, which already accepts the SUPABASE_SERVICE_ROLE_KEY bearer the DB trigger sends)",
+        "The existing insert-trigger invocation path still succeeds (it sends the service-role key), verified against how the trigger calls the function",
+        "No request/response shape change on the authorized path (backward-compat for the trigger + admin UI)",
+        "Unauthorized calls get a 401/403 with a generic message (no internals leaked)",
+        "npm run validate passes"
+      ],
+      "priority": 47,
+      "passes": false,
+      "notes": "Gap found 2026-06-25 audit. campaign-creative-review/index.ts Deno.serve handler reads req.json().creativeId and acts with the service client; only auth-related env ref is SUPABASE_SERVICE_ROLE_KEY (to build the client). Not listed in config.toml so verify_jwt defaults true (authenticated-only) — but ANY authenticated user can trigger it; tighten to admin-or-service. Confirm the trigger's auth header before shipping."
+    },
+    {
+      "id": "WEB-PERF-008",
+      "title": "Fix recommendation N+1 + detail-page column over-fetch",
+      "description": "As a user, recommendation and detail surfaces should issue tight, batched, column-projected queries instead of per-item N+1 loops and select('*') over wide tables, to cut payloads and latency toward the PERF budgets.",
+      "acceptanceCriteria": [
+        "useSimplePersonalization.combineAndScoreRecommendations no longer issues one select('*').eq('id') per trending item in a loop — batches by content_type with .in('id', ids) and explicit column lists (reuse src/lib/listColumns.ts)",
+        "useSimplePersonalization.getPopularContent fetches the candidate tables in parallel (Promise.all) with explicit columns + .limit(needed), not sequential select('*')",
+        "RestaurantDetails and AttractionDetails detail/related/nearby queries project explicit columns (drop seo_*, geo_*, search_vector, geometry and other unrendered fields) instead of select('*')",
+        "No visible behavior/ordering change on the affected surfaces; results render the same fields",
+        "npm run validate passes"
+      ],
+      "priority": 48,
+      "passes": false,
+      "notes": "Gap found 2026-06-25 audit. Confirmed: useSimplePersonalization.ts:193-213 per-item select('*') in a for-loop; 234-239 sequential per-table select('*'); RestaurantDetails.tsx:69-126 + AttractionDetails.tsx:95-104 select('*'). listColumns.ts already defines projected column sets used by list hooks."
+    },
+    {
+      "id": "WEB-UX-024",
+      "title": "Accessibility: image alt text, keyboard-operable star rating, labeled search inputs",
+      "description": "As a screen-reader or keyboard-only user, content images need descriptive alt text, the review star picker must be operable without a mouse, and search/filter inputs need accessible names — closing WCAG 2.1 AA gaps the prior a11y pass missed.",
+      "acceptanceCriteria": [
+        "Content images on detail pages (Event/Attraction/Hotel/Article) and recommendation/scene cards have descriptive alt text derived from the item title (not empty alt) — decorative-only images may keep alt=''",
+        "RatingSystem StarRating is keyboard operable: stars are focusable and respond to Arrow/Home/End + Enter/Space, with role='radiogroup'/'radio' (or equivalent) and an accessible name; the readonly display stays non-interactive",
+        "NLPSearchBar and SearchSection search inputs have an associated <label> or aria-label; EventInlineFilters filter pills expose an aria-label describing the filter",
+        "Changes are styling-neutral and don't alter existing behavior for sighted/mouse users",
+        "npm run validate passes"
+      ],
+      "priority": 49,
+      "passes": false,
+      "notes": "Gap found 2026-06-25 audit. Evidence: RatingSystem.tsx StarRating (~38-68) has onClick/onMouseEnter but no onKeyDown/tabIndex; NLPSearchBar.tsx + SearchSection.tsx inputs lack label association; EventInlineFilters.tsx:63 FilterPill button has no aria-label; multiple detail-page/card <img> lack alt. Keep scope to user-facing surfaces (skip admin-only dialogs)."
     }
   ]
 }

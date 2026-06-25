@@ -4758,3 +4758,46 @@ POST-DEPLOY MANUAL CHECK (no Supabase runtime in sandbox)
 FILES (this session)
   M src/components/RatingSystem.tsx   (Edit prefill/reachability fix; relative date)
   M prd.json                          (WEB-FEAT-010 passes=true + notes)
+
+================================================================================
+## 2026-06-25 — Gap-finding pass + WEB-SEC-009 (error-leak hardening): DONE
+================================================================================
+All WEB stories passed, so ran the fallback: a 3-way parallel audit (security,
+performance, UX/a11y) of the web app for NEW gaps not already covered by shipped
+stories. Filed 4 evidence-backed stories in prd.json and implemented the top one.
+
+NEW STORIES ADDED (prd.json)
+- WEB-SEC-009 (prio 46) Stop edge functions leaking stack traces/raw messages. [DONE below]
+- WEB-SEC-010 (prio 47) Require admin/trigger auth on campaign-creative-review
+  (Deno.serve handler builds a service client + runs AI work with no caller authz;
+  any authenticated user can trigger it).
+- WEB-PERF-008 (prio 48) Fix recommendation N+1 + detail over-fetch. Confirmed:
+  useSimplePersonalization.ts:193-213 per-item select('*') in a for-loop; 234-239
+  sequential per-table select('*'); RestaurantDetails/AttractionDetails select('*').
+- WEB-UX-024 (prio 49) A11y: image alt text on content images, keyboard-operable
+  StarRating (no onKeyDown/tabIndex today), labeled NLP/search/filter inputs.
+Dropped one audit finding as a FALSE POSITIVE: FavoriteButton "open redirect" —
+Auth.tsx already validates redirect via SecurityUtils.getSafeRedirectUrl and the
+param is a same-origin path. Not a real vuln.
+
+WEB-SEC-009 — IMPLEMENTED (passes=true)
+- 8 functions returned {error: error.message, details: error.stack} (or a
+  dev-gated stack) in their 500 bodies, leaking file paths, internal names and
+  package versions to any caller: gsc-sync-data, crawl-site, send-seo-notification,
+  seo-audit, run-scheduled-audit, analyze-content, analyze-images,
+  search-new-restaurants.
+- Converted each top-level catch to _shared/errorResponse.ts errorResponse()
+  (the WEB-SEC-007 sanitized pattern): generic client `error` string, full detail
+  logged server-side, SAME 500 status + CORS headers. Added the import to each.
+- VERIFIED: no error.stack/err.stack remains inside any Response/JSON.stringify
+  body (only a server-side console.error('Error details',{stack}) log remains in
+  search-new-restaurants, which is correct); all 8 esbuild-parse clean; `npm run
+  validate` exits 0. Backward-compat preserved (status codes + string `error`).
+- NOT in scope (left intentionally): per-item error.message strings inside
+  admin-authenticated batch-result arrays (social-media-manager, scrape-events) —
+  diagnostic output, not a secret leak; genericizing would only hurt admin tools.
+
+FILES (this session, WEB-SEC-009)
+  M supabase/functions/{gsc-sync-data,crawl-site,send-seo-notification,seo-audit,
+    run-scheduled-audit,analyze-content,analyze-images,search-new-restaurants}/index.ts
+  M prd.json   (+4 stories; WEB-SEC-009 passes=true)
