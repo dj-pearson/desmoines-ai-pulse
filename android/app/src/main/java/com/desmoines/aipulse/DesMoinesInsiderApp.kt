@@ -11,6 +11,7 @@ import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import com.desmoines.aipulse.data.local.CacheManager
 import com.desmoines.aipulse.util.LocalNotificationService
 import com.desmoines.aipulse.util.PushNotificationService
+import com.desmoines.aipulse.util.QueryCache
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -27,12 +28,14 @@ class DesMoinesInsiderApp : Application(), SingletonImageLoader.Factory {
 
     @Inject lateinit var cacheManager: CacheManager
     @Inject lateinit var localNotificationService: LocalNotificationService
+    @Inject lateinit var queryCache: QueryCache
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
         super.onCreate()
         appScope.launch { cacheManager.pruneExpired() }
+        appScope.launch { queryCache.prune() }
         // Clean up reminder IDs for alarms that have already fired
         localNotificationService.pruneExpiredReminders()
 
