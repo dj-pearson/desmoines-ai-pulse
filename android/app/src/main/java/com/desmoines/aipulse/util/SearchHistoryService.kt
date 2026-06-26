@@ -14,6 +14,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -32,6 +34,7 @@ class SearchHistoryService @Inject constructor(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val queriesKey = stringPreferencesKey("recent_queries")
+    private val listSerializer = ListSerializer(String.serializer())
 
     /** Most-recent-first list of queries. */
     val history: StateFlow<List<String>> = context.searchHistoryStore.data
@@ -43,7 +46,7 @@ class SearchHistoryService @Inject constructor(
         if (query.isBlank()) return
         context.searchHistoryStore.edit { prefs ->
             val next = reduce(decode(prefs[queriesKey]), query)
-            prefs[queriesKey] = json.encodeToString(next)
+            prefs[queriesKey] = json.encodeToString(listSerializer, next)
         }
     }
 
@@ -54,7 +57,7 @@ class SearchHistoryService @Inject constructor(
 
     private fun decode(raw: String?): List<String> =
         if (raw.isNullOrBlank()) emptyList()
-        else runCatching { json.decodeFromString<List<String>>(raw) }.getOrDefault(emptyList())
+        else runCatching { json.decodeFromString(listSerializer, raw) }.getOrDefault(emptyList())
 
     companion object {
         const val MAX_ITEMS = 10

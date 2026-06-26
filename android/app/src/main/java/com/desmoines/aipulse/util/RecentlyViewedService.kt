@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -35,6 +36,7 @@ class RecentlyViewedService @Inject constructor(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val itemsKey = stringPreferencesKey("recent_items")
+    private val listSerializer = ListSerializer(RecentItem.serializer())
 
     /** Most-recent-first list of viewed items. */
     val recent: StateFlow<List<RecentItem>> = context.recentlyViewedStore.data
@@ -46,7 +48,7 @@ class RecentlyViewedService @Inject constructor(
         val item = RecentItem(type, id, title, imageUrl)
         context.recentlyViewedStore.edit { prefs ->
             val next = reduce(decode(prefs[itemsKey]), item)
-            prefs[itemsKey] = json.encodeToString(next)
+            prefs[itemsKey] = json.encodeToString(listSerializer, next)
         }
     }
 
@@ -57,7 +59,7 @@ class RecentlyViewedService @Inject constructor(
 
     private fun decode(raw: String?): List<RecentItem> =
         if (raw.isNullOrBlank()) emptyList()
-        else runCatching { json.decodeFromString<List<RecentItem>>(raw) }.getOrDefault(emptyList())
+        else runCatching { json.decodeFromString(listSerializer, raw) }.getOrDefault(emptyList())
 
     companion object {
         const val MAX_ITEMS = 12
