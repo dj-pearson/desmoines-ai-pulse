@@ -1,0 +1,855 @@
+{
+  "project": "Des Moines AI Pulse \u2014 Android Feature Parity & Hardening",
+  "branchName": "claude/android-feature-parity-prd-cgakjx",
+  "description": "Complete build-out plan to bring the native Android app (Kotlin, Jetpack Compose, Material 3, MVVM, Hilt) to feature parity with the heavily-audited iOS SwiftUI app and to mirror the iOS audit-hardening layer. The Android v1 foundation (Home, Restaurants, Attractions, Search, Map, Favorites, Auth, Profile, Onboarding, Subscription/Play Billing, push/local notifications, Room cache, glassmorphism design system) is already complete (see prd-android.json). This PRD adds the missing iOS feature surfaces and shared services, then a cross-cutting hardening pass. Stories are grounded in the iOS source under ios/DesMoinesInsider/ and reuse the existing Supabase backend (same edge functions, RPCs, and tables across web/iOS/Android). Epics: (0) shared infra/services, (1) AI features, (2) discovery & engagement, (3) content, (4) monetization & ads, (5) search enhancements, (6) cross-cutting hardening. Backward compatibility: additive backend only \u2014 reuse existing edge functions/RPCs; do not alter shapes older iOS/web clients depend on (see CLAUDE.md).",
+  "userStories": [
+    {
+      "id": "ANDP-001",
+      "title": "Port QueryCache: file-backed LRU response cache",
+      "description": "As a developer, I need a reusable on-disk cache so feature screens can serve content on offline cold-start and reduce redundant network calls, matching iOS QueryCache.swift.",
+      "acceptanceCriteria": [
+        "Create QueryCache (Hilt singleton) storing JSON in Context.cacheDir under a 'query-cache' subdir",
+        "get(key, allowStale): return value if within per-key TTL; if allowStale && offline, return expired value; else null",
+        "set(key, value, ttlMinutes): write JSON payload + stored-at timestamp; default TTL = Config.CACHE_EXPIRATION_MINUTES (5)",
+        "Enforce ~50 MB disk budget with LRU eviction by file mtime on write",
+        "Prune entries older than 24h on app launch; clear() wipes all (called on sign-out)",
+        "kotlinx.serialization used for encode/decode; corrupt entries are dropped, never crash",
+        "Unit tests cover TTL expiry, allowStale-on-offline, and LRU eviction"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Mirrors ios/DesMoinesInsider/Services/QueryCache.swift. Used by Weekend, Hubs, Articles, Hotels, Deals, BestOf for offline cold-start (key examples: 'weekend-events', 'hub-events-{id}')."
+    },
+    {
+      "id": "ANDP-002",
+      "title": "Port NetworkRetry: exponential-backoff retry wrapper",
+      "description": "As a developer, I need a global suspend retry helper so transient failures recover gracefully, matching iOS NetworkRetry.swift.",
+      "acceptanceCriteria": [
+        "withRetry(maxAttempts=3) { block } suspend wrapper returning the block result",
+        "Backoff delay = base(1s) * 2^attempt + random jitter (0..500ms)",
+        "Retry only on 5xx, 429, and transport errors (timeout, connection lost, DNS, TLS)",
+        "Never retry 4xx (except 429), CancellationException, or non-transient errors",
+        "Respect coroutine cancellation before and after each delay",
+        "Log each retry attempt + delay via AppLogger; throw last error after max attempts",
+        "Unit tests cover success-after-retry, no-retry-on-4xx, and cancellation"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Mirrors ios/DesMoinesInsider/Services/NetworkRetry.swift. Wrap Supabase reads in repositories with this."
+    },
+    {
+      "id": "ANDP-003",
+      "title": "Build AnalyticsService facade over Firebase Analytics",
+      "description": "As a product owner, I need consistent, consent-gated analytics so feature usage and conversions are measurable across platforms, matching iOS AnalyticsService.swift.",
+      "acceptanceCriteria": [
+        "AnalyticsService (Hilt singleton) wraps FirebaseAnalytics.getInstance()",
+        "All events gated behind ConsentService.analyticsConsent; dropped when consent is false",
+        "Track app_open, screen_view(screen), search(query_length, result_count), save_favorite(item_type)",
+        "Track paywall_present/paywall_dismiss/paywall_purchase_start with a context id for per-surface conversion",
+        "Mirror iOS event names + parameter keys exactly; no PII (no email, raw query, or user id)",
+        "Provide logScreen() and logEvent(name, params) helpers used by ViewModels"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Mirrors ios/DesMoinesInsider/Services/AnalyticsService.swift. Existing Android AnalyticsService is skeletal \u2014 wire Firebase + consent gate."
+    },
+    {
+      "id": "ANDP-004",
+      "title": "Build CrashReportingService: first-party crash + non-fatal queue",
+      "description": "As a developer, I need crash capture so production stability is observable, matching iOS CrashReportingService.swift.",
+      "acceptanceCriteria": [
+        "Install a global Thread.UncaughtExceptionHandler on app startup that chains to the previous handler",
+        "Persist uncaught exceptions (message + stack + timestamp + anonymized user id) as JSON files in filesDir/CrashReports",
+        "recordError(throwable, context) persists non-fatal errors with custom key/value context",
+        "pendingRecords() lists unsent records; flushPendingRecords() drains and deletes them",
+        "Cap queue at ~200 records (drop oldest); survive process death and reload on next launch",
+        "Set anonymized (hashed, 16-char) user id for attribution; respect analytics consent",
+        "Reserve POST to future 'crash-report' edge function behind a flag (not wired yet)"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Mirrors ios/DesMoinesInsider/Services/CrashReportingService.swift. Android has no POSIX signal handler equivalent \u2014 VM-level uncaught handler is the analog. Could later swap to Crashlytics."
+    },
+    {
+      "id": "ANDP-005",
+      "title": "Version check + ForceUpdate blocking screen",
+      "description": "As the business, I need to force-upgrade unsupported app versions so retired clients can be cut off safely, matching iOS VersionCheckService + ForceUpdateView and the CLAUDE.md force-update flow.",
+      "acceptanceCriteria": [
+        "Call 'version-check' edge function on launch (pre-auth) with { platform: 'android', version: BuildConfig.VERSION_NAME }",
+        "Parse { minSupportedVersion, latestVersion, forceUpgrade, updateAvailable, storeUrl, message }",
+        "If forceUpgrade: show blocking ForceUpdateScreen (no dismiss/back) with message + 'Update Now' opening storeUrl in Play Store",
+        "If updateAvailable && !forceUpgrade: show a dismissible update banner",
+        "Fail open: any network/parse error leaves forceUpgrade=false and does not block the app",
+        "BackHandler is consumed on the force-update screen so it cannot be bypassed"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Mirrors ios/DesMoinesInsider/Services/VersionCheckService.swift + Views/Components/ForceUpdateView.swift. Edge function 'version-check' already exists (REL-001 on iOS)."
+    },
+    {
+      "id": "ANDP-006",
+      "title": "Port WeatherService (Open-Meteo, privacy-rounded)",
+      "description": "As a user, I want current local conditions surfaced in discovery ribbons, matching iOS WeatherService.swift.",
+      "acceptanceCriteria": [
+        "Fetch current conditions from api.open-meteo.com (keyless public API) for device location",
+        "Round latitude/longitude to 2 decimals (~1km) before the request; never send exact coordinates",
+        "Parse temperature_2m (F) + weather_code (WMO); map code to buckets (clear, cloudy, rain, snow, fog, thunder, unknown)",
+        "Cache result 30 min in DataStore (temp, condition, fetchedAt, lat, lon)",
+        "Return cached value when offline; return null only when no cache AND network fails",
+        "Skip refetch when location moved < 0.05 deg and cache age < 30 min"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Mirrors ios/DesMoinesInsider/Services/WeatherService.swift. Feeds the optional 'Right Now' ribbon (RightNowRibbon) on Home/Dashboard."
+    },
+    {
+      "id": "ANDP-007",
+      "title": "Port RecentlyViewedService (on-device, last 12, multi-type)",
+      "description": "As a user, I want to jump back into things I just looked at, matching iOS RecentlyViewedService.swift.",
+      "acceptanceCriteria": [
+        "record(type, id, title, imageUrl) on every detail-view open; types: event, restaurant, attraction, article, hotel",
+        "Persist list (max 12) in DataStore as JSON; move existing item to front, drop oldest on overflow",
+        "Expose recent as StateFlow<List<RecentItem>> for the Dashboard rail and Search suggestions",
+        "clear() wipes the list; persists across app restarts",
+        "Tapping an item type-dispatches to the correct detail fetch + navigation"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "Mirrors ios/DesMoinesInsider/Services/RecentlyViewedService.swift. Consumed by Dashboard (ANDP-028) and Search suggestions (ANDP-051)."
+    },
+    {
+      "id": "ANDP-008",
+      "title": "Port SearchHistoryService (on-device, last 10)",
+      "description": "As a user, I want recent searches remembered so I can re-run them quickly, matching iOS SearchHistoryService.swift.",
+      "acceptanceCriteria": [
+        "record(query) on search submit; case-insensitive dedupe, move-to-front, cap 10, drop oldest",
+        "Persist in DataStore; expose as StateFlow<List<String>>",
+        "clearAll() wipes history; persists across restarts",
+        "Surface 5 most recent in the empty-search state with a clear-all action",
+        "Tapping a recent query populates the field and submits"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "Mirrors ios/DesMoinesInsider/Services/SearchHistoryService.swift. Consumed by Search suggestions (ANDP-051)."
+    },
+    {
+      "id": "ANDP-010",
+      "title": "Trip Planner: input form + AI itinerary generation",
+      "description": "As a user, I want to generate an AI day-by-day Des Moines itinerary from my preferences, matching iOS TripPlannerView.",
+      "acceptanceCriteria": [
+        "Form sections: date range (end >= start), interests multi-select (10 chips), party-size stepper (1-12), has-children toggle, budget (budget/moderate/splurge/any), pace (relaxed/moderate/packed), neighborhood (8 + Anywhere)",
+        "Quota meter shows 'X of Y left' (Insider 5/mo), 'Unlimited' (VIP), or 'Locked' (Free)",
+        "Generate calls 'generate-itinerary' with { startDate, endDate, preferences:{interests,budget,pace,groupSize,hasChildren,mustSee} } (yyyy-MM-dd)",
+        "Loading state shows 'Building your itinerary...'; on success navigate to itinerary detail",
+        "Free tier hits SoftPaywall first (then hard paywall if on cooldown); exhausted Insider quota shows hard paywall upsell",
+        "Offline shows 'You're offline. Reconnect to plan a trip.'; generation failure shows error + retry",
+        "Generate disabled while loading or when interests empty"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "Edge function: generate-itinerary. Tables: trip_plans (count rows in current month for quota). Mirrors ios/.../Views/TripPlanner/TripPlannerView.swift + Services/TripPlannerService.swift. Depends on ANDP-043 (SoftPaywall)."
+    },
+    {
+      "id": "ANDP-011",
+      "title": "Trip Planner: itinerary detail, day grouping, reorder",
+      "description": "As a user, I want to view my itinerary day-by-day and reorder stops, matching iOS ItineraryDetailView.",
+      "acceptanceCriteria": [
+        "Fetch items via get_trip_itinerary RPC (p_trip_id); group by dayNumber into collapsible 'Day N' sections",
+        "Each stop row: type icon (event/restaurant/attraction/transit), start time (h:mm a), title, location, AI reason, estimated cost",
+        "Map preview renders geocoded unique locations (max 8, free-text + ', Des Moines, IA')",
+        "Reorder mode (drag handle) reorders within a day; persist order_index per item via trip_plan_items update",
+        "On partial save failure, reload items from server (server-truth) and show 'Couldn't save the new order. Restored.'",
+        "States: 'Loading itinerary...' spinner; offline + fetch-failed each show error + retry"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "RPC: get_trip_itinerary. Table writes: trip_plan_items.order_index. Mirrors ios/.../Views/TripPlanner/ItineraryDetailView.swift."
+    },
+    {
+      "id": "ANDP-012",
+      "title": "Trip Planner: saved trips list, share, delete",
+      "description": "As a user, I want to revisit, share, and delete my saved itineraries, matching iOS TripPlanner saved-trips + share flow.",
+      "acceptanceCriteria": [
+        "List trip_plans for user ordered by created_at DESC; loading + empty ('Your generated itineraries will appear here')",
+        "Each row shows title + date-range; tap opens itinerary detail",
+        "Share sets is_public=true, selects share_code, builds ${VITE_SITE_URL}/trips/shared/{code}, launches Android share sheet",
+        "Share failure shows 'Couldn't create a share link. Try again.'",
+        "Delete is optimistic; on failure reload list and show 'Couldn't delete the itinerary. Please try again.'",
+        "TripPlannerHomeCard entry point surfaces on Home and Dashboard"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": "Tables: trip_plans (select/update is_public+share_code/delete). Mirrors ios/.../Views/TripPlanner/* and TripPlannerHomeCard.swift."
+    },
+    {
+      "id": "ANDP-013",
+      "title": "Ask Pulse: conversational AI discovery chat",
+      "description": "As a user, I want to ask in natural language for recommendations and tap through to details, matching iOS AskPulseView.",
+      "acceptanceCriteria": [
+        "Welcome state: hero, 4 suggestion chips, bottom input (auto-focused); chip tap pre-fills + sends",
+        "send() appends user bubble, clears input, shows 'Thinking...', calls 'discover-chat' with full message history + optional location",
+        "Render picks as cards (type icon, reason, chevron) and followUpSuggestions as tappable chips; append synthetic assistant summary",
+        "Auto-scroll to newest; 'New' resets conversation, picks, follow-ups, error to welcome state",
+        "HTTP 429 shows 'You've hit today's Ask Pulse limit. Upgrade for more queries.' + hard paywall; other errors show banner",
+        "Tapping a pick resolves itemType+itemId via Events/Restaurants/Attractions services to its detail screen, with loading + 'Couldn't Load' + retry",
+        "A server-eligible sponsored pick (free tier) renders as a clearly-labeled card among picks"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": "Edge function: discover-chat \u2192 { picks:[{itemType,itemId,reason}], followUpSuggestions:[], usage:{remaining,tier} }. Mirrors ios/.../Views/AskPulse/AskPulseView.swift + Services/AskPulseService.swift. Sponsored pick via ANDP-042."
+    },
+    {
+      "id": "ANDP-014",
+      "title": "For You / Trending Now rail on Home",
+      "description": "As a user, I want a personalized (or trending cold-start) event rail at the top of Home, matching iOS ForYouRail.",
+      "acceptanceCriteria": [
+        "On load, count swipe_interactions for user in last 90 days; >=5 -> 'For You' (get_personalized_recommendations), else 'Trending now' (get_trending_events)",
+        "Call RPC with p_limit=12 (personalized also passes p_user_lat/p_user_lon when available)",
+        "Header shows source title + refresh button (disabled while loading)",
+        "Horizontal rail of cards (image, 2-line title, 2-line reason); empty -> rail hidden; loading -> centered spinner",
+        "Tapping a card resolves recommendation.id to a full Event and opens detail, with loading + retry on failure",
+        "Errors are logged and hide the rail (no error UI), matching iOS"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": "RPCs: get_personalized_recommendations, get_trending_events. Table: swipe_interactions (count). Mirrors ios/.../Views/Components/ForYouRail.swift + Services/ForYouService.swift. Free feature."
+    },
+    {
+      "id": "ANDP-015",
+      "title": "App Shortcuts / Assistant deep-link parity (Siri equivalent)",
+      "description": "As a user, I want quick voice/launcher actions that open the app pre-filled, matching iOS App Intents (PulseAppIntents).",
+      "acceptanceCriteria": [
+        "Register App Shortcuts (ShortcutInfo / capabilities) and intent filters for ask-pulse, find-restaurants, find-events",
+        "Ask Pulse shortcut opens Ask Pulse with the query pre-filled and auto-sent",
+        "Find Restaurants shortcut pre-populates restaurant search (cuisine, area, openNow) and navigates there",
+        "Find Events shortcut pre-populates event search (category, datePreset) and navigates there",
+        "A shared pending-intent dispatcher applies parameters once the relevant screen is shown",
+        "Shortcuts appear in the launcher long-press menu / Assistant app actions"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": "Mirrors ios/DesMoinesInsider/Intents/PulseAppIntents.swift. Feeds into Ask Pulse (ANDP-013) and Search. No backend calls of its own."
+    },
+    {
+      "id": "ANDP-020",
+      "title": "Discover: swipe card deck core gestures + stack",
+      "description": "As a user, I want a Tinder-style swipe deck to like/skip/boost events and restaurants, matching iOS Discover SwipeCardStack.",
+      "acceptanceCriteria": [
+        "Render top 3 cards as a peek stack (back cards scaled ~0.96 + offset down ~14dp); reset uses a stack generation id",
+        "Modifier.pointerInput/detectDragGestures tracks live drag offset; commit threshold ~110dp or velocity > ~320dp/s",
+        "Left = skip (fly -700px X), right = like (+700px X), up = boost (-900px Y); easeOut ~0.28s",
+        "Overlay LIKE / NOPE / MORE-LIKE-THIS labels fade in with drag; boost plays a stronger haptic than left/right",
+        "Skip/Boost/Like action-bar buttons animate identical paths to the swipes",
+        "Honor system reduce-motion: drop rotation + spring overshoot but keep direct-manipulation drag",
+        "Tap card center opens detail and records a weak-positive signal"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": "Mirrors ios/.../Views/Discover/SwipeCard.swift + SwipeCardStack.swift + DiscoverView.swift. Compose-specific gesture handling required (no UIKit DragGesture equivalent)."
+    },
+    {
+      "id": "ANDP-021",
+      "title": "Discover: mode toggle, pre-filters, prefetch & pagination",
+      "description": "As a user, I want to scope the deck by mode/filters and have cards keep loading, matching iOS DiscoverViewModel.",
+      "acceptanceCriteria": [
+        "Segmented mode: Tonight (mixed) / Events / Dining; switching clears deck, resets offsets, refetches",
+        "Events fetched from events table (category, date range, city, free-only); restaurants from restaurants table (cuisine, price_range, location, rating, featured); limit 20 offset paged independently",
+        "Pre-filter context (entered from a typed filter) shows as a tag strip and locks the mode toggle",
+        "Prefetch next page when deck size <= 4 and not already fetching; mixed mode interleaves so blocks don't stack",
+        "A fetch generation counter invalidates in-flight results on mode/filter/boost change (drop stale)",
+        "Boost narrows filters (event->add category, restaurant->add cuisine), drops deck, and refetches"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": "Mirrors ios/.../Views/Discover/DiscoverView.swift + DiscoverHubView.swift. Tables: events, restaurants. Implements the stale-result guard from the iOS audit (BUG-007)."
+    },
+    {
+      "id": "ANDP-022",
+      "title": "Discover: like/skip/boost persistence + dedupe",
+      "description": "As a user, I want my swipes saved and not repeated, matching iOS SwipeInteractionService.",
+      "acceptanceCriteria": [
+        "Insert into swipe_interactions { user_id, item_type, item_id, action(like/skip/boost/detail), source_context(JSON filter snapshot), created_at }",
+        "Maintain an in-memory swiped-key set (max 1000) persisted to DataStore; skip already-swiped items in future fetches",
+        "Like persists the item to favorites; right-swipe at the free 50-favorite cap soft-fails and lets the app paywall surface (no Discover-specific error)",
+        "Detail tap records a weak signal; boost records a strong-positive signal",
+        "Saved-count badge updates as items are liked",
+        "Writes are fire-and-forget but failures are logged, not surfaced as blocking errors"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": "Mirrors ios/.../Services/SwipeInteractionService.swift. Table: swipe_interactions. Feeds For You personalization (ANDP-014)."
+    },
+    {
+      "id": "ANDP-023",
+      "title": "Discover: group swipe sessions",
+      "description": "As a group, we want to swipe together and see mutual matches, matching iOS GroupSessionView + SwipeSessionService.",
+      "acceptanceCriteria": [
+        "Host creates a session (swipe_sessions insert) producing a shareable code (DSM-XXXX); requires auth",
+        "Join by code adds a participant row; sessions auto-expire after 4h",
+        "Each participant's swipes are scoped to the session; matches resolved via get_swipe_session_matches(session_id) RPC",
+        "Matches list shows items everyone liked, with tap-through to detail",
+        "Session status transitions (active/ended) update via swipe_sessions update",
+        "Empty/expired/host-left states are handled with clear messaging"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": "Mirrors ios/.../Views/GroupSession/GroupSessionView.swift + Services/SwipeSessionService.swift. Tables: swipe_sessions (+participants); RPC get_swipe_session_matches. Free to host/join."
+    },
+    {
+      "id": "ANDP-024",
+      "title": "Surprise Me: single-pick recommendation engine",
+      "description": "As a user, I want one delightful curated pick I can save or reroll, matching iOS SurpriseMeView.",
+      "acceptanceCriteria": [
+        "Loading state animates a bouncing die ('Rolling...'); call get_surprise_pick(p_user_lat, p_user_lon) (location optional)",
+        "Reveal animation: scale 0.92->1.0 + alpha 0->1 spring; success haptic on reveal; track 'shown' to surprise_pick_outcomes",
+        "'Save it' toggles favorite for the item type; on success haptic + track 'saved' + dismiss; favorites-cap error dismisses silently (app paywall handles)",
+        "'Try another' increments roll count, medium haptic, rerolls; track 'tried_another' for the dismissed pick",
+        "Every Nth roll (free tier) tries SponsoredPickService(surface=surprise_me) first; sponsored variant is clearly labeled and 'Try another' sets forceOrganic",
+        "Error state shows warn icon + retry"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": "RPC: get_surprise_pick. Table: surprise_pick_outcomes. Mirrors ios/.../Views/SurpriseMe/SurpriseMeView.swift + Services/SurpriseMeService.swift. Sponsored via ANDP-042."
+    },
+    {
+      "id": "ANDP-025",
+      "title": "This Weekend guide",
+      "description": "As a user, I want a Fri/Sat/Sun plan with featured dining and attractions, matching iOS WeekendView.",
+      "acceptanceCriteria": [
+        "Compute weekend window (Fri 00:00 -> Mon 00:00) on each refresh; fetch events in range sorted by date, grouped by day",
+        "Render only populated day sections (Fri->Sun) with icon + day name + event count; tap event -> detail",
+        "Featured dining rail (restaurants is_featured=true, limit 10) and featured attractions rail (attractions is_featured=true, limit 10), each fail-soft",
+        "Ad slot rendered between events and the featured rails (free tier)",
+        "Offline cold-start serves QueryCache key 'weekend-events'; only show error when offline AND no cache AND empty",
+        "Partial error (events load, a rail fails) shows events plus an inline retry banner; pull-to-refresh fires success/error haptic without blanking the view"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": "Mirrors ios/.../Views/Weekend/WeekendView.swift. Tables: events, restaurants, attractions. QueryCache (ANDP-001). Free feature."
+    },
+    {
+      "id": "ANDP-026",
+      "title": "Neighborhoods hub + detail with location sort",
+      "description": "As a user, I want to explore listings by Des Moines neighborhood, matching iOS Neighborhoods views.",
+      "acceptanceCriteria": [
+        "Hub lists the fixed neighborhoods (East Village, West Des Moines, Ankeny, Urbandale, Johnston, Clive, Waukee, Altoona) with icon, blurb, highlight tags; tap -> detail",
+        "Detail fetches restaurants/attractions/events (limit ~60 each) in parallel and filters client-side by neighborhood match (city/location/displayLocation)",
+        "'Sort by what's nearby' requests location permission (\u22648s wait); on grant, sort nearest-first and show 'Sorted by distance from you'",
+        "On permission failure, keep default order; rails: restaurants (compact), ad slot, attractions (compact), events (standard)",
+        "Empty state: 'Still mapping this area'; loading shows skeleton cards",
+        "Tapping any card opens its detail"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": "Mirrors ios/.../Views/Neighborhoods/NeighborhoodsView.swift + NeighborhoodDetailView.swift. Tables: restaurants, attractions, events (client-side filter). LocationService present. Free feature."
+    },
+    {
+      "id": "ANDP-027",
+      "title": "Content Hubs (Music / Sports / Outdoors)",
+      "description": "As a user, I want curated topic hubs, matching iOS ContentHubView.",
+      "acceptanceCriteria": [
+        "Generic hub template takes a ContentHub model (id, title, blurb, icon, gradient, eventTerms, attractionTypes)",
+        "Events spine: fetch by category terms (hub.eventTerms, limit 20) as a vertical stack (critical path)",
+        "Attractions rail (types=hub.attractionTypes, limit 12) and featured dining rail (limit 10) are horizontal and fail-soft",
+        "Per-hub QueryCache key 'hub-events-{id}' for offline cold-start; serve cache when offline, no error",
+        "Ad slot between events and attractions rail (free tier)",
+        "Empty state 'Nothing here yet'; events-blank error shows inline retry; missing side rails stay silent"
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": "Mirrors ios/.../Views/Hubs/ContentHubView.swift. Tables: events (by terms), attractions, restaurants. QueryCache (ANDP-001). Free feature."
+    },
+    {
+      "id": "ANDP-028",
+      "title": "Dashboard (signed-in home base)",
+      "description": "As a signed-in user, I want a personal hub of trips, favorites, alerts, recents and recommendations, matching iOS DashboardView.",
+      "acceptanceCriteria": [
+        "Guest state: sign-in CTA + subscription banner; signed-in: scrollable sections with pull-to-refresh",
+        "Itineraries section: up to 3 trip_plans, empty CTA 'Plan a trip' -> Trip Planner; tap row -> itinerary detail",
+        "Favorites overview: 4 stat tiles (Events/Dining/Places/Guides counts from FavoritesService); empty hint to tap hearts",
+        "Saved searches & alerts section embeds the saved-searches list",
+        "Recently-viewed rail (RecentlyViewedService) with type icons; tap type-dispatches to detail",
+        "For You rail reuses the Home recommendations component"
+      ],
+      "priority": 23,
+      "passes": false,
+      "notes": "Mirrors ios/.../Views/Dashboard/DashboardView.swift. Depends on ANDP-007 (recents), ANDP-012 (trips), ANDP-014 (For You), ANDP-050 (saved searches)."
+    },
+    {
+      "id": "ANDP-030",
+      "title": "Articles hub: browse, search, paginate",
+      "description": "As a user, I want to browse and search published guides, matching iOS ArticlesView.",
+      "acceptanceCriteria": [
+        "List articles where status='published' ordered by published_at DESC; 20/page, fetch next on scroll near end",
+        "Sticky category chip bar ('All' + distinct categories); debounced (~350ms) full-text search on title/excerpt/category (ilike)",
+        "Loading shows 5 skeleton cards; fetch error shows a retry banner without clearing loaded content",
+        "In-feed ad after the 3rd card for free tier; none for premium",
+        "Pull-to-refresh with success/error haptic; tap card -> article detail",
+        "First page cached to QueryCache for offline cold-start"
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": "Table: articles. Mirrors ios/.../Views/Articles/ArticlesView.swift + Services/ArticlesService.swift. Reading is free; ads free-tier only."
+    },
+    {
+      "id": "ANDP-031",
+      "title": "Article detail with native markdown rendering",
+      "description": "As a user, I want to read a full guide with rich formatting, matching iOS ArticleMarkdownView.",
+      "acceptanceCriteria": [
+        "Header: hero image, title, category tag, published date, reading-time estimate",
+        "Render articles.content markdown natively: headings (6 levels), paragraphs, images (cached), ordered/unordered lists, blockquotes, fenced code, horizontal rules, inline bold/italic/code",
+        "Markdown parse failure falls back to plain text (never lose content)",
+        "Article links route through the in-app browser; only safe schemes (https) allowed, unsafe dropped",
+        "Best-effort view_count increment on open; save (FavoritesService.toggleFavoriteArticle) + share with 2s toast",
+        "Related rail: up to 4 same-category articles (newest, excluding current); tap opens its detail"
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": "Table: articles (+ view_count update). Mirrors ios/.../Views/Articles/ArticleDetailView.swift + ArticleMarkdownView.swift. Use a Compose markdown renderer (e.g. compose-markdown) or a custom block parser matching the iOS MarkdownBlock enum."
+    },
+    {
+      "id": "ANDP-032",
+      "title": "Deals hub: browse, filter, deep-link, redemption",
+      "description": "As a user, I want to find active local deals and open the related listing, matching iOS DealsView.",
+      "acceptanceCriteria": [
+        "List deals (RLS limits to start_date <= now <= end_date) sorted is_featured DESC then end_date ASC",
+        "Entity-type chips (All + restaurant/attraction/event/hotel) + 'Active now' toggle; search on title/business name/description",
+        "Card shows value badge, business name, schedule text, active-now indicator, promo code; featured deals get sponsored border + badge",
+        "Tapping a deal with entityId fetches the related listing (restaurant/attraction/event/hotel) and opens its detail; non-entity deals are non-tappable",
+        "Best-effort increment_deal_redemption(deal_id) on display (tolerate anon RLS failure, no UI)",
+        "Loading = 4 skeletons; empty/error messaging adapts to filter state; in-feed ad after 3rd card (free tier)"
+      ],
+      "priority": 26,
+      "passes": false,
+      "notes": "Table: deals; RPC increment_deal_redemption. Mirrors ios/.../Views/Deals/DealsView.swift + Services/DealsService.swift. Reading free."
+    },
+    {
+      "id": "ANDP-033",
+      "title": "Hotels/Stay hub: filters, sort, pagination",
+      "description": "As a user, I want to browse hotels with rich filters, matching iOS HotelsView.",
+      "acceptanceCriteria": [
+        "List hotels where is_active=true; default sort featured (is_featured DESC, sort_order ASC, name ASC); 20/page",
+        "Area chips (distinct areas, multi-select), price-range toggles ($-$$$$), star-rating menu (Any/3+/3.5+/4+/4.5+), sort menu (Featured/Price Low/Price High/Top Rated/Name)",
+        "Debounced (~350ms) search on name/description/area/chain_name; active filters shown as dismissible chips + result count + Clear all",
+        "Pagination fetches next 20 when ~5 from end; pull-to-refresh with haptics",
+        "Loading = 5 skeleton cards; empty/error states adapt to filter state",
+        "In-feed ad after 3rd card (free tier)"
+      ],
+      "priority": 27,
+      "passes": false,
+      "notes": "Table: hotels. Mirrors ios/.../Views/Stay/HotelsView.swift + Services/HotelsService.swift. Reading free."
+    },
+    {
+      "id": "ANDP-034",
+      "title": "Hotel detail + affiliate booking CTA + indexing",
+      "description": "As a user, I want hotel details and a way to book, matching iOS HotelDetailView.",
+      "acceptanceCriteria": [
+        "Detail fetches hotel by id (name, description, amenities, star rating, price, images, area)",
+        "'Book Now' CTA opens the affiliate partner link via the safe external-link launcher (ANDP-063) / affiliate allowlist (ANDP-065)",
+        "Loading + error states for the detail fetch",
+        "Index hotels into on-device App Search for discoverability (extends AppSearchService)",
+        "Reviews section embedded (ANDP-035) for hotels",
+        "Hero uses ParallaxHeroHeader + glass overlay consistent with other detail screens"
+      ],
+      "priority": 28,
+      "passes": false,
+      "notes": "Table: hotels. Mirrors ios/.../Views/Stay/HotelDetailView.swift. Affiliate CTA must pass allowlist validation."
+    },
+    {
+      "id": "ANDP-035",
+      "title": "Reviews & Ratings section (read + aggregate)",
+      "description": "As a user, I want to read reviews and the average rating on detail screens, matching iOS ReviewsSection.",
+      "acceptanceCriteria": [
+        "Reusable section embeddable in event/restaurant/attraction/hotel detail",
+        "Load reviews from user_ratings (join profiles for author name) for (content_type, content_id) ordered created_at DESC",
+        "Load aggregate from content_rating_aggregates (average_rating, total_ratings); header shows star + average + (count)",
+        "Each row: stars, optional text, author name or 'You', date, verified badge when present",
+        "Loading spinner first load; retryable error banner; empty state 'No reviews yet. Be the first...'"
+      ],
+      "priority": 29,
+      "passes": false,
+      "notes": "Tables: user_ratings, content_rating_aggregates. Mirrors ios/.../Views/Reviews/ReviewsSection.swift + Services/RatingsService.swift. Reading is free."
+    },
+    {
+      "id": "ANDP-036",
+      "title": "Reviews: write/edit (premium gate), delete, report",
+      "description": "As an Insider+, I want to write reviews; as any user I want to report abuse, matching iOS review write paths.",
+      "acceptanceCriteria": [
+        "'Write a review' gated to authenticated + hasFeature(writeReviews) [Insider+]; otherwise show paywall on tap",
+        "Composer modal: required 1-5 star picker + optional text; if a review exists, switch to 'Edit your review' pre-filled",
+        "Submit upserts user_ratings on conflict (user_id, content_type, content_id) \u2014 atomic, no delete-then-insert; isSubmitting disables the button",
+        "Reload list + toast after submit; own review menu offers Edit + Delete (delete needs confirm; DELETE WHERE id AND user_id)",
+        "Other reviews offer Report -> insert rating_abuse_reports { rating_id, reported_by, reason } with confirmation toast",
+        "All writes require auth and respect RLS; failures show error toast, never crash"
+      ],
+      "priority": 30,
+      "passes": false,
+      "notes": "Tables: user_ratings (upsert/delete), rating_abuse_reports (insert). Mirrors iOS RatingsService/VotingService. Atomic upsert mirrors iOS BUG-002. Depends on ANDP-035 + ANDP-043."
+    },
+    {
+      "id": "ANDP-037",
+      "title": "Best Of: categories hub",
+      "description": "As a user, I want to browse community voting categories, matching iOS BestOfView.",
+      "acceptanceCriteria": [
+        "Load voting_categories where is_active=true ordered by name; inject vote counts aggregated from votes (GROUP BY category_id)",
+        "List rows: icon, name, description, vote count; tap -> category detail",
+        "Loading = 6 skeleton rows; empty 'No Categories Yet'",
+        "Pull-to-refresh reloads categories and refreshes winner badges",
+        "First load cached for offline cold-start"
+      ],
+      "priority": 31,
+      "passes": false,
+      "notes": "Tables: voting_categories, votes (count). Mirrors ios/.../Views/BestOf/BestOfView.swift + Services/BestOfWinners.swift. Reading free."
+    },
+    {
+      "id": "ANDP-038",
+      "title": "Best Of: voting booth + nominee search + write-in",
+      "description": "As a signed-in user, I want to cast or change my vote in a category, matching iOS BestOfCategoryView booth.",
+      "acceptanceCriteria": [
+        "Load the user's existing vote (votes where category_id AND user_id limit 1)",
+        "Signed-out: show sign-in prompt + CTA to Auth (soft funnel, no hard paywall)",
+        "Signed-in: search field (>=2 chars, ~300ms debounce) querying restaurants + attractions (5 each) -> nominee rows (image, name, type badge)",
+        "Show current pick status ('You voted for X \u2014 search or write in to change')",
+        "Write-in toggle accepts a non-empty custom entry (entityType='custom')",
+        "Cast vote upserts votes on conflict (category_id, user_id) \u2014 one atomic upsert (no transient zero-count); cast failure shows error banner"
+      ],
+      "priority": 32,
+      "passes": false,
+      "notes": "Tables: votes (upsert), restaurants, attractions (nominee search). Mirrors ios/.../Views/BestOf/BestOfCategoryView.swift + Services/VotingService.swift. Atomic upsert mirrors iOS BUG-002."
+    },
+    {
+      "id": "ANDP-039",
+      "title": "Best Of: live leaderboard + optimistic updates + winner badges",
+      "description": "As a user, I want to see standings update instantly and award badges app-wide, matching iOS Best Of leaderboard + BestOfWinners.",
+      "acceptanceCriteria": [
+        "Load results (votes for category, aggregate by entity_id or custom_entry desc by count); batch-enrich restaurant/attraction name+image, fail-soft per type",
+        "Leaderboard rows: rank badge (medals top 3), image, name, vote-count bar, percentage, 'Your pick' highlight",
+        "Optimistic cast: immediately decrement old pick, increment new, re-sort; revert to snapshot on failure with error message",
+        "After cast or hub refresh, compute winners (entityId -> category-name map) and store in a BestOfWinners singleton (StateFlow)",
+        "Inject 'Best {Category}' award badges onto restaurant/attraction/event cards wherever those entities appear",
+        "Loading spinner; clamped vote bar widths (mirror iOS Best-Of vote bar fix)"
+      ],
+      "priority": 33,
+      "passes": false,
+      "notes": "Tables: votes, voting_categories, restaurants, attractions. Mirrors iOS BestOf leaderboard + Services/BestOfWinners.swift. Bar clamp mirrors iOS audit fix (8cbed07)."
+    },
+    {
+      "id": "ANDP-040",
+      "title": "Campaign ad serving + AdSlot component",
+      "description": "As the business, I need first-party campaign ads in feed/detail placements, matching iOS CampaignAdService + AdSlot.",
+      "acceptanceCriteria": [
+        "CampaignAdService fetches creatives via get_active_ads(p_placement_type) for placements (top_banner/featured_spot/below_fold/sponsored_listing)",
+        "5-minute per-placement cache; returns null when no live campaign; free tier only (null for Insider/VIP)",
+        "AdSlot composable renders title, image, CTA for feed and detail surfaces",
+        "Tapping the ad opens link_url through the safe external-link launcher (ANDP-063)",
+        "No ad rendered for premium tiers",
+        "Network/parse failure renders nothing (no error UI)"
+      ],
+      "priority": 34,
+      "passes": false,
+      "notes": "RPC: get_active_ads. Tables: campaigns, campaign_creatives. Mirrors ios/.../Services/CampaignAdService.swift + Views/Components/AdSlot.swift/AdBannerView.swift."
+    },
+    {
+      "id": "ANDP-041",
+      "title": "Ad viewability + impression/click tracking + offline queue",
+      "description": "As the business, I need accurate, consent-gated ad metrics, matching iOS AdTrackingService + AdViewabilityModifier.",
+      "acceptanceCriteria": [
+        "Viewability modifier logs an impression only when an ad is >=50% on-screen for >=1s (Compose layout/onGloballyPositioned tracking)",
+        "Insert impressions to ad_impressions and clicks to ad_clicks (link click to impression_id when known)",
+        "De-dupe impressions per campaign+creative+session; frequency-cap (e.g. 3/campaign/session, 10/user/day) by querying ad_impressions before show",
+        "Respect ConsentService.analyticsConsent; drop queued events if consent revoked",
+        "Offline-safe queue in DataStore; flush on reconnect via NetworkMonitor",
+        "Emit matching analytics events (affiliate/sponsored/house with inventory_class tag)"
+      ],
+      "priority": 35,
+      "passes": false,
+      "notes": "Tables: ad_impressions, ad_clicks. Mirrors ios/.../Services/AdTrackingService.swift + Views/Components/AdViewabilityModifier.swift. Mirrors iOS ad-viewability screen-bounds fix."
+    },
+    {
+      "id": "ANDP-042",
+      "title": "Sponsored picks in AI surfaces",
+      "description": "As the business, I need labeled sponsored listings in AI flows, matching iOS SponsoredPickService + SponsoredPickCard.",
+      "acceptanceCriteria": [
+        "SponsoredPickService calls get-sponsored-pick with { surface: ask_pulse|surprise_me|trip_planner, query? }",
+        "Free tier only: short-circuit locally (return null) for Insider/VIP before the network call; server re-checks via bearer token",
+        "SponsoredPickCard shows a clear 'Sponsored' label, title, reason, thumbnail, external-link icon",
+        "Log impression on view and click on tap via AdTrackingService; de-dupe per session per surface",
+        "Returns null gracefully when no sponsored inventory"
+      ],
+      "priority": 36,
+      "passes": false,
+      "notes": "Edge function: get-sponsored-pick. Tables: campaigns, sponsored_listing_links. Mirrors ios/.../Services/SponsoredPickService.swift + Views/Components/SponsoredPickCard.swift. Consumed by ANDP-013/024."
+    },
+    {
+      "id": "ANDP-043",
+      "title": "Soft paywall service + contextual PaywallView",
+      "description": "As the business, I want timely, capped upsells, matching iOS SoftPaywallService + PaywallView.",
+      "acceptanceCriteria": [
+        "SoftPaywallService triggers after configured engagement (e.g. 2nd favorite OR first Trip Planner attempt); free tier only; resets on purchase",
+        "Frequency cap: max ~3 presentations ever with a ~7-day cooldown between shows (persisted)",
+        "PaywallView shows context-specific headline (favorites, Trip Planner, insider/dining tips) + tier comparison + Subscribe button -> SubscriptionScreen",
+        "Post-onboarding upsell shown at most once per session",
+        "Track paywall_present/dismiss/purchase_start with a context id",
+        "Free users retain graceful access to non-premium content"
+      ],
+      "priority": 37,
+      "passes": false,
+      "notes": "Mirrors ios/.../Services/SoftPaywallService.swift + Views/Subscription/PaywallView.swift. Reuses existing PremiumGate + SubscriptionScreen. Mirrors iOS FEAT-032/033 soft-paywall wiring."
+    },
+    {
+      "id": "ANDP-044",
+      "title": "Frequency-capped interstitial ads",
+      "description": "As the business, I want occasional full-screen ads at safe boundaries, matching iOS InterstitialAdService.",
+      "acceptanceCriteria": [
+        "InterstitialAdService gates full-screen ads at major nav boundaries (e.g. tab switch) for free tier only",
+        "Caps: max N per session, none in the first M sessions, minimum interval between shows",
+        "Persist session count, boundary count, last-shown timestamp in DataStore",
+        "Never show while reading or mid-flow; callers gate behind stable boundaries only",
+        "Mark presented after show and increment counters; no-op for premium"
+      ],
+      "priority": 38,
+      "passes": false,
+      "notes": "Mirrors ios/.../Services/InterstitialAdService.swift + Views/Components/InterstitialAdView.swift."
+    },
+    {
+      "id": "ANDP-050",
+      "title": "Saved searches CRUD + alert configuration",
+      "description": "As a user, I want to save searches and get alerts, matching iOS SavedSearchService + SavedSearch UI.",
+      "acceptanceCriteria": [
+        "Fetch the user's saved_searches (RLS own-only) ordered created_at DESC; offline -> serve last-fetched local copy, re-sync on reconnect",
+        "Create with name, filters (JSONB), search_type ('event_list' for Events tab else 'advanced'), and top-level alerts_enabled mirrored from filters.alertsEnabled",
+        "Toggle alerts updates both top-level alerts_enabled and search_type so the nightly alert job can scan it",
+        "Delete is optimistic with confirm; on failure roll back the row and show an error toast",
+        "Tapping a saved search re-runs it (applies filters to the relevant tab)",
+        "Surfaced in Search and embedded in Dashboard"
+      ],
+      "priority": 39,
+      "passes": false,
+      "notes": "Table: saved_searches. Mirrors ios/.../Services/SavedSearchService.swift + Views/Search/SavedSearchUI.swift/SavedSearchResultsView.swift. Optimistic-delete rollback mirrors iOS audit (d7cead5)."
+    },
+    {
+      "id": "ANDP-051",
+      "title": "Search suggestions: trending + recent + recently-viewed",
+      "description": "As a user, I want helpful suggestions in the empty search state, matching iOS SearchSuggestions.",
+      "acceptanceCriteria": [
+        "Trending chips row (e.g. Live music, Kid-friendly, Brunch, Free, This weekend)",
+        "Recent searches list (last 5 from SearchHistoryService) with a clear-all action",
+        "Recently-viewed horizontal rail (RecentlyViewedService) with thumbnails + titles",
+        "Tapping a trending chip or recent query populates the field and submits",
+        "Tapping a recently-viewed item navigates to its detail",
+        "All read-only / on-device (no network)"
+      ],
+      "priority": 40,
+      "passes": false,
+      "notes": "Mirrors ios/.../Views/Components/SearchSuggestions.swift. Depends on ANDP-007 + ANDP-008."
+    },
+    {
+      "id": "ANDP-060",
+      "title": "Atomic favorite toggles (no double-write race)",
+      "description": "As a user, rapid favorite taps must never duplicate or desync, mirroring the iOS atomic-upsert audit fix.",
+      "acceptanceCriteria": [
+        "Guard FavoritesRepository toggle with a per-item Mutex so local cache write + remote call are atomic",
+        "Optimistic local update with rollback on remote failure",
+        "Remote write uses upsert (not delete-then-insert) to avoid transient states",
+        "Unit test: 10 concurrent toggles on one id result in one consistent final state + a single effective remote write"
+      ],
+      "priority": 41,
+      "passes": false,
+      "notes": "Mirrors iOS BUG-002 (atomic vote upsert) applied to favorites. Files: data/repository/FavoritesRepositoryImpl.kt."
+    },
+    {
+      "id": "ANDP-061",
+      "title": "Serialize/cancel async fetches to kill stale-result races",
+      "description": "As a user, overlapping loads must not show stale data, mirroring the iOS BUG-007 fix.",
+      "acceptanceCriteria": [
+        "Introduce a per-endpoint fetch generation/cancellation so a newer request cancels the in-flight one",
+        "Apply to Events, Restaurants, Favorites, Search, and Discover fetches",
+        "Only the latest request's result updates UI state",
+        "Restore any throttle/debounce removed during the change (mirror iOS a972e23 follow-up)",
+        "Integration test: rapid filter changes + pull-to-refresh yield only the latest result"
+      ],
+      "priority": 42,
+      "passes": false,
+      "notes": "Mirrors iOS BUG-007 + the prefetch-throttle restore. ViewModels under ui/screens/*."
+    },
+    {
+      "id": "ANDP-062",
+      "title": "Pagination consistency validation",
+      "description": "As a user, paginated lists must not silently corrupt, mirroring the iOS pagination-desync fix.",
+      "acceptanceCriteria": [
+        "Validate response size <= requested limit; detect offset overlap with the previous page",
+        "On mismatch, emit an error state + reload affordance instead of appending bad data",
+        "Apply to Events, Restaurants, Articles, Hotels list loads",
+        "Unit test: oversized/overlapping mock responses trigger the guard"
+      ],
+      "priority": 43,
+      "passes": false,
+      "notes": "Mirrors iOS pagination desync fix (d7cead5). Carries forward AUDIT-PERF concerns."
+    },
+    {
+      "id": "ANDP-063",
+      "title": "Crash-safe external link + Maps handling with allowlist",
+      "description": "As a user, opening links/maps must never crash, mirroring the iOS crash-safe Maps audit fix.",
+      "acceptanceCriteria": [
+        "SafeLinkLauncher validates URIs and resolves an Intent before launch; catches ActivityNotFound",
+        "Maps fallback chain: geo: intent -> Google Maps -> browser",
+        "Allowlist app domains + map schemes; drop unsafe/unknown schemes",
+        "Route all article/ad/detail external links through SafeLinkLauncher",
+        "Unit test: malformed URL falls back safely; disallowed scheme is rejected"
+      ],
+      "priority": 44,
+      "passes": false,
+      "notes": "Mirrors iOS d9dd6ac (crash-safe Maps links, ad-link allowlist). Used by ANDP-031/034/040."
+    },
+    {
+      "id": "ANDP-064",
+      "title": "Sign-out complete teardown (no leaks)",
+      "description": "As a user, signing out must fully reset state, mirroring the iOS sign-out leak fix.",
+      "acceptanceCriteria": [
+        "signOut() stops SessionTimeoutService, unregisters NetworkMonitor + push token, cancels in-flight jobs",
+        "Clear SecureStorage tokens, cached profile, recently-viewed/search history if required, and image cache",
+        "No retained listeners/observers after sign-out",
+        "Test verifies repositories/services are reset and no callbacks remain registered"
+      ],
+      "priority": 45,
+      "passes": false,
+      "notes": "Mirrors iOS d9dd6ac sign-out leak fix. Files: AuthViewModel, SessionTimeoutService, NetworkMonitor, PushNotificationService."
+    },
+    {
+      "id": "ANDP-065",
+      "title": "Affiliate ad-link allowlist + remote config",
+      "description": "As the business, affiliate links must only open approved domains, mirroring the iOS ad-link allowlist.",
+      "acceptanceCriteria": [
+        "Extend AffiliateAdService registry to all current partners; add isValidAffiliateUrl(url) domain check",
+        "Every affiliate launch validates against the registry before opening",
+        "Log + drop rejected (non-allowlisted) domains",
+        "Allowlist updatable via remote config without an APK rebuild"
+      ],
+      "priority": 46,
+      "passes": false,
+      "notes": "Mirrors iOS ad-link allowlist (d9dd6ac). Files: ui/components/AffiliateAdBanner.kt + a new AffiliateAdService."
+    },
+    {
+      "id": "ANDP-066",
+      "title": "Enforce 48dp minimum touch targets",
+      "description": "As a user with motor/vision needs, all controls must be reliably tappable, mirroring the iOS 44pt-target fix.",
+      "acceptanceCriteria": [
+        "Apply minHitTarget()/minimumInteractiveComponentSize to icon buttons, tab icons, filter chips, map controls",
+        "Audit EventDetail, RestaurantDetail, Search, Map, Profile screens",
+        "Default IconButton size >= 48x48dp with padding",
+        "Snapshot/UX test at large font scale confirms no clipped/under-sized targets"
+      ],
+      "priority": 47,
+      "passes": false,
+      "notes": "Mirrors iOS 44pt target fix (d9dd6ac) -> Android 48dp (WCAG 2.5.5). AccessibilityModifiers.kt already exposes minHitTarget()."
+    },
+    {
+      "id": "ANDP-067",
+      "title": "Telemetry opt-out enforcement",
+      "description": "As a privacy-conscious user, revoking analytics must actually stop non-essential telemetry, mirroring the iOS universal opt-out.",
+      "acceptanceCriteria": [
+        "Gate all non-essential analytics/ad events behind ConsentService.analyticsConsent",
+        "Never gate essential crash/auth-error telemetry",
+        "Settings exposes an opt-out that calls ConsentService and clears queued analytics/ad events",
+        "Test: revoke consent, exercise app, verify no analytics/ad-impression writes"
+      ],
+      "priority": 48,
+      "passes": false,
+      "notes": "Mirrors iOS SEC-014 universal analytics opt-out. Ties into ANDP-003/041."
+    },
+    {
+      "id": "ANDP-068",
+      "title": "Comprehensive accessibility labels + semantic hierarchy",
+      "description": "As a TalkBack user, I need meaningful, ordered labels, mirroring the iOS accessibility audit batch.",
+      "acceptanceCriteria": [
+        "Use aggregated card labels (title/date/venue/price) instead of many separate reads",
+        "Apply heading semantics to screen + section titles; contentDescription on all icon-only buttons",
+        "Make star ratings keyboard/AT-operable; label search/filter inputs (mirror web WEB-UX-024)",
+        "Audit EventDetail, RestaurantDetail, Search, Profile, Discover with TalkBack and fix reading order"
+      ],
+      "priority": 49,
+      "passes": false,
+      "notes": "Mirrors iOS UX-039..047 accessibility batch. AccessibilityModifiers.kt/AccessibilityHelper.kt exist but aren't applied systematically."
+    },
+    {
+      "id": "ANDP-069",
+      "title": "Auto-refetch stale queries on reconnect",
+      "description": "As a user returning online, content should refresh itself, mirroring iOS NWPathMonitor-driven refetch.",
+      "acceptanceCriteria": [
+        "Observe NetworkMonitor reconnect signal; debounce ~500ms then refresh currently-visible queries only",
+        "Wire into Events, Restaurants, Favorites (avoid refetching all pages)",
+        "Optional subtle banner/toast during refetch",
+        "Test: offline -> online toggle refreshes the visible list"
+      ],
+      "priority": 50,
+      "passes": false,
+      "notes": "Mirrors iOS reconnect behavior. NetworkMonitor already exposes a reconnect state; wire it to repositories."
+    },
+    {
+      "id": "ANDP-070",
+      "title": "Index attractions (and hotels) into App Search",
+      "description": "As a user, I want on-device search to find all content types, mirroring the iOS Spotlight indexing.",
+      "acceptanceCriteria": [
+        "Extend AppSearchService to index attractions and hotels alongside events/restaurants",
+        "Index on content fetch (Home/Restaurants/Attractions/Hotels load) with name, description, deep-link URL, image, keywords",
+        "Tapping a system-search result deep-links into the correct detail screen",
+        "Settings toggle to disable on-device indexing"
+      ],
+      "priority": 51,
+      "passes": false,
+      "notes": "Mirrors iOS Spotlight work (3a677fa). AppSearchService currently covers events + restaurants only."
+    },
+    {
+      "id": "ANDP-071",
+      "title": "Navigation polish: back-handled sheets + tab re-select scroll-to-top",
+      "description": "As a user, navigation should feel native, carrying forward the open Android audit UX items.",
+      "acceptanceCriteria": [
+        "BackHandler dismisses an open bottom sheet before popping the back stack",
+        "Re-selecting the active bottom-nav tab scrolls that screen's list to top",
+        "Apply consistently across Home, Restaurants, Search, Favorites"
+      ],
+      "priority": 52,
+      "passes": false,
+      "notes": "Carries forward prd-android-audit.json AUDIT-UX-002/003 (still todo). Files: MainScreen.kt, NavGraph.kt."
+    },
+    {
+      "id": "ANDP-072",
+      "title": "Extract hardcoded strings to resources (i18n readiness)",
+      "description": "As a developer, user-facing strings should live in resources, carrying forward the Android audit item.",
+      "acceptanceCriteria": [
+        "Move hardcoded UI strings to res/values/strings.xml",
+        "Replace literals in screens/components with stringResource()",
+        "No behavior change; lint passes with no hardcoded-text warnings on migrated files"
+      ],
+      "priority": 53,
+      "passes": false,
+      "notes": "Carries forward prd-android-audit.json AUDIT-UX-004 (todo)."
+    },
+    {
+      "id": "ANDP-073",
+      "title": "Responsive tablet & landscape layouts",
+      "description": "As a tablet user, layouts should adapt, carrying forward the Android audit item.",
+      "acceptanceCriteria": [
+        "Use WindowSizeClass to switch to multi-column/list-detail layouts on expanded widths",
+        "Map, detail, and list screens render correctly in landscape and on tablets",
+        "NavigationRail used instead of bottom bar on expanded width (already partly present)"
+      ],
+      "priority": 54,
+      "passes": false,
+      "notes": "Carries forward prd-android-audit.json AUDIT-UX-007 (todo)."
+    },
+    {
+      "id": "ANDP-074",
+      "title": "Premium lock indicators on gated filters/options",
+      "description": "As a free user, I should see what's premium before tapping, carrying forward the Android audit item.",
+      "acceptanceCriteria": [
+        "Show a lock badge on premium filter options and premium-only toggles",
+        "Tapping a locked option opens the contextual paywall (ANDP-043)",
+        "Apply in FilterSheet and any premium event/restaurant filters"
+      ],
+      "priority": 55,
+      "passes": false,
+      "notes": "Carries forward prd-android-audit.json AUDIT-UX-006 (todo). Ties into ANDP-043."
+    }
+  ]
+}

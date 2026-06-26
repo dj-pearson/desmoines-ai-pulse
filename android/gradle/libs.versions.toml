@@ -108,6 +108,7 @@ play-billing = { group = "com.android.billingclient", name = "billing-ktx", vers
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
 firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging" }
 firebase-appindexing = { group = "com.google.firebase", name = "firebase-appindexing", version.ref = "firebaseAppIndexing" }
+firebase-analytics = { group = "com.google.firebase", name = "firebase-analytics" }
 
 # Security (Encrypted SharedPreferences)
 security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
