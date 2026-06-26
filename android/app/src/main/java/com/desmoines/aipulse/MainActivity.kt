@@ -1,6 +1,7 @@
 package com.desmoines.aipulse
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -26,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
+import com.desmoines.aipulse.ui.components.ForceUpdateScreen
 import com.desmoines.aipulse.ui.screens.MainScreen
 import com.desmoines.aipulse.ui.screens.onboarding.OnboardingScreen
 import com.desmoines.aipulse.ui.theme.DesMoinesInsiderTheme
@@ -36,6 +38,7 @@ import com.desmoines.aipulse.util.DeepLinkHandler
 import com.desmoines.aipulse.util.NetworkMonitor
 import com.desmoines.aipulse.util.OnboardingPreferences
 import com.desmoines.aipulse.util.RootDetector
+import com.desmoines.aipulse.util.VersionCheckService
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -56,6 +59,9 @@ class MainActivity : FragmentActivity() {
     @Inject
     lateinit var biometricAuthService: BiometricAuthService
 
+    @Inject
+    lateinit var versionCheckService: VersionCheckService
+
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -71,6 +77,19 @@ class MainActivity : FragmentActivity() {
             // to System preserves existing behavior while the container lets
             // future theme changes crossfade smoothly.
             ThemeCrossfadeContainer(themeMode = ThemeMode.System) { _ ->
+                // Launch-time version gate. Fails open; only blocks when the backend
+                // explicitly returns forceUpgrade=true.
+                val versionState by versionCheckService.state.collectAsState()
+                LaunchedEffect(Unit) { versionCheckService.check() }
+                if (versionState.forceUpgrade) {
+                    ForceUpdateScreen(message = versionState.message) {
+                        runCatching {
+                            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(versionState.storeUrl)))
+                        }
+                    }
+                    return@ThemeCrossfadeContainer
+                }
+
                 val hasCompletedOnboarding by onboardingPreferences.hasCompletedOnboarding
                     .collectAsState(initial = true) // default true to avoid flash
 

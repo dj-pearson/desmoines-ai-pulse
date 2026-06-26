@@ -3,7 +3,11 @@ package com.desmoines.aipulse.di
 import android.content.Context
 import android.content.SharedPreferences
 import com.desmoines.aipulse.data.remote.SupabaseClientProvider
+import com.desmoines.aipulse.util.AnalyticsSink
+import com.desmoines.aipulse.util.CrashReportingService
+import com.desmoines.aipulse.util.FirebaseAnalyticsSink
 import com.desmoines.aipulse.util.QueryCache
+import com.google.firebase.analytics.FirebaseAnalytics
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -46,4 +50,16 @@ object AppModule {
         @ApplicationContext context: Context,
         json: Json,
     ): QueryCache = QueryCache(File(context.cacheDir, "query-cache"), json)
+
+    @Provides
+    @Singleton
+    fun provideCrashReportingService(
+        @ApplicationContext context: Context,
+        json: Json,
+    ): CrashReportingService = CrashReportingService(File(context.filesDir, "CrashReports"), json)
+
+    @Provides
+    @Singleton
+    fun provideAnalyticsSink(@ApplicationContext context: Context): AnalyticsSink =
+        FirebaseAnalyticsSink(FirebaseAnalytics.getInstance(context))
 }
