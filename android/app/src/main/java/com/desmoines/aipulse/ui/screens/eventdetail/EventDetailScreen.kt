@@ -80,6 +80,7 @@ import com.desmoines.aipulse.data.model.EventCategory
 import com.desmoines.aipulse.data.model.SubscriptionTier
 import com.desmoines.aipulse.ui.components.CachedAsyncImage
 import com.desmoines.aipulse.ui.components.CategoryBadge
+import com.desmoines.aipulse.ui.components.reviews.ReviewsSection
 import com.desmoines.aipulse.ui.components.FullScreenImageViewer
 import com.desmoines.aipulse.ui.components.HeartBurst
 import com.desmoines.aipulse.ui.components.LoadingView
@@ -220,6 +221,10 @@ fun EventDetailScreen(
                 currentTier = currentTier,
                 onShowSubscription = onShowSubscription,
             )
+
+            // Reviews (ANDP-035)
+            Spacer(modifier = Modifier.height(8.dp))
+            ReviewsSection(contentType = "event", contentId = event.id)
 
             // Related Events
             EventDetailRelated(

@@ -20,6 +20,8 @@ import com.desmoines.aipulse.data.repository.DealsRepository
 import com.desmoines.aipulse.data.repository.DealsRepositoryImpl
 import com.desmoines.aipulse.data.repository.HotelsRepository
 import com.desmoines.aipulse.data.repository.HotelsRepositoryImpl
+import com.desmoines.aipulse.data.repository.ReviewsRepository
+import com.desmoines.aipulse.data.repository.ReviewsRepositoryImpl
 import com.desmoines.aipulse.data.repository.SavedSearchRepository
 import com.desmoines.aipulse.data.repository.SavedSearchRepositoryImpl
 import com.desmoines.aipulse.data.repository.SurpriseMeRepository
@@ -67,6 +69,9 @@ abstract class RepositoryModule {
 
     @Binds
     abstract fun bindHotelsRepository(impl: HotelsRepositoryImpl): HotelsRepository
+
+    @Binds
+    abstract fun bindReviewsRepository(impl: ReviewsRepositoryImpl): ReviewsRepository
 
     @Binds
     abstract fun bindAskPulseRepository(impl: AskPulseRepositoryImpl): AskPulseRepository
