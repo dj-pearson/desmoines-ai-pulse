@@ -63,6 +63,29 @@ fun DiscoverScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
+                actions = {
+                    if (state.savedCount > 0) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .padding(end = 12.dp)
+                                .semantics { contentDescription = "${state.savedCount} saved" },
+                        ) {
+                            Icon(
+                                Icons.Filled.Favorite,
+                                contentDescription = null,
+                                tint = Color(0xFF43A047),
+                                modifier = Modifier.size(20.dp),
+                            )
+                            Spacer(Modifier.size(4.dp))
+                            Text(
+                                "${state.savedCount}",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                    }
+                },
             )
         },
     ) { innerPadding ->

@@ -617,6 +617,7 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
             onSkip = viewModel::onSkip,
             onBoost = viewModel::onBoost,
             onOpenItem = { item ->
+                viewModel.onDetail(item) // weak-positive signal
                 when (item.itemType) {
                     com.desmoines.aipulse.data.model.SwipeItemType.EVENT ->
                         navController.navigate(Route.EventDetail.createRoute(item.rawId))
