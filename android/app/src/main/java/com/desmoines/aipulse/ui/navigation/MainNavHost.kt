@@ -473,8 +473,7 @@ private fun NavGraphBuilder.addTabDestinations(
                 navController.navigate(Route.Subscription.route)
             },
             onVisitWebsite = {
-                val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(com.desmoines.aipulse.util.Config.SITE_URL))
-                context.startActivity(intent)
+                com.desmoines.aipulse.util.SafeLinkLauncher.openUrl(context, com.desmoines.aipulse.util.Config.SITE_URL)
             },
         )
     }
@@ -546,8 +545,7 @@ private fun NavGraphBuilder.addDetailDestinations(navController: NavHostControll
                 navController.navigate(Route.EventDetail.createRoute(id))
             },
             onOpenSourceUrl = { url ->
-                val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
-                context.startActivity(intent)
+                com.desmoines.aipulse.util.SafeLinkLauncher.openUrl(context, url)
             },
             onNavigateToAuth = { navController.navigate(Route.Auth.route) },
         )
@@ -818,13 +816,8 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
                 context.startActivity(Intent.createChooser(shareIntent, "Share Hotel"))
             },
             onBook = {
-                viewModel.createBookingIntent()?.let { intent ->
-                    try {
-                        context.startActivity(intent)
-                    } catch (_: Exception) {
-                        // No browser/handler available; ignore.
-                    }
-                }
+                // Safe-link launcher validates the scheme + swallows missing handlers.
+                com.desmoines.aipulse.util.SafeLinkLauncher.openUrl(context, viewModel.bookingUrl())
             },
             onCall = {
                 viewModel.createCallIntent()?.let { intent -> context.startActivity(intent) }

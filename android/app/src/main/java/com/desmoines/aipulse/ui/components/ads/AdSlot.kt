@@ -1,7 +1,5 @@
 package com.desmoines.aipulse.ui.components.ads
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -29,6 +27,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.desmoines.aipulse.data.model.CampaignAd
 import com.desmoines.aipulse.ui.components.CachedAsyncImage
+import com.desmoines.aipulse.util.SafeLinkLauncher
 
 /**
  * Renders the live first-party campaign ad for [placement] (ANDP-040), or
@@ -56,8 +55,7 @@ fun AdSlot(placement: String, modifier: Modifier = Modifier) {
         modifier = modifier.trackAdViewability(key = creative.creativeId) { viewModel.onImpression(placement) },
         onClick = {
             viewModel.onClick()
-            val url = creative.linkUrl?.trim()?.takeIf { it.isNotEmpty() } ?: return@AdCard
-            runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+            SafeLinkLauncher.openUrl(context, creative.linkUrl)
         },
     )
 }

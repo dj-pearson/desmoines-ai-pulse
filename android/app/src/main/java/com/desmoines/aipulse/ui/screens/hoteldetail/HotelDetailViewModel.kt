@@ -81,6 +81,9 @@ class HotelDetailViewModel @Inject constructor(
         return Intent(Intent.ACTION_VIEW, Uri.parse(url))
     }
 
+    /** Affiliate booking URL (or website), for the safe-link launcher. */
+    fun bookingUrl(): String? = _hotel.value?.bookingUrl
+
     fun createCallIntent(): Intent? {
         val phone = _hotel.value?.phone?.trim()?.takeIf { it.isNotEmpty() } ?: return null
         return Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone"))
