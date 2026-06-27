@@ -64,6 +64,8 @@ import com.desmoines.aipulse.ui.screens.restaurants.RestaurantsViewModel
 import com.desmoines.aipulse.ui.components.WebViewScreen
 import com.desmoines.aipulse.ui.screens.search.SearchScreen
 import com.desmoines.aipulse.ui.screens.search.SearchViewModel
+import com.desmoines.aipulse.ui.screens.search.SearchTab
+import com.desmoines.aipulse.ui.screens.search.SavedSearchViewModel
 import com.desmoines.aipulse.ui.screens.subscription.SubscriptionScreen
 import com.desmoines.aipulse.ui.screens.subscription.SubscriptionViewModel
 import com.desmoines.aipulse.data.remote.BillingService
@@ -280,13 +282,26 @@ private fun NavGraphBuilder.addTabDestinations(
 
     composable(Route.Search.route) {
         val viewModel: SearchViewModel = hiltViewModel()
+        val savedSearchViewModel: SavedSearchViewModel = hiltViewModel()
         val state by viewModel.uiState.collectAsState()
+        val savedSearchState by savedSearchViewModel.uiState.collectAsState()
 
         SearchScreen(
             state = state,
+            savedSearches = savedSearchState.searches,
             onSearchTextChanged = viewModel::onSearchTextChanged,
             onTabSelected = viewModel::onTabSelected,
             onClearSearch = viewModel::clearSearch,
+            onSaveCurrentSearch = {
+                savedSearchViewModel.save(state.searchText, state.selectedTab.displayName)
+            },
+            onRerunSavedSearch = { search ->
+                SearchTab.entries.firstOrNull { it.displayName == search.filters.tab }
+                    ?.let { viewModel.onTabSelected(it) }
+                viewModel.onSearchTextChanged(search.query)
+            },
+            onToggleSavedSearchAlerts = savedSearchViewModel::toggleAlerts,
+            onDeleteSavedSearch = savedSearchViewModel::delete,
             onNavigateToEventDetail = { id ->
                 navController.navigate(Route.EventDetail.createRoute(id))
             },

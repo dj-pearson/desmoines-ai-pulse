@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.School
+import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SportsTennis
 import androidx.compose.material.icons.filled.Star
@@ -52,6 +53,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -84,9 +86,14 @@ import java.util.Locale
 fun SearchScreen(
     state: SearchScreenState = SearchScreenState(),
     isConnected: Boolean = true,
+    savedSearches: List<com.desmoines.aipulse.data.model.SavedSearch> = emptyList(),
     onSearchTextChanged: (String) -> Unit = {},
     onTabSelected: (SearchTab) -> Unit = {},
     onClearSearch: () -> Unit = {},
+    onSaveCurrentSearch: () -> Unit = {},
+    onRerunSavedSearch: (com.desmoines.aipulse.data.model.SavedSearch) -> Unit = {},
+    onToggleSavedSearchAlerts: (com.desmoines.aipulse.data.model.SavedSearch) -> Unit = {},
+    onDeleteSavedSearch: (com.desmoines.aipulse.data.model.SavedSearch) -> Unit = {},
     onNavigateToEventDetail: (String) -> Unit = {},
     onNavigateToRestaurantDetail: (String) -> Unit = {},
     onNavigateToAttractionDetail: (String) -> Unit = {},
@@ -113,12 +120,40 @@ fun SearchScreen(
             )
         }
 
+        // Save the active query as a saved search.
+        if (state.hasSearched && state.searchText.isNotBlank()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                TextButton(onClick = { haptics.light(); onSaveCurrentSearch() }) {
+                    Icon(
+                        Icons.Filled.BookmarkAdd,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text("Save search")
+                }
+            }
+        }
+
         // Content
         when {
             state.searchText.isEmpty() && !state.hasSearched -> {
-                SearchSuggestions(
-                    onSuggestionSelected = onSearchTextChanged,
-                )
+                Column(modifier = Modifier.fillMaxSize()) {
+                    if (savedSearches.isNotEmpty()) {
+                        SavedSearchSection(
+                            searches = savedSearches,
+                            onRerun = onRerunSavedSearch,
+                            onToggleAlerts = onToggleSavedSearchAlerts,
+                            onDelete = onDeleteSavedSearch,
+                        )
+                    }
+                    SearchSuggestions(
+                        onSuggestionSelected = onSearchTextChanged,
+                    )
+                }
             }
             state.isSearching -> {
                 LoadingView()
