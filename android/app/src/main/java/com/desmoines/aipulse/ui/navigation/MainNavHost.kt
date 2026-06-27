@@ -40,6 +40,8 @@ import com.desmoines.aipulse.ui.screens.neighborhoods.NeighborhoodDetailViewMode
 import com.desmoines.aipulse.ui.screens.hubs.ContentHubsListScreen
 import com.desmoines.aipulse.ui.screens.hubs.ContentHubScreen
 import com.desmoines.aipulse.ui.screens.hubs.ContentHubViewModel
+import com.desmoines.aipulse.ui.screens.dashboard.DashboardScreen
+import com.desmoines.aipulse.ui.screens.dashboard.DashboardViewModel
 import com.desmoines.aipulse.ui.screens.auth.AuthScreen
 import com.desmoines.aipulse.ui.screens.eventdetail.EventDetailScreen
 import com.desmoines.aipulse.ui.screens.eventdetail.EventDetailViewModel
@@ -196,6 +198,9 @@ private fun NavGraphBuilder.addTabDestinations(
             },
             onNavigateToContentHubs = {
                 navController.navigate(Route.ContentHubs.route)
+            },
+            onNavigateToDashboard = {
+                navController.navigate(Route.Dashboard.route)
             },
             onSelectCategory = { category -> viewModel.setSelectedCategory(category) },
             onSelectDatePreset = { preset -> viewModel.setSelectedDatePreset(preset) },
@@ -665,6 +670,33 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
             onReload = viewModel::reload,
             onSelectMode = viewModel::setMode,
             onClearFilter = viewModel::clearFilter,
+            onNavigateBack = { navController.popBackStack() },
+        )
+    }
+
+    composable(Route.Dashboard.route) {
+        val viewModel: DashboardViewModel = hiltViewModel()
+        val savedSearchViewModel: SavedSearchViewModel = hiltViewModel()
+        val state by viewModel.uiState.collectAsState()
+        val savedSearchState by savedSearchViewModel.uiState.collectAsState()
+
+        DashboardScreen(
+            state = state,
+            savedSearches = savedSearchState.searches,
+            onRerunSavedSearch = {
+                // Re-run lands on the Search tab (where the saved-search list fully applies).
+                navController.navigate(Route.Search.route) { launchSingleTop = true }
+            },
+            onToggleSavedSearchAlerts = savedSearchViewModel::toggleAlerts,
+            onDeleteSavedSearch = savedSearchViewModel::delete,
+            onSignIn = { navController.navigate(Route.Auth.route) },
+            onUpgrade = { navController.navigate(Route.Subscription.route) },
+            onPlanTrip = { navController.navigate(Route.TripPlanner.route) },
+            onOpenTrip = { id -> navController.navigate(Route.ItineraryDetail.createRoute(id)) },
+            onOpenEvent = { id -> navController.navigate(Route.EventDetail.createRoute(id)) },
+            onOpenRestaurant = { id -> navController.navigate(Route.RestaurantDetail.createRoute(id)) },
+            onOpenAttraction = { id -> navController.navigate(Route.AttractionDetail.createRoute(id)) },
+            onRefresh = viewModel::refresh,
             onNavigateBack = { navController.popBackStack() },
         )
     }
