@@ -41,6 +41,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.desmoines.aipulse.data.repository.DiscoverPick
+import com.desmoines.aipulse.data.remote.SponsoredPickService
+import com.desmoines.aipulse.ui.components.ads.SponsoredPickSlot
 import com.desmoines.aipulse.ui.components.ChatBubble
 import com.desmoines.aipulse.ui.components.ChatRole
 import com.desmoines.aipulse.ui.components.SuggestionChipsRow
@@ -95,6 +97,13 @@ fun AskPulseScreen(
                     modifier = Modifier.weight(1f),
                 )
             }
+
+            // Sponsored pick (ANDP-042) — labeled, free-tier only, above the composer.
+            SponsoredPickSlot(
+                surface = SponsoredPickService.Surface.ASK_PULSE,
+                query = null,
+                onOpenItem = onNavigateToPick,
+            )
 
             state.errorMessage?.let { message ->
                 ErrorBanner(
