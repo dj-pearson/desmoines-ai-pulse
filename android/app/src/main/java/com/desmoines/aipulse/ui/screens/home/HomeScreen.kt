@@ -78,7 +78,9 @@ import com.desmoines.aipulse.data.model.Event
 import com.desmoines.aipulse.data.model.EventCategory
 import com.desmoines.aipulse.data.model.Restaurant
 import com.desmoines.aipulse.data.model.SubscriptionTier
+import com.desmoines.aipulse.data.remote.CampaignAdService
 import com.desmoines.aipulse.ui.components.AdBannerView
+import com.desmoines.aipulse.ui.components.ads.AdSlot
 import com.desmoines.aipulse.ui.components.EmptyStateView
 import com.desmoines.aipulse.ui.components.InlineLoadingView
 import com.desmoines.aipulse.ui.components.icon
@@ -331,6 +333,9 @@ fun HomeScreen(
                                 .padding(vertical = 4.dp)
                         )
                     }
+                    item(key = "campaignAd", span = { GridItemSpan(maxLineSpan) }) {
+                        AdSlot(placement = CampaignAdService.BELOW_FOLD)
+                    }
                     if (state.restaurants.isNotEmpty()) {
                         item(key = "restaurants", span = { GridItemSpan(maxLineSpan) }) {
                             val topRestaurants = remember(state.restaurants) {
@@ -501,6 +506,9 @@ fun HomeScreen(
                                 .padding(horizontal = Dimens.SpacingLg)
                                 .padding(vertical = 4.dp)
                         )
+                    }
+                    item(key = "campaignAd") {
+                        AdSlot(placement = CampaignAdService.BELOW_FOLD)
                     }
                     if (state.restaurants.isNotEmpty()) {
                         item(key = "restaurants") {
