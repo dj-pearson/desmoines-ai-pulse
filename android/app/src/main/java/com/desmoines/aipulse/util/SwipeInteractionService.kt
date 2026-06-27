@@ -68,6 +68,7 @@ class SwipeInteractionService @Inject constructor(
         itemType: String,
         itemId: String,
         sourceContext: Map<String, List<String>>? = null,
+        sessionId: String? = null,
     ) {
         val k = key(itemType, itemId)
         context.swipeStore.edit { prefs ->
@@ -78,7 +79,7 @@ class SwipeInteractionService @Inject constructor(
                 prefs[swipedOrderKey] = json.encodeToString(stringListSerializer, next)
             }
             val pending = decodePending(prefs[pendingKey]) +
-                PendingSwipe(itemType = itemType, itemId = itemId, action = action.value, sourceContext = sourceContext)
+                PendingSwipe(itemType = itemType, itemId = itemId, action = action.value, sourceContext = sourceContext, sessionId = sessionId)
             prefs[pendingKey] = json.encodeToString(pendingListSerializer, pending)
         }
         flushPending()
@@ -102,6 +103,7 @@ class SwipeInteractionService @Inject constructor(
                 itemId = it.itemId,
                 action = it.action,
                 sourceContext = it.sourceContext,
+                sessionId = it.sessionId,
             )
         }
         runCatching {
@@ -134,6 +136,7 @@ class SwipeInteractionService @Inject constructor(
         val itemId: String,
         val action: String,
         val sourceContext: Map<String, List<String>>? = null,
+        val sessionId: String? = null,
     )
 
     @Serializable
@@ -143,6 +146,7 @@ class SwipeInteractionService @Inject constructor(
         @SerialName("item_id") val itemId: String,
         val action: String,
         @SerialName("source_context") val sourceContext: Map<String, List<String>>? = null,
+        @SerialName("session_id") val sessionId: String? = null,
     )
 
     companion object {

@@ -30,6 +30,8 @@ import com.desmoines.aipulse.ui.screens.tripplanner.ItineraryDetailScreen
 import com.desmoines.aipulse.ui.screens.tripplanner.ItineraryDetailViewModel
 import com.desmoines.aipulse.ui.screens.discover.DiscoverScreen
 import com.desmoines.aipulse.ui.screens.discover.DiscoverViewModel
+import com.desmoines.aipulse.ui.screens.groupsession.GroupSessionScreen
+import com.desmoines.aipulse.ui.screens.groupsession.GroupSessionViewModel
 import com.desmoines.aipulse.ui.screens.surpriseme.SurpriseMeScreen
 import com.desmoines.aipulse.ui.screens.surpriseme.SurpriseMeViewModel
 import com.desmoines.aipulse.ui.screens.weekend.WeekendScreen
@@ -700,6 +702,35 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
             onReload = viewModel::reload,
             onSelectMode = viewModel::setMode,
             onClearFilter = viewModel::clearFilter,
+            onNavigateBack = { navController.popBackStack() },
+            onOpenGroupSession = { navController.navigate(Route.GroupSession.route) },
+        )
+    }
+
+    composable(Route.GroupSession.route) {
+        val viewModel: GroupSessionViewModel = hiltViewModel()
+        val state by viewModel.uiState.collectAsState()
+
+        GroupSessionScreen(
+            state = state,
+            modes = viewModel.modes,
+            onModeSelected = viewModel::onModeSelected,
+            onJoinCodeChanged = viewModel::onJoinCodeChanged,
+            onCreate = viewModel::createSession,
+            onJoin = viewModel::joinSession,
+            onRefresh = viewModel::refresh,
+            onEnd = viewModel::endSession,
+            onLeave = viewModel::leaveSession,
+            onSwipeNow = { navController.navigate(Route.Discover.route) },
+            onOpenMatch = { itemType, itemId ->
+                when (itemType) {
+                    "restaurant" -> navController.navigate(Route.RestaurantDetail.createRoute(itemId))
+                    "attraction" -> navController.navigate(Route.AttractionDetail.createRoute(itemId))
+                    "event" -> navController.navigate(Route.EventDetail.createRoute(itemId))
+                }
+            },
+            onClearError = viewModel::clearError,
+            onNavigateToAuth = { navController.navigate(Route.Auth.route) },
             onNavigateBack = { navController.popBackStack() },
         )
     }
