@@ -86,6 +86,8 @@ fun AttractionDetailScreen(
     onOpenWebsite: () -> Unit,
     onOpenDirections: () -> Unit,
     modifier: Modifier = Modifier,
+    onNavigateToSubscription: () -> Unit = {},
+    onNavigateToAuth: () -> Unit = {},
 ) {
     val haptic = rememberHapticPerformer()
     var showFullScreenImage by remember { mutableStateOf(false) }
@@ -166,9 +168,14 @@ fun AttractionDetailScreen(
             // Description
             AttractionDescriptionSection(attraction = attraction)
 
-            // Reviews (ANDP-035)
+            // Reviews (ANDP-035 / ANDP-036)
             Spacer(modifier = Modifier.height(16.dp))
-            ReviewsSection(contentType = "attraction", contentId = attraction.id)
+            ReviewsSection(
+                contentType = "attraction",
+                contentId = attraction.id,
+                onNavigateToSubscription = onNavigateToSubscription,
+                onNavigateToAuth = onNavigateToAuth,
+            )
             Spacer(modifier = Modifier.height(24.dp))
         }
 

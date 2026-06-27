@@ -530,6 +530,7 @@ private fun NavGraphBuilder.addDetailDestinations(navController: NavHostControll
                 val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
                 context.startActivity(intent)
             },
+            onNavigateToAuth = { navController.navigate(Route.Auth.route) },
         )
     }
 
@@ -589,6 +590,7 @@ private fun NavGraphBuilder.addDetailDestinations(navController: NavHostControll
             onShowSubscription = {
                 navController.navigate(Route.Subscription.route)
             },
+            onNavigateToAuth = { navController.navigate(Route.Auth.route) },
         )
     }
 
@@ -634,6 +636,8 @@ private fun NavGraphBuilder.addDetailDestinations(navController: NavHostControll
                     }
                 }
             },
+            onNavigateToSubscription = { navController.navigate(Route.Subscription.route) },
+            onNavigateToAuth = { navController.navigate(Route.Auth.route) },
         )
     }
 }
