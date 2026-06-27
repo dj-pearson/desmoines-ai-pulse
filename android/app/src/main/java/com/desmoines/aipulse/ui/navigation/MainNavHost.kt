@@ -710,6 +710,11 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
         ArticleDetailScreen(
             state = state,
             onRetry = viewModel::retry,
+            onToggleSave = viewModel::toggleSave,
+            onShared = viewModel::onShared,
+            onConsumeToast = viewModel::consumeToast,
+            onOpenLink = { url -> navController.navigate(Route.WebView.createRoute(url)) },
+            onOpenRelated = { id -> navController.navigate(Route.ArticleDetail.createRoute(id)) },
             onNavigateBack = { navController.popBackStack() },
         )
     }
