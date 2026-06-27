@@ -10,6 +10,7 @@ import com.desmoines.aipulse.data.remote.EventsQuery
 import com.desmoines.aipulse.data.remote.FavoritesException
 import com.desmoines.aipulse.data.remote.RestaurantsQuery
 import com.desmoines.aipulse.data.repository.AuthRepository
+import com.desmoines.aipulse.data.repository.GroupSessionManager
 import com.desmoines.aipulse.data.repository.EventsRepository
 import com.desmoines.aipulse.data.repository.FavoritesRepository
 import com.desmoines.aipulse.data.repository.RestaurantsRepository
@@ -59,6 +60,7 @@ class DiscoverViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val swipeInteractionService: SwipeInteractionService,
     private val softPaywallService: SoftPaywallService,
+    private val groupSessionManager: GroupSessionManager,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DiscoverUiState())
@@ -159,7 +161,14 @@ class DiscoverViewModel @Inject constructor(
 
     private fun record(action: SwipeInteractionService.Action, item: SwipeItem) {
         viewModelScope.launch {
-            swipeInteractionService.record(action, itemTypeString(item), item.rawId, filter.toSourceContext())
+            // When in a group session, tag the swipe so it counts toward shared matches.
+            swipeInteractionService.record(
+                action,
+                itemTypeString(item),
+                item.rawId,
+                filter.toSourceContext(),
+                sessionId = groupSessionManager.activeSessionId,
+            )
         }
     }
 

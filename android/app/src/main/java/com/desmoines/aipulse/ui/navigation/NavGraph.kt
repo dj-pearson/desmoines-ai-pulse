@@ -53,6 +53,7 @@ sealed class Route(val route: String) {
     data object Settings : Route("settings")
     data object AskPulse : Route("ask_pulse")
     data object Discover : Route("discover")
+    data object GroupSession : Route("group_session")
     data object SurpriseMe : Route("surprise_me")
     data object Weekend : Route("weekend")
     data object Neighborhoods : Route("neighborhoods")

@@ -18,6 +18,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -58,6 +59,7 @@ fun DiscoverScreen(
     onSelectMode: (DiscoverMode) -> Unit,
     onClearFilter: () -> Unit,
     onNavigateBack: () -> Unit,
+    onOpenGroupSession: () -> Unit = {},
 ) {
     var command by remember { mutableStateOf<SwipeCommand?>(null) }
 
@@ -91,6 +93,9 @@ fun DiscoverScreen(
                                 fontWeight = FontWeight.SemiBold,
                             )
                         }
+                    }
+                    IconButton(onClick = onOpenGroupSession) {
+                        Icon(Icons.Filled.Group, contentDescription = "Group session")
                     }
                 },
             )
