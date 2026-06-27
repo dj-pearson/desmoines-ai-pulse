@@ -17,11 +17,15 @@ import com.desmoines.aipulse.util.SoftPaywallService
 import com.desmoines.aipulse.util.SwipeInteractionService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 
 @Immutable
@@ -31,15 +35,21 @@ data class DiscoverUiState(
     val errorMessage: String? = null,
     /** Number of items saved (liked) this session — drives the saved-count badge. */
     val savedCount: Int = 0,
+    val mode: DiscoverMode = DiscoverMode.MIXED,
+    /** Filter chips shown above the deck (boost narrowing or a typed pre-filter). */
+    val filterTags: List<String> = emptyList(),
+    /** True when a typed pre-filter locks the mode toggle. */
+    val modeLocked: Boolean = false,
 ) {
     val isEmpty: Boolean get() = items.isEmpty() && !isLoading && errorMessage == null
 }
 
 /**
- * Feeds the Discover swipe deck (ANDP-020) and persists swipe signals (ANDP-022).
- * Likes/skips/boosts/detail-taps are recorded to `swipe_interactions` (fire-and-
- * forget), already-swiped items are filtered out, and a like also saves to
- * favorites — soft-failing to the paywall at the free cap. Mirrors iOS Discover.
+ * Feeds + scopes the Discover swipe deck (ANDP-020/021/022). Owns the mode
+ * toggle, filter context, independent paged fetches with a stale-result
+ * generation guard, background prefetch, and "more like this" boost narrowing —
+ * plus swipe persistence (records signals, dedupes, likes → favorites).
+ * Mirrors iOS DiscoverViewModel.
  */
 @HiltViewModel
 class DiscoverViewModel @Inject constructor(
@@ -54,12 +64,23 @@ class DiscoverViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(DiscoverUiState())
     val uiState: StateFlow<DiscoverUiState> = _uiState.asStateFlow()
 
+    private var filter = DiscoverFilterContext()
+
     private var favoriteEventIds: Set<String> = emptySet()
     private var favoriteRestaurantIds: Set<String> = emptySet()
 
+    // Paging + stale-result guard.
+    private var eventOffset = 0
+    private var restaurantOffset = 0
+    private var hasMoreEvents = true
+    private var hasMoreRestaurants = true
+    private var fetchGeneration = 0
+    private var fetchErrored = false
+    private val fetchMutex = Mutex()
+
     init {
         loadFavorites()
-        load()
+        reload()
     }
 
     private fun loadFavorites() {
@@ -72,30 +93,31 @@ class DiscoverViewModel @Inject constructor(
         }
     }
 
-    fun load() {
-        _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-        viewModelScope.launch {
-            val eventsDeferred = async {
-                eventsRepository.fetchEvents(EventsQuery(limit = 30)).getOrNull()?.events.orEmpty()
-            }
-            val restaurantsDeferred = async {
-                restaurantsRepository.fetchRestaurants(RestaurantsQuery(limit = 30)).getOrNull()?.restaurants.orEmpty()
-            }
-            val events = eventsDeferred.await().map(SwipeItem::from)
-            val restaurants = restaurantsDeferred.await().map(SwipeItem::from)
-            // Skip anything the user already swiped on (dedupe).
-            val swiped = swipeInteractionService.swipedKeys.value
-            val deck = interleave(events, restaurants).filterNot { swiped.contains(swipeKey(it)) }
+    fun setMode(mode: DiscoverMode) {
+        if (mode == _uiState.value.mode || _uiState.value.modeLocked) return
+        _uiState.update { it.copy(mode = mode) }
+        reload()
+    }
 
+    fun clearFilter() {
+        if (filter.isEmpty || _uiState.value.modeLocked) return
+        filter = DiscoverFilterContext()
+        reload()
+    }
+
+    fun reload() {
+        _uiState.update { it.copy(isLoading = true, items = emptyList(), errorMessage = null, filterTags = filter.tags()) }
+        resetPaging()
+        fetchGeneration++
+        viewModelScope.launch {
+            fetchMore()
             _uiState.update {
-                if (deck.isEmpty()) {
-                    it.copy(
-                        isLoading = false,
-                        errorMessage = "Couldn't load the discovery deck. Try again.",
-                    )
-                } else {
-                    it.copy(items = deck, isLoading = false, errorMessage = null)
-                }
+                it.copy(
+                    isLoading = false,
+                    errorMessage = if (it.items.isEmpty() && fetchErrored) {
+                        "Couldn't load the discovery deck. Try again."
+                    } else null,
+                )
             }
         }
     }
@@ -111,9 +133,11 @@ class DiscoverViewModel @Inject constructor(
         advancePast(item)
     }
 
+    /** Boost = strong positive + "show me more like this": narrow the filter and refetch. */
     fun onBoost(item: SwipeItem) {
         record(SwipeInteractionService.Action.BOOST, item)
-        advancePast(item)
+        applyBoostFilter(item)
+        reload()
     }
 
     /** Detail tap records a weak-positive signal; navigation is handled by the caller. */
@@ -123,9 +147,19 @@ class DiscoverViewModel @Inject constructor(
 
     fun clearError() = _uiState.update { it.copy(errorMessage = null) }
 
+    // MARK: - Internals
+
+    private fun applyBoostFilter(item: SwipeItem) {
+        filter = when (item.itemType) {
+            SwipeItemType.EVENT -> filter.copy(eventCategory = item.eventCategory ?: filter.eventCategory)
+            SwipeItemType.RESTAURANT ->
+                item.cuisine?.let { filter.copy(cuisines = listOf(it)) } ?: filter
+        }
+    }
+
     private fun record(action: SwipeInteractionService.Action, item: SwipeItem) {
         viewModelScope.launch {
-            swipeInteractionService.record(action, itemTypeString(item), item.rawId)
+            swipeInteractionService.record(action, itemTypeString(item), item.rawId, filter.toSourceContext())
         }
     }
 
@@ -158,9 +192,106 @@ class DiscoverViewModel @Inject constructor(
         }
     }
 
-    /** Remove the committed card from the top of the deck. */
+    /** Remove the committed card; prefetch the next page when the deck runs low. */
     private fun advancePast(item: SwipeItem) {
         _uiState.update { state -> state.copy(items = state.items.filterNot { it.id == item.id }) }
+        if (_uiState.value.items.size <= PREFETCH_THRESHOLD && !fetchMutex.isLocked) {
+            viewModelScope.launch { fetchMore() }
+        }
+    }
+
+    private fun resetPaging() {
+        eventOffset = 0
+        restaurantOffset = 0
+        hasMoreEvents = true
+        hasMoreRestaurants = true
+    }
+
+    private suspend fun fetchMore() {
+        fetchMutex.withLock {
+            fetchErrored = false
+            val generation = fetchGeneration
+            when (_uiState.value.mode) {
+                DiscoverMode.EVENTS -> fetchEventBatch(generation)
+                DiscoverMode.RESTAURANTS -> fetchRestaurantBatch(generation)
+                DiscoverMode.MIXED -> coroutineScope {
+                    val events = async { fetchEventBatch(generation) }
+                    val restaurants = async { fetchRestaurantBatch(generation) }
+                    events.await()
+                    restaurants.await()
+                }
+            }
+        }
+    }
+
+    private suspend fun fetchEventBatch(generation: Int) {
+        if (!hasMoreEvents) return
+        // "Tonight" (mixed) with no explicit preset shows the next 7 days so the
+        // deck isn't empty, without pulling events weeks out.
+        val preset = filter.datePreset
+            ?: if (_uiState.value.mode == DiscoverMode.MIXED) com.desmoines.aipulse.data.model.DateFilterPreset.THIS_WEEK else null
+        val range = preset?.dateRange
+        val query = EventsQuery(
+            category = filter.eventCategory,
+            dateStart = range?.first?.format(ISO),
+            dateEnd = range?.second?.format(ISO),
+            limit = PAGE_SIZE,
+            offset = eventOffset,
+        )
+        eventsRepository.fetchEvents(query)
+            .onSuccess { response ->
+                if (generation != fetchGeneration) return
+                val fresh = response.events
+                    .filterNot { swipeInteractionService.hasSwiped("event", it.id) }
+                    .map(SwipeItem::from)
+                appendUnique(fresh)
+                eventOffset += response.events.size
+                hasMoreEvents = response.hasMore
+            }
+            .onFailure {
+                if (generation != fetchGeneration) return
+                hasMoreEvents = false
+                fetchErrored = true
+            }
+    }
+
+    private suspend fun fetchRestaurantBatch(generation: Int) {
+        if (!hasMoreRestaurants) return
+        val query = RestaurantsQuery(
+            cuisines = filter.cuisines.ifEmpty { null },
+            priceRanges = filter.priceRanges.ifEmpty { null },
+            locations = filter.locations.ifEmpty { null },
+            minRating = filter.minRating.takeIf { it > 0 },
+            limit = PAGE_SIZE,
+            offset = restaurantOffset,
+        )
+        restaurantsRepository.fetchRestaurants(query)
+            .onSuccess { response ->
+                if (generation != fetchGeneration) return
+                val fresh = response.restaurants
+                    .let { list -> if (filter.openNow) list.filter { it.isOpenNow() == true } else list }
+                    .filterNot { swipeInteractionService.hasSwiped("restaurant", it.id) }
+                    .map(SwipeItem::from)
+                appendUnique(fresh)
+                restaurantOffset += response.restaurants.size
+                hasMoreRestaurants = response.hasMore
+            }
+            .onFailure {
+                if (generation != fetchGeneration) return
+                hasMoreRestaurants = false
+                fetchErrored = true
+            }
+    }
+
+    private fun appendUnique(newItems: List<SwipeItem>) {
+        _uiState.update { state ->
+            val existing = state.items.mapTo(HashSet()) { it.id }
+            val unique = newItems.filterNot { existing.contains(it.id) }
+            // Mixed mode: shuffle the new batch so events and restaurants interleave
+            // instead of arriving in two solid blocks.
+            val toAppend = if (state.mode == DiscoverMode.MIXED) unique.shuffled() else unique
+            state.copy(items = state.items + toAppend)
+        }
     }
 
     private fun itemTypeString(item: SwipeItem): String = when (item.itemType) {
@@ -168,16 +299,9 @@ class DiscoverViewModel @Inject constructor(
         SwipeItemType.RESTAURANT -> "restaurant"
     }
 
-    private fun swipeKey(item: SwipeItem): String = "${itemTypeString(item)}:${item.rawId}"
-
-    /** Alternate events and restaurants so the deck mixes content types. */
-    private fun interleave(a: List<SwipeItem>, b: List<SwipeItem>): List<SwipeItem> {
-        val result = ArrayList<SwipeItem>(a.size + b.size)
-        val max = maxOf(a.size, b.size)
-        for (i in 0 until max) {
-            if (i < a.size) result.add(a[i])
-            if (i < b.size) result.add(b[i])
-        }
-        return result
+    companion object {
+        private const val PAGE_SIZE = 20
+        private const val PREFETCH_THRESHOLD = 4
+        private val ISO: DateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME
     }
 }
