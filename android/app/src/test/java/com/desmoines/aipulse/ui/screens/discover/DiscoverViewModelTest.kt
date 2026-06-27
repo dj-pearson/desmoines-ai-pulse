@@ -5,11 +5,17 @@ import com.desmoines.aipulse.data.model.Restaurant
 import com.desmoines.aipulse.data.model.SwipeItemType
 import com.desmoines.aipulse.data.remote.EventsResponse
 import com.desmoines.aipulse.data.remote.RestaurantsResponse
+import com.desmoines.aipulse.data.repository.AuthRepository
 import com.desmoines.aipulse.data.repository.EventsRepository
+import com.desmoines.aipulse.data.repository.FavoritesRepository
 import com.desmoines.aipulse.data.repository.RestaurantsRepository
+import com.desmoines.aipulse.util.SoftPaywallService
+import com.desmoines.aipulse.util.SwipeInteractionService
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -30,12 +36,22 @@ class DiscoverViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
     private lateinit var eventsRepository: EventsRepository
     private lateinit var restaurantsRepository: RestaurantsRepository
+    private lateinit var favoritesRepository: FavoritesRepository
+    private lateinit var authRepository: AuthRepository
+    private lateinit var swipeInteractionService: SwipeInteractionService
+    private lateinit var softPaywallService: SoftPaywallService
 
     @BeforeEach
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         eventsRepository = mockk(relaxed = true)
         restaurantsRepository = mockk(relaxed = true)
+        favoritesRepository = mockk(relaxed = true)
+        authRepository = mockk(relaxed = true)
+        swipeInteractionService = mockk(relaxed = true)
+        softPaywallService = mockk(relaxed = true)
+        every { authRepository.currentUserId } returns null
+        every { swipeInteractionService.swipedKeys } returns MutableStateFlow(emptySet())
     }
 
     @AfterEach
@@ -54,7 +70,14 @@ class DiscoverViewModelTest {
             Result.success(RestaurantsResponse(ids.map(::restaurant), ids.size, false))
     }
 
-    private fun vm() = DiscoverViewModel(eventsRepository, restaurantsRepository)
+    private fun vm() = DiscoverViewModel(
+        eventsRepository,
+        restaurantsRepository,
+        favoritesRepository,
+        authRepository,
+        swipeInteractionService,
+        softPaywallService,
+    )
 
     @Test
     fun `load interleaves events and restaurants`() = runTest(testDispatcher) {
