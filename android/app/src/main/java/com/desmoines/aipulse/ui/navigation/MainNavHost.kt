@@ -32,6 +32,8 @@ import com.desmoines.aipulse.ui.screens.discover.DiscoverScreen
 import com.desmoines.aipulse.ui.screens.discover.DiscoverViewModel
 import com.desmoines.aipulse.ui.screens.surpriseme.SurpriseMeScreen
 import com.desmoines.aipulse.ui.screens.surpriseme.SurpriseMeViewModel
+import com.desmoines.aipulse.ui.screens.weekend.WeekendScreen
+import com.desmoines.aipulse.ui.screens.weekend.WeekendViewModel
 import com.desmoines.aipulse.ui.screens.auth.AuthScreen
 import com.desmoines.aipulse.ui.screens.eventdetail.EventDetailScreen
 import com.desmoines.aipulse.ui.screens.eventdetail.EventDetailViewModel
@@ -177,6 +179,9 @@ private fun NavGraphBuilder.addTabDestinations(
             },
             onNavigateToSurpriseMe = {
                 navController.navigate(Route.SurpriseMe.route)
+            },
+            onNavigateToWeekend = {
+                navController.navigate(Route.Weekend.route)
             },
             onSelectCategory = { category -> viewModel.setSelectedCategory(category) },
             onSelectDatePreset = { preset -> viewModel.setSelectedDatePreset(preset) },
@@ -633,6 +638,20 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
             onReload = viewModel::reload,
             onSelectMode = viewModel::setMode,
             onClearFilter = viewModel::clearFilter,
+            onNavigateBack = { navController.popBackStack() },
+        )
+    }
+
+    composable(Route.Weekend.route) {
+        val viewModel: WeekendViewModel = hiltViewModel()
+        val state by viewModel.uiState.collectAsState()
+
+        WeekendScreen(
+            state = state,
+            onRefresh = viewModel::refresh,
+            onOpenEvent = { id -> navController.navigate(Route.EventDetail.createRoute(id)) },
+            onOpenRestaurant = { id -> navController.navigate(Route.RestaurantDetail.createRoute(id)) },
+            onOpenAttraction = { id -> navController.navigate(Route.AttractionDetail.createRoute(id)) },
             onNavigateBack = { navController.popBackStack() },
         )
     }
