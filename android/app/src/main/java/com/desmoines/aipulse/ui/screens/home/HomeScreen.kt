@@ -144,6 +144,7 @@ fun HomeScreen(
     onNavigateToDashboard: () -> Unit = {},
     onNavigateToArticles: () -> Unit = {},
     onNavigateToDeals: () -> Unit = {},
+    onNavigateToHotels: () -> Unit = {},
     onSelectCategory: (EventCategory?) -> Unit = {},
     onSelectDatePreset: (DateFilterPreset?) -> Unit = {},
     onShowFilters: () -> Unit = {},
@@ -297,6 +298,9 @@ fun HomeScreen(
                     }
                     item(key = "deals", span = { GridItemSpan(maxLineSpan) }) {
                         DealsHomeCard(onClick = onNavigateToDeals)
+                    }
+                    item(key = "hotels", span = { GridItemSpan(maxLineSpan) }) {
+                        HotelsHomeCard(onClick = onNavigateToHotels)
                     }
                     item(key = "forYou", span = { GridItemSpan(maxLineSpan) }) {
                         ForYouRail(onNavigateToEvent = onNavigateToEventDetail)
@@ -462,6 +466,9 @@ fun HomeScreen(
                     }
                     item(key = "deals") {
                         DealsHomeCard(onClick = onNavigateToDeals)
+                    }
+                    item(key = "hotels") {
+                        HotelsHomeCard(onClick = onNavigateToHotels)
                     }
                     item(key = "forYou") {
                         ForYouRail(onNavigateToEvent = onNavigateToEventDetail)

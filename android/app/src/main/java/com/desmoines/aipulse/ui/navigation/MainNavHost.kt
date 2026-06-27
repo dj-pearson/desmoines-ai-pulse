@@ -48,6 +48,8 @@ import com.desmoines.aipulse.ui.screens.articles.ArticleDetailScreen
 import com.desmoines.aipulse.ui.screens.articles.ArticleDetailViewModel
 import com.desmoines.aipulse.ui.screens.deals.DealsScreen
 import com.desmoines.aipulse.ui.screens.deals.DealsViewModel
+import com.desmoines.aipulse.ui.screens.hotels.HotelsScreen
+import com.desmoines.aipulse.ui.screens.hotels.HotelsViewModel
 import com.desmoines.aipulse.ui.screens.auth.AuthScreen
 import com.desmoines.aipulse.ui.screens.eventdetail.EventDetailScreen
 import com.desmoines.aipulse.ui.screens.eventdetail.EventDetailViewModel
@@ -213,6 +215,9 @@ private fun NavGraphBuilder.addTabDestinations(
             },
             onNavigateToDeals = {
                 navController.navigate(Route.Deals.route)
+            },
+            onNavigateToHotels = {
+                navController.navigate(Route.Hotels.route)
             },
             onSelectCategory = { category -> viewModel.setSelectedCategory(category) },
             onSelectDatePreset = { preset -> viewModel.setSelectedDatePreset(preset) },
@@ -708,6 +713,28 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
                     }
                 }
             },
+            onNavigateBack = { navController.popBackStack() },
+        )
+    }
+
+    composable(Route.Hotels.route) {
+        val viewModel: HotelsViewModel = hiltViewModel()
+        val state by viewModel.uiState.collectAsState()
+
+        HotelsScreen(
+            state = state,
+            onSearchTextChanged = viewModel::onSearchTextChanged,
+            onToggleArea = viewModel::onToggleArea,
+            onTogglePriceRange = viewModel::onTogglePriceRange,
+            onSelectMinRating = viewModel::onSelectMinRating,
+            onSelectSort = viewModel::onSelectSort,
+            onClearFilters = viewModel::clearFilters,
+            onLoadMore = viewModel::loadMore,
+            onRefresh = viewModel::refresh,
+            onRetry = viewModel::retry,
+            // Hotel detail + booking CTA lands in ANDP-034 (#290); until then the
+            // card is a no-op tap target.
+            onOpenHotel = { /* no detail surface yet */ },
             onNavigateBack = { navController.popBackStack() },
         )
     }
