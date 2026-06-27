@@ -52,6 +52,8 @@ import com.desmoines.aipulse.ui.screens.hotels.HotelsScreen
 import com.desmoines.aipulse.ui.screens.hotels.HotelsViewModel
 import com.desmoines.aipulse.ui.screens.hoteldetail.HotelDetailScreen
 import com.desmoines.aipulse.ui.screens.hoteldetail.HotelDetailViewModel
+import com.desmoines.aipulse.ui.screens.bestof.BestOfScreen
+import com.desmoines.aipulse.ui.screens.bestof.BestOfViewModel
 import com.desmoines.aipulse.ui.screens.auth.AuthScreen
 import com.desmoines.aipulse.ui.screens.eventdetail.EventDetailScreen
 import com.desmoines.aipulse.ui.screens.eventdetail.EventDetailViewModel
@@ -220,6 +222,9 @@ private fun NavGraphBuilder.addTabDestinations(
             },
             onNavigateToHotels = {
                 navController.navigate(Route.Hotels.route)
+            },
+            onNavigateToBestOf = {
+                navController.navigate(Route.BestOf.route)
             },
             onSelectCategory = { category -> viewModel.setSelectedCategory(category) },
             onSelectDatePreset = { preset -> viewModel.setSelectedDatePreset(preset) },
@@ -793,6 +798,21 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
                 }
             },
             onRetry = { viewModel.retry() },
+        )
+    }
+
+    composable(Route.BestOf.route) {
+        val viewModel: BestOfViewModel = hiltViewModel()
+        val state by viewModel.uiState.collectAsState()
+
+        BestOfScreen(
+            state = state,
+            // The per-category voting booth lands in ANDP-038 (#276); until then
+            // the row is a no-op tap target.
+            onOpenCategory = { /* voting booth not built yet */ },
+            onRefresh = viewModel::refresh,
+            onRetry = viewModel::retry,
+            onNavigateBack = { navController.popBackStack() },
         )
     }
 

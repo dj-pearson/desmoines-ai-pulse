@@ -67,6 +67,7 @@ sealed class Route(val route: String) {
     data object Articles : Route("articles")
     data object Deals : Route("deals")
     data object Hotels : Route("hotels")
+    data object BestOf : Route("best_of")
 
     data object HotelDetail : Route("hotel/{hotelId}") {
         fun createRoute(hotelId: String) = "hotel/$hotelId"
