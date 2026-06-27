@@ -2,6 +2,7 @@ package com.desmoines.aipulse.ui.components.ads
 
 import com.desmoines.aipulse.data.model.CampaignAd
 import com.desmoines.aipulse.data.model.SubscriptionTier
+import com.desmoines.aipulse.data.remote.AdTrackingService
 import com.desmoines.aipulse.data.remote.BillingService
 import com.desmoines.aipulse.data.remote.CampaignAdService
 import io.mockk.coEvery
@@ -28,18 +29,21 @@ class AdSlotViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
     private lateinit var campaignAdService: CampaignAdService
     private lateinit var billingService: BillingService
+    private lateinit var adTrackingService: AdTrackingService
 
     @BeforeEach
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         campaignAdService = mockk(relaxed = true)
         billingService = mockk(relaxed = true)
+        adTrackingService = mockk(relaxed = true)
+        every { adTrackingService.canShow(any()) } returns true
     }
 
     @AfterEach
     fun tearDown() = Dispatchers.resetMain()
 
-    private fun vm() = AdSlotViewModel(campaignAdService, billingService)
+    private fun vm() = AdSlotViewModel(campaignAdService, billingService, adTrackingService)
 
     @Test
     fun `free tier loads the ad`() = runTest(testDispatcher) {
@@ -66,5 +70,19 @@ class AdSlotViewModelTest {
 
         assertNull(viewModel.ad.value)
         coVerify { campaignAdService.fetchAd("below_fold", isPremium = true) }
+    }
+
+    @Test
+    fun `frequency-capped campaign is not shown`() = runTest(testDispatcher) {
+        every { billingService.currentTier } returns MutableStateFlow(SubscriptionTier.FREE)
+        every { adTrackingService.canShow("c") } returns false
+        coEvery { campaignAdService.fetchAd("below_fold", false) } returns
+            CampaignAd(campaignId = "c", creativeId = "cr", title = "Capped")
+        val viewModel = vm()
+
+        viewModel.load("below_fold")
+        advanceUntilIdle()
+
+        assertNull(viewModel.ad.value)
     }
 }
