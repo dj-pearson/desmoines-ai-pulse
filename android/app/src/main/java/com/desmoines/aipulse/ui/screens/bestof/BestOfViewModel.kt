@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.desmoines.aipulse.data.model.VotingCategory
 import com.desmoines.aipulse.data.repository.BestOfRepository
+import com.desmoines.aipulse.data.repository.BestOfWinnersStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,6 +32,7 @@ data class BestOfUiState(
 @HiltViewModel
 class BestOfViewModel @Inject constructor(
     private val repository: BestOfRepository,
+    private val winnersStore: BestOfWinnersStore,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(BestOfUiState())
@@ -54,6 +56,8 @@ class BestOfViewModel @Inject constructor(
                 .onFailure {
                     _uiState.update { it.copy(isLoading = false, isRefreshing = false, errorMessage = "Couldn't load categories. Tap to retry.") }
                 }
+            // Recompute app-wide winner badges on (re)load.
+            winnersStore.refresh()
         }
     }
 }

@@ -31,6 +31,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.desmoines.aipulse.data.model.Restaurant
 import com.desmoines.aipulse.ui.components.CachedAsyncImage
+import com.desmoines.aipulse.ui.components.bestof.BestOfBadge
 import com.desmoines.aipulse.ui.theme.BrandOrange
 import com.desmoines.aipulse.ui.theme.DesMoinesInsiderTheme
 import com.desmoines.aipulse.ui.theme.Dimens
@@ -111,6 +112,9 @@ fun CompactRestaurantCard(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
+
+        // Best Of award badge (ANDP-039) — shown when this restaurant leads a category.
+        BestOfBadge(entityId = restaurant.id, modifier = Modifier.padding(top = 2.dp))
 
         Spacer(modifier = Modifier.height(2.dp))
 

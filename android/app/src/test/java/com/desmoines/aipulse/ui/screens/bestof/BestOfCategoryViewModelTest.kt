@@ -1,10 +1,12 @@
 package com.desmoines.aipulse.ui.screens.bestof
 
+import com.desmoines.aipulse.data.model.LeaderboardEntry
 import com.desmoines.aipulse.data.model.Nominee
 import com.desmoines.aipulse.data.model.Vote
 import com.desmoines.aipulse.data.model.VotingCategory
 import com.desmoines.aipulse.data.repository.AuthRepository
 import com.desmoines.aipulse.data.repository.BestOfRepository
+import com.desmoines.aipulse.data.repository.BestOfWinnersStore
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -30,21 +32,27 @@ class BestOfCategoryViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
     private lateinit var repository: BestOfRepository
     private lateinit var authRepository: AuthRepository
+    private lateinit var winnersStore: BestOfWinnersStore
 
     @BeforeEach
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         repository = mockk(relaxed = true)
         authRepository = mockk(relaxed = true)
+        winnersStore = mockk(relaxed = true)
         every { authRepository.currentUserId } returns "u1"
         coEvery { repository.fetchCategory("c1") } returns Result.success(VotingCategory(id = "c1", name = "Best Tacos"))
         coEvery { repository.fetchUserVote(any(), any()) } returns Result.success(null)
+        coEvery { repository.fetchResults(any()) } returns Result.success(emptyList())
     }
 
     @AfterEach
     fun tearDown() = Dispatchers.resetMain()
 
-    private fun vm() = BestOfCategoryViewModel(repository, authRepository)
+    private fun entry(key: String, name: String, votes: Int) =
+        LeaderboardEntry(key = key, entityType = "restaurant", entityId = key, customEntry = null, name = name, imageUrl = null, voteCount = votes)
+
+    private fun vm() = BestOfCategoryViewModel(repository, authRepository, winnersStore)
 
     @Test
     fun `load signed in fetches category and existing custom vote`() = runTest(testDispatcher) {
@@ -145,5 +153,55 @@ class BestOfCategoryViewModelTest {
         advanceUntilIdle()
 
         assertEquals("Couldn't record your vote. Please try again.", viewModel.uiState.value.errorMessage)
+    }
+
+    @Test
+    fun `leaderboard loads with totals`() = runTest(testDispatcher) {
+        coEvery { repository.fetchResults("c1") } returns Result.success(
+            listOf(entry("a", "Alpha", 3), entry("b", "Beta", 1)),
+        )
+        val viewModel = vm()
+        viewModel.load("c1")
+        advanceUntilIdle()
+
+        assertEquals(listOf("a", "b"), viewModel.uiState.value.leaderboard.map { it.key })
+        assertEquals(4, viewModel.uiState.value.totalVotes)
+    }
+
+    @Test
+    fun `cast failure reverts the optimistic leaderboard`() = runTest(testDispatcher) {
+        coEvery { repository.fetchResults("c1") } returns Result.success(listOf(entry("a", "Alpha", 1)))
+        coEvery { repository.castVote(any(), any(), any(), any(), any()) } returns Result.failure(IllegalStateException("boom"))
+        val viewModel = vm()
+        viewModel.load("c1")
+        advanceUntilIdle()
+
+        viewModel.voteFor(Nominee("b", "Beta", null, "restaurant"))
+        advanceUntilIdle()
+
+        // Optimistic "b" is rolled back to the pre-cast snapshot.
+        assertEquals(listOf("a"), viewModel.uiState.value.leaderboard.map { it.key })
+        assertNull(viewModel.uiState.value.yourPickKey)
+        assertEquals("Couldn't record your vote. Please try again.", viewModel.uiState.value.errorMessage)
+    }
+
+    @Test
+    fun `successful cast reconciles board and refreshes winners`() = runTest(testDispatcher) {
+        coEvery { repository.fetchResults("c1") } returns Result.success(listOf(entry("a", "Alpha", 2)))
+        coEvery { repository.castVote("c1", "u1", "restaurant", "b", null) } returns Result.success(Unit)
+        val viewModel = vm()
+        viewModel.load("c1")
+        advanceUntilIdle()
+
+        // After the cast, the authoritative board includes the new pick.
+        coEvery { repository.fetchResults("c1") } returns Result.success(
+            listOf(entry("a", "Alpha", 2), entry("b", "Beta", 1)),
+        )
+        viewModel.voteFor(Nominee("b", "Beta", null, "restaurant"))
+        advanceUntilIdle()
+
+        assertEquals("Beta", viewModel.uiState.value.currentVoteLabel)
+        assertTrue(viewModel.uiState.value.leaderboard.any { it.key == "b" })
+        coVerify { winnersStore.refresh() }
     }
 }
