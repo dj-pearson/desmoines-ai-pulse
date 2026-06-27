@@ -54,6 +54,8 @@ import com.desmoines.aipulse.ui.screens.hoteldetail.HotelDetailScreen
 import com.desmoines.aipulse.ui.screens.hoteldetail.HotelDetailViewModel
 import com.desmoines.aipulse.ui.screens.bestof.BestOfScreen
 import com.desmoines.aipulse.ui.screens.bestof.BestOfViewModel
+import com.desmoines.aipulse.ui.screens.bestof.BestOfCategoryScreen
+import com.desmoines.aipulse.ui.screens.bestof.BestOfCategoryViewModel
 import com.desmoines.aipulse.ui.screens.auth.AuthScreen
 import com.desmoines.aipulse.ui.screens.eventdetail.EventDetailScreen
 import com.desmoines.aipulse.ui.screens.eventdetail.EventDetailViewModel
@@ -807,11 +809,33 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
 
         BestOfScreen(
             state = state,
-            // The per-category voting booth lands in ANDP-038 (#276); until then
-            // the row is a no-op tap target.
-            onOpenCategory = { /* voting booth not built yet */ },
+            onOpenCategory = { category -> navController.navigate(Route.BestOfCategory.createRoute(category.id)) },
             onRefresh = viewModel::refresh,
             onRetry = viewModel::retry,
+            onNavigateBack = { navController.popBackStack() },
+        )
+    }
+
+    composable(
+        route = Route.BestOfCategory.route,
+        arguments = Route.BestOfCategory.arguments,
+    ) { backStackEntry ->
+        val categoryId = backStackEntry.arguments?.getString("categoryId") ?: return@composable
+        val viewModel: BestOfCategoryViewModel = hiltViewModel()
+        val state by viewModel.uiState.collectAsState()
+
+        androidx.compose.runtime.LaunchedEffect(categoryId) { viewModel.load(categoryId) }
+
+        BestOfCategoryScreen(
+            state = state,
+            onSearchTextChanged = viewModel::onSearchTextChanged,
+            onToggleWriteIn = viewModel::toggleWriteIn,
+            onWriteInChanged = viewModel::onWriteInChanged,
+            onVoteFor = viewModel::voteFor,
+            onSubmitWriteIn = viewModel::submitWriteIn,
+            onRetry = viewModel::retry,
+            onDismissError = viewModel::consumeError,
+            onNavigateToAuth = { navController.navigate(Route.Auth.route) },
             onNavigateBack = { navController.popBackStack() },
         )
     }
