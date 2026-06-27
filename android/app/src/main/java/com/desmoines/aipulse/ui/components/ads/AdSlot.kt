@@ -53,8 +53,9 @@ fun AdSlot(placement: String, modifier: Modifier = Modifier) {
 
     AdCard(
         ad = creative,
-        modifier = modifier,
+        modifier = modifier.trackAdViewability(key = creative.creativeId) { viewModel.onImpression(placement) },
         onClick = {
+            viewModel.onClick()
             val url = creative.linkUrl?.trim()?.takeIf { it.isNotEmpty() } ?: return@AdCard
             runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
         },
