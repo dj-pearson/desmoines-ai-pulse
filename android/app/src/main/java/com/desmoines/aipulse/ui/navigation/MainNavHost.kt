@@ -34,6 +34,9 @@ import com.desmoines.aipulse.ui.screens.surpriseme.SurpriseMeScreen
 import com.desmoines.aipulse.ui.screens.surpriseme.SurpriseMeViewModel
 import com.desmoines.aipulse.ui.screens.weekend.WeekendScreen
 import com.desmoines.aipulse.ui.screens.weekend.WeekendViewModel
+import com.desmoines.aipulse.ui.screens.neighborhoods.NeighborhoodsHubScreen
+import com.desmoines.aipulse.ui.screens.neighborhoods.NeighborhoodDetailScreen
+import com.desmoines.aipulse.ui.screens.neighborhoods.NeighborhoodDetailViewModel
 import com.desmoines.aipulse.ui.screens.auth.AuthScreen
 import com.desmoines.aipulse.ui.screens.eventdetail.EventDetailScreen
 import com.desmoines.aipulse.ui.screens.eventdetail.EventDetailViewModel
@@ -182,6 +185,9 @@ private fun NavGraphBuilder.addTabDestinations(
             },
             onNavigateToWeekend = {
                 navController.navigate(Route.Weekend.route)
+            },
+            onNavigateToNeighborhoods = {
+                navController.navigate(Route.Neighborhoods.route)
             },
             onSelectCategory = { category -> viewModel.setSelectedCategory(category) },
             onSelectDatePreset = { preset -> viewModel.setSelectedDatePreset(preset) },
@@ -638,6 +644,33 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
             onReload = viewModel::reload,
             onSelectMode = viewModel::setMode,
             onClearFilter = viewModel::clearFilter,
+            onNavigateBack = { navController.popBackStack() },
+        )
+    }
+
+    composable(Route.Neighborhoods.route) {
+        NeighborhoodsHubScreen(
+            onOpenNeighborhood = { slug -> navController.navigate(Route.NeighborhoodDetail.createRoute(slug)) },
+            onNavigateBack = { navController.popBackStack() },
+        )
+    }
+
+    composable(
+        route = Route.NeighborhoodDetail.route,
+        arguments = Route.NeighborhoodDetail.arguments,
+    ) { backStackEntry ->
+        val slug = backStackEntry.arguments?.getString("slug") ?: return@composable
+        val viewModel: NeighborhoodDetailViewModel = hiltViewModel()
+        val state by viewModel.uiState.collectAsState()
+
+        androidx.compose.runtime.LaunchedEffect(slug) { viewModel.load(slug) }
+
+        NeighborhoodDetailScreen(
+            state = state,
+            onSortByNearby = viewModel::sortByNearby,
+            onOpenRestaurant = { id -> navController.navigate(Route.RestaurantDetail.createRoute(id)) },
+            onOpenAttraction = { id -> navController.navigate(Route.AttractionDetail.createRoute(id)) },
+            onOpenEvent = { id -> navController.navigate(Route.EventDetail.createRoute(id)) },
             onNavigateBack = { navController.popBackStack() },
         )
     }
