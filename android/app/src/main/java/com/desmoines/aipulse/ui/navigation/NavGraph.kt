@@ -64,6 +64,12 @@ sealed class Route(val route: String) {
 
     data object Dashboard : Route("dashboard")
     data object ContentHubs : Route("content_hubs")
+    data object Articles : Route("articles")
+
+    data object ArticleDetail : Route("article/{articleId}") {
+        fun createRoute(articleId: String) = "article/$articleId"
+        val arguments = listOf(navArgument("articleId") { type = NavType.StringType })
+    }
 
     data object ContentHubDetail : Route("content_hub/{hubId}") {
         fun createRoute(hubId: String) = "content_hub/$hubId"

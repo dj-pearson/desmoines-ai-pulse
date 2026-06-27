@@ -42,6 +42,10 @@ import com.desmoines.aipulse.ui.screens.hubs.ContentHubScreen
 import com.desmoines.aipulse.ui.screens.hubs.ContentHubViewModel
 import com.desmoines.aipulse.ui.screens.dashboard.DashboardScreen
 import com.desmoines.aipulse.ui.screens.dashboard.DashboardViewModel
+import com.desmoines.aipulse.ui.screens.articles.ArticlesScreen
+import com.desmoines.aipulse.ui.screens.articles.ArticlesViewModel
+import com.desmoines.aipulse.ui.screens.articles.ArticleDetailScreen
+import com.desmoines.aipulse.ui.screens.articles.ArticleDetailViewModel
 import com.desmoines.aipulse.ui.screens.auth.AuthScreen
 import com.desmoines.aipulse.ui.screens.eventdetail.EventDetailScreen
 import com.desmoines.aipulse.ui.screens.eventdetail.EventDetailViewModel
@@ -201,6 +205,9 @@ private fun NavGraphBuilder.addTabDestinations(
             },
             onNavigateToDashboard = {
                 navController.navigate(Route.Dashboard.route)
+            },
+            onNavigateToArticles = {
+                navController.navigate(Route.Articles.route)
             },
             onSelectCategory = { category -> viewModel.setSelectedCategory(category) },
             onSelectDatePreset = { preset -> viewModel.setSelectedDatePreset(preset) },
@@ -670,6 +677,39 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
             onReload = viewModel::reload,
             onSelectMode = viewModel::setMode,
             onClearFilter = viewModel::clearFilter,
+            onNavigateBack = { navController.popBackStack() },
+        )
+    }
+
+    composable(Route.Articles.route) {
+        val viewModel: ArticlesViewModel = hiltViewModel()
+        val state by viewModel.uiState.collectAsState()
+
+        ArticlesScreen(
+            state = state,
+            onSearchTextChanged = viewModel::onSearchTextChanged,
+            onCategorySelected = viewModel::onCategorySelected,
+            onLoadMore = viewModel::loadMore,
+            onRefresh = viewModel::refresh,
+            onRetry = viewModel::retry,
+            onOpenArticle = { id -> navController.navigate(Route.ArticleDetail.createRoute(id)) },
+            onNavigateBack = { navController.popBackStack() },
+        )
+    }
+
+    composable(
+        route = Route.ArticleDetail.route,
+        arguments = Route.ArticleDetail.arguments,
+    ) { backStackEntry ->
+        val articleId = backStackEntry.arguments?.getString("articleId") ?: return@composable
+        val viewModel: ArticleDetailViewModel = hiltViewModel()
+        val state by viewModel.uiState.collectAsState()
+
+        androidx.compose.runtime.LaunchedEffect(articleId) { viewModel.load(articleId) }
+
+        ArticleDetailScreen(
+            state = state,
+            onRetry = viewModel::retry,
             onNavigateBack = { navController.popBackStack() },
         )
     }
