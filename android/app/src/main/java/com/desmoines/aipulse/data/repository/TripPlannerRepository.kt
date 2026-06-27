@@ -1,6 +1,7 @@
 package com.desmoines.aipulse.data.repository
 
 import com.desmoines.aipulse.data.model.TripPlan
+import com.desmoines.aipulse.data.model.TripPlanItem
 import com.desmoines.aipulse.data.remote.TripPlannerRemoteDataSource
 import com.desmoines.aipulse.data.remote.TripPreferences
 import com.desmoines.aipulse.util.AppLogger
@@ -27,6 +28,15 @@ interface TripPlannerRepository {
 
     /** Delete a saved trip. */
     suspend fun deleteTrip(tripId: String): Result<Unit>
+
+    /** Load a saved trip's header (title, dates, cost) by id. */
+    suspend fun fetchTrip(tripId: String): Result<TripPlan>
+
+    /** Day-by-day items for a trip via the get_trip_itinerary RPC. */
+    suspend fun fetchItems(tripId: String): Result<List<TripPlanItem>>
+
+    /** Persist a reordering; true only if every item's order_index write succeeded. */
+    suspend fun persistOrder(items: List<TripPlanItem>): Boolean
 }
 
 @Singleton
@@ -66,6 +76,17 @@ class TripPlannerRepositoryImpl @Inject constructor(
 
     override suspend fun deleteTrip(tripId: String): Result<Unit> =
         runCatching { remote.deleteTrip(tripId) }
+
+    override suspend fun fetchTrip(tripId: String): Result<TripPlan> =
+        runCatching { remote.fetchTrip(tripId) }
+
+    override suspend fun fetchItems(tripId: String): Result<List<TripPlanItem>> =
+        runCatching { remote.fetchItems(tripId) }
+
+    override suspend fun persistOrder(items: List<TripPlanItem>): Boolean =
+        runCatching { remote.persistOrder(items) }
+            .onFailure { AppLogger.network.warning("persistOrder failed: ${it.message}") }
+            .getOrDefault(false)
 }
 
 /** Carries the server's user-facing error message for a failed generation. */

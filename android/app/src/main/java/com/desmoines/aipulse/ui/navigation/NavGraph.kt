@@ -55,6 +55,11 @@ sealed class Route(val route: String) {
     data object TripPlanner : Route("trip_planner")
     data object SavedTrips : Route("saved_trips")
 
+    data object ItineraryDetail : Route("itinerary_detail/{tripId}") {
+        fun createRoute(tripId: String) = "itinerary_detail/$tripId"
+        val arguments = listOf(navArgument("tripId") { type = NavType.StringType })
+    }
+
     // WebView route
     data object WebView : Route("webview/{url}") {
         fun createRoute(url: String) = "webview/${java.net.URLEncoder.encode(url, "UTF-8")}"
