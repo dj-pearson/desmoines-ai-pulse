@@ -22,6 +22,8 @@ import com.desmoines.aipulse.ui.theme.PremiumMotion
 import com.desmoines.aipulse.data.model.SubscriptionTier
 import com.desmoines.aipulse.ui.screens.askpulse.AskPulseScreen
 import com.desmoines.aipulse.ui.screens.askpulse.AskPulseViewModel
+import com.desmoines.aipulse.ui.screens.tripplanner.TripPlannerScreen
+import com.desmoines.aipulse.ui.screens.tripplanner.TripPlannerViewModel
 import com.desmoines.aipulse.ui.screens.auth.AuthScreen
 import com.desmoines.aipulse.ui.screens.eventdetail.EventDetailScreen
 import com.desmoines.aipulse.ui.screens.eventdetail.EventDetailViewModel
@@ -158,6 +160,9 @@ private fun NavGraphBuilder.addTabDestinations(
             },
             onNavigateToSubscription = {
                 navController.navigate(Route.Subscription.route)
+            },
+            onNavigateToTripPlanner = {
+                navController.navigate(Route.TripPlanner.route)
             },
             onSelectCategory = { category -> viewModel.setSelectedCategory(category) },
             onSelectDatePreset = { preset -> viewModel.setSelectedDatePreset(preset) },
@@ -590,6 +595,35 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
                 }
             },
             onUpgrade = { navController.navigate(Route.Subscription.route) },
+        )
+    }
+
+    composable(Route.TripPlanner.route) {
+        val viewModel: TripPlannerViewModel = hiltViewModel()
+        val state by viewModel.uiState.collectAsState()
+
+        // Hard paywall: VM requests the Subscription screen (free on cooldown, or quota exhausted).
+        androidx.compose.runtime.LaunchedEffect(state.navigateToSubscription) {
+            if (state.navigateToSubscription) {
+                navController.navigate(Route.Subscription.route)
+                viewModel.consumeNavigation()
+            }
+        }
+
+        TripPlannerScreen(
+            state = state,
+            allInterests = viewModel.allInterests,
+            onSetStartOffset = viewModel::setStartOffset,
+            onSetLength = viewModel::setLength,
+            onToggleInterest = viewModel::toggleInterest,
+            onSetGroupSize = viewModel::setGroupSize,
+            onSetHasChildren = viewModel::setHasChildren,
+            onSetBudget = viewModel::setBudget,
+            onSetPace = viewModel::setPace,
+            onGenerate = viewModel::generate,
+            onReset = viewModel::reset,
+            onClearError = viewModel::clearError,
+            onNavigateBack = { navController.popBackStack() },
         )
     }
 

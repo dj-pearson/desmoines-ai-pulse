@@ -52,6 +52,7 @@ sealed class Route(val route: String) {
     data object Subscription : Route("subscription")
     data object Settings : Route("settings")
     data object AskPulse : Route("ask_pulse")
+    data object TripPlanner : Route("trip_planner")
 
     // WebView route
     data object WebView : Route("webview/{url}") {

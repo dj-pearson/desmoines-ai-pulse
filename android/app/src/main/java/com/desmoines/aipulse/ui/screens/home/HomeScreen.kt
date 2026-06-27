@@ -135,6 +135,7 @@ fun HomeScreen(
     onNavigateToEventDetail: (String) -> Unit = {},
     onNavigateToRestaurantDetail: (String) -> Unit = {},
     onNavigateToSubscription: () -> Unit = {},
+    onNavigateToTripPlanner: () -> Unit = {},
     onSelectCategory: (EventCategory?) -> Unit = {},
     onSelectDatePreset: (DateFilterPreset?) -> Unit = {},
     onShowFilters: () -> Unit = {},
@@ -261,6 +262,9 @@ fun HomeScreen(
                                 )
                             }
                         )
+                    }
+                    item(key = "tripPlanner", span = { GridItemSpan(maxLineSpan) }) {
+                        TripPlannerHomeCard(onClick = onNavigateToTripPlanner)
                     }
                     item(key = "forYou", span = { GridItemSpan(maxLineSpan) }) {
                         ForYouRail(onNavigateToEvent = onNavigateToEventDetail)
@@ -399,6 +403,9 @@ fun HomeScreen(
                                 )
                             }
                         )
+                    }
+                    item(key = "tripPlanner") {
+                        TripPlannerHomeCard(onClick = onNavigateToTripPlanner)
                     }
                     item(key = "forYou") {
                         ForYouRail(onNavigateToEvent = onNavigateToEventDetail)
