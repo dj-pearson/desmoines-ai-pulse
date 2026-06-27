@@ -38,6 +38,7 @@ import com.desmoines.aipulse.util.DeepLinkHandler
 import com.desmoines.aipulse.util.NetworkMonitor
 import com.desmoines.aipulse.util.OnboardingPreferences
 import com.desmoines.aipulse.util.RootDetector
+import com.desmoines.aipulse.util.ShortcutDispatcher
 import com.desmoines.aipulse.util.VersionCheckService
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.first
@@ -55,6 +56,9 @@ class MainActivity : FragmentActivity() {
 
     @Inject
     lateinit var deepLinkHandler: DeepLinkHandler
+
+    @Inject
+    lateinit var shortcutDispatcher: ShortcutDispatcher
 
     @Inject
     lateinit var biometricAuthService: BiometricAuthService
@@ -194,6 +198,7 @@ class MainActivity : FragmentActivity() {
                         MainScreen(
                             networkMonitor = networkMonitor,
                             deepLinkHandler = deepLinkHandler,
+                            shortcutDispatcher = shortcutDispatcher,
                             widthSizeClass = windowSizeClass.widthSizeClass
                         )
                     }
@@ -208,6 +213,13 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun handleDeepLinkIntent(intent: Intent) {
+        // App Shortcut / Assistant deep links take priority (ANDP-015). Clear the
+        // data once handled so it isn't re-applied on configuration change.
+        if (shortcutDispatcher.handleIntent(intent)) {
+            intent.data = null
+            return
+        }
+
         // Try notification tap extras first, then URI deep link
         if (!deepLinkHandler.handleIntent(intent)) {
             // If not handled as deep link, let Supabase handle auth callbacks

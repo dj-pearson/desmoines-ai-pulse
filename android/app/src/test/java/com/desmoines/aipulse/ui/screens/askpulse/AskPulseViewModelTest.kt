@@ -6,6 +6,7 @@ import com.desmoines.aipulse.data.repository.DiscoverChatMessage
 import com.desmoines.aipulse.data.repository.DiscoverChatResponse
 import com.desmoines.aipulse.data.repository.DiscoverPick
 import com.desmoines.aipulse.data.repository.QuotaExceededException
+import com.desmoines.aipulse.util.ShortcutDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -59,7 +60,7 @@ class AskPulseViewModelTest {
                 ),
             ),
         )
-        val vm = AskPulseViewModel(repo)
+        val vm = AskPulseViewModel(repo, ShortcutDispatcher())
         vm.onInputChange("date night")
         vm.send()
         advanceUntilIdle()
@@ -79,7 +80,7 @@ class AskPulseViewModelTest {
     @Test
     fun `empty picks yields a no-match summary`() = runTest {
         val repo = FakeAskPulseRepository(Result.success(DiscoverChatResponse()))
-        val vm = AskPulseViewModel(repo)
+        val vm = AskPulseViewModel(repo, ShortcutDispatcher())
         vm.sendSuggestion("obscure request")
         advanceUntilIdle()
 
@@ -91,7 +92,7 @@ class AskPulseViewModelTest {
     @Test
     fun `429 sets quotaExceeded with an upgrade message`() = runTest {
         val repo = FakeAskPulseRepository(Result.failure(QuotaExceededException()))
-        val vm = AskPulseViewModel(repo)
+        val vm = AskPulseViewModel(repo, ShortcutDispatcher())
         vm.sendSuggestion("anything")
         advanceUntilIdle()
 
@@ -104,7 +105,7 @@ class AskPulseViewModelTest {
     @Test
     fun `generic failure shows a retry message without quota flag`() = runTest {
         val repo = FakeAskPulseRepository(Result.failure(IllegalStateException("boom")))
-        val vm = AskPulseViewModel(repo)
+        val vm = AskPulseViewModel(repo, ShortcutDispatcher())
         vm.sendSuggestion("anything")
         advanceUntilIdle()
 
@@ -116,7 +117,7 @@ class AskPulseViewModelTest {
     @Test
     fun `blank input does not send`() = runTest {
         val repo = FakeAskPulseRepository(Result.success(DiscoverChatResponse()))
-        val vm = AskPulseViewModel(repo)
+        val vm = AskPulseViewModel(repo, ShortcutDispatcher())
         vm.onInputChange("   ")
         vm.send()
         advanceUntilIdle()
@@ -128,7 +129,7 @@ class AskPulseViewModelTest {
         val repo = FakeAskPulseRepository(
             Result.success(DiscoverChatResponse(picks = listOf(DiscoverPick("event", "e1", "x")))),
         )
-        val vm = AskPulseViewModel(repo)
+        val vm = AskPulseViewModel(repo, ShortcutDispatcher())
         vm.sendSuggestion("hi")
         advanceUntilIdle()
         vm.reset()

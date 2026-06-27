@@ -6,6 +6,7 @@ import com.desmoines.aipulse.data.repository.AskPulseRepository
 import com.desmoines.aipulse.data.repository.DiscoverChatMessage
 import com.desmoines.aipulse.data.repository.DiscoverPick
 import com.desmoines.aipulse.data.repository.QuotaExceededException
+import com.desmoines.aipulse.util.ShortcutDispatcher
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -36,6 +37,7 @@ data class AskPulseUiState(
 @HiltViewModel
 class AskPulseViewModel @Inject constructor(
     private val repository: AskPulseRepository,
+    private val shortcutDispatcher: ShortcutDispatcher,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AskPulseUiState())
@@ -48,6 +50,19 @@ class AskPulseViewModel @Inject constructor(
         "kid-friendly things to do",
         "best patios for brunch",
     )
+
+    init {
+        // App Shortcut / Assistant "Ask Pulse" deep link (ANDP-015): pre-fill the
+        // query and auto-send once the screen is shown, then consume the payload.
+        viewModelScope.launch {
+            shortcutDispatcher.pending.collect { pending ->
+                if (pending is ShortcutDispatcher.Pending.AskPulse) {
+                    shortcutDispatcher.consume()
+                    if (pending.query.isNotBlank()) sendSuggestion(pending.query)
+                }
+            }
+        }
+    }
 
     fun onInputChange(text: String) {
         _uiState.update { it.copy(inputText = text) }

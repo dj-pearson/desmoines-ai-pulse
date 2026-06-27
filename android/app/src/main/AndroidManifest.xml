@@ -34,6 +34,27 @@
                     android:scheme="com.desmoines.aipulse"
                     android:host="auth-callback" />
             </intent-filter>
+
+            <!--
+                App Shortcut / Assistant deep links (ANDP-015). Parsed by
+                ShortcutDispatcher; lets the static shortcuts (and Assistant App
+                Actions / adb) open Ask Pulse, restaurant search, or event search
+                pre-filled via query params (cuisine, area, openNow, category,
+                datePreset).
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="com.desmoines.aipulse" android:host="ask-pulse" />
+                <data android:host="find-restaurants" />
+                <data android:host="find-events" />
+            </intent-filter>
+
+            <!-- Static App Shortcuts (launcher long-press / Assistant). -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
 
         <!--

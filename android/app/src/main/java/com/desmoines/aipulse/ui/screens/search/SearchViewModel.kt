@@ -11,6 +11,7 @@ import com.desmoines.aipulse.data.remote.RestaurantsQuery
 import com.desmoines.aipulse.data.repository.AttractionsRepository
 import com.desmoines.aipulse.data.repository.EventsRepository
 import com.desmoines.aipulse.data.repository.RestaurantsRepository
+import com.desmoines.aipulse.util.ShortcutDispatcher
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -55,6 +56,7 @@ class SearchViewModel @Inject constructor(
     private val eventsRepository: EventsRepository,
     private val restaurantsRepository: RestaurantsRepository,
     private val attractionsRepository: AttractionsRepository,
+    private val shortcutDispatcher: ShortcutDispatcher,
 ) : ViewModel() {
 
     private val _searchText = MutableStateFlow("")
@@ -88,6 +90,44 @@ class SearchViewModel @Inject constructor(
     )
 
     private var searchJob: Job? = null
+
+    init {
+        // App Shortcut / Assistant deep links (ANDP-015): apply pre-filled
+        // restaurant/event searches once this screen exists, then consume so the
+        // payload isn't re-applied.
+        viewModelScope.launch {
+            shortcutDispatcher.pending.collect { pending ->
+                when (pending) {
+                    is ShortcutDispatcher.Pending.FindRestaurants -> {
+                        applyShortcutSearch(
+                            SearchTab.RESTAURANTS,
+                            listOfNotNull(
+                                pending.cuisine,
+                                pending.area,
+                                "open now".takeIf { pending.openNow },
+                            ),
+                        )
+                        shortcutDispatcher.consume()
+                    }
+                    is ShortcutDispatcher.Pending.FindEvents -> {
+                        applyShortcutSearch(
+                            SearchTab.EVENTS,
+                            listOfNotNull(pending.category, pending.datePreset),
+                        )
+                        shortcutDispatcher.consume()
+                    }
+                    else -> Unit // AskPulse handled elsewhere; ignore null.
+                }
+            }
+        }
+    }
+
+    /** Select [tab] and, if any terms were supplied, run the composed query. */
+    private fun applyShortcutSearch(tab: SearchTab, terms: List<String>) {
+        _selectedTab.value = tab
+        val query = terms.joinToString(" ").trim()
+        if (query.isNotEmpty()) onSearchTextChanged(query)
+    }
 
     fun onSearchTextChanged(text: String) {
         _searchText.value = text
