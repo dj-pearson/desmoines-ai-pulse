@@ -20,6 +20,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.desmoines.aipulse.ui.theme.PremiumMotion
 import com.desmoines.aipulse.data.model.SubscriptionTier
+import com.desmoines.aipulse.ui.screens.askpulse.AskPulseScreen
+import com.desmoines.aipulse.ui.screens.askpulse.AskPulseViewModel
 import com.desmoines.aipulse.ui.screens.auth.AuthScreen
 import com.desmoines.aipulse.ui.screens.eventdetail.EventDetailScreen
 import com.desmoines.aipulse.ui.screens.eventdetail.EventDetailViewModel
@@ -565,6 +567,29 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
     composable(Route.Auth.route) {
         AuthScreen(
             onNavigateBack = { navController.popBackStack() },
+        )
+    }
+
+    composable(Route.AskPulse.route) {
+        val viewModel: AskPulseViewModel = hiltViewModel()
+        val state by viewModel.uiState.collectAsState()
+
+        AskPulseScreen(
+            state = state,
+            suggestions = viewModel.suggestions,
+            onInputChange = viewModel::onInputChange,
+            onSend = viewModel::send,
+            onSuggestion = viewModel::sendSuggestion,
+            onReset = viewModel::reset,
+            onNavigateBack = { navController.popBackStack() },
+            onNavigateToPick = { itemType, itemId ->
+                when (itemType.lowercase()) {
+                    "event" -> navController.navigate(Route.EventDetail.createRoute(itemId))
+                    "restaurant" -> navController.navigate(Route.RestaurantDetail.createRoute(itemId))
+                    "attraction" -> navController.navigate(Route.AttractionDetail.createRoute(itemId))
+                }
+            },
+            onUpgrade = { navController.navigate(Route.Subscription.route) },
         )
     }
 

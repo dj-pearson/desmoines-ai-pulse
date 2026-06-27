@@ -1,5 +1,7 @@
 package com.desmoines.aipulse.di
 
+import com.desmoines.aipulse.data.repository.AskPulseRepository
+import com.desmoines.aipulse.data.repository.AskPulseRepositoryImpl
 import com.desmoines.aipulse.data.repository.AttractionsRepository
 import com.desmoines.aipulse.data.repository.AttractionsRepositoryImpl
 import com.desmoines.aipulse.data.repository.AuthRepository
@@ -36,4 +38,7 @@ abstract class RepositoryModule {
 
     @Binds
     abstract fun bindFavoritesRepository(impl: FavoritesRepositoryImpl): FavoritesRepository
+
+    @Binds
+    abstract fun bindAskPulseRepository(impl: AskPulseRepositoryImpl): AskPulseRepository
 }
