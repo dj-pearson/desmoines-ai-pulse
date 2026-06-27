@@ -29,6 +29,11 @@ enum class PaywallContext(
         headline = "Dine like a local",
         body = "Unlock dining tips and premium picks for every restaurant with Insider.",
     ),
+    REVIEWS(
+        id = "reviews",
+        headline = "Share your take",
+        body = "Writing reviews and ratings is an Insider perk. Upgrade to add yours.",
+    ),
     GENERIC(
         id = "generic",
         headline = "Unlock more with Insider",

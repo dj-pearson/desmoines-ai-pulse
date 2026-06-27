@@ -200,6 +200,9 @@ enum class SubscriptionTier(val displayName: String) {
             INSIDER, VIP -> Int.MAX_VALUE
         }
 
+    /** Insider+ unlocks premium features (write reviews, advanced filters, etc.). */
+    val isPremium: Boolean get() = this == INSIDER || this == VIP
+
     val features: List<String>
         get() = when (this) {
             FREE -> listOf(

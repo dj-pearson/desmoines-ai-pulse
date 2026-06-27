@@ -117,6 +117,7 @@ fun EventDetailScreen(
     onShowSubscription: () -> Unit,
     onNavigateToEventDetail: (String) -> Unit,
     onOpenSourceUrl: (String) -> Unit,
+    onNavigateToAuth: () -> Unit = {},
 ) {
     var showImageViewer by remember { mutableStateOf(false) }
     val haptic = rememberHapticPerformer()
@@ -222,9 +223,14 @@ fun EventDetailScreen(
                 onShowSubscription = onShowSubscription,
             )
 
-            // Reviews (ANDP-035)
+            // Reviews (ANDP-035 / ANDP-036)
             Spacer(modifier = Modifier.height(8.dp))
-            ReviewsSection(contentType = "event", contentId = event.id)
+            ReviewsSection(
+                contentType = "event",
+                contentId = event.id,
+                onNavigateToSubscription = onShowSubscription,
+                onNavigateToAuth = onNavigateToAuth,
+            )
 
             // Related Events
             EventDetailRelated(

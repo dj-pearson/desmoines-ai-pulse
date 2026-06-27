@@ -105,6 +105,7 @@ fun RestaurantDetailScreen(
     onOpenWebsite: () -> Unit,
     onOpenDirections: () -> Unit,
     onShowSubscription: () -> Unit,
+    onNavigateToAuth: () -> Unit = {},
 ) {
     var showImageViewer by remember { mutableStateOf(false) }
     val haptic = rememberHapticPerformer()
@@ -204,9 +205,14 @@ fun RestaurantDetailScreen(
                 onShowSubscription = onShowSubscription
             )
 
-            // Reviews (ANDP-035)
+            // Reviews (ANDP-035 / ANDP-036)
             Spacer(modifier = Modifier.height(8.dp))
-            ReviewsSection(contentType = "restaurant", contentId = restaurant.id)
+            ReviewsSection(
+                contentType = "restaurant",
+                contentId = restaurant.id,
+                onNavigateToSubscription = onShowSubscription,
+                onNavigateToAuth = onNavigateToAuth,
+            )
 
             // Ad Banner
             AdBannerView(
