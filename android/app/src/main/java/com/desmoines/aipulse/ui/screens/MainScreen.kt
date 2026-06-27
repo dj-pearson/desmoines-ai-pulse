@@ -41,6 +41,7 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.desmoines.aipulse.ui.components.OfflineBanner
+import com.desmoines.aipulse.ui.components.PaywallHost
 import com.desmoines.aipulse.ui.navigation.BottomNavTab
 import com.desmoines.aipulse.ui.navigation.MainNavHost
 import com.desmoines.aipulse.ui.navigation.Route
@@ -294,5 +295,11 @@ fun MainScreen(
             }
         }
     }
+
+        // Soft paywall: shown as a bottom sheet whenever SoftPaywallService has a
+        // pending context. Consumers (favorites cap, Trip Planner, etc.) trigger it.
+        PaywallHost(
+            onNavigateToSubscription = { navController.navigate(Route.Subscription.route) },
+        )
     } // CompositionLocalProvider
 }
