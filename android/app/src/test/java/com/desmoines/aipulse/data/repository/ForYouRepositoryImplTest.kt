@@ -30,7 +30,7 @@ class ForYouRepositoryImplTest {
     }
 
     @Test
-    fun `engaged user (>= threshold swipes) gets personalized feed`() = runTest {
+    fun `engaged user at or above the swipe threshold gets personalized feed`() = runTest {
         coEvery { remote.countRecentSwipes(any(), any()) } returns ForYouRepository.SWIPE_THRESHOLD
         coEvery { remote.fetchPersonalized(any(), any(), any()) } returns sample
 
