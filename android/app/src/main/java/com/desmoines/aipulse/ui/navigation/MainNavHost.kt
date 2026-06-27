@@ -37,6 +37,9 @@ import com.desmoines.aipulse.ui.screens.weekend.WeekendViewModel
 import com.desmoines.aipulse.ui.screens.neighborhoods.NeighborhoodsHubScreen
 import com.desmoines.aipulse.ui.screens.neighborhoods.NeighborhoodDetailScreen
 import com.desmoines.aipulse.ui.screens.neighborhoods.NeighborhoodDetailViewModel
+import com.desmoines.aipulse.ui.screens.hubs.ContentHubsListScreen
+import com.desmoines.aipulse.ui.screens.hubs.ContentHubScreen
+import com.desmoines.aipulse.ui.screens.hubs.ContentHubViewModel
 import com.desmoines.aipulse.ui.screens.auth.AuthScreen
 import com.desmoines.aipulse.ui.screens.eventdetail.EventDetailScreen
 import com.desmoines.aipulse.ui.screens.eventdetail.EventDetailViewModel
@@ -188,6 +191,9 @@ private fun NavGraphBuilder.addTabDestinations(
             },
             onNavigateToNeighborhoods = {
                 navController.navigate(Route.Neighborhoods.route)
+            },
+            onNavigateToContentHubs = {
+                navController.navigate(Route.ContentHubs.route)
             },
             onSelectCategory = { category -> viewModel.setSelectedCategory(category) },
             onSelectDatePreset = { preset -> viewModel.setSelectedDatePreset(preset) },
@@ -644,6 +650,33 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
             onReload = viewModel::reload,
             onSelectMode = viewModel::setMode,
             onClearFilter = viewModel::clearFilter,
+            onNavigateBack = { navController.popBackStack() },
+        )
+    }
+
+    composable(Route.ContentHubs.route) {
+        ContentHubsListScreen(
+            onOpenHub = { id -> navController.navigate(Route.ContentHubDetail.createRoute(id)) },
+            onNavigateBack = { navController.popBackStack() },
+        )
+    }
+
+    composable(
+        route = Route.ContentHubDetail.route,
+        arguments = Route.ContentHubDetail.arguments,
+    ) { backStackEntry ->
+        val hubId = backStackEntry.arguments?.getString("hubId") ?: return@composable
+        val viewModel: ContentHubViewModel = hiltViewModel()
+        val state by viewModel.uiState.collectAsState()
+
+        androidx.compose.runtime.LaunchedEffect(hubId) { viewModel.load(hubId) }
+
+        ContentHubScreen(
+            state = state,
+            onRetry = viewModel::retry,
+            onOpenEvent = { id -> navController.navigate(Route.EventDetail.createRoute(id)) },
+            onOpenAttraction = { id -> navController.navigate(Route.AttractionDetail.createRoute(id)) },
+            onOpenRestaurant = { id -> navController.navigate(Route.RestaurantDetail.createRoute(id)) },
             onNavigateBack = { navController.popBackStack() },
         )
     }

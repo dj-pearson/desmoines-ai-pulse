@@ -140,6 +140,7 @@ fun HomeScreen(
     onNavigateToSurpriseMe: () -> Unit = {},
     onNavigateToWeekend: () -> Unit = {},
     onNavigateToNeighborhoods: () -> Unit = {},
+    onNavigateToContentHubs: () -> Unit = {},
     onSelectCategory: (EventCategory?) -> Unit = {},
     onSelectDatePreset: (DateFilterPreset?) -> Unit = {},
     onShowFilters: () -> Unit = {},
@@ -281,6 +282,9 @@ fun HomeScreen(
                     }
                     item(key = "neighborhoods", span = { GridItemSpan(maxLineSpan) }) {
                         NeighborhoodsHomeCard(onClick = onNavigateToNeighborhoods)
+                    }
+                    item(key = "contentHubs", span = { GridItemSpan(maxLineSpan) }) {
+                        ContentHubsHomeCard(onClick = onNavigateToContentHubs)
                     }
                     item(key = "forYou", span = { GridItemSpan(maxLineSpan) }) {
                         ForYouRail(onNavigateToEvent = onNavigateToEventDetail)
@@ -434,6 +438,9 @@ fun HomeScreen(
                     }
                     item(key = "neighborhoods") {
                         NeighborhoodsHomeCard(onClick = onNavigateToNeighborhoods)
+                    }
+                    item(key = "contentHubs") {
+                        ContentHubsHomeCard(onClick = onNavigateToContentHubs)
                     }
                     item(key = "forYou") {
                         ForYouRail(onNavigateToEvent = onNavigateToEventDetail)
