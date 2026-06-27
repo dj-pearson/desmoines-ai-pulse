@@ -145,6 +145,7 @@ fun HomeScreen(
     onNavigateToArticles: () -> Unit = {},
     onNavigateToDeals: () -> Unit = {},
     onNavigateToHotels: () -> Unit = {},
+    onNavigateToBestOf: () -> Unit = {},
     onSelectCategory: (EventCategory?) -> Unit = {},
     onSelectDatePreset: (DateFilterPreset?) -> Unit = {},
     onShowFilters: () -> Unit = {},
@@ -301,6 +302,9 @@ fun HomeScreen(
                     }
                     item(key = "hotels", span = { GridItemSpan(maxLineSpan) }) {
                         HotelsHomeCard(onClick = onNavigateToHotels)
+                    }
+                    item(key = "bestOf", span = { GridItemSpan(maxLineSpan) }) {
+                        BestOfHomeCard(onClick = onNavigateToBestOf)
                     }
                     item(key = "forYou", span = { GridItemSpan(maxLineSpan) }) {
                         ForYouRail(onNavigateToEvent = onNavigateToEventDetail)
@@ -469,6 +473,9 @@ fun HomeScreen(
                     }
                     item(key = "hotels") {
                         HotelsHomeCard(onClick = onNavigateToHotels)
+                    }
+                    item(key = "bestOf") {
+                        BestOfHomeCard(onClick = onNavigateToBestOf)
                     }
                     item(key = "forYou") {
                         ForYouRail(onNavigateToEvent = onNavigateToEventDetail)
