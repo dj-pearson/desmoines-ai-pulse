@@ -1,5 +1,7 @@
 package com.desmoines.aipulse.data.repository
 
+import com.desmoines.aipulse.data.model.Nominee
+import com.desmoines.aipulse.data.model.Vote
 import com.desmoines.aipulse.data.model.VotingCategory
 import com.desmoines.aipulse.data.remote.BestOfRemoteDataSource
 import com.desmoines.aipulse.util.QueryCache
@@ -7,9 +9,20 @@ import kotlinx.serialization.builtins.ListSerializer
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** Reads Best Of voting categories, caching the list for offline cold-start. */
+/** Reads Best Of voting categories + the booth (user vote, nominee search, cast). */
 interface BestOfRepository {
     suspend fun fetchCategories(): Result<List<VotingCategory>>
+    suspend fun fetchCategory(categoryId: String): Result<VotingCategory?>
+    suspend fun fetchUserVote(categoryId: String, userId: String): Result<Vote?>
+    suspend fun searchNominees(query: String): Result<List<Nominee>>
+    suspend fun resolveEntityName(entityType: String, entityId: String): String?
+    suspend fun castVote(
+        categoryId: String,
+        userId: String,
+        entityType: String,
+        entityId: String?,
+        customEntry: String?,
+    ): Result<Unit>
 }
 
 @Singleton
@@ -29,6 +42,28 @@ class BestOfRepositoryImpl @Inject constructor(
         val cached = queryCache.get(CACHE_KEY, serializer, allowStale = true)
         if (cached != null) return Result.success(cached)
         return Result.failure(IllegalStateException("Couldn't load voting categories."))
+    }
+
+    override suspend fun fetchCategory(categoryId: String): Result<VotingCategory?> =
+        runCatching { remote.fetchCategory(categoryId) }
+
+    override suspend fun fetchUserVote(categoryId: String, userId: String): Result<Vote?> =
+        runCatching { remote.fetchUserVote(categoryId, userId) }
+
+    override suspend fun searchNominees(query: String): Result<List<Nominee>> =
+        runCatching { remote.searchNominees(query) }
+
+    override suspend fun resolveEntityName(entityType: String, entityId: String): String? =
+        runCatching { remote.fetchEntityName(entityType, entityId) }.getOrNull()
+
+    override suspend fun castVote(
+        categoryId: String,
+        userId: String,
+        entityType: String,
+        entityId: String?,
+        customEntry: String?,
+    ): Result<Unit> = runCatching {
+        remote.castVote(categoryId, userId, entityType, entityId, customEntry)
     }
 
     private companion object {
