@@ -61,6 +61,13 @@ sealed class Route(val route: String) {
         fun createRoute(slug: String) = "neighborhood/$slug"
         val arguments = listOf(navArgument("slug") { type = NavType.StringType })
     }
+
+    data object ContentHubs : Route("content_hubs")
+
+    data object ContentHubDetail : Route("content_hub/{hubId}") {
+        fun createRoute(hubId: String) = "content_hub/$hubId"
+        val arguments = listOf(navArgument("hubId") { type = NavType.StringType })
+    }
     data object TripPlanner : Route("trip_planner")
     data object SavedTrips : Route("saved_trips")
 
