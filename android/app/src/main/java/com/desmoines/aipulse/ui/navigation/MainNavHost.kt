@@ -28,6 +28,8 @@ import com.desmoines.aipulse.ui.screens.tripplanner.SavedTripsScreen
 import com.desmoines.aipulse.ui.screens.tripplanner.SavedTripsViewModel
 import com.desmoines.aipulse.ui.screens.tripplanner.ItineraryDetailScreen
 import com.desmoines.aipulse.ui.screens.tripplanner.ItineraryDetailViewModel
+import com.desmoines.aipulse.ui.screens.discover.DiscoverScreen
+import com.desmoines.aipulse.ui.screens.discover.DiscoverViewModel
 import com.desmoines.aipulse.ui.screens.auth.AuthScreen
 import com.desmoines.aipulse.ui.screens.eventdetail.EventDetailScreen
 import com.desmoines.aipulse.ui.screens.eventdetail.EventDetailViewModel
@@ -167,6 +169,9 @@ private fun NavGraphBuilder.addTabDestinations(
             },
             onNavigateToTripPlanner = {
                 navController.navigate(Route.TripPlanner.route)
+            },
+            onNavigateToDiscover = {
+                navController.navigate(Route.Discover.route)
             },
             onSelectCategory = { category -> viewModel.setSelectedCategory(category) },
             onSelectDatePreset = { preset -> viewModel.setSelectedDatePreset(preset) },
@@ -599,6 +604,28 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
                 }
             },
             onUpgrade = { navController.navigate(Route.Subscription.route) },
+        )
+    }
+
+    composable(Route.Discover.route) {
+        val viewModel: DiscoverViewModel = hiltViewModel()
+        val state by viewModel.uiState.collectAsState()
+
+        DiscoverScreen(
+            state = state,
+            onLike = viewModel::onLike,
+            onSkip = viewModel::onSkip,
+            onBoost = viewModel::onBoost,
+            onOpenItem = { item ->
+                when (item.itemType) {
+                    com.desmoines.aipulse.data.model.SwipeItemType.EVENT ->
+                        navController.navigate(Route.EventDetail.createRoute(item.rawId))
+                    com.desmoines.aipulse.data.model.SwipeItemType.RESTAURANT ->
+                        navController.navigate(Route.RestaurantDetail.createRoute(item.rawId))
+                }
+            },
+            onReload = viewModel::load,
+            onNavigateBack = { navController.popBackStack() },
         )
     }
 
