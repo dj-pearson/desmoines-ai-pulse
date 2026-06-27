@@ -344,6 +344,16 @@ private fun NavGraphBuilder.addTabDestinations(
             onNavigateToAttractionDetail = { id ->
                 navController.navigate(Route.AttractionDetail.createRoute(id))
             },
+            onOpenRecent = { item ->
+                val route = when (item.type) {
+                    com.desmoines.aipulse.data.model.RecentItemType.EVENT -> Route.EventDetail.createRoute(item.id)
+                    com.desmoines.aipulse.data.model.RecentItemType.RESTAURANT -> Route.RestaurantDetail.createRoute(item.id)
+                    com.desmoines.aipulse.data.model.RecentItemType.ATTRACTION -> Route.AttractionDetail.createRoute(item.id)
+                    com.desmoines.aipulse.data.model.RecentItemType.ARTICLE -> Route.ArticleDetail.createRoute(item.id)
+                    com.desmoines.aipulse.data.model.RecentItemType.HOTEL -> Route.HotelDetail.createRoute(item.id)
+                }
+                navController.navigate(route)
+            },
         )
     }
 
