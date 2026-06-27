@@ -110,6 +110,28 @@ class AdTrackingService @Inject constructor(
         }
     }
 
+    /**
+     * Logs a sponsored-pick impression in an AI surface, deduped per campaign +
+     * surface per session. Sponsored picks carry no ad creative id, so this is
+     * analytics-only (no `ad_impressions` row). Returns false on a duplicate.
+     */
+    fun recordSponsoredImpression(campaignId: String, surface: String): Boolean {
+        if (!gate.registerImpression(campaignId, "sponsored:$surface")) return false
+        analyticsService.logEvent(
+            EVENT_SPONSORED_IMPRESSION,
+            mapOf("surface" to surface, "inventory_class" to INVENTORY_CLASS, "campaign_id" to campaignId),
+        )
+        return true
+    }
+
+    /** Logs a sponsored-pick click in an AI surface (analytics-only). */
+    fun recordSponsoredClick(campaignId: String, surface: String) {
+        analyticsService.logEvent(
+            EVENT_SPONSORED_CLICK,
+            mapOf("surface" to surface, "inventory_class" to INVENTORY_CLASS, "campaign_id" to campaignId),
+        )
+    }
+
     private fun idKey(ad: CampaignAd) = "${ad.campaignId}:${ad.creativeId}"
 
     private fun enqueue(event: PendingAdEvent) {
@@ -207,6 +229,8 @@ class AdTrackingService @Inject constructor(
         const val TYPE_CLICK = "click"
         const val EVENT_IMPRESSION = "ad_impression"
         const val EVENT_CLICK = "ad_click"
+        const val EVENT_SPONSORED_IMPRESSION = "sponsored_impression"
+        const val EVENT_SPONSORED_CLICK = "sponsored_click"
         const val INVENTORY_CLASS = "sponsored"
     }
 }

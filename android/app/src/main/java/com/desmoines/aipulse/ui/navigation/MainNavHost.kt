@@ -1022,6 +1022,12 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
             },
             onRetry = viewModel::roll,
             onNavigateBack = { navController.popBackStack() },
+            onOpenSponsored = { itemType, itemId ->
+                when (itemType) {
+                    "event" -> navController.navigate(Route.EventDetail.createRoute(itemId))
+                    "restaurant" -> navController.navigate(Route.RestaurantDetail.createRoute(itemId))
+                }
+            },
         )
     }
 

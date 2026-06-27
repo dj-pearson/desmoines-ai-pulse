@@ -47,7 +47,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.desmoines.aipulse.data.model.SurprisePick
+import com.desmoines.aipulse.data.remote.SponsoredPickService
 import com.desmoines.aipulse.ui.components.CachedAsyncImage
+import com.desmoines.aipulse.ui.components.ads.SponsoredPickSlot
 import com.desmoines.aipulse.util.rememberHapticPerformer
 import com.desmoines.aipulse.util.rememberShouldReduceAnimations
 import kotlinx.coroutines.launch
@@ -61,6 +63,7 @@ fun SurpriseMeScreen(
     onOpen: (SurprisePick) -> Unit,
     onRetry: () -> Unit,
     onNavigateBack: () -> Unit,
+    onOpenSponsored: (String, String) -> Unit = {},
 ) {
     val haptic = rememberHapticPerformer()
 
@@ -89,12 +92,20 @@ fun SurpriseMeScreen(
             when {
                 state.isRolling -> RollingState()
                 state.errorMessage != null -> ErrorState(message = state.errorMessage, onRetry = onRetry)
-                pick != null -> PickReveal(
-                    pick = pick,
-                    onSave = { haptic.light(); onSave() },
-                    onTryAnother = { haptic.medium(); onTryAnother() },
-                    onOpen = { onOpen(pick) },
-                )
+                pick != null -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    PickReveal(
+                        pick = pick,
+                        onSave = { haptic.light(); onSave() },
+                        onTryAnother = { haptic.medium(); onTryAnother() },
+                        onOpen = { onOpen(pick) },
+                    )
+                    Spacer(Modifier.height(20.dp))
+                    SponsoredPickSlot(
+                        surface = SponsoredPickService.Surface.SURPRISE_ME,
+                        query = null,
+                        onOpenItem = onOpenSponsored,
+                    )
+                }
             }
         }
     }
