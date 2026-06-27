@@ -14,6 +14,8 @@ import com.desmoines.aipulse.data.repository.ForYouRepository
 import com.desmoines.aipulse.data.repository.ForYouRepositoryImpl
 import com.desmoines.aipulse.data.repository.RestaurantsRepository
 import com.desmoines.aipulse.data.repository.RestaurantsRepositoryImpl
+import com.desmoines.aipulse.data.repository.TripPlannerRepository
+import com.desmoines.aipulse.data.repository.TripPlannerRepositoryImpl
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -46,4 +48,7 @@ abstract class RepositoryModule {
 
     @Binds
     abstract fun bindForYouRepository(impl: ForYouRepositoryImpl): ForYouRepository
+
+    @Binds
+    abstract fun bindTripPlannerRepository(impl: TripPlannerRepositoryImpl): TripPlannerRepository
 }
