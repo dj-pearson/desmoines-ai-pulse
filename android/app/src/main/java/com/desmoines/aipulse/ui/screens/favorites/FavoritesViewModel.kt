@@ -7,7 +7,11 @@ import com.desmoines.aipulse.data.model.Restaurant
 import com.desmoines.aipulse.data.model.SubscriptionTier
 import com.desmoines.aipulse.data.repository.FavoritesRepository
 import com.desmoines.aipulse.data.repository.AuthRepository
+import com.desmoines.aipulse.util.NetworkMonitor
+import com.desmoines.aipulse.util.RECONNECT_DEBOUNCE_MS
+import com.desmoines.aipulse.util.onReconnect
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -27,6 +31,7 @@ private const val TAG = "FavoritesViewModel"
 class FavoritesViewModel @Inject constructor(
     private val favoritesRepository: FavoritesRepository,
     private val authRepository: AuthRepository,
+    private val networkMonitor: NetworkMonitor,
 ) : ViewModel() {
 
     private val _upcomingEvents = MutableStateFlow<List<Event>>(emptyList())
@@ -79,6 +84,16 @@ class FavoritesViewModel @Inject constructor(
     )
 
     private var hasLoadedInitialData = false
+
+    init {
+        // Auto-refetch favorites when connectivity returns (ANDP-069).
+        viewModelScope.launch {
+            networkMonitor.isConnected.onReconnect().collect {
+                delay(RECONNECT_DEBOUNCE_MS)
+                if (hasLoadedInitialData && networkMonitor.isConnected.value) refresh()
+            }
+        }
+    }
 
     fun loadFavorites() {
         if (hasLoadedInitialData) return
