@@ -262,6 +262,9 @@ fun HomeScreen(
                             }
                         )
                     }
+                    item(key = "forYou", span = { GridItemSpan(maxLineSpan) }) {
+                        ForYouRail(onNavigateToEvent = onNavigateToEventDetail)
+                    }
                     if (state.errorMessage != null) {
                         item(key = "error", span = { GridItemSpan(maxLineSpan) }) {
                             ErrorBanner(message = state.errorMessage, onRetry = onRefresh)
@@ -396,6 +399,9 @@ fun HomeScreen(
                                 )
                             }
                         )
+                    }
+                    item(key = "forYou") {
+                        ForYouRail(onNavigateToEvent = onNavigateToEventDetail)
                     }
                     if (state.errorMessage != null) {
                         item(key = "error") {

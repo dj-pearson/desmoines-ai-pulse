@@ -10,6 +10,8 @@ import com.desmoines.aipulse.data.repository.EventsRepository
 import com.desmoines.aipulse.data.repository.EventsRepositoryImpl
 import com.desmoines.aipulse.data.repository.FavoritesRepository
 import com.desmoines.aipulse.data.repository.FavoritesRepositoryImpl
+import com.desmoines.aipulse.data.repository.ForYouRepository
+import com.desmoines.aipulse.data.repository.ForYouRepositoryImpl
 import com.desmoines.aipulse.data.repository.RestaurantsRepository
 import com.desmoines.aipulse.data.repository.RestaurantsRepositoryImpl
 import dagger.Binds
@@ -41,4 +43,7 @@ abstract class RepositoryModule {
 
     @Binds
     abstract fun bindAskPulseRepository(impl: AskPulseRepositoryImpl): AskPulseRepository
+
+    @Binds
+    abstract fun bindForYouRepository(impl: ForYouRepositoryImpl): ForYouRepository
 }
