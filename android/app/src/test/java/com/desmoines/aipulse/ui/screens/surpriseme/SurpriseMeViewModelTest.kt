@@ -4,6 +4,7 @@ import com.desmoines.aipulse.data.model.SurprisePick
 import com.desmoines.aipulse.data.remote.FavoritesException
 import com.desmoines.aipulse.data.repository.AuthRepository
 import com.desmoines.aipulse.data.repository.FavoritesRepository
+import com.desmoines.aipulse.data.repository.FavoritesState
 import com.desmoines.aipulse.data.repository.SurpriseMeException
 import com.desmoines.aipulse.data.repository.SurpriseMeRepository
 import com.desmoines.aipulse.util.SoftPaywallService
@@ -44,6 +45,8 @@ class SurpriseMeViewModelTest {
         authRepository = mockk(relaxed = true)
         softPaywallService = mockk(relaxed = true)
         every { authRepository.currentUserId } returns "u1"
+        // Result is a value class — relaxed mocks can't synthesize one, so stub it.
+        coEvery { favoritesRepository.loadFavorites(any()) } returns Result.success(FavoritesState())
     }
 
     @AfterEach
