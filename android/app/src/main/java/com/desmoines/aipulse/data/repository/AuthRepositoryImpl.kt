@@ -3,6 +3,8 @@ package com.desmoines.aipulse.data.repository
 import android.util.Log
 import com.desmoines.aipulse.data.model.UserProfile
 import com.desmoines.aipulse.data.remote.AuthRemoteDataSource
+import com.desmoines.aipulse.util.SignOutCleaner
+import dagger.Lazy
 import io.github.jan.supabase.auth.status.SessionStatus
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
@@ -17,6 +19,8 @@ private const val TAG = "AuthRepository"
 @Singleton
 class AuthRepositoryImpl @Inject constructor(
     private val remoteDataSource: AuthRemoteDataSource,
+    // Lazy breaks the DI cycle (cleaner → swipe/ad services → AuthRepository).
+    private val signOutCleaner: Lazy<SignOutCleaner>,
 ) : AuthRepository {
 
     override val sessionStatus: Flow<SessionStatus>?
@@ -42,6 +46,8 @@ class AuthRepositoryImpl @Inject constructor(
     override suspend fun signOut(): Result<Unit> =
         runCatching { remoteDataSource.signOut() }
             .onFailure { Log.w(TAG, "Sign out failed: ${it.message}") }
+            // Always tear down local state, even if the remote sign-out failed.
+            .also { signOutCleaner.get().tearDown() }
 
     override suspend fun resetPassword(email: String): Result<Unit> =
         runCatching { remoteDataSource.resetPassword(email) }
