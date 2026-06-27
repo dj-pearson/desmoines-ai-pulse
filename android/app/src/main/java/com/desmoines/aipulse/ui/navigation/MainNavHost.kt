@@ -625,7 +625,9 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
                         navController.navigate(Route.RestaurantDetail.createRoute(item.rawId))
                 }
             },
-            onReload = viewModel::load,
+            onReload = viewModel::reload,
+            onSelectMode = viewModel::setMode,
+            onClearFilter = viewModel::clearFilter,
             onNavigateBack = { navController.popBackStack() },
         )
     }

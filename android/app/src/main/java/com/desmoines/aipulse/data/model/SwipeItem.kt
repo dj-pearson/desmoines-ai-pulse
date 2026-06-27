@@ -22,6 +22,10 @@ data class SwipeItem(
     val locationText: String,
     val typeLabel: String,
     val imageUrl: String?,
+    /** Event category display name — drives "more like this" boost narrowing. */
+    val eventCategory: String? = null,
+    /** Restaurant cuisine — drives "more like this" boost narrowing. */
+    val cuisine: String? = null,
 ) {
     companion object {
         fun from(event: Event): SwipeItem = SwipeItem(
@@ -33,6 +37,7 @@ data class SwipeItem(
             locationText = event.displayLocation,
             typeLabel = prettyCategory(event.category) ?: "Event",
             imageUrl = event.imageUrl,
+            eventCategory = EventCategory.from(event.category).displayName,
         )
 
         fun from(restaurant: Restaurant): SwipeItem = SwipeItem(
@@ -47,6 +52,7 @@ data class SwipeItem(
             locationText = restaurant.city.orEmpty(),
             typeLabel = restaurant.cuisine?.takeIf { it.isNotBlank() } ?: "Restaurant",
             imageUrl = restaurant.imageUrl,
+            cuisine = restaurant.cuisine?.takeIf { it.isNotBlank() },
         )
 
         private fun prettyCategory(category: String?): String? =

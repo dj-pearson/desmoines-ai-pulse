@@ -26,6 +26,7 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -80,7 +81,7 @@ class DiscoverViewModelTest {
     )
 
     @Test
-    fun `load interleaves events and restaurants`() = runTest(testDispatcher) {
+    fun `load builds a mixed deck of events and restaurants`() = runTest(testDispatcher) {
         stubEvents("e1", "e2")
         stubRestaurants("r1", "r2")
         val viewModel = vm()
@@ -88,28 +89,31 @@ class DiscoverViewModelTest {
 
         val state = viewModel.uiState.value
         assertFalse(state.isLoading)
+        // Mixed mode shuffles, so assert membership not order.
         assertEquals(
-            listOf("event-e1", "restaurant-r1", "event-e2", "restaurant-r2"),
-            state.items.map { it.id },
+            setOf("event-e1", "event-e2", "restaurant-r1", "restaurant-r2"),
+            state.items.map { it.id }.toSet(),
         )
-        assertEquals(SwipeItemType.EVENT, state.items.first().itemType)
     }
 
     @Test
-    fun `commit removes the top card`() = runTest(testDispatcher) {
+    fun `commit removes the swiped card`() = runTest(testDispatcher) {
         stubEvents("e1", "e2")
         stubRestaurants()
         val viewModel = vm()
         advanceUntilIdle()
 
-        val top = viewModel.uiState.value.items.first()
+        val before = viewModel.uiState.value.items
+        val top = before.first()
         viewModel.onLike(top)
 
-        assertEquals(listOf("event-e2"), viewModel.uiState.value.items.map { it.id })
+        val after = viewModel.uiState.value.items
+        assertEquals(before.size - 1, after.size)
+        assertFalse(after.any { it.id == top.id })
     }
 
     @Test
-    fun `empty deck surfaces an error`() = runTest(testDispatcher) {
+    fun `empty successful fetch shows the caught-up state, not an error`() = runTest(testDispatcher) {
         stubEvents()
         stubRestaurants()
         val viewModel = vm()
@@ -117,7 +121,36 @@ class DiscoverViewModelTest {
 
         val state = viewModel.uiState.value
         assertTrue(state.items.isEmpty())
-        assertNotNull(state.errorMessage)
         assertFalse(state.isLoading)
+        assertNull(state.errorMessage)
+        assertTrue(state.isEmpty)
+    }
+
+    @Test
+    fun `failed fetch surfaces an error`() = runTest(testDispatcher) {
+        coEvery { eventsRepository.fetchEvents(any()) } returns Result.failure(RuntimeException("boom"))
+        coEvery { restaurantsRepository.fetchRestaurants(any()) } returns Result.failure(RuntimeException("boom"))
+        val viewModel = vm()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertTrue(state.items.isEmpty())
+        assertNotNull(state.errorMessage)
+    }
+
+    @Test
+    fun `switching mode refetches the deck`() = runTest(testDispatcher) {
+        stubEvents("e1")
+        stubRestaurants("r1")
+        val viewModel = vm()
+        advanceUntilIdle()
+
+        viewModel.setMode(DiscoverMode.EVENTS)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(DiscoverMode.EVENTS, state.mode)
+        // Events-only mode: no restaurants in the deck.
+        assertTrue(state.items.all { it.itemType == SwipeItemType.EVENT })
     }
 }

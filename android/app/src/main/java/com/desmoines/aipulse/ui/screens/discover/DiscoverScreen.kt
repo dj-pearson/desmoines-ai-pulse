@@ -1,5 +1,6 @@
 package com.desmoines.aipulse.ui.screens.discover
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,21 +11,25 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -50,6 +55,8 @@ fun DiscoverScreen(
     onBoost: (SwipeItem) -> Unit,
     onOpenItem: (SwipeItem) -> Unit,
     onReload: () -> Unit,
+    onSelectMode: (DiscoverMode) -> Unit,
+    onClearFilter: () -> Unit,
     onNavigateBack: () -> Unit,
 ) {
     var command by remember { mutableStateOf<SwipeCommand?>(null) }
@@ -89,39 +96,52 @@ fun DiscoverScreen(
             )
         },
     ) { innerPadding ->
-        Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-            when {
-                state.isLoading -> CenterStatus { CircularProgressIndicator() }
-                state.errorMessage != null -> CenterStatus {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            state.errorMessage,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Spacer(Modifier.height(12.dp))
-                        OutlinedButton(onClick = onReload) { Text("Try again") }
+        Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+            ModeToggle(
+                mode = state.mode,
+                enabled = !state.modeLocked,
+                onSelectMode = onSelectMode,
+            )
+            if (state.filterTags.isNotEmpty()) {
+                FilterTagStrip(
+                    tags = state.filterTags,
+                    showClear = !state.modeLocked,
+                    onClear = onClearFilter,
+                )
+            }
+
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                when {
+                    state.isLoading -> CenterStatus { CircularProgressIndicator() }
+                    state.errorMessage != null -> CenterStatus {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                state.errorMessage,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            OutlinedButton(onClick = onReload) { Text("Try again") }
+                        }
                     }
-                }
-                state.isEmpty -> CenterStatus {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            "You're all caught up",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            "Come back later for fresh picks.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Spacer(Modifier.height(12.dp))
-                        OutlinedButton(onClick = onReload) { Text("Refresh") }
+                    state.isEmpty -> CenterStatus {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                "You're all caught up",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "Come back later for fresh picks.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            OutlinedButton(onClick = onReload) { Text("Refresh") }
+                        }
                     }
-                }
-                else -> Column(modifier = Modifier.fillMaxSize()) {
-                    Box(modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp)) {
+                    else -> Box(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
                         SwipeCardStack(
                             items = state.items,
                             onLike = onLike,
@@ -132,13 +152,52 @@ fun DiscoverScreen(
                             onCommandConsumed = { command = null },
                         )
                     }
-                    ActionBar(
-                        onSkip = { command = SwipeCommand.SKIP },
-                        onBoost = { command = SwipeCommand.BOOST },
-                        onLike = { command = SwipeCommand.LIKE },
-                    )
                 }
             }
+
+            if (state.items.isNotEmpty() && !state.isLoading) {
+                ActionBar(
+                    onSkip = { command = SwipeCommand.SKIP },
+                    onBoost = { command = SwipeCommand.BOOST },
+                    onLike = { command = SwipeCommand.LIKE },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ModeToggle(mode: DiscoverMode, enabled: Boolean, onSelectMode: (DiscoverMode) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        DiscoverMode.entries.forEach { entry ->
+            FilterChip(
+                selected = entry == mode,
+                enabled = enabled,
+                onClick = { onSelectMode(entry) },
+                label = { Text(entry.title) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun FilterTagStrip(tags: List<String>, showClear: Boolean, onClear: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        tags.forEach { tag ->
+            AssistChip(onClick = {}, label = { Text(tag) })
+        }
+        if (showClear) {
+            TextButton(onClick = onClear) { Text("Clear") }
         }
     }
 }
