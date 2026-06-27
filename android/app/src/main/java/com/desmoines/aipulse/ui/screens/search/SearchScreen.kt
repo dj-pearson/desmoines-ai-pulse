@@ -20,6 +20,11 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.material3.AssistChip
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.desmoines.aipulse.data.model.RecentItem
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -55,6 +60,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -97,6 +103,7 @@ fun SearchScreen(
     onNavigateToEventDetail: (String) -> Unit = {},
     onNavigateToRestaurantDetail: (String) -> Unit = {},
     onNavigateToAttractionDetail: (String) -> Unit = {},
+    onOpenRecent: (RecentItem) -> Unit = {},
 ) {
     val haptics = rememberHapticPerformer()
 
@@ -141,6 +148,9 @@ fun SearchScreen(
         // Content
         when {
             state.searchText.isEmpty() && !state.hasSearched -> {
+                val suggestionsViewModel: SearchSuggestionsViewModel = hiltViewModel()
+                val recentSearches by suggestionsViewModel.recentSearches.collectAsStateWithLifecycle()
+                val recentlyViewed by suggestionsViewModel.recentlyViewed.collectAsStateWithLifecycle()
                 Column(modifier = Modifier.fillMaxSize()) {
                     if (savedSearches.isNotEmpty()) {
                         SavedSearchSection(
@@ -151,7 +161,11 @@ fun SearchScreen(
                         )
                     }
                     SearchSuggestions(
+                        recentSearches = recentSearches,
+                        recentlyViewed = recentlyViewed,
                         onSuggestionSelected = onSearchTextChanged,
+                        onClearHistory = suggestionsViewModel::clearSearchHistory,
+                        onOpenRecent = onOpenRecent,
                     )
                 }
             }
@@ -333,6 +347,10 @@ private fun tabIcon(tab: SearchTab): ImageVector = when (tab) {
 @Composable
 private fun SearchSuggestions(
     onSuggestionSelected: (String) -> Unit,
+    recentSearches: List<String> = emptyList(),
+    recentlyViewed: List<RecentItem> = emptyList(),
+    onClearHistory: () -> Unit = {},
+    onOpenRecent: (RecentItem) -> Unit = {},
 ) {
     val haptics = rememberHapticPerformer()
     val categories = remember { EventCategory.entries.take(8) }
@@ -349,6 +367,86 @@ private fun SearchSuggestions(
     LazyColumn(
         contentPadding = PaddingValues(top = 20.dp, bottom = Dimens.SpacingLg),
     ) {
+        // Trending chips
+        item {
+            Text(
+                text = "Trending",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = Dimens.SpacingMd).padding(bottom = Dimens.SpacingSm),
+            )
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = Dimens.SpacingMd),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(SearchSuggestionsViewModel.TRENDING) { trend ->
+                    AssistChip(
+                        onClick = { haptics.light(); onSuggestionSelected(trend) },
+                        label = { Text(trend) },
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(20.dp))
+        }
+
+        // Recent searches (last 5) with clear-all
+        if (recentSearches.isNotEmpty()) {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = Dimens.SpacingMd),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Recent searches",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = onClearHistory) { Text("Clear all") }
+                }
+            }
+            items(recentSearches.take(SearchSuggestionsViewModel.RECENT_LIMIT)) { query ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { haptics.light(); onSuggestionSelected(query) }
+                        .padding(horizontal = Dimens.SpacingMd, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Search,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.width(Dimens.SpacingSm))
+                    Text(text = query, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                }
+            }
+            item { Spacer(modifier = Modifier.height(20.dp)) }
+        }
+
+        // Recently viewed rail
+        if (recentlyViewed.isNotEmpty()) {
+            item {
+                Text(
+                    text = "Recently viewed",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = Dimens.SpacingMd).padding(bottom = Dimens.SpacingSm),
+                )
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = Dimens.SpacingMd),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(recentlyViewed, key = { "${it.type}:${it.id}" }) { item ->
+                        RecentlyViewedCard(item = item, onClick = { haptics.light(); onOpenRecent(item) })
+                    }
+                }
+                Spacer(modifier = Modifier.height(20.dp))
+            }
+        }
+
         // Popular Categories header
         item {
             Text(
@@ -474,6 +572,29 @@ private fun categoryIcon(category: EventCategory): ImageVector = when (category)
     EventCategory.CHARITY -> Icons.Filled.Favorite
     EventCategory.HOLIDAY -> Icons.Filled.CardGiftcard
     EventCategory.GENERAL -> Icons.Filled.CalendarToday
+}
+
+@Composable
+private fun RecentlyViewedCard(item: RecentItem, onClick: () -> Unit) {
+    Column(modifier = Modifier.width(120.dp).clickable(onClick = onClick)) {
+        Box(
+            modifier = Modifier
+                .width(120.dp)
+                .height(80.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            CachedAsyncImage(url = item.imageUrl, contentDescription = null, modifier = Modifier.fillMaxSize())
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = item.title,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.Medium,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
 }
 
 // endregion

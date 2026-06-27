@@ -5,6 +5,7 @@ import com.desmoines.aipulse.data.model.SponsoredPickResponse
 import com.desmoines.aipulse.util.AppLogger
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.functions.functions
+import io.ktor.client.statement.bodyAsText
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
