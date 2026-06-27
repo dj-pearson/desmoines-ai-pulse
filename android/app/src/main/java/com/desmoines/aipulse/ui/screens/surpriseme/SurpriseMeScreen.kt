@@ -63,7 +63,7 @@ fun SurpriseMeScreen(
     onOpen: (SurprisePick) -> Unit,
     onRetry: () -> Unit,
     onNavigateBack: () -> Unit,
-    onOpenSponsored: (String, String) -> Unit = {},
+    onOpenSponsored: (String, String) -> Unit = { _, _ -> },
 ) {
     val haptic = rememberHapticPerformer()
 
