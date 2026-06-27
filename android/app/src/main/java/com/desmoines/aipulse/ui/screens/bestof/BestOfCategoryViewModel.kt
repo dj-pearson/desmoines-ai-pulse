@@ -3,10 +3,12 @@ package com.desmoines.aipulse.ui.screens.bestof
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.desmoines.aipulse.data.model.LeaderboardEntry
 import com.desmoines.aipulse.data.model.Nominee
 import com.desmoines.aipulse.data.model.VotingCategory
 import com.desmoines.aipulse.data.repository.AuthRepository
 import com.desmoines.aipulse.data.repository.BestOfRepository
+import com.desmoines.aipulse.data.repository.BestOfWinnersStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -22,6 +24,7 @@ data class BestOfCategoryUiState(
     val category: VotingCategory? = null,
     val isAuthenticated: Boolean = false,
     val currentVoteLabel: String? = null,
+    val yourPickKey: String? = null,
     val searchText: String = "",
     val results: List<Nominee> = emptyList(),
     val isSearching: Boolean = false,
@@ -29,22 +32,26 @@ data class BestOfCategoryUiState(
     val writeInText: String = "",
     val isCasting: Boolean = false,
     val isLoading: Boolean = true,
+    val leaderboard: List<LeaderboardEntry> = emptyList(),
+    val isLeaderboardLoading: Boolean = false,
     val errorMessage: String? = null,
 ) {
     val hasVoted: Boolean get() = currentVoteLabel != null
     val canSubmitWriteIn: Boolean get() = writeInText.trim().isNotEmpty() && !isCasting
+    val totalVotes: Int get() = leaderboard.sumOf { it.voteCount }
 }
 
 /**
- * Best Of voting booth (ANDP-038): cast or change a vote in a category.
- * Reading the booth is free but casting needs auth (soft funnel to Auth, no
- * hard paywall). The cast is one atomic upsert on (category_id, user_id).
- * Mirrors iOS BestOfCategoryView.
+ * Best Of voting booth + live leaderboard (ANDP-038 / ANDP-039). Casting needs
+ * auth (soft funnel, no hard paywall) and is one atomic upsert on
+ * (category_id, user_id). Standings update optimistically and revert on
+ * failure. Mirrors iOS BestOfCategoryView + leaderboard.
  */
 @HiltViewModel
 class BestOfCategoryViewModel @Inject constructor(
     private val repository: BestOfRepository,
     private val authRepository: AuthRepository,
+    private val winnersStore: BestOfWinnersStore,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(BestOfCategoryUiState())
@@ -61,6 +68,7 @@ class BestOfCategoryViewModel @Inject constructor(
             val category = repository.fetchCategory(categoryId).getOrNull()
             _uiState.update { it.copy(category = category, isLoading = false) }
             if (userId != null) refreshUserVote(categoryId, userId)
+            refreshLeaderboard(categoryId)
         }
     }
 
@@ -72,7 +80,19 @@ class BestOfCategoryViewModel @Inject constructor(
             vote.entityId != null -> repository.resolveEntityName(vote.entityType, vote.entityId) ?: "your pick"
             else -> "your pick"
         }
-        _uiState.update { it.copy(currentVoteLabel = label) }
+        val key = when {
+            vote == null -> null
+            vote.entityId != null -> vote.entityId
+            else -> "custom:${vote.customEntry?.trim()?.lowercase().orEmpty()}"
+        }
+        _uiState.update { it.copy(currentVoteLabel = label, yourPickKey = key) }
+    }
+
+    private suspend fun refreshLeaderboard(categoryId: String) {
+        _uiState.update { it.copy(isLeaderboardLoading = it.leaderboard.isEmpty()) }
+        repository.fetchResults(categoryId)
+            .onSuccess { res -> _uiState.update { it.copy(leaderboard = res, isLeaderboardLoading = false) } }
+            .onFailure { _uiState.update { it.copy(isLeaderboardLoading = false) } }
     }
 
     fun onSearchTextChanged(text: String) {
@@ -114,25 +134,69 @@ class BestOfCategoryViewModel @Inject constructor(
         val catId = categoryId ?: return
         val userId = authRepository.currentUserId ?: return
         if (_uiState.value.isCasting) return
-        _uiState.update { it.copy(isCasting = true, errorMessage = null) }
+
+        val snapshot = _uiState.value
+        val newKey = entityId ?: "custom:${customEntry?.trim()?.lowercase().orEmpty()}"
+        val optimisticBoard = applyOptimistic(snapshot, newKey, entityType, entityId, customEntry, label)
+
+        _uiState.update {
+            it.copy(
+                isCasting = true,
+                errorMessage = null,
+                currentVoteLabel = label,
+                yourPickKey = newKey,
+                leaderboard = optimisticBoard,
+                searchText = "",
+                results = emptyList(),
+            )
+        }
+
         viewModelScope.launch {
             repository.castVote(catId, userId, entityType, entityId, customEntry)
                 .onSuccess {
-                    _uiState.update {
-                        it.copy(
-                            isCasting = false,
-                            currentVoteLabel = label,
-                            searchText = "",
-                            results = emptyList(),
-                            isWriteIn = false,
-                            writeInText = "",
-                        )
-                    }
+                    _uiState.update { it.copy(isCasting = false, isWriteIn = false, writeInText = "") }
+                    // Reconcile with authoritative counts/images, then refresh winner badges.
+                    refreshLeaderboard(catId)
+                    winnersStore.refresh()
                 }
                 .onFailure {
-                    _uiState.update { it.copy(isCasting = false, errorMessage = "Couldn't record your vote. Please try again.") }
+                    // Revert to the pre-cast snapshot.
+                    _uiState.value = snapshot.copy(
+                        isCasting = false,
+                        errorMessage = "Couldn't record your vote. Please try again.",
+                    )
                 }
         }
+    }
+
+    /** Optimistic standings: decrement the old pick, increment/insert the new, re-sort. */
+    private fun applyOptimistic(
+        state: BestOfCategoryUiState,
+        newKey: String,
+        entityType: String,
+        entityId: String?,
+        customEntry: String?,
+        label: String,
+    ): List<LeaderboardEntry> {
+        val old = state.yourPickKey
+        if (old == newKey) return state.leaderboard // re-affirming the same pick: no count change
+
+        val list = state.leaderboard.toMutableList()
+        if (old != null) {
+            val idx = list.indexOfFirst { it.key == old }
+            if (idx >= 0) {
+                val e = list[idx]
+                if (e.voteCount <= 1) list.removeAt(idx) else list[idx] = e.copy(voteCount = e.voteCount - 1)
+            }
+        }
+        val idx = list.indexOfFirst { it.key == newKey }
+        if (idx >= 0) {
+            val e = list[idx]
+            list[idx] = e.copy(voteCount = e.voteCount + 1)
+        } else {
+            list.add(LeaderboardEntry(newKey, entityType, entityId, customEntry, label, null, 1))
+        }
+        return list.sortedWith(compareByDescending<LeaderboardEntry> { it.voteCount }.thenBy { it.name.lowercase() })
     }
 
     fun retry() {

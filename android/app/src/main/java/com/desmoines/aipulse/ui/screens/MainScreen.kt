@@ -42,6 +42,9 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.desmoines.aipulse.ui.components.OfflineBanner
 import com.desmoines.aipulse.ui.components.PaywallHost
+import com.desmoines.aipulse.ui.components.bestof.BestOfWinnersViewModel
+import com.desmoines.aipulse.ui.components.bestof.LocalBestOfAwards
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.desmoines.aipulse.ui.navigation.BottomNavTab
 import com.desmoines.aipulse.ui.navigation.MainNavHost
 import com.desmoines.aipulse.ui.navigation.Route
@@ -168,8 +171,14 @@ fun MainScreen(
         }
     }
 
+    // App-wide Best Of winner badges (ANDP-039): provided once so cards anywhere
+    // can show "Best {Category}" without per-screen plumbing.
+    val bestOfWinnersViewModel: BestOfWinnersViewModel = hiltViewModel()
+    val bestOfAwards by bestOfWinnersViewModel.winners.collectAsState()
+
     CompositionLocalProvider(
         LocalBackdropBlurState provides backdropBlur,
+        LocalBestOfAwards provides bestOfAwards,
     ) {
     if (useNavRail) {
         // Tablet / landscape: NavigationRail on the left + content on the right

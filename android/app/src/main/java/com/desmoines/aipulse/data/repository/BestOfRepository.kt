@@ -1,5 +1,6 @@
 package com.desmoines.aipulse.data.repository
 
+import com.desmoines.aipulse.data.model.LeaderboardEntry
 import com.desmoines.aipulse.data.model.Nominee
 import com.desmoines.aipulse.data.model.Vote
 import com.desmoines.aipulse.data.model.VotingCategory
@@ -9,13 +10,15 @@ import kotlinx.serialization.builtins.ListSerializer
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** Reads Best Of voting categories + the booth (user vote, nominee search, cast). */
+/** Reads Best Of voting categories + the booth (user vote, nominee search, cast) + leaderboards. */
 interface BestOfRepository {
     suspend fun fetchCategories(): Result<List<VotingCategory>>
     suspend fun fetchCategory(categoryId: String): Result<VotingCategory?>
     suspend fun fetchUserVote(categoryId: String, userId: String): Result<Vote?>
     suspend fun searchNominees(query: String): Result<List<Nominee>>
     suspend fun resolveEntityName(entityType: String, entityId: String): String?
+    suspend fun fetchResults(categoryId: String): Result<List<LeaderboardEntry>>
+    suspend fun fetchWinners(): Map<String, String>
     suspend fun castVote(
         categoryId: String,
         userId: String,
@@ -55,6 +58,12 @@ class BestOfRepositoryImpl @Inject constructor(
 
     override suspend fun resolveEntityName(entityType: String, entityId: String): String? =
         runCatching { remote.fetchEntityName(entityType, entityId) }.getOrNull()
+
+    override suspend fun fetchResults(categoryId: String): Result<List<LeaderboardEntry>> =
+        runCatching { remote.fetchResults(categoryId) }
+
+    override suspend fun fetchWinners(): Map<String, String> =
+        runCatching { remote.fetchWinners() }.getOrDefault(emptyMap())
 
     override suspend fun castVote(
         categoryId: String,

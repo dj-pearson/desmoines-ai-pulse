@@ -2,6 +2,7 @@ package com.desmoines.aipulse.ui.screens.bestof
 
 import com.desmoines.aipulse.data.model.VotingCategory
 import com.desmoines.aipulse.data.repository.BestOfRepository
+import com.desmoines.aipulse.data.repository.BestOfWinnersStore
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -23,11 +24,13 @@ class BestOfViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
     private lateinit var repository: BestOfRepository
+    private lateinit var winnersStore: BestOfWinnersStore
 
     @BeforeEach
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         repository = mockk(relaxed = true)
+        winnersStore = mockk(relaxed = true)
     }
 
     @AfterEach
@@ -41,7 +44,7 @@ class BestOfViewModelTest {
         coEvery { repository.fetchCategories() } returns Result.success(
             listOf(category("a", 5), category("b", 0)),
         )
-        val viewModel = BestOfViewModel(repository)
+        val viewModel = BestOfViewModel(repository, winnersStore)
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
@@ -53,7 +56,7 @@ class BestOfViewModelTest {
     @Test
     fun `empty result yields empty state`() = runTest(testDispatcher) {
         coEvery { repository.fetchCategories() } returns Result.success(emptyList())
-        val viewModel = BestOfViewModel(repository)
+        val viewModel = BestOfViewModel(repository, winnersStore)
         advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value.isEmpty)
@@ -62,7 +65,7 @@ class BestOfViewModelTest {
     @Test
     fun `failure shows a retry message`() = runTest(testDispatcher) {
         coEvery { repository.fetchCategories() } returns Result.failure(IllegalStateException("boom"))
-        val viewModel = BestOfViewModel(repository)
+        val viewModel = BestOfViewModel(repository, winnersStore)
         advanceUntilIdle()
 
         assertEquals("Couldn't load categories. Tap to retry.", viewModel.uiState.value.errorMessage)

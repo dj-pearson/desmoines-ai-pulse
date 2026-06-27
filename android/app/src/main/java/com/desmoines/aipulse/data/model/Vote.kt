@@ -39,3 +39,27 @@ data class Nominee(
             else -> entityType.replaceFirstChar { it.uppercase() }
         }
 }
+
+/**
+ * An aggregated standing in a category leaderboard. [key] uniquely identifies a
+ * nominee (the entity id, or a "custom:" key for write-ins) so optimistic
+ * updates can target a row.
+ */
+@Immutable
+data class LeaderboardEntry(
+    val key: String,
+    val entityType: String,
+    val entityId: String?,
+    val customEntry: String?,
+    val name: String,
+    val imageUrl: String?,
+    val voteCount: Int,
+) {
+    /** Vote share of [total], clamped to 0..1 for safe bar widths (iOS audit fix). */
+    fun fraction(total: Int): Float =
+        if (total <= 0) 0f else (voteCount.toFloat() / total).coerceIn(0f, 1f)
+
+    /** Whole-percent share for the row label. */
+    fun percent(total: Int): Int = (fraction(total) * 100).toInt()
+}
+

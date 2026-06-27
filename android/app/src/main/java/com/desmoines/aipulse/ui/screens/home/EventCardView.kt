@@ -49,6 +49,7 @@ import androidx.compose.runtime.setValue
 import com.desmoines.aipulse.data.model.Event
 import com.desmoines.aipulse.ui.components.CachedAsyncImage
 import com.desmoines.aipulse.ui.components.CategoryBadge
+import com.desmoines.aipulse.ui.components.bestof.BestOfBadge
 import com.desmoines.aipulse.ui.components.HeartBurst
 import com.desmoines.aipulse.ui.components.icon
 import com.desmoines.aipulse.ui.theme.BrandOrange
@@ -206,6 +207,9 @@ fun EventCardView(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
+
+                // Best Of award badge (ANDP-039) — shown when this event leads a category.
+                BestOfBadge(entityId = event.id, modifier = Modifier.padding(top = 4.dp))
 
                 Spacer(modifier = Modifier.height(Dimens.SpacingSm))
 

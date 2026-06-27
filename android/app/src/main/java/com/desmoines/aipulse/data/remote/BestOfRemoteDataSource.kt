@@ -1,5 +1,6 @@
 package com.desmoines.aipulse.data.remote
 
+import com.desmoines.aipulse.data.model.LeaderboardEntry
 import com.desmoines.aipulse.data.model.Nominee
 import com.desmoines.aipulse.data.model.Vote
 import com.desmoines.aipulse.data.model.VotingCategory
@@ -41,6 +42,102 @@ class BestOfRemoteDataSource @Inject constructor(
             .mapNotNull { it.categoryId }
             .groupingBy { it }
             .eachCount()
+
+    @Serializable
+    private data class VoteAggRow(
+        @SerialName("entity_type") val entityType: String = "",
+        @SerialName("entity_id") val entityId: String? = null,
+        @SerialName("custom_entry") val customEntry: String? = null,
+    )
+
+    /**
+     * Category leaderboard: votes aggregated by entity (or custom write-in),
+     * descending by count, with names/images batch-enriched per entity type
+     * (fail-soft — a failed enrich leaves the raw entry rather than erroring).
+     */
+    suspend fun fetchResults(categoryId: String): List<LeaderboardEntry> {
+        val votes = db().from("votes")
+            .select(Columns.list("entity_type", "entity_id", "custom_entry")) {
+                filter { eq("category_id", categoryId) }
+            }.decodeList<VoteAggRow>()
+
+        // Aggregate by entity id, or a stable key for write-ins.
+        data class Acc(val type: String, val entityId: String?, val custom: String?, var count: Int)
+        val grouped = LinkedHashMap<String, Acc>()
+        votes.forEach { v ->
+            val key = v.entityId ?: "custom:${v.customEntry?.trim()?.lowercase().orEmpty()}"
+            val acc = grouped.getOrPut(key) { Acc(v.entityType, v.entityId, v.customEntry, 0) }
+            acc.count++
+        }
+
+        // Batch-enrich names/images per entity type, fail-soft.
+        val byType = grouped.values.filter { it.entityId != null }.groupBy({ it.type }, { it.entityId!! })
+        val enrich = mutableMapOf<String, EntityRow>()
+        byType.forEach { (type, ids) ->
+            runCatching { fetchEntities(type, ids) }.getOrNull()?.forEach { enrich[it.id] = it }
+        }
+
+        return grouped.entries.map { (key, acc) ->
+            val row = acc.entityId?.let { enrich[it] }
+            val name = row?.name ?: row?.title ?: acc.custom?.trim().orEmpty().ifEmpty { "Unknown" }
+            LeaderboardEntry(
+                key = key,
+                entityType = acc.type,
+                entityId = acc.entityId,
+                customEntry = acc.custom,
+                name = name,
+                imageUrl = row?.imageUrl,
+                voteCount = acc.count,
+            )
+        }.sortedWith(compareByDescending<LeaderboardEntry> { it.voteCount }.thenBy { it.name.lowercase() })
+    }
+
+    private suspend fun fetchEntities(entityType: String, ids: List<String>): List<EntityRow> {
+        if (ids.isEmpty()) return emptyList()
+        val (table, nameCol) = when (entityType) {
+            "restaurant" -> "restaurants" to "name"
+            "attraction" -> "attractions" to "name"
+            "event" -> "events" to "title"
+            else -> return emptyList()
+        }
+        return db().from(table).select(Columns.list("id", nameCol, "image_url")) {
+            filter { isIn("id", ids) }
+        }.decodeList<EntityRow>()
+    }
+
+    @Serializable
+    private data class WinnerVoteRow(
+        @SerialName("entity_id") val entityId: String? = null,
+        @SerialName("category_id") val categoryId: String? = null,
+    )
+
+    @Serializable
+    private data class CategoryNameRow(val id: String, val name: String)
+
+    /**
+     * Computes the current winner (top entity) of every active category and maps
+     * the winning entity id → "Best {Category}" for app-wide award badges.
+     * Custom write-ins are excluded (no entity to badge).
+     */
+    suspend fun fetchWinners(): Map<String, String> {
+        val votes = db().from("votes")
+            .select(Columns.list("entity_id", "category_id"))
+            .decodeList<WinnerVoteRow>()
+        val categories = db().from("voting_categories")
+            .select(Columns.list("id", "name")) { filter { eq("is_active", true) } }
+            .decodeList<CategoryNameRow>()
+        val categoryName = categories.associate { it.id to it.name }
+
+        val winners = mutableMapOf<String, String>()
+        votes.filter { it.entityId != null && it.categoryId != null }
+            .groupBy { it.categoryId!! }
+            .forEach { (catId, rows) ->
+                val topEntity = rows.groupingBy { it.entityId!! }.eachCount().maxByOrNull { it.value }?.key
+                val name = categoryName[catId]
+                if (topEntity != null && name != null) winners[topEntity] = "Best $name"
+            }
+        return winners
+    }
 
     /** A single category by id (for the voting booth header). */
     suspend fun fetchCategory(categoryId: String): VotingCategory? =

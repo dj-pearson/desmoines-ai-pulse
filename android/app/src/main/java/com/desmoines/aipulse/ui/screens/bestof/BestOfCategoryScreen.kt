@@ -37,9 +37,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.desmoines.aipulse.data.model.LeaderboardEntry
 import com.desmoines.aipulse.data.model.Nominee
 import com.desmoines.aipulse.ui.components.CachedAsyncImage
 
@@ -103,7 +105,125 @@ fun BestOfCategoryScreen(
                     onSubmitWriteIn = onSubmitWriteIn,
                 )
             }
+
+            if (!state.isLoading || state.category != null) {
+                Spacer(Modifier.height(24.dp))
+                LeaderboardSection(state = state)
+            }
         }
+    }
+}
+
+@Composable
+private fun LeaderboardSection(state: BestOfCategoryUiState) {
+    Text("Leaderboard", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+    Spacer(Modifier.height(8.dp))
+
+    when {
+        state.isLeaderboardLoading && state.leaderboard.isEmpty() -> Box(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+            contentAlignment = Alignment.Center,
+        ) { CircularProgressIndicator(modifier = Modifier.size(24.dp)) }
+
+        state.leaderboard.isEmpty() -> Text(
+            "No votes yet — be the first to cast one.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        else -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            val total = state.totalVotes
+            state.leaderboard.forEachIndexed { index, entry ->
+                LeaderboardRow(
+                    rank = index + 1,
+                    entry = entry,
+                    total = total,
+                    isYourPick = entry.key == state.yourPickKey,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LeaderboardRow(rank: Int, entry: LeaderboardEntry, total: Int, isYourPick: Boolean) {
+    val highlight = if (isYourPick) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f) else Color.Transparent
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(highlight)
+            .padding(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RankBadge(rank)
+        Spacer(Modifier.width(10.dp))
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            CachedAsyncImage(url = entry.imageUrl, contentDescription = null, modifier = Modifier.fillMaxSize())
+        }
+        Column(modifier = Modifier.weight(1f).padding(horizontal = 10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    entry.name,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (isYourPick) {
+                    Spacer(Modifier.width(6.dp))
+                    Text("Your pick", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+            // Clamped vote bar (iOS audit fix — fraction is coerced to 0..1).
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(entry.fraction(total))
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(MaterialTheme.colorScheme.primary),
+                )
+            }
+        }
+        Column(horizontalAlignment = Alignment.End) {
+            Text("${entry.percent(total)}%", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            Text(
+                if (entry.voteCount == 1) "1 vote" else "${entry.voteCount} votes",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun RankBadge(rank: Int) {
+    val color = when (rank) {
+        1 -> Color(0xFFFFC107) // gold
+        2 -> Color(0xFFB0BEC5) // silver
+        3 -> Color(0xFFCD7F32) // bronze
+        else -> MaterialTheme.colorScheme.surfaceVariant
+    }
+    val textColor = if (rank <= 3) Color.Black else MaterialTheme.colorScheme.onSurfaceVariant
+    Box(
+        modifier = Modifier.size(28.dp).clip(RoundedCornerShape(50)).background(color),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text("$rank", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = textColor)
     }
 }
 
