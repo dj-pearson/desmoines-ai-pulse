@@ -192,6 +192,13 @@ class AdTrackingService @Inject constructor(
         scope.launch { context.adEventStore.edit { it.remove(queueKey) } }
     }
 
+    /** Clears all session tracking state + queued events (sign-out teardown). */
+    fun reset() {
+        gate.reset()
+        impressionIds.clear()
+        clearQueue()
+    }
+
     private fun decode(raw: String?): List<PendingAdEvent> =
         if (raw.isNullOrBlank()) emptyList()
         else runCatching { json.decodeFromString(queueSerializer, raw) }.getOrDefault(emptyList())
