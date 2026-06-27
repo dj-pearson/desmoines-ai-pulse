@@ -46,6 +46,8 @@ import com.desmoines.aipulse.ui.screens.articles.ArticlesScreen
 import com.desmoines.aipulse.ui.screens.articles.ArticlesViewModel
 import com.desmoines.aipulse.ui.screens.articles.ArticleDetailScreen
 import com.desmoines.aipulse.ui.screens.articles.ArticleDetailViewModel
+import com.desmoines.aipulse.ui.screens.deals.DealsScreen
+import com.desmoines.aipulse.ui.screens.deals.DealsViewModel
 import com.desmoines.aipulse.ui.screens.auth.AuthScreen
 import com.desmoines.aipulse.ui.screens.eventdetail.EventDetailScreen
 import com.desmoines.aipulse.ui.screens.eventdetail.EventDetailViewModel
@@ -208,6 +210,9 @@ private fun NavGraphBuilder.addTabDestinations(
             },
             onNavigateToArticles = {
                 navController.navigate(Route.Articles.route)
+            },
+            onNavigateToDeals = {
+                navController.navigate(Route.Deals.route)
             },
             onSelectCategory = { category -> viewModel.setSelectedCategory(category) },
             onSelectDatePreset = { preset -> viewModel.setSelectedDatePreset(preset) },
@@ -677,6 +682,32 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
             onReload = viewModel::reload,
             onSelectMode = viewModel::setMode,
             onClearFilter = viewModel::clearFilter,
+            onNavigateBack = { navController.popBackStack() },
+        )
+    }
+
+    composable(Route.Deals.route) {
+        val viewModel: DealsViewModel = hiltViewModel()
+        val state by viewModel.uiState.collectAsState()
+
+        DealsScreen(
+            state = state,
+            entityTypes = DealsViewModel.ENTITY_TYPES,
+            onSearchTextChanged = viewModel::onSearchTextChanged,
+            onEntityTypeSelected = viewModel::onEntityTypeSelected,
+            onToggleActiveNow = viewModel::onToggleActiveNow,
+            onRetry = viewModel::retry,
+            onOpenDeal = { deal ->
+                val id = deal.entityId
+                if (id != null) {
+                    when (deal.entityType) {
+                        "restaurant" -> navController.navigate(Route.RestaurantDetail.createRoute(id))
+                        "attraction" -> navController.navigate(Route.AttractionDetail.createRoute(id))
+                        "event" -> navController.navigate(Route.EventDetail.createRoute(id))
+                        // hotel detail lands in ANDP-034 (#290); activity has no detail surface.
+                    }
+                }
+            },
             onNavigateBack = { navController.popBackStack() },
         )
     }
