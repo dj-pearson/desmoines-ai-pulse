@@ -73,6 +73,7 @@ import com.desmoines.aipulse.data.model.Restaurant
 import com.desmoines.aipulse.data.model.SubscriptionTier
 import com.desmoines.aipulse.ui.components.AdBannerView
 import com.desmoines.aipulse.ui.components.CachedAsyncImage
+import com.desmoines.aipulse.ui.components.reviews.ReviewsSection
 import com.desmoines.aipulse.ui.components.FullScreenImageViewer
 import com.desmoines.aipulse.ui.components.HeartBurst
 import com.desmoines.aipulse.ui.components.LoadingView
@@ -202,6 +203,10 @@ fun RestaurantDetailScreen(
                 currentTier = currentTier,
                 onShowSubscription = onShowSubscription
             )
+
+            // Reviews (ANDP-035)
+            Spacer(modifier = Modifier.height(8.dp))
+            ReviewsSection(contentType = "restaurant", contentId = restaurant.id)
 
             // Ad Banner
             AdBannerView(

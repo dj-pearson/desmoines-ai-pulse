@@ -64,6 +64,7 @@ import com.desmoines.aipulse.data.model.Attraction
 import com.desmoines.aipulse.ui.components.CachedAsyncImage
 import com.desmoines.aipulse.ui.components.FullScreenImageViewer
 import com.desmoines.aipulse.ui.components.LoadingView
+import com.desmoines.aipulse.ui.components.reviews.ReviewsSection
 import com.desmoines.aipulse.ui.theme.BrandOrange
 import com.desmoines.aipulse.ui.theme.DesMoinesInsiderTheme
 import com.desmoines.aipulse.ui.theme.GlassIntensity
@@ -164,6 +165,11 @@ fun AttractionDetailScreen(
 
             // Description
             AttractionDescriptionSection(attraction = attraction)
+
+            // Reviews (ANDP-035)
+            Spacer(modifier = Modifier.height(16.dp))
+            ReviewsSection(contentType = "attraction", contentId = attraction.id)
+            Spacer(modifier = Modifier.height(24.dp))
         }
 
         // Full-screen image viewer overlay
