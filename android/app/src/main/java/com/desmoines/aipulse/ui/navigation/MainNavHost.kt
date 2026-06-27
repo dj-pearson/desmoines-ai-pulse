@@ -26,6 +26,8 @@ import com.desmoines.aipulse.ui.screens.tripplanner.TripPlannerScreen
 import com.desmoines.aipulse.ui.screens.tripplanner.TripPlannerViewModel
 import com.desmoines.aipulse.ui.screens.tripplanner.SavedTripsScreen
 import com.desmoines.aipulse.ui.screens.tripplanner.SavedTripsViewModel
+import com.desmoines.aipulse.ui.screens.tripplanner.ItineraryDetailScreen
+import com.desmoines.aipulse.ui.screens.tripplanner.ItineraryDetailViewModel
 import com.desmoines.aipulse.ui.screens.auth.AuthScreen
 import com.desmoines.aipulse.ui.screens.eventdetail.EventDetailScreen
 import com.desmoines.aipulse.ui.screens.eventdetail.EventDetailViewModel
@@ -640,8 +642,29 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
             state = state,
             onShare = viewModel::share,
             onDelete = viewModel::delete,
+            onOpenTrip = { id -> navController.navigate(Route.ItineraryDetail.createRoute(id)) },
             onConsumeShareUrl = viewModel::consumeShareUrl,
             onClearError = viewModel::clearError,
+            onNavigateBack = { navController.popBackStack() },
+        )
+    }
+
+    composable(
+        route = Route.ItineraryDetail.route,
+        arguments = Route.ItineraryDetail.arguments,
+    ) { backStackEntry ->
+        val tripId = backStackEntry.arguments?.getString("tripId") ?: return@composable
+        val viewModel: ItineraryDetailViewModel = hiltViewModel()
+        val state by viewModel.uiState.collectAsState()
+
+        androidx.compose.runtime.LaunchedEffect(tripId) { viewModel.load(tripId) }
+
+        ItineraryDetailScreen(
+            state = state,
+            onToggleReorder = viewModel::toggleReorderMode,
+            onMove = viewModel::move,
+            onConsumeMessage = viewModel::consumeMessage,
+            onRetry = viewModel::retry,
             onNavigateBack = { navController.popBackStack() },
         )
     }

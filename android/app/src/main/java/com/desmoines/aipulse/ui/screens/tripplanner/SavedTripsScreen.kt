@@ -1,6 +1,7 @@
 package com.desmoines.aipulse.ui.screens.tripplanner
 
 import android.content.Intent
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -47,6 +48,7 @@ fun SavedTripsScreen(
     state: SavedTripsUiState,
     onShare: (String) -> Unit,
     onDelete: (String) -> Unit,
+    onOpenTrip: (String) -> Unit,
     onConsumeShareUrl: () -> Unit,
     onClearError: () -> Unit,
     onNavigateBack: () -> Unit,
@@ -94,6 +96,7 @@ fun SavedTripsScreen(
                     items(state.trips, key = { it.id }) { trip ->
                         SavedTripRow(
                             trip = trip,
+                            onOpen = { onOpenTrip(trip.id) },
                             onShare = { onShare(trip.id) },
                             onDelete = { pendingDelete = trip.id },
                         )
@@ -123,10 +126,11 @@ fun SavedTripsScreen(
 }
 
 @Composable
-private fun SavedTripRow(trip: TripPlan, onShare: () -> Unit, onDelete: () -> Unit) {
+private fun SavedTripRow(trip: TripPlan, onOpen: () -> Unit, onShare: () -> Unit, onDelete: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(onClick = onOpen)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

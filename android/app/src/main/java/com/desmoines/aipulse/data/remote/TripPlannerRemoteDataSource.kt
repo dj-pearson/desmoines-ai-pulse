@@ -1,13 +1,16 @@
 package com.desmoines.aipulse.data.remote
 
 import com.desmoines.aipulse.data.model.TripPlan
+import com.desmoines.aipulse.data.model.TripPlanItem
 import com.desmoines.aipulse.util.Config
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.functions.functions
 import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Count
 import io.github.jan.supabase.postgrest.query.Order
+import io.github.jan.supabase.postgrest.rpc
 import io.ktor.client.statement.bodyAsText
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -108,5 +111,43 @@ class TripPlannerRemoteDataSource @Inject constructor(
     /** Delete a trip (RLS restricts to the owner). */
     suspend fun deleteTrip(tripId: String) {
         db().from("trip_plans").delete { filter { eq("id", tripId) } }
+    }
+
+    /** A single saved trip's header row, for the detail screen (items load separately via RPC). */
+    suspend fun fetchTrip(tripId: String): TripPlan =
+        db().from("trip_plans").select {
+            filter { eq("id", tripId) }
+            limit(1L)
+        }.decodeSingle<TripPlan>()
+
+    @Serializable
+    private data class ItineraryParams(@SerialName("p_trip_id") val tripId: String)
+
+    /** Day-by-day items for a trip via the get_trip_itinerary RPC. */
+    suspend fun fetchItems(tripId: String): List<TripPlanItem> =
+        db().postgrest.rpc(
+            function = "get_trip_itinerary",
+            parameters = ItineraryParams(tripId = tripId),
+        ).decodeList<TripPlanItem>()
+
+    @Serializable
+    private data class OrderUpdate(@SerialName("order_index") val orderIndex: Int)
+
+    /**
+     * Persist a new ordering by writing each item's order_index. Returns true only
+     * if every write succeeds, so the caller can reconcile with server truth on
+     * partial failure (mirrors iOS persistOrder).
+     */
+    suspend fun persistOrder(items: List<TripPlanItem>): Boolean {
+        var allSucceeded = true
+        items.forEachIndexed { index, item ->
+            val id = item.itemId ?: return@forEachIndexed
+            runCatching {
+                db().from("trip_plan_items").update(OrderUpdate(orderIndex = index)) {
+                    filter { eq("id", id) }
+                }
+            }.onFailure { allSucceeded = false }
+        }
+        return allSucceeded
     }
 }
