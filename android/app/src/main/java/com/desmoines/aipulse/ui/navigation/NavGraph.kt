@@ -53,6 +53,7 @@ sealed class Route(val route: String) {
     data object Settings : Route("settings")
     data object AskPulse : Route("ask_pulse")
     data object TripPlanner : Route("trip_planner")
+    data object SavedTrips : Route("saved_trips")
 
     // WebView route
     data object WebView : Route("webview/{url}") {

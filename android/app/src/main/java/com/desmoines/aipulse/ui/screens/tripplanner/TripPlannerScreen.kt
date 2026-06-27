@@ -30,6 +30,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -55,6 +56,7 @@ fun TripPlannerScreen(
     onGenerate: () -> Unit,
     onReset: () -> Unit,
     onClearError: () -> Unit,
+    onViewSavedTrips: () -> Unit,
     onNavigateBack: () -> Unit,
 ) {
     Scaffold(
@@ -65,6 +67,9 @@ fun TripPlannerScreen(
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
+                },
+                actions = {
+                    TextButton(onClick = onViewSavedTrips) { Text("Saved") }
                 },
             )
         },

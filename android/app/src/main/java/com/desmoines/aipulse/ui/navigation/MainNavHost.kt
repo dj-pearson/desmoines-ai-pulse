@@ -24,6 +24,8 @@ import com.desmoines.aipulse.ui.screens.askpulse.AskPulseScreen
 import com.desmoines.aipulse.ui.screens.askpulse.AskPulseViewModel
 import com.desmoines.aipulse.ui.screens.tripplanner.TripPlannerScreen
 import com.desmoines.aipulse.ui.screens.tripplanner.TripPlannerViewModel
+import com.desmoines.aipulse.ui.screens.tripplanner.SavedTripsScreen
+import com.desmoines.aipulse.ui.screens.tripplanner.SavedTripsViewModel
 import com.desmoines.aipulse.ui.screens.auth.AuthScreen
 import com.desmoines.aipulse.ui.screens.eventdetail.EventDetailScreen
 import com.desmoines.aipulse.ui.screens.eventdetail.EventDetailViewModel
@@ -622,6 +624,23 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
             onSetPace = viewModel::setPace,
             onGenerate = viewModel::generate,
             onReset = viewModel::reset,
+            onClearError = viewModel::clearError,
+            onViewSavedTrips = { navController.navigate(Route.SavedTrips.route) },
+            onNavigateBack = { navController.popBackStack() },
+        )
+    }
+
+    composable(Route.SavedTrips.route) {
+        val viewModel: SavedTripsViewModel = hiltViewModel()
+        val state by viewModel.uiState.collectAsState()
+
+        androidx.compose.runtime.LaunchedEffect(Unit) { viewModel.load() }
+
+        SavedTripsScreen(
+            state = state,
+            onShare = viewModel::share,
+            onDelete = viewModel::delete,
+            onConsumeShareUrl = viewModel::consumeShareUrl,
             onClearError = viewModel::clearError,
             onNavigateBack = { navController.popBackStack() },
         )

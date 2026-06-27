@@ -18,6 +18,15 @@ interface TripPlannerRepository {
 
     /** Number of trips the user has generated this calendar month (0 if signed out). */
     suspend fun monthlyTripCount(userId: String?): Int
+
+    /** The user's saved trips, newest first. */
+    suspend fun fetchSavedTrips(userId: String?): Result<List<TripPlan>>
+
+    /** Make a trip public; returns its share URL. */
+    suspend fun shareTrip(tripId: String): Result<String>
+
+    /** Delete a saved trip. */
+    suspend fun deleteTrip(tripId: String): Result<Unit>
 }
 
 @Singleton
@@ -46,6 +55,17 @@ class TripPlannerRepositoryImpl @Inject constructor(
             .onFailure { AppLogger.network.warning("monthlyTripCount failed: ${it.message}") }
             .getOrDefault(0)
     }
+
+    override suspend fun fetchSavedTrips(userId: String?): Result<List<TripPlan>> {
+        if (userId == null) return Result.success(emptyList())
+        return runCatching { remote.fetchSavedTrips(userId) }
+    }
+
+    override suspend fun shareTrip(tripId: String): Result<String> =
+        runCatching { remote.shareTrip(tripId) }
+
+    override suspend fun deleteTrip(tripId: String): Result<Unit> =
+        runCatching { remote.deleteTrip(tripId) }
 }
 
 /** Carries the server's user-facing error message for a failed generation. */

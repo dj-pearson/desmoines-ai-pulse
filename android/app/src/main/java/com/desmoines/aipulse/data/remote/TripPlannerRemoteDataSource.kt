@@ -1,11 +1,15 @@
 package com.desmoines.aipulse.data.remote
 
 import com.desmoines.aipulse.data.model.TripPlan
+import com.desmoines.aipulse.util.Config
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.functions.functions
 import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Count
+import io.github.jan.supabase.postgrest.query.Order
 import io.ktor.client.statement.bodyAsText
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.add
@@ -73,5 +77,36 @@ class TripPlannerRemoteDataSource @Inject constructor(
             limit(1L)
         }
         return result.countOrNull()?.toInt() ?: 0
+    }
+
+    /** All of the user's saved trips, newest first. */
+    suspend fun fetchSavedTrips(userId: String): List<TripPlan> =
+        db().from("trip_plans").select {
+            filter { eq("user_id", userId) }
+            order("created_at", Order.DESCENDING)
+        }.decodeList<TripPlan>()
+
+    @Serializable
+    private data class PublicUpdate(@SerialName("is_public") val isPublic: Boolean)
+
+    @Serializable
+    private data class ShareCodeRow(@SerialName("share_code") val shareCode: String? = null)
+
+    /** Make the trip public and return its public share URL. */
+    suspend fun shareTrip(tripId: String): String {
+        db().from("trip_plans").update(PublicUpdate(isPublic = true)) {
+            filter { eq("id", tripId) }
+        }
+        val row = db().from("trip_plans").select(Columns.list("share_code")) {
+            filter { eq("id", tripId) }
+        }.decodeSingleOrNull<ShareCodeRow>()
+        val code = row?.shareCode
+            ?: throw IllegalStateException("Share link is not ready yet.")
+        return "${Config.SITE_URL}/trips/shared/$code"
+    }
+
+    /** Delete a trip (RLS restricts to the owner). */
+    suspend fun deleteTrip(tripId: String) {
+        db().from("trip_plans").delete { filter { eq("id", tripId) } }
     }
 }
