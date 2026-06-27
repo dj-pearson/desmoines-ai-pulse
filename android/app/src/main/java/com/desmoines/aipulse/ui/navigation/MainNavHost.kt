@@ -50,6 +50,8 @@ import com.desmoines.aipulse.ui.screens.deals.DealsScreen
 import com.desmoines.aipulse.ui.screens.deals.DealsViewModel
 import com.desmoines.aipulse.ui.screens.hotels.HotelsScreen
 import com.desmoines.aipulse.ui.screens.hotels.HotelsViewModel
+import com.desmoines.aipulse.ui.screens.hoteldetail.HotelDetailScreen
+import com.desmoines.aipulse.ui.screens.hoteldetail.HotelDetailViewModel
 import com.desmoines.aipulse.ui.screens.auth.AuthScreen
 import com.desmoines.aipulse.ui.screens.eventdetail.EventDetailScreen
 import com.desmoines.aipulse.ui.screens.eventdetail.EventDetailViewModel
@@ -732,10 +734,61 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
             onLoadMore = viewModel::loadMore,
             onRefresh = viewModel::refresh,
             onRetry = viewModel::retry,
-            // Hotel detail + booking CTA lands in ANDP-034 (#290); until then the
-            // card is a no-op tap target.
-            onOpenHotel = { /* no detail surface yet */ },
+            onOpenHotel = { id -> navController.navigate(Route.HotelDetail.createRoute(id)) },
             onNavigateBack = { navController.popBackStack() },
+        )
+    }
+
+    composable(
+        route = Route.HotelDetail.route,
+        arguments = Route.HotelDetail.arguments,
+    ) { backStackEntry ->
+        val hotelId = backStackEntry.arguments?.getString("hotelId") ?: return@composable
+        val viewModel: HotelDetailViewModel = hiltViewModel()
+        val hotel by viewModel.hotel.collectAsState()
+        val isLoading by viewModel.isLoading.collectAsState()
+        val errorMessage by viewModel.errorMessage.collectAsState()
+        val context = androidx.compose.ui.platform.LocalContext.current
+
+        androidx.compose.runtime.LaunchedEffect(hotelId) { viewModel.load(hotelId) }
+
+        HotelDetailScreen(
+            hotel = hotel,
+            isLoading = isLoading,
+            errorMessage = errorMessage,
+            distanceText = viewModel.formattedDistance(),
+            onNavigateBack = { navController.popBackStack() },
+            onShare = {
+                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, viewModel.shareText)
+                }
+                context.startActivity(Intent.createChooser(shareIntent, "Share Hotel"))
+            },
+            onBook = {
+                viewModel.createBookingIntent()?.let { intent ->
+                    try {
+                        context.startActivity(intent)
+                    } catch (_: Exception) {
+                        // No browser/handler available; ignore.
+                    }
+                }
+            },
+            onCall = {
+                viewModel.createCallIntent()?.let { intent -> context.startActivity(intent) }
+            },
+            onOpenDirections = {
+                viewModel.createDirectionsIntent()?.let { intent ->
+                    try {
+                        context.startActivity(intent)
+                    } catch (_: Exception) {
+                        viewModel.createDirectionsFallbackIntent()?.let { fallback ->
+                            context.startActivity(fallback)
+                        }
+                    }
+                }
+            },
+            onRetry = { viewModel.retry() },
         )
     }
 
