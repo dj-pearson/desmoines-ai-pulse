@@ -14,6 +14,8 @@ import com.desmoines.aipulse.data.repository.ForYouRepository
 import com.desmoines.aipulse.data.repository.ForYouRepositoryImpl
 import com.desmoines.aipulse.data.repository.RestaurantsRepository
 import com.desmoines.aipulse.data.repository.RestaurantsRepositoryImpl
+import com.desmoines.aipulse.data.repository.SurpriseMeRepository
+import com.desmoines.aipulse.data.repository.SurpriseMeRepositoryImpl
 import com.desmoines.aipulse.data.repository.TripPlannerRepository
 import com.desmoines.aipulse.data.repository.TripPlannerRepositoryImpl
 import dagger.Binds
@@ -42,6 +44,9 @@ abstract class RepositoryModule {
 
     @Binds
     abstract fun bindFavoritesRepository(impl: FavoritesRepositoryImpl): FavoritesRepository
+
+    @Binds
+    abstract fun bindSurpriseMeRepository(impl: SurpriseMeRepositoryImpl): SurpriseMeRepository
 
     @Binds
     abstract fun bindAskPulseRepository(impl: AskPulseRepositoryImpl): AskPulseRepository
