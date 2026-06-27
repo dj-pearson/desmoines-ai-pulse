@@ -1,7 +1,12 @@
 package com.desmoines.aipulse.data.remote
 
+import android.content.Context
 import android.content.SharedPreferences
+import com.desmoines.aipulse.util.AppLogger
+import com.desmoines.aipulse.util.SafeLinkLauncher
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -42,6 +47,7 @@ class AffiliateAdService @Inject constructor(
     companion object {
         private const val ASSET_BASE_URL = "https://desmoinesinsider.com/ads/affiliates"
         private const val SESSION_KEY = "affiliate_brand_session"
+        private const val ALLOWLIST_KEY = "affiliate_allowlist_extra"
         private const val SESSION_DURATION_MS = 30 * 60 * 1000L // 30 minutes
     }
 
@@ -127,6 +133,75 @@ class AffiliateAdService @Inject constructor(
      */
     val affiliateUrl: String?
         get() = currentPartner?.affiliateUrl
+
+    // MARK: - Allowlist (ANDP-065)
+
+    /** Domains derived from the partner registry — always allowed. */
+    private val builtInDomains: Set<String> by lazy {
+        partners.mapNotNull { hostOf(it.affiliateUrl) }.toSet()
+    }
+
+    /** Built-in partner domains plus any remotely-synced extras. */
+    fun allowedDomains(): Set<String> = builtInDomains + loadRemoteAllowlist()
+
+    /**
+     * True only when [url] is an http/https link whose host is on the allowlist
+     * (subdomain-aware). Drives the affiliate-launch guard.
+     */
+    fun isValidAffiliateUrl(url: String?): Boolean {
+        val host = hostOf(url) ?: return false
+        return allowedDomains().any { allowed -> host == allowed || host.endsWith(".$allowed") }
+    }
+
+    /**
+     * Validates an affiliate [url] against the allowlist, then opens it through
+     * the crash-safe launcher. Rejected (non-allowlisted) domains are logged and
+     * dropped. Returns true only when the link was actually launched.
+     */
+    fun safeOpen(context: Context, url: String?): Boolean {
+        if (!isValidAffiliateUrl(url)) {
+            AppLogger.network.warning("Blocked non-allowlisted affiliate link: ${hostOf(url) ?: url}")
+            return false
+        }
+        return SafeLinkLauncher.openUrl(context, url)
+    }
+
+    /**
+     * Persists a remotely-synced allowlist of extra approved domains so the
+     * allowlist can change without an APK rebuild. Normalizes to bare hosts.
+     */
+    fun setRemoteAllowlist(domains: List<String>) {
+        val cleaned = domains.mapNotNull { raw ->
+            raw.trim().lowercase().removePrefix("www.").takeIf { it.isNotEmpty() }
+        }.distinct()
+        runCatching {
+            sharedPreferences.edit()
+                .putString(ALLOWLIST_KEY, json.encodeToString(ListSerializer(String.serializer()), cleaned))
+                .apply()
+        }
+    }
+
+    private fun loadRemoteAllowlist(): Set<String> {
+        val raw = sharedPreferences.getString(ALLOWLIST_KEY, null) ?: return emptySet()
+        return runCatching {
+            json.decodeFromString(ListSerializer(String.serializer()), raw).toSet()
+        }.getOrDefault(emptySet())
+    }
+
+    /** Pure host extraction (no android.net.Uri) for testability; null unless http/https. */
+    internal fun hostOf(url: String?): String? {
+        val trimmed = url?.trim().orEmpty()
+        if (trimmed.isEmpty()) return null
+        val scheme = trimmed.substringBefore("://", "").lowercase()
+        if (scheme != "http" && scheme != "https") return null
+        val host = trimmed.substringAfter("://", "")
+            .substringBefore("/")
+            .substringBefore("?")
+            .substringBefore("#")
+            .lowercase()
+            .removePrefix("www.")
+        return host.takeIf { it.isNotBlank() }
+    }
 
     // MARK: - Persistence
 
