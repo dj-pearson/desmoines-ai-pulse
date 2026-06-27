@@ -47,6 +47,7 @@ import com.desmoines.aipulse.ui.navigation.MainNavHost
 import com.desmoines.aipulse.ui.navigation.Route
 import com.desmoines.aipulse.util.DeepLinkHandler
 import com.desmoines.aipulse.util.NetworkMonitor
+import com.desmoines.aipulse.util.ShortcutDispatcher
 
 /**
  * Main screen with bottom navigation bar matching iOS MainTabView.swift.
@@ -58,6 +59,7 @@ import com.desmoines.aipulse.util.NetworkMonitor
 fun MainScreen(
     networkMonitor: NetworkMonitor,
     deepLinkHandler: DeepLinkHandler,
+    shortcutDispatcher: ShortcutDispatcher,
     widthSizeClass: WindowWidthSizeClass = WindowWidthSizeClass.Compact,
 ) {
     val useNavRail = widthSizeClass != WindowWidthSizeClass.Compact
@@ -115,6 +117,27 @@ fun MainScreen(
                     restoreState = true
                 }
             }
+        }
+    }
+
+    // App Shortcut / Assistant deep links (ANDP-015): route to the host screen.
+    // The destination's ViewModel consumes the payload and applies the params,
+    // so we only navigate here (no consume) — once consumed, pending goes null.
+    val pendingShortcut by shortcutDispatcher.pending.collectAsState()
+    LaunchedEffect(pendingShortcut) {
+        when (pendingShortcut) {
+            is ShortcutDispatcher.Pending.AskPulse -> {
+                navController.navigate(Route.AskPulse.route) { launchSingleTop = true }
+            }
+            is ShortcutDispatcher.Pending.FindRestaurants,
+            is ShortcutDispatcher.Pending.FindEvents -> {
+                navController.navigate(Route.Search.route) {
+                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                    launchSingleTop = true
+                    restoreState = true
+                }
+            }
+            null -> Unit
         }
     }
 

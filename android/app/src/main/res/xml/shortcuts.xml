@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Static App Shortcuts surfaced in the launcher long-press menu and to the
+    Google Assistant. Mirrors iOS PulseShortcuts (App Intents): Ask Pulse,
+    Find Restaurants, Find Events. Each fires an explicit VIEW intent at
+    MainActivity carrying a deep-link URI; ShortcutDispatcher parses the URI
+    (including query params like cuisine/area/openNow/category) and the target
+    screen applies them once shown.
+-->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <shortcut
+        android:shortcutId="ask_pulse"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_ask_pulse"
+        android:shortcutShortLabel="@string/shortcut_ask_pulse_short"
+        android:shortcutLongLabel="@string/shortcut_ask_pulse_long"
+        android:shortcutDisabledMessage="@string/shortcut_ask_pulse_disabled">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.desmoines.aipulse"
+            android:targetClass="com.desmoines.aipulse.MainActivity"
+            android:data="com.desmoines.aipulse://ask-pulse?q=What%27s%20good%20in%20Des%20Moines%20tonight%3F" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="find_restaurants"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_restaurant"
+        android:shortcutShortLabel="@string/shortcut_find_restaurants_short"
+        android:shortcutLongLabel="@string/shortcut_find_restaurants_long"
+        android:shortcutDisabledMessage="@string/shortcut_find_restaurants_disabled">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.desmoines.aipulse"
+            android:targetClass="com.desmoines.aipulse.MainActivity"
+            android:data="com.desmoines.aipulse://find-restaurants" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="find_events"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_event"
+        android:shortcutShortLabel="@string/shortcut_find_events_short"
+        android:shortcutLongLabel="@string/shortcut_find_events_long"
+        android:shortcutDisabledMessage="@string/shortcut_find_events_disabled">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.desmoines.aipulse"
+            android:targetClass="com.desmoines.aipulse.MainActivity"
+            android:data="com.desmoines.aipulse://find-events" />
+    </shortcut>
+
+</shortcuts>
