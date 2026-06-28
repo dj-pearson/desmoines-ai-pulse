@@ -91,6 +91,36 @@ class ArticlesViewModelTest {
     }
 
     @Test
+    fun `loadMore overlapping the loaded page trips the guard instead of appending`() = runTest(testDispatcher) {
+        coEvery { repository.fetchArticles(match { it.offset == 0 }) } returns Result.success(page(listOf("a", "b"), hasMore = true))
+        val viewModel = vm()
+        advanceUntilIdle()
+
+        // A desynced server re-returns an already-loaded id: must not append, must surface a retry.
+        coEvery { repository.fetchArticles(match { it.offset == 2 }) } returns Result.success(page(listOf("b", "c"), hasMore = true))
+        viewModel.loadMore()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(listOf("a", "b"), state.articles.map { it.id })
+        assertNotNull(state.errorMessage)
+        assertFalse(state.hasMore) // paging halted to stop the bad loop
+    }
+
+    @Test
+    fun `an oversized first page trips the guard`() = runTest(testDispatcher) {
+        // PAGE_SIZE is 20; a 21-item response signals a broken limit.
+        val oversized = (1..21).map { it.toString() }
+        coEvery { repository.fetchArticles(any()) } returns Result.success(page(oversized, hasMore = false))
+        val viewModel = vm()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertTrue(state.articles.isEmpty())
+        assertNotNull(state.errorMessage)
+    }
+
+    @Test
     fun `fetch failure keeps loaded content and shows a retry banner`() = runTest(testDispatcher) {
         coEvery { repository.fetchArticles(match { it.offset == 0 }) } returns Result.success(page(listOf("a", "b"), hasMore = true))
         val viewModel = vm()

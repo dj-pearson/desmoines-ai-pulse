@@ -11,6 +11,7 @@ import com.desmoines.aipulse.data.repository.RestaurantsRepository
 import com.desmoines.aipulse.util.Config
 import com.desmoines.aipulse.util.FetchGeneration
 import com.desmoines.aipulse.util.NetworkMonitor
+import com.desmoines.aipulse.util.PaginationGuard
 import com.desmoines.aipulse.util.RECONNECT_DEBOUNCE_MS
 import com.desmoines.aipulse.util.onReconnect
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -261,6 +262,16 @@ class RestaurantsViewModel @Inject constructor(
 
         restaurantsRepository.fetchRestaurants(query).onSuccess { response ->
             if (!restaurantsFetch.isCurrent(token)) return@onSuccess // superseded — drop stale result
+            // Reject a desynced page (oversized, or overlapping the loaded list) instead
+            // of corrupting the list — surface a retry instead. (ANDP-062)
+            val existingIds: Set<String> = if (reset) emptySet() else _allRestaurants.value.mapTo(HashSet()) { it.id }
+            val check = PaginationGuard.validatePage(response.restaurants, pageSize, existingIds) { it.id }
+            if (check is PaginationGuard.Result.Invalid) {
+                Log.w(TAG, "restaurants pagination guard tripped: ${check.reason}")
+                _hasMore.value = false
+                _errorMessage.value = "Something went wrong loading restaurants. Pull to refresh."
+                return@onSuccess
+            }
             if (reset) {
                 _allRestaurants.value = response.restaurants
             } else {
