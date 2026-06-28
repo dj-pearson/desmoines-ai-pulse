@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.desmoines.aipulse.data.model.Article
 import com.desmoines.aipulse.data.remote.ArticlesQuery
 import com.desmoines.aipulse.data.repository.ArticlesRepository
+import com.desmoines.aipulse.util.PaginationGuard
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -86,6 +87,11 @@ class ArticlesViewModel @Inject constructor(
         viewModelScope.launch {
             repository.fetchArticles(currentQuery(offset = 0))
                 .onSuccess { resp ->
+                    val check = PaginationGuard.validatePage(resp.articles, PAGE_SIZE, emptySet()) { it.id }
+                    if (check is PaginationGuard.Result.Invalid) {
+                        _uiState.update { it.copy(isLoading = false, isRefreshing = false, errorMessage = "Couldn't load articles. Tap to retry.") }
+                        return@onSuccess
+                    }
                     loaded = resp.articles.size
                     _uiState.update {
                         it.copy(articles = resp.articles, hasMore = resp.hasMore, isLoading = false, isRefreshing = false, errorMessage = null)
@@ -105,6 +111,13 @@ class ArticlesViewModel @Inject constructor(
         viewModelScope.launch {
             repository.fetchArticles(currentQuery(offset = loaded))
                 .onSuccess { resp ->
+                    val existingIds = _uiState.value.articles.mapTo(HashSet()) { it.id }
+                    val check = PaginationGuard.validatePage(resp.articles, PAGE_SIZE, existingIds) { it.id }
+                    if (check is PaginationGuard.Result.Invalid) {
+                        // Halt paging and surface a retry rather than appending corrupt data.
+                        _uiState.update { it.copy(isLoadingMore = false, hasMore = false, errorMessage = "Couldn't load more. Tap to retry.") }
+                        return@onSuccess
+                    }
                     loaded += resp.articles.size
                     _uiState.update { it.copy(articles = it.articles + resp.articles, hasMore = resp.hasMore, isLoadingMore = false) }
                 }

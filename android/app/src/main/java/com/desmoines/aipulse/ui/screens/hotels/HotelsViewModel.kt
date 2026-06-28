@@ -7,6 +7,7 @@ import com.desmoines.aipulse.data.model.Hotel
 import com.desmoines.aipulse.data.remote.HotelSort
 import com.desmoines.aipulse.data.remote.HotelsQuery
 import com.desmoines.aipulse.data.repository.HotelsRepository
+import com.desmoines.aipulse.util.PaginationGuard
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -125,6 +126,11 @@ class HotelsViewModel @Inject constructor(
         viewModelScope.launch {
             repository.fetchHotels(currentQuery(offset = 0))
                 .onSuccess { resp ->
+                    val check = PaginationGuard.validatePage(resp.hotels, PAGE_SIZE, emptySet()) { it.id }
+                    if (check is PaginationGuard.Result.Invalid) {
+                        _uiState.update { it.copy(isLoading = false, isRefreshing = false, errorMessage = "Couldn't load hotels. Tap to retry.") }
+                        return@onSuccess
+                    }
                     loaded = resp.hotels.size
                     _uiState.update {
                         it.copy(hotels = resp.hotels, hasMore = resp.hasMore, isLoading = false, isRefreshing = false, errorMessage = null)
@@ -143,6 +149,13 @@ class HotelsViewModel @Inject constructor(
         viewModelScope.launch {
             repository.fetchHotels(currentQuery(offset = loaded))
                 .onSuccess { resp ->
+                    val existingIds = _uiState.value.hotels.mapTo(HashSet()) { it.id }
+                    val check = PaginationGuard.validatePage(resp.hotels, PAGE_SIZE, existingIds) { it.id }
+                    if (check is PaginationGuard.Result.Invalid) {
+                        // Halt paging and surface a retry rather than appending corrupt data.
+                        _uiState.update { it.copy(isLoadingMore = false, hasMore = false, errorMessage = "Couldn't load more. Tap to retry.") }
+                        return@onSuccess
+                    }
                     loaded += resp.hotels.size
                     _uiState.update { it.copy(hotels = it.hotels + resp.hotels, hasMore = resp.hasMore, isLoadingMore = false) }
                 }

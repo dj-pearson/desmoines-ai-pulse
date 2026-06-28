@@ -16,6 +16,7 @@ import com.desmoines.aipulse.data.repository.RestaurantsRepository
 import com.desmoines.aipulse.util.Config
 import com.desmoines.aipulse.util.FetchGeneration
 import com.desmoines.aipulse.util.LocationService
+import com.desmoines.aipulse.util.PaginationGuard
 import com.desmoines.aipulse.util.NetworkMonitor
 import com.desmoines.aipulse.util.RECONNECT_DEBOUNCE_MS
 import com.desmoines.aipulse.util.onReconnect
@@ -176,6 +177,9 @@ class EventsViewModel @Inject constructor(
     // Stale-result guard: a reset supersedes any in-flight events fetch (ANDP-061).
     private val eventsFetch = FetchGeneration()
 
+    // Raw (pre-premium-filter) ids seen this query, for pagination overlap detection (ANDP-062).
+    private val seenEventIds = HashSet<String>()
+
     // endregion
 
     // region Public API
@@ -327,6 +331,20 @@ class EventsViewModel @Inject constructor(
         eventsRepository.fetchEvents(query)
             .onSuccess { response ->
                 if (!eventsFetch.isCurrent(token)) return@onSuccess // superseded — drop stale result
+                // Reject a desynced page (oversized, or overlapping the loaded list) rather
+                // than corrupting the feed — surface a retry instead. Overlap is checked on
+                // raw ids since premium filters thin the displayed list. (ANDP-062)
+                val existingIds: Set<String> = if (reset) emptySet() else seenEventIds
+                val check = PaginationGuard.validatePage(response.events, pageSize, existingIds) { it.id }
+                if (check is PaginationGuard.Result.Invalid) {
+                    Log.w(TAG, "events pagination guard tripped: ${check.reason}")
+                    _hasMore.value = false
+                    _errorMessage.value = "Something went wrong loading events. Pull to refresh."
+                    return@onSuccess
+                }
+                if (reset) seenEventIds.clear()
+                seenEventIds.addAll(response.events.map { it.id })
+
                 val filtered = applyPremiumFilters(response.events)
                 if (reset) {
                     _events.value = filtered
@@ -335,7 +353,8 @@ class EventsViewModel @Inject constructor(
                 }
                 _totalCount.value = response.totalCount
                 _hasMore.value = response.hasMore
-                currentOffset = _events.value.size
+                // Offset tracks raw rows fetched (not the premium-filtered display size).
+                currentOffset += response.events.size
             }
             .onFailure { error ->
                 if (!eventsFetch.isCurrent(token)) return@onFailure
