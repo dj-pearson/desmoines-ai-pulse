@@ -7,6 +7,8 @@ import com.desmoines.aipulse.data.model.UserProfile
 import com.desmoines.aipulse.data.remote.SupabaseClientProvider
 import com.desmoines.aipulse.data.repository.AuthRepository
 import com.desmoines.aipulse.ui.screens.auth.AuthViewModel
+import com.desmoines.aipulse.util.AnalyticsService
+import com.desmoines.aipulse.util.ConsentService
 import com.desmoines.aipulse.util.OnboardingPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.jan.supabase.auth.status.SessionStatus
@@ -27,7 +29,30 @@ private const val TAG = "ProfileViewModel"
 class ProfileViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val onboardingPreferences: OnboardingPreferences,
+    private val consentService: ConsentService,
+    private val analyticsService: AnalyticsService,
 ) : ViewModel() {
+
+    // MARK: - Privacy / Consent (ANDP-067)
+    // Exposes the live consent state and the opt-out handlers the Settings screen drives.
+
+    val locationConsent: StateFlow<Boolean> = consentService.locationConsent
+    val emailConsent: StateFlow<Boolean> = consentService.emailConsent
+    val analyticsConsent: StateFlow<Boolean> = consentService.analyticsConsent
+
+    fun setLocationConsent(enabled: Boolean) = consentService.setLocationConsent(enabled)
+
+    fun setEmailConsent(enabled: Boolean) = consentService.setEmailConsent(enabled)
+
+    /**
+     * Toggle analytics/telemetry consent. Revoking immediately disables Firebase
+     * collection; AdTrackingService drops its queued events via its consent
+     * observer, so no non-essential telemetry survives the opt-out.
+     */
+    fun setAnalyticsConsent(enabled: Boolean) {
+        consentService.setAnalyticsConsent(enabled)
+        analyticsService.applyConsent()
+    }
 
     // MARK: - Profile Fields
 
