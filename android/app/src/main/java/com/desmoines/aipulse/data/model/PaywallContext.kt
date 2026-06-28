@@ -29,6 +29,11 @@ enum class PaywallContext(
         headline = "Dine like a local",
         body = "Unlock dining tips and premium picks for every restaurant with Insider.",
     ),
+    PREMIUM_FILTERS(
+        id = "premium_filters",
+        headline = "Filter like an Insider",
+        body = "Distance radius, free-events-only, and minimum rating are Insider filters. Upgrade to dial in exactly what you want.",
+    ),
     REVIEWS(
         id = "reviews",
         headline = "Share your take",

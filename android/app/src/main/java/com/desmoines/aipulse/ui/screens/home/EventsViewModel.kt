@@ -11,6 +11,7 @@ import com.desmoines.aipulse.data.model.SubscriptionTier
 import com.desmoines.aipulse.data.remote.EventsQuery
 import com.desmoines.aipulse.data.model.RestaurantSortOption
 import com.desmoines.aipulse.data.remote.RestaurantsQuery
+import com.desmoines.aipulse.data.model.PaywallContext
 import com.desmoines.aipulse.data.repository.EventsRepository
 import com.desmoines.aipulse.data.repository.RestaurantsRepository
 import com.desmoines.aipulse.util.Config
@@ -19,6 +20,7 @@ import com.desmoines.aipulse.util.LocationService
 import com.desmoines.aipulse.util.PaginationGuard
 import com.desmoines.aipulse.util.NetworkMonitor
 import com.desmoines.aipulse.util.RECONNECT_DEBOUNCE_MS
+import com.desmoines.aipulse.util.SoftPaywallService
 import com.desmoines.aipulse.util.onReconnect
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -46,6 +48,7 @@ class EventsViewModel @Inject constructor(
     private val restaurantsRepository: RestaurantsRepository,
     private val networkMonitor: NetworkMonitor,
     private val locationService: LocationService,
+    private val softPaywallService: SoftPaywallService,
 ) : ViewModel() {
 
     // region State
@@ -267,6 +270,14 @@ class EventsViewModel @Inject constructor(
 
     fun setCurrentTier(tier: SubscriptionTier) {
         _currentTier.value = tier
+    }
+
+    /**
+     * A free user tapped a locked premium filter — open the contextual soft
+     * paywall (ANDP-043/074) rather than jumping straight to the store screen.
+     */
+    fun requestFilterUpgrade() {
+        softPaywallService.present(PaywallContext.PREMIUM_FILTERS)
     }
 
     fun clearFilters() {
