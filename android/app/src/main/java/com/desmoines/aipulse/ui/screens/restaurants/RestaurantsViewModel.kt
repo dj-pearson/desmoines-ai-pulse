@@ -9,6 +9,7 @@ import com.desmoines.aipulse.data.model.SubscriptionTier
 import com.desmoines.aipulse.data.remote.RestaurantsQuery
 import com.desmoines.aipulse.data.repository.RestaurantsRepository
 import com.desmoines.aipulse.util.Config
+import com.desmoines.aipulse.util.FetchGeneration
 import com.desmoines.aipulse.util.NetworkMonitor
 import com.desmoines.aipulse.util.RECONNECT_DEBOUNCE_MS
 import com.desmoines.aipulse.util.onReconnect
@@ -81,6 +82,9 @@ class RestaurantsViewModel @Inject constructor(
     private val pageSize = Config.DEFAULT_PAGE_SIZE
     private var fetchJob: Job? = null
     private var hasLoadedInitialData = false
+
+    // Stale-result guard: a reset supersedes any in-flight restaurants fetch (ANDP-061).
+    private val restaurantsFetch = FetchGeneration()
 
     // endregion
 
@@ -241,6 +245,10 @@ class RestaurantsViewModel @Inject constructor(
     // region Private
 
     private suspend fun fetchRestaurants(reset: Boolean) {
+        // A reset supersedes any in-flight fetch; a load-more rides the current token
+        // and is dropped if a reset lands while it's in flight.
+        val token = if (reset) restaurantsFetch.bump() else restaurantsFetch.current()
+
         if (reset) {
             currentOffset = 0
             if (_restaurants.value.isEmpty()) _isLoading.value = true
@@ -252,6 +260,7 @@ class RestaurantsViewModel @Inject constructor(
         val query = buildQuery().copy(offset = currentOffset)
 
         restaurantsRepository.fetchRestaurants(query).onSuccess { response ->
+            if (!restaurantsFetch.isCurrent(token)) return@onSuccess // superseded — drop stale result
             if (reset) {
                 _allRestaurants.value = response.restaurants
             } else {
@@ -262,14 +271,18 @@ class RestaurantsViewModel @Inject constructor(
             _hasMore.value = response.hasMore
             currentOffset = _allRestaurants.value.size
         }.onFailure { error ->
+            if (!restaurantsFetch.isCurrent(token)) return@onFailure
             Log.e(TAG, "fetchRestaurants failed: ${error.message}", error)
             if (_restaurants.value.isEmpty()) {
                 _errorMessage.value = error.localizedMessage ?: "Failed to load restaurants"
             }
         }
 
-        _isLoading.value = false
-        _isLoadingMore.value = false
+        // Only the latest request owns the loading flags.
+        if (restaurantsFetch.isCurrent(token)) {
+            _isLoading.value = false
+            _isLoadingMore.value = false
+        }
     }
 
     private fun buildQuery(): RestaurantsQuery = RestaurantsQuery(

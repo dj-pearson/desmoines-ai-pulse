@@ -14,6 +14,7 @@ import com.desmoines.aipulse.data.repository.GroupSessionManager
 import com.desmoines.aipulse.data.repository.EventsRepository
 import com.desmoines.aipulse.data.repository.FavoritesRepository
 import com.desmoines.aipulse.data.repository.RestaurantsRepository
+import com.desmoines.aipulse.util.FetchGeneration
 import com.desmoines.aipulse.util.SoftPaywallService
 import com.desmoines.aipulse.util.SwipeInteractionService
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -76,7 +77,7 @@ class DiscoverViewModel @Inject constructor(
     private var restaurantOffset = 0
     private var hasMoreEvents = true
     private var hasMoreRestaurants = true
-    private var fetchGeneration = 0
+    private val fetchGeneration = FetchGeneration()
     private var fetchErrored = false
     private val fetchMutex = Mutex()
 
@@ -110,7 +111,7 @@ class DiscoverViewModel @Inject constructor(
     fun reload() {
         _uiState.update { it.copy(isLoading = true, items = emptyList(), errorMessage = null, filterTags = filter.tags()) }
         resetPaging()
-        fetchGeneration++
+        fetchGeneration.bump()
         viewModelScope.launch {
             fetchMore()
             _uiState.update {
@@ -219,7 +220,7 @@ class DiscoverViewModel @Inject constructor(
     private suspend fun fetchMore() {
         fetchMutex.withLock {
             fetchErrored = false
-            val generation = fetchGeneration
+            val generation = fetchGeneration.current()
             when (_uiState.value.mode) {
                 DiscoverMode.EVENTS -> fetchEventBatch(generation)
                 DiscoverMode.RESTAURANTS -> fetchRestaurantBatch(generation)
@@ -249,7 +250,7 @@ class DiscoverViewModel @Inject constructor(
         )
         eventsRepository.fetchEvents(query)
             .onSuccess { response ->
-                if (generation != fetchGeneration) return
+                if (!fetchGeneration.isCurrent(generation)) return
                 val fresh = response.events
                     .filterNot { swipeInteractionService.hasSwiped("event", it.id) }
                     .map(SwipeItem::from)
@@ -258,7 +259,7 @@ class DiscoverViewModel @Inject constructor(
                 hasMoreEvents = response.hasMore
             }
             .onFailure {
-                if (generation != fetchGeneration) return
+                if (!fetchGeneration.isCurrent(generation)) return
                 hasMoreEvents = false
                 fetchErrored = true
             }
@@ -276,7 +277,7 @@ class DiscoverViewModel @Inject constructor(
         )
         restaurantsRepository.fetchRestaurants(query)
             .onSuccess { response ->
-                if (generation != fetchGeneration) return
+                if (!fetchGeneration.isCurrent(generation)) return
                 val fresh = response.restaurants
                     .let { list -> if (filter.openNow) list.filter { it.isOpenNow() == true } else list }
                     .filterNot { swipeInteractionService.hasSwiped("restaurant", it.id) }
@@ -286,7 +287,7 @@ class DiscoverViewModel @Inject constructor(
                 hasMoreRestaurants = response.hasMore
             }
             .onFailure {
-                if (generation != fetchGeneration) return
+                if (!fetchGeneration.isCurrent(generation)) return
                 hasMoreRestaurants = false
                 fetchErrored = true
             }

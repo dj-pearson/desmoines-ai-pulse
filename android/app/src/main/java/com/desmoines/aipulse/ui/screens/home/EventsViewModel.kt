@@ -14,6 +14,7 @@ import com.desmoines.aipulse.data.remote.RestaurantsQuery
 import com.desmoines.aipulse.data.repository.EventsRepository
 import com.desmoines.aipulse.data.repository.RestaurantsRepository
 import com.desmoines.aipulse.util.Config
+import com.desmoines.aipulse.util.FetchGeneration
 import com.desmoines.aipulse.util.LocationService
 import com.desmoines.aipulse.util.NetworkMonitor
 import com.desmoines.aipulse.util.RECONNECT_DEBOUNCE_MS
@@ -172,6 +173,9 @@ class EventsViewModel @Inject constructor(
     private var debounceJob: Job? = null
     private var hasLoadedInitialData = false
 
+    // Stale-result guard: a reset supersedes any in-flight events fetch (ANDP-061).
+    private val eventsFetch = FetchGeneration()
+
     // endregion
 
     // region Public API
@@ -294,6 +298,10 @@ class EventsViewModel @Inject constructor(
      * Fetch events from repository. Mirrors iOS fetchEvents(reset:).
      */
     private suspend fun fetchEvents(reset: Boolean) {
+        // A reset supersedes any in-flight fetch; a load-more rides the current token
+        // and is dropped if a reset lands while it's in flight.
+        val token = if (reset) eventsFetch.bump() else eventsFetch.current()
+
         if (reset) {
             currentOffset = 0
             if (_events.value.isEmpty()) {
@@ -318,6 +326,7 @@ class EventsViewModel @Inject constructor(
 
         eventsRepository.fetchEvents(query)
             .onSuccess { response ->
+                if (!eventsFetch.isCurrent(token)) return@onSuccess // superseded — drop stale result
                 val filtered = applyPremiumFilters(response.events)
                 if (reset) {
                     _events.value = filtered
@@ -329,6 +338,7 @@ class EventsViewModel @Inject constructor(
                 currentOffset = _events.value.size
             }
             .onFailure { error ->
+                if (!eventsFetch.isCurrent(token)) return@onFailure
                 Log.e(TAG, "fetchEvents failed: ${error.message}", error)
                 // If offline and we have cached data, don't overwrite with an error
                 if (_events.value.isEmpty()) {
@@ -336,8 +346,12 @@ class EventsViewModel @Inject constructor(
                 }
             }
 
-        _isLoading.value = false
-        _isLoadingMore.value = false
+        // Only the latest request owns the loading flags; a superseded one leaves
+        // them for the newer fetch to clear.
+        if (eventsFetch.isCurrent(token)) {
+            _isLoading.value = false
+            _isLoadingMore.value = false
+        }
     }
 
     /**
