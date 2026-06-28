@@ -50,6 +50,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.desmoines.aipulse.data.model.RatingAggregate
 import com.desmoines.aipulse.data.model.Review
+import com.desmoines.aipulse.util.minHitTarget
 
 private val StarGold = Color(0xFFFFC107)
 
@@ -271,7 +272,7 @@ private fun ReviewRowMenu(
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        IconButton(onClick = { expanded = true }, modifier = Modifier.size(28.dp)) {
+        IconButton(onClick = { expanded = true }, modifier = Modifier.minHitTarget()) {
             Icon(
                 Icons.Filled.MoreVert,
                 contentDescription = if (isOwn) "Review options" else "Report review",

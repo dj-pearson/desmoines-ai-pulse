@@ -81,6 +81,7 @@ import com.desmoines.aipulse.data.model.Event
 import com.desmoines.aipulse.data.model.EventCategory
 import com.desmoines.aipulse.data.model.Restaurant
 import com.desmoines.aipulse.ui.components.CachedAsyncImage
+import com.desmoines.aipulse.util.minHitTarget
 import com.desmoines.aipulse.util.rememberShouldReduceAnimations
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
@@ -622,7 +623,7 @@ private fun EventPopup(
             }
 
             // Close button
-            IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
+            IconButton(onClick = onDismiss, modifier = Modifier.minHitTarget()) {
                 Icon(
                     Icons.Filled.Close,
                     contentDescription = "Dismiss",
@@ -740,7 +741,7 @@ private fun RestaurantPopup(
             }
 
             // Close button
-            IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
+            IconButton(onClick = onDismiss, modifier = Modifier.minHitTarget()) {
                 Icon(
                     Icons.Filled.Close,
                     contentDescription = "Dismiss",
@@ -846,7 +847,7 @@ private fun AttractionPopup(
             }
 
             // Close button
-            IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
+            IconButton(onClick = onDismiss, modifier = Modifier.minHitTarget()) {
                 Icon(
                     Icons.Filled.Close,
                     contentDescription = "Dismiss",
