@@ -1147,6 +1147,9 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
         val showDeleteConfirmation by profileViewModel.showDeleteConfirmation.collectAsState()
         val errorMessage by profileViewModel.errorMessage.collectAsState()
         val subscriptionState by settingsSubscriptionViewModel.uiState.collectAsState()
+        val locationConsent by profileViewModel.locationConsent.collectAsState()
+        val emailConsent by profileViewModel.emailConsent.collectAsState()
+        val analyticsConsent by profileViewModel.analyticsConsent.collectAsState()
 
         SettingsScreen(
             isAuthenticated = isAuthenticated,
@@ -1154,6 +1157,12 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
             isDeleting = isDeleting,
             showDeleteConfirmation = showDeleteConfirmation,
             errorMessage = errorMessage,
+            locationConsent = locationConsent,
+            emailConsent = emailConsent,
+            analyticsConsent = analyticsConsent,
+            onToggleLocationConsent = { profileViewModel.setLocationConsent(it) },
+            onToggleEmailConsent = { profileViewModel.setEmailConsent(it) },
+            onToggleAnalyticsConsent = { profileViewModel.setAnalyticsConsent(it) },
             onNavigateBack = { navController.popBackStack() },
             onNavigateToSubscription = {
                 navController.navigate(Route.Subscription.route)
