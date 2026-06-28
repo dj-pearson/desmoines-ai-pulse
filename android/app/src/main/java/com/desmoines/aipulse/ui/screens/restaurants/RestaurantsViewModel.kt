@@ -10,6 +10,8 @@ import com.desmoines.aipulse.data.remote.RestaurantsQuery
 import com.desmoines.aipulse.data.repository.RestaurantsRepository
 import com.desmoines.aipulse.util.Config
 import com.desmoines.aipulse.util.NetworkMonitor
+import com.desmoines.aipulse.util.RECONNECT_DEBOUNCE_MS
+import com.desmoines.aipulse.util.onReconnect
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -148,6 +150,16 @@ class RestaurantsViewModel @Inject constructor(
     // endregion
 
     // region Public API
+
+    init {
+        // Auto-refetch the visible first page when connectivity returns (ANDP-069).
+        viewModelScope.launch {
+            networkMonitor.isConnected.onReconnect().collect {
+                delay(RECONNECT_DEBOUNCE_MS)
+                if (hasLoadedInitialData && networkMonitor.isConnected.value) refresh()
+            }
+        }
+    }
 
     fun loadInitialData() {
         if (hasLoadedInitialData) return
