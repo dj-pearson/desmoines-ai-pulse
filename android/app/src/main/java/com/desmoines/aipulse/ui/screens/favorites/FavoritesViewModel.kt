@@ -7,6 +7,7 @@ import com.desmoines.aipulse.data.model.Restaurant
 import com.desmoines.aipulse.data.model.SubscriptionTier
 import com.desmoines.aipulse.data.repository.FavoritesRepository
 import com.desmoines.aipulse.data.repository.AuthRepository
+import com.desmoines.aipulse.util.FetchGeneration
 import com.desmoines.aipulse.util.NetworkMonitor
 import com.desmoines.aipulse.util.RECONNECT_DEBOUNCE_MS
 import com.desmoines.aipulse.util.onReconnect
@@ -85,6 +86,9 @@ class FavoritesViewModel @Inject constructor(
 
     private var hasLoadedInitialData = false
 
+    // Stale-result guard: a refresh supersedes any in-flight favorites load (ANDP-061).
+    private val favoritesFetch = FetchGeneration()
+
     init {
         // Auto-refetch favorites when connectivity returns (ANDP-069).
         viewModelScope.launch {
@@ -121,20 +125,26 @@ class FavoritesViewModel @Inject constructor(
             return
         }
 
+        // A concurrent refresh supersedes this load so a slow response can't clobber it.
+        val token = favoritesFetch.bump()
+
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
 
             // Load favorite IDs
             favoritesRepository.loadFavorites(userId).onSuccess { state ->
+                if (!favoritesFetch.isCurrent(token)) return@launch
                 _favoriteEventIds.value = state.favoriteEventIds
                 _favoriteRestaurantIds.value = state.favoriteRestaurantIds
             }.onFailure {
+                if (!favoritesFetch.isCurrent(token)) return@launch
                 _errorMessage.value = it.message
             }
 
             // Fetch full event objects and split into upcoming/past
             favoritesRepository.fetchFavoriteEvents(_favoriteEventIds.value).onSuccess { allEvents ->
+                if (!favoritesFetch.isCurrent(token)) return@launch
                 val now = OffsetDateTime.now()
                 _upcomingEvents.value = allEvents.filter { event ->
                     val date = event.parsedDate ?: return@filter true
@@ -145,19 +155,25 @@ class FavoritesViewModel @Inject constructor(
                     date.isBefore(now)
                 }
             }.onFailure {
+                if (!favoritesFetch.isCurrent(token)) return@launch
                 _errorMessage.value = it.message
             }
 
             // Fetch full restaurant objects
             favoritesRepository.fetchFavoriteRestaurants(_favoriteRestaurantIds.value).onSuccess { restaurants ->
+                if (!favoritesFetch.isCurrent(token)) return@launch
                 _favoriteRestaurants.value = restaurants
             }.onFailure {
+                if (!favoritesFetch.isCurrent(token)) return@launch
                 // Restaurant favorites table may not exist yet — that's OK
                 _favoriteRestaurants.value = emptyList()
             }
 
-            _isLoading.value = false
-            _isRefreshing.value = false
+            // Only the latest load owns the loading flags.
+            if (favoritesFetch.isCurrent(token)) {
+                _isLoading.value = false
+                _isRefreshing.value = false
+            }
         }
     }
 
