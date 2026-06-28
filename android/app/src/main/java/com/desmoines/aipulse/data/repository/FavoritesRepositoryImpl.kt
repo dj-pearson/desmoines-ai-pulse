@@ -8,6 +8,9 @@ import com.desmoines.aipulse.data.model.SubscriptionTier
 import com.desmoines.aipulse.data.remote.FavoritesException
 import com.desmoines.aipulse.data.remote.FavoritesRemoteDataSource
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -28,9 +31,18 @@ class FavoritesRepositoryImpl @Inject constructor(
     @param:ApplicationContext private val context: Context,
 ) : FavoritesRepository {
 
-    // In-memory cache of favorite IDs
-    private var _favoriteEventIds: Set<String> = emptySet()
-    private var _favoriteRestaurantIds: Set<String> = emptySet()
+    // In-memory cache of favorite IDs. Mutated only under the matching per-item
+    // Mutex so a toggle's local-cache write + remote call stay atomic (ANDP-060).
+    @Volatile private var _favoriteEventIds: Set<String> = emptySet()
+    @Volatile private var _favoriteRestaurantIds: Set<String> = emptySet()
+
+    // One Mutex per favorited id serializes rapid taps on that id so they can't
+    // interleave into a duplicate remote write or a desynced cache.
+    private val eventMutexes = ConcurrentHashMap<String, Mutex>()
+    private val restaurantMutexes = ConcurrentHashMap<String, Mutex>()
+
+    private fun eventMutex(id: String): Mutex = eventMutexes.getOrPut(id) { Mutex() }
+    private fun restaurantMutex(id: String): Mutex = restaurantMutexes.getOrPut(id) { Mutex() }
 
     override suspend fun loadFavorites(userId: String): Result<FavoritesState> = runCatching {
         // Load event favorites
@@ -60,21 +72,31 @@ class FavoritesRepositoryImpl @Inject constructor(
         eventId: String,
         currentIds: Set<String>,
     ): Result<Boolean> = runCatching {
-        if (currentIds.contains(eventId)) {
-            // Remove
-            remoteDataSource.removeEventFavorite(userId, eventId)
-            _favoriteEventIds = _favoriteEventIds - eventId
-            false
-        } else {
-            // Add — check limit
-            val totalFavorites = currentIds.size + _favoriteRestaurantIds.size
-            val maxFavorites = SubscriptionTier.FREE.maxFavorites
-            if (maxFavorites > 0 && totalFavorites >= maxFavorites) {
-                throw FavoritesException.LimitReached(maxFavorites)
+        eventMutex(eventId).withLock {
+            // The caller's snapshot decides the intended direction; the authoritative
+            // in-memory set decides whether that work is still needed. Rapid duplicate
+            // taps therefore collapse to a single effective remote write.
+            val wantFavorite = !currentIds.contains(eventId)
+            val isFavorite = eventId in _favoriteEventIds
+            if (wantFavorite == isFavorite) return@withLock wantFavorite
+
+            if (wantFavorite) {
+                val totalFavorites = _favoriteEventIds.size + _favoriteRestaurantIds.size
+                val maxFavorites = SubscriptionTier.FREE.maxFavorites
+                if (maxFavorites > 0 && totalFavorites >= maxFavorites) {
+                    throw FavoritesException.LimitReached(maxFavorites)
+                }
+                // Optimistic local update, rolled back if the remote write fails.
+                _favoriteEventIds = _favoriteEventIds + eventId
+                runCatching { remoteDataSource.addEventFavorite(userId, eventId) }
+                    .onFailure { _favoriteEventIds = _favoriteEventIds - eventId; throw it }
+                true
+            } else {
+                _favoriteEventIds = _favoriteEventIds - eventId
+                runCatching { remoteDataSource.removeEventFavorite(userId, eventId) }
+                    .onFailure { _favoriteEventIds = _favoriteEventIds + eventId; throw it }
+                false
             }
-            remoteDataSource.addEventFavorite(userId, eventId)
-            _favoriteEventIds = _favoriteEventIds + eventId
-            true
         }
     }.onFailure { Log.e(TAG, "Failed to toggle event favorite", it) }
 
@@ -83,29 +105,34 @@ class FavoritesRepositoryImpl @Inject constructor(
         restaurantId: String,
         currentIds: Set<String>,
     ): Result<Boolean> = runCatching {
-        if (currentIds.contains(restaurantId)) {
-            // Remove
-            try {
-                remoteDataSource.removeRestaurantFavorite(userId, restaurantId)
-            } catch (e: Exception) {
-                saveLocalRestaurantFavorite(restaurantId, add = false)
+        restaurantMutex(restaurantId).withLock {
+            val wantFavorite = !currentIds.contains(restaurantId)
+            val isFavorite = restaurantId in _favoriteRestaurantIds
+            if (wantFavorite == isFavorite) return@withLock wantFavorite
+
+            if (wantFavorite) {
+                val totalFavorites = _favoriteEventIds.size + _favoriteRestaurantIds.size
+                val maxFavorites = SubscriptionTier.FREE.maxFavorites
+                if (maxFavorites > 0 && totalFavorites >= maxFavorites) {
+                    throw FavoritesException.LimitReached(maxFavorites)
+                }
+                _favoriteRestaurantIds = _favoriteRestaurantIds + restaurantId
+                // Remote table may not exist — fall back to local prefs, keeping the optimistic add.
+                try {
+                    remoteDataSource.addRestaurantFavorite(userId, restaurantId)
+                } catch (e: Exception) {
+                    saveLocalRestaurantFavorite(restaurantId, add = true)
+                }
+                true
+            } else {
+                _favoriteRestaurantIds = _favoriteRestaurantIds - restaurantId
+                try {
+                    remoteDataSource.removeRestaurantFavorite(userId, restaurantId)
+                } catch (e: Exception) {
+                    saveLocalRestaurantFavorite(restaurantId, add = false)
+                }
+                false
             }
-            _favoriteRestaurantIds = _favoriteRestaurantIds - restaurantId
-            false
-        } else {
-            // Add — check limit
-            val totalFavorites = _favoriteEventIds.size + currentIds.size
-            val maxFavorites = SubscriptionTier.FREE.maxFavorites
-            if (maxFavorites > 0 && totalFavorites >= maxFavorites) {
-                throw FavoritesException.LimitReached(maxFavorites)
-            }
-            try {
-                remoteDataSource.addRestaurantFavorite(userId, restaurantId)
-            } catch (e: Exception) {
-                saveLocalRestaurantFavorite(restaurantId, add = true)
-            }
-            _favoriteRestaurantIds = _favoriteRestaurantIds + restaurantId
-            true
         }
     }.onFailure { Log.e(TAG, "Failed to toggle restaurant favorite", it) }
 
