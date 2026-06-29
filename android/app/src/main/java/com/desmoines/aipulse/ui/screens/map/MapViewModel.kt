@@ -11,6 +11,7 @@ import com.desmoines.aipulse.data.model.Restaurant
 import com.desmoines.aipulse.data.repository.AttractionsRepository
 import com.desmoines.aipulse.data.repository.EventsRepository
 import com.desmoines.aipulse.data.repository.RestaurantsRepository
+import com.desmoines.aipulse.util.AppSearchService
 import com.desmoines.aipulse.util.Config
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
@@ -147,6 +148,7 @@ class MapViewModel @Inject constructor(
     private val eventsRepository: EventsRepository,
     private val restaurantsRepository: RestaurantsRepository,
     private val attractionsRepository: AttractionsRepository,
+    private val appSearchService: AppSearchService,
 ) : ViewModel() {
 
     // Data
@@ -370,6 +372,9 @@ class MapViewModel @Inject constructor(
         _events.value = fetchedEvents
         _restaurants.value = fetchedRestaurants
         _attractions.value = fetchedAttractions
+
+        // Surface attractions (and events/restaurants) to on-device system search (ANDP-070).
+        appSearchService.indexAttractions(fetchedAttractions)
 
         if (fetchedEvents.isEmpty() && fetchedRestaurants.isEmpty() && fetchedAttractions.isEmpty()) {
             _errorMessage.value = "No places found in this area. Try expanding your search."

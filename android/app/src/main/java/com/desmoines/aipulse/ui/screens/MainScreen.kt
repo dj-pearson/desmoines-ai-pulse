@@ -42,6 +42,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.desmoines.aipulse.ui.components.OfflineBanner
 import com.desmoines.aipulse.ui.components.PaywallHost
+import com.desmoines.aipulse.ui.components.ads.InterstitialAdView
+import com.desmoines.aipulse.ui.components.ads.InterstitialAdViewModel
 import com.desmoines.aipulse.ui.components.bestof.BestOfWinnersViewModel
 import com.desmoines.aipulse.ui.components.bestof.LocalBestOfAwards
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -103,6 +105,11 @@ fun MainScreen(
                     launchSingleTop = true
                 }
             }
+            is DeepLinkHandler.Destination.Hotel -> {
+                navController.navigate(Route.HotelDetail.createRoute(destination.id)) {
+                    launchSingleTop = true
+                }
+            }
             is DeepLinkHandler.Destination.Tab -> {
                 val tabRoute = when (destination.tab) {
                     DeepLinkHandler.TabDestination.HOME -> Route.Home.route
@@ -154,6 +161,11 @@ fun MainScreen(
         navController.navigate(Route.AskPulse.route) { launchSingleTop = true }
     }
 
+    // Full-screen interstitial (ANDP-044): counts the session on creation and is
+    // offered only at a tab switch — a stable boundary, never mid-read/mid-flow.
+    val interstitialViewModel: InterstitialAdViewModel = hiltViewModel()
+    val pendingInterstitial by interstitialViewModel.pending.collectAsState()
+
     // Shared tab click handler
     val onTabClick: (BottomNavTab, Boolean) -> Unit = { tab, isSelected ->
         if (isSelected) {
@@ -168,6 +180,7 @@ fun MainScreen(
                 launchSingleTop = true
                 restoreState = true
             }
+            interstitialViewModel.onBoundary()
         }
     }
 
@@ -333,5 +346,15 @@ fun MainScreen(
         PaywallHost(
             onNavigateToSubscription = { navController.navigate(Route.Subscription.route) },
         )
+
+        // Frequency-capped full-screen interstitial (ANDP-044), free tier only.
+        pendingInterstitial?.let { ad ->
+            InterstitialAdView(
+                ad = ad,
+                onImpression = interstitialViewModel::onImpression,
+                onClick = interstitialViewModel::onClick,
+                onDismiss = interstitialViewModel::dismiss,
+            )
+        }
     } // CompositionLocalProvider
 }

@@ -1152,6 +1152,7 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
         val locationConsent by profileViewModel.locationConsent.collectAsState()
         val emailConsent by profileViewModel.emailConsent.collectAsState()
         val analyticsConsent by profileViewModel.analyticsConsent.collectAsState()
+        val searchIndexingEnabled by profileViewModel.searchIndexingEnabled.collectAsState()
 
         SettingsScreen(
             isAuthenticated = isAuthenticated,
@@ -1165,6 +1166,8 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
             onToggleLocationConsent = { profileViewModel.setLocationConsent(it) },
             onToggleEmailConsent = { profileViewModel.setEmailConsent(it) },
             onToggleAnalyticsConsent = { profileViewModel.setAnalyticsConsent(it) },
+            searchIndexingEnabled = searchIndexingEnabled,
+            onToggleSearchIndexing = { profileViewModel.setSearchIndexingEnabled(it) },
             onNavigateBack = { navController.popBackStack() },
             onNavigateToSubscription = {
                 navController.navigate(Route.Subscription.route)
