@@ -96,6 +96,31 @@ class SoftPaywallServiceTest {
         assertNull(svc.pending.value)
     }
 
+    // --- present (explicit user tap) ---
+
+    @Test
+    fun `present shows for a free user even past the lifetime cap`() {
+        // An explicit tap bypasses the frequency cap that throttles passive prompts.
+        every { secureStorage.loadLong(SoftPaywallService.KEY_COUNT, any()) } returns
+            SoftPaywallService.MAX_PRESENTATIONS.toLong()
+        val svc = service(SubscriptionTier.FREE)
+
+        val shown = svc.present(PaywallContext.PREMIUM_FILTERS)
+
+        assertTrue(shown)
+        assertEquals(PaywallContext.PREMIUM_FILTERS, svc.pending.value)
+        verify { analytics.logPaywallPresent(PaywallContext.PREMIUM_FILTERS.id) }
+    }
+
+    @Test
+    fun `present never shows for premium users`() {
+        val svc = service(SubscriptionTier.VIP)
+
+        assertFalse(svc.present(PaywallContext.PREMIUM_FILTERS))
+        assertNull(svc.pending.value)
+        verify(exactly = 0) { analytics.logPaywallPresent(any()) }
+    }
+
     @Test
     fun `dismiss clears the pending context`() {
         val svc = service(SubscriptionTier.FREE)

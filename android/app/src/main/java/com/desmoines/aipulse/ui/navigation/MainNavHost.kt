@@ -262,7 +262,9 @@ private fun NavGraphBuilder.addTabDestinations(
                 onClearFilters = { viewModel.clearFilters() },
                 onUpgradeClick = {
                     showFilterSheet = false
-                    navController.navigate(Route.Subscription.route)
+                    // Open the contextual soft paywall (ANDP-074); its Subscribe
+                    // button routes on to the store screen.
+                    viewModel.requestFilterUpgrade()
                 },
                 onDismiss = { showFilterSheet = false },
             )

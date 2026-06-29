@@ -54,6 +54,19 @@ class SoftPaywallService(
         return true
     }
 
+    /**
+     * Present the soft paywall for [context] in response to an explicit user action
+     * (e.g. tapping a locked premium filter). Unlike [maybePresent] this bypasses the
+     * frequency cap — the user asked for it — but is still a no-op for premium users.
+     * Returns true if presented.
+     */
+    fun present(context: PaywallContext): Boolean {
+        if (billingService.currentTier.value != SubscriptionTier.FREE) return false
+        _pending.value = context
+        analytics.logPaywallPresent(context.id)
+        return true
+    }
+
     /** Dismiss the current paywall (user tapped "Maybe later" or scrimmed away). */
     fun dismiss() {
         _pending.value?.let { analytics.logPaywallDismiss(it.id) }
