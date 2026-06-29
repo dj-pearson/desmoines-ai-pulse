@@ -8,6 +8,7 @@ import com.desmoines.aipulse.data.model.RestaurantSortOption
 import com.desmoines.aipulse.data.model.SubscriptionTier
 import com.desmoines.aipulse.data.remote.RestaurantsQuery
 import com.desmoines.aipulse.data.repository.RestaurantsRepository
+import com.desmoines.aipulse.util.AppSearchService
 import com.desmoines.aipulse.util.Config
 import com.desmoines.aipulse.util.FetchGeneration
 import com.desmoines.aipulse.util.NetworkMonitor
@@ -57,6 +58,7 @@ data class RestaurantsScreenState(
 class RestaurantsViewModel @Inject constructor(
     private val restaurantsRepository: RestaurantsRepository,
     private val networkMonitor: NetworkMonitor,
+    private val appSearchService: AppSearchService,
 ) : ViewModel() {
 
     // region State
@@ -281,6 +283,8 @@ class RestaurantsViewModel @Inject constructor(
             _totalCount.value = response.totalCount
             _hasMore.value = response.hasMore
             currentOffset = _allRestaurants.value.size
+            // Surface this page to on-device system search (ANDP-070).
+            appSearchService.indexRestaurants(response.restaurants)
         }.onFailure { error ->
             if (!restaurantsFetch.isCurrent(token)) return@onFailure
             Log.e(TAG, "fetchRestaurants failed: ${error.message}", error)

@@ -103,6 +103,11 @@ fun MainScreen(
                     launchSingleTop = true
                 }
             }
+            is DeepLinkHandler.Destination.Hotel -> {
+                navController.navigate(Route.HotelDetail.createRoute(destination.id)) {
+                    launchSingleTop = true
+                }
+            }
             is DeepLinkHandler.Destination.Tab -> {
                 val tabRoute = when (destination.tab) {
                     DeepLinkHandler.TabDestination.HOME -> Route.Home.route

@@ -1,8 +1,9 @@
 package com.desmoines.aipulse.util
 
 import android.content.Context
-import android.net.Uri
+import com.desmoines.aipulse.data.model.Attraction
 import com.desmoines.aipulse.data.model.Event
+import com.desmoines.aipulse.data.model.Hotel
 import com.desmoines.aipulse.data.model.Restaurant
 import com.google.firebase.appindexing.FirebaseAppIndex
 import com.google.firebase.appindexing.Indexable
@@ -11,93 +12,117 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** Canonical web origin for deep-linkable content URLs (matches DeepLinkHandler). */
+private const val WEB_ORIGIN = "https://desmoinesinsider.com"
+
 /**
- * Indexes app content (events, restaurants) into Firebase App Indexing
- * for on-device search discovery via Google app and Android system search.
+ * A content row's on-device search representation, independent of the Firebase
+ * SDK so the name/description/url/keyword mapping is unit-testable. (ANDP-070)
+ */
+data class IndexSpec(
+    val name: String,
+    val description: String,
+    val url: String,
+    val imageUrl: String?,
+    val keywords: List<String>,
+)
+
+fun Event.toIndexSpec(): IndexSpec = IndexSpec(
+    name = title,
+    description = displayDescription ?: "",
+    url = "$WEB_ORIGIN/events/$id",
+    imageUrl = imageUrl,
+    keywords = listOfNotNull(category ?: "event", venue, city ?: "Des Moines").filter { it.isNotBlank() },
+)
+
+fun Restaurant.toIndexSpec(): IndexSpec = IndexSpec(
+    name = name,
+    description = description ?: "",
+    url = "$WEB_ORIGIN/restaurants/$id",
+    imageUrl = imageUrl,
+    keywords = listOfNotNull(cuisine ?: "restaurant", city ?: "Des Moines", priceRange).filter { it.isNotBlank() },
+)
+
+fun Attraction.toIndexSpec(): IndexSpec = IndexSpec(
+    name = name,
+    description = description ?: "",
+    url = "$WEB_ORIGIN/attractions/$id",
+    imageUrl = imageUrl,
+    keywords = listOfNotNull(type.ifBlank { "attraction" }, location, "Des Moines").filter { it.isNotBlank() },
+)
+
+fun Hotel.toIndexSpec(): IndexSpec = IndexSpec(
+    name = name,
+    description = description ?: "",
+    url = "$WEB_ORIGIN/hotels/$id",
+    imageUrl = imageUrl,
+    keywords = listOfNotNull("hotel", area, city ?: "Des Moines", priceRange).filter { it.isNotBlank() },
+)
+
+/**
+ * Indexes app content (events, restaurants, attractions, hotels) into Firebase
+ * App Indexing for on-device search discovery via the Google app and Android
+ * system search. Each indexed item carries a deep-linkable web URL that
+ * DeepLinkHandler routes to the right detail screen.
  *
- * Mirrors iOS SpotlightService.swift.
+ * Indexing is user-toggleable ([isIndexingEnabled] / [setIndexingEnabled]);
+ * turning it off purges everything already indexed. Mirrors iOS SpotlightService.
  */
 @Singleton
 class AppSearchService @Inject constructor(
     @param:ApplicationContext private val context: Context,
+    private val secureStorage: SecureStorage,
 ) {
 
     private val appIndex: FirebaseAppIndex by lazy {
         FirebaseAppIndex.getInstance(context)
     }
 
+    /** On-device indexing is opt-out — enabled unless the user disabled it in Settings. */
+    fun isIndexingEnabled(): Boolean = secureStorage.loadBoolean(KEY_INDEXING_ENABLED, defaultValue = true)
+
     /**
-     * Index a list of events for on-device search.
-     * Creates Indexable objects with title, description, keywords, URL, and image.
+     * Toggle on-device indexing. Disabling immediately purges everything already
+     * indexed so stale results can't linger in system search.
      */
-    fun indexEvents(events: List<Event>) {
-        if (events.isEmpty()) return
+    fun setIndexingEnabled(enabled: Boolean) {
+        secureStorage.saveBoolean(KEY_INDEXING_ENABLED, enabled)
+        if (!enabled) removeAllItems()
+    }
 
-        val indexables = events.map { event ->
-            val keywords = listOfNotNull(
-                event.category ?: "event",
-                event.venue,
-                event.city ?: "Des Moines"
-            ).filter { it.isNotEmpty() }
+    fun indexEvents(events: List<Event>) = index(events.map { it.toIndexSpec() })
 
-            val url = "https://desmoinesinsider.com/events/${event.id}"
+    fun indexRestaurants(restaurants: List<Restaurant>) = index(restaurants.map { it.toIndexSpec() })
 
+    fun indexAttractions(attractions: List<Attraction>) = index(attractions.map { it.toIndexSpec() })
+
+    fun indexHotels(hotels: List<Hotel>) = index(hotels.map { it.toIndexSpec() })
+
+    private fun index(specs: List<IndexSpec>) {
+        if (specs.isEmpty() || !isIndexingEnabled()) return
+
+        val indexables = specs.map { spec ->
             Indexables.digitalDocumentBuilder()
-                .setName(event.title)
-                .setDescription(event.displayDescription ?: "")
-                .setUrl(url)
+                .setName(spec.name)
+                .setDescription(spec.description)
+                .setUrl(spec.url)
                 .apply {
-                    event.imageUrl?.let { setImage(it) }
-                    setKeywords(*keywords.toTypedArray())
+                    spec.imageUrl?.let { setImage(it) }
+                    if (spec.keywords.isNotEmpty()) setKeywords(*spec.keywords.toTypedArray())
                 }
-                .setMetadata(
-                    Indexable.Metadata.Builder()
-                        .setWorksOffline(true)
-                )
+                .setMetadata(Indexable.Metadata.Builder().setWorksOffline(true))
                 .build()
         }.toTypedArray()
 
         appIndex.update(*indexables)
     }
 
-    /**
-     * Index a list of restaurants for on-device search.
-     * Creates Indexable objects with name, cuisine, price range, location, URL.
-     */
-    fun indexRestaurants(restaurants: List<Restaurant>) {
-        if (restaurants.isEmpty()) return
-
-        val indexables = restaurants.map { restaurant ->
-            val keywords = listOfNotNull(
-                restaurant.cuisine ?: "restaurant",
-                restaurant.city ?: "Des Moines",
-                restaurant.priceRange
-            ).filter { it.isNotEmpty() }
-
-            val url = "https://desmoinesinsider.com/restaurants/${restaurant.id}"
-
-            Indexables.digitalDocumentBuilder()
-                .setName(restaurant.name)
-                .setDescription(restaurant.description ?: "")
-                .setUrl(url)
-                .apply {
-                    restaurant.imageUrl?.let { setImage(it) }
-                    setKeywords(*keywords.toTypedArray())
-                }
-                .setMetadata(
-                    Indexable.Metadata.Builder()
-                        .setWorksOffline(true)
-                )
-                .build()
-        }.toTypedArray()
-
-        appIndex.update(*indexables)
-    }
-
-    /**
-     * Remove all indexed items from Firebase App Index.
-     */
+    /** Remove all indexed items from Firebase App Index. */
     fun removeAllItems() {
         appIndex.removeAll()
+    }
+
+    private companion object {
+        const val KEY_INDEXING_ENABLED = "app_search_indexing_enabled"
     }
 }

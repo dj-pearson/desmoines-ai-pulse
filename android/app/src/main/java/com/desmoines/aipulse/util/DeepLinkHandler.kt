@@ -34,6 +34,7 @@ class DeepLinkHandler @Inject constructor() {
         data class Event(val id: String) : Destination()
         data class Restaurant(val id: String) : Destination()
         data class Attraction(val id: String) : Destination()
+        data class Hotel(val id: String) : Destination()
         data class Tab(val tab: TabDestination) : Destination()
     }
 
@@ -140,6 +141,7 @@ class DeepLinkHandler @Inject constructor() {
                 "events" -> Destination.Event(id)
                 "restaurants" -> Destination.Restaurant(id)
                 "attractions" -> Destination.Attraction(id)
+                "hotels" -> Destination.Hotel(id)
                 else -> null
             }
         }
@@ -159,6 +161,7 @@ class DeepLinkHandler @Inject constructor() {
             host == "event" && id.isNotEmpty() -> Destination.Event(id)
             host == "restaurant" && id.isNotEmpty() -> Destination.Restaurant(id)
             host == "attraction" && id.isNotEmpty() -> Destination.Attraction(id)
+            host == "hotel" && id.isNotEmpty() -> Destination.Hotel(id)
             host == "home" -> Destination.Tab(TabDestination.HOME)
             host == "search" -> Destination.Tab(TabDestination.SEARCH)
             host == "favorites" -> Destination.Tab(TabDestination.SAVED)

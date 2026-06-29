@@ -3,6 +3,7 @@ package com.desmoines.aipulse.ui.screens.restaurants
 import com.desmoines.aipulse.data.model.Restaurant
 import com.desmoines.aipulse.data.remote.RestaurantsResponse
 import com.desmoines.aipulse.data.repository.RestaurantsRepository
+import com.desmoines.aipulse.util.AppSearchService
 import com.desmoines.aipulse.util.NetworkMonitor
 import io.mockk.coEvery
 import io.mockk.every
@@ -33,12 +34,14 @@ class RestaurantsViewModelStaleFetchTest {
     private val testDispatcher = StandardTestDispatcher()
     private lateinit var repository: RestaurantsRepository
     private lateinit var networkMonitor: NetworkMonitor
+    private lateinit var appSearchService: AppSearchService
 
     @BeforeEach
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         repository = mockk(relaxed = true)
         networkMonitor = mockk(relaxed = true)
+        appSearchService = mockk(relaxed = true)
         every { networkMonitor.isConnected } returns MutableStateFlow(true)
     }
 
@@ -50,7 +53,7 @@ class RestaurantsViewModelStaleFetchTest {
     private fun response(vararg ids: String) =
         Result.success(RestaurantsResponse(ids.map(::restaurant), ids.size, false))
 
-    private fun vm() = RestaurantsViewModel(repository, networkMonitor)
+    private fun vm() = RestaurantsViewModel(repository, networkMonitor, appSearchService)
 
     @Test
     fun `a slow superseded refresh does not overwrite the latest result`() = runTest(testDispatcher) {
