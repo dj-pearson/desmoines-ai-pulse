@@ -295,6 +295,7 @@ private fun NavGraphBuilder.addTabDestinations(
             onRefresh = { viewModel.refresh() },
             onLoadMore = { viewModel.loadMoreIfNeeded(state.restaurants.size - 1) },
             onFavoriteClick = null, // Favorites wired in AND-024
+            scrollToTopTrigger = scrollToTopTrigger,
         )
 
         // Dismiss filter sheet on system back press before navigating away
@@ -356,6 +357,7 @@ private fun NavGraphBuilder.addTabDestinations(
                 }
                 navController.navigate(route)
             },
+            scrollToTopTrigger = scrollToTopTrigger,
         )
     }
 
@@ -416,6 +418,7 @@ private fun NavGraphBuilder.addTabDestinations(
             onRemoveEventFavorite = { eventId -> viewModel.removeEventFavorite(eventId) },
             onRemoveRestaurantFavorite = { restaurantId -> viewModel.removeRestaurantFavorite(restaurantId) },
             onRefresh = { viewModel.refresh() },
+            scrollToTopTrigger = scrollToTopTrigger,
         )
     }
 
