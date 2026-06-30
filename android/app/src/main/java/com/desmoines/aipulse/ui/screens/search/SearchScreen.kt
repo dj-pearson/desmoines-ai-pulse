@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -60,6 +62,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -104,8 +107,15 @@ fun SearchScreen(
     onNavigateToRestaurantDetail: (String) -> Unit = {},
     onNavigateToAttractionDetail: (String) -> Unit = {},
     onOpenRecent: (RecentItem) -> Unit = {},
+    scrollToTopTrigger: Int = 0,
 ) {
     val haptics = rememberHapticPerformer()
+    val resultsListState = rememberLazyListState()
+
+    // Scroll results to top when the user re-taps the active bottom nav tab (ANDP-071).
+    LaunchedEffect(scrollToTopTrigger) {
+        if (scrollToTopTrigger > 0) resultsListState.animateScrollToItem(0)
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Search bar
@@ -193,6 +203,7 @@ fun SearchScreen(
             else -> {
                 ResultsList(
                     state = state,
+                    listState = resultsListState,
                     onNavigateToEventDetail = onNavigateToEventDetail,
                     onNavigateToRestaurantDetail = onNavigateToRestaurantDetail,
                     onNavigateToAttractionDetail = onNavigateToAttractionDetail,
@@ -604,11 +615,13 @@ private fun RecentlyViewedCard(item: RecentItem, onClick: () -> Unit) {
 @Composable
 private fun ResultsList(
     state: SearchScreenState,
+    listState: LazyListState,
     onNavigateToEventDetail: (String) -> Unit,
     onNavigateToRestaurantDetail: (String) -> Unit,
     onNavigateToAttractionDetail: (String) -> Unit,
 ) {
     LazyColumn(
+        state = listState,
         contentPadding = PaddingValues(Dimens.SpacingMd),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {

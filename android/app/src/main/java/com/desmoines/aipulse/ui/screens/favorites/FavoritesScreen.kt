@@ -47,6 +47,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -91,8 +93,15 @@ fun FavoritesScreen(
     onRemoveEventFavorite: (String) -> Unit = {},
     onRemoveRestaurantFavorite: (String) -> Unit = {},
     onRefresh: () -> Unit = {},
+    scrollToTopTrigger: Int = 0,
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    val listState = rememberLazyListState()
+
+    // Scroll to top when the user re-taps the active bottom nav tab (ANDP-071).
+    LaunchedEffect(scrollToTopTrigger) {
+        if (scrollToTopTrigger > 0) listState.animateScrollToItem(0)
+    }
 
     Scaffold(
         topBar = {
@@ -126,6 +135,7 @@ fun FavoritesScreen(
                 else -> {
                     SavedContent(
                         state = state,
+                        listState = listState,
                         onNavigateToEventDetail = onNavigateToEventDetail,
                         onNavigateToRestaurantDetail = onNavigateToRestaurantDetail,
                         onNavigateToSubscription = onNavigateToSubscription,
@@ -141,6 +151,7 @@ fun FavoritesScreen(
 @Composable
 private fun SavedContent(
     state: FavoritesScreenState,
+    listState: LazyListState,
     onNavigateToEventDetail: (String) -> Unit,
     onNavigateToRestaurantDetail: (String) -> Unit,
     onNavigateToSubscription: () -> Unit,
@@ -148,6 +159,7 @@ private fun SavedContent(
     onRemoveRestaurantFavorite: (String) -> Unit,
 ) {
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {

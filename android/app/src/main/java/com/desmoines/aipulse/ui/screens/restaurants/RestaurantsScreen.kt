@@ -105,10 +105,16 @@ fun RestaurantsScreen(
     onRefresh: () -> Unit = {},
     onLoadMore: () -> Unit = {},
     onFavoriteClick: ((String) -> Unit)? = null,
+    scrollToTopTrigger: Int = 0,
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val haptic = rememberHapticPerformer()
     val listState = rememberLazyListState()
+
+    // Scroll to top when the user re-taps the active bottom nav tab (ANDP-071).
+    LaunchedEffect(scrollToTopTrigger) {
+        if (scrollToTopTrigger > 0) listState.animateScrollToItem(0)
+    }
 
     // Load more detection
     val shouldLoadMore by remember {
