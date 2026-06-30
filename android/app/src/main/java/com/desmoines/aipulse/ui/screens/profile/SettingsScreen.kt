@@ -51,11 +51,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.desmoines.aipulse.BuildConfig
+import com.desmoines.aipulse.R
 import com.desmoines.aipulse.data.model.SubscriptionTier
 import com.desmoines.aipulse.util.Config
 
@@ -97,14 +99,15 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val appVersion = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
+    val versionContentDescription = stringResource(R.string.settings_version_label, appVersion)
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Settings") },
+                title = { Text(stringResource(R.string.settings_title)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
                     }
                 },
             )
@@ -118,11 +121,11 @@ fun SettingsScreen(
         ) {
             // Account section (authenticated only)
             if (isAuthenticated) {
-                SectionHeader("Account")
+                SectionHeader(stringResource(R.string.settings_section_account))
 
                 SettingsRow(
                     icon = Icons.Default.Star,
-                    title = "Subscription",
+                    title = stringResource(R.string.settings_subscription),
                     subtitle = currentTier.displayName,
                     showChevron = true,
                     onClick = onNavigateToSubscription,
@@ -130,7 +133,7 @@ fun SettingsScreen(
 
                 SettingsRow(
                     icon = Icons.Default.Refresh,
-                    title = "Restore Purchases",
+                    title = stringResource(R.string.settings_restore_purchases),
                     onClick = onRestorePurchases,
                 )
 
@@ -138,13 +141,13 @@ fun SettingsScreen(
             }
 
             // General
-            SectionHeader("General")
+            SectionHeader(stringResource(R.string.settings_section_general))
 
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 12.dp)
-                    .semantics { contentDescription = "Version $appVersion" },
+                    .semantics { contentDescription = versionContentDescription },
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
@@ -154,7 +157,7 @@ fun SettingsScreen(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(modifier = Modifier.width(12.dp))
-                Text("Version", style = MaterialTheme.typography.bodyLarge)
+                Text(stringResource(R.string.settings_version), style = MaterialTheme.typography.bodyLarge)
                 Spacer(modifier = Modifier.weight(1f))
                 Text(
                     text = appVersion,
@@ -167,12 +170,12 @@ fun SettingsScreen(
 
             // Security section
             if (isAuthenticated && isBiometricAvailable) {
-                SectionHeader("Security")
+                SectionHeader(stringResource(R.string.settings_section_security))
 
                 SettingsToggleRow(
                     icon = Icons.Default.Fingerprint,
-                    title = "Biometric Unlock",
-                    subtitle = if (isBiometricEnabled) "Enabled" else "Disabled",
+                    title = stringResource(R.string.settings_biometric_unlock),
+                    subtitle = if (isBiometricEnabled) stringResource(R.string.settings_enabled) else stringResource(R.string.settings_disabled),
                     checked = isBiometricEnabled,
                     onCheckedChange = onToggleBiometric,
                 )
@@ -181,36 +184,36 @@ fun SettingsScreen(
             }
 
             // Privacy & Data (consent toggles)
-            SectionHeader("Privacy & Data")
+            SectionHeader(stringResource(R.string.settings_section_privacy))
 
             SettingsToggleRow(
                 icon = Icons.Default.PrivacyTip,
-                title = "Location Data",
-                subtitle = "Allow location-based recommendations",
+                title = stringResource(R.string.settings_location_data),
+                subtitle = stringResource(R.string.settings_location_subtitle),
                 checked = locationConsent,
                 onCheckedChange = onToggleLocationConsent,
             )
 
             SettingsToggleRow(
                 icon = Icons.Default.Email,
-                title = "Email Communications",
-                subtitle = "Receive event updates and newsletters",
+                title = stringResource(R.string.settings_email_comms),
+                subtitle = stringResource(R.string.settings_email_subtitle),
                 checked = emailConsent,
                 onCheckedChange = onToggleEmailConsent,
             )
 
             SettingsToggleRow(
                 icon = Icons.Default.Info,
-                title = "Analytics",
-                subtitle = "Help improve the app with usage data",
+                title = stringResource(R.string.settings_analytics),
+                subtitle = stringResource(R.string.settings_analytics_subtitle),
                 checked = analyticsConsent,
                 onCheckedChange = onToggleAnalyticsConsent,
             )
 
             SettingsToggleRow(
                 icon = Icons.Default.Search,
-                title = "On-Device Search",
-                subtitle = "Let system search find events, dining, and places",
+                title = stringResource(R.string.settings_ondevice_search),
+                subtitle = stringResource(R.string.settings_ondevice_search_subtitle),
                 checked = searchIndexingEnabled,
                 onCheckedChange = onToggleSearchIndexing,
             )
@@ -218,22 +221,22 @@ fun SettingsScreen(
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
             // Notifications
-            SectionHeader("Notifications")
+            SectionHeader(stringResource(R.string.settings_section_notifications))
 
             SettingsRow(
                 icon = Icons.Default.Notifications,
-                title = "Notification Settings",
+                title = stringResource(R.string.settings_notification_settings),
                 onClick = { openNotificationSettings(context) },
             )
 
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
             // About
-            SectionHeader("About")
+            SectionHeader(stringResource(R.string.settings_section_about))
 
             SettingsRow(
                 icon = Icons.Default.Language,
-                title = "Website",
+                title = stringResource(R.string.settings_website),
                 onClick = {
                     context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Config.SITE_URL)))
                 },
@@ -241,7 +244,7 @@ fun SettingsScreen(
 
             SettingsRow(
                 icon = Icons.Default.Email,
-                title = "Contact Support",
+                title = stringResource(R.string.settings_contact_support),
                 onClick = {
                     context.startActivity(
                         Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:${Config.SUPPORT_EMAIL}"))
@@ -251,19 +254,19 @@ fun SettingsScreen(
 
             SettingsRow(
                 icon = Icons.Default.Security,
-                title = "Privacy Policy",
+                title = stringResource(R.string.settings_privacy_policy),
                 onClick = { onNavigateToWebView("${Config.SITE_URL}/privacy-policy") },
             )
 
             SettingsRow(
                 icon = Icons.Default.Description,
-                title = "Terms of Service",
+                title = stringResource(R.string.settings_terms),
                 onClick = { onNavigateToWebView("${Config.SITE_URL}/terms") },
             )
 
             SettingsRow(
                 icon = Icons.Default.StarRate,
-                title = "Rate Des Moines Insider",
+                title = stringResource(R.string.settings_rate),
                 onClick = { openPlayStore(context) },
             )
 
@@ -271,7 +274,7 @@ fun SettingsScreen(
 
             // Danger Zone (authenticated only)
             if (isAuthenticated) {
-                SectionHeader("Account Data")
+                SectionHeader(stringResource(R.string.settings_section_account_data))
 
                 Row(
                     modifier = Modifier
@@ -287,20 +290,20 @@ fun SettingsScreen(
                         )
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(
-                            "Deleting Account...",
+                            stringResource(R.string.settings_deleting_account),
                             color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodyLarge,
                         )
                     } else {
                         Icon(
                             Icons.Default.Delete,
-                            contentDescription = "Delete your account",
+                            contentDescription = stringResource(R.string.settings_delete_account_cd),
                             modifier = Modifier.size(24.dp),
                             tint = MaterialTheme.colorScheme.error,
                         )
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(
-                            "Delete Account",
+                            stringResource(R.string.settings_delete_account),
                             color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodyLarge,
                         )
@@ -312,11 +315,11 @@ fun SettingsScreen(
 
             // Debug section (debug builds only)
             if (BuildConfig.DEBUG) {
-                SectionHeader("Debug")
+                SectionHeader(stringResource(R.string.settings_section_debug))
 
                 SettingsRow(
                     icon = Icons.Default.BugReport,
-                    title = "Reset Onboarding",
+                    title = stringResource(R.string.settings_reset_onboarding),
                     onClick = onResetOnboarding,
                 )
 
@@ -331,9 +334,9 @@ fun SettingsScreen(
     if (showDeleteConfirmation) {
         AlertDialog(
             onDismissRequest = onDismissDelete,
-            title = { Text("Delete Account?") },
+            title = { Text(stringResource(R.string.settings_delete_dialog_title)) },
             text = {
-                Text("This will permanently delete your account, favorites, and all associated data. This action cannot be undone.")
+                Text(stringResource(R.string.settings_delete_dialog_body))
             },
             confirmButton = {
                 TextButton(
@@ -342,12 +345,12 @@ fun SettingsScreen(
                         contentColor = MaterialTheme.colorScheme.error
                     ),
                 ) {
-                    Text("Delete")
+                    Text(stringResource(R.string.delete))
                 }
             },
             dismissButton = {
                 TextButton(onClick = onDismissDelete) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel))
                 }
             },
         )
@@ -357,11 +360,11 @@ fun SettingsScreen(
     if (errorMessage != null) {
         AlertDialog(
             onDismissRequest = onClearError,
-            title = { Text("Error") },
+            title = { Text(stringResource(R.string.error)) },
             text = { Text(errorMessage) },
             confirmButton = {
                 TextButton(onClick = onClearError) {
-                    Text("OK")
+                    Text(stringResource(R.string.ok))
                 }
             },
         )

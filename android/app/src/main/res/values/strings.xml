@@ -139,4 +139,47 @@
     <string name="a11y_tab_selected">, selected</string>
     <string name="a11y_section_items">%1$s, %2$d items</string>
     <string name="a11y_section_item">%1$s, %2$d item</string>
+
+    <!-- Common (additional) -->
+    <string name="back">Back</string>
+    <string name="ok">OK</string>
+    <string name="error">Error</string>
+
+    <!-- Settings Screen -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_section_account">Account</string>
+    <string name="settings_subscription">Subscription</string>
+    <string name="settings_restore_purchases">Restore Purchases</string>
+    <string name="settings_section_general">General</string>
+    <string name="settings_version">Version</string>
+    <string name="settings_version_label">Version %1$s</string>
+    <string name="settings_section_security">Security</string>
+    <string name="settings_biometric_unlock">Biometric Unlock</string>
+    <string name="settings_enabled">Enabled</string>
+    <string name="settings_disabled">Disabled</string>
+    <string name="settings_section_privacy">Privacy &amp; Data</string>
+    <string name="settings_location_data">Location Data</string>
+    <string name="settings_location_subtitle">Allow location-based recommendations</string>
+    <string name="settings_email_comms">Email Communications</string>
+    <string name="settings_email_subtitle">Receive event updates and newsletters</string>
+    <string name="settings_analytics">Analytics</string>
+    <string name="settings_analytics_subtitle">Help improve the app with usage data</string>
+    <string name="settings_ondevice_search">On-Device Search</string>
+    <string name="settings_ondevice_search_subtitle">Let system search find events, dining, and places</string>
+    <string name="settings_section_notifications">Notifications</string>
+    <string name="settings_notification_settings">Notification Settings</string>
+    <string name="settings_section_about">About</string>
+    <string name="settings_website">Website</string>
+    <string name="settings_contact_support">Contact Support</string>
+    <string name="settings_privacy_policy">Privacy Policy</string>
+    <string name="settings_terms">Terms of Service</string>
+    <string name="settings_rate">Rate Des Moines Insider</string>
+    <string name="settings_section_account_data">Account Data</string>
+    <string name="settings_deleting_account">Deleting Account...</string>
+    <string name="settings_delete_account_cd">Delete your account</string>
+    <string name="settings_delete_account">Delete Account</string>
+    <string name="settings_section_debug">Debug</string>
+    <string name="settings_reset_onboarding">Reset Onboarding</string>
+    <string name="settings_delete_dialog_title">Delete Account?</string>
+    <string name="settings_delete_dialog_body">This will permanently delete your account, favorites, and all associated data. This action cannot be undone.</string>
 </resources>
