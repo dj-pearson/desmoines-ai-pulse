@@ -1,0 +1,6 @@
+tree 9bc2ebd05ba9c59b3bab9974abc579cbd265ce24
+parent a4748477e03bd688248d8eba4ed0c38209979539
+author Dj Pearson <pearson.performance@gmail.com> 1753903948 -0500
+committer Dj Pearson <pearson.performance@gmail.com> 1753903948 -0500
+
+feat: Add AI Writeup component to Event and Restaurant details pages
