@@ -3536,6 +3536,1014 @@
       "priority": 3,
       "passes": false,
       "notes": "Evidence: DiscoverViewModel.swift and SwipeInteractionService.swift have no tests for key-pruning or empty-state transitions."
+    },
+    {
+      "id": "AOS-CORE-001",
+      "title": "Agent registry (canonical config of every autonomous agent)",
+      "description": "As the platform owner, I need one authoritative record of every autonomous agent — its category, schedule, owner, enabled flag, tier policy and cost budget — because agents are currently scattered across edge functions and pg_cron with no single place to see or govern them.",
+      "acceptanceCriteria": [
+        "Additive migration creates agent_registry (agent_key unique, name, category enum: dev|maintain|nurture|prospect|support|manage|security|governance, description, schedule_cron nullable, enabled bool default true, tier1_confidence_threshold numeric, monthly_cost_budget_usd numeric nullable, owner_role text, created_at, updated_at with trigger)",
+        "Seed rows for every agent introduced in this AOS program plus the existing WEB-AUTO scheduled jobs (content ingest, dedupe, moderation, newsletter, sitemap, social) so the registry reflects reality on day one",
+        "RLS: admin read/write only; a helper getAgentConfig(agent_key) in _shared/ that every agent calls at start to read enabled + thresholds + budget",
+        "docs/AGENTIC_OS.md created documenting the registry schema, categories, and how to add a new agent",
+        "npm run validate passes"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-CORE-002",
+      "title": "Unified agent run ledger (extend WEB-AUTO job observability)",
+      "description": "As the platform owner, I need every agent execution recorded with status, cost, tokens, duration and outcome, because without a run ledger I cannot see reliability, spend, or what each agent actually did.",
+      "acceptanceCriteria": [
+        "Reuse the WEB-AUTO job-observability table if one exists; otherwise additive migration creates agent_runs (agent_key FK, started_at, finished_at, status enum: running|success|failure|escalated|skipped, items_processed int, items_escalated int, tokens_used int, cost_usd numeric, error text nullable, summary text)",
+        "A _shared/agentRun.ts helper wraps a run: opens a row, updates on completion, records tokens/cost/outcome; used by at least the WEB-AUTO cron jobs to backfill coverage",
+        "Failures never crash the isolate — the ledger write fails open with a logged warning",
+        "Runs are queryable per agent for the control-plane dashboard (AOS-CORE-008)",
+        "npm run validate passes"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-CORE-003",
+      "title": "Shared agent runtime harness (tool-calling loop + guardrails)",
+      "description": "As a developer of agents, I need a reusable runtime so every agent gets the same LLM tool-calling loop, cost caps, timeouts, retries and audit logging without reimplementing them, because copy-pasted agent loops drift and skip guardrails.",
+      "acceptanceCriteria": [
+        "New _shared/agentRuntime.ts exposes runAgent({agentKey, systemPrompt, tools, maxSteps, costCapUsd}) that loops model tool-calls to completion, enforces a per-run token/cost cap, a wall-clock timeout, and bounded retries with backoff",
+        "Defaults to the latest Claude model per CLAUDE.md; every external/DB action taken inside the loop is written to the agent audit trail (AOS-GOV-002)",
+        "Honors the agent_registry enabled flag and global kill switch (AOS-CORE-009) — returns early without acting when disabled",
+        "Uses existing _shared middleware (rate limit, error responder) and is covered by at least one edge function refactored to use it",
+        "Backward-compat per CLAUDE.md: DB changes additive-only, no edge-function request/response/field/status/rate-limit changes that break shipped iOS/Android binaries, console logs wrapped in import.meta.env.DEV, storage via @/lib/safeStorage, errors via @/lib/errorHandler",
+        "npm run validate passes"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-CORE-004",
+      "title": "Tiered task + escalation data model (tier-1 auto / tier-2-3 human)",
+      "description": "As the platform owner, I need a shared model for work items agents produce, classified tier-1 (auto-resolve) vs tier-2/3 (human), with confidence and SLA, because the whole OS depends on a consistent auto-vs-escalate contract.",
+      "acceptanceCriteria": [
+        "Additive migration creates agent_tasks (id, agent_key, category, tier int check 1..3, title, payload jsonb, confidence numeric, status enum: open|auto_resolving|resolved|escalated|assigned|closed|failed, assigned_to uuid nullable, sla_due_at timestamptz nullable, resolution jsonb nullable, created_at, updated_at)",
+        "A createAgentTask() helper in _shared/ that applies the per-category tier1_confidence_threshold from agent_registry: at/above threshold -> tier 1 auto path, below -> escalate to human tier",
+        "SLA due date computed from a per-category policy table/const; overdue tasks are flagged for the console",
+        "RLS: agents (service role) write; admins read/update; immutable created_at",
+        "npm run validate passes"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-CORE-005",
+      "title": "Escalation router (route tier-2/3 tasks to the right human queue)",
+      "description": "As the platform owner, I need escalated tasks routed to the correct owner/queue with dedupe, because unrouted or duplicated escalations get lost or spam the same person.",
+      "acceptanceCriteria": [
+        "New agent-escalation-router edge function (guarded by requireAdminOrApiKey / service-role cron per WEB-SEC-001) assigns owner_role/queue by category using agent_registry.owner_role",
+        "Deduplicates: an open task with the same (agent_key, dedupe_key) is updated/coalesced instead of creating a duplicate",
+        "Writes a security_audit_logs / agent audit entry on each routing decision and notifies the owner via AOS-CORE-010",
+        "Fails open: a routing error leaves the task open+unrouted and raises an ops alert rather than dropping it",
+        "Backward-compat per CLAUDE.md: DB changes additive-only, no edge-function request/response/field/status/rate-limit changes that break shipped iOS/Android binaries, console logs wrapped in import.meta.env.DEV, storage via @/lib/safeStorage, errors via @/lib/errorHandler",
+        "npm run validate passes"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-CORE-006",
+      "title": "Human escalation console (/admin/inbox)",
+      "description": "As a tier-2/3 operator, I need one inbox to see, filter, claim and resolve escalated agent tasks, because escalations are useless if humans have no place to work them.",
+      "acceptanceCriteria": [
+        "New protected admin page /admin/inbox (wrapped in ProtectedRoute, useDocumentTitle) lists agent_tasks where status in (escalated,assigned) via a TanStack Query hook",
+        "Filter by tier, category, SLA status (overdue highlighted), and agent; claim assigns to current admin; resolve/close writes resolution + audit entry",
+        "Row detail shows the task payload, the agent run that produced it, and any AI-suggested resolution",
+        "Mobile-first, WCAG 2.1 AA (44px targets, ARIA), empty/loading/error states consistent with existing admin pages",
+        "npm run validate passes"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-CORE-007",
+      "title": "Human-in-the-loop approval queue for agent-proposed actions",
+      "description": "As the platform owner, I need risky agent actions to wait for human approval before executing, because some actions (publishing, sending outreach, refunds, destructive fixes) must not run unattended.",
+      "acceptanceCriteria": [
+        "Additive migration adds agent_action_approvals (id, agent_key, action_type, proposed_payload jsonb, status enum: pending|approved|rejected|expired, decided_by, decided_at, expires_at)",
+        "A requiresApproval(actionType) check in the runtime: guarded actions create a pending approval and stop instead of executing",
+        "/admin/approvals UI lists pending items with a diff/preview, approve executes the queued action, reject records reason; all decisions audited",
+        "Expired approvals auto-close and re-escalate; approving/rejecting is idempotent",
+        "npm run validate passes"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-CORE-008",
+      "title": "Agent control-plane dashboard (/admin/agents)",
+      "description": "As the platform owner, I need a single dashboard showing each agent status, last run, success rate, cost and an enable/disable + manual-run control, because I cannot operate the OS blind.",
+      "acceptanceCriteria": [
+        "New protected page /admin/agents lists agent_registry joined to recent agent_runs: last run time, 7/30-day success rate, items processed vs escalated, spend vs budget",
+        "Per-agent toggle writes agent_registry.enabled (audited); a manual \"run now\" triggers the agent edge function (admin-authenticated)",
+        "A drill-in view shows that agent run history (AOS-CORE-002) with error details",
+        "Charts use Recharts; page is lazy-loaded and mobile-responsive",
+        "npm run validate passes"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-CORE-009",
+      "title": "Kill switch + global pause honored by all agents",
+      "description": "As the platform owner, I need a global and per-agent kill switch that instantly stops agents from taking actions, because an misbehaving agent must be stoppable without a deploy.",
+      "acceptanceCriteria": [
+        "A global aos_enabled flag (config table or env-backed) plus per-agent enabled; runtime and every agent entrypoint check both before any action and exit cleanly (recording a skipped run) when off",
+        "Toggling the global switch is a one-click admin action, audited, and takes effect on the next agent invocation (no deploy)",
+        "While paused, scheduled agents still record a skipped run so the gap is visible in the ledger",
+        "Documented in docs/AGENTIC_OS.md including how to pause in an incident",
+        "npm run validate passes"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-CORE-010",
+      "title": "Agent notification + digest delivery (escalations & failures)",
+      "description": "As a tier-2/3 operator, I need to be notified of new escalations and agent failures, because I will not sit watching a console — the OS must reach out.",
+      "acceptanceCriteria": [
+        "A shared notifyOps() in _shared/ sends via existing Resend/SendGrid plumbing (and a webhook URL, e.g. Slack, if configured) with per-severity routing",
+        "Immediate notify on tier-2/3 escalations and agent failures; a batched daily digest of tier-1 auto-resolutions and open-task counts",
+        "Notifications are frequency-capped/coalesced so a storm of tasks does not create a storm of emails",
+        "Delivery failures are logged and never block the originating agent",
+        "Backward-compat per CLAUDE.md: DB changes additive-only, no edge-function request/response/field/status/rate-limit changes that break shipped iOS/Android binaries, console logs wrapped in import.meta.env.DEV, storage via @/lib/safeStorage, errors via @/lib/errorHandler",
+        "npm run validate passes"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-CORE-011",
+      "title": "Per-category confidence thresholds + auto-vs-human config UI",
+      "description": "As the platform owner, I need to tune, per category, the confidence at which agents act autonomously vs escalate, because the right auto/human line differs for a broken link versus a refund.",
+      "acceptanceCriteria": [
+        "Admin UI (within /admin/agents) edits tier1_confidence_threshold and monthly_cost_budget per agent/category in agent_registry",
+        "createAgentTask/runtime read these live so tuning takes effect without a deploy; changes are audited",
+        "Sensible seeded defaults per category (destructive/financial categories default conservative), documented in docs/AGENTIC_OS.md",
+        "A safety floor prevents setting a financial/destructive category to fully-auto without an explicit override flag",
+        "npm run validate passes"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-GOV-001",
+      "title": "Per-agent cost/token budgets with hard stop + alert",
+      "description": "As the platform owner, I need each agent capped to a monthly spend and per-run cost, because autonomous LLM/API work can silently burn budget.",
+      "acceptanceCriteria": [
+        "Runtime enforces per-run costCap and a rolling monthly per-agent budget from agent_registry, computed from agent_runs cost_usd",
+        "On breach: the run stops, records status=failure with reason=budget, opens a tier-2 task, and notifies ops — it does not partially corrupt state",
+        "A budget dashboard tile shows spend vs budget per agent and total OS spend this month",
+        "Budgets fail safe: an unknown/unpriced model counts an estimated cost rather than zero",
+        "npm run validate passes"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-GOV-002",
+      "title": "Immutable agent action audit trail",
+      "description": "As the platform owner, I need every action an agent takes (DB writes, external sends, publishes, refunds) recorded immutably, because autonomy without an audit trail is uninvestigable.",
+      "acceptanceCriteria": [
+        "Additive migration creates agent_audit_log (id, agent_key, run_id, action_type, target_ref, before jsonb nullable, after jsonb nullable, actor=agent, created_at) with insert-only RLS (no update/delete for non-service roles), mirroring the security_audit_logs pattern",
+        "runtime + createAgentTask + all action helpers write an audit row for every state-changing action",
+        "Admin audit viewer with filter by agent/action/date; entries link back to the run and task",
+        "Verified no code path deletes or mutates audit rows",
+        "npm run validate passes"
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-GOV-003",
+      "title": "Guardrail policy layer (per-agent action allowlist)",
+      "description": "As the platform owner, I need each agent constrained to an explicit allowlist of action types, because an agent should never be able to perform actions outside its remit even if a prompt is manipulated.",
+      "acceptanceCriteria": [
+        "A policy map (per agent_key -> allowed action_types, and which require approval) enforced centrally in the runtime before any action executes",
+        "Disallowed actions are refused, audited, and escalated as a tier-2 anomaly rather than silently dropped",
+        "Financial and destructive actions (refunds, unpublish, delete, mass-send) are approval-required by default in policy",
+        "Policy is documented in docs/AGENTIC_OS.md and covered by a unit-style test where feasible",
+        "npm run validate passes"
+      ],
+      "priority": 23,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-GOV-004",
+      "title": "Output quality evaluation (LLM-judge) with auto-escalation",
+      "description": "As the platform owner, I need agent outputs scored for quality/safety before they ship, because low-quality autonomous output (bad replies, off-brand copy) erodes trust.",
+      "acceptanceCriteria": [
+        "A scoreOutput() evaluator (LLM-judge with a rubric per category) runs on agent-generated user-facing content before send/publish",
+        "Scores below a per-category threshold downgrade the task to tier-2 human review instead of auto-executing",
+        "Scores are stored on the task/run for later analysis and surfaced in the agent dashboard",
+        "Evaluator cost is itself budgeted and cannot loop infinitely",
+        "npm run validate passes"
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-GOV-005",
+      "title": "Shadow / dry-run mode per agent for safe rollout",
+      "description": "As the platform owner, I need to run any agent in shadow mode — computing and logging proposed actions without executing them — because new agents must be observed before they touch production.",
+      "acceptanceCriteria": [
+        "agent_registry gains a mode enum (shadow|live) default shadow; runtime in shadow mode records proposed actions to agent_audit_log with a shadow flag and takes no external/DB write action",
+        "The dashboard shows shadow proposals so an operator can compare against reality before flipping to live",
+        "Flipping shadow->live is an audited admin action gated behind AOS-CORE-011 safety floor for financial/destructive categories",
+        "Every new agent in this program ships in shadow mode by default",
+        "npm run validate passes"
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-SEC-001",
+      "title": "Security anomaly-detection agent",
+      "description": "As the platform owner, I need an agent watching auth, rate-limit and abuse signals to open incidents automatically, because attacks happen faster than humans check logs.",
+      "acceptanceCriteria": [
+        "Scheduled agent reads login_attempts (WEB-SEC-006), rate_limit_entries, and security_audit_logs for spikes/anomalies (credential stuffing, quota abuse, unusual admin actions)",
+        "Confident, known-benign patterns auto-note; ambiguous/high-severity patterns create tier-2/3 incident tasks with evidence",
+        "Runs through the runtime (budgeted, audited, kill-switch aware) and writes findings to agent_tasks",
+        "Documented detection rules in docs/AGENTIC_OS.md; no false-positive can auto-lock a legitimate user without human confirmation",
+        "npm run validate passes"
+      ],
+      "priority": 26,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-SEC-002",
+      "title": "Dependency & CVE scanning agent",
+      "description": "As the platform owner, I need automated detection of vulnerable dependencies with remediation tasks, because unpatched CVEs are a top breach vector.",
+      "acceptanceCriteria": [
+        "Scheduled agent runs npm audit (and Deno checks for edge functions), parses results, and opens tier-appropriate tasks: low-risk patch bumps as tier-1 (hand to AOS-DEV-003), high-severity as tier-2",
+        "Dedupes against already-open vuln tasks; closes tasks when a CVE is resolved",
+        "Produces a security posture summary in the digest (open CVEs by severity)",
+        "Backward-compat per CLAUDE.md: DB changes additive-only, no edge-function request/response/field/status/rate-limit changes that break shipped iOS/Android binaries, console logs wrapped in import.meta.env.DEV, storage via @/lib/safeStorage, errors via @/lib/errorHandler",
+        "npm run validate passes"
+      ],
+      "priority": 27,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-SEC-003",
+      "title": "Secret-leak scanning (CI + repo history)",
+      "description": "As the platform owner, I want secrets blocked before they land and detected if they slip in, extending WEB-SEC-008 hygiene, because a leaked key is an emergency.",
+      "acceptanceCriteria": [
+        "A CI step (GitHub Actions) scans diffs for secret patterns and fails the build on a hit; documented in the workflow",
+        "A scheduled agent scans recent history/current tree for high-entropy/keyed patterns and opens a tier-3 incident on detection with the rotation runbook linked",
+        "Known safe placeholders (.env.example) are allowlisted to avoid noise",
+        "No actual secret values are written into tasks/logs (reference location only)",
+        "npm run validate passes"
+      ],
+      "priority": 28,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-SEC-004",
+      "title": "Subscription & AI-endpoint abuse/fraud detection",
+      "description": "As the platform owner, I need detection of billing fraud and AI-quota abuse, because chargebacks and cost-abuse hit revenue directly.",
+      "acceptanceCriteria": [
+        "Agent correlates Stripe events, subscription state, and AI-endpoint usage to flag anomalies (rapid signup+refund, quota abuse across accounts, mismatched entitlements)",
+        "Tier-1 auto-actions limited to safe throttling within existing rate-limit infra; account-affecting actions escalate to tier-2/3 with evidence",
+        "Findings audited; respects backward-compat (no tightening of shipped client limits below retry thresholds per WEB-SEC-002)",
+        "Backward-compat per CLAUDE.md: DB changes additive-only, no edge-function request/response/field/status/rate-limit changes that break shipped iOS/Android binaries, console logs wrapped in import.meta.env.DEV, storage via @/lib/safeStorage, errors via @/lib/errorHandler",
+        "npm run validate passes"
+      ],
+      "priority": 29,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-SEC-005",
+      "title": "Automated incident-response runbooks",
+      "description": "As a tier-2/3 responder, I need one-click/automated response actions (revoke sessions, lock account, rotate-reminder, notify) tied to incidents, because manual response is slow and error-prone under pressure.",
+      "acceptanceCriteria": [
+        "Codified runbooks map incident types to actions; safe reversible steps can auto-run tier-1, account/data-affecting steps are approval-gated (AOS-CORE-007)",
+        "Each executed step is audited and appended to the incident task timeline",
+        "A responder can trigger a runbook from /admin/inbox on an incident task",
+        "Runbooks documented in docs/AGENTIC_OS.md",
+        "npm run validate passes"
+      ],
+      "priority": 30,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-SEC-006",
+      "title": "Continuous RLS/config drift audit (scheduled + diff)",
+      "description": "As the platform owner, I need the WEB-SEC-005 RLS audit to run on a schedule and alert on drift, because a one-time audit goes stale the next migration.",
+      "acceptanceCriteria": [
+        "Reuse scripts/audit-rls.ts as a scheduled agent that regenerates the audit and diffs against the committed docs/RLS_AUDIT.md baseline",
+        "New permissive-write/anon-write/missing-RLS/unpinned-SECURITY-DEFINER findings open a tier-2 security task; a clean run just records success",
+        "CORS/CSP and verify_jwt config drift (against the WEB-SEC-001/004 baselines) included in the same sweep",
+        "Baseline is updatable via an audited admin action after review",
+        "npm run validate passes"
+      ],
+      "priority": 31,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-SEC-007",
+      "title": "Compliance monitor (retention, consent, deletion SLA)",
+      "description": "As the platform owner, I need automated tracking of data-retention, consent, and GDPR/CCPA deletion SLAs, because compliance gaps are legal risk and older mobile binaries depend on the consent/deletion shapes.",
+      "acceptanceCriteria": [
+        "Agent verifies deletion requests (delete-user-account) complete within SLA and that data-export requests are honored; overdue items escalate tier-2",
+        "Checks retention windows on telemetry/PII tables and flags rows past policy for review (does not hard-delete without approval)",
+        "Consent records/coverage validated against required-reason usage (aligns with iOS privacy-manifest work)",
+        "Produces a compliance section in the weekly digest",
+        "npm run validate passes"
+      ],
+      "priority": 32,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-DEV-001",
+      "title": "Production-error to dev-task pipeline",
+      "description": "As the platform owner, I need production errors clustered into actionable dev tasks with repro context, because raw error noise never gets fixed.",
+      "acceptanceCriteria": [
+        "A sink/agent ingests errors captured by @/lib/errorHandler (and edge-function errors), clusters by signature, and creates de-duplicated agent_tasks with frequency, first/last seen, affected route/user-count, and stack context",
+        "Severity/frequency sets tier: high-frequency user-facing = tier-2, rare/benign = tier-1 backlog",
+        "Resolved-error signatures auto-close their task on next clean window",
+        "No PII from error payloads is stored in the task (scrubbed)",
+        "npm run validate passes"
+      ],
+      "priority": 33,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-DEV-002",
+      "title": "Autonomous fix agent (Ralph-as-a-service) for tier-1 dev tasks",
+      "description": "As the platform owner, I need low-risk dev tasks fixed and PR-ed automatically, formalizing the existing Ralph loop, because routine fixes should not need me.",
+      "acceptanceCriteria": [
+        "A dev agent picks tier-1 dev tasks (from AOS-DEV-001/003), implements on a claude/aos-fix branch, runs npm run type-check && lint (and tests where present), and opens a PR — never committing to main/develop directly per CLAUDE.md",
+        "PRs are opened as drafts for human merge (no auto-merge to protected branches); failing checks keep the task open with the failure logged",
+        "Each attempt is a budgeted, audited agent run; repeated failures escalate to tier-2",
+        "Scope guardrails: the agent only touches files within the task’s blast radius and respects the branching rules table",
+        "npm run validate passes"
+      ],
+      "priority": 34,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-DEV-003",
+      "title": "Dependency-update agent with test-gated PRs",
+      "description": "As the platform owner, I need routine dependency bumps proposed automatically and gated by CI, because stale deps accumulate risk and manual bumps are tedious.",
+      "acceptanceCriteria": [
+        "Scheduled agent proposes grouped, non-breaking dependency updates as PRs (respects semver; majors escalate to tier-2 for human review)",
+        "PRs run the full validate + test suite; only green PRs are surfaced for merge, red ones annotate the failure",
+        "Coordinates with AOS-SEC-002 so security patches are prioritized",
+        "Backward-compat per CLAUDE.md: DB changes additive-only, no edge-function request/response/field/status/rate-limit changes that break shipped iOS/Android binaries, console logs wrapped in import.meta.env.DEV, storage via @/lib/safeStorage, errors via @/lib/errorHandler",
+        "npm run validate passes"
+      ],
+      "priority": 35,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-DEV-004",
+      "title": "Test-coverage / test-generation agent for critical paths",
+      "description": "As the platform owner, I need tests generated for uncovered critical paths, because the audit found key flows (auth, StoreKit, edge-function contracts) untested.",
+      "acceptanceCriteria": [
+        "Agent identifies high-value uncovered areas (auth, subscription/entitlement, edge-function decode contracts) and generates Playwright/unit tests as PRs",
+        "Generated tests must actually pass and be deterministic (no live network) before the PR is surfaced",
+        "Prioritizes paths flagged by AOS-DEV-001 error clusters",
+        "Human merges; nothing auto-merges to protected branches",
+        "npm run validate passes"
+      ],
+      "priority": 36,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-DEV-005",
+      "title": "Flaky-test + CI-health watcher",
+      "description": "As the platform owner, I need flaky tests detected and CI health tracked, because flakes erode trust in the pipeline and hide real failures.",
+      "acceptanceCriteria": [
+        "Agent analyzes CI run history for tests that pass/fail non-deterministically, quarantines/annotates them, and opens a tier-2 task to fix",
+        "Tracks CI duration and failure-rate trends; regressions raise an ops alert",
+        "Reports flaky/slow tests in the weekly digest",
+        "Backward-compat per CLAUDE.md: DB changes additive-only, no edge-function request/response/field/status/rate-limit changes that break shipped iOS/Android binaries, console logs wrapped in import.meta.env.DEV, storage via @/lib/safeStorage, errors via @/lib/errorHandler",
+        "npm run validate passes"
+      ],
+      "priority": 37,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-DEV-006",
+      "title": "Automated PR code-review agent (security + CLAUDE.md compliance)",
+      "description": "As the platform owner, I need every PR auto-reviewed for security and convention compliance, because human review misses backward-compat and RLS pitfalls.",
+      "acceptanceCriteria": [
+        "A GitHub Actions-triggered agent reviews PR diffs for: destructive migrations in one release, tightened validation/rate-limits, RLS regressions, direct localStorage/process.env usage, unwrapped console logs, and posts inline review comments",
+        "Blocks (or requests changes) only on high-confidence CLAUDE.md rule violations; style nits are advisory",
+        "Runs are budgeted/audited; the check never hard-fails on the agent’s own error (fails open with a note)",
+        "Backward-compat per CLAUDE.md: DB changes additive-only, no edge-function request/response/field/status/rate-limit changes that break shipped iOS/Android binaries, console logs wrapped in import.meta.env.DEV, storage via @/lib/safeStorage, errors via @/lib/errorHandler",
+        "npm run validate passes"
+      ],
+      "priority": 38,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-DEV-007",
+      "title": "Release-notes / changelog generator",
+      "description": "As the platform owner, I need release notes generated from merged PRs and conventional commits, because manual changelogs get skipped.",
+      "acceptanceCriteria": [
+        "Agent aggregates merged PRs/commits since the last tag into categorized notes (feat/fix/perf/etc.) and drafts a CHANGELOG/release entry as a PR",
+        "Distinguishes web vs iOS vs Android surfaces and flags any backward-compat-sensitive changes for the release checklist",
+        "Draft only — human edits and publishes",
+        "Backward-compat per CLAUDE.md: DB changes additive-only, no edge-function request/response/field/status/rate-limit changes that break shipped iOS/Android binaries, console logs wrapped in import.meta.env.DEV, storage via @/lib/safeStorage, errors via @/lib/errorHandler",
+        "npm run validate passes"
+      ],
+      "priority": 39,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-MAINT-001",
+      "title": "Uptime / synthetic-monitoring agent",
+      "description": "As the platform owner, I need key routes and edge functions probed continuously with auto-incidents on failure, because I should learn about downtime before users do.",
+      "acceptanceCriteria": [
+        "Scheduled agent probes critical public routes and edge functions (health checks that do not mutate state) and records latency/status to agent_runs",
+        "Sustained failures open a tier-2 incident and notify ops immediately; transient blips are recorded but not alerted (with a documented threshold)",
+        "A status tile on /admin/agents shows current up/down + p95 latency",
+        "Backward-compat per CLAUDE.md: DB changes additive-only, no edge-function request/response/field/status/rate-limit changes that break shipped iOS/Android binaries, console logs wrapped in import.meta.env.DEV, storage via @/lib/safeStorage, errors via @/lib/errorHandler",
+        "npm run validate passes"
+      ],
+      "priority": 40,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-MAINT-002",
+      "title": "Database health agent (slow queries, bloat, index gaps)",
+      "description": "As the platform owner, I need DB health monitored with actionable suggestions, because performance rots silently as data grows.",
+      "acceptanceCriteria": [
+        "Agent inspects pg_stat_statements / index usage (via an admin-only RPC) for slow queries, missing indexes, and table bloat and opens tier-2 tasks with concrete suggestions",
+        "Index suggestions are proposed as additive CREATE INDEX CONCURRENTLY migrations (never applied automatically to production)",
+        "Connection/health metrics surfaced in the digest",
+        "Read-only inspection — the agent proposes, humans/AOS-DEV apply",
+        "npm run validate passes"
+      ],
+      "priority": 41,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-MAINT-003",
+      "title": "Backup verification agent",
+      "description": "As the platform owner, I need confirmation that backups exist and are restorable, because an unverified backup is not a backup.",
+      "acceptanceCriteria": [
+        "Agent verifies Supabase backup recency and records a periodic restore-sanity check result (e.g., row-count/spot-check against a restore or PITR window) to the ledger",
+        "Missing/stale backups open a tier-3 incident immediately",
+        "Backup status included in the weekly digest",
+        "Backward-compat per CLAUDE.md: DB changes additive-only, no edge-function request/response/field/status/rate-limit changes that break shipped iOS/Android binaries, console logs wrapped in import.meta.env.DEV, storage via @/lib/safeStorage, errors via @/lib/errorHandler",
+        "npm run validate passes"
+      ],
+      "priority": 42,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-MAINT-004",
+      "title": "Data-quality sweeper (autofill + escalate)",
+      "description": "As the platform owner, I need content rows kept complete (images, coordinates, SEO/GEO fields) automatically, extending the WEB-AUTO backfills, because gaps hurt SEO and UX.",
+      "acceptanceCriteria": [
+        "Scheduled agent finds events/restaurants/attractions missing image_url, lat/lng, or SEO/GEO fields and auto-fills via existing backfill/geocode/generate-seo functions (tier-1)",
+        "Rows that cannot be auto-fixed after N attempts escalate to a tier-2 data task with the reason",
+        "Idempotent and rate-limited against external APIs (Google Places / image / LLM) within the cost budget",
+        "Reports fill-rate trend in the digest",
+        "npm run validate passes"
+      ],
+      "priority": 43,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-MAINT-005",
+      "title": "Broken-link & dead-content monitor with auto-remediation",
+      "description": "As the platform owner, I need dead links and stale/expired content handled automatically, extending WEB-AUTO, because broken links and past-date events erode trust and SEO.",
+      "acceptanceCriteria": [
+        "Agent crawls outbound/content links and detects expired events / stale listings; safe fixes (unpublish past events, mark dead links) run tier-1",
+        "Ambiguous cases (a 200-but-changed page, a possibly-recurring event) escalate to tier-2",
+        "All auto-unpublish/mark actions are audited and reversible; respects additive DB rules",
+        "Reports link health + stale-content counts in the digest",
+        "npm run validate passes"
+      ],
+      "priority": 44,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-MAINT-006",
+      "title": "External-API cost & quota watchdog",
+      "description": "As the platform owner, I need spend and quota across OpenAI/Anthropic/Google/Stripe/Resend watched with throttling, because a runaway integration can rack up cost or hit hard quotas.",
+      "acceptanceCriteria": [
+        "Agent aggregates external-API usage/cost (from agent_runs + provider signals where available) and compares against configured budgets/quotas",
+        "Approaching a limit triggers graceful throttling within existing rate-limit infra and an ops alert; a hard breach pauses the affected agent (not the whole product)",
+        "A cost dashboard tile shows per-provider spend vs budget month-to-date",
+        "Backward-compat per CLAUDE.md: DB changes additive-only, no edge-function request/response/field/status/rate-limit changes that break shipped iOS/Android binaries, console logs wrapped in import.meta.env.DEV, storage via @/lib/safeStorage, errors via @/lib/errorHandler",
+        "npm run validate passes"
+      ],
+      "priority": 45,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-MAINT-007",
+      "title": "Edge-function error-rate & cold-start monitor",
+      "description": "As the platform owner, I need per-function error rates and cold-start latency tracked with maintenance tasks on regression, because 73 edge functions are otherwise unobservable.",
+      "acceptanceCriteria": [
+        "Agent samples edge-function invocations for error rate and latency, records to the ledger, and opens tier-2 tasks when a function regresses beyond threshold",
+        "Distinguishes user-caused 4xx from server 5xx so alerts are actionable",
+        "Surfaces the noisiest functions in the digest",
+        "Backward-compat per CLAUDE.md: DB changes additive-only, no edge-function request/response/field/status/rate-limit changes that break shipped iOS/Android binaries, console logs wrapped in import.meta.env.DEV, storage via @/lib/safeStorage, errors via @/lib/errorHandler",
+        "npm run validate passes"
+      ],
+      "priority": 46,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-CS-001",
+      "title": "Unified support intake (tickets from form, email, in-app)",
+      "description": "As a support operator, I need every support request in one place, because requests scattered across a contact form, email, and app cannot be served consistently.",
+      "acceptanceCriteria": [
+        "Additive migration creates support_tickets (id, user_id nullable, channel enum: web_form|email|in_app, subject, body, status enum: new|ai_handling|awaiting_user|escalated|resolved|closed, priority, sentiment nullable, assigned_to nullable, created_at, updated_at) and support_messages (thread)",
+        "The existing contact form and any support email path write into support_tickets; unauthenticated submissions supported with anti-abuse (rate limit) intact",
+        "RLS: users see own tickets, admins see all, agents (service role) write",
+        "Backfill/import path documented; no change to the public contact endpoint shape",
+        "npm run validate passes"
+      ],
+      "priority": 47,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-CS-002",
+      "title": "AI first-responder agent (tier-1 answers, tier-2 escalate)",
+      "description": "As a support operator, I need common questions answered instantly by an agent that knows when to hand off, because most tickets are repetitive but some genuinely need a human.",
+      "acceptanceCriteria": [
+        "Agent drafts an answer from the knowledge base (AOS-CS-003); high-confidence answers auto-send as tier-1, low-confidence or sensitive (billing/account/legal) escalate to tier-2 with a suggested draft",
+        "Output passes the AOS-GOV-004 quality/safety check before any auto-send",
+        "Every send/escalation is audited; the user can always request a human (which forces escalation)",
+        "Respects frequency/loop limits so it never ping-pongs with a confused user",
+        "npm run validate passes"
+      ],
+      "priority": 48,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-CS-003",
+      "title": "Knowledge base + retrieval for support",
+      "description": "As the support agent, I need a retrievable knowledge base built from docs/FAQ/policies, because answers must be grounded, not hallucinated.",
+      "acceptanceCriteria": [
+        "Build a KB from existing docs (README, guides, policy pages, FAQ) into a support_kb table with embeddings; a retrieve(query) helper returns top passages with sources",
+        "Admin UI to add/edit KB articles; edits re-embed automatically",
+        "The first-responder cites KB sources in escalated drafts so humans can verify",
+        "Embedding/generation cost is budgeted",
+        "npm run validate passes"
+      ],
+      "priority": 49,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-CS-004",
+      "title": "Billing/subscription self-service automation",
+      "description": "As a subscriber, I need routine billing actions handled instantly within policy, because waiting on a human to cancel or apply a policy refund is a bad experience.",
+      "acceptanceCriteria": [
+        "Agent handles tier-1 self-service within explicit policy: cancellation, plan info, receipt resend, and in-policy refunds via existing Stripe functions (process-stripe-refund) — out-of-policy refunds escalate to tier-2 approval (AOS-CORE-007)",
+        "All financial actions are approval-gated per AOS-GOV-003 policy unless clearly within an auto-approve window, and always audited",
+        "Entitlement changes respect the subscription_tier shapes shipped clients read (no schema tightening)",
+        "Backward-compat per CLAUDE.md: DB changes additive-only, no edge-function request/response/field/status/rate-limit changes that break shipped iOS/Android binaries, console logs wrapped in import.meta.env.DEV, storage via @/lib/safeStorage, errors via @/lib/errorHandler",
+        "npm run validate passes"
+      ],
+      "priority": 50,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-CS-005",
+      "title": "Ticket sentiment + priority classifier with SLA",
+      "description": "As a support operator, I need tickets auto-classified by sentiment and priority with an SLA, because angry/urgent users must jump the queue.",
+      "acceptanceCriteria": [
+        "Agent classifies each new ticket (sentiment, urgency, category) and sets priority + sla_due_at accordingly",
+        "Negative-sentiment/high-urgency tickets are fast-tracked and, if unhandled, escalate before SLA breach",
+        "Classification stored on the ticket and visible in the console; misclassifications correctable by humans (feedback captured)",
+        "Backward-compat per CLAUDE.md: DB changes additive-only, no edge-function request/response/field/status/rate-limit changes that break shipped iOS/Android binaries, console logs wrapped in import.meta.env.DEV, storage via @/lib/safeStorage, errors via @/lib/errorHandler",
+        "npm run validate passes"
+      ],
+      "priority": 51,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-CS-006",
+      "title": "In-app support chat wired to the CS agent",
+      "description": "As a user, I need in-app help that actually resolves things, reusing the discover-chat infrastructure, because a dead FAQ page does not help.",
+      "acceptanceCriteria": [
+        "An in-app support widget/route reuses the existing chat edge-function pattern (auth, rate limit, streaming) to converse via the first-responder agent with KB grounding",
+        "Unresolved chats create a support_ticket and escalate; the conversation transcript is attached",
+        "PremiumGate-aware where appropriate but core support is available to all tiers",
+        "Mobile-first, accessible, with clear \"talk to a human\" affordance",
+        "npm run validate passes"
+      ],
+      "priority": 52,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-CS-007",
+      "title": "Post-resolution CSAT loop with re-escalation",
+      "description": "As the platform owner, I need satisfaction measured after resolution and dissatisfaction re-opened, because a \"resolved\" ticket the user hated is not resolved.",
+      "acceptanceCriteria": [
+        "On resolution, a lightweight CSAT prompt is sent (in-app/email); scores stored against the ticket and agent run",
+        "Low CSAT auto-re-escalates the ticket to tier-2 with the original context",
+        "CSAT trend by channel and by auto-vs-human resolution reported in the digest",
+        "Backward-compat per CLAUDE.md: DB changes additive-only, no edge-function request/response/field/status/rate-limit changes that break shipped iOS/Android binaries, console logs wrapped in import.meta.env.DEV, storage via @/lib/safeStorage, errors via @/lib/errorHandler",
+        "npm run validate passes"
+      ],
+      "priority": 53,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-CS-008",
+      "title": "Human agent ticket console (tier-2/3)",
+      "description": "As a tier-2/3 support human, I need a full ticket workspace with AI-suggested replies, because escalations need efficient human handling.",
+      "acceptanceCriteria": [
+        "A /admin/support console lists/filters tickets, shows the full thread, user context (subscription, recent activity), and AI-suggested replies the human can edit and send",
+        "Canned responses + KB insertion; sending updates status and audits the action",
+        "Assignment, internal notes, and merge-duplicate supported",
+        "Consistent empty/loading/error states, mobile-responsive, WCAG 2.1 AA",
+        "npm run validate passes"
+      ],
+      "priority": 54,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-NURTURE-001",
+      "title": "User lifecycle-stage model",
+      "description": "As the platform owner, I need each user classified into a lifecycle stage, because targeted nurture is impossible without knowing who is new, active, at-risk, or churned.",
+      "acceptanceCriteria": [
+        "Additive migration adds a computed lifecycle_stage (new|onboarding|active|at_risk|dormant|churned|reactivated) maintained by a scheduled agent from activity signals (logins, saves, sessions, subscription state)",
+        "Stage transitions are recorded (history) so nurture agents can react to changes",
+        "Exposed via an admin view and usable as a segmentation input by other nurture agents",
+        "PII-safe; respects unsubscribe/consent flags for any downstream messaging",
+        "npm run validate passes"
+      ],
+      "priority": 55,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-NURTURE-002",
+      "title": "Onboarding drip agent",
+      "description": "As a new user, I need a helpful welcome/education sequence, because activation drops when people do not learn the core value quickly.",
+      "acceptanceCriteria": [
+        "Agent triggers a staged onboarding sequence (welcome, key features, personalization prompt, first-value nudge) via existing email plumbing, gated on lifecycle_stage and actual behavior (skip steps already completed)",
+        "Frequency-capped and unsubscribe-respecting; content passes AOS-GOV-004 quality check",
+        "Sends and outcomes (open/click/activation) recorded for the agent ledger and digest",
+        "Backward-compat per CLAUDE.md: DB changes additive-only, no edge-function request/response/field/status/rate-limit changes that break shipped iOS/Android binaries, console logs wrapped in import.meta.env.DEV, storage via @/lib/safeStorage, errors via @/lib/errorHandler",
+        "npm run validate passes"
+      ],
+      "priority": 56,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-NURTURE-003",
+      "title": "Churn-risk prediction + win-back agent",
+      "description": "As the platform owner, I need at-risk users identified and offered a reason to stay, because reactive retention loses people who already left.",
+      "acceptanceCriteria": [
+        "Agent scores churn risk from engagement/subscription signals, moves users to at_risk, and runs a win-back play (personalized value reminder, offer within policy)",
+        "Offers/discounts are policy-bounded and approval-gated above a threshold (AOS-CORE-007); everything audited",
+        "Effectiveness (retained vs churned after intervention) measured and reported",
+        "Backward-compat per CLAUDE.md: DB changes additive-only, no edge-function request/response/field/status/rate-limit changes that break shipped iOS/Android binaries, console logs wrapped in import.meta.env.DEV, storage via @/lib/safeStorage, errors via @/lib/errorHandler",
+        "npm run validate passes"
+      ],
+      "priority": 57,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-NURTURE-004",
+      "title": "Personalized weekly digest agent",
+      "description": "As a user, I need a weekly digest tailored to my interests and location, extending the existing newsletter, because generic blasts get ignored.",
+      "acceptanceCriteria": [
+        "Agent assembles a per-user digest (relevant upcoming events, new restaurants/attractions, saved-search matches) using existing personalization/recommendation infra",
+        "Respects tier (some premium picks gated), frequency cap, and unsubscribe; content quality-checked before send",
+        "Deliverability and engagement tracked; a no-relevant-content user is skipped rather than sent filler",
+        "Backward-compat per CLAUDE.md: DB changes additive-only, no edge-function request/response/field/status/rate-limit changes that break shipped iOS/Android binaries, console logs wrapped in import.meta.env.DEV, storage via @/lib/safeStorage, errors via @/lib/errorHandler",
+        "npm run validate passes"
+      ],
+      "priority": 58,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-NURTURE-005",
+      "title": "Dormant-user re-engagement agent",
+      "description": "As the platform owner, I need dormant users nudged back safely, because re-activating an existing user is cheaper than acquiring a new one.",
+      "acceptanceCriteria": [
+        "Agent targets dormant lifecycle users with a re-engagement message (what they missed, a saved-search alert, a personalized highlight) on a conservative cadence",
+        "Hard frequency caps and unsubscribe/consent enforcement; no user receives overlapping nurture + re-engagement in the same window (coordination across nurture agents)",
+        "Reactivations measured; repeatedly-unresponsive users are aged out to avoid spam",
+        "Backward-compat per CLAUDE.md: DB changes additive-only, no edge-function request/response/field/status/rate-limit changes that break shipped iOS/Android binaries, console logs wrapped in import.meta.env.DEV, storage via @/lib/safeStorage, errors via @/lib/errorHandler",
+        "npm run validate passes"
+      ],
+      "priority": 59,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-NURTURE-006",
+      "title": "Loyalty / streak / milestone recognition agent",
+      "description": "As a user, I want my engagement recognized, because recognition drives habit and retention.",
+      "acceptanceCriteria": [
+        "Agent detects milestones (streaks, saves, reviews, anniversaries) and delivers lightweight recognition (in-app + optional email) within frequency caps",
+        "Recognition content is on-brand and quality-checked; opt-out respected",
+        "Milestone events recorded; impact on retention tracked in the digest",
+        "Backward-compat per CLAUDE.md: DB changes additive-only, no edge-function request/response/field/status/rate-limit changes that break shipped iOS/Android binaries, console logs wrapped in import.meta.env.DEV, storage via @/lib/safeStorage, errors via @/lib/errorHandler",
+        "npm run validate passes"
+      ],
+      "priority": 60,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-NURTURE-007",
+      "title": "Subscription lifecycle nurture (trial, dunning, upgrade)",
+      "description": "As the platform owner, I need trial-ending, failed-payment, and upgrade moments handled automatically, because these are the highest-leverage revenue touchpoints.",
+      "acceptanceCriteria": [
+        "Agent runs trial-ending reminders, failed-payment dunning (retry sequence via Stripe), and contextual upgrade prompts aligned to the shipped iOS monetization/paywall model",
+        "All messaging respects entitlement shapes shipped clients read, frequency caps, and unsubscribe; refund/credit actions approval-gated",
+        "Recovery/upgrade conversion measured and reported",
+        "Backward-compat per CLAUDE.md: DB changes additive-only, no edge-function request/response/field/status/rate-limit changes that break shipped iOS/Android binaries, console logs wrapped in import.meta.env.DEV, storage via @/lib/safeStorage, errors via @/lib/errorHandler",
+        "npm run validate passes"
+      ],
+      "priority": 61,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-PROSPECT-001",
+      "title": "Local-business discovery agent (advertiser lead sourcing)",
+      "description": "As the platform owner, I need a steady flow of advertisable local businesses and event organizers who are not yet partners, because sales starts with leads.",
+      "acceptanceCriteria": [
+        "Agent discovers candidate local venues/organizers (from existing content, public sources within the WEB-SEC-001 fetch allowlist) that are not already advertisers, and creates lead records",
+        "Deduped against existing advertisers/campaigns and prior leads; respects the crawl allowlist + response caps (no SSRF/cost abuse)",
+        "Each lead captures source, category, and why it is a fit; runs are budgeted/audited",
+        "No scraping of gated/PII sources; documented data sources",
+        "npm run validate passes"
+      ],
+      "priority": 62,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-PROSPECT-002",
+      "title": "Lightweight CRM data model (leads/accounts/opportunities)",
+      "description": "As the platform owner, I need a place to track prospects through a pipeline, because leads without a pipeline are lost.",
+      "acceptanceCriteria": [
+        "Additive migration creates crm_leads, crm_accounts, crm_opportunities (stage enum: new|qualified|contacted|proposal|won|lost, value, owner, next_action, timestamps) with RLS (admin/sales role read/write, agents write)",
+        "Relationships to existing advertisers/campaigns so a won opportunity links to a real advertiser record",
+        "Admin CRM views to browse/edit; audited changes",
+        "No coupling that breaks existing campaigns/advertisements schema (additive only)",
+        "npm run validate passes"
+      ],
+      "priority": 63,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-PROSPECT-003",
+      "title": "Lead enrichment + fit scoring agent",
+      "description": "As a salesperson, I need leads enriched and scored so I work the best ones first, because untriaged leads waste time.",
+      "acceptanceCriteria": [
+        "Agent enriches leads (category, size signals, existing web presence) within the fetch allowlist and scores fit/priority; writes score + rationale to crm_leads",
+        "High-fit leads advance to qualified automatically (tier-1); ambiguous ones queue for human qualification",
+        "Enrichment respects cost budget and does not store PII beyond business-contact basics",
+        "Backward-compat per CLAUDE.md: DB changes additive-only, no edge-function request/response/field/status/rate-limit changes that break shipped iOS/Android binaries, console logs wrapped in import.meta.env.DEV, storage via @/lib/safeStorage, errors via @/lib/errorHandler",
+        "npm run validate passes"
+      ],
+      "priority": 64,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-PROSPECT-004",
+      "title": "Outreach sequencing agent (guardrailed sends)",
+      "description": "As the platform owner, I need personalized outreach sequences that run automatically but never go rogue, because consistent follow-up wins deals and bad sends damage reputation.",
+      "acceptanceCriteria": [
+        "Agent drafts and sends personalized multi-step outreach via existing email plumbing to qualified leads; every first-send template is approval-gated (AOS-CORE-007) before the sequence can auto-run",
+        "Replies are detected and escalate to a human closer (tier-2); the agent never negotiates or commits pricing autonomously",
+        "Full CAN-SPAM/opt-out compliance (unsubscribe, physical address, suppression list); frequency-capped; all sends audited",
+        "Quality/safety checked (AOS-GOV-004) before any send",
+        "npm run validate passes"
+      ],
+      "priority": 65,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-PROSPECT-005",
+      "title": "Proposal / media-kit generator agent",
+      "description": "As a salesperson, I need tailored ad-package proposals generated instantly, because bespoke proposals are slow to write by hand.",
+      "acceptanceCriteria": [
+        "Agent generates a tailored proposal/media-kit (audience stats, placement options, pricing tiers tied to real ad products) for a given opportunity as a shareable doc/PDF draft",
+        "Pricing pulled from a configured price list — the agent never invents prices; proposals are draft-for-human-review by default",
+        "Generated proposals attach to the opportunity and are audited",
+        "Backward-compat per CLAUDE.md: DB changes additive-only, no edge-function request/response/field/status/rate-limit changes that break shipped iOS/Android binaries, console logs wrapped in import.meta.env.DEV, storage via @/lib/safeStorage, errors via @/lib/errorHandler",
+        "npm run validate passes"
+      ],
+      "priority": 66,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-PROSPECT-006",
+      "title": "Sales pipeline console + human closer handoff",
+      "description": "As a sales human, I need a pipeline view and clean handoff of agent-sourced replies, because closing is a human job.",
+      "acceptanceCriteria": [
+        "A /admin/crm pipeline (kanban by stage) shows opportunities with agent-suggested next actions; reply-triggered escalations land here assigned to a closer",
+        "Humans can advance stages, log activity, and accept/override agent suggestions; all changes audited",
+        "Won opportunities trigger advertiser onboarding (AOS-PROSPECT-007)",
+        "Mobile-responsive, accessible, consistent states",
+        "npm run validate passes"
+      ],
+      "priority": 67,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-PROSPECT-007",
+      "title": "Self-serve advertiser onboarding funnel",
+      "description": "As a new advertiser, I need to sign up and launch a campaign myself, because a self-serve path scales revenue without sales labor.",
+      "acceptanceCriteria": [
+        "A guided advertiser onboarding flow ties into existing campaigns/advertisements + Stripe: create account, pick a package, pay, submit creative — feeding the existing creative-approval automation (WEB-AUTO)",
+        "Agent assists/validates each step and escalates edge cases; entitlement/campaign shapes remain backward-compatible",
+        "Won CRM opportunities can drop a prospect straight into this funnel",
+        "Backward-compat per CLAUDE.md: DB changes additive-only, no edge-function request/response/field/status/rate-limit changes that break shipped iOS/Android binaries, console logs wrapped in import.meta.env.DEV, storage via @/lib/safeStorage, errors via @/lib/errorHandler",
+        "npm run validate passes"
+      ],
+      "priority": 68,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-PROSPECT-008",
+      "title": "Advertiser performance reporting agent (retention/upsell)",
+      "description": "As an advertiser, I want automatic ROI reports, because proving value drives renewals and upsells.",
+      "acceptanceCriteria": [
+        "Agent compiles per-advertiser performance (impressions/clicks/spend from existing ad metrics) into a scheduled report delivered via email, with plain-language insights and an upsell/renew suggestion",
+        "Underperforming campaigns flag a tier-2 account-management task; strong performers get an upsell nudge",
+        "Reports are quality-checked and audited; no metric is fabricated (reports only real logged data)",
+        "Backward-compat per CLAUDE.md: DB changes additive-only, no edge-function request/response/field/status/rate-limit changes that break shipped iOS/Android binaries, console logs wrapped in import.meta.env.DEV, storage via @/lib/safeStorage, errors via @/lib/errorHandler",
+        "npm run validate passes"
+      ],
+      "priority": 69,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-MANAGE-001",
+      "title": "Executive digest agent (daily/weekly KPI roll-up)",
+      "description": "As the platform owner, I need a concise daily/weekly digest of the whole business, because I should not assemble KPIs by hand.",
+      "acceptanceCriteria": [
+        "Agent compiles KPIs across content (new/updated listings), users (growth, activation, retention), revenue (MRR, trials, churn), support (volume, CSAT, SLA), and ops (agent auto-resolve rate, escalations, spend) into one digest",
+        "Delivered on schedule via existing email/webhook plumbing; highlights notable deltas and open tier-2/3 items",
+        "Every number is sourced from real tables (no fabrication) and links into the relevant admin view",
+        "Backward-compat per CLAUDE.md: DB changes additive-only, no edge-function request/response/field/status/rate-limit changes that break shipped iOS/Android binaries, console logs wrapped in import.meta.env.DEV, storage via @/lib/safeStorage, errors via @/lib/errorHandler",
+        "npm run validate passes"
+      ],
+      "priority": 70,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-MANAGE-002",
+      "title": "Content-calendar orchestrator",
+      "description": "As the platform owner, I need content planned and scheduled across events, articles, and social coherently, because uncoordinated publishing creates gaps and clashes.",
+      "acceptanceCriteria": [
+        "Agent plans a forward content calendar (leveraging WEB-AUTO article/social/newsletter pipelines), balancing categories/timing, and schedules items; conflicts/gaps escalate to tier-2",
+        "A /admin calendar view shows planned vs published; humans can override/reorder (audited)",
+        "Respects existing publishing approval flows; nothing publishes that bypasses creative/content approval",
+        "Backward-compat per CLAUDE.md: DB changes additive-only, no edge-function request/response/field/status/rate-limit changes that break shipped iOS/Android binaries, console logs wrapped in import.meta.env.DEV, storage via @/lib/safeStorage, errors via @/lib/errorHandler",
+        "npm run validate passes"
+      ],
+      "priority": 71,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-MANAGE-003",
+      "title": "Unified moderation orchestration",
+      "description": "As the platform owner, I need all user-generated content moderation in one governed flow, extending WEB-AUTO moderation, because reviews/comments/submissions must be consistently safe.",
+      "acceptanceCriteria": [
+        "Agent unifies UGC moderation (reviews, ratings, submissions) into agent_tasks with AI scoring: clear-safe auto-approve and clear-abuse auto-reject as tier-1, borderline to tier-2",
+        "All auto-actions reversible and audited; a human can override any decision from /admin/inbox",
+        "Appeals path: a rejected user can request review, creating a tier-2 task",
+        "Backward-compat per CLAUDE.md: DB changes additive-only, no edge-function request/response/field/status/rate-limit changes that break shipped iOS/Android binaries, console logs wrapped in import.meta.env.DEV, storage via @/lib/safeStorage, errors via @/lib/errorHandler",
+        "npm run validate passes"
+      ],
+      "priority": 72,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-MANAGE-004",
+      "title": "OS metrics warehouse + dashboards",
+      "description": "As the platform owner, I need durable metrics about the OS itself (auto-resolve rate, escalation volume, SLA adherence, cost) to know it is working, because you cannot manage what you cannot measure.",
+      "acceptanceCriteria": [
+        "Aggregate agent_runs/agent_tasks/agent_audit_log into materialized metrics (per agent + category + day): tasks handled, % auto vs escalated, SLA hit rate, cost, quality scores",
+        "A /admin/agents metrics tab visualizes trends (Recharts); export to CSV",
+        "Metrics are additive/read-only aggregations; no impact on operational tables",
+        "Backward-compat per CLAUDE.md: DB changes additive-only, no edge-function request/response/field/status/rate-limit changes that break shipped iOS/Android binaries, console logs wrapped in import.meta.env.DEV, storage via @/lib/safeStorage, errors via @/lib/errorHandler",
+        "npm run validate passes"
+      ],
+      "priority": 73,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-MANAGE-005",
+      "title": "Budget & cost governance dashboard",
+      "description": "As the platform owner, I need one view of all agent + external-API spend against budgets, because autonomy must stay within a controlled cost envelope.",
+      "acceptanceCriteria": [
+        "A dashboard aggregates per-agent spend (AOS-GOV-001) and per-provider external-API cost (AOS-MAINT-006) vs monthly budgets with projections and alerts",
+        "Over-budget agents surface prominently with a one-click pause; projected-overrun raises an early warning",
+        "Numbers reconcile with the agent_runs cost ledger",
+        "Backward-compat per CLAUDE.md: DB changes additive-only, no edge-function request/response/field/status/rate-limit changes that break shipped iOS/Android binaries, console logs wrapped in import.meta.env.DEV, storage via @/lib/safeStorage, errors via @/lib/errorHandler",
+        "npm run validate passes"
+      ],
+      "priority": 74,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-MANAGE-006",
+      "title": "Business-metric anomaly alerting",
+      "description": "As the platform owner, I need automatic alerts when business metrics move abnormally (traffic, signups, revenue, error rate), because silent drops cost money.",
+      "acceptanceCriteria": [
+        "Agent baselines key metrics and detects significant deviations (drop in signups/traffic/revenue, spike in errors/refunds), opening a tier-2 task with the likely-affected area",
+        "Alerts are debounced against known seasonality/deploys to limit false positives (documented)",
+        "Confirmed anomalies notify ops immediately and appear in the digest",
+        "Backward-compat per CLAUDE.md: DB changes additive-only, no edge-function request/response/field/status/rate-limit changes that break shipped iOS/Android binaries, console logs wrapped in import.meta.env.DEV, storage via @/lib/safeStorage, errors via @/lib/errorHandler",
+        "npm run validate passes"
+      ],
+      "priority": 75,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AOS-MANAGE-007",
+      "title": "Weekly agent-performance review report",
+      "description": "As the platform owner, I need a weekly report on how the OS performed — what it auto-resolved, what it escalated, quality, and estimated human-time saved, because the OS itself needs continuous oversight and tuning.",
+      "acceptanceCriteria": [
+        "Agent produces a review: per-category auto-resolve vs escalation counts, quality-score trends, SLA adherence, top recurring escalation causes, and estimated hours/cost saved",
+        "Recommends threshold/policy tuning (feeds AOS-CORE-011) and flags any agent trending worse",
+        "Delivered on schedule; sourced only from real ledger data; linked into /admin/agents",
+        "Backward-compat per CLAUDE.md: DB changes additive-only, no edge-function request/response/field/status/rate-limit changes that break shipped iOS/Android binaries, console logs wrapped in import.meta.env.DEV, storage via @/lib/safeStorage, errors via @/lib/errorHandler",
+        "npm run validate passes"
+      ],
+      "priority": 76,
+      "passes": false,
+      "notes": ""
     }
   ]
 }
