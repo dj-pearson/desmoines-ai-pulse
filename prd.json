@@ -2852,6 +2852,68 @@
       "notes": "DONE (2026-06-25). The audit's biggest pillar (missing alt text) was largely a FALSE ALARM on user-facing surfaces, so this story is mostly the two real gaps + an honest audit record.\nFIXED:\n- RatingSystem.tsx StarRating: had onClick/onMouseEnter only — not focusable, no keyboard, no roles. Rewrote the interactive path as a role='radiogroup' with roving tabindex; each star is a <button role='radio' aria-checked aria-label='N star(s)'> handling ArrowRight/Up/Left/Down, Home, End, Enter, Space (moves selection + focus). Readonly path is now a single role='img' aria-label='Rated X out of 5 stars' with aria-hidden glyphs. (This is the composer from WEB-FEAT-010, so keyboard users can now actually rate.)\n- NLPSearchBar.tsx: search Input had only a placeholder → added aria-label.\n- EventInlineFilters.tsx: filter-pill trigger already had visible {label} text (so it had a name) but added an explicit aria-label='Filter by <label>' for clearer expanded-popover context.\nAUDITED, ALREADY CORRECT (no change): EventDetails/AttractionDetails/HotelDetails/ArticleDetails hero <img> already carry descriptive alt (prior a11y pass); PersonalizedRecommendations img alt={event.title}; SearchSection inputs already aria-labelled; SceneUpdateCard:46 + VotingBooth:137 alt='' are CORRECT decorative usage because the title/name is rendered as adjacent text (alt would double-announce). Admin dialogs out of scope.\nVERIFIED: npm run validate exits 0 (type-check + lint, 0 errors)."
     },
     {
+      "id": "WEB-AUTO-015",
+      "title": "Persist adapter-provided image_url at event ingest (firecrawl-scraper)",
+      "description": "As the platform owner, I want scraped events to keep the image the domain adapters already fetched, because firecrawl-scraper drops item.image_url when building the events insert — so SeatGeek / Funny Bone / Catch Des Moines events land with image_url=NULL even though the image was already available.",
+      "acceptanceCriteria": [
+        "The events branch of transformedData (supabase/functions/firecrawl-scraper/index.ts ~1029-1047) includes image_url sourced from item.image_url when present; the restaurants/attractions branches likewise pass through item.image_url when their adapter provides one",
+        "Adapter-provided images go through the existing SSRF/dimension-guarded fetchAndStoreImage path (mirroring ai-crawler) so remote URLs are validated and stored rather than hot-linked blindly; on fetch/validation failure the event still inserts with image_url NULL (no regression)",
+        "image_url is only set when the item actually carries one — no behavior change for adapters that return image_url:null (barnstormers, milb, sports-schedule rows)",
+        "BACKWARD COMPAT: additive only — no request/response shape change to firecrawl-scraper, and event read shapes older iOS/Android binaries consume are unchanged (CLAUDE.md)",
+        "npm run validate passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Evidence: seatgeek.ts:142 (performer image), catchdesmoines.ts:303 (ld+json image), eventbrite.ts:176, hyveetix.ts:349 all already return item.image_url on ScrapedItem (types.ts:19), but the events transformedData object at firecrawl-scraper/index.ts:1029-1047 omits image_url entirely, so every adapter's image is silently discarded at insert. ai-crawler already demonstrates the fetchAndStoreImage SSRF/dimension guard to copy from. LIVE DB: 253/286 upcoming events (88%) have image_url NULL; 190 are seatgeek.com and every Funny Bone row is SeatGeek adapter output whose image was fetched then thrown away. CAVEAT: the SeatGeek image is the performer photo (shared across all dates of a tour/homestand) — correct for concerts/comedy, venue-plausible otherwise; scraping each SeatGeek event page is NOT viable (JS shells that never yield an image). Highest leverage: fixes the majority of NEW imageless rows at the source."
+    },
+    {
+      "id": "WEB-AUTO-016",
+      "title": "Heal NULL image_url on the firecrawl-scraper duplicate branch",
+      "description": "As the platform owner, I want re-scrapes to backfill images onto events that already exist with image_url=NULL, because the duplicate branch only ever updates source_url — so the 253-row imageless backlog can never self-heal even after ingest is fixed.",
+      "acceptanceCriteria": [
+        "In the events duplicate branch (firecrawl-scraper/index.ts ~1147-1186), when the existing row's image_url is NULL/empty AND the incoming item carries a usable image, set image_url on the existing row via the same fetchAndStoreImage guard used in WEB-AUTO-015",
+        "Never overwrite a non-empty existing image_url (respect human-entered / earlier data); fold cleanly into the existing source_url update rather than adding a second round-trip where avoidable",
+        "Idempotent: once a row is healed, subsequent duplicate hits are no-ops for the image; the existing duplicate-branch console logging reflects when an image was healed",
+        "BACKWARD COMPAT: additive UPDATE only, no request/response shape change",
+        "npm run validate passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Evidence: firecrawl-scraper/index.ts:1147-1186 — the events duplicate branch updates ONLY source_url (external URL replacing a catchdesmoines URL), and on any other duplicate logs 'Duplicate found (no update needed)' and touches nothing. Result: the 253 existing imageless rows stay imageless no matter how often the scrapers re-run. DEPENDS ON WEB-AUTO-015 (the item must already carry image_url). With both landed, the regularly scheduled scrapes drain most of the backlog automatically within a cycle or two — no manual backfill campaign required."
+    },
+    {
+      "id": "WEB-AUTO-017",
+      "title": "Add vibrantmusichall domain adapter (parse /shows ld+json)",
+      "description": "As the platform owner, I want Vibrant Music Hall events ingested with their real images, dates, and per-event ticket URLs, because Vibrant has no adapter today — its events come through the generic Browserless+Claude path with source_url pointed at the /shows LIST page, so the nightly backfill finds nothing event-specific and every Vibrant row is imageless.",
+      "acceptanceCriteria": [
+        "New supabase/functions/_shared/domain-adapters/vibrantmusichall.ts modeled on catchdesmoines.ts but simpler: a single plain HTTP GET of https://www.vibrantmusichall.com/shows, parsing the embedded application/ld+json MusicEvent blocks into ScrapedItem[] (name, image [Ticketmaster CDN], tz-correct startDate, per-event Ticketmaster url, venue, geo lat/lng) — no headless browser, no Claude tokens",
+        "Registered in domain-adapters/index.ts with a matcher for vibrantmusichall.com; each item sets image_url and sets source_url to the per-event Ticketmaster URL (which also feeds the existing scrape-ticketmaster-events affiliate-link matcher for free)",
+        "The seeded scraping-job / source URL for Vibrant is updated from vibrantmusichall.com/ to /shows so the adapter path is actually taken",
+        "Robust to the list page having 0 or many blocks; malformed ld+json blocks are skipped, not fatal",
+        "BACKWARD COMPAT: new adapter file + additive registration only — no change to other adapters or to any request/response shape",
+        "npm run validate passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Evidence: DB shows Vibrant events (Night Ranger, Kansas, etc.) all have source_url=https://www.vibrantmusichall.com/shows (the LIST page) and image_url NULL, and there is no vibrantmusichall.ts in domain-adapters/ (dir currently: barnstormers, catchdesmoines, eventbrite, hyveetix, milb, seatgeek). A plain HTTP GET of /shows returns 38 server-rendered application/ld+json MusicEvent blocks, each with name, a Ticketmaster CDN image, tz-correct startDate, a per-event Ticketmaster URL, venue, and geo coordinates. Model on catchdesmoines.ts (ld+json parse at :303) but single-fetch — no per-detail-page loop. 15 Vibrant rows are currently imageless."
+    },
+    {
+      "id": "WEB-AUTO-018",
+      "title": "Add image_checked_at so image backfill stops re-trying hopeless rows",
+      "description": "As the platform owner, I want the nightly image backfill to stop burning its per-night quota re-scraping rows that will never yield an image (e.g. SeatGeek JS shells), because it currently retries permanent failures forever and so can never drain the real backlog.",
+      "acceptanceCriteria": [
+        "Additive migration: add image_checked_at (timestamptz NULL, no default/rewrite) to events (and restaurants/attractions if they share the backfill path) — CLAUDE.md additive-only safe",
+        "backfill-images (and the WEB-AUTO-003 data-quality-heal image stage) stamp image_checked_at on every attempt and skip rows checked within a cooldown window (e.g. 30 days), so permanent failures stop crowding out fresh never-checked candidates each night",
+        "Batch selection prioritizes never-checked rows; a successful image set is not re-checked during the cooldown",
+        "Documented in docs/IMAGE_PIPELINE_FINDINGS.md (which already flags this) and docs/AUTOMATION_JOBS.md",
+        "BACKWARD COMPAT: additive column only — no read/write shape change for any client",
+        "npm run validate passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Follow-on already documented in docs/IMAGE_PIPELINE_FINDINGS.md: the backfill does ~25 rows/table/night and re-tries permanent failures forever, so the 190 SeatGeek JS-shell rows (which will never yield an image to a plain scrape) burn the nightly quota indefinitely and the genuine backlog never drains. Lower leverage than WEB-AUTO-015..017 (those fix ingest and self-heal at the source); this makes the backfill safety-net efficient rather than self-defeating. Ties into WEB-AUTO-003's image stage."
+    },
+    {
       "id": "IOS-AUDIT-BUG-001",
       "title": "Eliminate force-unwrapped Maps/directions URLs that can crash on tap",
       "description": "As a user tapping Directions/Open in Maps, I need the app to never crash when a place name or coordinate produces a malformed URL.",
