@@ -183,3 +183,8 @@ verify_jwt = false
 # public routes + edge-function health (non-mutating). Auth via requireAdminOrApiKey.
 [functions.agent-uptime-monitor]
 verify_jwt = false
+
+# Database health agent (AOS-MAINT-002). Cron-invoked; read-only inspection via
+# the admin-only db_health_report RPC. Auth via requireAdminOrApiKey.
+[functions.agent-db-health]
+verify_jwt = false

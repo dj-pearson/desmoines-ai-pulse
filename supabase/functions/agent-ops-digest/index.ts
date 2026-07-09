@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
     const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const nowIso = new Date().toISOString();
 
-    const [autoResolved, openTier1, openTier2, openTier3, overdue, failures24h, openCves, openCompliance, openFlaky] = await Promise.all([
+    const [autoResolved, openTier1, openTier2, openTier3, overdue, failures24h, openCves, openCompliance, openFlaky, openDbHealth, openOutages] = await Promise.all([
       count(supabase, "agent_tasks", (q) => q.eq("tier", 1).eq("status", "resolved").gte("updated_at", dayAgo)),
       count(supabase, "agent_tasks", (q) => q.eq("tier", 1).in("status", ["escalated", "assigned", "auto_resolving"])),
       count(supabase, "agent_tasks", (q) => q.eq("tier", 2).in("status", ["escalated", "assigned"])),
@@ -59,6 +59,10 @@ Deno.serve(async (req) => {
       count(supabase, "agent_tasks", (q) => q.eq("agent_key", "compliance-monitor").in("status", ["open", "escalated", "assigned"])),
       // CI health: open flaky-test tasks (AOS-DEV-005).
       count(supabase, "agent_tasks", (q) => q.eq("agent_key", "ci-health-watcher").in("status", ["open", "escalated", "assigned"])),
+      // DB health: open slow-query/index/bloat suggestions (AOS-MAINT-002).
+      count(supabase, "agent_tasks", (q) => q.eq("agent_key", "db-health").in("status", ["open", "escalated", "assigned"])),
+      // Uptime: open outage incidents (AOS-MAINT-001).
+      count(supabase, "agent_tasks", (q) => q.eq("agent_key", "uptime-monitor").in("status", ["open", "escalated", "assigned"])),
     ]);
 
     const openHuman = openTier2 + openTier3;
@@ -71,6 +75,8 @@ Deno.serve(async (req) => {
       `Open dependency CVEs: ${openCves}`,
       `Compliance — open review items: ${openCompliance}`,
       `CI health — open flaky/slow tasks: ${openFlaky}`,
+      `DB health — open suggestions (slow query/index/bloat): ${openDbHealth}`,
+      `Uptime — open outage incidents: ${openOutages}`,
     ].join("\n");
 
     // Date-keyed dedupe so a re-run same day coalesces instead of double-sending.
@@ -83,9 +89,9 @@ Deno.serve(async (req) => {
       capWindowMs: 20 * 60 * 60 * 1000, // ~one per day
     });
 
-    ctx.meta({ autoResolved, openHuman, overdue, failures24h, openCves, openCompliance, openFlaky, notify });
+    ctx.meta({ autoResolved, openHuman, overdue, failures24h, openCves, openCompliance, openFlaky, openDbHealth, openOutages, notify });
     ctx.processed(1);
-    return { autoResolved, openHuman, openTier1, overdue, failures24h, openCves, openCompliance, openFlaky, notify };
+    return { autoResolved, openHuman, openTier1, overdue, failures24h, openCves, openCompliance, openFlaky, openDbHealth, openOutages, notify };
   });
 
   return json({ ok: result.ok, ...(result.result ?? {}), status: result.status }, result.ok ? 200 : 500, corsHeaders);

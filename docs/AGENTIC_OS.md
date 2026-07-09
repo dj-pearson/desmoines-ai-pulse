@@ -329,6 +329,30 @@ means zero LLM budget; each review is recorded as an audited run via
 `agent-pr-review`. (Semantic checks like RLS/rate-limit tightening are left out
 deliberately — a false-positive block is worse than a miss.)
 
+## Database health agent (AOS-MAINT-002)
+
+`agent-db-health` (cron, daily 07:00 UTC) calls the **admin-only, read-only**
+`db_health_report` RPC (SECURITY DEFINER, gated to `service_role` / admin) and
+turns its findings into tier-2 suggestion tasks. It **inspects and proposes —
+never applies**:
+
+- **Missing-index candidates** — tables with heavy sequential scanning
+  (`pg_stat_user_tables.seq_scan` over sizable tables) get a task carrying an
+  **additive `CREATE INDEX CONCURRENTLY` draft** (columns left for a human to
+  fill). Concurrently = safe online; additive = compat-safe. Never auto-run.
+- **Unused indexes** — `idx_scan = 0` (excluding PK/unique) surfaced for review.
+  The task explicitly notes `DROP INDEX` is **destructive** per CLAUDE.md and
+  must follow the multi-release deprecation flow — so no DROP is drafted.
+- **Table bloat** — high dead-tuple ratio → a `VACUUM (ANALYZE)` / autovacuum
+  suggestion.
+- **Slow queries** — top patterns from `pg_stat_statements` (when installed;
+  degrades gracefully when not) collected into one task.
+- **Connections** — when in-use ≥ 80% of `max_connections`, an immediate ops
+  alert fires (not just a task).
+
+Connection/health metrics and open-suggestion counts are surfaced in the daily
+ops digest. Every run is budgeted/audited through `runAgent`.
+
 ## Uptime / synthetic-monitoring agent (AOS-MAINT-001)
 
 `agent-uptime-monitor` (cron, every 5 min) probes critical surfaces and records

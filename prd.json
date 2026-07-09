@@ -4079,8 +4079,8 @@
         "npm run validate passes"
       ],
       "priority": 41,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Database health agent. New admin-only, read-only db_health_report RPC (SECURITY DEFINER, gated to service_role/admin via user_has_role_or_higher, REVOKE public + GRANT authenticated/service_role) inspects pg_stat_statements (slow queries, degrades gracefully if extension absent), pg_stat_user_indexes (unused indexes excluding PK/unique), pg_stat_user_tables (missing-index candidates via heavy seq_scan on sizable tables; table bloat via dead-tuple ratio), and pg_stat_activity (connection pressure). agent-db-health edge function (cron daily 07:00, verify_jwt=false, requireAdminOrApiKey, runAgent-wrapped) opens deduped tier-2 tasks: missing-index candidates carry an additive CREATE INDEX CONCURRENTLY draft (columns left for human — never auto-applied); unused-index task explicitly notes DROP INDEX is destructive per CLAUDE.md and must follow the deprecation flow (no DROP drafted); bloat → VACUUM/autovacuum suggestion; slow queries collected into one task. Connections ≥80% of max fires an immediate ops alert. Read-only throughout — proposes only, humans/AOS-DEV apply. Extended agent-ops-digest with open db-health + uptime incident counts. Migration 20260709000029 (RPC + agent_registry + pg_cron); config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=41). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-MAINT-003",

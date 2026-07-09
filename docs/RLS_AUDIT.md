@@ -7,13 +7,13 @@
 
 | Metric | Count |
 |---|---|
-| Migrations scanned | 285 |
+| Migrations scanned | 286 |
 | Distinct policies (current) | 529 |
 | Tables with RLS enabled | 239 |
 | Tables with policies but no ENABLE RLS seen | 5 |
 | Permissive write policies USING/CHECK(true) | 30 |
 | Write policies granted to `anon` | 4 |
-| SECURITY DEFINER functions | 113 |
+| SECURITY DEFINER functions | 114 |
 | …of those WITHOUT pinned search_path | 50 |
 
 ## ⚠️ Findings needing attention
