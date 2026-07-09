@@ -178,3 +178,8 @@ verify_jwt = false
 # here for an audited run record. Does its own auth via requireAdminOrApiKey.
 [functions.agent-release-notes]
 verify_jwt = false
+
+# Uptime / synthetic-monitoring agent (AOS-MAINT-001). Cron-invoked; probes
+# public routes + edge-function health (non-mutating). Auth via requireAdminOrApiKey.
+[functions.agent-uptime-monitor]
+verify_jwt = false

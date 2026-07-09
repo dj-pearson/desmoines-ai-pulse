@@ -329,6 +329,31 @@ means zero LLM budget; each review is recorded as an audited run via
 `agent-pr-review`. (Semantic checks like RLS/rate-limit tightening are left out
 deliberately — a false-positive block is worse than a miss.)
 
+## Uptime / synthetic-monitoring agent (AOS-MAINT-001)
+
+`agent-uptime-monitor` (cron, every 5 min) probes critical surfaces and records
+latency/status to `uptime_probes`:
+
+- **Public routes** — `GET` on the site URL (`/`, `/events`, `/restaurants`,
+  `/attractions` by default; override with `UPTIME_ROUTES`). Up = any non-5xx
+  (the server responded).
+- **Edge-function health** — `OPTIONS` CORS preflight (override with
+  `UPTIME_FUNCTIONS`). Preflight returns from `handleCors` **before any auth or
+  logic**, so it's a genuine liveness check that mutates nothing and needs no
+  credentials.
+
+**Alerting threshold (documented, so blips don't page):** a single failed probe
+is a *blip* — recorded, never alerted. **3 consecutive** failed probes for one
+target is a *sustained* outage — it opens a **tier-2 incident** (idempotent per
+target via a `uptime-down:<target>` dedupe key) and notifies ops immediately.
+When a downed target probes healthy again, its incident is **auto-resolved** and
+a recovery notice is sent. Every probe is budgeted/audited through `runAgent`.
+
+The **/admin/agents status tile** (`UptimeStatusTile` + `useUptimeStatus`) reads
+`uptime_probes` for the last hour and shows, per target, current up/down, p95
+latency, and uptime %, with a headline of how many targets are down and the worst
+p95.
+
 ## Release-notes / changelog generator (AOS-DEV-007)
 
 `.github/workflows/release-notes.yml` (manual dispatch, or on a `release/**`

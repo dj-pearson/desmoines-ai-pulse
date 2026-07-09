@@ -4064,8 +4064,8 @@
         "npm run validate passes"
       ],
       "priority": 40,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Uptime/synthetic-monitoring agent. agent-uptime-monitor (cron every 5 min, verify_jwt=false, requireAdminOrApiKey, runAgent-wrapped) probes critical public routes (GET on site URL) and edge-function health (OPTIONS CORS preflight — non-mutating, no auth, no side effects; returns from handleCors before any logic) and records latency/status to new uptime_probes table (additive; RLS admin-read, service-role writes). Documented threshold: a single failed probe is a blip (recorded, never alerted); 3 consecutive failures = sustained outage → opens tier-2 incident (idempotent per target via uptime-down:<target> dedupe key) + immediate ops notify; auto-resolves the incident and sends a recovery notice when the target returns healthy. Targets configurable via UPTIME_ROUTES/UPTIME_FUNCTIONS env. Status tile on /admin/agents (UptimeStatusTile + useUptimeStatus hook) shows per-target current up/down, p95 latency, and uptime% over the last hour, plus a down-count/worst-p95 headline. Migration 20260709000028 (table + agent_registry + pg_cron schedule); config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=40). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-MAINT-002",

@@ -18,6 +18,7 @@
     "agent-secret-scan",
     "agent-security-monitor",
     "agent-test-gen",
+    "agent-uptime-monitor",
     "ai-crawler",
     "analyze-competitor",
     "bulk-enhance-events",
@@ -40,7 +41,7 @@
     "social-daily-poster",
     "version-check"
   ],
-  "verifyJwtCount": 39,
+  "verifyJwtCount": 40,
   "cspPresent": true,
   "cspHash": "1625510d45515045",
   "corsHash": "b1683c94fbad28a6"

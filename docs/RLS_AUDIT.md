@@ -7,9 +7,9 @@
 
 | Metric | Count |
 |---|---|
-| Migrations scanned | 284 |
-| Distinct policies (current) | 528 |
-| Tables with RLS enabled | 238 |
+| Migrations scanned | 285 |
+| Distinct policies (current) | 529 |
+| Tables with RLS enabled | 239 |
 | Tables with policies but no ENABLE RLS seen | 5 |
 | Permissive write policies USING/CHECK(true) | 30 |
 | Write policies granted to `anon` | 4 |
@@ -582,6 +582,7 @@
 | trip_plans | Users can delete own trip plans | DELETE | public | auth.uid() = user_id | — |
 | trip_plans | Users can update own trip plans | UPDATE | public | auth.uid() = user_id | — |
 | trip_plans | Users can view own trip plans | SELECT | public | auth.uid() = user_id OR is_public = true | — |
+| uptime_probes | uptime_probes_admin_read | SELECT | authenticated | EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')) | — |
 | usage_events | Service role can manage all usage events | ALL | public | true | true |
 | usage_events | Users can view own usage events | SELECT | public | auth.uid() = user_id | — |
 | usage_quotas | Anyone can view usage quotas | SELECT | public | true | — |
