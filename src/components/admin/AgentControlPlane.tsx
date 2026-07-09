@@ -46,6 +46,7 @@ import { cn } from "@/lib/utils";
 import { handleError } from "@/lib/errorHandler";
 import { toast } from "sonner";
 import UptimeStatusTile from "@/components/admin/UptimeStatusTile";
+import ProviderCostTile from "@/components/admin/ProviderCostTile";
 
 function statusTone(status: string | null): string {
   if (status === "success") return "text-green-600";
@@ -393,8 +394,11 @@ export default function AgentControlPlane() {
         )}
       </Card>
 
-      {/* Uptime / synthetic-monitoring status (AOS-MAINT-001). */}
-      <UptimeStatusTile />
+      {/* Uptime (AOS-MAINT-001) + external-API cost (AOS-MAINT-006). */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <UptimeStatusTile />
+        <ProviderCostTile />
+      </div>
 
       <Card>
         <CardContent className="pt-6">

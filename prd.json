@@ -4139,8 +4139,8 @@
         "npm run validate passes"
       ],
       "priority": 45,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "External-API cost & quota watchdog. Added additive agent_registry.provider column (default anthropic) attributing each agent's ledger cost to a provider; new provider_budgets table (provider PK, monthly_budget_usd, soft_pct 0.80, hard_pct 1.00, throttled/paused flags, auto_paused_agents[] for clean recovery) seeded for anthropic/openai/google/resend/stripe; new provider_usage table for provider-reported cost signals; provider_spend_mtd view summing ledger cost (via agent_registry.provider) + provider_usage month-to-date vs budget. agent-api-watchdog edge function (cron hourly, verify_jwt=false, requireAdminOrApiKey, runAgent-wrapped): soft breach (>=80%) marks provider throttled + ops alert (graceful — runAgent's per-agent budget hard-stop already slows spend); hard breach (>=100%) pauses only the affected agents via agent_registry.enabled=false (same mechanism as kill switch → runAgent records skipped; watchdog itself and rest of product untouched) and records which agents for recovery; spend dropping back under hard line auto-re-enables exactly those agents; below soft clears throttle. Every pause/resume audited with before/after, reversible. Cost dashboard tile on /admin/agents (ProviderCostTile + useProviderCosts hook) shows per-provider spend vs budget MTD with progress bar + throttled/paused badges. Migration 20260709000033 (column + 2 tables + view + agent_registry + pg_cron); config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=45). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-MAINT-007",

@@ -329,6 +329,33 @@ means zero LLM budget; each review is recorded as an audited run via
 `agent-pr-review`. (Semantic checks like RLS/rate-limit tightening are left out
 deliberately — a false-positive block is worse than a miss.)
 
+## External-API cost & quota watchdog (AOS-MAINT-006)
+
+`agent-api-watchdog` (cron, hourly) keeps external-API spend under control per
+provider. Each agent's ledger cost is attributed to a provider
+(`agent_registry.provider` — anthropic/openai/google/stripe/resend); the
+`provider_spend_mtd` view sums that plus optional `provider_usage` reports
+(for providers with no ledger signal) month-to-date and compares to
+`provider_budgets`:
+
+- **Soft breach** (spend ≥ `soft_pct`, default 80%) → the provider is marked
+  **throttled** and ops is alerted. This is graceful: the per-agent budget
+  hard-stop in `runAgent` already slows spend as budgets fill; the watchdog
+  flags it and warns *before* the hard line.
+- **Hard breach** (≥ `hard_pct`, default 100%) → the affected agents are
+  **paused** by setting `agent_registry.enabled = false` — the same mechanism
+  the kill switch uses, so `runAgent` records their runs as *skipped*. The
+  watchdog itself and the rest of the product are untouched — only that
+  provider's agents stop.
+- **Recovery** — when spend drops back under the hard line (e.g. month
+  rollover), the exact agents this watchdog paused (tracked in
+  `auto_paused_agents`) are **re-enabled** automatically; below soft, the
+  throttle clears. Every pause/resume is audited with before/after and is
+  reversible.
+
+A **cost tile on /admin/agents** (`ProviderCostTile` + `useProviderCosts`) shows
+per-provider spend vs budget MTD with a progress bar and throttled/paused badges.
+
 ## Broken-link & dead-content monitor (AOS-MAINT-005)
 
 `agent-link-monitor` (cron, daily 09:00 UTC) keeps content trustworthy,

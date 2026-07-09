@@ -203,3 +203,8 @@ verify_jwt = false
 # outbound links, unpublishes past events (reversible). Auth via requireAdminOrApiKey.
 [functions.agent-link-monitor]
 verify_jwt = false
+
+# External-API cost & quota watchdog (AOS-MAINT-006). Cron-invoked; aggregates
+# per-provider MTD spend vs budget, throttles/pauses. Auth via requireAdminOrApiKey.
+[functions.agent-api-watchdog]
+verify_jwt = false
