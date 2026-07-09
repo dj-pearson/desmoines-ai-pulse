@@ -195,6 +195,7 @@ const AdminAuditLog = lazyWithRetry(() => import("./pages/AdminAuditLog"));
 const AdminSupportKb = lazyWithRetry(() => import("./pages/AdminSupportKb"));
 const AdminSupportTickets = lazyWithRetry(() => import("./pages/AdminSupportTickets"));
 const AdminSupport = lazyWithRetry(() => import("./pages/AdminSupport"));
+const AdminLifecycle = lazyWithRetry(() => import("./pages/AdminLifecycle"));
 const AdminMedia = lazyWithRetry(() => import("./pages/AdminMedia"));
 // Admin Backend Overhaul (PRD: feat/admin-backend-overhaul) — stubs until each
 // story fleshes the dedicated page out. See AdminPlaceholder for the shell.
@@ -325,6 +326,7 @@ const App = () => (
             <Route path="/admin/support-kb" element={<ProtectedRoute requireAdmin><AdminSupportKb /></ProtectedRoute>} />
             <Route path="/admin/support-tickets" element={<ProtectedRoute requireAdmin><AdminSupportTickets /></ProtectedRoute>} />
             <Route path="/admin/support" element={<ProtectedRoute requireAdmin><AdminSupport /></ProtectedRoute>} />
+            <Route path="/admin/lifecycle" element={<ProtectedRoute requireAdmin><AdminLifecycle /></ProtectedRoute>} />
             <Route path="/admin/media" element={<ProtectedRoute requireAdmin><AdminMedia /></ProtectedRoute>} />
             <Route path="/admin/menus" element={<ProtectedRoute requireAdmin><AdminMenus /></ProtectedRoute>} />
             {/* Admin Backend Overhaul routes — stubs until each story replaces the page */}

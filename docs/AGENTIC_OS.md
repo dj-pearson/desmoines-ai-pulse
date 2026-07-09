@@ -329,6 +329,32 @@ means zero LLM budget; each review is recorded as an audited run via
 `agent-pr-review`. (Semantic checks like RLS/rate-limit tightening are left out
 deliberately — a false-positive block is worse than a miss.)
 
+## User lifecycle-stage model (AOS-NURTURE-001)
+
+`agent-lifecycle` (cron, daily) classifies each user into a lifecycle stage —
+`new → onboarding → active → at_risk → dormant → churned`, plus `reactivated` —
+from activity signals, and stores it on `profiles.lifecycle_stage`. It processes
+the **stalest profiles first** and pulls signals in **bulk** (a handful of
+aggregate queries, joined in memory — not N+1):
+
+- **Signup age** (`profiles.created_at`), **last activity** (max across
+  favorites, reviews, and successful logins), **recent saves** (30-day favorites),
+  and **subscription state** (`user_subscriptions.status`).
+- Deterministic rules: active > 90d → churned, > 30d → dormant,
+  `past_due`/lapsing → at_risk, brand-new/low-activity → new/onboarding, and a
+  previously-lapsed user active in the last 7d → **reactivated**.
+
+Every **stage transition** is recorded in `user_lifecycle_history` so downstream
+nurture agents can react to changes; the current stage on `profiles` is their
+**segmentation input**. The `/admin/lifecycle` view (`LifecyclePanel`) shows the
+stage distribution + recent transitions.
+
+**PII-safe:** the stored `lifecycle_signals` are only day-offsets, counts,
+subscription status, and a `messagingAllowed` flag (derived from
+`newsletter_subscribers` unsubscribe + `communication_preferences`) — never
+names, emails, or content. Downstream messaging agents must honor
+`messagingAllowed`.
+
 ## Human ticket console (AOS-CS-008)
 
 `/admin/support` (`SupportConsole`) is the tier-2/3 human workspace, backed by the

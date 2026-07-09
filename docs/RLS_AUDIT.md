@@ -7,9 +7,9 @@
 
 | Metric | Count |
 |---|---|
-| Migrations scanned | 299 |
-| Distinct policies (current) | 548 |
-| Tables with RLS enabled | 252 |
+| Migrations scanned | 300 |
+| Distinct policies (current) | 549 |
+| Tables with RLS enabled | 253 |
 | Tables with policies but no ENABLE RLS seen | 5 |
 | Permissive write policies USING/CHECK(true) | 30 |
 | Write policies granted to `anon` | 4 |
@@ -642,6 +642,7 @@
 | user_interactions_enhanced | Users can insert their own enhanced analytics | INSERT | public | — | auth.uid() = user_id OR auth.uid() IS NULL |
 | user_journeys | Service role can manage user journeys | ALL | public | auth.role() = 'service_role' | — |
 | user_journeys | Users can view their own journeys | SELECT | public | auth.uid() = user_id | — |
+| user_lifecycle_history | lifecycle_history_admin_read | SELECT | authenticated | is_admin() | — |
 | user_locations | Anyone can view public locations | SELECT | public | is_public = true | — |
 | user_locations | Users can manage their own location | ALL | public | auth.uid() = user_id | — |
 | user_locations | Users can view public locations | SELECT | public | is_public = true OR auth.uid() = user_id | — |

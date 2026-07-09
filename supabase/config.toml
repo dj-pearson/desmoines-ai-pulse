@@ -268,3 +268,8 @@ verify_jwt = false
 # Auth via requireAdminOrApiKey.
 [functions.support-console]
 verify_jwt = false
+
+# Lifecycle classifier (AOS-NURTURE-001). Cron; computes lifecycle_stage from
+# activity signals. Auth via requireAdminOrApiKey.
+[functions.agent-lifecycle]
+verify_jwt = false

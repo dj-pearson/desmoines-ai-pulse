@@ -4289,8 +4289,8 @@
         "npm run validate passes"
       ],
       "priority": 55,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "User lifecycle-stage model. Migration 20260709000043 adds additive profiles columns (lifecycle_stage, lifecycle_updated_at, lifecycle_signals jsonb) + user_lifecycle_history table (from_stage/to_stage/reason/signals, RLS admin-read) + user_lifecycle_summary view (counts by stage) + registers lifecycle-classifier agent (cron daily 05:00). agent-lifecycle edge function (verify_jwt=false, requireAdminOrApiKey, runAgent) processes the stalest 500 profiles/run (index nullsFirst on lifecycle_updated_at), pulls activity signals in BULK (favorites/reviews/user_subscriptions/login_attempts/newsletter_subscribers — a few aggregate queries joined in memory, not N+1), derives stage (new|onboarding|active|at_risk|dormant|churned|reactivated) deterministically: active>90d churned, >30d dormant, past_due/>14d at_risk, brand-new/low-activity new/onboarding, previously-lapsed active<=7d reactivated. Writes stage+signals to profiles and records a user_lifecycle_history row on any transition so nurture agents can react. PII-safe: lifecycle_signals stores only day offsets, counts, subscription status, and a messagingAllowed flag (derived from newsletter unsubscribe status + communication_preferences) — never names/emails/content; downstream messaging must honor messagingAllowed. Exposed via /admin/lifecycle admin view (AdminLifecycle page + LifecyclePanel component + useLifecycle hook, route + ProtectedRoute requireAdmin + AdminNav 'Lifecycle' link) showing stage distribution + recent transitions, and usable as a segmentation input (profiles.lifecycle_stage, indexed) by other nurture agents. config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=58). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-NURTURE-002",
