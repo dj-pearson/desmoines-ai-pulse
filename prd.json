@@ -3779,8 +3779,8 @@
         "npm run validate passes"
       ],
       "priority": 21,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): runtime enforces per-run costCap (existing runToolLoop cost_cap) AND a rolling monthly per-agent budget. Migration 20260709000010 adds agent_month_spend view (per-agent MTD spend/tokens/runs from automation_job_runs.cost_usd vs agent_registry.monthly_cost_budget_usd). agentRuntime.runAgent checks monthlyBudgetState BEFORE any work; on breach handleBudgetBreach records a failure run (metadata.reason=budget), opens a tier-2 createAgentTask, and notifyOps(high, coalesced per agent), then returns failure — no partial state. Fail-safe: unknown/unpriced model costed via priceFor default (non-zero estimate, never 0); budget-read error => fail-open (no budget). Dashboard: useMonthlySpend hook + /admin/agents budget tiles (OS spend this month vs total budget, agents-over-budget list, agent counts); per-agent 30d spend vs budget already in the list. npm run validate passes (0 errors). Documented in AGENTIC_OS.md."
     },
     {
       "id": "AOS-GOV-002",

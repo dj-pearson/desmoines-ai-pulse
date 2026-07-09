@@ -32,6 +32,7 @@ import {
   useRunAgent,
   useGlobalPause,
   useSetGlobalPause,
+  useMonthlySpend,
   useAgentConfigRow,
   useUpdateAgentConfig,
   successRate,
@@ -215,7 +216,16 @@ function ConfigDialog({ agent, onClose }: { agent: AgentSummary; onClose: () => 
 export default function AgentControlPlane() {
   const { user } = useAuth();
   const { data: agents, isLoading, isError, refetch, isFetching } = useAgentSummaries();
+  const { data: monthSpend } = useMonthlySpend();
   const { data: globalPaused } = useGlobalPause();
+
+  const osSpend = useMemo(() => {
+    const rows = monthSpend ?? [];
+    const total = rows.reduce((sum, r) => sum + Number(r.spend_mtd || 0), 0);
+    const overBudget = rows.filter((r) => r.monthly_cost_budget_usd != null && Number(r.spend_mtd) > r.monthly_cost_budget_usd);
+    const totalBudget = rows.reduce((sum, r) => sum + (r.monthly_cost_budget_usd ?? 0), 0);
+    return { total, overBudget, totalBudget };
+  }, [monthSpend]);
   const setPause = useSetGlobalPause();
   const toggle = useToggleAgent();
   const run = useRunAgent();
@@ -317,6 +327,33 @@ export default function AgentControlPlane() {
                 aria-label={globalPaused ? "Resume all agents" : "Pause all agents"}
               />
               <span className="text-xs font-medium">{globalPaused ? "Paused" : "Active"}</span>
+            </div>
+          </div>
+
+          {/* OS spend this month (AOS-GOV-001). */}
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">OS spend this month</p>
+              <p className="text-xl font-semibold">${osSpend.total.toFixed(2)}</p>
+              {osSpend.totalBudget > 0 && (
+                <p className="text-xs text-muted-foreground">of ${osSpend.totalBudget.toFixed(0)} budgeted</p>
+              )}
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Agents over budget</p>
+              <p className={cn("text-xl font-semibold", osSpend.overBudget.length > 0 && "text-destructive")}>
+                {osSpend.overBudget.length}
+              </p>
+              {osSpend.overBudget.length > 0 && (
+                <p className="truncate text-xs text-destructive" title={osSpend.overBudget.map((a) => a.agent_key).join(", ")}>
+                  {osSpend.overBudget.map((a) => a.agent_key).join(", ")}
+                </p>
+              )}
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Agents</p>
+              <p className="text-xl font-semibold">{(agents ?? []).length}</p>
+              <p className="text-xs text-muted-foreground">{(agents ?? []).filter((a) => a.enabled).length} enabled</p>
             </div>
           </div>
         </CardHeader>

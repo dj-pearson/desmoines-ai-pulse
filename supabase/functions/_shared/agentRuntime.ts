@@ -24,6 +24,8 @@ import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supa
 import { getAIConfig } from "./aiConfig.ts";
 import { runAgent as recordAgentRun } from "./agentRun.ts";
 import { requiresApproval, createApproval } from "./agentApprovals.ts";
+import { createAgentTask } from "./agentTasks.ts";
+import { notifyOps } from "./notifyOps.ts";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 
@@ -322,6 +324,68 @@ function serviceClient(): SupabaseClient | null {
   return createClient(url, key);
 }
 
+interface MonthlyBudgetState {
+  budgetUsd: number | null;
+  spendMtd: number;
+  category: string;
+}
+
+/** Month-to-date spend + budget for an agent (AOS-GOV-001). Fail-open: on a read
+ *  error, report no budget so a metrics hiccup can't wrongly block the agent. */
+async function monthlyBudgetState(supabase: SupabaseClient, agentKey: string): Promise<MonthlyBudgetState> {
+  try {
+    const { data } = await supabase
+      .from("agent_month_spend")
+      .select("monthly_cost_budget_usd, spend_mtd, category")
+      .eq("agent_key", agentKey)
+      .maybeSingle();
+    return {
+      budgetUsd: data?.monthly_cost_budget_usd ?? null,
+      spendMtd: Number(data?.spend_mtd ?? 0),
+      category: data?.category ?? "governance",
+    };
+  } catch (err) {
+    console.warn(`[agentRuntime:${agentKey}] budget read failed (treating as no budget):`, err instanceof Error ? err.message : String(err));
+    return { budgetUsd: null, spendMtd: 0, category: "governance" };
+  }
+}
+
+/** Record the budget breach: a failure run, a tier-2 task, and an ops alert. */
+async function handleBudgetBreach(supabase: SupabaseClient, agentKey: string, budget: MonthlyBudgetState): Promise<void> {
+  const detail = `${agentKey} hit its monthly budget: $${budget.spendMtd.toFixed(2)} of $${budget.budgetUsd}.`;
+  try {
+    const nowIso = new Date().toISOString();
+    await supabase.from("automation_job_runs").insert({
+      job_name: agentKey,
+      agent_key: agentKey,
+      status: "failure",
+      finished_at: nowIso,
+      error: "monthly budget exceeded",
+      summary: detail,
+      metadata: { reason: "budget", spendMtd: budget.spendMtd, budgetUsd: budget.budgetUsd },
+    });
+  } catch (err) {
+    console.warn(`[agentRuntime:${agentKey}] failed to record budget-breach run:`, err instanceof Error ? err.message : String(err));
+  }
+  // deno-lint-ignore no-explicit-any
+  await createAgentTask(supabase as any, {
+    // deno-lint-ignore no-explicit-any
+    agentKey,
+    category: budget.category as any,
+    title: `Budget exceeded: ${agentKey}`,
+    confidence: 0,
+    forceTier: 2,
+    payload: { reason: "monthly_budget_exceeded", spendMtd: budget.spendMtd, budgetUsd: budget.budgetUsd },
+  }).catch((e) => console.warn(`[agentRuntime:${agentKey}] budget task failed:`, e?.message ?? e));
+  // deno-lint-ignore no-explicit-any
+  await notifyOps(supabase as any, {
+    severity: "high",
+    title: `Agent over budget: ${agentKey}`,
+    body: detail,
+    dedupeKey: `budget:${agentKey}`,
+  }).catch((e) => console.warn(`[agentRuntime:${agentKey}] budget notify failed:`, e?.message ?? e));
+}
+
 
 /**
  * Run an autonomous agent through the guarded runtime. Returns `disabled`
@@ -350,6 +414,18 @@ export async function runAgent(config: RunAgentConfig): Promise<RunAgentResult> 
 
   const messages: ChatMessage[] = config.messages ??
     [{ role: "user", content: config.userMessage ?? "Begin." }];
+
+  // Monthly per-agent budget hard stop (AOS-GOV-001). Checked BEFORE any work,
+  // so a breach can't partially corrupt state. On breach: record a failure run
+  // (reason=budget), open a tier-2 task, notify ops, and return without acting.
+  const budget = await monthlyBudgetState(supabase, config.agentKey);
+  if (budget.budgetUsd != null && budget.spendMtd >= budget.budgetUsd) {
+    await handleBudgetBreach(supabase, config.agentKey, budget);
+    return {
+      status: "failure",
+      error: `monthly budget exceeded ($${budget.spendMtd.toFixed(2)} of $${budget.budgetUsd})`,
+    };
+  }
 
   // Correlates the ledger row with the audit-log rows for this run.
   const runCorrelation = crypto.randomUUID();

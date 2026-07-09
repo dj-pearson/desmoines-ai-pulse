@@ -149,6 +149,33 @@ export function useSetGlobalPause() {
   });
 }
 
+export interface AgentMonthSpend {
+  agent_key: string;
+  name: string;
+  category: string;
+  monthly_cost_budget_usd: number | null;
+  spend_mtd: number;
+  tokens_mtd: number;
+  runs_mtd: number;
+}
+
+/** Per-agent month-to-date spend vs budget (AOS-GOV-001 budget tile). */
+export function useMonthlySpend() {
+  return useQuery({
+    queryKey: ["agent-month-spend"],
+    queryFn: async (): Promise<AgentMonthSpend[]> => {
+      const { data, error } = await db
+        .from("agent_month_spend")
+        .select("*")
+        .order("spend_mtd", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as AgentMonthSpend[];
+    },
+    staleTime: 60 * 1000,
+    refetchInterval: 2 * 60 * 1000,
+  });
+}
+
 export interface AgentConfigRow {
   agent_key: string;
   category: string;

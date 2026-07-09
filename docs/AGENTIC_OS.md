@@ -78,6 +78,24 @@ returns permissive defaults (`enabled: true`, `0.85` threshold, no budget) with
 `found: false` and logs — a registry hiccup must never silently kill a live
 agent. Results are cached for 60s per `agent_key`.
 
+## Cost budgets (AOS-GOV-001)
+
+Two caps keep autonomous LLM/API work from silently burning money:
+
+- **Per-run**: `runToolLoop` stops at `costCapUsd` (default $0.50), checked
+  between steps.
+- **Monthly**: before any work, the runtime reads month-to-date spend from
+  `agent_month_spend` (summed from the ledger's `cost_usd`) and compares it to
+  `agent_registry.monthly_cost_budget_usd`. On breach the run **hard-stops
+  before acting** (no partial state), records a `failure` run with
+  `reason=budget`, opens a tier-2 task, and alerts ops.
+
+Both fail safe: an unknown/unpriced model is costed with an **estimate** (the
+default per-token rate), never zero, so spend can't hide; and a budget-read
+error is treated as "no budget" so a metrics hiccup can't wrongly block an
+agent. The `/admin/agents` header shows OS spend this month, budget, and any
+over-budget agents.
+
 ## Confidence thresholds + auto-vs-human tuning (AOS-CORE-011)
 
 Each agent's `tier1_confidence_threshold` is the line between acting
