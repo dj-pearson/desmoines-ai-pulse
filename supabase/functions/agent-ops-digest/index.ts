@@ -144,6 +144,14 @@ Deno.serve(async (req) => {
       ? `Onboarding (7d) — ${nurSent} sent, ${nur.filter((r) => r.opened_at).length} opened, ${nur.filter((r) => r.clicked_at).length} clicked, ${nur.filter((r) => r.activated_at).length} activated`
       : `Onboarding (7d) — no sends`;
 
+    // Weekly digest engagement (AOS-NURTURE-004).
+    const { data: wdRows } = await supabase.from("nurture_sends").select("status, opened_at, clicked_at").eq("agent_key", "weekly-digest-personal").gte("created_at", weekAgo).limit(5000);
+    const wd = (wdRows ?? []) as { status: string; opened_at: string | null; clicked_at: string | null }[];
+    const wdSent = wd.filter((r) => r.status !== "skipped" && r.status !== "failed").length;
+    const wdLine = wd.length
+      ? `Weekly digest (7d) — ${wdSent} sent, ${wd.filter((r) => r.opened_at).length} opened, ${wd.filter((r) => r.clicked_at).length} clicked`
+      : `Weekly digest (7d) — no sends`;
+
     // Win-back effectiveness (AOS-NURTURE-003).
     const { data: wbRows } = await supabase.from("winback_interventions").select("status").gte("created_at", new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString()).limit(5000);
     const wb = (wbRows ?? []) as { status: string }[];
@@ -172,6 +180,7 @@ Deno.serve(async (req) => {
       edgeLine,
       csatLine,
       nurLine,
+      wdLine,
       wbLine,
     ].join("\n");
 

@@ -4334,8 +4334,8 @@
         "npm run validate passes"
       ],
       "priority": 58,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Personalized weekly digest agent. agent-weekly-digest edge function (verify_jwt=false, requireAdminOrApiKey, runAgent, $30/mo, cron weekly Thu 15:00 via migration 20260709000046) assembles a per-user digest from existing content: fetches shared content ONCE (upcoming events next 14d non-archived, new restaurants/attractions last 14d) and filters per user in memory (interest-matched events via profiles.interests vs event.category, fallback to soonest) — efficient for large audiences. Adds saved-search matches (upcoming events matching a saved_searches alerts_enabled filter category) and gates premium picks by tier (free users get non-sponsored restaurants/attractions; insider/vip also see sponsored). Guardrails: 7-day frequency cap (nurture_sends kind weekly_digest), classifier messagingAllowed consent flag, AOS-GOV-004 quality gate (scoreOutput nurture) before send, and a user with zero relevant items is SKIPPED (no filler). Sends via shared sendNurtureEmail (one-click unsubscribe); deliverability/opens/clicks tracked in nurture_sends via the existing resend-webhook. Ops digest reports 7-day weekly-digest sent/opened/clicked. No new tables. config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=61). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-NURTURE-005",

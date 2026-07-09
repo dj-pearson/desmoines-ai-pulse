@@ -283,3 +283,8 @@ verify_jwt = false
 # (offers approval-gated above threshold). Auth via requireAdminOrApiKey.
 [functions.agent-churn-winback]
 verify_jwt = false
+
+# Personalized weekly digest (AOS-NURTURE-004). Cron; per-user digest, tier-aware.
+# Auth via requireAdminOrApiKey.
+[functions.agent-weekly-digest]
+verify_jwt = false

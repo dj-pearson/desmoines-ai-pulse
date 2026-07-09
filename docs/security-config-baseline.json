@@ -32,6 +32,7 @@
     "agent-test-gen",
     "agent-ticket-classifier",
     "agent-uptime-monitor",
+    "agent-weekly-digest",
     "ai-crawler",
     "analyze-competitor",
     "bulk-enhance-events",
@@ -61,7 +62,7 @@
     "support-ticket-reclassify",
     "version-check"
   ],
-  "verifyJwtCount": 60,
+  "verifyJwtCount": 61,
   "cspPresent": true,
   "cspHash": "1625510d45515045",
   "corsHash": "b1683c94fbad28a6"

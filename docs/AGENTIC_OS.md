@@ -329,6 +329,23 @@ means zero LLM budget; each review is recorded as an audited run via
 `agent-pr-review`. (Semantic checks like RLS/rate-limit tightening are left out
 deliberately — a false-positive block is worse than a miss.)
 
+## Personalized weekly digest (AOS-NURTURE-004)
+
+`agent-weekly-digest` (cron, weekly) sends each user a digest of what's relevant
+to *them*, not a generic blast. Shared content — upcoming events, new
+restaurants/attractions — is fetched **once** and filtered **per user in memory**
+(interest-matched events, falling back to soonest), so a large audience is a few
+queries, not N×. Per user it adds **saved-search matches** (upcoming events
+matching a saved search's category) and gates **premium picks** by tier (free
+users get non-sponsored picks; insider/vip see sponsored ones too).
+
+Guardrails: a **7-day frequency cap**, the classifier's `messagingAllowed`
+consent flag, the **AOS-GOV-004** quality gate before send, and — critically — a
+user with **no relevant content is skipped**, never sent filler. Sends go through
+`sendNurtureEmail` (one-click unsubscribe) and land in `nurture_sends`;
+deliverability/opens/clicks flow back via `resend-webhook`. The digest reports
+7-day weekly-digest sent/opened/clicked.
+
 ## Churn-risk + win-back agent (AOS-NURTURE-003)
 
 `agent-churn-winback` (cron, daily) catches users before they leave. Three passes:
