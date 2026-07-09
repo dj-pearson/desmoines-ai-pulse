@@ -2910,8 +2910,8 @@
         "npm run validate passes"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Follow-on already documented in docs/IMAGE_PIPELINE_FINDINGS.md: the backfill does ~25 rows/table/night and re-tries permanent failures forever, so the 190 SeatGeek JS-shell rows (which will never yield an image to a plain scrape) burn the nightly quota indefinitely and the genuine backlog never drains. Lower leverage than WEB-AUTO-015..017 (those fix ingest and self-heal at the source); this makes the backfill safety-net efficient rather than self-defeating. Ties into WEB-AUTO-003's image stage."
+      "passes": true,
+      "notes": "Follow-on already documented in docs/IMAGE_PIPELINE_FINDINGS.md: the backfill does ~25 rows/table/night and re-tries permanent failures forever, so the 190 SeatGeek JS-shell rows (which will never yield an image to a plain scrape) burn the nightly quota indefinitely and the genuine backlog never drains. Lower leverage than WEB-AUTO-015..017 (those fix ingest and self-heal at the source); this makes the backfill safety-net efficient rather than self-defeating. Ties into WEB-AUTO-003's image stage. | DONE (2026-07-09): implementation already present on branch — migration 20260620000001_image_checked_at_backfill.sql adds image_checked_at (events/restaurants/attractions/playgrounds) + partial NULLS-FIRST indexes on the imageless working set + backfill-images-{events,restaurants,attractions} pg_cron. backfill-images/index.ts stamps image_checked_at on every attempt (success+fail), orders never-checked first (nullsFirst), and skips rows re-checked within a 7-day window; successful rows leave the working set (image_url set) so are not re-checked. data-quality-heal image stage delegates to backfill-images so it inherits the cooldown. Remaining AC gap closed here: documented the backfill-images cron drain + image_checked_at cooldown in docs/AUTOMATION_JOBS.md (3 job rows) and updated docs/IMAGE_PIPELINE_FINDINGS.md to mark the item SHIPPED. npm run validate passes."
     },
     {
       "id": "IOS-AUDIT-BUG-001",
