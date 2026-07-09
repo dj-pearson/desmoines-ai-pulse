@@ -15,6 +15,7 @@ import { validateURLForSSRF } from "../_shared/validation.ts";
 import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
 import { tryDomainAdapter } from "../_shared/domain-adapters/index.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+import { fetchAndStoreImage, CONTENT_TYPE_MAP } from "../_shared/imageStorage.ts";
 
 // Marker time for events without specific times (7:31:58 PM Central)
 const NO_TIME_MARKER = "19:31:58";
@@ -1193,6 +1194,26 @@ Return empty array [] if no competitive content found.`
               if (category === 'events') {
                 transformedData.is_featured = Math.random() > 0.8;
                 transformedData.created_at = new Date().toISOString();
+              }
+
+              // Persist the image the domain adapter already fetched (seatgeek /
+              // catchdesmoines / eventbrite / hyveetix all return item.image_url).
+              // Route it through the shared SSRF/dimension-guarded fetchAndStoreImage
+              // path (same as ai-crawler) so the remote image is validated and copied
+              // into Storage rather than hot-linked blindly. Only touch image_url when
+              // the adapter actually provided one — adapters that return image_url:null
+              // (barnstormers, milb, sports-schedule) keep the prior behavior. A
+              // fetch/validation failure leaves image_url NULL, so the row still inserts.
+              if (item.image_url && CONTENT_TYPE_MAP[category]) {
+                // Pre-assign the row id so the stored media_asset is keyed to this record.
+                const contentId = crypto.randomUUID();
+                transformedData.id = contentId;
+                transformedData.image_url = await fetchAndStoreImage(
+                  supabase,
+                  item.image_url,
+                  category,
+                  contentId,
+                );
               }
 
               // For events, get the inserted ID for SEO generation
