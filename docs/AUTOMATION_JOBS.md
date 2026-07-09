@@ -44,6 +44,7 @@ All times UTC. Schedules are cron expressions (`min hour dom mon dow`).
 | **`moderate-content-sweep`** | `*/15 * * * *` | fn `moderate-content` | **Re-moderate reviews stuck in `pending` (fail-open safety net for the inline review path); ≤25/run. Pause via `feature_flags.content_moderation_enabled` (WEB-AUTO-009)** | ✅ |
 | **`job-health-watchdog-daily`** | `0 8 * * *` | fn `job-health-watchdog` | **Alert on missed/failed observed jobs (WEB-AUTO-001)** | n/a |
 | **`agent-escalation-router`** | `*/10 * * * *` | fn `agent-escalation-router` | **Route tier-2/3 agent_tasks to the owner queue (agent_registry.owner_role) and coalesce duplicates; fail-open per task (AOS-CORE-005)** | ✅ |
+| **`approval-sweeper`** | `*/15 * * * *` | fn `agent-approvals` (mode=sweep) | **Expire stale pending action approvals and re-escalate them as human tasks (AOS-CORE-007)** | ✅ |
 
 \* **Observed** = wrapped with `jobRunner` and recording to `automation_job_runs`.
 `✅` done, `planned` = adopts the same one-line wrap as its WEB-AUTO story lands

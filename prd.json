@@ -3703,8 +3703,8 @@
         "npm run validate passes"
       ],
       "priority": 16,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): migration 20260709000006_agent_action_approvals.sql adds agent_approval_status enum + agent_action_approvals table (id, agent_key FK, action_type, proposed_payload jsonb, status, decided_by, decided_at, reason, execution_result, expires_at, created_at/updated_at) + triggers (updated_at, immutable created_at) + admin read/update RLS + pending-expiry index; registers approval-sweeper agent + schedules */15 sweep cron. _shared/agentApprovals.ts: GUARDED_ACTIONS set, requiresApproval(actionType), createApproval(), and an executor registry (registerApprovalExecutor/executeApprovedAction — unregistered types surfaced, never silently run). agentRuntime dispatch integration: AgentTool.actionType; a guarded action creates a pending approval and returns queued_for_approval instead of executing. agent-approvals edge function (verify_jwt=false, requireAdminOrApiKey): modes approve (executes via registry + audits), reject (reason + audit), sweep (expire stale pending -> status expired + re-escalate via createAgentTask, runJob-observed); idempotent (status=pending guard, non-pending returns current state). Frontend: useAgentApprovals hook (usePendingApprovals + useDecideApproval via functions.invoke), AgentApprovals component (payload preview, approve&execute/reject with required reason, expiring-soon highlight, states), AdminApprovals page, /admin/approvals route + AdminNav link. npm run validate passes (0 errors). Docs updated (AGENTIC_OS.md, AUTOMATION_JOBS.md)."
     },
     {
       "id": "AOS-CORE-008",

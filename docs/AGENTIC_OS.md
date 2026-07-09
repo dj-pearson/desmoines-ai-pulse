@@ -180,6 +180,23 @@ when) is written to the task's `resolution` jsonb as the human-action record. Th
 detail sheet shows the task payload, the producing agent's latest run (from
 `agent_run_summary`), and any AI-suggested resolution in the payload.
 
+## Human-in-the-loop approvals (AOS-CORE-007)
+
+Some actions must never run unattended (publishing, outreach, refunds,
+destructive fixes). A tool is marked with an `actionType` from
+`agentApprovals.GUARDED_ACTIONS`; when the runtime dispatches it, instead of
+executing it **creates a pending `agent_action_approvals` row and stops**,
+telling the model the action is queued. A human works the queue at
+`/admin/approvals`: reviewing the proposed payload and either **approving**
+(which runs the registered executor for that `action_type` server-side via the
+`agent-approvals` edge function) or **rejecting** with a reason. Every decision
+is audited, and decisions are idempotent (a non-pending approval is a no-op).
+
+Guarded actions register their executor with
+`registerApprovalExecutor(actionType, fn)`; an unregistered type is surfaced,
+never silently run. The `approval-sweeper` cron (every 15 min) expires stale
+pending approvals and re-escalates them as human tasks so nothing is dropped.
+
 ## How to add a new agent
 
 1. **Register it.** Add a row to `agent_registry` in a new additive migration

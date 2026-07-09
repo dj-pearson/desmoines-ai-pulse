@@ -87,3 +87,8 @@ verify_jwt = false
 # auth via requireAdminOrApiKey (cron service-role key or admin JWT).
 [functions.agent-escalation-router]
 verify_jwt = false
+
+# Agent action approvals (AOS-CORE-007). Admin approve/reject + cron sweep of
+# expired approvals. Does its own auth via requireAdminOrApiKey.
+[functions.agent-approvals]
+verify_jwt = false

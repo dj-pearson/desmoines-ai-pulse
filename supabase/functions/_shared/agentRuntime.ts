@@ -24,6 +24,7 @@ import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supa
 import { getAIConfig } from "./aiConfig.ts";
 import { getAgentConfig } from "./agentConfig.ts";
 import { runAgent as recordAgentRun } from "./agentRun.ts";
+import { requiresApproval, createApproval } from "./agentApprovals.ts";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 
@@ -277,6 +278,12 @@ export interface AgentTool {
   description?: string;
   input_schema: Record<string, unknown>;
   execute: (input: Record<string, unknown>) => Promise<unknown>;
+  /**
+   * If set to a guarded action type (see agentApprovals.GUARDED_ACTIONS), the
+   * runtime queues a human approval and does NOT execute the tool — the model
+   * gets back a "queued for approval" result. Approval executes it later.
+   */
+  actionType?: string;
 }
 
 export interface RunAgentConfig {
@@ -395,6 +402,20 @@ export async function runAgent(config: RunAgentConfig): Promise<RunAgentResult> 
         dispatch: async (name, input) => {
           const tool = toolByName.get(name);
           if (!tool) return { error: `unknown tool: ${name}` };
+          // Human-in-the-loop gate (AOS-CORE-007): a guarded action is queued
+          // for approval and NOT executed. The model is told it's pending.
+          if (requiresApproval(tool.actionType)) {
+            const approval = await createApproval(supabase, {
+              agentKey: config.agentKey,
+              actionType: tool.actionType!,
+              payload: input,
+            });
+            return {
+              status: "queued_for_approval",
+              approval_id: approval.approvalId ?? null,
+              note: `Action "${tool.actionType}" requires human approval before it runs. It has been queued; do not retry.`,
+            };
+          }
           return await tool.execute(input);
         },
         onAction: async (a) => {
