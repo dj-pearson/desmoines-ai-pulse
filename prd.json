@@ -4319,8 +4319,8 @@
         "npm run validate passes"
       ],
       "priority": 57,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Churn-risk prediction + win-back agent. Migration 20260709000045 adds additive profiles columns (churn_risk_score, churn_scored_at) + winback_interventions ledger (user_id, churn_score, play value_reminder|offer, offer_pct, status sent|approval_pending|retained|churned, send_id, approval_id, outcome_at; RLS admin-read) + registers churn-winback agent (cron daily 05:30, $25/mo). agent-churn-winback edge function (verify_jwt=false, requireAdminOrApiKey, runAgent): (1) scores churn 0-1 from lifecycle_signals (daysSinceActive/45 + past_due 0.3 + canceled 0.2, reuses stored signals — no re-query), stamps churn_risk_score, moves high-risk (>=0.6) active users to at_risk with a history transition; (2) win-back play for high-risk consented users respecting a 30-day frequency cap — value_reminder, or a discount offer above OFFER_RISK 0.75; in-policy offers (<=WINBACK_AUTO_MAX_PCT 20%) send after the AOS-GOV-004 quality gate, offers above threshold are approval-gated via createApproval('issue_credit') per AOS-CORE-007 (queued approval_pending, NOT sent until approved); every reminder/offer/approval audited via writeAgentAudit; (3) effectiveness pass marks interventions >=14d old retained (stage active/reactivated) or churned (churned/dormant). Sends via shared sendNurtureEmail (unsubscribe-respecting). Added churn-winback to agentPolicy allowlist (issue_credit/send_outreach/create_task). Ops digest reports 60-day win-back volume, pending approvals, and retained-share. config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=60). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-NURTURE-004",

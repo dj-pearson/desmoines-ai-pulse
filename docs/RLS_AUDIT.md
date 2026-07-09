@@ -7,9 +7,9 @@
 
 | Metric | Count |
 |---|---|
-| Migrations scanned | 301 |
-| Distinct policies (current) | 550 |
-| Tables with RLS enabled | 254 |
+| Migrations scanned | 302 |
+| Distinct policies (current) | 551 |
+| Tables with RLS enabled | 255 |
 | Tables with policies but no ENABLE RLS seen | 5 |
 | Permissive write policies USING/CHECK(true) | 30 |
 | Write policies granted to `anon` | 4 |
@@ -685,6 +685,7 @@
 | weekend_guides | Weekend guides are publicly readable | SELECT | public | true | — |
 | weekly_digest_log | Users can view their own digest log | SELECT | public | auth.uid() = user_id | — |
 | whitelisted_ips | Root admins can manage IP whitelist | ALL | public | EXISTS ( SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = 'root_admin' ) | — |
+| winback_interventions | winback_admin_read | SELECT | authenticated | is_admin() | — |
 
 ## Needs human decision
 

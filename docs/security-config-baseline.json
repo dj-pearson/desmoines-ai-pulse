@@ -4,6 +4,7 @@
     "agent-approvals",
     "agent-backup-verify",
     "agent-billing-selfservice",
+    "agent-churn-winback",
     "agent-ci-health",
     "agent-compliance-monitor",
     "agent-config-audit",
@@ -60,7 +61,7 @@
     "support-ticket-reclassify",
     "version-check"
   ],
-  "verifyJwtCount": 59,
+  "verifyJwtCount": 60,
   "cspPresent": true,
   "cspHash": "1625510d45515045",
   "corsHash": "b1683c94fbad28a6"

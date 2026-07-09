@@ -278,3 +278,8 @@ verify_jwt = false
 # lifecycle + behavior. Auth via requireAdminOrApiKey.
 [functions.agent-onboarding-drip]
 verify_jwt = false
+
+# Churn & win-back (AOS-NURTURE-003). Cron; scores churn, runs win-back plays
+# (offers approval-gated above threshold). Auth via requireAdminOrApiKey.
+[functions.agent-churn-winback]
+verify_jwt = false

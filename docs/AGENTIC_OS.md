@@ -329,6 +329,29 @@ means zero LLM budget; each review is recorded as an audited run via
 `agent-pr-review`. (Semantic checks like RLS/rate-limit tightening are left out
 deliberately — a false-positive block is worse than a miss.)
 
+## Churn-risk + win-back agent (AOS-NURTURE-003)
+
+`agent-churn-winback` (cron, daily) catches users before they leave. Three passes:
+
+1. **Score** churn risk (0–1) from the lifecycle classifier's stored signals
+   (days since active, subscription status — reusing `lifecycle_signals`, so no
+   re-querying), stamp `profiles.churn_risk_score`, and move clearly high-risk
+   `active` users to `at_risk` (recording the transition).
+2. **Win-back play** for high-risk, **consented**, not-recently-contacted users
+   (30-day frequency cap): a **value reminder**, or — above a higher risk bar —
+   a **discount offer**. Offers within policy (≤ `WINBACK_AUTO_MAX_PCT` = 20%)
+   send after the **AOS-GOV-004** quality gate; an offer **above** the threshold
+   is **approval-gated** (`createApproval("issue_credit")`, AOS-CORE-007) —
+   queued as `approval_pending`, **not sent** until a human approves. Every
+   reminder/offer/approval is audited.
+3. **Effectiveness** — interventions ≥ 14 days old are marked `retained` or
+   `churned` from the user's current lifecycle stage.
+
+`winback_interventions` records each play + outcome; the digest reports 60-day
+intervention volume, pending approvals, and the **retained-share**. The
+`churn-winback` agent is allow-listed for `issue_credit`/`send_outreach` in
+`agentPolicy.ts`.
+
 ## Onboarding drip agent (AOS-NURTURE-002)
 
 `agent-onboarding-drip` (cron, every 6h) runs a staged welcome sequence for users

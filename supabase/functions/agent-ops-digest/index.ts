@@ -144,6 +144,16 @@ Deno.serve(async (req) => {
       ? `Onboarding (7d) — ${nurSent} sent, ${nur.filter((r) => r.opened_at).length} opened, ${nur.filter((r) => r.clicked_at).length} clicked, ${nur.filter((r) => r.activated_at).length} activated`
       : `Onboarding (7d) — no sends`;
 
+    // Win-back effectiveness (AOS-NURTURE-003).
+    const { data: wbRows } = await supabase.from("winback_interventions").select("status").gte("created_at", new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString()).limit(5000);
+    const wb = (wbRows ?? []) as { status: string }[];
+    const wbRetained = wb.filter((r) => r.status === "retained").length;
+    const wbChurned = wb.filter((r) => r.status === "churned").length;
+    const wbDecided = wbRetained + wbChurned;
+    const wbLine = wb.length
+      ? `Win-back (60d) — ${wb.length} interventions, ${wb.filter((r) => r.status === "approval_pending").length} awaiting approval; retained ${wbRetained}/${wbDecided}${wbDecided ? ` (${Math.round((wbRetained / wbDecided) * 100)}%)` : ""}`
+      : `Win-back (60d) — none`;
+
     const openHuman = openTier2 + openTier3;
     const body = [
       `Tier-1 auto-resolutions (24h): ${autoResolved}`,
@@ -162,6 +172,7 @@ Deno.serve(async (req) => {
       edgeLine,
       csatLine,
       nurLine,
+      wbLine,
     ].join("\n");
 
     // Date-keyed dedupe so a re-run same day coalesces instead of double-sending.
