@@ -7,9 +7,9 @@
 
 | Metric | Count |
 |---|---|
-| Migrations scanned | 298 |
-| Distinct policies (current) | 547 |
-| Tables with RLS enabled | 251 |
+| Migrations scanned | 299 |
+| Distinct policies (current) | 548 |
+| Tables with RLS enabled | 252 |
 | Tables with policies but no ENABLE RLS seen | 5 |
 | Permissive write policies USING/CHECK(true) | 30 |
 | Write policies granted to `anon` | 4 |
@@ -558,6 +558,7 @@
 | storage.objects | Users upload own review photos | INSERT | public | — | bucket_id = 'review-photos' AND auth.uid()::text = (storage.foldername(name))[1] |
 | subscription_events | subscription_events_admin_select | SELECT | authenticated | public.is_admin() | — |
 | subscription_plans | Anyone can view subscription plans | SELECT | public | is_active = true | — |
+| support_canned_responses | canned_responses_admin_read | SELECT | authenticated | is_admin() | — |
 | support_csat | support_csat_admin_read | SELECT | authenticated | is_admin() | — |
 | support_csat | support_csat_user_read | SELECT | authenticated | EXISTS (SELECT 1 FROM public.support_tickets t WHERE t.id = ticket_id AND t.user_id = auth.uid()) | — |
 | support_kb | support_kb_admin_read | SELECT | authenticated | is_admin() | — |

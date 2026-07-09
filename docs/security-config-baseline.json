@@ -50,6 +50,7 @@
     "scrape-events",
     "social-daily-poster",
     "support-chat",
+    "support-console",
     "support-csat-submit",
     "support-kb-admin",
     "support-kb-embed",
@@ -57,7 +58,7 @@
     "support-ticket-reclassify",
     "version-check"
   ],
-  "verifyJwtCount": 56,
+  "verifyJwtCount": 57,
   "cspPresent": true,
   "cspHash": "1625510d45515045",
   "corsHash": "b1683c94fbad28a6"

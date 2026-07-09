@@ -329,6 +329,28 @@ means zero LLM budget; each review is recorded as an audited run via
 `agent-pr-review`. (Semantic checks like RLS/rate-limit tightening are left out
 deliberately — a false-positive block is worse than a miss.)
 
+## Human ticket console (AOS-CS-008)
+
+`/admin/support` (`SupportConsole`) is the tier-2/3 human workspace, backed by the
+`support-console` edge function. A two-pane layout (list ↔ thread, collapsing to
+one pane on mobile) provides:
+
+- **List + filter** by status/priority; **full thread** with internal notes
+  visually distinct from user-visible messages.
+- **User context** — subscription tier/status plus light activity (favorites,
+  reviews) pulled for the ticket's user.
+- **AI-suggested replies** — `suggest_reply` drafts a KB-grounded reply the human
+  **edits before sending**; **canned responses** insert from a library; sending
+  posts an `admin` message, updates status, and **audits** the action
+  (`console_reply_sent`). "Send & resolve" closes it out.
+- **Assignment** (assign to me), **internal notes** (system message flagged
+  `internal`, never shown to users), and **merge-duplicate** (moves the
+  duplicate's messages to the canonical ticket, marks it `merged_into` + closed).
+
+Every state has an empty/loading/error branch, 44px touch targets, labelled
+controls, and a responsive grid — WCAG 2.1 AA. Console actions are audited under
+the `support-console` actor.
+
 ## Post-resolution CSAT loop (AOS-CS-007)
 
 "A resolved ticket the user hated is not resolved." When a ticket becomes

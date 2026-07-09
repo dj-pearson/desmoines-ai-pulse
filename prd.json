@@ -4274,8 +4274,8 @@
         "npm run validate passes"
       ],
       "priority": 54,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Human agent ticket console (tier-2/3). support-console edge function (verify_jwt=false, requireAdminOrApiKey) actions: list (filter status/priority, excludes merged), thread (full ticket + messages + user context: subscription tier/status + favorites/reviews counts), suggest_reply (KB-grounded AI draft via retrieveKb+Claude for the human to edit), send_reply (inserts admin message, updates status, audits console_reply_sent), assign (assigned_to + status, audited), add_note (internal system message flagged metadata.internal — never shown to users), merge (moves duplicate's messages to canonical ticket, sets merged_into + closed, audited console_merge), canned (library). Migration 20260709000042 adds additive merged_into column + support_canned_responses table (seeded 4 templates, RLS admin-read) + registers support-console actor. Frontend /admin/support (AdminSupport page + SupportConsole component + useSupportConsole hook, lazyWithRetry route + ProtectedRoute requireAdmin + AdminNav 'Support console' link): two-pane list↔thread layout collapsing to one pane on mobile; filter by status; full thread with internal notes visually distinct; user-context banner; composer with AI-suggest + canned-response insertion (both editable before send) + Send reply / Send & resolve / Assign to me; internal note + merge-duplicate inputs. Consistent empty/loading/error states, 44px touch targets, labelled controls, aria labels — WCAG 2.1 AA, mobile-responsive. config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=57). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-NURTURE-001",

@@ -263,3 +263,8 @@ verify_jwt = false
 # Records score + re-escalates low CSAT.
 [functions.support-csat-submit]
 verify_jwt = false
+
+# Human ticket console (AOS-CS-008). Admin tier-2/3 workspace backend.
+# Auth via requireAdminOrApiKey.
+[functions.support-console]
+verify_jwt = false
