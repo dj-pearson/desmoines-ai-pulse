@@ -163,3 +163,8 @@ verify_jwt = false
 # targets and record outcomes. Does its own auth via requireAdminOrApiKey.
 [functions.agent-test-gen]
 verify_jwt = false
+
+# CI health watcher (AOS-DEV-005). CI posts run outcomes (ingest); cron analyzes
+# for flakiness/regressions. Does its own auth via requireAdminOrApiKey.
+[functions.agent-ci-health]
+verify_jwt = false

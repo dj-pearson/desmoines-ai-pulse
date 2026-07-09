@@ -4019,8 +4019,8 @@
         "npm run validate passes"
       ],
       "priority": 37,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): migration 20260709000025 adds ci_runs table (workflow, conclusion, duration_s, branch, head_sha, run_id, flaky_count) + admin RLS; registers ci-health-watcher agent + */6h analyze cron. agent-ci-health edge function (verify_jwt=false, requireAdminOrApiKey): mode=ingest stores a run row; mode=analyze (runAgent-wrapped) groups last 25 runs/workflow over 14d, flags flaky (reported flakes OR mixed 10-60% fail rate = non-deterministic, not a clean break) with deduped tier-2 flaky:<wf> task (quarantine/annotate + fix), detects duration regression (recent half > 1.5x older half) -> notifyOps. .github/workflows/ci-health-report.yml (workflow_run on completion of PR Checks/E2E/Android CI/iOS CI) computes duration from run timestamps and POSTs the outcome to ingest. Ops digest reports open flaky/slow CI-health tasks. Backward-compat additive-only. npm run validate passes (0 errors). Completes AOS-DEV epic (001-005). Documented in AGENTIC_OS.md."
     },
     {
       "id": "AOS-DEV-006",

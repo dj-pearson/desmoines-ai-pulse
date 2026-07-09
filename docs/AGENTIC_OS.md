@@ -280,6 +280,18 @@ through the `agent-control` edge function (admin-authenticated, audited) — tog
 writes `agent_registry.enabled`, run maps the agent to its edge function and
 fires it. A drill-in sheet shows that agent's run history with error details.
 
+## Flaky-test + CI-health watcher (AOS-DEV-005)
+
+`.github/workflows/ci-health-report.yml` fires on **`workflow_run` completion**
+of the test workflows (PR Checks, E2E, Android/iOS CI) and records each run's
+conclusion, duration, and branch to `ci_runs` via `agent-ci-health`
+(`mode:ingest`). The `ci-health-watcher` agent (every 6h, `mode:analyze`) then,
+per workflow over a 2-week window: flags **flaky** workflows (reported flakes or
+a mixed 10–60% failure rate — a clean break isn't flaky) with a deduped tier-2
+fix task recommending quarantine/annotation, and detects **duration
+regressions** (recent half > 1.5× the older half) raising an ops alert. Open
+flaky/slow tasks are reported in the ops digest.
+
 ## Test-coverage agent (AOS-DEV-004)
 
 The `test-coverage-agent` (`aos-test-gen.yml`, manual dispatch) writes tests for
