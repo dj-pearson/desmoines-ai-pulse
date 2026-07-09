@@ -99,6 +99,32 @@ Deno.serve(async (req) => {
         updates.monthly_cost_budget_usd = body.monthlyCostBudgetUsd;
       }
       if (typeof body.autoOverride === "boolean") updates.auto_override = body.autoOverride;
+
+      // Mode flip shadow->live (AOS-GOV-005). `agentMode` carries the value
+      // (`mode` is already the operation selector). Flipping a financial/
+      // destructive category to live is gated behind the AOS-CORE-011 safety
+      // floor: it needs an explicit auto_override.
+      const agentMode = body.agentMode as string | undefined;
+      if (agentMode === "shadow" || agentMode === "live") {
+        if (agentMode === "live") {
+          const { data: reg } = await supabase
+            .from("agent_registry")
+            .select("category, auto_override")
+            .eq("agent_key", agentKey)
+            .maybeSingle();
+          const sensitive = reg?.category === "security" || reg?.category === "manage";
+          const overridden = updates.auto_override === true || reg?.auto_override === true;
+          if (sensitive && !overridden) {
+            return json({
+              ok: false,
+              safetyFloor: true,
+              error: `Promoting a ${reg?.category} agent to live requires an explicit override (auto_override).`,
+            }, 200, corsHeaders);
+          }
+        }
+        updates.mode = agentMode;
+      }
+
       if (Object.keys(updates).length === 0) return json({ error: "nothing to update" }, 400, corsHeaders);
 
       const { error } = await supabase.from("agent_registry").update(updates).eq("agent_key", agentKey);

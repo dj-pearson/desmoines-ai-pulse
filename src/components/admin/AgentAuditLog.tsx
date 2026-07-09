@@ -137,6 +137,7 @@ export default function AgentAuditLog() {
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium">{e.action_type}</span>
                       <Badge variant="outline">{e.agent_key}</Badge>
+                      {e.shadow && <Badge variant="secondary" title="Shadow-mode proposal (not executed)">shadow</Badge>}
                       {e.target_ref && <span className="truncate text-xs text-muted-foreground">{e.target_ref}</span>}
                     </div>
                   </div>

@@ -280,6 +280,25 @@ through the `agent-control` edge function (admin-authenticated, audited) — tog
 writes `agent_registry.enabled`, run maps the agent to its edge function and
 fires it. A drill-in sheet shows that agent's run history with error details.
 
+## Shadow / dry-run mode (AOS-GOV-005)
+
+Every agent has a `mode` in the registry — **`shadow`** (the default for new
+agents) or **`live`**. In shadow mode the runtime computes what it *would* do
+but executes nothing: each state-changing tool call is recorded to
+`agent_audit_log` with `shadow = true` and returns a `shadow_logged` result
+instead of running (read-only tools still run so the agent can compute real
+proposals). This lets an operator observe a new agent against reality before it
+touches production. `getAgentConfig` **fails safe to shadow** — an
+unregistered/unreadable agent can't act.
+
+The `/admin/agents` list badges shadow agents, `/admin/agent-audit` flags shadow
+proposals (with their before/after), and the per-agent Config dialog has a
+**Live mode** switch. Promoting a `security`/`manage` (financial/destructive)
+agent to live is gated behind the AOS-CORE-011 safety floor — it requires an
+explicit `auto_override` — and the flip is audited. The WEB-AUTO jobs and
+control-plane agents already in production ship as `live`; the AOS program
+agents ship `shadow`.
+
 ## Output quality evaluation (AOS-GOV-004)
 
 Before an agent ships user-facing content, it runs it through the LLM-judge

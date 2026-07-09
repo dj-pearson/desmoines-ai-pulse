@@ -3839,8 +3839,8 @@
         "npm run validate passes"
       ],
       "priority": 25,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): migration 20260709000013 adds agent_mode enum (shadow|live) + agent_registry.mode column DEFAULT shadow + agent_audit_log.shadow bool column + index; promotes the 14 already-live WEB-AUTO/control-plane agents to live, AOS program agents stay shadow. getAgentConfig returns mode (fail-safe default shadow for unregistered/unreadable). agentRuntime dispatch: in shadow mode a tool carrying an actionType is recorded to agent_audit_log (shadow:true, before=input, after={proposed:true}) and returns shadow_logged WITHOUT executing (reads still run). agent-control update_config accepts agentMode (renamed to avoid clashing with the op selector); flipping shadow->live for security/manage categories gated behind the AOS-CORE-011 safety floor (requires auto_override), audited. Dashboard: useAgentModes hook + shadow badge on /admin/agents list + Live-mode Switch in ConfigDialog + shadow badge on /admin/agent-audit entries (proposals with before/after). npm run validate passes (0 errors). Completes AOS-GOV epic (001-005). Documented in AGENTIC_OS.md."
     },
     {
       "id": "AOS-SEC-001",

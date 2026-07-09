@@ -19,6 +19,7 @@ export interface AgentAuditEntry {
   before: Record<string, unknown> | null;
   after: Record<string, unknown> | null;
   actor: string;
+  shadow: boolean;
   created_at: string;
 }
 

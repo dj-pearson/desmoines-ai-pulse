@@ -34,6 +34,7 @@ import {
   useSetGlobalPause,
   useMonthlySpend,
   useAgentQuality,
+  useAgentModes,
   useAgentConfigRow,
   useUpdateAgentConfig,
   successRate,
@@ -96,6 +97,7 @@ function ConfigDialog({ agent, onClose }: { agent: AgentSummary; onClose: () => 
   const [threshold, setThreshold] = useState<string>("");
   const [budget, setBudget] = useState<string>("");
   const [override, setOverride] = useState(false);
+  const [live, setLive] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
   // Seed the form once the config row arrives.
@@ -103,6 +105,7 @@ function ConfigDialog({ agent, onClose }: { agent: AgentSummary; onClose: () => 
     setThreshold(String(cfg.tier1_confidence_threshold));
     setBudget(cfg.monthly_cost_budget_usd == null ? "" : String(cfg.monthly_cost_budget_usd));
     setOverride(cfg.auto_override);
+    setLive(cfg.mode === "live");
     setLoaded(true);
   }
 
@@ -129,9 +132,10 @@ function ConfigDialog({ agent, onClose }: { agent: AgentSummary; onClose: () => 
         tier1ConfidenceThreshold: t,
         monthlyCostBudgetUsd: b,
         autoOverride: override,
+        agentMode: live ? "live" : "shadow",
       });
       if (res?.safetyFloor) {
-        toast.error(res.error ?? "Below the safety floor for this category.");
+        toast.error(res.error ?? "Blocked by the safety floor for this category.");
         return;
       }
       toast.success("Config updated");
@@ -185,6 +189,16 @@ function ConfigDialog({ agent, onClose }: { agent: AgentSummary; onClose: () => 
             />
           </div>
 
+          <div className="flex items-center justify-between rounded-md border p-2">
+            <div>
+              <Label htmlFor="cfg-mode" className="font-medium">Live mode</Label>
+              <p className="text-xs text-muted-foreground">
+                {live ? "Executes actions." : "Shadow: proposes + logs actions without executing."}
+              </p>
+            </div>
+            <Switch id="cfg-mode" checked={live} onCheckedChange={setLive} aria-label="Toggle live mode" />
+          </div>
+
           {sensitive && (
             <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-2">
               <Checkbox
@@ -219,6 +233,7 @@ export default function AgentControlPlane() {
   const { data: agents, isLoading, isError, refetch, isFetching } = useAgentSummaries();
   const { data: monthSpend } = useMonthlySpend();
   const { data: quality } = useAgentQuality();
+  const { data: modes } = useAgentModes();
   const { data: globalPaused } = useGlobalPause();
 
   const osSpend = useMemo(() => {
@@ -403,6 +418,9 @@ export default function AgentControlPlane() {
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-medium">{a.name}</span>
                           <Badge variant="outline">{a.category}</Badge>
+                          {modes?.[a.agent_key] === "shadow" && (
+                            <Badge variant="secondary" title="Shadow mode: proposes without executing">shadow</Badge>
+                          )}
                           {a.last_status && (
                             <span className={cn("text-xs", statusTone(a.last_status))}>{a.last_status}</span>
                           )}

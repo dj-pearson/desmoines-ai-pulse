@@ -55,6 +55,8 @@ export interface AgentAuditEntry {
   before?: Record<string, unknown> | null;
   after?: Record<string, unknown> | null;
   actor?: string;
+  /** True when this is a shadow-mode proposed action, not an executed one. */
+  shadow?: boolean;
 }
 
 /**
@@ -75,6 +77,7 @@ export async function writeAgentAudit(
       before: entry.before ?? null,
       after: entry.after ?? null,
       actor: entry.actor ?? 'agent',
+      shadow: entry.shadow ?? false,
     });
   } catch (err) {
     console.error('[auditLog] failed to write agent_audit_log row:', err);

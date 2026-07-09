@@ -22,6 +22,7 @@
 
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getAIConfig } from "./aiConfig.ts";
+import { getAgentConfig } from "./agentConfig.ts";
 import { runAgent as recordAgentRun } from "./agentRun.ts";
 import { requiresApproval, createApproval } from "./agentApprovals.ts";
 import { createAgentTask } from "./agentTasks.ts";
@@ -464,6 +465,11 @@ export async function runAgent(config: RunAgentConfig): Promise<RunAgentResult> 
     };
   }
 
+  // Shadow mode (AOS-GOV-005): in shadow, state-changing tools are proposed +
+  // logged but never executed. Fail-safe to shadow if the config can't be read.
+  const agentCfg = await getAgentConfig(supabase, config.agentKey);
+  const shadow = agentCfg.mode === "shadow";
+
   // Correlates the ledger row with the audit-log rows for this run.
   const runCorrelation = crypto.randomUUID();
   const toolByName = new Map(config.tools.map((t) => [t.name, t]));
@@ -494,6 +500,21 @@ export async function runAgent(config: RunAgentConfig): Promise<RunAgentResult> 
           const at = tool.actionType;
           // Tools carrying an actionType are governed; read-only tools run free.
           if (at) {
+            // Shadow mode (AOS-GOV-005): propose + log the action, execute NOTHING.
+            if (shadow) {
+              await writeAgentAudit(supabase, {
+                agentKey: config.agentKey,
+                runId: runCorrelation,
+                actionType: at,
+                before: input,
+                after: { proposed: true },
+                shadow: true,
+              });
+              return {
+                status: "shadow_logged",
+                note: `Shadow mode: proposed action "${at}" was logged, not executed. Do not retry.`,
+              };
+            }
             // Guardrail policy allowlist (AOS-GOV-003): refuse anything outside
             // the agent's remit — audited + escalated, never silently dropped.
             if (!isActionAllowed(config.agentKey, at)) {

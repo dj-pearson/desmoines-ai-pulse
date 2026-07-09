@@ -205,6 +205,22 @@ export interface AgentConfigRow {
   tier1_confidence_threshold: number;
   monthly_cost_budget_usd: number | null;
   auto_override: boolean;
+  mode: "shadow" | "live";
+}
+
+/** agent_key -> mode (shadow|live), for badges on the dashboard list. */
+export function useAgentModes() {
+  return useQuery({
+    queryKey: ["agent-modes"],
+    queryFn: async (): Promise<Record<string, "shadow" | "live">> => {
+      const { data, error } = await db.from("agent_registry").select("agent_key, mode");
+      if (error) throw error;
+      const map: Record<string, "shadow" | "live"> = {};
+      for (const r of (data ?? []) as { agent_key: string; mode: "shadow" | "live" }[]) map[r.agent_key] = r.mode;
+      return map;
+    },
+    staleTime: 30 * 1000,
+  });
 }
 
 /** Categories where a low tier-1 threshold is gated by the 0.80 safety floor. */
@@ -218,7 +234,7 @@ export function useAgentConfigRow(agentKey: string | null) {
     queryFn: async (): Promise<AgentConfigRow | null> => {
       const { data, error } = await db
         .from("agent_registry")
-        .select("agent_key, category, tier1_confidence_threshold, monthly_cost_budget_usd, auto_override")
+        .select("agent_key, category, tier1_confidence_threshold, monthly_cost_budget_usd, auto_override, mode")
         .eq("agent_key", agentKey)
         .maybeSingle();
       if (error) throw error;
@@ -238,9 +254,13 @@ export function useUpdateAgentConfig() {
       tier1ConfidenceThreshold?: number;
       monthlyCostBudgetUsd?: number | null;
       autoOverride?: boolean;
+      agentMode?: "shadow" | "live";
     }) => {
+      const { agentMode, ...rest } = args;
       const { data, error } = await supabase.functions.invoke("agent-control", {
-        body: { mode: "update_config", ...args },
+        // `mode` selects the edge-function operation; `agentMode` is the value we
+        // want to set on the agent (renamed to avoid clashing with the op field).
+        body: { mode: "update_config", ...rest, ...(agentMode ? { agentMode } : {}) },
       });
       // Surface the edge function's 422 safety-floor message to the caller.
       if (error) throw error;

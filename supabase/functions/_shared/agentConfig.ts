@@ -27,6 +27,8 @@ export interface AgentConfig {
   monthlyCostBudgetUsd: number | null;
   ownerRole: string;
   scheduleCron: string | null;
+  /** 'shadow' = propose + log without executing; 'live' = execute (AOS-GOV-005). */
+  mode: "shadow" | "live";
   /** false when no registry row exists for this agent_key (defaults returned). */
   found: boolean;
 }
@@ -37,6 +39,9 @@ const DEFAULTS = {
   monthlyCostBudgetUsd: null as number | null,
   ownerRole: "admin",
   scheduleCron: null as string | null,
+  // Fail-safe default: an unregistered/unreadable agent is treated as shadow so
+  // it can't take unattended actions before it's known and promoted.
+  mode: "shadow" as "shadow" | "live",
 };
 
 const CACHE_TTL_MS = 60 * 1000; // 1 minute
@@ -62,7 +67,7 @@ export async function getAgentConfig(
     const { data, error } = await supabase
       .from("agent_registry")
       .select(
-        "agent_key, name, category, enabled, tier1_confidence_threshold, monthly_cost_budget_usd, owner_role, schedule_cron",
+        "agent_key, name, category, enabled, tier1_confidence_threshold, monthly_cost_budget_usd, owner_role, schedule_cron, mode",
       )
       .eq("agent_key", agentKey)
       .maybeSingle();
@@ -91,6 +96,7 @@ export async function getAgentConfig(
         monthlyCostBudgetUsd: data.monthly_cost_budget_usd ?? null,
         ownerRole: data.owner_role ?? DEFAULTS.ownerRole,
         scheduleCron: data.schedule_cron ?? null,
+        mode: (data.mode ?? DEFAULTS.mode) as "shadow" | "live",
         found: true,
       };
     }
