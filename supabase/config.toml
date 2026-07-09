@@ -128,3 +128,8 @@ verify_jwt = false
 # requireAdminOrApiKey.
 [functions.agent-runbook]
 verify_jwt = false
+
+# RLS/config drift audit ingest (AOS-SEC-006). CI posts drift here to open a
+# tier-2 review task. Does its own auth via requireAdminOrApiKey.
+[functions.agent-config-audit]
+verify_jwt = false

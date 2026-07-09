@@ -3929,8 +3929,8 @@
         "npm run validate passes"
       ],
       "priority": 31,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): extended scripts/audit-rls.ts with --json (emits docs/rls-audit-findings.json with finding keys: permissive_write/anon_write/missing_rls/unpinned_definer). New scripts/security-config-snapshot.ts captures verify_jwt-false function list + CSP (public/_headers) + CORS (cors.ts) into docs/security-config-baseline.json. New .github/workflows/rls-config-audit.yml (daily) regenerates both, diffs against committed baselines (git show HEAD:), POSTs {newFindings, configDrift} to agent-config-audit. agent-config-audit edge function (verify_jwt=false, requireAdminOrApiKey, runAgent-wrapped): any new RLS finding or verify_jwt/CSP/CORS drift opens a deduped tier-2 task + notifyOps; clean run records success and clears the open drift task. Registered config-drift-auditor agent (live, security). Baseline updatable via audited admin action = regenerate + commit the three baseline files after PR review (documented). Committed current baselines (89 RLS findings, 30 verify_jwt) so first run shows no false drift. npm run validate passes (0 errors). Documented in AGENTIC_OS.md."
     },
     {
       "id": "AOS-SEC-007",

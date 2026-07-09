@@ -1,19 +1,19 @@
 # RLS Policy Audit
 
-**Generated**: 2026-06-12 by `scripts/audit-rls.ts` (static analysis of `supabase/migrations/*.sql`, last-wins).
+**Generated**: 2026-07-09 by `scripts/audit-rls.ts` (static analysis of `supabase/migrations/*.sql`, last-wins).
 **Re-run**: `tsx scripts/audit-rls.ts`. Diff this file in future audits.
 
 ## Summary
 
 | Metric | Count |
 |---|---|
-| Migrations scanned | 221 |
-| Distinct policies (current) | 496 |
-| Tables with RLS enabled | 219 |
+| Migrations scanned | 276 |
+| Distinct policies (current) | 526 |
+| Tables with RLS enabled | 236 |
 | Tables with policies but no ENABLE RLS seen | 5 |
-| Permissive write policies USING/CHECK(true) | 29 |
+| Permissive write policies USING/CHECK(true) | 30 |
 | Write policies granted to `anon` | 4 |
-| SECURITY DEFINER functions | 98 |
+| SECURITY DEFINER functions | 113 |
 | …of those WITHOUT pinned search_path | 50 |
 
 ## ⚠️ Findings needing attention
@@ -51,6 +51,7 @@
 | trending_config | Service role full access | ALL | service_role | true | true | 20260520000009_create_trending_config.sql |
 | newsletter_deliveries | Service role full access | ALL | service_role | true | true | 20260520000013_newsletter_delivery_tracking.sql |
 | feedback_replies | Service role full access | ALL | service_role | true | true | 20260520000014_create_feedback_replies.sql |
+| web_vitals | web_vitals_insert_any | INSERT | public | — | true | 20260620000004_web_vitals.sql |
 
 > **Verdict**: each must be either an insert-only analytics/telemetry table (acceptable — justify inline) or tightened by an ADDITIVE migration. Do NOT tighten a policy a shipped mobile binary relies on in one release (CLAUDE.md) — flag those in §"Needs human decision".
 
@@ -146,6 +147,17 @@
 | admin_action_logs | Only admins can view admin action logs | SELECT | public | EXISTS ( SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin') ) | — |
 | advertising_packages | Admins can manage advertising packages | ALL | public | user_has_role_or_higher(auth.uid(), 'admin') | — |
 | advertising_packages | Anyone can view active advertising packages | SELECT | public | is_active = true | — |
+| agent_action_approvals | agent_approvals_admin_read | SELECT | authenticated | EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')) | — |
+| agent_action_approvals | agent_approvals_admin_update | UPDATE | authenticated | EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')) | — |
+| agent_action_log | agent_action_log_admin_read | SELECT | authenticated | EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')) | — |
+| agent_audit_log | agent_audit_log_admin_read | SELECT | authenticated | EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')) | — |
+| agent_quality_scores | agent_quality_admin_read | SELECT | authenticated | EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')) | — |
+| agent_registry | Admin-only delete for agent registry | DELETE | public | EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')) | — |
+| agent_registry | Admin-only insert for agent registry | INSERT | public | — | EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')) |
+| agent_registry | Admin-only read for agent registry | SELECT | public | EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')) | — |
+| agent_registry | Admin-only update for agent registry | UPDATE | public | EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')) | — |
+| agent_tasks | agent_tasks_admin_read | SELECT | authenticated | EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')) | — |
+| agent_tasks | agent_tasks_admin_update | UPDATE | authenticated | EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')) | — |
 | ai_configuration | Admins can manage AI configuration | ALL | public | user_has_role_or_higher(auth.uid(), 'admin'::user_role) | — |
 | ai_model_configurations | Admin full access to ai_model_configurations | ALL | public | is_admin() | — |
 | ai_models | Admins can manage AI models | ALL | public | user_has_role_or_higher(auth.uid(), 'admin'::user_role) | — |
@@ -175,6 +187,7 @@
 | author_profiles | Public can view active author profiles | SELECT | public | is_active = true | — |
 | author_profiles | Users can update their own author profile | UPDATE | authenticated | user_id = auth.uid() | user_id = auth.uid() |
 | auto_approval_rules | Admin full access to auto_approval_rules | ALL | public | is_admin() | — |
+| automation_job_runs | automation_job_runs_admin_read | SELECT | authenticated | public.is_admin() | — |
 | badges | Anyone can view active badges | SELECT | public | is_active = true | — |
 | blocked_email_domains | Admins can delete blocked email domains | DELETE | authenticated | EXISTS ( SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin') ) | — |
 | blocked_email_domains | Admins can insert blocked email domains | INSERT | authenticated | — | EXISTS ( SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin') ) |
@@ -207,12 +220,18 @@
 | consent_records | Authenticated users insert their own consent | INSERT | authenticated | — | auth.uid() = user_id |
 | consent_records | Service role full access | ALL | service_role | true | true |
 | consent_records | Users read their own consent records | SELECT | authenticated | auth.uid() = user_id | — |
-| contact_submissions | Admins can update submissions | UPDATE | public | EXISTS ( SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.role = 'admin' ) | — |
-| contact_submissions | Admins can view all submissions | SELECT | public | EXISTS ( SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.role = 'admin' ) | — |
+| contact_submissions | Admins can update submissions | UPDATE | public | is_admin() | — |
+| contact_submissions | Admins can view all submissions | SELECT | public | is_admin() | — |
 | contact_submissions | Anyone can submit contact form | INSERT | public | — | true |
 | contact_submissions | Users can view own submissions | SELECT | public | auth.uid() = user_id | — |
+| content_favorites | content_favorites_delete_own | DELETE | public | auth.uid() = user_id | — |
+| content_favorites | content_favorites_insert_own | INSERT | public | — | auth.uid() = user_id |
+| content_favorites | content_favorites_select_own | SELECT | public | auth.uid() = user_id | — |
 | content_helpful_votes | Users can manage their own votes | ALL | public | auth.uid() = user_id | — |
 | content_helpful_votes | Users can view all helpful votes | SELECT | public | true | — |
+| content_merge_candidates | Admins read merge candidates | SELECT | authenticated | public.is_admin() | — |
+| content_merges | Admins read merges | SELECT | authenticated | public.is_admin() | — |
+| content_moderation | Admins read moderation queue | SELECT | authenticated | public.is_admin() | — |
 | content_performance_metrics | Everyone can read content performance | SELECT | public | true | — |
 | content_performance_metrics | Service role can manage content performance | ALL | public | auth.role() = 'service_role' | — |
 | content_queue | Admins can manage all queue items | ALL | authenticated | EXISTS ( SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.role = 'admin' ) | — |
@@ -261,6 +280,7 @@
 | discussion_threads | Anyone can view threads in public forums | SELECT | public | EXISTS ( SELECT 1 FROM public.discussion_forums WHERE id = forum_id AND is_public = true ) | — |
 | discussion_threads | Authenticated users can create threads | INSERT | public | — | auth.uid() IS NOT NULL AND auth.uid() = created_by |
 | discussion_threads | Thread creators can update their threads | UPDATE | public | auth.uid() = created_by | — |
+| event_archive | Admins can read event_archive | SELECT | authenticated | public.is_admin() | — |
 | event_attendance | Users can manage their own attendance | ALL | public | auth.uid() = user_id | — |
 | event_attendance | Users can view all attendance | SELECT | public | true | — |
 | event_attendees | Anyone can view attendee status | SELECT | public | true | — |
@@ -387,6 +407,7 @@
 | newsletter_subscribers | Admins can read newsletter subscribers | SELECT | public | EXISTS ( SELECT 1 FROM public.profiles WHERE profiles.id = auth.uid() AND profiles.role = 'admin' ) | — |
 | newsletter_subscribers | Anyone can subscribe to newsletter | INSERT | public | — | true |
 | oauth_providers | Admin full access to oauth_providers | ALL | public | is_admin() | — |
+| ops_notification_log | ops_notification_admin_read | SELECT | authenticated | EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')) | — |
 | partnership_applications | Admins can manage all applications | ALL | public | user_has_role_or_higher(auth.uid(), 'admin') | — |
 | partnership_applications | Users can create their own applications | INSERT | public | — | auth.uid() = user_id |
 | partnership_applications | Users can view their own applications | SELECT | public | auth.uid() = user_id | — |
@@ -414,6 +435,10 @@
 | pseo_pages | Public can read published pseo pages | SELECT | public | is_published = true | — |
 | pseo_pages | Service role full access to pseo pages | ALL | public | true | true |
 | rate_limit_entries | Service role only | ALL | public | auth.role() = 'service_role' | auth.role() = 'service_role' |
+| recently_viewed | recently_viewed_delete_own | DELETE | public | auth.uid() = user_id | — |
+| recently_viewed | recently_viewed_insert_own | INSERT | public | — | auth.uid() = user_id |
+| recently_viewed | recently_viewed_select_own | SELECT | public | auth.uid() = user_id | — |
+| recently_viewed | recently_viewed_update_own | UPDATE | public | auth.uid() = user_id | auth.uid() = user_id |
 | referrals | Users can create referrals | INSERT | public | — | auth.uid() = referrer_id |
 | referrals | Users can view own referrals | SELECT | public | auth.uid() = referrer_id | — |
 | restaurant_blacklist | Admins can delete blacklist | DELETE | public | is_admin() | — |
@@ -505,6 +530,7 @@
 | storage.objects | Public read access for media bucket | SELECT | public | bucket_id = 'media' | — |
 | storage.objects | Public read access for thumbnails bucket | SELECT | public | bucket_id = 'thumbnails' | — |
 | storage.objects | Public read access for videos bucket | SELECT | public | bucket_id = 'videos' | — |
+| storage.objects | Review photos are publicly readable | SELECT | public | bucket_id = 'review-photos' | — |
 | storage.objects | Service can manage thumbnails | ALL | service_role | bucket_id = 'thumbnails' | — |
 | storage.objects | Team members can view campaign ads | SELECT | authenticated | bucket_id = 'ad-creatives' AND (storage.foldername(name))[1] IN ( SELECT DISTINCT c.id::text FROM public.campaigns c JOIN public.campaign_team_members ctm ON ctm.campaign_owner_id = c.user_id WHERE ctm.team_member_id = auth.uid() AND ctm.invitation_status = 'accepted' ) | — |
 | storage.objects | Users can delete own ad creatives | DELETE | authenticated | bucket_id = 'ad-creatives' AND (storage.foldername(name))[1] IN ( SELECT id::text FROM public.campaigns WHERE user_id = auth.uid() ) | — |
@@ -519,6 +545,9 @@
 | storage.objects | Users can upload event photos | INSERT | public | — | bucket_id = 'event-photos' AND auth.uid()::text = (storage.foldername(name))[1] |
 | storage.objects | Users can upload to own campaigns | INSERT | authenticated | — | bucket_id = 'ad-creatives' AND (storage.foldername(name))[1] IN ( SELECT id::text FROM public.campaigns WHERE user_id = auth.uid() ) |
 | storage.objects | Users can view own ad creatives | SELECT | authenticated | bucket_id = 'ad-creatives' AND (storage.foldername(name))[1] IN ( SELECT id::text FROM public.campaigns WHERE user_id = auth.uid() ) | — |
+| storage.objects | Users manage own review photos | ALL | public | bucket_id = 'review-photos' AND auth.uid()::text = (storage.foldername(name))[1] | — |
+| storage.objects | Users upload own review photos | INSERT | public | — | bucket_id = 'review-photos' AND auth.uid()::text = (storage.foldername(name))[1] |
+| subscription_events | subscription_events_admin_select | SELECT | authenticated | public.is_admin() | — |
 | subscription_plans | Anyone can view subscription plans | SELECT | public | is_active = true | — |
 | surprise_pick_outcomes | Users can insert their own surprise outcomes | INSERT | public | — | auth.uid() = user_id OR user_id IS NULL |
 | surprise_pick_outcomes | Users can read their own surprise outcomes | SELECT | public | auth.uid() = user_id | — |
@@ -625,6 +654,8 @@
 | voting_categories | Admin insert voting categories | INSERT | public | — | EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')) |
 | voting_categories | Admin update voting categories | UPDATE | public | EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')) | — |
 | voting_categories | Public read voting categories | SELECT | public | true | — |
+| web_vitals | web_vitals_admin_read | SELECT | authenticated | EXISTS ( SELECT 1 FROM public.user_roles ur WHERE ur.user_id = auth.uid() AND ur.role IN ('admin', 'root_admin') ) | — |
+| web_vitals | web_vitals_insert_any | INSERT | public | — | true |
 | weekend_guides | Authenticated users can read weekend guides | SELECT | authenticated | true | — |
 | weekend_guides | Only admins can modify weekend guides | ALL | authenticated | EXISTS ( SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin') ) | EXISTS ( SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin') ) |
 | weekend_guides | Weekend guides are publicly readable | SELECT | public | true | — |
@@ -634,57 +665,3 @@
 ## Needs human decision
 
 Anything in §1/§2 that a shipped iOS/Android binary might rely on must NOT be tightened in a single release — stage it via the CLAUDE.md deprecation flow. Items confirmed safe (web-only or additive) are fixed in the accompanying migration.
-
----
-
-## Disposition (WEB-SEC-005, 2026-06-12) — hand-maintained
-
-> The sections above are auto-generated by `scripts/audit-rls.ts`. This section
-> records the human verdict per finding. Re-running the script regenerates the
-> auto sections; re-append this block afterward.
-
-### FIXED (migration 20260612000001_rls_audit_fixes.sql)
-
-**Accidentally-public "service role" write policies → scoped to `service_role`.**
-Named "Service role can manage …" but written `FOR ALL USING(true) WITH
-CHECK(true)` with no `TO` clause, so they defaulted to PUBLIC — any authenticated
-(or anon) caller could read+write everyone's rows, and the permissive policy
-OR-ed with and nullified the proper per-user SELECT policies. Tightened to
-`TO service_role` (safe: service_role bypasses RLS so backend writes are
-unaffected; user reads served by separate "Users can view own …" policies; no
-client writes these tables directly):
-`user_subscriptions`, `payments`, `invoices`, `usage_events`, `usage_quotas`,
-`pseo_pages`, `pseo_generation_queue`, `pseo_generation_log`.
-
-**Unpinned SECURITY DEFINER functions → `SET search_path = public, pg_temp`** via
-an OID-based loop (handles overloads, idempotent, additive).
-
-### ACCEPTED (intentional, no change)
-
-- **Insert-only telemetry/intake tables** with `WITH CHECK (true)` on INSERT
-  (`security_audit_logs`, `csp_violation_logs`, `failed_auth_attempts`,
-  `failed_login_attempts`, `search_analytics`, `activity_feed`,
-  `newsletter_subscribers`, `contact_submissions`, `accessibility_reports`,
-  `media_performance_metrics`, `guide_requests`, `rfp_submissions`):
-  append-only intake surfaces that must accept writes from unauthenticated
-  visitors. No SELECT/UPDATE/DELETE granted to public, so callers write but
-  can't read others' rows.
-- **`service_role`-scoped `USING(true)` policies** (`consent_records`,
-  `social_accounts`, `newsletter_campaigns`, `trending_config`,
-  `newsletter_deliveries`, `feedback_replies`, `image_optimization_queue`):
-  already `TO service_role`, so `true` is correctly gated.
-- **anon writes**: `consent_records` anon insert (anonymous consent,
-  `user_id IS NULL`) is intentional; the `user_roles` anon rows are the
-  WEB-SEC-003 deny policies (`WITH CHECK (false)`), not grants.
-- **`geofence_regions`** authenticated insert `WITH CHECK(true)`: user-owned
-  geofence creation; rows are user-scoped on read.
-
-### NEEDS HUMAN DECISION / VERIFY
-
-- **Tables with policies but no `ENABLE ROW LEVEL SECURITY` in a migration**
-  (`profiles`, `storage.objects`, `trending_scores`, `user_analytics`,
-  `user_reputation`): RLS was very likely enabled out-of-band via the Supabase
-  dashboard (esp. `profiles` and the Supabase-managed `storage.objects`).
-  Verify live (`SELECT relrowsecurity FROM pg_class WHERE relname='…'`) before
-  assuming a hole — NOT force-enabled here because enabling RLS on `profiles`
-  blindly could break reads if the live policy set differs from migrations.

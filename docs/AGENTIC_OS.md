@@ -280,6 +280,24 @@ through the `agent-control` edge function (admin-authenticated, audited) — tog
 writes `agent_registry.enabled`, run maps the agent to its edge function and
 fires it. A drill-in sheet shows that agent's run history with error details.
 
+## RLS / config drift audit (AOS-SEC-006)
+
+The one-time WEB-SEC-005 RLS audit is now continuous. The
+`.github/workflows/rls-config-audit.yml` workflow (daily) regenerates the audit
+(`scripts/audit-rls.ts --json` → `docs/rls-audit-findings.json`) and a security
+config snapshot (`scripts/security-config-snapshot.ts` → verify_jwt exemptions,
+CSP, CORS) and **diffs them against the committed baselines** (`git show HEAD:…`).
+Any drift — new permissive-write / anon-write / missing-RLS / unpinned
+SECURITY-DEFINER finding, or a verify_jwt / CSP / CORS change vs the
+WEB-SEC-001/004 baselines — is POSTed to `agent-config-audit`, which opens one
+deduped **tier-2** task; a clean run just records success (and clears any open
+drift task).
+
+**Updating the baseline** is an audited admin action: after reviewing intended
+drift, regenerate and commit `docs/RLS_AUDIT.md`,
+`docs/rls-audit-findings.json`, and `docs/security-config-baseline.json` (the
+PR review + the drift task's resolution are the audit record).
+
 ## Incident-response runbooks (AOS-SEC-005)
 
 Incident tasks carry a codified **runbook** (`_shared/runbooks.ts`) mapping the
