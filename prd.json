@@ -3884,8 +3884,8 @@
         "npm run validate passes"
       ],
       "priority": 28,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): CI block-before-land — extended .github/workflows/secret-scan.yml PR-diff scan with provider secret patterns (Stripe sk/rk_live, AWS AKIA, Google AIza, private-key headers, high-entropy key=value assignments) that fail the build; .env.example/*.md + placeholder/env-ref values allowlisted; failure message withholds the value (keeps existing JWT + iOS Secrets checks). Detect-if-slipped — new .github/workflows/secret-history-scan.yml (daily) scans the tree via git grep (inline node scanner) emitting {file,line,type} ONLY (never values; transiently inspects line content to allowlist placeholders but stores only location), POSTs to agent-secret-scan. agent-secret-scan edge function (verify_jwt=false, requireAdminOrApiKey, runAgent-wrapped): sanitizes findings (strips any extra fields), opens ONE deduped tier-3 incident (dedupe_key secret_leak) listing locations + byType + rotationRunbook link, notifyOps high (values withheld); auto-closes the incident when a clean scan returns no findings. Registered secret-leak-scanner agent (live, security). No secret values in tasks/logs (locations only). Rotation runbook documented in AGENTIC_OS.md#secret-rotation-runbook. npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-SEC-004",

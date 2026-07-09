@@ -280,6 +280,35 @@ through the `agent-control` edge function (admin-authenticated, audited) — tog
 writes `agent_registry.enabled`, run maps the agent to its edge function and
 fires it. A drill-in sheet shows that agent's run history with error details.
 
+## Secret-leak scanning (AOS-SEC-003)
+
+Two layers, extending WEB-SEC-008 hygiene:
+
+- **Block before it lands** — `.github/workflows/secret-scan.yml` scans each PR
+  diff and **fails the build** on a JWT/anon-key shape, an iOS `Secrets` file, or
+  a provider key pattern (Stripe `sk_live`, AWS `AKIA…`, Google `AIza…`, private
+  keys, high-entropy `key=…` assignments). Placeholders (`.env.example`, `*.md`,
+  and obvious example / `process.env` references) are allowlisted; the failure
+  message never echoes the value.
+- **Detect if it slips in** — `.github/workflows/secret-history-scan.yml` (daily)
+  scans the tree and POSTs findings as **`{file, line, type}` only — never the
+  secret value** to `agent-secret-scan`, which opens one deduped **tier-3
+  incident** listing the locations and linking the rotation runbook (and
+  auto-closes it when the tree is clean).
+
+### Secret rotation runbook
+
+When a secret leak incident opens:
+
+1. **Rotate first, investigate second.** Immediately revoke/rotate the exposed
+   key at the provider (Supabase service key, Stripe, Anthropic, Resend, etc.).
+2. **Update the secret** in Supabase (`supabase secrets set KEY=…`) and any CI
+   secret store — never in the repo.
+3. **Purge from the tree** and, if it was committed, from history
+   (`git filter-repo`/BFG) on a coordinated force-push, then re-run the scan.
+4. **Confirm** the incident auto-closes on the next clean scan, and note the
+   rotation in the task resolution.
+
 ## Dependency & CVE scanner (AOS-SEC-002)
 
 Because `npm audit` needs a Node environment, the scan runs in CI: the

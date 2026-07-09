@@ -112,3 +112,8 @@ verify_jwt = false
 # open/close remediation tasks. Does its own auth via requireAdminOrApiKey.
 [functions.agent-dep-scan]
 verify_jwt = false
+
+# Secret-leak scan ingest (AOS-SEC-003). CI posts finding locations (no values)
+# here to open a tier-3 incident. Does its own auth via requireAdminOrApiKey.
+[functions.agent-secret-scan]
+verify_jwt = false
