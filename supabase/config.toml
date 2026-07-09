@@ -81,3 +81,9 @@ verify_jwt = false
 # with no auth, so verify_jwt=false (like image-transform). Rate-limited in-fn.
 [functions.og-image]
 verify_jwt = false
+
+# Escalation router (AOS-CORE-005). Cron control-plane job: routes tier-2/3
+# agent_tasks to the right human queue and coalesces duplicates. Does its own
+# auth via requireAdminOrApiKey (cron service-role key or admin JWT).
+[functions.agent-escalation-router]
+verify_jwt = false

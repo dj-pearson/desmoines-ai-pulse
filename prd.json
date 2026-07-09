@@ -3673,8 +3673,8 @@
         "npm run validate passes"
       ],
       "priority": 14,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): new agent-escalation-router edge function (verify_jwt=false in config.toml; guarded by requireAdminOrApiKey per WEB-SEC-001; wrapped in runJob for observability). Pulls escalated+unrouted tasks, assigns queue=agent_registry.owner_role by agent (fallback admin), stamps routed_at. Dedupe: coalesces a task into an existing already-routed OPEN task with the same (agent_key, dedupe_key) — closes the dup with resolution.coalesced_into (sequential loop also collapses same-batch dupes). Writes security_audit_logs entry (writeAuditLog) on every route/coalesce decision; best-effort owner notification via sendJobAlert for tier-3 (AOS-CORE-010 will formalize the channel). Fail-open: per-task error leaves the task open+unrouted and raises an ops alert, batch continues. Migration 20260709000005_agent_task_routing.sql adds agent_tasks.dedupe_key/queue/routed_at + dedupe index, registers the escalation-router governance agent, and schedules the */10 pg_cron. Documented in AUTOMATION_JOBS.md. Backward-compat additive-only. npm run validate passes."
     },
     {
       "id": "AOS-CORE-006",

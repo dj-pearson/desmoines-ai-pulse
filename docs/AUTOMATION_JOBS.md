@@ -43,6 +43,7 @@ All times UTC. Schedules are cron expressions (`min hour dom mon dow`).
 | **`ai-article-pipeline-daily`** | `0 11 * * *` | fn `ai-article-pipeline` | **Daily local-SEO article: pick topic → generate draft → score → publish (≥80) / draft-review (50-79) / discard (<50). Cap 1 auto-publish/day. Pause via `feature_flags.ai_article_pipeline_enabled` (WEB-AUTO-007)** | ✅ |
 | **`moderate-content-sweep`** | `*/15 * * * *` | fn `moderate-content` | **Re-moderate reviews stuck in `pending` (fail-open safety net for the inline review path); ≤25/run. Pause via `feature_flags.content_moderation_enabled` (WEB-AUTO-009)** | ✅ |
 | **`job-health-watchdog-daily`** | `0 8 * * *` | fn `job-health-watchdog` | **Alert on missed/failed observed jobs (WEB-AUTO-001)** | n/a |
+| **`agent-escalation-router`** | `*/10 * * * *` | fn `agent-escalation-router` | **Route tier-2/3 agent_tasks to the owner queue (agent_registry.owner_role) and coalesce duplicates; fail-open per task (AOS-CORE-005)** | ✅ |
 
 \* **Observed** = wrapped with `jobRunner` and recording to `automation_job_runs`.
 `✅` done, `planned` = adopts the same one-line wrap as its WEB-AUTO story lands
