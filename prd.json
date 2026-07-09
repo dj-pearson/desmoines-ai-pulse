@@ -3642,8 +3642,8 @@
         "npm run validate passes"
       ],
       "priority": 12,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): _shared/agentRuntime.ts exposes runAgent({agentKey, systemPrompt, tools, maxSteps, costCapUsd, model?, timeoutMs?, finalToolName?}) — an autonomous entry that (1) checks the global kill switch (feature_flags aos_kill_switch) + agent_registry.enabled via getAgentConfig and returns {status:disabled} without acting when off, (2) records the run in the AOS-CORE-002 ledger, (3) audits every tool action to agent_action_log (correlated via run_correlation), (4) defaults to the latest Claude model from ai_configuration, and delegates to a shared runToolLoop. runToolLoop enforces per-run cost cap (costCapUsd, checked between steps), wall-clock timeout (AbortSignal + elapsed checks), maxSteps, and bounded transient-error retries with exponential backoff; supports prompt caching + a terminating finalToolName. Migration 20260709000003_agent_runtime.sql adds agent_action_log (admin-read RLS) + seeds aos_kill_switch flag (additive). Refactored discover-chat to delegate its bespoke tool loop to runToolLoop (ungated, since user-facing) — response unchanged, dead ClaudeResponse types removed. Reuses _shared aiConfig/agentConfig/agentRun/cors/rateLimit. Backward-compat: DB additive-only, no edge-function shape/status changes. npm run validate passes (0 errors). Documented in docs/AGENTIC_OS.md."
     },
     {
       "id": "AOS-CORE-004",

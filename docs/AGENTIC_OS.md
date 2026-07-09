@@ -113,6 +113,34 @@ to the registry budget — the query surface for the control-plane dashboard
 WEB-AUTO jobs continue to use `jobRunner` and migrate to `runAgent` as they gain
 agent semantics (tokens/cost/escalation).
 
+## The runtime harness (AOS-CORE-003)
+
+`supabase/functions/_shared/agentRuntime.ts` is the one reusable Claude
+tool-calling loop, so agents stop copy-pasting (and drifting) their own loops.
+It has two entry points:
+
+- **`runAgent({agentKey, systemPrompt, tools, maxSteps, costCapUsd})`** — the
+  autonomous entry. It checks the **global kill switch** (`aos_kill_switch`
+  feature flag) and the agent's `enabled` flag in the registry and returns
+  `{status: 'disabled'}` **without acting** when either is off; otherwise it
+  records the run in the ledger (AOS-CORE-002), audits every tool action to
+  `agent_action_log`, defaults to the latest Claude model (from
+  `ai_configuration`), and delegates to `runToolLoop`. Each `tool` is
+  `{name, description, input_schema, execute}`.
+- **`runToolLoop(...)`** — the pure, ungated loop underneath it: cost cap,
+  wall-clock timeout, bounded retries with backoff, optional prompt caching, and
+  a terminating-tool (`finalToolName`) convention. User-facing tool-using
+  endpoints (e.g. `discover-chat`) use this directly so they are **not** subject
+  to the autonomous kill switch.
+
+Guardrails enforced per run: a token/cost ceiling (`costCapUsd`, checked between
+steps), a wall-clock `timeoutMs`, `maxSteps`, and transient-error retries. Every
+tool action is written to `agent_action_log` (audit trail) correlated to the
+ledger row via `run_correlation`.
+
+`discover-chat` is the first edge function refactored onto the harness — its
+bespoke loop is gone, its response is unchanged.
+
 ## How to add a new agent
 
 1. **Register it.** Add a row to `agent_registry` in a new additive migration
