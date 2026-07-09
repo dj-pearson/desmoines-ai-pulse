@@ -329,6 +329,24 @@ means zero LLM budget; each review is recorded as an audited run via
 `agent-pr-review`. (Semantic checks like RLS/rate-limit tightening are left out
 deliberately — a false-positive block is worse than a miss.)
 
+## Sales pipeline console + closer handoff (AOS-PROSPECT-006)
+
+The `/admin/crm` board becomes a working pipeline. Each opportunity card shows an
+**agent-suggested next action** (rule-based per stage) that a human can **Accept**
+(copies it to `next_action`, logged) or **override**. Humans can **advance
+stages**, **log activity** (`crm_activities` — notes/calls/emails/stage-changes/
+replies), and **take** (assign themselves as closer). Every change is audited via
+`crm-console` (`log_activity`, `accept_suggestion`, `assign_closer`,
+`advance_stage`).
+
+**Reply-triggered escalations land here**: `outreach-reply` now logs a `reply`
+activity on the lead's opportunity (in addition to opening the tier-2 closer
+task), so a reply surfaces in the pipeline for the assigned closer. **Winning a
+deal triggers advertiser onboarding**: advancing to `won` sets
+`onboarding_started`, notifies ops, and audits `advertiser_onboarding_triggered`
+— the handoff point into AOS-PROSPECT-007. The board keeps its
+mobile-responsive, accessible, consistent empty/loading/error states.
+
 ## Proposal / media-kit generator (AOS-PROSPECT-005)
 
 `generate-proposal` (on-demand from the CRM console) assembles a tailored

@@ -4469,8 +4469,8 @@
         "npm run validate passes"
       ],
       "priority": 67,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Sales pipeline console + human closer handoff. Migration 20260709000055 adds additive crm_opportunities.assigned_closer + onboarding_started + new crm_activities log table (opportunity_id, lead_id, type note|call|email|stage_change|reply|suggestion_accepted, note, actor; RLS admin/sales). Extended crm-console edge function: board now attaches an agent-suggested next action per opportunity (rule-based STAGE_SUGGESTION per stage) + returns assigned_closer/onboarding_started; new actions activities (list), log_activity (insert + audit), accept_suggestion (copies stage suggestion to next_action + logs suggestion_accepted + audit), assign_closer (audit); advance_stage now logs a stage_change activity and — on WON — sets onboarding_started, sets next_action to onboarding, notifies ops, and audits advertiser_onboarding_triggered (the handoff into AOS-PROSPECT-007). outreach-reply now also logs a reply activity on the lead's opportunity so reply-triggered escalations land in the pipeline for the assigned closer (in addition to the tier-2 task). Frontend /admin/crm CrmBoard enhanced (kanban by stage, existing): each opportunity card shows human next_action or the agent suggestion (italic), with Accept (accept_suggestion), advance-stage, Proposal/View, Log (window.prompt → log_activity), and Take (assign_closer to self) actions; onboarding-started badge. Mobile-responsive, accessible, consistent states. Regenerated security baselines (verify_jwt=70 unchanged — no new functions). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-PROSPECT-007",

@@ -7,8 +7,8 @@
 
 | Metric | Count |
 |---|---|
-| Migrations scanned | 311 |
-| Distinct policies (current) | 563 |
+| Migrations scanned | 312 |
+| Distinct policies (current) | 564 |
 | Tables with RLS enabled | 265 |
 | Tables with policies but no ENABLE RLS seen | 6 |
 | Permissive write policies USING/CHECK(true) | 30 |
@@ -251,6 +251,7 @@
 | content_queue_comments | Users can view comments on their queue items | SELECT | authenticated | EXISTS ( SELECT 1 FROM content_queue cq WHERE cq.id = queue_item_id AND (cq.submitted_by = auth.uid() OR cq.assigned_reviewer = auth.uid()) ) | — |
 | content_suggestions | Admin can manage content suggestions | ALL | public | user_has_role_or_higher(auth.uid(), 'admin') | — |
 | crm_activities | Activities accessible by admins and owners | ALL | authenticated | is_crm_admin() OR EXISTS ( SELECT 1 FROM crm_contacts WHERE id = crm_activities.contact_id AND user_id = auth.uid() ) | is_crm_admin() |
+| crm_activities | crm_activities_sales | ALL | authenticated | public.is_admin_or_sales() | public.is_admin_or_sales() |
 | crm_communications | Communications accessible by admins | ALL | authenticated | is_crm_admin() OR EXISTS ( SELECT 1 FROM crm_contacts WHERE id = crm_communications.contact_id AND user_id = auth.uid() ) | is_crm_admin() |
 | crm_contact_segments | Contact segments accessible by admins | ALL | authenticated | is_crm_admin() | is_crm_admin() |
 | crm_contacts | Contacts accessible by admins | ALL | authenticated | is_crm_admin() OR user_id = auth.uid() | is_crm_admin() |

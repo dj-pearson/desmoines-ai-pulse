@@ -37,6 +37,11 @@ export default function CrmBoard() {
     return m;
   }, [data]);
 
+  async function onLog(oppId: string) {
+    const note = window.prompt("Log activity (note, call, email…):");
+    if (note && note.trim()) await run({ action: "log_activity", id: oppId, note: note.trim() }, "Activity logged.");
+  }
+
   async function onProposal(oppId: string) {
     const existing = proposalByOpp.get(oppId);
     if (existing) return openProposal(existing);
@@ -138,16 +143,40 @@ export default function CrmBoard() {
                         <div key={o.id} className="rounded-md border bg-background p-2 text-sm">
                           <p className="font-medium">{accountName.get(o.account_id ?? "") ?? o.name}</p>
                           {o.value > 0 && <p className="text-xs text-muted-foreground">${o.value.toLocaleString()}</p>}
+                          {/* Next action: human-set wins; else the agent suggestion. */}
+                          {(o.next_action || o.suggested_next_action) && (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {o.next_action ? (
+                                <span>▸ {o.next_action}</span>
+                              ) : (
+                                <span className="italic">💡 {o.suggested_next_action}</span>
+                              )}
+                            </p>
+                          )}
                           <div className="mt-1 flex flex-wrap gap-1">
                             {ns && (
                               <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => run({ action: "advance_stage", id: o.id, stage: ns }, `Moved to ${ns}.`)} disabled={action.isPending}>
                                 {ns} <ChevronRight className="ml-1 h-3 w-3" />
                               </Button>
                             )}
+                            {!o.next_action && o.suggested_next_action && (
+                              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => run({ action: "accept_suggestion", id: o.id }, "Suggestion accepted.")} disabled={action.isPending}>
+                                Accept
+                              </Button>
+                            )}
                             <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => onProposal(o.id)} disabled={generate.isPending}>
                               <FileText className="mr-1 h-3 w-3" /> {proposalByOpp.has(o.id) ? "View" : "Proposal"}
                             </Button>
+                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => onLog(o.id)} disabled={action.isPending}>
+                              Log
+                            </Button>
+                            {!o.assigned_closer && (
+                              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => run({ action: "assign_closer", id: o.id, closer: user?.id }, "Assigned to you.")} disabled={action.isPending}>
+                                Take
+                              </Button>
+                            )}
                           </div>
+                          {o.onboarding_started && <p className="mt-1 text-xs font-medium text-green-600">onboarding started</p>}
                         </div>
                       );
                     })}

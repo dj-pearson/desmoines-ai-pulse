@@ -66,6 +66,13 @@ Deno.serve(async (req) => {
     await supabase.from("outreach_suppression").insert({ email, reason: "opt-out reply" });
   }
 
+  // Land the escalation in the CRM: log a reply activity on the lead's
+  // opportunity (if any), so the pipeline console shows it for the closer.
+  const { data: opp } = await supabase.from("crm_opportunities").select("id").eq("lead_id", leadId).order("updated_at", { ascending: false }).limit(1).maybeSingle();
+  if (opp) {
+    await supabase.from("crm_activities").insert({ opportunity_id: opp.id, lead_id: leadId, type: "reply", note: message.slice(0, 500) || "(reply received)" });
+  }
+
   // Escalate to a human closer (tier-2) — the agent never negotiates.
   if (!optOut) {
     await createAgentTask(supabase, {

@@ -19,6 +19,9 @@ export interface CrmOpportunity {
   stage: string;
   value: number;
   next_action: string | null;
+  suggested_next_action: string | null;
+  assigned_closer: string | null;
+  onboarding_started: boolean;
   account_id: string | null;
   campaign_id: string | null;
   closed_at: string | null;
