@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
     const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const nowIso = new Date().toISOString();
 
-    const [autoResolved, openTier1, openTier2, openTier3, overdue, failures24h, openCves, openCompliance, openFlaky, openDbHealth, openOutages] = await Promise.all([
+    const [autoResolved, openTier1, openTier2, openTier3, overdue, failures24h, openCves, openCompliance, openFlaky, openDbHealth, openOutages, deadLinks] = await Promise.all([
       count(supabase, "agent_tasks", (q) => q.eq("tier", 1).eq("status", "resolved").gte("updated_at", dayAgo)),
       count(supabase, "agent_tasks", (q) => q.eq("tier", 1).in("status", ["escalated", "assigned", "auto_resolving"])),
       count(supabase, "agent_tasks", (q) => q.eq("tier", 2).in("status", ["escalated", "assigned"])),
@@ -63,6 +63,8 @@ Deno.serve(async (req) => {
       count(supabase, "agent_tasks", (q) => q.eq("agent_key", "db-health").in("status", ["open", "escalated", "assigned"])),
       // Uptime: open outage incidents (AOS-MAINT-001).
       count(supabase, "agent_tasks", (q) => q.eq("agent_key", "uptime-monitor").in("status", ["open", "escalated", "assigned"])),
+      // Link health: currently dead links (AOS-MAINT-005).
+      count(supabase, "content_link_checks", (q) => q.eq("marked_dead", true)),
     ]);
 
     // Backup status: the most recent verification (AOS-MAINT-003).
@@ -105,6 +107,7 @@ Deno.serve(async (req) => {
       `Uptime — open outage incidents: ${openOutages}`,
       backupLine,
       dqLine,
+      `Link health — dead links: ${deadLinks}`,
     ].join("\n");
 
     // Date-keyed dedupe so a re-run same day coalesces instead of double-sending.
@@ -117,9 +120,9 @@ Deno.serve(async (req) => {
       capWindowMs: 20 * 60 * 60 * 1000, // ~one per day
     });
 
-    ctx.meta({ autoResolved, openHuman, overdue, failures24h, openCves, openCompliance, openFlaky, openDbHealth, openOutages, notify });
+    ctx.meta({ autoResolved, openHuman, overdue, failures24h, openCves, openCompliance, openFlaky, openDbHealth, openOutages, deadLinks, notify });
     ctx.processed(1);
-    return { autoResolved, openHuman, openTier1, overdue, failures24h, openCves, openCompliance, openFlaky, openDbHealth, openOutages, notify };
+    return { autoResolved, openHuman, openTier1, overdue, failures24h, openCves, openCompliance, openFlaky, openDbHealth, openOutages, deadLinks, notify };
   });
 
   return json({ ok: result.ok, ...(result.result ?? {}), status: result.status }, result.ok ? 200 : 500, corsHeaders);

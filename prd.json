@@ -4124,8 +4124,8 @@
         "npm run validate passes"
       ],
       "priority": 44,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Broken-link & dead-content monitor. agent-link-monitor (cron daily 09:00, verify_jwt=false, requireAdminOrApiKey, runAgent-wrapped) runs two audited, reversible passes. (1) Expired events: events past their date with archived_at IS NULL are unpublished tier-1 by setting archived_at (reversible — null it to restore; row never deleted), bounded to ARCHIVE_LIMIT=100/run; a past event whose title matches recurrence keywords (weekly/annual/every Xday/recurring/series) is ambiguous → escalated to tier-2 instead of auto-archived. (2) Outbound links: bounded batch (LINK_BUDGET=50 — currently-failing links first, then a rotating sample of events.source_url, restaurants.website/source_url, attractions.website) probed via HEAD (GET fallback on 405/501), state upserted per link in new content_link_checks table; a hard-dead link (404/410) for FAIL_THRESHOLD=3 consecutive checks is marked dead tier-1; a 200 that redirects to a different host is ambiguous → tier-2; transient 5xx/timeouts accumulate but never mark; a dead link that later responds is un-marked (recovery). Link marks live only in content_link_checks (content row never mutated → trivially reversible). Every auto-action (unpublish_past_event, mark_dead_link, unmark_dead_link) written to agent_audit_log with before/after. Digest reports dead-link count. New content_link_checks table (additive, RLS admin-read). Migration 20260709000032 (table + agent_registry + pg_cron); config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=44). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-MAINT-006",

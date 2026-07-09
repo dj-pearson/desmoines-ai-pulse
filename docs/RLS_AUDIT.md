@@ -7,9 +7,9 @@
 
 | Metric | Count |
 |---|---|
-| Migrations scanned | 288 |
-| Distinct policies (current) | 532 |
-| Tables with RLS enabled | 242 |
+| Migrations scanned | 289 |
+| Distinct policies (current) | 533 |
+| Tables with RLS enabled | 243 |
 | Tables with policies but no ENABLE RLS seen | 5 |
 | Permissive write policies USING/CHECK(true) | 30 |
 | Write policies granted to `anon` | 4 |
@@ -231,6 +231,7 @@
 | content_favorites | content_favorites_select_own | SELECT | public | auth.uid() = user_id | — |
 | content_helpful_votes | Users can manage their own votes | ALL | public | auth.uid() = user_id | — |
 | content_helpful_votes | Users can view all helpful votes | SELECT | public | true | — |
+| content_link_checks | link_checks_admin_read | SELECT | authenticated | EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')) | — |
 | content_merge_candidates | Admins read merge candidates | SELECT | authenticated | public.is_admin() | — |
 | content_merges | Admins read merges | SELECT | authenticated | public.is_admin() | — |
 | content_moderation | Admins read moderation queue | SELECT | authenticated | public.is_admin() | — |

@@ -329,6 +329,32 @@ means zero LLM budget; each review is recorded as an audited run via
 `agent-pr-review`. (Semantic checks like RLS/rate-limit tightening are left out
 deliberately — a false-positive block is worse than a miss.)
 
+## Broken-link & dead-content monitor (AOS-MAINT-005)
+
+`agent-link-monitor` (cron, daily 09:00 UTC) keeps content trustworthy,
+extending WEB-AUTO. Two passes, **audited and reversible** throughout:
+
+- **Expired events** — events past their `date` with `archived_at IS NULL` are
+  unpublished **tier-1** by setting `archived_at` (reversible: null it to
+  restore; the content row is never deleted). A past event whose title reads
+  *recurring* (`weekly`, `annual`, `every Monday`, …) is **ambiguous** and
+  **escalates to tier-2** instead of being auto-archived. Up to `ARCHIVE_LIMIT`
+  (100) per run.
+- **Outbound links** — a bounded batch (`LINK_BUDGET` 50: currently-failing
+  links first, then a rotating sample of `events.source_url`,
+  `restaurants.website/source_url`, `attractions.website`) is probed with HEAD
+  (GET fallback). State is upserted per link in `content_link_checks`. A
+  **hard-dead** link (404/410) for `FAIL_THRESHOLD` (3) consecutive checks is
+  **marked dead tier-1**; a 200 that **redirects to a different host** is
+  ambiguous → **tier-2**. Transient 5xx/timeouts accumulate but never mark. A
+  dead link that later responds is **un-marked** (recovery).
+
+Marks live in the separate `content_link_checks` tracker — the content row is
+never mutated for links, so every action is trivially reversible. Every
+auto-action (archive, mark-dead, un-mark) is written to the `agent_audit_log`
+with before/after. Link health (dead-link count) and stale-content are surfaced
+in the ops digest.
+
 ## Data-quality sweeper (AOS-MAINT-004)
 
 `agent-data-quality` (cron, daily 08:00 UTC) keeps content rows complete,

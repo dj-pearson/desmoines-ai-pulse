@@ -198,3 +198,8 @@ verify_jwt = false
 # existing enrichment fns + escalates. Auth via requireAdminOrApiKey.
 [functions.agent-data-quality]
 verify_jwt = false
+
+# Broken-link & dead-content monitor (AOS-MAINT-005). Cron-invoked; probes
+# outbound links, unpublishes past events (reversible). Auth via requireAdminOrApiKey.
+[functions.agent-link-monitor]
+verify_jwt = false
