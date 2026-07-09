@@ -2,6 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import {
   ArrowLeft,
   BarChart3,
+  BookOpen,
   Bot,
   ChevronDown,
   CreditCard,
@@ -127,6 +128,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: "Escalation inbox", href: "/admin/inbox", icon: Inbox, description: "Tier-2/3 agent tasks for a human" },
       { label: "Action approvals", href: "/admin/approvals", icon: ShieldCheck, description: "Approve risky agent actions" },
       { label: "Agent audit", href: "/admin/agent-audit", icon: FileClock, description: "Immutable agent action trail" },
+      { label: "Support KB", href: "/admin/support-kb", icon: BookOpen, description: "Knowledge base for the support agent" },
       { label: "Site tools", href: "/admin/tools", icon: Wrench },
       { label: "Refunds", href: "/admin/refunds", icon: Receipt },
       { label: "Security", href: "/admin/security", icon: Shield },

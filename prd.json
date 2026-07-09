@@ -4199,8 +4199,8 @@
         "npm run validate passes"
       ],
       "priority": 49,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Knowledge base + retrieval for support. Enabled pgvector; new support_kb table (title, content, source, category, embedding vector(1536), needs_embedding, is_active) with HNSW cosine index (ivfflat fallback) + match_support_kb(query_embedding, match_count, threshold) SECURITY DEFINER RPC (admin/service-role gated) returning top passages WITH sources by cosine similarity. Shared helpers _shared/embed.ts (OpenAI text-embedding-3-small, 1536 dims, returns cost) and _shared/kbRetrieve.ts (embed query → match RPC, used by first-responder CS-002). Edge functions: support-kb-embed (cron every 30m + on-demand, budgeted/audited via runAgent against support-kb agent $10/mo budget) embeds articles needing it; a BEFORE UPDATE trigger flips needs_embedding=true on title/content change so edits re-embed automatically; support-kb-admin (service-role CRUD — list/upsert/delete, table has no client write policy — with inline re-embed on save); support-kb-search (grounded retrieval test returning passages+sources). Admin UI /admin/support-kb (AdminSupportKb page + SupportKbManager component + useSupportKb hook, lazyWithRetry route + ProtectedRoute requireAdmin + AdminNav 'Support KB' link) to add/edit/delete articles with a live retrieval tester. Migration 20260709000036 seeds a starter KB from existing docs/FAQ/policies (tiers, cancellation, refunds, password reset, content reports, contact). RLS admin-read; service-role writes. config.toml entries for the 3 functions; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=49). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-CS-004",

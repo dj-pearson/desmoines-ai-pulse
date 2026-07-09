@@ -7,13 +7,13 @@
 
 | Metric | Count |
 |---|---|
-| Migrations scanned | 291 |
-| Distinct policies (current) | 536 |
-| Tables with RLS enabled | 246 |
+| Migrations scanned | 293 |
+| Distinct policies (current) | 544 |
+| Tables with RLS enabled | 249 |
 | Tables with policies but no ENABLE RLS seen | 5 |
 | Permissive write policies USING/CHECK(true) | 30 |
 | Write policies granted to `anon` | 4 |
-| SECURITY DEFINER functions | 114 |
+| SECURITY DEFINER functions | 116 |
 | …of those WITHOUT pinned search_path | 50 |
 
 ## ⚠️ Findings needing attention
@@ -558,6 +558,14 @@
 | storage.objects | Users upload own review photos | INSERT | public | — | bucket_id = 'review-photos' AND auth.uid()::text = (storage.foldername(name))[1] |
 | subscription_events | subscription_events_admin_select | SELECT | authenticated | public.is_admin() | — |
 | subscription_plans | Anyone can view subscription plans | SELECT | public | is_active = true | — |
+| support_kb | support_kb_admin_read | SELECT | authenticated | is_admin() | — |
+| support_messages | support_messages_admin_read | SELECT | authenticated | is_admin() | — |
+| support_messages | support_messages_user_insert | INSERT | authenticated | — | EXISTS (SELECT 1 FROM public.support_tickets t WHERE t.id = ticket_id AND t.user_id = auth.uid()) |
+| support_messages | support_messages_user_read | SELECT | authenticated | EXISTS (SELECT 1 FROM public.support_tickets t WHERE t.id = ticket_id AND t.user_id = auth.uid()) | — |
+| support_tickets | support_tickets_admin_read | SELECT | authenticated | is_admin() | — |
+| support_tickets | support_tickets_admin_update | UPDATE | authenticated | is_admin() | — |
+| support_tickets | support_tickets_user_insert | INSERT | authenticated | — | auth.uid() = user_id |
+| support_tickets | support_tickets_user_read | SELECT | authenticated | auth.uid() = user_id | — |
 | surprise_pick_outcomes | Users can insert their own surprise outcomes | INSERT | public | — | auth.uid() = user_id OR user_id IS NULL |
 | surprise_pick_outcomes | Users can read their own surprise outcomes | SELECT | public | auth.uid() = user_id | — |
 | swipe_interactions | Users can delete own swipes | DELETE | public | auth.uid() = user_id | — |

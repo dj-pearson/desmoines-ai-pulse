@@ -329,6 +329,28 @@ means zero LLM budget; each review is recorded as an audited run via
 `agent-pr-review`. (Semantic checks like RLS/rate-limit tightening are left out
 deliberately — a false-positive block is worse than a miss.)
 
+## Support knowledge base + retrieval (AOS-CS-003)
+
+Grounded answers need grounded sources. `support_kb` stores docs/FAQ/policy
+passages with **pgvector embeddings** (OpenAI `text-embedding-3-small`, 1536
+dims); `match_support_kb(query_embedding, count, threshold)` is an admin/service-
+role RPC that returns the top passages by cosine similarity **with their
+sources**, so the first-responder (AOS-CS-002) can cite them and humans can
+verify. The shared `retrieveKb(supabase, query)` helper (`_shared/kbRetrieve.ts`)
+embeds a query and calls the RPC in one step.
+
+- **Embedding** — `support-kb-embed` (cron every 30 min + on-demand) embeds any
+  article with `needs_embedding = true`, cost attributed to the `support-kb`
+  agent budget ($10/mo). A DB trigger flips `needs_embedding` back on whenever an
+  article's title/content changes, so **edits re-embed automatically**.
+- **Admin UI** — `/admin/support-kb` (`SupportKbManager`) lists, adds, edits, and
+  deletes articles through the service-role `support-kb-admin` function (the
+  table has no client write policy); a save re-embeds inline so the article is
+  immediately retrievable. The page also has a **retrieval tester** that shows
+  the top passages + similarity for a sample query.
+- **Seed** — the migration seeds a starter KB from existing docs/FAQ/policies
+  (tiers, cancellation, refunds, password reset, reporting content, contact).
+
 ## Unified support intake (AOS-CS-001)
 
 Every support request lands in one place — `support_tickets` (+ a

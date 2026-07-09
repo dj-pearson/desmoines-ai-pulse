@@ -213,3 +213,18 @@ verify_jwt = false
 # aggregates edge_function_metrics + ledger for regressions. Auth via requireAdminOrApiKey.
 [functions.agent-edge-metrics]
 verify_jwt = false
+
+# Support KB embed (AOS-CS-003). Cron + admin-invoked; re-embeds KB articles.
+# Auth via requireAdminOrApiKey.
+[functions.support-kb-embed]
+verify_jwt = false
+
+# Support KB admin CRUD (AOS-CS-003). Admin console writes + inline re-embed.
+# Auth via requireAdminOrApiKey.
+[functions.support-kb-admin]
+verify_jwt = false
+
+# Support KB retrieval (AOS-CS-003). Grounded top-passage retrieval with sources.
+# Auth via requireAdminOrApiKey.
+[functions.support-kb-search]
+verify_jwt = false
