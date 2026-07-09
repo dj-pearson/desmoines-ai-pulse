@@ -280,6 +280,17 @@ through the `agent-control` edge function (admin-authenticated, audited) — tog
 writes `agent_registry.enabled`, run maps the agent to its edge function and
 fires it. A drill-in sheet shows that agent's run history with error details.
 
+## Dependency-update agent (AOS-DEV-003)
+
+The `dependency-update-agent` (`dependency-update.yml`, weekly) runs
+`npm outdated`, splits updates into **non-breaking** (same major) and **majors**,
+and prioritizes packages with an **open CVE task** (queried from `agent-dep-update`
+`mode:priority` — coordinates with AOS-SEC-002). It applies the grouped
+non-breaking bumps, gates them on `npm run validate && npm run build`, and opens
+a PR **only when green** (red annotates the failure, no PR). Major-version bumps
+are escalated to deduped **tier-2** review tasks via `agent-dep-update`
+`mode:majors` — they can break, so a human reviews them.
+
 ## Autonomous fix agent (AOS-DEV-002)
 
 The `dev-fix-agent` formalizes the Ralph loop for **tier-1 dev tasks** (from the

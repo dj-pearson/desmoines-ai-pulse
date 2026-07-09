@@ -153,3 +153,8 @@ verify_jwt = false
 # dev tasks and record attempts. Does its own auth via requireAdminOrApiKey.
 [functions.agent-dev-fix]
 verify_jwt = false
+
+# Dependency-update coordination (AOS-DEV-003). CI calls this for CVE-priority
+# packages and to escalate majors. Does its own auth via requireAdminOrApiKey.
+[functions.agent-dep-update]
+verify_jwt = false

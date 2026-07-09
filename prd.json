@@ -3989,8 +3989,8 @@
         "npm run validate passes"
       ],
       "priority": 35,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): .github/workflows/dependency-update.yml (weekly Mon 05:00 + dispatch): npm outdated --json, splits non-breaking (same major major(cur)==major(latest)) vs majors; queries CVE-priority packages from agent-dep-update mode=priority (coordinates AOS-SEC-002) and sorts them first; applies grouped non-breaking bumps (npm install pkg@wanted), gates on npm run validate && npm run build, opens a PR to develop ONLY when green (red -> ::warning annotate + step summary, no PR); escalates majors to agent-dep-update mode=majors. agent-dep-update edge function (verify_jwt=false, requireAdminOrApiKey, runAgent-wrapped): mode=priority returns package names with open cve: tasks; mode=majors opens deduped tier-2 review tasks (major_update:<pkg>). Registered dependency-update-agent (live, dev). Full test suite runs via the opened PR CI; workflow gates on validate+build. Backward-compat additive-only. npm run validate passes (0 errors). Documented in AGENTIC_OS.md."
     },
     {
       "id": "AOS-DEV-004",

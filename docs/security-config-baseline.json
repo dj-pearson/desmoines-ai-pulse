@@ -5,6 +5,7 @@
     "agent-config-audit",
     "agent-control",
     "agent-dep-scan",
+    "agent-dep-update",
     "agent-dev-fix",
     "agent-error-triage",
     "agent-escalation-router",
@@ -35,7 +36,7 @@
     "social-daily-poster",
     "version-check"
   ],
-  "verifyJwtCount": 34,
+  "verifyJwtCount": 35,
   "cspPresent": true,
   "cspHash": "1625510d45515045",
   "corsHash": "b1683c94fbad28a6"
