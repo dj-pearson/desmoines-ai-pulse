@@ -280,6 +280,33 @@ through the `agent-control` edge function (admin-authenticated, audited) — tog
 writes `agent_registry.enabled`, run maps the agent to its edge function and
 fires it. A drill-in sheet shows that agent's run history with error details.
 
+## Incident-response runbooks (AOS-SEC-005)
+
+Incident tasks carry a codified **runbook** (`_shared/runbooks.ts`) mapping the
+incident type to an ordered set of response steps. A responder opens the task in
+`/admin/inbox` and triggers steps:
+
+- **Safe, reversible steps** (`notify_ops`, `rotate_reminder`) run immediately
+  (tier-1).
+- **Account/data-affecting steps** (`revoke_sessions`, `lock_account`,
+  `block_ip`, `throttle_client`, `flag_account_review`,
+  `reconcile_entitlement`) are **approval-gated** — triggering them queues a
+  human approval (AOS-CORE-007) rather than executing.
+
+| Incident type | Steps |
+|---|---|
+| credential_stuffing | notify · block IP\* · revoke sessions\* |
+| quota_abuse | notify · throttle client\* |
+| refund | notify · flag account review\* |
+| entitlement | notify · reconcile entitlement\* |
+| secret_leak | notify · rotation reminder · revoke sessions\* |
+| generic / policy_violation | notify |
+
+<sup>\* approval-gated</sup>
+
+Every triggered step is **audited** (`runbook_step:<id>` in `agent_audit_log`)
+and appended to the incident task's `payload.timeline`, shown in the inbox.
+
 ## Fraud & abuse detector (AOS-SEC-004)
 
 The `fraud-abuse-detector` agent (`agent-fraud-monitor`, every 6h) correlates

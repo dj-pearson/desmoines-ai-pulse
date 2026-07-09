@@ -185,3 +185,52 @@ export function useResolveTask() {
 export function isOverdue(task: Pick<AgentTask, "sla_due_at">): boolean {
   return !!task.sla_due_at && new Date(task.sla_due_at).getTime() < Date.now();
 }
+
+export interface RunbookStep {
+  id: string;
+  label: string;
+  action: string;
+  requiresApproval: boolean;
+  description: string;
+}
+
+export interface RunbookTimelineEntry {
+  stepId: string;
+  label: string;
+  actor: string | null;
+  at: string;
+  result: string;
+}
+
+/** The applicable incident-response runbook + timeline for a task (AOS-SEC-005). */
+export function useRunbook(taskId: string | null) {
+  return useQuery({
+    queryKey: ["runbook", taskId],
+    queryFn: async (): Promise<{ incidentType: string; steps: RunbookStep[]; timeline: RunbookTimelineEntry[] }> => {
+      const { data, error } = await supabase.functions.invoke("agent-runbook", {
+        body: { mode: "list", taskId },
+      });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!taskId,
+    staleTime: 15 * 1000,
+  });
+}
+
+export function useRunRunbookStep() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ taskId, stepId, actorId }: { taskId: string; stepId: string; actorId: string }) => {
+      const { data, error } = await supabase.functions.invoke("agent-runbook", {
+        body: { mode: "run", taskId, stepId, actorId },
+      });
+      if (error) throw error;
+      return data as { ok: boolean; result: string };
+    },
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["runbook", vars.taskId] });
+      qc.invalidateQueries({ queryKey: ["agent-tasks"] });
+    },
+  });
+}

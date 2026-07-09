@@ -122,3 +122,9 @@ verify_jwt = false
 # usage and opens incident tasks. Does its own auth via requireAdminOrApiKey.
 [functions.agent-fraud-monitor]
 verify_jwt = false
+
+# Incident-response runbook executor (AOS-SEC-005). Admin responder endpoint:
+# runs safe steps, queues approvals for account-affecting ones. Auth via
+# requireAdminOrApiKey.
+[functions.agent-runbook]
+verify_jwt = false

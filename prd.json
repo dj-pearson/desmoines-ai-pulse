@@ -3914,8 +3914,8 @@
         "npm run validate passes"
       ],
       "priority": 30,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): _shared/runbooks.ts codifies RUNBOOKS mapping incident type (credential_stuffing/quota_abuse/refund/entitlement/secret_leak/policy_violation/generic, derived via incidentTypeOf from task payload/dedupe_key/agent_key) to ordered RunbookStep[]; safe reversible steps (notify_ops, rotate_reminder) requiresApproval=false, account/data-affecting (revoke_sessions, lock_account, block_ip, throttle_client, flag_account_review, reconcile_entitlement) requiresApproval=true. agent-runbook edge function (verify_jwt=false, requireAdminOrApiKey): mode=list returns steps+timeline; mode=run executes safe steps immediately (runSafeStep -> notifyOps) or queues a human approval via createApproval (AOS-CORE-007) for approval-gated ones; every step audited (writeAgentAudit runbook_step:<id>) and appended to agent_tasks.payload.timeline. Frontend: useRunbook/useRunRunbookStep hooks + RunbookPanel in AgentInbox TaskDetail (Run/Request buttons per step + timeline display) so responders trigger runbooks from /admin/inbox. Runbooks documented in AGENTIC_OS.md. npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-SEC-006",

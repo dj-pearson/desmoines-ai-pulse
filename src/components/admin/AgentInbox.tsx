@@ -22,6 +22,8 @@ import {
   useAgentRunSummary,
   useClaimTask,
   useResolveTask,
+  useRunbook,
+  useRunRunbookStep,
   isOverdue,
   type AgentTask,
   type AgentTaskFilters,
@@ -51,6 +53,66 @@ function relativeSla(task: AgentTask): string {
   const m = Math.floor((abs % 3_600_000) / 60_000);
   const rel = h > 0 ? `${h}h ${m}m` : `${m}m`;
   return ms < 0 ? `Overdue by ${rel}` : `Due in ${rel}`;
+}
+
+function RunbookPanel({ task }: { task: AgentTask }) {
+  const { user } = useAuth();
+  const { data: runbook, isLoading } = useRunbook(task.id);
+  const runStep = useRunRunbookStep();
+
+  async function run(stepId: string) {
+    if (!user?.id) return;
+    try {
+      const res = await runStep.mutateAsync({ taskId: task.id, stepId, actorId: user.id });
+      toast.success(res.result?.startsWith("queued_for_approval") ? "Step queued for approval" : "Step executed");
+    } catch (error) {
+      handleError(error, { component: "AgentInbox", action: "runbook_step" });
+      toast.error("Could not run the step.");
+    }
+  }
+
+  if (isLoading || !runbook || runbook.steps.length === 0) return null;
+
+  return (
+    <section aria-label="Incident runbook">
+      <h3 className="mb-1 font-medium">Runbook — {runbook.incidentType.replace(/_/g, " ")}</h3>
+      <ul className="space-y-2">
+        {runbook.steps.map((step) => (
+          <li key={step.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-2">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-medium">{step.label}</span>
+                {step.requiresApproval && <Badge variant="outline">approval-gated</Badge>}
+              </div>
+              <p className="text-xs text-muted-foreground">{step.description}</p>
+            </div>
+            <Button
+              size="sm"
+              variant={step.requiresApproval ? "outline" : "secondary"}
+              className="min-h-[44px]"
+              disabled={runStep.isPending}
+              onClick={() => run(step.id)}
+              aria-label={`Run runbook step ${step.label}`}
+            >
+              {step.requiresApproval ? "Request" : "Run"}
+            </Button>
+          </li>
+        ))}
+      </ul>
+      {runbook.timeline.length > 0 && (
+        <div className="mt-2">
+          <h4 className="text-xs font-medium text-muted-foreground">Timeline</h4>
+          <ul className="mt-1 space-y-1">
+            {runbook.timeline.map((t, i) => (
+              <li key={i} className="text-xs text-muted-foreground">
+                {new Date(t.at).toLocaleString()} — {t.label}: {t.result}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
+  );
 }
 
 function TaskDetail({
@@ -133,6 +195,8 @@ function TaskDetail({
             <p className="text-muted-foreground">No recent run recorded for this agent.</p>
           )}
         </section>
+
+        <RunbookPanel task={task} />
 
         <section aria-label="Resolution">
           <Label htmlFor="resolution-notes" className="mb-1 block font-medium">
