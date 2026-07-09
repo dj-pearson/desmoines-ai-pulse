@@ -3626,8 +3626,8 @@
         "npm run validate passes"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): reused/extended the WEB-AUTO ledger instead of a parallel table. Migration 20260709000002_agent_run_ledger.sql additively adds agent_key (FK agent_registry ON DELETE SET NULL), items_escalated, tokens_used, cost_usd, summary to automation_job_runs; loosens the status CHECK to the union running/success/failed/partial/failure/escalated/skipped (widening only = additive-safe); adds partial index on (agent_key, started_at desc); creates agent_run_summary view (per registered agent: latest run + 7-day success/failure/escalation/items/tokens/cost rollup joined to registry budget) for the control plane (AOS-CORE-008). Added _shared/agentRun.ts runAgent(agentKey, fn, {client}) — opens/updates/closes a ledger row, ctx.processed/escalated/failed/tokens/cost/summary/skip/meta, status resolution, fully fail-open (never throws, fn errors captured not re-thrown). Wired into backfill-images (previously unobserved registered agent — no double-logging) with dry-run marked skipped. npm run validate passes (0 errors). Documented in docs/AGENTIC_OS.md."
     },
     {
       "id": "AOS-CORE-003",

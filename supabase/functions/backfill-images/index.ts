@@ -8,6 +8,7 @@ import {
 } from "../_shared/imageStorage.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { validateURLForSSRF } from "../_shared/validation.ts";
+import { runAgent } from "../_shared/agentRun.ts";
 import {
   findExistingVenueRecord,
   scrapeImageFromWebsite,
@@ -288,6 +289,12 @@ Deno.serve(async (req) => {
       details: [],
     };
 
+    // Record this invocation in the unified agent run ledger (AOS-CORE-002).
+    // Fail-open: runAgent never throws, so a ledger hiccup can't break the
+    // backfill itself. Dry runs are marked skipped (no writes happen).
+    await runAgent("backfill-images", async (ctx) => {
+      if (dryRun) ctx.skip("dry run — preview only, no writes");
+
     for (const record of records) {
       const id: string = record.id;
       const name: string = record[namecol] ?? id;
@@ -423,6 +430,23 @@ Deno.serve(async (req) => {
         source,
       });
     }
+
+      // Report outcome to the ledger. Image work uses no LLM tokens; cost is
+      // effectively storage/egress, left at 0 here.
+      ctx.processed(result.updated);
+      ctx.failed(result.failed);
+      ctx.meta({
+        category,
+        batchSize,
+        offset,
+        skippedCount: result.skipped,
+        nextOffset: result.nextOffset,
+      });
+      ctx.summary(
+        `[${category}] updated ${result.updated}, failed ${result.failed}, skipped ${result.skipped} of ${result.processed} processed`,
+      );
+      return result;
+    }, { client: supabase });
 
     console.log(
       `✅ backfill-images done: updated=${result.updated} skipped=${result.skipped} failed=${result.failed} nextOffset=${result.nextOffset}`

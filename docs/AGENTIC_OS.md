@@ -78,6 +78,41 @@ returns permissive defaults (`enabled: true`, `0.85` threshold, no budget) with
 `found: false` and logs — a registry hiccup must never silently kill a live
 agent. Results are cached for 60s per `agent_key`.
 
+## The run ledger (AOS-CORE-002)
+
+Every agent execution is recorded so reliability and spend are visible. Rather
+than a parallel table, the WEB-AUTO run ledger `automation_job_runs` was
+**extended** with `agent_key` (FK → `agent_registry`), `items_escalated`,
+`tokens_used`, `cost_usd`, and `summary`, and its status vocabulary widened to
+include `escalated` and `skipped` alongside the existing job statuses.
+
+Agents wrap their work in `runAgent` (`supabase/functions/_shared/agentRun.ts`):
+
+```ts
+import { runAgent } from "../_shared/agentRun.ts";
+
+const res = await runAgent("backfill-images", async (ctx) => {
+  ctx.processed(updated);
+  ctx.escalated(needsHuman);   // items routed to a human queue
+  ctx.tokens(tokensUsed);
+  ctx.cost(usd);
+  ctx.summary(`updated ${updated}, escalated ${needsHuman}`);
+  return { updated };
+}, { client: supabase });
+```
+
+Outcome resolves to `failure` (fn threw), `skipped` (`ctx.skip()`), `escalated`
+(items escalated, none processed), or `success`. Like `jobRunner`, every ledger
+write is **best-effort and fail-open** — a ledger hiccup logs a warning and
+never crashes the isolate or fails the agent's real work.
+
+The `agent_run_summary` view exposes, per registered agent, its latest run plus
+a 7-day rollup of successes/failures/escalations, items, tokens, and cost joined
+to the registry budget — the query surface for the control-plane dashboard
+(AOS-CORE-008). `backfill-images` is wired as the first covered agent; the other
+WEB-AUTO jobs continue to use `jobRunner` and migrate to `runAgent` as they gain
+agent semantics (tokens/cost/escalation).
+
 ## How to add a new agent
 
 1. **Register it.** Add a row to `agent_registry` in a new additive migration
