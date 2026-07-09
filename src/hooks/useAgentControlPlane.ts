@@ -149,6 +149,61 @@ export function useSetGlobalPause() {
   });
 }
 
+export interface AgentConfigRow {
+  agent_key: string;
+  category: string;
+  tier1_confidence_threshold: number;
+  monthly_cost_budget_usd: number | null;
+  auto_override: boolean;
+}
+
+/** Categories where a low tier-1 threshold is gated by the 0.80 safety floor. */
+export const SENSITIVE_CATEGORIES = new Set(["security", "manage"]);
+export const THRESHOLD_FLOOR = 0.8;
+
+/** The editable registry config for one agent (threshold, budget, override). */
+export function useAgentConfigRow(agentKey: string | null) {
+  return useQuery({
+    queryKey: ["agent-config-row", agentKey],
+    queryFn: async (): Promise<AgentConfigRow | null> => {
+      const { data, error } = await db
+        .from("agent_registry")
+        .select("agent_key, category, tier1_confidence_threshold, monthly_cost_budget_usd, auto_override")
+        .eq("agent_key", agentKey)
+        .maybeSingle();
+      if (error) throw error;
+      return (data ?? null) as AgentConfigRow | null;
+    },
+    enabled: !!agentKey,
+    staleTime: 15 * 1000,
+  });
+}
+
+export function useUpdateAgentConfig() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      agentKey: string;
+      actorId: string;
+      tier1ConfidenceThreshold?: number;
+      monthlyCostBudgetUsd?: number | null;
+      autoOverride?: boolean;
+    }) => {
+      const { data, error } = await supabase.functions.invoke("agent-control", {
+        body: { mode: "update_config", ...args },
+      });
+      // Surface the edge function's 422 safety-floor message to the caller.
+      if (error) throw error;
+      if (data && data.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["agent-summaries"] });
+      qc.invalidateQueries({ queryKey: ["agent-config-row", vars.agentKey] });
+    },
+  });
+}
+
 export function successRate(successes: number, runs: number): number | null {
   if (!runs) return null;
   return Math.round((successes / runs) * 100);

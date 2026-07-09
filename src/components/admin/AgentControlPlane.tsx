@@ -4,6 +4,17 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -21,7 +32,11 @@ import {
   useRunAgent,
   useGlobalPause,
   useSetGlobalPause,
+  useAgentConfigRow,
+  useUpdateAgentConfig,
   successRate,
+  SENSITIVE_CATEGORIES,
+  THRESHOLD_FLOOR,
   type AgentSummary,
 } from "@/hooks/useAgentControlPlane";
 import { cn } from "@/lib/utils";
@@ -72,6 +87,131 @@ function RunHistory({ agent, onClose }: { agent: AgentSummary; onClose: () => vo
   );
 }
 
+function ConfigDialog({ agent, onClose }: { agent: AgentSummary; onClose: () => void }) {
+  const { user } = useAuth();
+  const { data: cfg, isLoading } = useAgentConfigRow(agent.agent_key);
+  const update = useUpdateAgentConfig();
+  const [threshold, setThreshold] = useState<string>("");
+  const [budget, setBudget] = useState<string>("");
+  const [override, setOverride] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  // Seed the form once the config row arrives.
+  if (cfg && !loaded) {
+    setThreshold(String(cfg.tier1_confidence_threshold));
+    setBudget(cfg.monthly_cost_budget_usd == null ? "" : String(cfg.monthly_cost_budget_usd));
+    setOverride(cfg.auto_override);
+    setLoaded(true);
+  }
+
+  const sensitive = SENSITIVE_CATEGORIES.has(agent.category);
+  const thresholdNum = parseFloat(threshold);
+  const belowFloor = sensitive && Number.isFinite(thresholdNum) && thresholdNum < THRESHOLD_FLOOR;
+
+  async function save() {
+    if (!user?.id) return;
+    const t = parseFloat(threshold);
+    if (!Number.isFinite(t) || t < 0 || t > 1) {
+      toast.error("Threshold must be between 0 and 1.");
+      return;
+    }
+    const b = budget.trim() === "" ? null : parseFloat(budget);
+    if (b != null && (!Number.isFinite(b) || b < 0)) {
+      toast.error("Budget must be a non-negative number or blank.");
+      return;
+    }
+    try {
+      const res = await update.mutateAsync({
+        agentKey: agent.agent_key,
+        actorId: user.id,
+        tier1ConfidenceThreshold: t,
+        monthlyCostBudgetUsd: b,
+        autoOverride: override,
+      });
+      if (res?.safetyFloor) {
+        toast.error(res.error ?? "Below the safety floor for this category.");
+        return;
+      }
+      toast.success("Config updated");
+      onClose();
+    } catch (error) {
+      handleError(error, { component: "AgentControlPlane", action: "update_config" });
+      toast.error(error instanceof Error ? error.message : "Could not update config.");
+    }
+  }
+
+  return (
+    <DialogContent aria-label={`Configure ${agent.name}`}>
+      <DialogHeader>
+        <DialogTitle>Configure {agent.name}</DialogTitle>
+        <DialogDescription>
+          {agent.category} · auto-vs-human threshold and monthly budget. Read live — no deploy needed.
+        </DialogDescription>
+      </DialogHeader>
+
+      {isLoading ? (
+        <Skeleton className="h-32 w-full" />
+      ) : (
+        <div className="space-y-4">
+          <div>
+            <Label htmlFor="cfg-threshold">Tier-1 confidence threshold (0–1)</Label>
+            <Input
+              id="cfg-threshold"
+              type="number"
+              step="0.01"
+              min="0"
+              max="1"
+              value={threshold}
+              onChange={(e) => setThreshold(e.target.value)}
+              className="min-h-[44px]"
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              At/above this confidence, tasks auto-resolve (tier 1); below, they escalate to a human.
+            </p>
+          </div>
+
+          <div>
+            <Label htmlFor="cfg-budget">Monthly cost budget (USD, blank = none)</Label>
+            <Input
+              id="cfg-budget"
+              type="number"
+              step="1"
+              min="0"
+              value={budget}
+              onChange={(e) => setBudget(e.target.value)}
+              className="min-h-[44px]"
+            />
+          </div>
+
+          {sensitive && (
+            <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-2">
+              <Checkbox
+                id="cfg-override"
+                checked={override}
+                onCheckedChange={(v) => setOverride(v === true)}
+                className="mt-1"
+              />
+              <Label htmlFor="cfg-override" className="text-sm font-normal">
+                Override the {THRESHOLD_FLOOR} safety floor for this {agent.category} agent.
+                {belowFloor && !override && (
+                  <span className="mt-1 block font-medium text-destructive">
+                    Required: {threshold} is below the floor for a financial/destructive category.
+                  </span>
+                )}
+              </Label>
+            </div>
+          )}
+        </div>
+      )}
+
+      <DialogFooter>
+        <Button variant="outline" className="min-h-[44px]" onClick={onClose}>Cancel</Button>
+        <Button className="min-h-[44px]" onClick={save} disabled={update.isPending || isLoading}>Save</Button>
+      </DialogFooter>
+    </DialogContent>
+  );
+}
+
 export default function AgentControlPlane() {
   const { user } = useAuth();
   const { data: agents, isLoading, isError, refetch, isFetching } = useAgentSummaries();
@@ -80,6 +220,7 @@ export default function AgentControlPlane() {
   const toggle = useToggleAgent();
   const run = useRunAgent();
   const [drill, setDrill] = useState<AgentSummary | null>(null);
+  const [editing, setEditing] = useState<AgentSummary | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
 
   async function onGlobalPause(paused: boolean) {
@@ -262,6 +403,15 @@ export default function AgentControlPlane() {
                           size="sm"
                           variant="outline"
                           className="min-h-[44px]"
+                          onClick={() => setEditing(a)}
+                          aria-label={`Configure ${a.name}`}
+                        >
+                          Config
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="min-h-[44px]"
                           onClick={() => setDrill(a)}
                           aria-label={`Run history for ${a.name}`}
                         >
@@ -285,6 +435,10 @@ export default function AgentControlPlane() {
       <Sheet open={!!drill} onOpenChange={(open) => !open && setDrill(null)}>
         {drill && <RunHistory agent={drill} onClose={() => setDrill(null)} />}
       </Sheet>
+
+      <Dialog open={!!editing} onOpenChange={(open) => !open && setEditing(null)}>
+        {editing && <ConfigDialog agent={editing} onClose={() => setEditing(null)} />}
+      </Dialog>
     </div>
   );
 }

@@ -78,6 +78,31 @@ returns permissive defaults (`enabled: true`, `0.85` threshold, no budget) with
 `found: false` and logs — a registry hiccup must never silently kill a live
 agent. Results are cached for 60s per `agent_key`.
 
+## Confidence thresholds + auto-vs-human tuning (AOS-CORE-011)
+
+Each agent's `tier1_confidence_threshold` is the line between acting
+autonomously (tier 1) and escalating to a human — and the right line differs by
+category. Admins tune it (and `monthly_cost_budget_usd`) per agent from the
+**Config** button on `/admin/agents`. `getAgentConfig`/`createAgentTask` read the
+registry live (≤60s cache), so tuning takes effect **without a deploy**; every
+change is audited.
+
+Seeded defaults lean conservative where mistakes are costly:
+
+| Category | Default tier-1 threshold | Rationale |
+|---|---|---|
+| `security`, `governance` | 0.95 | destructive / policy — act only when almost certain |
+| `dev`, `maintain` | 0.85–0.90 | code + data changes; medium caution |
+| `manage`, `support` | 0.85 | account / customer actions |
+| `nurture` | 0.80 | content/marketing; cheaper to get wrong |
+| `prospect` | 0.75 | discovery; low blast radius |
+
+**Safety floor:** for financial/destructive categories (`security`, `manage`),
+a DB trigger (`enforce_threshold_floor`) rejects a threshold below **0.80**
+unless `auto_override` is explicitly set — so you can't quietly make a sensitive
+agent near-fully-auto. The config dialog surfaces the override checkbox and the
+floor error for those categories.
+
 ## The run ledger (AOS-CORE-002)
 
 Every agent execution is recorded so reliability and spend are visible. Rather

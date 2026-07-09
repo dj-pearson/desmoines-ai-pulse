@@ -84,6 +84,44 @@ Deno.serve(async (req) => {
 
     if (!agentKey) return json({ error: "agentKey required" }, 400, corsHeaders);
 
+    // Tune per-agent/category thresholds + budget (AOS-CORE-011). Read live by
+    // getAgentConfig/createAgentTask, so tuning takes effect without a deploy.
+    // The 0.80 safety floor for sensitive categories is enforced by the DB
+    // trigger; here we surface a clear error and pass auto_override through.
+    if (mode === "update_config") {
+      const updates: Record<string, unknown> = {};
+      if (typeof body.tier1ConfidenceThreshold === "number") {
+        const t = body.tier1ConfidenceThreshold as number;
+        if (t < 0 || t > 1) return json({ error: "threshold must be in [0,1]" }, 400, corsHeaders);
+        updates.tier1_confidence_threshold = t;
+      }
+      if (body.monthlyCostBudgetUsd === null || typeof body.monthlyCostBudgetUsd === "number") {
+        updates.monthly_cost_budget_usd = body.monthlyCostBudgetUsd;
+      }
+      if (typeof body.autoOverride === "boolean") updates.auto_override = body.autoOverride;
+      if (Object.keys(updates).length === 0) return json({ error: "nothing to update" }, 400, corsHeaders);
+
+      const { error } = await supabase.from("agent_registry").update(updates).eq("agent_key", agentKey);
+      if (error) {
+        // The floor trigger raises a clear message — return it as a 200
+        // validation result (not a server error) so the UI can show it.
+        if (/safety floor/i.test(error.message)) {
+          return json({ ok: false, safetyFloor: true, error: error.message }, 200, corsHeaders);
+        }
+        throw error;
+      }
+
+      await writeAuditLog(supabase, {
+        eventType: "agent_control",
+        actorId,
+        action: "update_config",
+        resource: "agent_registry",
+        severity: "medium",
+        details: { agentKey, ...updates },
+      });
+      return json({ ok: true, agentKey, updates }, 200, corsHeaders);
+    }
+
     if (mode === "toggle") {
       const enabled = body.enabled === true;
       const { error } = await supabase

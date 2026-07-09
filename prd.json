@@ -3764,8 +3764,8 @@
         "npm run validate passes"
       ],
       "priority": 20,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): agent-control mode=update_config sets tier1_confidence_threshold + monthly_cost_budget_usd + auto_override per agent (audited). getAgentConfig/createAgentTask already read the registry live (<=60s cache) so tuning takes effect without a deploy. Migration 20260709000009_threshold_floor.sql adds auto_override column + enforce_threshold_floor BEFORE INSERT/UPDATE trigger: sensitive categories (security, manage) rejected below 0.80 threshold unless auto_override (defense-in-depth behind the UI). Frontend: useAgentConfigRow + useUpdateAgentConfig hooks; ConfigDialog on /admin/agents (Config button) edits threshold + budget with an override checkbox shown for sensitive categories + inline floor error; safety-floor rejection surfaced as a 200 result. Seeded per-category defaults lean conservative (security/governance 0.95, dev/maintain 0.85-0.90, manage/support 0.85, nurture 0.80, prospect 0.75) documented in docs/AGENTIC_OS.md with the floor. npm run validate passes (0 errors). Completes the AOS-CORE epic (001-011)."
     },
     {
       "id": "AOS-GOV-001",
