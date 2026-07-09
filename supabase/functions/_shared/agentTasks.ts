@@ -14,6 +14,7 @@
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getAgentConfig } from "./agentConfig.ts";
+import { writeAgentAudit } from "./auditLog.ts";
 
 export type AgentTaskStatus =
   | "open"
@@ -138,7 +139,15 @@ export async function createAgentTask(
 
     if (error) throw error;
 
-    return { ok: true, task: data as AgentTaskRow, tier, status, slaDueAt: due };
+    const task = data as AgentTaskRow;
+    await writeAgentAudit(supabase, {
+      agentKey: input.agentKey,
+      actionType: "create_task",
+      targetRef: `agent_tasks:${task.id}`,
+      after: { tier, status, category: input.category, title: input.title, confidence: input.confidence },
+    });
+
+    return { ok: true, task, tier, status, slaDueAt: due };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[agentTasks] failed to create task for "${input.agentKey}":`, message);

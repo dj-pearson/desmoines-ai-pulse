@@ -26,6 +26,7 @@ import { runAgent as recordAgentRun } from "./agentRun.ts";
 import { requiresApproval, createApproval } from "./agentApprovals.ts";
 import { createAgentTask } from "./agentTasks.ts";
 import { notifyOps } from "./notifyOps.ts";
+import { writeAgentAudit } from "./auditLog.ts";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 
@@ -472,6 +473,7 @@ export async function runAgent(config: RunAgentConfig): Promise<RunAgentResult> 
         },
         onAction: async (a) => {
           ctx.processed(1);
+          // Low-level tool-call trace.
           try {
             await supabase.from("agent_action_log").insert({
               agent_key: config.agentKey,
@@ -483,8 +485,16 @@ export async function runAgent(config: RunAgentConfig): Promise<RunAgentResult> 
               output_summary: a.outputSummary,
             });
           } catch (err) {
-            console.warn(`[agentRuntime:${config.agentKey}] audit write failed:`, err instanceof Error ? err.message : String(err));
+            console.warn(`[agentRuntime:${config.agentKey}] trace write failed:`, err instanceof Error ? err.message : String(err));
           }
+          // Immutable action audit (AOS-GOV-002).
+          await writeAgentAudit(supabase, {
+            agentKey: config.agentKey,
+            runId: runCorrelation,
+            actionType: `tool:${a.toolName}`,
+            before: a.input,
+            after: { output_summary: a.outputSummary },
+          });
         },
       });
 

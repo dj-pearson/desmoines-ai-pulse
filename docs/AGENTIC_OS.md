@@ -280,6 +280,22 @@ through the `agent-control` edge function (admin-authenticated, audited) — tog
 writes `agent_registry.enabled`, run maps the agent to its edge function and
 fires it. A drill-in sheet shows that agent's run history with error details.
 
+## Immutable audit trail (AOS-GOV-002)
+
+`agent_audit_log` is the append-only record of every state-changing action an
+agent takes — task/approval creation, approved-action execution, and each
+executed tool call — with a `before`/`after` diff, `agent_key`, `run_id`, and
+`target_ref`. It is written via `writeAgentAudit` (`_shared/auditLog.ts`) by the
+runtime, `createAgentTask`, and the approval helpers. **Immutability** is
+enforced two ways: insert-only RLS (no non-service update/delete policies) and a
+trigger that blocks `UPDATE` for every role — so not even a buggy agent can
+rewrite history (DELETE stays available to the service role for retention). The
+admin viewer at `/admin/agent-audit` filters by agent, action, and date and
+shows each entry's before/after and its run/target references.
+
+(`agent_action_log` from AOS-CORE-003 is the lower-level tool-call *trace*;
+`agent_audit_log` is the governance-grade immutable *audit*.)
+
 ## Human-in-the-loop approvals (AOS-CORE-007)
 
 Some actions must never run unattended (publishing, outreach, refunds,

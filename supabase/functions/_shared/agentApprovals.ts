@@ -8,6 +8,7 @@
  */
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { writeAgentAudit } from "./auditLog.ts";
 
 /**
  * Action types that must be human-approved before they run. Agents tag a tool
@@ -66,6 +67,12 @@ export async function createApproval(
       .select("id")
       .single();
     if (error) throw error;
+    await writeAgentAudit(supabase, {
+      agentKey: args.agentKey,
+      actionType: "create_approval",
+      targetRef: `agent_action_approvals:${data?.id}`,
+      after: { actionType: args.actionType, expiresAt },
+    });
     return { ok: true, approvalId: data?.id };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -110,9 +117,22 @@ export async function executeApprovedAction(
   }
   try {
     const result = await fn(supabase, payload);
+    await writeAgentAudit(supabase, {
+      agentKey: "approval-executor",
+      actionType: `execute_${actionType}`,
+      before: payload,
+      after: { executed: true, ...result },
+      actor: "agent",
+    });
     return { executed: true, ...result };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    await writeAgentAudit(supabase, {
+      agentKey: "approval-executor",
+      actionType: `execute_${actionType}`,
+      before: payload,
+      after: { executed: false, error: message },
+    });
     return { executed: false, error: message };
   }
 }

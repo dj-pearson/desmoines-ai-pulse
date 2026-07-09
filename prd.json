@@ -3794,8 +3794,8 @@
         "npm run validate passes"
       ],
       "priority": 22,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): migration 20260709000011_agent_audit_log.sql creates agent_audit_log (id, agent_key, run_id uuid null, action_type, target_ref, before jsonb null, after jsonb null, actor default agent, created_at) + indexes; insert-only RLS (admin SELECT only, no update/delete policies so only service-role bypass can write) mirroring security_audit_logs; PLUS a block_agent_audit_update BEFORE UPDATE trigger raising for every role => true append-only immutability (DELETE left to service role for retention). writeAgentAudit helper added to _shared/auditLog.ts (best-effort, never throws). Wired into: runtime onAction (tool:<name> with before=input/after=output_summary, run_id=correlation), createAgentTask (create_task), createApproval (create_approval), executeApprovedAction (execute_<type> before/after). Admin viewer: useAgentAudit hooks + AgentAuditLog component (/admin/agent-audit, AdminNav link) filter by agent/action/date, detail sheet with before/after + run_id + target_ref links. Verified no code path updates/deletes agent_audit_log (grep clean + DB trigger). npm run validate passes (0 errors). Documented in AGENTIC_OS.md."
     },
     {
       "id": "AOS-GOV-003",
