@@ -44,6 +44,9 @@ export interface CreateAgentTaskInput {
   payload?: Record<string, unknown>;
   /** Override the confidence→tier decision (e.g. force human review). */
   forceTier?: 1 | 2 | 3;
+  /** Coalescing key: if an open task with the same (agentKey, dedupeKey) exists,
+   *  it is returned instead of creating a duplicate. */
+  dedupeKey?: string;
 }
 
 export interface AgentTaskRow {
@@ -122,6 +125,22 @@ export async function createAgentTask(
   const due = slaDueAt(input.category, tier, Date.now());
 
   try {
+    // Idempotent on dedupeKey: don't stack duplicate open tasks for the same
+    // ongoing condition (e.g. a persistent security anomaly re-detected each run).
+    if (input.dedupeKey) {
+      const { data: existing } = await supabase
+        .from("agent_tasks")
+        .select("*")
+        .eq("agent_key", input.agentKey)
+        .eq("dedupe_key", input.dedupeKey)
+        .in("status", ["open", "escalated", "assigned", "auto_resolving"])
+        .limit(1)
+        .maybeSingle();
+      if (existing) {
+        return { ok: true, task: existing as AgentTaskRow, tier: existing.tier, status: existing.status, slaDueAt: existing.sla_due_at };
+      }
+    }
+
     const { data, error } = await supabase
       .from("agent_tasks")
       .insert({
@@ -133,6 +152,7 @@ export async function createAgentTask(
         confidence: input.confidence,
         status,
         sla_due_at: due,
+        dedupe_key: input.dedupeKey ?? null,
       })
       .select("*")
       .single();

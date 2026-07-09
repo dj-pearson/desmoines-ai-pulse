@@ -102,3 +102,8 @@ verify_jwt = false
 # auto-resolutions, and failures. Does its own auth via requireAdminOrApiKey.
 [functions.agent-ops-digest]
 verify_jwt = false
+
+# Security anomaly detector (AOS-SEC-001). Cron: reads login/rate-limit/audit
+# signals and opens incident tasks. Does its own auth via requireAdminOrApiKey.
+[functions.agent-security-monitor]
+verify_jwt = false

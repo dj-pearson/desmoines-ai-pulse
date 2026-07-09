@@ -3854,8 +3854,8 @@
         "npm run validate passes"
       ],
       "priority": 26,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): agent-security-monitor edge function (verify_jwt=false, requireAdminOrApiKey, wrapped in runAgent -> ledger + kill-switch pause gate). Reads login_attempts/rate_limit_entries/security_audit_logs over 20m window; detects credential stuffing (>=15 fails/IP or one email from >=5 IPs -> tier3), quota abuse (client >=300 req -> tier2), high-severity events (>=1 -> tier3), admin-action burst (>=10 -> tier2). Ambiguous/high -> createAgentTask tier-2/3 with evidence payload; benign below-threshold just scanned/summarized. Idempotent incidents via new createAgentTask dedupeKey support (added dedupe_key write + open-task coalesce check). notifyOps summary. NEVER locks a user (only opens tasks; human-confirmed remediation). Registered security-anomaly-detector agent (live, security) + */15 cron. ALSO FIXED latent bug: widened security_audit_logs event_type CHECK to allow the AOS audit event types (agent_task_routing/agent_control/agent_action_approval/security_anomaly) that were silently failing the constraint. Detection rules documented in AGENTIC_OS.md. npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-SEC-002",

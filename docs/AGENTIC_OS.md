@@ -280,6 +280,30 @@ through the `agent-control` edge function (admin-authenticated, audited) — tog
 writes `agent_registry.enabled`, run maps the agent to its edge function and
 fires it. A drill-in sheet shows that agent's run history with error details.
 
+## Security anomaly detector (AOS-SEC-001)
+
+The `security-anomaly-detector` agent (`agent-security-monitor`, every 15 min)
+reads `login_attempts`, `rate_limit_entries`, and `security_audit_logs` over a
+20-minute window and opens incident tasks. It **only reads and opens tasks** —
+it never locks a user; remediation is always human-confirmed.
+
+**Detection rules:**
+
+| Signal | Rule | Incident |
+|---|---|---|
+| Credential stuffing (IP) | ≥ 15 failed logins from one IP / 20 min | tier-3 (high) |
+| Credential stuffing (account) | one email failed from ≥ 5 distinct IPs / 20 min | tier-3 (high) |
+| Quota abuse | a `client_id` with ≥ 300 requests across a 20-min window | tier-2 (medium) |
+| High-severity events | ≥ 1 `high` severity row in `security_audit_logs` / 20 min | tier-3 (high) |
+| Admin-action burst | ≥ 10 `admin_action` rows / 20 min | tier-2 (medium) |
+
+Each incident carries its evidence (counts, IPs, samples) in the task payload
+and is **idempotent** — `createAgentTask`'s `dedupeKey` means an ongoing anomaly
+re-detected each run updates one task instead of stacking duplicates. Findings
+below threshold are simply scanned (auto-noted in the run summary), not
+escalated. The agent runs through the ledger wrapper so it's kill-switch aware
+and its runs are recorded.
+
 ## Shadow / dry-run mode (AOS-GOV-005)
 
 Every agent has a `mode` in the registry — **`shadow`** (the default for new
