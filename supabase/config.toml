@@ -193,3 +193,8 @@ verify_jwt = false
 # + row-count restore-sanity (read-only). Auth via requireAdminOrApiKey.
 [functions.agent-backup-verify]
 verify_jwt = false
+
+# Data-quality sweeper (AOS-MAINT-004). Cron-invoked; auto-fills content gaps via
+# existing enrichment fns + escalates. Auth via requireAdminOrApiKey.
+[functions.agent-data-quality]
+verify_jwt = false

@@ -6,6 +6,7 @@
     "agent-compliance-monitor",
     "agent-config-audit",
     "agent-control",
+    "agent-data-quality",
     "agent-db-health",
     "agent-dep-scan",
     "agent-dep-update",
@@ -43,7 +44,7 @@
     "social-daily-poster",
     "version-check"
   ],
-  "verifyJwtCount": 42,
+  "verifyJwtCount": 43,
   "cspPresent": true,
   "cspHash": "1625510d45515045",
   "corsHash": "b1683c94fbad28a6"

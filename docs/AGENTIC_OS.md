@@ -329,6 +329,31 @@ means zero LLM budget; each review is recorded as an audited run via
 `agent-pr-review`. (Semantic checks like RLS/rate-limit tightening are left out
 deliberately — a false-positive block is worse than a miss.)
 
+## Data-quality sweeper (AOS-MAINT-004)
+
+`agent-data-quality` (cron, daily 08:00 UTC) keeps content rows complete,
+extending the WEB-AUTO backfills. Per table (`events`, `restaurants`,
+`attractions`), it runs **detect → reconcile → fill → snapshot**:
+
+1. **Detect** rows missing `image_url`, coordinates, `seo_title`, or
+   `geo_summary` (bounded to `DETECT_LIMIT` per run).
+2. **Reconcile** the per-row `data_quality_issues` tracker (idempotent by row):
+   rows no longer gapped **resolve**; still-gapped rows advance their attempt
+   count; a row still broken after `MAX_ATTEMPTS` (3) **escalates** to a tier-2
+   data task carrying the reason (which fields, how many attempts).
+3. **Auto-fill (tier-1)** by invoking the existing enrichment functions in
+   **bounded batches** — `backfill-images` (`limit 5`), `generate-seo-content`
+   (`batchSize 8`), and one `backfill-all-coordinates` pass — so external APIs
+   (Google/Nominatim, image, LLM) stay rate-limited and within the agent's cost
+   budget ($20/mo).
+4. **Snapshot** fill-rate to `data_quality_snapshots`; the ops digest shows the
+   current fill-rate per table as a trend.
+
+Detect-**then**-fill ordering means each daily run measures the *previous* run's
+fills, so attempt counts are honest (a row isn't re-counted as failed before the
+fix has had a chance to land). Idempotent throughout; budgeted/audited via
+`runAgent`.
+
 ## Backup verification agent (AOS-MAINT-003)
 
 `agent-backup-verify` (cron, daily 06:30 UTC) answers "are backups real and

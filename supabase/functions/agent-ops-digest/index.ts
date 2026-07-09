@@ -77,6 +77,20 @@ Deno.serve(async (req) => {
         `${lastBackup.backup_age_hours != null ? `, ${lastBackup.backup_age_hours}h old` : ""}) at ${String(lastBackup.checked_at).slice(0, 16)}`
       : `Backups — no verification recorded yet`;
 
+    // Data-quality fill-rate trend: latest snapshot per table (AOS-MAINT-004).
+    const { data: dqSnaps } = await supabase
+      .from("data_quality_snapshots")
+      .select("table_name, fill_rate, captured_at")
+      .order("captured_at", { ascending: false })
+      .limit(30);
+    const latestByTable = new Map<string, number>();
+    for (const s of (dqSnaps ?? []) as { table_name: string; fill_rate: number }[]) {
+      if (!latestByTable.has(s.table_name)) latestByTable.set(s.table_name, s.fill_rate);
+    }
+    const dqLine = latestByTable.size
+      ? `Data quality — fill rate: ${[...latestByTable].map(([t, r]) => `${t} ${Math.round(r * 100)}%`).join(", ")}`
+      : `Data quality — no snapshot yet`;
+
     const openHuman = openTier2 + openTier3;
     const body = [
       `Tier-1 auto-resolutions (24h): ${autoResolved}`,
@@ -90,6 +104,7 @@ Deno.serve(async (req) => {
       `DB health — open suggestions (slow query/index/bloat): ${openDbHealth}`,
       `Uptime — open outage incidents: ${openOutages}`,
       backupLine,
+      dqLine,
     ].join("\n");
 
     // Date-keyed dedupe so a re-run same day coalesces instead of double-sending.

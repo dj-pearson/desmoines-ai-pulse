@@ -4109,8 +4109,8 @@
         "npm run validate passes"
       ],
       "priority": 43,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Data-quality sweeper. agent-data-quality (cron daily 08:00, verify_jwt=false, requireAdminOrApiKey, runAgent-wrapped with $20/mo cost budget) runs detect→reconcile→fill→snapshot per table (events/restaurants/attractions). Detects rows missing image_url/coordinates/seo_title/geo_summary (bounded to DETECT_LIMIT=300/run). Reconciles per-row data_quality_issues tracker (idempotent by (target_table,row_id)): rows no longer gapped resolve; still-gapped rows advance attempts; after MAX_ATTEMPTS=3 escalate to a tier-2 data task with the reason (deduped dq:<table>:<id>). Auto-fills tier-1 via existing enrichment fns in bounded batches — backfill-images (limit 5), generate-seo-content (batchSize 8), one backfill-all-coordinates pass — keeping external APIs (Google/Nominatim/image/LLM) rate-limited within budget. Detect-then-fill ordering means each run measures the previous run's fills so attempt counts are honest. Snapshots fill-rate to data_quality_snapshots; ops digest shows current fill-rate per table as a trend. New tables data_quality_issues + data_quality_snapshots (additive, RLS admin-read). Migration 20260709000031 (tables + agent_registry + pg_cron); config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=43). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-MAINT-005",

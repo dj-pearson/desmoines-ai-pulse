@@ -7,9 +7,9 @@
 
 | Metric | Count |
 |---|---|
-| Migrations scanned | 287 |
-| Distinct policies (current) | 530 |
-| Tables with RLS enabled | 240 |
+| Migrations scanned | 288 |
+| Distinct policies (current) | 532 |
+| Tables with RLS enabled | 242 |
 | Tables with policies but no ENABLE RLS seen | 5 |
 | Permissive write policies USING/CHECK(true) | 30 |
 | Write policies granted to `anon` | 4 |
@@ -265,7 +265,9 @@
 | csp_violation_logs | System can insert CSP violations | INSERT | public | — | true |
 | curated_itineraries | Admins can manage itineraries | ALL | public | EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')) | — |
 | curated_itineraries | Public read for published itineraries | SELECT | public | is_published = true | — |
+| data_quality_issues | dq_issues_admin_read | SELECT | authenticated | EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')) | — |
 | data_quality_scans | Admin full access to data_quality_scans | ALL | public | is_admin() | — |
+| data_quality_snapshots | dq_snapshots_admin_read | SELECT | authenticated | EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')) | — |
 | deals | Admins can manage all deals | ALL | public | EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')) | — |
 | deals | Business owners and admins can insert deals | INSERT | public | — | auth.role() = 'authenticated' |
 | deals | Public read for active deals | SELECT | public | start_date <= now() AND (end_date IS NULL OR end_date >= now()) | — |
