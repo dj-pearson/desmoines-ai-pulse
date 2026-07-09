@@ -43,6 +43,7 @@ export const AGENT_POLICY: Record<string, AgentPolicy> = {
   "prospect-agent": { allow: ["enrich_prospect", "create_task"] },
   "support-agent": { allow: ["reply_ticket", "issue_credit", "create_task"] },
   "account-manager-agent": { allow: ["update_account", "process_refund", "create_task"] },
+  "billing-selfservice": { allow: ["process_refund", "cancel_subscription", "resend_receipt", "create_task"] },
   "security-agent": { allow: ["flag_incident", "create_task"] },
   "governance-agent": { allow: ["flag_violation", "create_task"] },
 };

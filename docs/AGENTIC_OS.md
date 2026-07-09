@@ -329,6 +329,31 @@ means zero LLM budget; each review is recorded as an audited run via
 `agent-pr-review`. (Semantic checks like RLS/rate-limit tightening are left out
 deliberately — a false-positive block is worse than a miss.)
 
+## Billing self-service automation (AOS-CS-004)
+
+`agent-billing-selfservice` handles routine billing actions instantly, within
+**explicit policy**:
+
+- **plan_info / resend_receipt** — read-only, tier-1, audited.
+- **cancel_subscription** — cancels at **period end** via Stripe (reversible;
+  entitlement lasts the paid period). No schema change, so shipped iOS/Android
+  clients keep reading the `subscription_tier` shape they expect. Audited with
+  before/after.
+- **refund** — `evaluateRefund` (AOS-GOV-003) defines a narrow **auto-approve
+  window**: allowed reason (duplicate/accidental/service-unavailable),
+  ≤ `$30`, charge ≤ `7d` old. In-policy refunds run immediately via Stripe and
+  are audited as auto-approved. Anything outside the window creates a **tier-2
+  approval** (AOS-CORE-007) and does **not** execute — a human approves it in the
+  console, at which point the registered `process_refund` executor
+  (`_shared/billingExecutors.ts`, imported by `agent-approvals`) runs the refund
+  and audits it.
+
+Every financial action is audited. The refund side-effect uses the same Stripe
+integration (`STRIPE_SECRET_KEY`) as the app's Stripe functions; cancellation
+never tightens any schema. The `billing-selfservice` agent is allow-listed for
+`process_refund`, `cancel_subscription`, and `resend_receipt` in the policy
+allowlist (`agentPolicy.ts`).
+
 ## AI first-responder (AOS-CS-002)
 
 `agent-support-responder` (cron every 10 min + on-demand per ticket) answers

@@ -3,6 +3,7 @@
     "agent-api-watchdog",
     "agent-approvals",
     "agent-backup-verify",
+    "agent-billing-selfservice",
     "agent-ci-health",
     "agent-compliance-monitor",
     "agent-config-audit",
@@ -51,7 +52,7 @@
     "support-kb-search",
     "version-check"
   ],
-  "verifyJwtCount": 50,
+  "verifyJwtCount": 51,
   "cspPresent": true,
   "cspHash": "1625510d45515045",
   "corsHash": "b1683c94fbad28a6"

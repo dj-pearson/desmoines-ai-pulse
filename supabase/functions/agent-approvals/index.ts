@@ -22,6 +22,9 @@ import { handleCors, getCorsHeaders } from "../_shared/cors.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { writeAuditLog } from "../_shared/auditLog.ts";
 import { executeApprovedAction } from "../_shared/agentApprovals.ts";
+// Side-effect import: registers the process_refund executor (AOS-CS-004) so an
+// approved refund actually runs when executeApprovedAction fires.
+import "../_shared/billingExecutors.ts";
 import { createAgentTask } from "../_shared/agentTasks.ts";
 import { runJob } from "../_shared/jobRunner.ts";
 

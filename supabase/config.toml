@@ -233,3 +233,8 @@ verify_jwt = false
 # answers, auto-sends on high confidence, escalates otherwise. Auth via requireAdminOrApiKey.
 [functions.agent-support-responder]
 verify_jwt = false
+
+# Billing self-service (AOS-CS-004). Agent/console-invoked; plan info, receipt,
+# cancellation, policy-gated refunds. Auth via requireAdminOrApiKey.
+[functions.agent-billing-selfservice]
+verify_jwt = false

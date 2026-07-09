@@ -4214,8 +4214,8 @@
         "npm run validate passes"
       ],
       "priority": 50,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Billing/subscription self-service automation. agent-billing-selfservice edge function (verify_jwt=false, requireAdminOrApiKey, runAgent-wrapped, provider stripe) dispatches intents: plan_info + resend_receipt (read-only tier-1, audited); cancel_subscription (Stripe cancel_at_period_end via stripeCancelAtPeriodEnd — reversible, entitlement retained to period end, updates user_subscriptions.cancel_at_period_end, no schema tightening so shipped clients keep the subscription_tier shape, audited with before/after); refund (new _shared/billingPolicy.ts evaluateRefund: auto-approve window = allowed reason {duplicate_charge/accidental_purchase/service_unavailable} AND <=$30 AND charge <=7d old — in-policy refunds execute immediately via stripeRefund + update payments.refunded_amount + audit process_refund autoApproved; out-of-policy create a tier-2 approval via createApproval('process_refund') per AOS-CORE-007 and do NOT execute). New _shared/billingExecutors.ts talks to the same Stripe integration (STRIPE_SECRET_KEY) as the app's Stripe functions and registers a process_refund approval executor so an approved refund actually runs when executeApprovedAction fires; agent-approvals imports it for side-effect registration. Added billing-selfservice to agentPolicy AGENT_POLICY allowlist (process_refund/cancel_subscription/resend_receipt/create_task). All financial actions approval-gated per GOV-003 unless within the auto-approve window, and always audited. No new tables, no schema change. Migration 20260709000038 (agent_registry); config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=51). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-CS-005",
