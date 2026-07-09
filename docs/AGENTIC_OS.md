@@ -329,6 +329,24 @@ means zero LLM budget; each review is recorded as an audited run via
 `agent-pr-review`. (Semantic checks like RLS/rate-limit tightening are left out
 deliberately — a false-positive block is worse than a miss.)
 
+## CRM pipeline data model (AOS-PROSPECT-002)
+
+Three additive tables give leads a pipeline: **`crm_accounts`** (a business we
+might sell to), **`crm_leads`** (a discovered prospect entering the funnel, linked
+back to its `prospect_leads` origin), and **`crm_opportunities`** (a deal moving
+through a `crm_opp_stage` enum: new → qualified → contacted → proposal → won /
+lost, with value, owner, next_action). A **won** opportunity links to a **real
+campaign** via `campaign_id` — an additive FK, so a closed deal ties to an actual
+advertiser record **without touching the campaigns/advertisements schema**.
+
+RLS is **admin-or-sales** (`is_admin_or_sales()` — `user_roles` in
+admin/root_admin/sales) for read+write; agents write via the service role. The
+`crm-console` edge function is the audited write path: `promote_prospect`
+(prospect_lead → account + lead), `create_opportunity`, `advance_stage`,
+`upsert_lead` — every write goes to the audit trail. The **/admin/crm** view
+(`CrmBoard`) shows open leads (promote → new opportunity) and a **stage board**
+where an opportunity advances inline.
+
 ## Local-business discovery / lead sourcing (AOS-PROSPECT-001)
 
 `agent-lead-sourcing` (cron, weekly) keeps a steady flow of advertiser leads.

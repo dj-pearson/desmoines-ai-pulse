@@ -7,13 +7,13 @@
 
 | Metric | Count |
 |---|---|
-| Migrations scanned | 307 |
-| Distinct policies (current) | 556 |
-| Tables with RLS enabled | 257 |
-| Tables with policies but no ENABLE RLS seen | 5 |
+| Migrations scanned | 308 |
+| Distinct policies (current) | 558 |
+| Tables with RLS enabled | 260 |
+| Tables with policies but no ENABLE RLS seen | 6 |
 | Permissive write policies USING/CHECK(true) | 30 |
 | Write policies granted to `anon` | 4 |
-| SECURITY DEFINER functions | 116 |
+| SECURITY DEFINER functions | 117 |
 | …of those WITHOUT pinned search_path | 50 |
 
 ## ⚠️ Findings needing attention
@@ -70,6 +70,7 @@
 
 > NOTE: RLS may have been enabled out-of-band (Supabase dashboard) and not captured in a migration. Treat as "verify", not "confirmed hole".
 
+- ``
 - `profiles`
 - `storage.objects`
 - `trending_scores`
@@ -135,6 +136,8 @@
 
 | Table | Policy | Cmd | Roles | USING | WITH CHECK |
 |---|---|---|---|---|---|
+|  | %1$s_sales_read | SELECT | authenticated | public.is_admin_or_sales() | — |
+|  | %1$s_sales_write | ALL | authenticated | public.is_admin_or_sales() | public.is_admin_or_sales() |
 | accessibility_reports | Admins can update accessibility reports | UPDATE | public | auth.jwt() ->> 'role' = 'admin' OR EXISTS ( SELECT 1 FROM public.profiles WHERE profiles.id = auth.uid() AND profiles.role = 'admin' ) | — |
 | accessibility_reports | Admins can view accessibility reports | SELECT | public | auth.jwt() ->> 'role' = 'admin' OR EXISTS ( SELECT 1 FROM public.profiles WHERE profiles.id = auth.uid() AND profiles.role = 'admin' ) | — |
 | accessibility_reports | Anyone can submit accessibility reports | INSERT | public | — | true |

@@ -4409,8 +4409,8 @@
         "npm run validate passes"
       ],
       "priority": 63,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Lightweight CRM data model (leads/accounts/opportunities). Migration 20260709000051 creates crm_accounts (name, category, city, website, business_ref, advertiser_user_id → auth.users, owner), crm_leads (prospect_lead_id → prospect_leads, account_id → crm_accounts, business_name, category, status new|qualified|contacted|disqualified, fit_score, owner, next_action, next_action_at), and crm_opportunities (account_id, lead_id, name, stage crm_opp_stage enum new|qualified|contacted|proposal|won|lost, value, owner, next_action, next_action_at, campaign_id → campaigns for won→real advertiser link, closed_at) — all additive with updated_at triggers. RLS admin/sales role read+write via new is_admin_or_sales() SECURITY DEFINER helper (user_roles admin/root_admin/sales); agents write via service role. Won opportunity links to a real campaign via campaign_id (additive FK — NO change to campaigns/advertisements schema). crm-console edge function (verify_jwt=false, requireAdminOrApiKey) is the audited write path: board (list leads/opps/accounts), promote_prospect (prospect_lead → crm_account + crm_lead, marks prospect qualified), upsert_lead, create_opportunity, advance_stage (won/lost stamps closed_at, won can link campaign_id) — every write audited via writeAgentAudit. Admin CRM view /admin/crm (AdminCrm page + CrmBoard component + useCrm hook, route + ProtectedRoute requireAdmin + AdminNav 'CRM' link) shows open leads (promote → new opportunity) and a 6-stage pipeline board with inline stage advancement; consistent loading/empty/error states, responsive. config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=66). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-PROSPECT-003",

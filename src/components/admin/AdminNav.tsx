@@ -4,6 +4,7 @@ import {
   BarChart3,
   BookOpen,
   Bot,
+  Briefcase,
   ChevronDown,
   CreditCard,
   FileText,
@@ -107,6 +108,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: "Email", href: "/admin/email", icon: Mail },
       { label: "Social", href: "/admin/social", icon: Share2 },
       { label: "Partnerships", href: "/admin/partnerships", icon: HandCoins },
+      { label: "CRM", href: "/admin/crm", icon: Briefcase, description: "Advertiser leads + pipeline" },
     ],
   },
   {

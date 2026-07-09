@@ -308,3 +308,7 @@ verify_jwt = false
 # content (no external fetch). Auth via requireAdminOrApiKey.
 [functions.agent-lead-sourcing]
 verify_jwt = false
+
+# CRM console (AOS-PROSPECT-002). Admin/sales pipeline CRUD. Auth via requireAdminOrApiKey.
+[functions.crm-console]
+verify_jwt = false
