@@ -45,6 +45,7 @@ All times UTC. Schedules are cron expressions (`min hour dom mon dow`).
 | **`job-health-watchdog-daily`** | `0 8 * * *` | fn `job-health-watchdog` | **Alert on missed/failed observed jobs (WEB-AUTO-001)** | n/a |
 | **`agent-escalation-router`** | `*/10 * * * *` | fn `agent-escalation-router` | **Route tier-2/3 agent_tasks to the owner queue (agent_registry.owner_role) and coalesce duplicates; fail-open per task (AOS-CORE-005)** | ✅ |
 | **`approval-sweeper`** | `*/15 * * * *` | fn `agent-approvals` (mode=sweep) | **Expire stale pending action approvals and re-escalate them as human tasks (AOS-CORE-007)** | ✅ |
+| **`ops-digest-daily`** | `0 13 * * *` | fn `agent-ops-digest` | **Daily batched digest to ops: tier-1 auto-resolutions, open-task counts, overdue, and agent failures (AOS-CORE-010)** | ✅ |
 
 \* **Observed** = wrapped with `jobRunner` and recording to `automation_job_runs`.
 `✅` done, `planned` = adopts the same one-line wrap as its WEB-AUTO story lands

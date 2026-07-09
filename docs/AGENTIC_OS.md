@@ -141,6 +141,24 @@ ledger row via `run_correlation`.
 `discover-chat` is the first edge function refactored onto the harness — its
 bespoke loop is gone, its response is unchanged.
 
+## Notifications (AOS-CORE-010)
+
+The OS reaches out — operators don't watch the console. `notifyOps`
+(`supabase/functions/_shared/notifyOps.ts`) is the one place agents send
+operational notifications, routed by severity over Resend email and an optional
+Slack-compatible webhook (`OPS_WEBHOOK_URL`):
+
+- **Immediate**: tier-2/3 escalations (from the router) and agent failures (from
+  `agentRun`) send now, coalesced per queue / per agent.
+- **Batched**: low-severity items (tier-1 auto-resolutions, open-task counts)
+  are summarized once a day by the `agent-ops-digest` cron.
+
+`notifyOps` is **frequency-capped**: a repeat with the same `dedupeKey` inside
+the cap window (default 15 min) bumps a suppressed counter in
+`ops_notification_log` instead of sending — so a storm of tasks is one alert,
+not a hundred. Every delivery is **fail-safe**: a send error is logged and never
+blocks the originating agent.
+
 ## Tasks + escalation (AOS-CORE-004)
 
 `agent_tasks` is the shared record for every work item an agent produces,

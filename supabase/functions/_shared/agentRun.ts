@@ -29,6 +29,7 @@
 
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { agentPaused } from "./agentGuards.ts";
+import { notifyOps } from "./notifyOps.ts";
 
 export type AgentRunStatus =
   | "running"
@@ -201,6 +202,22 @@ export async function runAgent<T>(
         .eq("id", runId);
     } catch (err) {
       console.warn(`[agentRun:${agentKey}] failed to close run row:`, err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  // Immediate, coalesced failure notification (AOS-CORE-010). Best-effort:
+  // notifyOps never throws, and even if it did the catch keeps it from
+  // affecting the agent's result.
+  if (error && supabase) {
+    try {
+      await notifyOps(supabase, {
+        severity: "high",
+        title: `Agent failed: ${agentKey}`,
+        body: `${agentKey} run failed: ${error}`,
+        dedupeKey: `agent-failure:${agentKey}`,
+      });
+    } catch (err) {
+      console.warn(`[agentRun:${agentKey}] failure notify failed:`, err instanceof Error ? err.message : String(err));
     }
   }
 

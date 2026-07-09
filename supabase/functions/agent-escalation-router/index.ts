@@ -27,6 +27,7 @@ import { handleCors, getCorsHeaders } from "../_shared/cors.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { runJob, sendJobAlert } from "../_shared/jobRunner.ts";
 import { writeAuditLog } from "../_shared/auditLog.ts";
+import { notifyOps } from "../_shared/notifyOps.ts";
 
 const BATCH = 100; // tasks routed per invocation
 
@@ -149,9 +150,15 @@ Deno.serve(async (req) => {
           details: { taskId: task.id, queue, tier: task.tier, agentKey: task.agent_key, category: task.category },
         });
 
-        // Notify the owner queue (best-effort; AOS-CORE-010 will formalize the
-        // channel). Never let a notification failure block routing.
-        await notifyOwner(queue, task).catch((e) =>
+        // Notify the owner queue via notifyOps (AOS-CORE-010): immediate for
+        // tier-2/3, severity-routed, coalesced per queue so a burst of tasks in
+        // the same queue doesn't storm inboxes. Never blocks routing.
+        await notifyOps(supabase, {
+          severity: task.tier >= 3 ? "high" : "medium",
+          title: `New tier-${task.tier} task for ${queue}`,
+          body: `"${task.title}" from ${task.agent_key} (${task.category}) was routed to ${queue}.`,
+          dedupeKey: `escalation:${queue}`,
+        }).catch((e) =>
           console.warn(`[escalation-router] notify failed for ${task.id}:`, e?.message ?? e),
         );
 
@@ -181,17 +188,3 @@ Deno.serve(async (req) => {
   );
 });
 
-/**
- * Best-effort owner notification. AOS-CORE-010 will build the real
- * notification channel; until then this records intent via the ops alert email
- * when configured, and no-ops cleanly otherwise.
- */
-async function notifyOwner(queue: string, task: AgentTask): Promise<void> {
-  // Only ping for the tightest tier to avoid noise before AOS-CORE-010 lands.
-  if (task.tier >= 3) {
-    await sendJobAlert(
-      "agent-escalation-router",
-      `New tier-${task.tier} task routed to ${queue}: "${task.title}" (${task.agent_key}).`,
-    );
-  }
-}

@@ -97,3 +97,8 @@ verify_jwt = false
 # Does its own auth via requireAdminOrApiKey (admin JWT).
 [functions.agent-control]
 verify_jwt = false
+
+# Daily ops digest (AOS-CORE-010). Cron: batched summary of escalations,
+# auto-resolutions, and failures. Does its own auth via requireAdminOrApiKey.
+[functions.agent-ops-digest]
+verify_jwt = false

@@ -3749,8 +3749,8 @@
         "npm run validate passes"
       ],
       "priority": 19,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): _shared/notifyOps.ts notifyOps(supabase,{severity,title,body,dedupeKey,capWindowMs}) — per-severity routing (low=digest-only/no immediate send, medium=webhook+email fallback, high/critical=email+webhook) over existing Resend plumbing + optional OPS_WEBHOOK_URL/SLACK_WEBHOOK_URL webhook; fully fail-safe (each channel try/catch, never throws/blocks). Frequency cap/coalesce via ops_notification_log (migration 20260709000008): a repeat with same dedupe_key within cap window (default 15m) bumps suppressed_count instead of sending. Immediate notifies wired in: escalation-router (tier-2/3 routing, severity by tier, coalesced per queue) and agentRun failure path (severity high, coalesced per agent). Daily digest: agent-ops-digest edge function (verify_jwt=false, requireAdminOrApiKey, runJob-observed) counts tier-1 auto-resolutions 24h, open tasks by tier, overdue, agent failures 24h; date-keyed dedupe; scheduled ops-digest-daily 13:00 UTC via cron; ops-digest agent registered. Backward-compat additive-only. npm run validate passes (0 errors). Docs updated (AGENTIC_OS.md, AUTOMATION_JOBS.md)."
     },
     {
       "id": "AOS-CORE-011",
