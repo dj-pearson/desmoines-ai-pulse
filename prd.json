@@ -4424,8 +4424,8 @@
         "npm run validate passes"
       ],
       "priority": 64,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Lead enrichment + fit scoring agent. Migration 20260709000052 adds additive crm_leads columns (enrichment jsonb non-PII, fit_rationale, priority, enriched_at) + registers lead-enrichment agent (cron Mon 07:00, $15/mo). agent-lead-enrichment edge function (verify_jwt=false, requireAdminOrApiKey, runAgent) processes new un-enriched crm_leads: pulls size signals from the LINKED content (prospect_leads.source_ref → the actual restaurants/attractions row for rating/popularity/website/city), builds a non-PII enrichment blob (category, webPresence boolean, rating, popularity, city), and computes a rule-based fit score + rationale written to crm_leads (fit_score, fit_rationale, priority high/medium/low). Tiered routing: high fit (>=0.7) auto-advances to qualified (tier-1, audited lead_auto_qualified); ambiguous (0.35-0.7) queues a deduped tier-2 human qualification task (queue for human); weak (<0.35) disqualified. NO external fetch (allowlist-gated enrichment intentionally off per WEB-SEC-001) and NO PII beyond business-contact basics — only category/web-presence/rating/popularity/city. Run budgeted via runAgent. config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=67). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-PROSPECT-004",

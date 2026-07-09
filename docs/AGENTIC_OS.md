@@ -329,6 +329,25 @@ means zero LLM budget; each review is recorded as an audited run via
 `agent-pr-review`. (Semantic checks like RLS/rate-limit tightening are left out
 deliberately — a false-positive block is worse than a miss.)
 
+## Lead enrichment + fit scoring (AOS-PROSPECT-003)
+
+`agent-lead-enrichment` (cron, weekly) triages new CRM leads so sales works the
+best ones first. For each `new` lead it pulls **size signals from the linked
+content** (the `prospect_leads.source_ref` → the actual restaurant/attraction row:
+rating, popularity, website, category), builds a non-PII `enrichment` blob, and
+computes a **fit score + rationale** written to `crm_leads`
+(`fit_score`, `fit_rationale`, `priority`).
+
+Routing is tiered:
+- **High fit (≥ 0.7)** → auto-advance to **`qualified`** (tier-1), audited.
+- **Ambiguous (0.35–0.7)** → a **tier-2 human qualification task** is queued
+  (deduped per lead).
+- **Weak (< 0.35)** → `disqualified`.
+
+**No external fetch** (allowlist-gated enrichment intentionally off per
+WEB-SEC-001) and **no PII beyond business basics** — only category, web-presence
+boolean, rating, popularity, city. The run is budgeted via `runAgent`.
+
 ## CRM pipeline data model (AOS-PROSPECT-002)
 
 Three additive tables give leads a pipeline: **`crm_accounts`** (a business we

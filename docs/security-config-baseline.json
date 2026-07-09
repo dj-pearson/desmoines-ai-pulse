@@ -19,6 +19,7 @@
     "agent-error-triage",
     "agent-escalation-router",
     "agent-fraud-monitor",
+    "agent-lead-enrichment",
     "agent-lead-sourcing",
     "agent-lifecycle",
     "agent-link-monitor",
@@ -67,7 +68,7 @@
     "support-ticket-reclassify",
     "version-check"
   ],
-  "verifyJwtCount": 66,
+  "verifyJwtCount": 67,
   "cspPresent": true,
   "cspHash": "1625510d45515045",
   "corsHash": "b1683c94fbad28a6"

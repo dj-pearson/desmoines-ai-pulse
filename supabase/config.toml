@@ -312,3 +312,8 @@ verify_jwt = false
 # CRM console (AOS-PROSPECT-002). Admin/sales pipeline CRUD. Auth via requireAdminOrApiKey.
 [functions.crm-console]
 verify_jwt = false
+
+# Lead enrichment (AOS-PROSPECT-003). Cron; enriches + fit-scores CRM leads,
+# auto-qualifies high-fit. Auth via requireAdminOrApiKey.
+[functions.agent-lead-enrichment]
+verify_jwt = false
