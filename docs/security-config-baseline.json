@@ -26,6 +26,7 @@
     "agent-security-monitor",
     "agent-support-responder",
     "agent-test-gen",
+    "agent-ticket-classifier",
     "agent-uptime-monitor",
     "ai-crawler",
     "analyze-competitor",
@@ -50,9 +51,10 @@
     "support-kb-admin",
     "support-kb-embed",
     "support-kb-search",
+    "support-ticket-reclassify",
     "version-check"
   ],
-  "verifyJwtCount": 51,
+  "verifyJwtCount": 53,
   "cspPresent": true,
   "cspHash": "1625510d45515045",
   "corsHash": "b1683c94fbad28a6"

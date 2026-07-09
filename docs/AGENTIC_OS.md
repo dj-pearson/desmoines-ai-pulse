@@ -329,6 +329,29 @@ means zero LLM budget; each review is recorded as an audited run via
 `agent-pr-review`. (Semantic checks like RLS/rate-limit tightening are left out
 deliberately — a false-positive block is worse than a miss.)
 
+## Ticket sentiment + priority classifier with SLA (AOS-CS-005)
+
+`agent-ticket-classifier` (cron every 10 min) makes angry/urgent users jump the
+queue. Two passes:
+
+1. **Classify** — each unclassified ticket is scored by the LLM for
+   `sentiment` (positive/neutral/negative), `urgency`
+   (low/medium/high/critical), and `category`. Priority is derived from urgency,
+   then **bumped one level for negative sentiment**, and `sla_due_at` is set from
+   priority (urgent 2h → high 8h → normal 24h → low 72h). The classification is
+   stored on the ticket with `classification_source = 'agent'` and a confidence.
+2. **SLA-breach guard** — any fast-track ticket approaching its `sla_due_at`
+   (within a 30-min buffer) while still unhandled is **pre-escalated to a tier-2
+   task before the breach** (tier-3 for urgent/negative), and `sla_escalated_at`
+   is stamped so it isn't re-escalated.
+
+Classification is visible in the **/admin/support-tickets** console
+(`SupportTicketsConsole`) with priority/sentiment/urgency badges and a live SLA
+countdown. An admin can **correct** any misclassification inline; the correction
+(`support-ticket-reclassify`) recomputes the SLA, sets
+`classification_source = 'human'`, and records the agent's prior values in
+`support_ticket_feedback` for model improvement.
+
 ## Billing self-service automation (AOS-CS-004)
 
 `agent-billing-selfservice` handles routine billing actions instantly, within

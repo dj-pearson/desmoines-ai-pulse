@@ -7,9 +7,9 @@
 
 | Metric | Count |
 |---|---|
-| Migrations scanned | 295 |
-| Distinct policies (current) | 544 |
-| Tables with RLS enabled | 249 |
+| Migrations scanned | 296 |
+| Distinct policies (current) | 545 |
+| Tables with RLS enabled | 250 |
 | Tables with policies but no ENABLE RLS seen | 5 |
 | Permissive write policies USING/CHECK(true) | 30 |
 | Write policies granted to `anon` | 4 |
@@ -562,6 +562,7 @@
 | support_messages | support_messages_admin_read | SELECT | authenticated | is_admin() | — |
 | support_messages | support_messages_user_insert | INSERT | authenticated | — | EXISTS (SELECT 1 FROM public.support_tickets t WHERE t.id = ticket_id AND t.user_id = auth.uid()) |
 | support_messages | support_messages_user_read | SELECT | authenticated | EXISTS (SELECT 1 FROM public.support_tickets t WHERE t.id = ticket_id AND t.user_id = auth.uid()) | — |
+| support_ticket_feedback | ticket_feedback_admin_read | SELECT | authenticated | is_admin() | — |
 | support_tickets | support_tickets_admin_read | SELECT | authenticated | is_admin() | — |
 | support_tickets | support_tickets_admin_update | UPDATE | authenticated | is_admin() | — |
 | support_tickets | support_tickets_user_insert | INSERT | authenticated | — | auth.uid() = user_id |

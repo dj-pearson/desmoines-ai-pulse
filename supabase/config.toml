@@ -238,3 +238,13 @@ verify_jwt = false
 # cancellation, policy-gated refunds. Auth via requireAdminOrApiKey.
 [functions.agent-billing-selfservice]
 verify_jwt = false
+
+# Ticket classifier (AOS-CS-005). Cron; sets sentiment/urgency/priority/SLA and
+# pre-escalates before breach. Auth via requireAdminOrApiKey.
+[functions.agent-ticket-classifier]
+verify_jwt = false
+
+# Ticket reclassify (AOS-CS-005). Admin console list + human correction/feedback.
+# Auth via requireAdminOrApiKey.
+[functions.support-ticket-reclassify]
+verify_jwt = false

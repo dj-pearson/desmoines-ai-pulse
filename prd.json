@@ -4229,8 +4229,8 @@
         "npm run validate passes"
       ],
       "priority": 51,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Ticket sentiment + priority classifier with SLA. Migration 20260709000039 adds additive columns to support_tickets (urgency, classified_at, classification_confidence, classification_source, sla_escalated_at) + support_ticket_feedback table (captures human corrections with the agent's prior values) + registers ticket-classifier agent (cron */10). agent-ticket-classifier edge function (verify_jwt=false, requireAdminOrApiKey, runAgent-wrapped, $15/mo budget) does two passes: (1) classifies unclassified tickets via LLM (lightweight model) into sentiment/urgency/category, derives priority from urgency then bumps one level for negative sentiment, sets sla_due_at from priority (urgent 2h/high 8h/normal 24h/low 72h), stores classification_source=agent + confidence; (2) SLA-breach guard pre-escalates fast-track tickets within 30min of sla_due_at while still unhandled to a tier-2 task (tier-3 for urgent/negative), stamping sla_escalated_at + setting status escalated so it fires BEFORE breach. Classification visible in new /admin/support-tickets console (AdminSupportTickets page + SupportTicketsConsole component + useSupportTickets hook, lazyWithRetry route + ProtectedRoute requireAdmin + AdminNav 'Support tickets' link) with priority/sentiment/urgency badges + live SLA countdown; admins correct misclassifications inline via support-ticket-reclassify function which recomputes SLA, sets classification_source=human, and records feedback in support_ticket_feedback. config.toml entries; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=53). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-CS-006",
