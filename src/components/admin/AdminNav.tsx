@@ -121,6 +121,7 @@ const NAV_GROUPS: NavGroup[] = [
     minRole: "admin",
     items: [
       { label: "AI tools", href: "/admin/ai", icon: Bot },
+      { label: "Escalation inbox", href: "/admin/inbox", icon: Inbox, description: "Tier-2/3 agent tasks for a human" },
       { label: "Site tools", href: "/admin/tools", icon: Wrench },
       { label: "Refunds", href: "/admin/refunds", icon: Receipt },
       { label: "Security", href: "/admin/security", icon: Shield },

@@ -3688,8 +3688,8 @@
         "npm run validate passes"
       ],
       "priority": 15,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): new /admin/inbox page (src/pages/AdminInbox.tsx, ProtectedRoute requireAdmin, useDocumentTitle, lazyWithRetry route in App.tsx, AdminNav Operations link). src/hooks/useAgentTasks.ts TanStack Query hooks: useAgentTasks(filters) lists escalated+assigned tasks (SLA-soonest first, 60s refetch), useInboxAgentKeys, useAgentRunSummary (producing agent context from agent_run_summary view), useClaimTask (assigned_to+status assigned), useResolveTask (writes resolution jsonb with resolved_by/resolved_at as human-action audit). src/components/admin/AgentInbox.tsx: filters by tier/category/agent/SLA (overdue highlighted + filter), claim/resolve/close, detail Sheet showing payload + producing-agent run + AI-suggested resolution (payload.suggested_resolution). Mobile-first (responsive grid/cards, sm: breakpoints), WCAG (44px min-h targets, aria-labels, aria-busy, labeled selects), skeleton/error/empty states consistent with admin pages. agent_tasks not yet in generated types -> narrow client cast confined to the hook. npm run validate passes (type-check + lint, 0 errors). Documented in docs/AGENTIC_OS.md."
     },
     {
       "id": "AOS-CORE-007",

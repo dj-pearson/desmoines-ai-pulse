@@ -169,6 +169,17 @@ surfaces open/assigned work past its SLA for the escalation console
 (AOS-CORE-006). RLS: agents write via the service role, admins read/update, and
 `created_at` is immutable (trigger).
 
+## The escalation console (AOS-CORE-006)
+
+`/admin/inbox` (protected, admin-only) is where tier-2/3 operators work escalated
+tasks. It lists `agent_tasks` in `escalated`/`assigned` status via the
+`useAgentTasks` TanStack Query hook, with filters for tier, category, agent, and
+SLA (overdue rows highlighted). An operator can **claim** a task (assigns it to
+themselves), and **resolve** or **close** it — the resolution (with who acted and
+when) is written to the task's `resolution` jsonb as the human-action record. The
+detail sheet shows the task payload, the producing agent's latest run (from
+`agent_run_summary`), and any AI-suggested resolution in the payload.
+
 ## How to add a new agent
 
 1. **Register it.** Add a row to `agent_registry` in a new additive migration
