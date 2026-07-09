@@ -273,3 +273,8 @@ verify_jwt = false
 # activity signals. Auth via requireAdminOrApiKey.
 [functions.agent-lifecycle]
 verify_jwt = false
+
+# Onboarding drip (AOS-NURTURE-002). Cron; staged onboarding emails gated on
+# lifecycle + behavior. Auth via requireAdminOrApiKey.
+[functions.agent-onboarding-drip]
+verify_jwt = false

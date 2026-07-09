@@ -4304,8 +4304,8 @@
         "npm run validate passes"
       ],
       "priority": 56,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Onboarding drip agent. Migration 20260709000044 adds shared nurture_sends ledger (user_id, email, agent_key, kind, resend_message_id, status, quality_score, opened_at/clicked_at/activated_at — reused by all NURTURE stages; RLS admin-read) + registers onboarding-drip agent (cron every 6h, $25/mo). New _shared/sendNurtureEmail.ts helper sends via existing Resend plumbing + renderEmail (emailLayout marketing footer with one-click unsubscribe + List-Unsubscribe headers) and records the send in nurture_sends (skipped if RESEND_API_KEY unset, failed on error — never throws). agent-onboarding-drip edge function (verify_jwt=false, requireAdminOrApiKey, runAgent) selects users in lifecycle_stage new/onboarding and sends the NEXT step of welcome→key_features→personalization→first_value, gated on: consent (classifier's messagingAllowed flag), behavior (skip personalization if interests set, skip first_value if a favorite exists, skip already-sent steps), frequency cap (>=24h between onboarding emails), and AOS-GOV-004 quality gate (scoreOutput nurture category — failing drafts held not sent). Stamps activated_at when the user favorites something after the first_value send. Extended resend-webhook (additive) to also update nurture_sends by resend_message_id for delivered/opened/clicked outcomes. Ops digest reports 7-day onboarding sent/opened/clicked/activated. config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=59). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-NURTURE-003",

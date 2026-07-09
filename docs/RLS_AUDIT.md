@@ -7,9 +7,9 @@
 
 | Metric | Count |
 |---|---|
-| Migrations scanned | 300 |
-| Distinct policies (current) | 549 |
-| Tables with RLS enabled | 253 |
+| Migrations scanned | 301 |
+| Distinct policies (current) | 550 |
+| Tables with RLS enabled | 254 |
 | Tables with policies but no ENABLE RLS seen | 5 |
 | Permissive write policies USING/CHECK(true) | 30 |
 | Write policies granted to `anon` | 4 |
@@ -413,6 +413,7 @@
 | newsletter_deliveries | Service role full access | ALL | service_role | true | true |
 | newsletter_subscribers | Admins can read newsletter subscribers | SELECT | public | EXISTS ( SELECT 1 FROM public.profiles WHERE profiles.id = auth.uid() AND profiles.role = 'admin' ) | — |
 | newsletter_subscribers | Anyone can subscribe to newsletter | INSERT | public | — | true |
+| nurture_sends | nurture_sends_admin_read | SELECT | authenticated | is_admin() | — |
 | oauth_providers | Admin full access to oauth_providers | ALL | public | is_admin() | — |
 | ops_notification_log | ops_notification_admin_read | SELECT | authenticated | EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')) | — |
 | partnership_applications | Admins can manage all applications | ALL | public | user_has_role_or_higher(auth.uid(), 'admin') | — |

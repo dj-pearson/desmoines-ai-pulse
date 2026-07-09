@@ -130,6 +130,20 @@ Deno.serve(async (req) => {
       ? `CSAT (30d) — by channel: ${avgBy("channel")}; by resolution: ${avgBy("resolved_by")}`
       : `CSAT (30d) — no responses yet`;
 
+    // Nurture: onboarding sends + activation over 7d (AOS-NURTURE-002).
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: nurtureRows } = await supabase
+      .from("nurture_sends")
+      .select("status, activated_at, opened_at, clicked_at")
+      .eq("agent_key", "onboarding-drip")
+      .gte("created_at", weekAgo)
+      .limit(5000);
+    const nur = (nurtureRows ?? []) as { status: string; activated_at: string | null; opened_at: string | null; clicked_at: string | null }[];
+    const nurSent = nur.filter((r) => r.status !== "skipped" && r.status !== "failed").length;
+    const nurLine = nur.length
+      ? `Onboarding (7d) — ${nurSent} sent, ${nur.filter((r) => r.opened_at).length} opened, ${nur.filter((r) => r.clicked_at).length} clicked, ${nur.filter((r) => r.activated_at).length} activated`
+      : `Onboarding (7d) — no sends`;
+
     const openHuman = openTier2 + openTier3;
     const body = [
       `Tier-1 auto-resolutions (24h): ${autoResolved}`,
@@ -147,6 +161,7 @@ Deno.serve(async (req) => {
       `Link health — dead links: ${deadLinks}`,
       edgeLine,
       csatLine,
+      nurLine,
     ].join("\n");
 
     // Date-keyed dedupe so a re-run same day coalesces instead of double-sending.

@@ -329,6 +329,29 @@ means zero LLM budget; each review is recorded as an audited run via
 `agent-pr-review`. (Semantic checks like RLS/rate-limit tightening are left out
 deliberately — a false-positive block is worse than a miss.)
 
+## Onboarding drip agent (AOS-NURTURE-002)
+
+`agent-onboarding-drip` (cron, every 6h) runs a staged welcome sequence for users
+in lifecycle stage `new`/`onboarding`: **welcome → key features → personalization
+→ first-value**. It sends the **next appropriate step**, gated on:
+
+- **Consent** — the classifier's `messagingAllowed` flag (unsubscribe + comm
+  prefs); disallowed users are skipped.
+- **Behavior** — steps already completed are skipped: personalization skips if
+  the user set interests; first-value skips if they already have a favorite.
+- **Frequency cap** — ≥ 24h between onboarding emails.
+- **Quality** — the step passes the **AOS-GOV-004** quality gate
+  (`scoreOutput`, `nurture`) before send; a failing draft is held, not sent.
+
+Sends go through the shared `sendNurtureEmail` helper (existing Resend plumbing +
+`emailLayout` CAN-SPAM footer with one-click unsubscribe) and are recorded in the
+`nurture_sends` ledger. **Outcomes** — delivered/opened/clicked flow back via an
+extended `resend-webhook` (which now also matches `nurture_sends` by message id);
+**activation** is stamped when a user takes the first-value action (a favorite)
+after the send. The ops digest reports 7-day onboarding sent/opened/clicked/
+activated counts. `nurture_sends` is shared infrastructure for the rest of the
+NURTURE epic.
+
 ## User lifecycle-stage model (AOS-NURTURE-001)
 
 `agent-lifecycle` (cron, daily) classifies each user into a lifecycle stage —
