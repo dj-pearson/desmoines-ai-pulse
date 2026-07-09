@@ -2863,8 +2863,8 @@
         "npm run validate passes"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Evidence: seatgeek.ts:142 (performer image), catchdesmoines.ts:303 (ld+json image), eventbrite.ts:176, hyveetix.ts:349 all already return item.image_url on ScrapedItem (types.ts:19), but the events transformedData object at firecrawl-scraper/index.ts:1029-1047 omits image_url entirely, so every adapter's image is silently discarded at insert. ai-crawler already demonstrates the fetchAndStoreImage SSRF/dimension guard to copy from. LIVE DB: 253/286 upcoming events (88%) have image_url NULL; 190 are seatgeek.com and every Funny Bone row is SeatGeek adapter output whose image was fetched then thrown away. CAVEAT: the SeatGeek image is the performer photo (shared across all dates of a tour/homestand) — correct for concerts/comedy, venue-plausible otherwise; scraping each SeatGeek event page is NOT viable (JS shells that never yield an image). Highest leverage: fixes the majority of NEW imageless rows at the source."
+      "passes": true,
+      "notes": "Evidence: seatgeek.ts:142 (performer image), catchdesmoines.ts:303 (ld+json image), eventbrite.ts:176, hyveetix.ts:349 all already return item.image_url on ScrapedItem (types.ts:19), but the events transformedData object at firecrawl-scraper/index.ts:1029-1047 omits image_url entirely, so every adapter's image is silently discarded at insert. ai-crawler already demonstrates the fetchAndStoreImage SSRF/dimension guard to copy from. LIVE DB: 253/286 upcoming events (88%) have image_url NULL; 190 are seatgeek.com and every Funny Bone row is SeatGeek adapter output whose image was fetched then thrown away. CAVEAT: the SeatGeek image is the performer photo (shared across all dates of a tour/homestand) — correct for concerts/comedy, venue-plausible otherwise; scraping each SeatGeek event page is NOT viable (JS shells that never yield an image). Highest leverage: fixes the majority of NEW imageless rows at the source. | DONE (2026-07-09): firecrawl-scraper/index.ts now imports fetchAndStoreImage + CONTENT_TYPE_MAP and, in the new-item insert branch (~1199), when item.image_url is present and category is image-capable, pre-assigns the row id (crypto.randomUUID) and routes the adapter image through the shared SSRF/dimension-guarded fetchAndStoreImage path (same as ai-crawler), persisting the stored CDN URL. Only touches image_url when the adapter provided one (adapters returning null keep prior behavior); fetch/validation failure leaves image_url NULL so the row still inserts. Placed in the insert branch (not the transformedData literal) so duplicates are not re-fetched. Additive only — no request/response shape change. npm run validate passes (0 errors)."
     },
     {
       "id": "WEB-AUTO-016",
@@ -2878,8 +2878,8 @@
         "npm run validate passes"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Evidence: firecrawl-scraper/index.ts:1147-1186 — the events duplicate branch updates ONLY source_url (external URL replacing a catchdesmoines URL), and on any other duplicate logs 'Duplicate found (no update needed)' and touches nothing. Result: the 253 existing imageless rows stay imageless no matter how often the scrapers re-run. DEPENDS ON WEB-AUTO-015 (the item must already carry image_url). With both landed, the regularly scheduled scrapes drain most of the backlog automatically within a cycle or two — no manual backfill campaign required."
+      "passes": true,
+      "notes": "Evidence: firecrawl-scraper/index.ts:1147-1186 — the events duplicate branch updates ONLY source_url (external URL replacing a catchdesmoines URL), and on any other duplicate logs 'Duplicate found (no update needed)' and touches nothing. Result: the 253 existing imageless rows stay imageless no matter how often the scrapers re-run. DEPENDS ON WEB-AUTO-015 (the item must already carry image_url). With both landed, the regularly scheduled scrapes drain most of the backlog automatically within a cycle or two — no manual backfill campaign required. | DONE (2026-07-09): events duplicate branch rewritten to accumulate updates into a single UPDATE. When the existing row image_url is NULL/empty and the re-scrape carries an image, heals via the same SSRF/dimension-guarded fetchAndStoreImage path (keyed to existing row id); never overwrites a non-empty image_url. Removed the early same-URL continue so stable-source_url re-scrapes can now heal. Folded image heal + source_url upgrade into one round-trip; logs 🖼️ Healed missing image. Idempotent (existingHasImage guard + fetchAndStoreImage media_asset no-op). Additive UPDATE only. npm run validate passes (0 errors)."
     },
     {
       "id": "WEB-AUTO-017",
@@ -2894,8 +2894,8 @@
         "npm run validate passes"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Evidence: DB shows Vibrant events (Night Ranger, Kansas, etc.) all have source_url=https://www.vibrantmusichall.com/shows (the LIST page) and image_url NULL, and there is no vibrantmusichall.ts in domain-adapters/ (dir currently: barnstormers, catchdesmoines, eventbrite, hyveetix, milb, seatgeek). A plain HTTP GET of /shows returns 38 server-rendered application/ld+json MusicEvent blocks, each with name, a Ticketmaster CDN image, tz-correct startDate, a per-event Ticketmaster URL, venue, and geo coordinates. Model on catchdesmoines.ts (ld+json parse at :303) but single-fetch — no per-detail-page loop. 15 Vibrant rows are currently imageless."
+      "passes": true,
+      "notes": "Evidence: DB shows Vibrant events (Night Ranger, Kansas, etc.) all have source_url=https://www.vibrantmusichall.com/shows (the LIST page) and image_url NULL, and there is no vibrantmusichall.ts in domain-adapters/ (dir currently: barnstormers, catchdesmoines, eventbrite, hyveetix, milb, seatgeek). A plain HTTP GET of /shows returns 38 server-rendered application/ld+json MusicEvent blocks, each with name, a Ticketmaster CDN image, tz-correct startDate, a per-event Ticketmaster URL, venue, and geo coordinates. Model on catchdesmoines.ts (ld+json parse at :303) but single-fetch — no per-detail-page loop. 15 Vibrant rows are currently imageless. | DONE (2026-07-09): added _shared/domain-adapters/vibrantmusichall.ts — single plain HTTP GET of /shows, parses all application/ld+json Event blocks (handles @graph/itemListElement/arrays, @type string|array, malformed blocks skipped not fatal) into AdapterEvent[] with name, Ticketmaster-CDN image_url, Central wall-clock startDate, per-event Ticketmaster source_url (feeds scrape-ticketmaster-events affiliate matcher), venue (defaults to canonical Vibrant Music Hall known-venue → firecrawl assigns coords), price from offers. Registered in domain-adapters/index.ts (matcher: vibrantmusichall.com). Added migration 20260709000000_vibrant_shows_url.sql to repoint the seeded scraping job from / to /shows (idempotent, only when still the seeded homepage URL). Images now persist via WEB-AUTO-015. LIVE VERIFY must run in Supabase runtime — the /shows host 403s datacenter IPs (this env), same as every adapter. npm run validate passes (0 errors)."
     },
     {
       "id": "WEB-AUTO-018",
@@ -2910,8 +2910,8 @@
         "npm run validate passes"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Follow-on already documented in docs/IMAGE_PIPELINE_FINDINGS.md: the backfill does ~25 rows/table/night and re-tries permanent failures forever, so the 190 SeatGeek JS-shell rows (which will never yield an image to a plain scrape) burn the nightly quota indefinitely and the genuine backlog never drains. Lower leverage than WEB-AUTO-015..017 (those fix ingest and self-heal at the source); this makes the backfill safety-net efficient rather than self-defeating. Ties into WEB-AUTO-003's image stage."
+      "passes": true,
+      "notes": "Follow-on already documented in docs/IMAGE_PIPELINE_FINDINGS.md: the backfill does ~25 rows/table/night and re-tries permanent failures forever, so the 190 SeatGeek JS-shell rows (which will never yield an image to a plain scrape) burn the nightly quota indefinitely and the genuine backlog never drains. Lower leverage than WEB-AUTO-015..017 (those fix ingest and self-heal at the source); this makes the backfill safety-net efficient rather than self-defeating. Ties into WEB-AUTO-003's image stage. | DONE (2026-07-09): implementation already present on branch — migration 20260620000001_image_checked_at_backfill.sql adds image_checked_at (events/restaurants/attractions/playgrounds) + partial NULLS-FIRST indexes on the imageless working set + backfill-images-{events,restaurants,attractions} pg_cron. backfill-images/index.ts stamps image_checked_at on every attempt (success+fail), orders never-checked first (nullsFirst), and skips rows re-checked within a 7-day window; successful rows leave the working set (image_url set) so are not re-checked. data-quality-heal image stage delegates to backfill-images so it inherits the cooldown. Remaining AC gap closed here: documented the backfill-images cron drain + image_checked_at cooldown in docs/AUTOMATION_JOBS.md (3 job rows) and updated docs/IMAGE_PIPELINE_FINDINGS.md to mark the item SHIPPED. npm run validate passes."
     },
     {
       "id": "IOS-AUDIT-BUG-001",
@@ -3611,8 +3611,8 @@
         "npm run validate passes"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): migration 20260709000001_agent_registry.sql creates agent_category enum (dev|maintain|nurture|prospect|support|manage|security|governance) + agent_registry table (agent_key unique, name, category, description, schedule_cron nullable, enabled default true, tier1_confidence_threshold default 0.85, monthly_cost_budget_usd nullable, owner_role, created_at/updated_at + trigger) + category/enabled indexes. Admin-only RLS for read AND write (governance config). Seeds 11 live WEB-AUTO jobs (content-ingest, data-quality-heal, backfill-images, dedupe-content, moderate-content, weekly-digest, ai-article-pipeline, social-media-manager, sitemap-refresh, validate-source-urls, job-health-watchdog) enabled=true + 8 AOS program agents (one per category) enabled=false; ON CONFLICT idempotent. Added _shared/agentConfig.ts getAgentConfig(supabase, agentKey) — reads enabled/threshold/budget, 60s cache, fail-safe permissive defaults with found flag; getAgentConfigByKey(url,key) overload. Created docs/AGENTIC_OS.md (schema, categories, getAgentConfig usage, how-to-add-an-agent). npm run validate passes (0 errors). Mirrors proven feature_flags migration; live apply belongs to Supabase runtime."
     },
     {
       "id": "AOS-CORE-002",
@@ -3626,8 +3626,8 @@
         "npm run validate passes"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): reused/extended the WEB-AUTO ledger instead of a parallel table. Migration 20260709000002_agent_run_ledger.sql additively adds agent_key (FK agent_registry ON DELETE SET NULL), items_escalated, tokens_used, cost_usd, summary to automation_job_runs; loosens the status CHECK to the union running/success/failed/partial/failure/escalated/skipped (widening only = additive-safe); adds partial index on (agent_key, started_at desc); creates agent_run_summary view (per registered agent: latest run + 7-day success/failure/escalation/items/tokens/cost rollup joined to registry budget) for the control plane (AOS-CORE-008). Added _shared/agentRun.ts runAgent(agentKey, fn, {client}) — opens/updates/closes a ledger row, ctx.processed/escalated/failed/tokens/cost/summary/skip/meta, status resolution, fully fail-open (never throws, fn errors captured not re-thrown). Wired into backfill-images (previously unobserved registered agent — no double-logging) with dry-run marked skipped. npm run validate passes (0 errors). Documented in docs/AGENTIC_OS.md."
     },
     {
       "id": "AOS-CORE-003",
@@ -3642,8 +3642,8 @@
         "npm run validate passes"
       ],
       "priority": 12,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): _shared/agentRuntime.ts exposes runAgent({agentKey, systemPrompt, tools, maxSteps, costCapUsd, model?, timeoutMs?, finalToolName?}) — an autonomous entry that (1) checks the global kill switch (feature_flags aos_kill_switch) + agent_registry.enabled via getAgentConfig and returns {status:disabled} without acting when off, (2) records the run in the AOS-CORE-002 ledger, (3) audits every tool action to agent_action_log (correlated via run_correlation), (4) defaults to the latest Claude model from ai_configuration, and delegates to a shared runToolLoop. runToolLoop enforces per-run cost cap (costCapUsd, checked between steps), wall-clock timeout (AbortSignal + elapsed checks), maxSteps, and bounded transient-error retries with exponential backoff; supports prompt caching + a terminating finalToolName. Migration 20260709000003_agent_runtime.sql adds agent_action_log (admin-read RLS) + seeds aos_kill_switch flag (additive). Refactored discover-chat to delegate its bespoke tool loop to runToolLoop (ungated, since user-facing) — response unchanged, dead ClaudeResponse types removed. Reuses _shared aiConfig/agentConfig/agentRun/cors/rateLimit. Backward-compat: DB additive-only, no edge-function shape/status changes. npm run validate passes (0 errors). Documented in docs/AGENTIC_OS.md."
     },
     {
       "id": "AOS-CORE-004",
@@ -3657,8 +3657,8 @@
         "npm run validate passes"
       ],
       "priority": 13,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): migration 20260709000004_agent_tasks.sql creates agent_task_status enum (open|auto_resolving|resolved|escalated|assigned|closed|failed) + agent_tasks table (id, agent_key FK, category agent_category, tier int CHECK 1..3, title, payload jsonb, confidence numeric, status, assigned_to uuid nullable FK auth.users, sla_due_at, resolution jsonb nullable, created_at/updated_at) + status/tier/agent indexes + open-SLA partial index. updated_at trigger + freeze_created_at trigger (immutable created_at). RLS: admin read + update (service role writes bypass). agent_tasks_overdue view flags open/escalated/assigned tasks past SLA for the console. _shared/agentTasks.ts createAgentTask() applies per-category tier1_confidence_threshold from getAgentConfig: >=threshold tier1 auto_resolving, >=threshold/2 tier2 escalated, else tier3; SLA due computed from per-category SLA_HOURS policy const (security/support tightest); decideTier exported. npm run validate passes (0 errors). Documented in docs/AGENTIC_OS.md."
     },
     {
       "id": "AOS-CORE-005",
@@ -3673,8 +3673,8 @@
         "npm run validate passes"
       ],
       "priority": 14,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): new agent-escalation-router edge function (verify_jwt=false in config.toml; guarded by requireAdminOrApiKey per WEB-SEC-001; wrapped in runJob for observability). Pulls escalated+unrouted tasks, assigns queue=agent_registry.owner_role by agent (fallback admin), stamps routed_at. Dedupe: coalesces a task into an existing already-routed OPEN task with the same (agent_key, dedupe_key) — closes the dup with resolution.coalesced_into (sequential loop also collapses same-batch dupes). Writes security_audit_logs entry (writeAuditLog) on every route/coalesce decision; best-effort owner notification via sendJobAlert for tier-3 (AOS-CORE-010 will formalize the channel). Fail-open: per-task error leaves the task open+unrouted and raises an ops alert, batch continues. Migration 20260709000005_agent_task_routing.sql adds agent_tasks.dedupe_key/queue/routed_at + dedupe index, registers the escalation-router governance agent, and schedules the */10 pg_cron. Documented in AUTOMATION_JOBS.md. Backward-compat additive-only. npm run validate passes."
     },
     {
       "id": "AOS-CORE-006",
@@ -3688,8 +3688,8 @@
         "npm run validate passes"
       ],
       "priority": 15,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): new /admin/inbox page (src/pages/AdminInbox.tsx, ProtectedRoute requireAdmin, useDocumentTitle, lazyWithRetry route in App.tsx, AdminNav Operations link). src/hooks/useAgentTasks.ts TanStack Query hooks: useAgentTasks(filters) lists escalated+assigned tasks (SLA-soonest first, 60s refetch), useInboxAgentKeys, useAgentRunSummary (producing agent context from agent_run_summary view), useClaimTask (assigned_to+status assigned), useResolveTask (writes resolution jsonb with resolved_by/resolved_at as human-action audit). src/components/admin/AgentInbox.tsx: filters by tier/category/agent/SLA (overdue highlighted + filter), claim/resolve/close, detail Sheet showing payload + producing-agent run + AI-suggested resolution (payload.suggested_resolution). Mobile-first (responsive grid/cards, sm: breakpoints), WCAG (44px min-h targets, aria-labels, aria-busy, labeled selects), skeleton/error/empty states consistent with admin pages. agent_tasks not yet in generated types -> narrow client cast confined to the hook. npm run validate passes (type-check + lint, 0 errors). Documented in docs/AGENTIC_OS.md."
     },
     {
       "id": "AOS-CORE-007",
@@ -3703,8 +3703,8 @@
         "npm run validate passes"
       ],
       "priority": 16,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): migration 20260709000006_agent_action_approvals.sql adds agent_approval_status enum + agent_action_approvals table (id, agent_key FK, action_type, proposed_payload jsonb, status, decided_by, decided_at, reason, execution_result, expires_at, created_at/updated_at) + triggers (updated_at, immutable created_at) + admin read/update RLS + pending-expiry index; registers approval-sweeper agent + schedules */15 sweep cron. _shared/agentApprovals.ts: GUARDED_ACTIONS set, requiresApproval(actionType), createApproval(), and an executor registry (registerApprovalExecutor/executeApprovedAction — unregistered types surfaced, never silently run). agentRuntime dispatch integration: AgentTool.actionType; a guarded action creates a pending approval and returns queued_for_approval instead of executing. agent-approvals edge function (verify_jwt=false, requireAdminOrApiKey): modes approve (executes via registry + audits), reject (reason + audit), sweep (expire stale pending -> status expired + re-escalate via createAgentTask, runJob-observed); idempotent (status=pending guard, non-pending returns current state). Frontend: useAgentApprovals hook (usePendingApprovals + useDecideApproval via functions.invoke), AgentApprovals component (payload preview, approve&execute/reject with required reason, expiring-soon highlight, states), AdminApprovals page, /admin/approvals route + AdminNav link. npm run validate passes (0 errors). Docs updated (AGENTIC_OS.md, AUTOMATION_JOBS.md)."
     },
     {
       "id": "AOS-CORE-008",
@@ -3718,8 +3718,8 @@
         "npm run validate passes"
       ],
       "priority": 17,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): /admin/agents dashboard. Migration 20260709000007_agent_summary_30d.sql extends agent_run_summary view with 30-day rollups (runs/successes/failures/items/cost) appended additively. agent-control edge function (verify_jwt=false, requireAdminOrApiKey): mode=toggle sets agent_registry.enabled + audits; mode=run maps agent_key->edge function via RUN_MAP and fires it (service role) + audits; not_runnable for agents without a function. Frontend: useAgentControlPlane hook (useAgentSummaries from view, useAgentRunHistory from automation_job_runs, useToggleAgent/useRunAgent via functions.invoke). AgentControlPlane component: per-agent status/last-run/7d+30d success rate/items proc vs esc/30d spend vs budget (over-budget highlighted), enable Switch, Run-now button, Recharts 7-day spend BarChart (ResponsiveContainer), run-history drill-in Sheet with error details. AdminAgents page (lazy route), AdminNav link. Mobile-responsive + 44px targets + aria. npm run validate passes (0 errors). Documented in AGENTIC_OS.md."
     },
     {
       "id": "AOS-CORE-009",
@@ -3733,8 +3733,8 @@
         "npm run validate passes"
       ],
       "priority": 18,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): _shared/agentGuards.ts agentPaused(supabase, agentKey) — paused when global aos_kill_switch flag on OR per-agent agent_registry.enabled=false; fail-open (read error => not paused) with 15s kill-switch cache. Enforced CENTRALLY in the shared run wrappers so every agent honors it without per-function code: jobRunner.runJob and agentRun.runAgent check agentPaused before any work and record a SKIPPED automation_job_runs row (fn never called); runJob gains agentKey + exemptFromPause opts (infra jobs like the watchdog can opt out); JobResult status union gains skipped. agentRuntime.runAgent simplified to delegate the gate to agentRun (removed its bespoke kill-switch/enabled checks), maps skipped->disabled. One-click global pause: agent-control mode=global_pause flips aos_kill_switch + audits (severity high); frontend useGlobalPause/useSetGlobalPause + a prominent red Pause-all banner Switch on /admin/agents. Takes effect next invocation (~15s), no deploy. Documented incident-pause runbook in docs/AGENTIC_OS.md. npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-CORE-010",
@@ -3749,8 +3749,8 @@
         "npm run validate passes"
       ],
       "priority": 19,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): _shared/notifyOps.ts notifyOps(supabase,{severity,title,body,dedupeKey,capWindowMs}) — per-severity routing (low=digest-only/no immediate send, medium=webhook+email fallback, high/critical=email+webhook) over existing Resend plumbing + optional OPS_WEBHOOK_URL/SLACK_WEBHOOK_URL webhook; fully fail-safe (each channel try/catch, never throws/blocks). Frequency cap/coalesce via ops_notification_log (migration 20260709000008): a repeat with same dedupe_key within cap window (default 15m) bumps suppressed_count instead of sending. Immediate notifies wired in: escalation-router (tier-2/3 routing, severity by tier, coalesced per queue) and agentRun failure path (severity high, coalesced per agent). Daily digest: agent-ops-digest edge function (verify_jwt=false, requireAdminOrApiKey, runJob-observed) counts tier-1 auto-resolutions 24h, open tasks by tier, overdue, agent failures 24h; date-keyed dedupe; scheduled ops-digest-daily 13:00 UTC via cron; ops-digest agent registered. Backward-compat additive-only. npm run validate passes (0 errors). Docs updated (AGENTIC_OS.md, AUTOMATION_JOBS.md)."
     },
     {
       "id": "AOS-CORE-011",
@@ -3764,8 +3764,8 @@
         "npm run validate passes"
       ],
       "priority": 20,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): agent-control mode=update_config sets tier1_confidence_threshold + monthly_cost_budget_usd + auto_override per agent (audited). getAgentConfig/createAgentTask already read the registry live (<=60s cache) so tuning takes effect without a deploy. Migration 20260709000009_threshold_floor.sql adds auto_override column + enforce_threshold_floor BEFORE INSERT/UPDATE trigger: sensitive categories (security, manage) rejected below 0.80 threshold unless auto_override (defense-in-depth behind the UI). Frontend: useAgentConfigRow + useUpdateAgentConfig hooks; ConfigDialog on /admin/agents (Config button) edits threshold + budget with an override checkbox shown for sensitive categories + inline floor error; safety-floor rejection surfaced as a 200 result. Seeded per-category defaults lean conservative (security/governance 0.95, dev/maintain 0.85-0.90, manage/support 0.85, nurture 0.80, prospect 0.75) documented in docs/AGENTIC_OS.md with the floor. npm run validate passes (0 errors). Completes the AOS-CORE epic (001-011)."
     },
     {
       "id": "AOS-GOV-001",
@@ -3779,8 +3779,8 @@
         "npm run validate passes"
       ],
       "priority": 21,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): runtime enforces per-run costCap (existing runToolLoop cost_cap) AND a rolling monthly per-agent budget. Migration 20260709000010 adds agent_month_spend view (per-agent MTD spend/tokens/runs from automation_job_runs.cost_usd vs agent_registry.monthly_cost_budget_usd). agentRuntime.runAgent checks monthlyBudgetState BEFORE any work; on breach handleBudgetBreach records a failure run (metadata.reason=budget), opens a tier-2 createAgentTask, and notifyOps(high, coalesced per agent), then returns failure — no partial state. Fail-safe: unknown/unpriced model costed via priceFor default (non-zero estimate, never 0); budget-read error => fail-open (no budget). Dashboard: useMonthlySpend hook + /admin/agents budget tiles (OS spend this month vs total budget, agents-over-budget list, agent counts); per-agent 30d spend vs budget already in the list. npm run validate passes (0 errors). Documented in AGENTIC_OS.md."
     },
     {
       "id": "AOS-GOV-002",
@@ -3794,8 +3794,8 @@
         "npm run validate passes"
       ],
       "priority": 22,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): migration 20260709000011_agent_audit_log.sql creates agent_audit_log (id, agent_key, run_id uuid null, action_type, target_ref, before jsonb null, after jsonb null, actor default agent, created_at) + indexes; insert-only RLS (admin SELECT only, no update/delete policies so only service-role bypass can write) mirroring security_audit_logs; PLUS a block_agent_audit_update BEFORE UPDATE trigger raising for every role => true append-only immutability (DELETE left to service role for retention). writeAgentAudit helper added to _shared/auditLog.ts (best-effort, never throws). Wired into: runtime onAction (tool:<name> with before=input/after=output_summary, run_id=correlation), createAgentTask (create_task), createApproval (create_approval), executeApprovedAction (execute_<type> before/after). Admin viewer: useAgentAudit hooks + AgentAuditLog component (/admin/agent-audit, AdminNav link) filter by agent/action/date, detail sheet with before/after + run_id + target_ref links. Verified no code path updates/deletes agent_audit_log (grep clean + DB trigger). npm run validate passes (0 errors). Documented in AGENTIC_OS.md."
     },
     {
       "id": "AOS-GOV-003",
@@ -3809,8 +3809,8 @@
         "npm run validate passes"
       ],
       "priority": 23,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): _shared/agentPolicy.ts — AGENT_POLICY per-agent allowlist (dev/maintenance/nurture/prospect/support/account-manager/security/governance agents) + FINANCIAL_DESTRUCTIVE_ACTIONS set; isActionAllowed (default-deny: unknown agent or unlisted action refused) + policyRequiresApproval (GUARDED_ACTIONS union financial/destructive). Enforced centrally in agentRuntime dispatch BEFORE execute: tools carrying an actionType are gated (read-only tools run free); disallowed -> handlePolicyViolation (writeAgentAudit policy_denied + createAgentTask tier-2 security anomaly + notifyOps high, returns denied_by_policy, tool NOT executed); allowed-but-financial/destructive -> queued for approval. Financial/destructive (refunds, unpublish, delete, mass-send, external_post, pricing) approval-required by default. Unit-style tests in agentPolicy.test.ts (deno test): allow/deny/default-deny/approval-required cases. npm run validate passes (0 errors). Documented in AGENTIC_OS.md."
     },
     {
       "id": "AOS-GOV-004",
@@ -3824,8 +3824,8 @@
         "npm run validate passes"
       ],
       "priority": 24,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): _shared/scoreOutput.ts scoreOutput(supabase,{agentKey,category,content,runId,taskId}) — LLM-judge single lightweight/Haiku call scoring content 0-100 against per-category RUBRIC vs per-category QUALITY_THRESHOLD; returns {score,passed,threshold,dimensions,reasons,evalCostUsd}. evaluateAndGate wraps it: below threshold -> createAgentTask tier-2 human review (downgrade, content+score in payload), returns gated=true; else gated=false so caller proceeds. Bounded/budgeted: single call, hard EVAL_MAX_TOKENS=400 cap, 20s timeout, no loop, eval_cost_usd recorded. Fail-safe: no key/error -> returns FAILING score so content gates to human, never silently ships. Migration 20260709000012 adds agent_quality_scores table (score/threshold/passed/dimensions/reasons/content_preview/run_id/task_id/eval_cost_usd) + admin RLS + agent_quality_summary 30d view. Dashboard: useAgentQuality hook + per-agent avg score + gated count shown on /admin/agents. npm run validate passes (0 errors). Documented in AGENTIC_OS.md."
     },
     {
       "id": "AOS-GOV-005",
@@ -3839,8 +3839,8 @@
         "npm run validate passes"
       ],
       "priority": 25,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): migration 20260709000013 adds agent_mode enum (shadow|live) + agent_registry.mode column DEFAULT shadow + agent_audit_log.shadow bool column + index; promotes the 14 already-live WEB-AUTO/control-plane agents to live, AOS program agents stay shadow. getAgentConfig returns mode (fail-safe default shadow for unregistered/unreadable). agentRuntime dispatch: in shadow mode a tool carrying an actionType is recorded to agent_audit_log (shadow:true, before=input, after={proposed:true}) and returns shadow_logged WITHOUT executing (reads still run). agent-control update_config accepts agentMode (renamed to avoid clashing with the op selector); flipping shadow->live for security/manage categories gated behind the AOS-CORE-011 safety floor (requires auto_override), audited. Dashboard: useAgentModes hook + shadow badge on /admin/agents list + Live-mode Switch in ConfigDialog + shadow badge on /admin/agent-audit entries (proposals with before/after). npm run validate passes (0 errors). Completes AOS-GOV epic (001-005). Documented in AGENTIC_OS.md."
     },
     {
       "id": "AOS-SEC-001",
@@ -3854,8 +3854,8 @@
         "npm run validate passes"
       ],
       "priority": 26,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): agent-security-monitor edge function (verify_jwt=false, requireAdminOrApiKey, wrapped in runAgent -> ledger + kill-switch pause gate). Reads login_attempts/rate_limit_entries/security_audit_logs over 20m window; detects credential stuffing (>=15 fails/IP or one email from >=5 IPs -> tier3), quota abuse (client >=300 req -> tier2), high-severity events (>=1 -> tier3), admin-action burst (>=10 -> tier2). Ambiguous/high -> createAgentTask tier-2/3 with evidence payload; benign below-threshold just scanned/summarized. Idempotent incidents via new createAgentTask dedupeKey support (added dedupe_key write + open-task coalesce check). notifyOps summary. NEVER locks a user (only opens tasks; human-confirmed remediation). Registered security-anomaly-detector agent (live, security) + */15 cron. ALSO FIXED latent bug: widened security_audit_logs event_type CHECK to allow the AOS audit event types (agent_task_routing/agent_control/agent_action_approval/security_anomaly) that were silently failing the constraint. Detection rules documented in AGENTIC_OS.md. npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-SEC-002",
@@ -3869,8 +3869,8 @@
         "npm run validate passes"
       ],
       "priority": 27,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): scan runs in CI (npm audit needs Node) — .github/workflows/dependency-scan.yml runs npm audit --json daily (09:00 UTC) + workflow_dispatch and POSTs {audit} to agent-dep-scan with EDGE_FUNCTION_API_KEY (guarded when secrets unset). agent-dep-scan edge function (verify_jwt=false, requireAdminOrApiKey, runAgent-wrapped): parses npm audit v7 JSON; per advisory opens a task — low/moderate with fixAvailable -> tier-1 (auto patch, payload.handoff=AOS-DEV-003), high/critical or no-fix -> tier-2; idempotent per package via dedupeKey cve:<name>. Auto-closes scanner CVE tasks whose package no longer appears in the audit (status resolved). notifyOps on high/critical. Registered dependency-cve-scanner agent (live, security, no pg_cron since CI-triggered). Security posture (open CVE count) added to agent-ops-digest. Deno edge deps are pinned URLs (no standard CVE feed) — reviewed at upgrade, documented. Backward-compat additive-only. npm run validate passes (0 errors). Documented in AGENTIC_OS.md."
     },
     {
       "id": "AOS-SEC-003",
@@ -3884,8 +3884,8 @@
         "npm run validate passes"
       ],
       "priority": 28,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): CI block-before-land — extended .github/workflows/secret-scan.yml PR-diff scan with provider secret patterns (Stripe sk/rk_live, AWS AKIA, Google AIza, private-key headers, high-entropy key=value assignments) that fail the build; .env.example/*.md + placeholder/env-ref values allowlisted; failure message withholds the value (keeps existing JWT + iOS Secrets checks). Detect-if-slipped — new .github/workflows/secret-history-scan.yml (daily) scans the tree via git grep (inline node scanner) emitting {file,line,type} ONLY (never values; transiently inspects line content to allowlist placeholders but stores only location), POSTs to agent-secret-scan. agent-secret-scan edge function (verify_jwt=false, requireAdminOrApiKey, runAgent-wrapped): sanitizes findings (strips any extra fields), opens ONE deduped tier-3 incident (dedupe_key secret_leak) listing locations + byType + rotationRunbook link, notifyOps high (values withheld); auto-closes the incident when a clean scan returns no findings. Registered secret-leak-scanner agent (live, security). No secret values in tasks/logs (locations only). Rotation runbook documented in AGENTIC_OS.md#secret-rotation-runbook. npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-SEC-004",
@@ -3899,8 +3899,8 @@
         "npm run validate passes"
       ],
       "priority": 29,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): agent-fraud-monitor edge function (verify_jwt=false, requireAdminOrApiKey, runAgent-wrapped, every 6h). Correlates payments (status refunded/partially_refunded or refunded_amount>0 -> refund/chargeback risk per user), usage_events (per-user AI quota abuse >= 2000 units/24h), and user_subscriptions (active + non-trialing + no succeeded payment -> entitlement mismatch). Each finding opens a deduped tier-2 incident with evidence (createAgentTask dedupeKey per finding, audited via agent_audit_log); notifyOps summary. Takes NO account-affecting auto-action — all account impacts escalate to a human (WEB-SEC-002: never tightens shipped client limits below retry thresholds; tier-1 limited to safe throttling within existing infra, so nothing auto-throttles a paid account). Registered fraud-abuse-detector agent (live, security) + */6h cron. Backward-compat additive-only. npm run validate passes (0 errors). Documented in AGENTIC_OS.md."
     },
     {
       "id": "AOS-SEC-005",
@@ -3914,8 +3914,8 @@
         "npm run validate passes"
       ],
       "priority": 30,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): _shared/runbooks.ts codifies RUNBOOKS mapping incident type (credential_stuffing/quota_abuse/refund/entitlement/secret_leak/policy_violation/generic, derived via incidentTypeOf from task payload/dedupe_key/agent_key) to ordered RunbookStep[]; safe reversible steps (notify_ops, rotate_reminder) requiresApproval=false, account/data-affecting (revoke_sessions, lock_account, block_ip, throttle_client, flag_account_review, reconcile_entitlement) requiresApproval=true. agent-runbook edge function (verify_jwt=false, requireAdminOrApiKey): mode=list returns steps+timeline; mode=run executes safe steps immediately (runSafeStep -> notifyOps) or queues a human approval via createApproval (AOS-CORE-007) for approval-gated ones; every step audited (writeAgentAudit runbook_step:<id>) and appended to agent_tasks.payload.timeline. Frontend: useRunbook/useRunRunbookStep hooks + RunbookPanel in AgentInbox TaskDetail (Run/Request buttons per step + timeline display) so responders trigger runbooks from /admin/inbox. Runbooks documented in AGENTIC_OS.md. npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-SEC-006",
@@ -3929,8 +3929,8 @@
         "npm run validate passes"
       ],
       "priority": 31,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): extended scripts/audit-rls.ts with --json (emits docs/rls-audit-findings.json with finding keys: permissive_write/anon_write/missing_rls/unpinned_definer). New scripts/security-config-snapshot.ts captures verify_jwt-false function list + CSP (public/_headers) + CORS (cors.ts) into docs/security-config-baseline.json. New .github/workflows/rls-config-audit.yml (daily) regenerates both, diffs against committed baselines (git show HEAD:), POSTs {newFindings, configDrift} to agent-config-audit. agent-config-audit edge function (verify_jwt=false, requireAdminOrApiKey, runAgent-wrapped): any new RLS finding or verify_jwt/CSP/CORS drift opens a deduped tier-2 task + notifyOps; clean run records success and clears the open drift task. Registered config-drift-auditor agent (live, security). Baseline updatable via audited admin action = regenerate + commit the three baseline files after PR review (documented). Committed current baselines (89 RLS findings, 30 verify_jwt) so first run shows no false drift. npm run validate passes (0 errors). Documented in AGENTIC_OS.md."
     },
     {
       "id": "AOS-SEC-007",
@@ -3944,8 +3944,8 @@
         "npm run validate passes"
       ],
       "priority": 32,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): agent-compliance-monitor edge function (verify_jwt=false, requireAdminOrApiKey, runAgent-wrapped, weekly Mon 06:00). Deletion SLA: account_deletion_tokens older than 30d (row cascade-deletes with the user, so a stale row = possibly-incomplete deletion) -> tier-2 review. Retention: counts rows past policy on login_attempts (90d/attempt_time) + security_audit_logs (180d/created_at), flags for review — NEVER hard-deletes (purge approval-gated, explicit note). Consent: REQUIRED_CONSENT_TYPES (privacy_policy, terms) each must have >0 granted consent_records; missing -> tier-2. All findings idempotent (dedupeKey compliance:<key>), governance category, notifyOps. Compliance section added to agent-ops-digest (open compliance review items). Data-export requests: no table exists yet -> best-effort, honestly noted in summary. Registered compliance-monitor agent (live, governance) + weekly cron; regenerated security-config baseline (verify_jwt=31). Does not mutate consent/deletion shapes older binaries depend on. npm run validate passes (0 errors). Completes AOS-SEC epic (001-007). Documented in AGENTIC_OS.md."
     },
     {
       "id": "AOS-DEV-001",
@@ -3959,8 +3959,8 @@
         "npm run validate passes"
       ],
       "priority": 33,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): full production-error pipeline. Migration 20260709000021 adds error_events table (signature, message_redacted, component/action/route, severity, source client|edge, user_id nullable for counts, created_at) + admin-read RLS + indexes; registers error-triage agent + */30 cron. _shared/scrubPii.ts scrubs emails/JWTs/keys/UUIDs/numbers/URL-params and computes a stable cluster signature (normalized message + component + action, SHA-256). log-error edge function (verify_jwt=false, rate-limited 60/min/IP, PII-scrubbed): ingests client + edge errors. errorHandler.ts reportErrorEvent ships errors in PROD (best-effort fire-and-forget, keepalive, client-side throttle 1/message/min, bounded memory) — no PII sent. agent-error-triage clusters error_events (24h) by signature into deduped dev tasks with frequency/first-last-seen/routes/affectedUsers/sample; tier-2 for high-frequency (>=10) user-facing, tier-1 backlog otherwise; upserts existing open task payloads; auto-closes signatures with no recurrence in window. Regenerated config baseline (verify_jwt=33). No PII from payloads stored (message_redacted only; user_id is uuid for counting). npm run validate passes (0 errors). Documented in AGENTIC_OS.md."
     },
     {
       "id": "AOS-DEV-002",
@@ -3974,8 +3974,8 @@
         "npm run validate passes"
       ],
       "priority": 34,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): formalized the Ralph loop (scripts/ralph/ralph.mjs) as an autonomous fix agent. agent-dev-fix edge function (verify_jwt=false, requireAdminOrApiKey): mode=claim returns the next open tier-1 dev task (category=dev, tier=1, under MAX_ATTEMPTS=3), marks it assigned + increments payload.fixAttempts (audited); mode=record (runAgent-wrapped = budgeted+audited ledger) resolves on success with prUrl, or on failure keeps the task open with lastFailureLog and escalates to tier-2 after 3 attempts (notifyOps). .github/workflows/aos-fix-agent.yml (workflow_dispatch only = safe rollout): claims a task, checks out claude/aos-fix-<taskid> from develop, installs Claude Code, runs the scoped fix via scripts/ralph/AOS-FIX.md, runs npm run type-check && lint, and ONLY on green opens a DRAFT PR to develop (gh pr create --draft) — never commits to main/develop, never auto-merges; records outcome. scripts/ralph/AOS-FIX.md instructions enforce blast-radius scope + branching rules + abort-if-uncertain. Registered dev-fix-agent (live, dev, budget 0). Actual Claude Code fix run needs ANTHROPIC_API_KEY in CI (gated). npm run validate passes (0 errors). Documented in AGENTIC_OS.md."
     },
     {
       "id": "AOS-DEV-003",
@@ -3989,8 +3989,8 @@
         "npm run validate passes"
       ],
       "priority": 35,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): .github/workflows/dependency-update.yml (weekly Mon 05:00 + dispatch): npm outdated --json, splits non-breaking (same major major(cur)==major(latest)) vs majors; queries CVE-priority packages from agent-dep-update mode=priority (coordinates AOS-SEC-002) and sorts them first; applies grouped non-breaking bumps (npm install pkg@wanted), gates on npm run validate && npm run build, opens a PR to develop ONLY when green (red -> ::warning annotate + step summary, no PR); escalates majors to agent-dep-update mode=majors. agent-dep-update edge function (verify_jwt=false, requireAdminOrApiKey, runAgent-wrapped): mode=priority returns package names with open cve: tasks; mode=majors opens deduped tier-2 review tasks (major_update:<pkg>). Registered dependency-update-agent (live, dev). Full test suite runs via the opened PR CI; workflow gates on validate+build. Backward-compat additive-only. npm run validate passes (0 errors). Documented in AGENTIC_OS.md."
     },
     {
       "id": "AOS-DEV-004",
@@ -4004,8 +4004,8 @@
         "npm run validate passes"
       ],
       "priority": 36,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): agent-test-gen edge function (verify_jwt=false, requireAdminOrApiKey): mode=target returns next uncovered area — error-cluster hotspots (open error-triage tasks component) prioritized, then curated CRITICAL_PATHS (auth-flow, subscription-entitlement, edge-contract-decode, trip-planner, favorites-ratings), skipping areas with an open test:<area> task; mode=record (runAgent-wrapped) tracks delivered test as resolved dev task w/ prUrl or logs failure (audited). .github/workflows/aos-test-gen.yml (workflow_dispatch = safe rollout): picks target, runs Claude Code with scripts/ralph/AOS-TEST.md (mandates deterministic, no-live-network, add-tests-only, must-pass), runs type-check + playwright test, opens a PR to develop ONLY when green — human review/merge required, never auto-merges/pushes protected. Registered test-coverage-agent (live, dev, budget 0). Claude Code run needs ANTHROPIC_API_KEY in CI (gated). npm run validate passes (0 errors). Documented in AGENTIC_OS.md."
     },
     {
       "id": "AOS-DEV-005",
@@ -4019,8 +4019,8 @@
         "npm run validate passes"
       ],
       "priority": 37,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): migration 20260709000025 adds ci_runs table (workflow, conclusion, duration_s, branch, head_sha, run_id, flaky_count) + admin RLS; registers ci-health-watcher agent + */6h analyze cron. agent-ci-health edge function (verify_jwt=false, requireAdminOrApiKey): mode=ingest stores a run row; mode=analyze (runAgent-wrapped) groups last 25 runs/workflow over 14d, flags flaky (reported flakes OR mixed 10-60% fail rate = non-deterministic, not a clean break) with deduped tier-2 flaky:<wf> task (quarantine/annotate + fix), detects duration regression (recent half > 1.5x older half) -> notifyOps. .github/workflows/ci-health-report.yml (workflow_run on completion of PR Checks/E2E/Android CI/iOS CI) computes duration from run timestamps and POSTs the outcome to ingest. Ops digest reports open flaky/slow CI-health tasks. Backward-compat additive-only. npm run validate passes (0 errors). Completes AOS-DEV epic (001-005). Documented in AGENTIC_OS.md."
     },
     {
       "id": "AOS-DEV-006",
@@ -4034,8 +4034,8 @@
         "npm run validate passes"
       ],
       "priority": 38,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): scripts/pr-review.mjs — deterministic CLAUDE.md-compliance PR reviewer with hunk-aware line tracking; high-confidence rules (destructive migration DROP/RENAME COLUMN/TABLE/TYPE, direct localStorage, process.env in web code) emit ::error inline annotations + exit 1 (block/request-changes); advisory nits (unwrapped console, any) emit ::warning, never block; fails OPEN (internal error -> ::notice + exit 0). Tested against synthetic diff (correct lines + classification). .github/workflows/pr-review.yml (pull_request to main/develop): diffs base...HEAD, runs the reviewer (inline annotations + step summary), records the run via agent-pr-review, enforces block on exit!=0. agent-pr-review edge function (verify_jwt=false, requireAdminOrApiKey, runAgent-wrapped) records each review as a budgeted (deterministic=0 LLM cost) + audited (ledger + agent_audit_log pr_review_block/pass) run. Registered pr-review-agent (live, dev). Semantic RLS/rate-limit checks deliberately omitted (false-positive block worse than miss). npm run validate passes (0 errors). Documented in AGENTIC_OS.md."
     },
     {
       "id": "AOS-DEV-007",
@@ -4049,8 +4049,8 @@
         "npm run validate passes"
       ],
       "priority": 39,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Deterministic release-notes/changelog generator. scripts/gen-release-notes.mjs reads `git log <last-tag>..HEAD` (no LLM), categorizes conventional commits into feat/fix/perf/refactor/docs/test/chore (+Other), distinguishes Web/iOS/Android surfaces by touched file paths, links merged PRs ((#n) + merge commits), and flags backward-compat-sensitive changes for the release checklist per CLAUDE.md — destructive migration statements (DROP/RENAME COLUMN/TABLE/TYPE, SET NOT NULL, DROP DEFAULT) and *modified* edge-function contracts (newly added functions skipped as additive-safe). Fails open so a changelog hiccup never blocks CI. .github/workflows/release-notes.yml (workflow_dispatch or release/** push) prepends to CHANGELOG.md and opens a DRAFT PR to develop — human edits/publishes, nothing auto-released. agent-release-notes edge function records each run (budgeted/audited via runAgent+writeAgentAudit); migration 20260709000027 registers release-notes-agent; config.toml verify_jwt=false; docs in AGENTIC_OS.md. Verified generator output against real repo history (correct categorization, surface tagging, and single compat-flag for the one modified edge fn). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-MAINT-001",
@@ -4064,8 +4064,8 @@
         "npm run validate passes"
       ],
       "priority": 40,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Uptime/synthetic-monitoring agent. agent-uptime-monitor (cron every 5 min, verify_jwt=false, requireAdminOrApiKey, runAgent-wrapped) probes critical public routes (GET on site URL) and edge-function health (OPTIONS CORS preflight — non-mutating, no auth, no side effects; returns from handleCors before any logic) and records latency/status to new uptime_probes table (additive; RLS admin-read, service-role writes). Documented threshold: a single failed probe is a blip (recorded, never alerted); 3 consecutive failures = sustained outage → opens tier-2 incident (idempotent per target via uptime-down:<target> dedupe key) + immediate ops notify; auto-resolves the incident and sends a recovery notice when the target returns healthy. Targets configurable via UPTIME_ROUTES/UPTIME_FUNCTIONS env. Status tile on /admin/agents (UptimeStatusTile + useUptimeStatus hook) shows per-target current up/down, p95 latency, and uptime% over the last hour, plus a down-count/worst-p95 headline. Migration 20260709000028 (table + agent_registry + pg_cron schedule); config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=40). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-MAINT-002",
@@ -4079,8 +4079,8 @@
         "npm run validate passes"
       ],
       "priority": 41,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Database health agent. New admin-only, read-only db_health_report RPC (SECURITY DEFINER, gated to service_role/admin via user_has_role_or_higher, REVOKE public + GRANT authenticated/service_role) inspects pg_stat_statements (slow queries, degrades gracefully if extension absent), pg_stat_user_indexes (unused indexes excluding PK/unique), pg_stat_user_tables (missing-index candidates via heavy seq_scan on sizable tables; table bloat via dead-tuple ratio), and pg_stat_activity (connection pressure). agent-db-health edge function (cron daily 07:00, verify_jwt=false, requireAdminOrApiKey, runAgent-wrapped) opens deduped tier-2 tasks: missing-index candidates carry an additive CREATE INDEX CONCURRENTLY draft (columns left for human — never auto-applied); unused-index task explicitly notes DROP INDEX is destructive per CLAUDE.md and must follow the deprecation flow (no DROP drafted); bloat → VACUUM/autovacuum suggestion; slow queries collected into one task. Connections ≥80% of max fires an immediate ops alert. Read-only throughout — proposes only, humans/AOS-DEV apply. Extended agent-ops-digest with open db-health + uptime incident counts. Migration 20260709000029 (RPC + agent_registry + pg_cron); config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=41). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-MAINT-003",
@@ -4094,8 +4094,8 @@
         "npm run validate passes"
       ],
       "priority": 42,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Backup verification agent. agent-backup-verify (cron daily 06:30, verify_jwt=false, requireAdminOrApiKey, runAgent-wrapped so each check lands in the ledger) does two read-only checks: (1) backup recency via the Supabase Management API when SUPABASE_ACCESS_TOKEN + project ref are configured (ref derived from SUPABASE_URL) — fetches the backup list, computes age of the latest, and treats >26h (STALE_HOURS) or missing as a failure; without a token, recency is recorded as unverifiable and does NOT page; (2) restore-sanity spot check — row counts of core tables (events/restaurants/attractions/profiles), where a 0-row core table is a restore-sanity failure. Results recorded to new backup_checks table (additive; RLS admin-read, service-role writes). Stale/missing backup or failed spot check opens a tier-3 incident (idempotent via backup-verification-failed dedupe key) + immediate ops notify; a subsequent passing check auto-resolves the incident. Backup status (last check OK/FAILED, method, age) surfaced in the ops digest. Migration 20260709000030 (table + agent_registry + pg_cron); config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=42). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-MAINT-004",
@@ -4109,8 +4109,8 @@
         "npm run validate passes"
       ],
       "priority": 43,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Data-quality sweeper. agent-data-quality (cron daily 08:00, verify_jwt=false, requireAdminOrApiKey, runAgent-wrapped with $20/mo cost budget) runs detect→reconcile→fill→snapshot per table (events/restaurants/attractions). Detects rows missing image_url/coordinates/seo_title/geo_summary (bounded to DETECT_LIMIT=300/run). Reconciles per-row data_quality_issues tracker (idempotent by (target_table,row_id)): rows no longer gapped resolve; still-gapped rows advance attempts; after MAX_ATTEMPTS=3 escalate to a tier-2 data task with the reason (deduped dq:<table>:<id>). Auto-fills tier-1 via existing enrichment fns in bounded batches — backfill-images (limit 5), generate-seo-content (batchSize 8), one backfill-all-coordinates pass — keeping external APIs (Google/Nominatim/image/LLM) rate-limited within budget. Detect-then-fill ordering means each run measures the previous run's fills so attempt counts are honest. Snapshots fill-rate to data_quality_snapshots; ops digest shows current fill-rate per table as a trend. New tables data_quality_issues + data_quality_snapshots (additive, RLS admin-read). Migration 20260709000031 (tables + agent_registry + pg_cron); config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=43). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-MAINT-005",
@@ -4124,8 +4124,8 @@
         "npm run validate passes"
       ],
       "priority": 44,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Broken-link & dead-content monitor. agent-link-monitor (cron daily 09:00, verify_jwt=false, requireAdminOrApiKey, runAgent-wrapped) runs two audited, reversible passes. (1) Expired events: events past their date with archived_at IS NULL are unpublished tier-1 by setting archived_at (reversible — null it to restore; row never deleted), bounded to ARCHIVE_LIMIT=100/run; a past event whose title matches recurrence keywords (weekly/annual/every Xday/recurring/series) is ambiguous → escalated to tier-2 instead of auto-archived. (2) Outbound links: bounded batch (LINK_BUDGET=50 — currently-failing links first, then a rotating sample of events.source_url, restaurants.website/source_url, attractions.website) probed via HEAD (GET fallback on 405/501), state upserted per link in new content_link_checks table; a hard-dead link (404/410) for FAIL_THRESHOLD=3 consecutive checks is marked dead tier-1; a 200 that redirects to a different host is ambiguous → tier-2; transient 5xx/timeouts accumulate but never mark; a dead link that later responds is un-marked (recovery). Link marks live only in content_link_checks (content row never mutated → trivially reversible). Every auto-action (unpublish_past_event, mark_dead_link, unmark_dead_link) written to agent_audit_log with before/after. Digest reports dead-link count. New content_link_checks table (additive, RLS admin-read). Migration 20260709000032 (table + agent_registry + pg_cron); config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=44). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-MAINT-006",
@@ -4139,8 +4139,8 @@
         "npm run validate passes"
       ],
       "priority": 45,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "External-API cost & quota watchdog. Added additive agent_registry.provider column (default anthropic) attributing each agent's ledger cost to a provider; new provider_budgets table (provider PK, monthly_budget_usd, soft_pct 0.80, hard_pct 1.00, throttled/paused flags, auto_paused_agents[] for clean recovery) seeded for anthropic/openai/google/resend/stripe; new provider_usage table for provider-reported cost signals; provider_spend_mtd view summing ledger cost (via agent_registry.provider) + provider_usage month-to-date vs budget. agent-api-watchdog edge function (cron hourly, verify_jwt=false, requireAdminOrApiKey, runAgent-wrapped): soft breach (>=80%) marks provider throttled + ops alert (graceful — runAgent's per-agent budget hard-stop already slows spend); hard breach (>=100%) pauses only the affected agents via agent_registry.enabled=false (same mechanism as kill switch → runAgent records skipped; watchdog itself and rest of product untouched) and records which agents for recovery; spend dropping back under hard line auto-re-enables exactly those agents; below soft clears throttle. Every pause/resume audited with before/after, reversible. Cost dashboard tile on /admin/agents (ProviderCostTile + useProviderCosts hook) shows per-provider spend vs budget MTD with progress bar + throttled/paused badges. Migration 20260709000033 (column + 2 tables + view + agent_registry + pg_cron); config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=45). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-MAINT-007",
@@ -4154,8 +4154,8 @@
         "npm run validate passes"
       ],
       "priority": 46,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Edge-function error-rate & cold-start monitor. New _shared/instrument.ts wrapper — serve(instrument('fn', handler)) — times each invocation, derives HTTP status class (2xx/3xx/4xx/5xx), records a sampled row to new edge_function_metrics table (fire-and-forget, never alters response, never throws, skips OPTIONS; EDGE_METRICS_SAMPLE_RATE caps hot functions). Adopted in geocode-location as the reference (verified wrapper opens/closes correctly). agent-edge-metrics edge function (cron every 6h, verify_jwt=false, requireAdminOrApiKey, runAgent-wrapped so summaries land in the ledger) aggregates current-24h vs prior-24h baseline from BOTH edge_function_metrics (instrumented HTTP: 5xx vs 4xx rate, p95 latency, max=cold-start proxy) AND automation_job_runs (internal agent/cron functions: failure rate + duration p95). Opens deduped tier-2 tasks (edge-regression:<fn>) only on SERVER-side regressions — 5xx/failure rate >=10% with >=20 samples and not below baseline, or p95 >=2s and >=1.5x baseline; 4xx recorded as context but never alerts (user-caused, keeps alerts actionable). Digest surfaces noisiest functions by 5xx/24h. New edge_function_metrics table (additive, RLS admin-read). Migration 20260709000034 (table + agent_registry + pg_cron); config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=46). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-CS-001",
@@ -4169,8 +4169,8 @@
         "npm run validate passes"
       ],
       "priority": 47,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Unified support intake. Additive migration 20260709000035 creates support_tickets (id, user_id nullable, channel enum web_form|email|in_app, subject, body, status enum new|ai_handling|awaiting_user|escalated|resolved|closed, priority, sentiment nullable, category, assigned_to nullable, contact_email, source_ref, sla_due_at, created_at, updated_at) + support_messages thread (ticket_id FK cascade, sender enum user|agent|admin|system, body, metadata, created_at) with enums support_channel/support_ticket_status/support_sender. The existing contact form is UNCHANGED — a SECURITY DEFINER trigger mirror_contact_to_support fires AFTER INSERT ON contact_submissions and creates the ticket + first message, so the public contact endpoint shape and its anti-abuse (anyone-can-insert RLS + rate limit) stay intact; mirroring is idempotent via unique source_ref (contact_submissions.id). Existing contact_submissions backfilled into tickets+messages (idempotent). RLS: users see own tickets/messages (user_id=auth.uid()), admins see all (is_admin()), admins update, authenticated users may open their own in_app ticket, agents write via service role (RLS-bypassing). Import/email path documented in AGENTIC_OS.md (email ingest inserts channel=email under service role — same shape the trigger uses, no schema change). No new edge function, no frontend change, no public endpoint change. npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-CS-002",
@@ -4184,8 +4184,8 @@
         "npm run validate passes"
       ],
       "priority": 48,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "AI first-responder agent. agent-support-responder (cron every 10m + on-demand per ticketId, verify_jwt=false, requireAdminOrApiKey, runAgent-wrapped with $30/mo budget, provider anthropic) processes tickets whose latest message is from the user. Anti-ping-pong: only engages when user spoke last (skips if agent replied and is awaiting); after MAX_AGENT_REPLIES=2 rounds hands to a human. Forced escalation: human-request (HUMAN_RE) or sensitive topic (billing/account/legal via SENSITIVE_RE keywords or ticket category) always escalate, never auto-send — satisfies 'user can always request a human'. Retrieves grounded KB passages via retrieveKb (CS-003) and drafts an answer with Claude (getAIConfig default_model) USING ONLY those passages, returning JSON {answer, canAnswer, sources}; if canAnswer=false or top similarity <0.75 → low confidence → escalate. Before any auto-send runs the AOS-GOV-004 quality/safety gate (scoreOutput, support category); failing score escalates with draft attached. High confidence + gate pass + not sensitive → auto-send tier-1: posts reply with sources to support_messages, sets ticket awaiting_user, audits support_auto_reply. Otherwise → tier-2 escalation: stores suggested draft as internal unsent agent message (metadata.draft), creates deduped support-ticket:<id> routing task with reason+sources+suggestedDraft, sets ticket escalated, audits support_escalation. Every send/escalation audited via writeAgentAudit; cost attributed to budget. No new tables (uses support_tickets/messages + agent_tasks + agent_audit_log). Migration 20260709000037 (agent_registry + pg_cron); config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=50). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-CS-003",
@@ -4199,8 +4199,8 @@
         "npm run validate passes"
       ],
       "priority": 49,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Knowledge base + retrieval for support. Enabled pgvector; new support_kb table (title, content, source, category, embedding vector(1536), needs_embedding, is_active) with HNSW cosine index (ivfflat fallback) + match_support_kb(query_embedding, match_count, threshold) SECURITY DEFINER RPC (admin/service-role gated) returning top passages WITH sources by cosine similarity. Shared helpers _shared/embed.ts (OpenAI text-embedding-3-small, 1536 dims, returns cost) and _shared/kbRetrieve.ts (embed query → match RPC, used by first-responder CS-002). Edge functions: support-kb-embed (cron every 30m + on-demand, budgeted/audited via runAgent against support-kb agent $10/mo budget) embeds articles needing it; a BEFORE UPDATE trigger flips needs_embedding=true on title/content change so edits re-embed automatically; support-kb-admin (service-role CRUD — list/upsert/delete, table has no client write policy — with inline re-embed on save); support-kb-search (grounded retrieval test returning passages+sources). Admin UI /admin/support-kb (AdminSupportKb page + SupportKbManager component + useSupportKb hook, lazyWithRetry route + ProtectedRoute requireAdmin + AdminNav 'Support KB' link) to add/edit/delete articles with a live retrieval tester. Migration 20260709000036 seeds a starter KB from existing docs/FAQ/policies (tiers, cancellation, refunds, password reset, content reports, contact). RLS admin-read; service-role writes. config.toml entries for the 3 functions; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=49). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-CS-004",
@@ -4214,8 +4214,8 @@
         "npm run validate passes"
       ],
       "priority": 50,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Billing/subscription self-service automation. agent-billing-selfservice edge function (verify_jwt=false, requireAdminOrApiKey, runAgent-wrapped, provider stripe) dispatches intents: plan_info + resend_receipt (read-only tier-1, audited); cancel_subscription (Stripe cancel_at_period_end via stripeCancelAtPeriodEnd — reversible, entitlement retained to period end, updates user_subscriptions.cancel_at_period_end, no schema tightening so shipped clients keep the subscription_tier shape, audited with before/after); refund (new _shared/billingPolicy.ts evaluateRefund: auto-approve window = allowed reason {duplicate_charge/accidental_purchase/service_unavailable} AND <=$30 AND charge <=7d old — in-policy refunds execute immediately via stripeRefund + update payments.refunded_amount + audit process_refund autoApproved; out-of-policy create a tier-2 approval via createApproval('process_refund') per AOS-CORE-007 and do NOT execute). New _shared/billingExecutors.ts talks to the same Stripe integration (STRIPE_SECRET_KEY) as the app's Stripe functions and registers a process_refund approval executor so an approved refund actually runs when executeApprovedAction fires; agent-approvals imports it for side-effect registration. Added billing-selfservice to agentPolicy AGENT_POLICY allowlist (process_refund/cancel_subscription/resend_receipt/create_task). All financial actions approval-gated per GOV-003 unless within the auto-approve window, and always audited. No new tables, no schema change. Migration 20260709000038 (agent_registry); config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=51). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-CS-005",
@@ -4229,8 +4229,8 @@
         "npm run validate passes"
       ],
       "priority": 51,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Ticket sentiment + priority classifier with SLA. Migration 20260709000039 adds additive columns to support_tickets (urgency, classified_at, classification_confidence, classification_source, sla_escalated_at) + support_ticket_feedback table (captures human corrections with the agent's prior values) + registers ticket-classifier agent (cron */10). agent-ticket-classifier edge function (verify_jwt=false, requireAdminOrApiKey, runAgent-wrapped, $15/mo budget) does two passes: (1) classifies unclassified tickets via LLM (lightweight model) into sentiment/urgency/category, derives priority from urgency then bumps one level for negative sentiment, sets sla_due_at from priority (urgent 2h/high 8h/normal 24h/low 72h), stores classification_source=agent + confidence; (2) SLA-breach guard pre-escalates fast-track tickets within 30min of sla_due_at while still unhandled to a tier-2 task (tier-3 for urgent/negative), stamping sla_escalated_at + setting status escalated so it fires BEFORE breach. Classification visible in new /admin/support-tickets console (AdminSupportTickets page + SupportTicketsConsole component + useSupportTickets hook, lazyWithRetry route + ProtectedRoute requireAdmin + AdminNav 'Support tickets' link) with priority/sentiment/urgency badges + live SLA countdown; admins correct misclassifications inline via support-ticket-reclassify function which recomputes SLA, sets classification_source=human, and records feedback in support_ticket_feedback. config.toml entries; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=53). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-CS-006",
@@ -4244,8 +4244,8 @@
         "npm run validate passes"
       ],
       "priority": 52,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "In-app support chat wired to the CS agent. support-chat edge function reuses the discover-chat pattern (handleCors + checkRateLimitPersistent per-IP rate limit + optional bearer auth via supabase.auth.getUser — core support available to ALL tiers, no PremiumGate, auth optional but attaches user_id when present), runAgent-wrapped ($40/mo budget). Grounds replies in the KB via retrieveKb (CS-003) and drafts with Claude USING ONLY retrieved passages, returning {reply, canAnswer, sources}. When it can't resolve (canAnswer=false / assistant unavailable) OR the user requests a human (talkToHuman flag from the button, or HUMAN_RE phrasing), it opens a support_tickets row (channel in_app, status escalated), attaches the FULL transcript as support_messages, creates a deduped tier-2 routing task, and audits support_chat_escalation. Frontend: /support public route (Support page + SupportChat component + useSupportChat hook, lazyWithRetry) — mobile-first + accessible (aria-live conversation log, 44px touch targets, labelled input, starter suggestions) with a first-class 'Talk to a human' button. Migration 20260709000040 registers support-chat agent (on-demand); config.toml verify_jwt=false entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=54). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-CS-007",
@@ -4259,8 +4259,8 @@
         "npm run validate passes"
       ],
       "priority": 53,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Post-resolution CSAT loop with re-escalation. Migration 20260709000041 adds additive columns to support_tickets (resolved_at, resolved_by, csat_prompt_sent_at, csat_score) + a BEFORE UPDATE trigger stamping resolved_at on first transition to resolved + new support_csat table (score 1-5 CHECK, comment, channel, resolved_by, run_id) with RLS admin-read + user-read-own + registers csat-agent (cron hourly). agent-csat edge function (verify_jwt=false, requireAdminOrApiKey, runAgent) finds newly-resolved tickets without a CSAT prompt, determines resolved_by (auto if unassigned AND never SLA-escalated, else human), posts a lightweight in-app CSAT prompt to the thread with one-click 1-5 rating links (/csat?ticket=..&score=N — works in-app and email), stamps csat_prompt_sent_at+resolved_by. support-csat-submit edge function (public, rate-limited via checkRateLimitPersistent, no auth so email links work) validates score 1-5, records support_csat (channel+resolved_by) + support_tickets.csat_score, audits csat_recorded; low score <=2 auto-re-escalates — reopens ticket (status escalated, resolved_at cleared) + creates tier-2 task with ORIGINAL context (subject/body) + audits csat_reescalation. Frontend /csat public route (Csat page, lazyWithRetry) submits immediately on a one-click link or shows an accessible star picker (role=radiogroup, 44px targets) + optional comment. Ops digest reports 30-day CSAT trend by channel and by auto-vs-human resolution. config.toml x2; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=56). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-CS-008",
@@ -4274,8 +4274,8 @@
         "npm run validate passes"
       ],
       "priority": 54,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Human agent ticket console (tier-2/3). support-console edge function (verify_jwt=false, requireAdminOrApiKey) actions: list (filter status/priority, excludes merged), thread (full ticket + messages + user context: subscription tier/status + favorites/reviews counts), suggest_reply (KB-grounded AI draft via retrieveKb+Claude for the human to edit), send_reply (inserts admin message, updates status, audits console_reply_sent), assign (assigned_to + status, audited), add_note (internal system message flagged metadata.internal — never shown to users), merge (moves duplicate's messages to canonical ticket, sets merged_into + closed, audited console_merge), canned (library). Migration 20260709000042 adds additive merged_into column + support_canned_responses table (seeded 4 templates, RLS admin-read) + registers support-console actor. Frontend /admin/support (AdminSupport page + SupportConsole component + useSupportConsole hook, lazyWithRetry route + ProtectedRoute requireAdmin + AdminNav 'Support console' link): two-pane list↔thread layout collapsing to one pane on mobile; filter by status; full thread with internal notes visually distinct; user-context banner; composer with AI-suggest + canned-response insertion (both editable before send) + Send reply / Send & resolve / Assign to me; internal note + merge-duplicate inputs. Consistent empty/loading/error states, 44px touch targets, labelled controls, aria labels — WCAG 2.1 AA, mobile-responsive. config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=57). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-NURTURE-001",
@@ -4289,8 +4289,8 @@
         "npm run validate passes"
       ],
       "priority": 55,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "User lifecycle-stage model. Migration 20260709000043 adds additive profiles columns (lifecycle_stage, lifecycle_updated_at, lifecycle_signals jsonb) + user_lifecycle_history table (from_stage/to_stage/reason/signals, RLS admin-read) + user_lifecycle_summary view (counts by stage) + registers lifecycle-classifier agent (cron daily 05:00). agent-lifecycle edge function (verify_jwt=false, requireAdminOrApiKey, runAgent) processes the stalest 500 profiles/run (index nullsFirst on lifecycle_updated_at), pulls activity signals in BULK (favorites/reviews/user_subscriptions/login_attempts/newsletter_subscribers — a few aggregate queries joined in memory, not N+1), derives stage (new|onboarding|active|at_risk|dormant|churned|reactivated) deterministically: active>90d churned, >30d dormant, past_due/>14d at_risk, brand-new/low-activity new/onboarding, previously-lapsed active<=7d reactivated. Writes stage+signals to profiles and records a user_lifecycle_history row on any transition so nurture agents can react. PII-safe: lifecycle_signals stores only day offsets, counts, subscription status, and a messagingAllowed flag (derived from newsletter unsubscribe status + communication_preferences) — never names/emails/content; downstream messaging must honor messagingAllowed. Exposed via /admin/lifecycle admin view (AdminLifecycle page + LifecyclePanel component + useLifecycle hook, route + ProtectedRoute requireAdmin + AdminNav 'Lifecycle' link) showing stage distribution + recent transitions, and usable as a segmentation input (profiles.lifecycle_stage, indexed) by other nurture agents. config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=58). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-NURTURE-002",
@@ -4304,8 +4304,8 @@
         "npm run validate passes"
       ],
       "priority": 56,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Onboarding drip agent. Migration 20260709000044 adds shared nurture_sends ledger (user_id, email, agent_key, kind, resend_message_id, status, quality_score, opened_at/clicked_at/activated_at — reused by all NURTURE stages; RLS admin-read) + registers onboarding-drip agent (cron every 6h, $25/mo). New _shared/sendNurtureEmail.ts helper sends via existing Resend plumbing + renderEmail (emailLayout marketing footer with one-click unsubscribe + List-Unsubscribe headers) and records the send in nurture_sends (skipped if RESEND_API_KEY unset, failed on error — never throws). agent-onboarding-drip edge function (verify_jwt=false, requireAdminOrApiKey, runAgent) selects users in lifecycle_stage new/onboarding and sends the NEXT step of welcome→key_features→personalization→first_value, gated on: consent (classifier's messagingAllowed flag), behavior (skip personalization if interests set, skip first_value if a favorite exists, skip already-sent steps), frequency cap (>=24h between onboarding emails), and AOS-GOV-004 quality gate (scoreOutput nurture category — failing drafts held not sent). Stamps activated_at when the user favorites something after the first_value send. Extended resend-webhook (additive) to also update nurture_sends by resend_message_id for delivered/opened/clicked outcomes. Ops digest reports 7-day onboarding sent/opened/clicked/activated. config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=59). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-NURTURE-003",
@@ -4319,8 +4319,8 @@
         "npm run validate passes"
       ],
       "priority": 57,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Churn-risk prediction + win-back agent. Migration 20260709000045 adds additive profiles columns (churn_risk_score, churn_scored_at) + winback_interventions ledger (user_id, churn_score, play value_reminder|offer, offer_pct, status sent|approval_pending|retained|churned, send_id, approval_id, outcome_at; RLS admin-read) + registers churn-winback agent (cron daily 05:30, $25/mo). agent-churn-winback edge function (verify_jwt=false, requireAdminOrApiKey, runAgent): (1) scores churn 0-1 from lifecycle_signals (daysSinceActive/45 + past_due 0.3 + canceled 0.2, reuses stored signals — no re-query), stamps churn_risk_score, moves high-risk (>=0.6) active users to at_risk with a history transition; (2) win-back play for high-risk consented users respecting a 30-day frequency cap — value_reminder, or a discount offer above OFFER_RISK 0.75; in-policy offers (<=WINBACK_AUTO_MAX_PCT 20%) send after the AOS-GOV-004 quality gate, offers above threshold are approval-gated via createApproval('issue_credit') per AOS-CORE-007 (queued approval_pending, NOT sent until approved); every reminder/offer/approval audited via writeAgentAudit; (3) effectiveness pass marks interventions >=14d old retained (stage active/reactivated) or churned (churned/dormant). Sends via shared sendNurtureEmail (unsubscribe-respecting). Added churn-winback to agentPolicy allowlist (issue_credit/send_outreach/create_task). Ops digest reports 60-day win-back volume, pending approvals, and retained-share. config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=60). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-NURTURE-004",
@@ -4334,8 +4334,8 @@
         "npm run validate passes"
       ],
       "priority": 58,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Personalized weekly digest agent. agent-weekly-digest edge function (verify_jwt=false, requireAdminOrApiKey, runAgent, $30/mo, cron weekly Thu 15:00 via migration 20260709000046) assembles a per-user digest from existing content: fetches shared content ONCE (upcoming events next 14d non-archived, new restaurants/attractions last 14d) and filters per user in memory (interest-matched events via profiles.interests vs event.category, fallback to soonest) — efficient for large audiences. Adds saved-search matches (upcoming events matching a saved_searches alerts_enabled filter category) and gates premium picks by tier (free users get non-sponsored restaurants/attractions; insider/vip also see sponsored). Guardrails: 7-day frequency cap (nurture_sends kind weekly_digest), classifier messagingAllowed consent flag, AOS-GOV-004 quality gate (scoreOutput nurture) before send, and a user with zero relevant items is SKIPPED (no filler). Sends via shared sendNurtureEmail (one-click unsubscribe); deliverability/opens/clicks tracked in nurture_sends via the existing resend-webhook. Ops digest reports 7-day weekly-digest sent/opened/clicked. No new tables. config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=61). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-NURTURE-005",
@@ -4349,8 +4349,8 @@
         "npm run validate passes"
       ],
       "priority": 59,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Dormant-user re-engagement agent. New _shared/nurtureCoordination.ts with recentlyMessaged (queries the shared nurture_sends ledger for ANY non-skipped send to a user in a window — the cross-agent coordination point) and shouldAgeOut (true when the last N re-engagement sends were all ignored — no open/click/activation). Migration 20260709000047 adds additive profiles.reengage_suppressed_at + registers dormant-reengagement agent (cron Tue 16:00, conservative, $20/mo). agent-reengagement edge function (verify_jwt=false, requireAdminOrApiKey, runAgent) targets lifecycle_stage=dormant, not-suppressed users with stacked guardrails in order: (1) consent messagingAllowed + not suppressed; (2) age-out — shouldAgeOut after MAX_ATTEMPTS=3 ignored sends stamps reengage_suppressed_at to stop spamming; (3) cross-agent coordination — recentlyMessaged skips if ANY nurture agent messaged within COORD_WINDOW_DAYS=7 (no overlapping nurture+reengagement, enabled because all nurture agents write to one nurture_sends ledger); (4) re-engagement cadence cap REENGAGE_GAP_DAYS=21; (5) AOS-GOV-004 quality gate. Content = what's-coming-up highlights (events fetched once) via sendNurtureEmail (unsubscribe-respecting). Reactivations measured — a prior re-engagement send whose user is now active/reactivated is stamped activated_at. Ops digest reports 7-day re-engagement sent + reactivated. config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=62). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-NURTURE-006",
@@ -4364,8 +4364,8 @@
         "npm run validate passes"
       ],
       "priority": 60,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Loyalty/streak/milestone recognition agent. Migration 20260709000048 adds user_milestones table (user_id, milestone_type saves|reviews|anniversary|streak, milestone_value, label, emailed, send_id, acknowledged_at; UNIQUE(user_id,type,value) dedupe) with RLS owner-read + owner-update-ack (this IS the in-app surface a frontend renders) + admin-read + registers milestone-recognition agent (cron daily 14:00, $15/mo). agent-milestones edge function (verify_jwt=false, requireAdminOrApiKey, runAgent) processes engaged users (active/onboarding/reactivated), pulls favorites/reviews in bulk (aggregated in memory), and detects the highest newly-crossed milestone across saves (5/10/25/50/100), reviews (1/5/10/25), weekly activity streaks (4/8/12/26/52 consecutive ISO weeks with a save/review), and account anniversaries (within +-2 days). Records the single most-notable new milestone in user_milestones (in-app, always). Optional recognition email gated on: consent (messagingAllowed), <=1 milestone email/week, no overlap with other nurture (recentlyMessaged 3d coordination), and AOS-GOV-004 quality gate; sent via sendNurtureEmail kind milestone_<type> (unsubscribe-respecting). Deduped by (user,type,value) so nobody is congratulated twice. Ops digest reports 7-day milestones recognized + emailed. config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=63). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-NURTURE-007",
@@ -4379,8 +4379,8 @@
         "npm run validate passes"
       ],
       "priority": 61,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Subscription lifecycle nurture (trial, dunning, upgrade). Migration 20260709000049 registers subscription-nurture agent (cron daily 13:00, $25/mo, provider stripe); added to agentPolicy allowlist (issue_credit/send_outreach/create_task). agent-subscription-nurture edge function (verify_jwt=false, requireAdminOrApiKey, runAgent) handles three touchpoints: (1) trial_ending — trialing subs within TRIAL_WINDOW_DAYS=3 of current_period_end get a keep-your-perks reminder; (2) dunning — past_due subs get a payment-update reminder on a ~3-day cadence aligned to Stripe smart retries (Stripe drives the actual charge; agent nudges), any courtesy credit would be approval-gated per AOS-CORE-007 never auto-applied; (3) upgrade_prompt — engaged free users (active lifecycle, no active/trialing paid sub) get a contextual upgrade nudge on a 30-day cadence. Reads only subscription status + tier — no schema tightening, so shipped iOS/Android clients keep the entitlement shapes they read. Every send consent-checked (messagingAllowed), frequency-capped (per-kind), and AOS-GOV-004 quality-gated; sent via sendNurtureEmail (unsubscribe-respecting). Conversion measured: a trial/upgrade send whose user later has an active paid subscription is stamped activated_at (converted); a dunning send whose sub recovers counts as recovered. Ops digest reports 7-day sent + converted/recovered. config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=64). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-PROSPECT-001",
@@ -4394,8 +4394,8 @@
         "npm run validate passes"
       ],
       "priority": 62,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Local-business discovery agent (advertiser lead sourcing). Migration 20260709000050 adds prospect_leads table (business_name, category, city, website, source, source_ref, fit_reason, fit_score, status new|contacted|qualified|disqualified|converted, dedupe_key UNIQUE; RLS admin read/write + updated_at trigger) + registers lead-sourcing agent (cron Mon 06:00, $15/mo). agent-lead-sourcing edge function (verify_jwt=false, requireAdminOrApiKey, runAgent) discovers candidates from EXISTING CONTENT ONLY (documented data sources): restaurants + attractions that are NOT sponsored (=> not already advertising, filtered via .or is_sponsored null/false), and event venues of upcoming events. Performs NO external fetch — zero SSRF/cost-abuse surface; docstring notes any future enrichment must go through _shared/fetchGuard (WEB-SEC-001 allowlist + byte caps) and is intentionally OFF; no gated/PII sources. Each candidate captures source (existing_content:<table>), category, city, website, fit_reason (popularity/rating/has-website/hosts-events) and fit_score (0-1 rule-based). Deduped by stable dedupe_key (normalized name+city) against existing prospect_leads (batched .in lookups) AND within-run, so weekly runs don't pile duplicates. Bulk insert; lead discovery audited via writeAgentAudit (leads_discovered); run budgeted via runAgent. Ops digest reports 7-day new leads + open leads. config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=65). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-PROSPECT-002",
@@ -4409,8 +4409,8 @@
         "npm run validate passes"
       ],
       "priority": 63,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Lightweight CRM data model (leads/accounts/opportunities). Migration 20260709000051 creates crm_accounts (name, category, city, website, business_ref, advertiser_user_id → auth.users, owner), crm_leads (prospect_lead_id → prospect_leads, account_id → crm_accounts, business_name, category, status new|qualified|contacted|disqualified, fit_score, owner, next_action, next_action_at), and crm_opportunities (account_id, lead_id, name, stage crm_opp_stage enum new|qualified|contacted|proposal|won|lost, value, owner, next_action, next_action_at, campaign_id → campaigns for won→real advertiser link, closed_at) — all additive with updated_at triggers. RLS admin/sales role read+write via new is_admin_or_sales() SECURITY DEFINER helper (user_roles admin/root_admin/sales); agents write via service role. Won opportunity links to a real campaign via campaign_id (additive FK — NO change to campaigns/advertisements schema). crm-console edge function (verify_jwt=false, requireAdminOrApiKey) is the audited write path: board (list leads/opps/accounts), promote_prospect (prospect_lead → crm_account + crm_lead, marks prospect qualified), upsert_lead, create_opportunity, advance_stage (won/lost stamps closed_at, won can link campaign_id) — every write audited via writeAgentAudit. Admin CRM view /admin/crm (AdminCrm page + CrmBoard component + useCrm hook, route + ProtectedRoute requireAdmin + AdminNav 'CRM' link) shows open leads (promote → new opportunity) and a 6-stage pipeline board with inline stage advancement; consistent loading/empty/error states, responsive. config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=66). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-PROSPECT-003",
@@ -4424,8 +4424,8 @@
         "npm run validate passes"
       ],
       "priority": 64,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Lead enrichment + fit scoring agent. Migration 20260709000052 adds additive crm_leads columns (enrichment jsonb non-PII, fit_rationale, priority, enriched_at) + registers lead-enrichment agent (cron Mon 07:00, $15/mo). agent-lead-enrichment edge function (verify_jwt=false, requireAdminOrApiKey, runAgent) processes new un-enriched crm_leads: pulls size signals from the LINKED content (prospect_leads.source_ref → the actual restaurants/attractions row for rating/popularity/website/city), builds a non-PII enrichment blob (category, webPresence boolean, rating, popularity, city), and computes a rule-based fit score + rationale written to crm_leads (fit_score, fit_rationale, priority high/medium/low). Tiered routing: high fit (>=0.7) auto-advances to qualified (tier-1, audited lead_auto_qualified); ambiguous (0.35-0.7) queues a deduped tier-2 human qualification task (queue for human); weak (<0.35) disqualified. NO external fetch (allowlist-gated enrichment intentionally off per WEB-SEC-001) and NO PII beyond business-contact basics — only category/web-presence/rating/popularity/city. Run budgeted via runAgent. config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=67). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-PROSPECT-004",
@@ -4439,8 +4439,8 @@
         "npm run validate passes"
       ],
       "priority": 65,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Outreach sequencing agent (guardrailed sends). Migration 20260709000053 adds additive crm_leads.contact_email (business-contact basic) + crm_leads.outreach_stopped, new outreach_templates (3-step sequence seeded, step 1 unapproved — approval-gated), outreach_sends ledger, and outreach_suppression list (RLS admin/sales via is_admin_or_sales) + registers outreach-sequencer agent (cron Wed 15:00, $20/mo). New _shared/outreachExecutors.ts registers a send_outreach approval executor (flips step-1 template approved on human approval); agent-approvals imports it. agent-outreach edge function (verify_jwt=false, requireAdminOrApiKey, runAgent): GUARDRAILS — (1) step-1 template must be approved before ANY auto-run, else it queues a one-time send_outreach approval (AOS-CORE-007) and sends nothing; (2) targets only status=qualified leads with a contact_email and outreach_stopped=false; (3) suppression list checked (email OR domain) before every send; (4) frequency cap >=4 days between steps, stops after step 3; (5) AOS-GOV-004 quality gate before send; (6) CAN-SPAM via renderEmail (physical address + one-click unsubscribe + List-Unsubscribe headers); every send audited (outreach_sent); first send flips lead to contacted. outreach-reply edge function (inbound-reply webhook) HALTS the sequence (outreach_stopped=true), marks the last send replied, escalates to a tier-2 human closer task (agent never negotiates/commits pricing), and adds opt-out replies to suppression; audited. config.toml x2 entries; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=69). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-PROSPECT-005",
@@ -4454,8 +4454,8 @@
         "npm run validate passes"
       ],
       "priority": 66,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Proposal/media-kit generator agent. Migration 20260709000054 adds ad_price_list table (product_key, name, description, tier, price, unit, sort_order, active — seeded 5 real ad products: featured_listing $149/mo, newsletter_feature $299/campaign, homepage_banner $499/mo, event_promotion $199/campaign, premium_partner $799/mo; RLS admin/sales) + proposals table (opportunity_id, account_id, content jsonb, html, status draft|sent|accepted; RLS admin/sales) + registers proposal-generator agent (on-demand, $15/mo). generate-proposal edge function (verify_jwt=false, requireAdminOrApiKey, runAgent): for an opportunity, computes REAL audience stats from platform data (registered users, monthly-active lifecycle, active newsletter subscribers, upcoming events, listed restaurants), pulls pricing STRICTLY from ad_price_list (never invents prices — errors if no active products), assembles a shareable HTML doc draft (audience + placement options + pricing table), stores it in proposals (status draft — for human review) attached to the opportunity, and audits proposal_generated. crm-console gains get_proposal action + proposals in board payload. Frontend /admin/crm CrmBoard gets a per-opportunity Proposal button (useProposal hook) that generates the draft or Views an existing one, opening the doc in a new tab. config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=70). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-PROSPECT-006",
@@ -4469,8 +4469,8 @@
         "npm run validate passes"
       ],
       "priority": 67,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Sales pipeline console + human closer handoff. Migration 20260709000055 adds additive crm_opportunities.assigned_closer + onboarding_started + new crm_activities log table (opportunity_id, lead_id, type note|call|email|stage_change|reply|suggestion_accepted, note, actor; RLS admin/sales). Extended crm-console edge function: board now attaches an agent-suggested next action per opportunity (rule-based STAGE_SUGGESTION per stage) + returns assigned_closer/onboarding_started; new actions activities (list), log_activity (insert + audit), accept_suggestion (copies stage suggestion to next_action + logs suggestion_accepted + audit), assign_closer (audit); advance_stage now logs a stage_change activity and — on WON — sets onboarding_started, sets next_action to onboarding, notifies ops, and audits advertiser_onboarding_triggered (the handoff into AOS-PROSPECT-007). outreach-reply now also logs a reply activity on the lead's opportunity so reply-triggered escalations land in the pipeline for the assigned closer (in addition to the tier-2 task). Frontend /admin/crm CrmBoard enhanced (kanban by stage, existing): each opportunity card shows human next_action or the agent suggestion (italic), with Accept (accept_suggestion), advance-stage, Proposal/View, Log (window.prompt → log_activity), and Take (assign_closer to self) actions; onboarding-started badge. Mobile-responsive, accessible, consistent states. Regenerated security baselines (verify_jwt=70 unchanged — no new functions). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-PROSPECT-007",

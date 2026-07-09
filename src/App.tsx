@@ -172,6 +172,8 @@ import { CookieConsentBanner } from "@/components/CookieConsentBanner";
 
 // Contact page
 const Contact = lazyWithRetry(() => import("./pages/Contact"));
+const Support = lazyWithRetry(() => import("./pages/Support"));
+const Csat = lazyWithRetry(() => import("./pages/Csat"));
 
 // Public CAN-SPAM one-click unsubscribe
 const Unsubscribe = lazyWithRetry(() => import("./pages/Unsubscribe"));
@@ -186,6 +188,15 @@ const AdminGscCallback = lazyWithRetry(() => import("./pages/AdminGscCallback"))
 const AdminSecurity = lazyWithRetry(() => import("./pages/AdminSecurity"));
 const AdminSystem = lazyWithRetry(() => import("./pages/AdminSystem"));
 const AdminAutonomy = lazyWithRetry(() => import("./pages/AdminAutonomy"));
+const AdminInbox = lazyWithRetry(() => import("./pages/AdminInbox"));
+const AdminApprovals = lazyWithRetry(() => import("./pages/AdminApprovals"));
+const AdminAgents = lazyWithRetry(() => import("./pages/AdminAgents"));
+const AdminAuditLog = lazyWithRetry(() => import("./pages/AdminAuditLog"));
+const AdminSupportKb = lazyWithRetry(() => import("./pages/AdminSupportKb"));
+const AdminSupportTickets = lazyWithRetry(() => import("./pages/AdminSupportTickets"));
+const AdminSupport = lazyWithRetry(() => import("./pages/AdminSupport"));
+const AdminLifecycle = lazyWithRetry(() => import("./pages/AdminLifecycle"));
+const AdminCrm = lazyWithRetry(() => import("./pages/AdminCrm"));
 const AdminMedia = lazyWithRetry(() => import("./pages/AdminMedia"));
 // Admin Backend Overhaul (PRD: feat/admin-backend-overhaul) — stubs until each
 // story fleshes the dedicated page out. See AdminPlaceholder for the shell.
@@ -309,6 +320,15 @@ const App = () => (
             <Route path="/admin/security" element={<ProtectedRoute requireAdmin><AdminSecurity /></ProtectedRoute>} />
             <Route path="/admin/system" element={<ProtectedRoute requireAdmin><AdminSystem /></ProtectedRoute>} />
             <Route path="/admin/autonomy" element={<ProtectedRoute requireAdmin><AdminAutonomy /></ProtectedRoute>} />
+            <Route path="/admin/inbox" element={<ProtectedRoute requireAdmin><AdminInbox /></ProtectedRoute>} />
+            <Route path="/admin/approvals" element={<ProtectedRoute requireAdmin><AdminApprovals /></ProtectedRoute>} />
+            <Route path="/admin/agents" element={<ProtectedRoute requireAdmin><AdminAgents /></ProtectedRoute>} />
+            <Route path="/admin/agent-audit" element={<ProtectedRoute requireAdmin><AdminAuditLog /></ProtectedRoute>} />
+            <Route path="/admin/support-kb" element={<ProtectedRoute requireAdmin><AdminSupportKb /></ProtectedRoute>} />
+            <Route path="/admin/support-tickets" element={<ProtectedRoute requireAdmin><AdminSupportTickets /></ProtectedRoute>} />
+            <Route path="/admin/support" element={<ProtectedRoute requireAdmin><AdminSupport /></ProtectedRoute>} />
+            <Route path="/admin/lifecycle" element={<ProtectedRoute requireAdmin><AdminLifecycle /></ProtectedRoute>} />
+            <Route path="/admin/crm" element={<ProtectedRoute requireAdmin><AdminCrm /></ProtectedRoute>} />
             <Route path="/admin/media" element={<ProtectedRoute requireAdmin><AdminMedia /></ProtectedRoute>} />
             <Route path="/admin/menus" element={<ProtectedRoute requireAdmin><AdminMenus /></ProtectedRoute>} />
             {/* Admin Backend Overhaul routes — stubs until each story replaces the page */}
@@ -436,6 +456,8 @@ const App = () => (
             <Route path="/unsubscribe" element={<Unsubscribe />} />
             {/* Contact page */}
             <Route path="/contact" element={<Contact />} />
+            <Route path="/support" element={<Support />} />
+            <Route path="/csat" element={<Csat />} />
             {/* Community voting */}
             <Route path="/best-of" element={<BestOf />} />
             <Route path="/best-of/:category" element={<BestOfCategory />} />

@@ -31,6 +31,7 @@ import { handleCors, getCorsHeaders, isOriginAllowed } from '../_shared/cors.ts'
 import { checkRateLimitPersistent, addRateLimitHeaders } from '../_shared/rateLimit.ts';
 import { getAIConfig } from '../_shared/aiConfig.ts';
 import { sanitizePostgrestPattern } from '../_shared/validation.ts';
+import { runToolLoop, type ToolSchema } from '../_shared/agentRuntime.ts';
 import { resolveEntitledTier } from '../_shared/entitlements.ts';
 
 // ---------------------------------------------------------------------------
@@ -254,21 +255,6 @@ async function consumeQuota(
 // Claude orchestration
 // ---------------------------------------------------------------------------
 
-interface ClaudeContentBlock {
-  type: string;
-  text?: string;
-  id?: string;
-  name?: string;
-  input?: Record<string, unknown>;
-  tool_use_id?: string;
-  content?: unknown;
-}
-
-interface ClaudeResponse {
-  content: ClaudeContentBlock[];
-  stop_reason: string;
-}
-
 async function runClaudeLoop(
   apiKey: string,
   model: string,
@@ -276,84 +262,34 @@ async function runClaudeLoop(
   messages: Array<{ role: string; content: unknown }>,
   supabase: SupabaseLike,
 ): Promise<{ picks: unknown[]; followUpSuggestions: string[] } | { error: string }> {
-  const headers = {
-    'Content-Type': 'application/json',
-    'x-api-key': apiKey,
-    'anthropic-version': anthropicVersion,
-    // Enable prompt caching beta — costs ~25% less on cached prefix.
-    'anthropic-beta': 'prompt-caching-2024-07-31',
-  };
+  // Delegate to the shared runtime harness (AOS-CORE-003) instead of a bespoke
+  // copy-pasted loop. Behavior is preserved: same tools, prompt caching, up to
+  // 6 turns, and the return_picks terminating tool. This is user-facing chat,
+  // so it uses the ungated runToolLoop (NOT the autonomous, kill-switch-gated
+  // runAgent).
+  const loop = await runToolLoop({
+    apiKey,
+    model,
+    anthropicVersion,
+    system: SYSTEM_PROMPT,
+    tools: TOOLS as unknown as ToolSchema[],
+    messages: [...messages],
+    maxSteps: 6,
+    maxTokensPerStep: 1024,
+    enableCaching: true,
+    finalToolName: 'return_picks',
+    dispatch: (name, input) => execTool(supabase, name, input),
+  });
 
-  const conversation: Array<{ role: string; content: unknown }> = [...messages];
-
-  // Up to 6 turns of tool use before we bail out — guards against runaway loops.
-  for (let turn = 0; turn < 6; turn++) {
-    const body = {
-      model,
-      max_tokens: 1024,
-      // System + tools are cached so the per-request cost drops sharply on
-      // anything past the first user query.
-      system: [
-        {
-          type: 'text',
-          text: SYSTEM_PROMPT,
-          cache_control: { type: 'ephemeral' },
-        },
-      ],
-      tools: TOOLS.map((t, i) =>
-        // Mark only the last tool with cache_control — Anthropic caches the
-        // whole tools array up to that boundary.
-        i === TOOLS.length - 1 ? { ...t, cache_control: { type: 'ephemeral' } } : t,
-      ),
-      messages: conversation,
+  if (loop.stopReason === 'final_tool' && loop.finalToolInput) {
+    return {
+      picks: (loop.finalToolInput.picks as unknown[]) ?? [],
+      followUpSuggestions: (loop.finalToolInput.followUpSuggestions as string[]) ?? [],
     };
-
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-    });
-
-    if (!res.ok) {
-      const errBody = await res.text().catch(() => '');
-      return { error: `Claude API ${res.status}: ${errBody.slice(0, 300)}` };
-    }
-
-    const reply = (await res.json()) as ClaudeResponse;
-    conversation.push({ role: 'assistant', content: reply.content });
-
-    // If the model called return_picks, pull the result out and finish.
-    const finalCall = reply.content.find(
-      (b) => b.type === 'tool_use' && b.name === 'return_picks',
-    );
-    if (finalCall?.input) {
-      const input = finalCall.input as Record<string, unknown>;
-      return {
-        picks: (input.picks as unknown[]) ?? [],
-        followUpSuggestions: (input.followUpSuggestions as string[]) ?? [],
-      };
-    }
-
-    // Otherwise, run any other tool_use blocks and feed results back.
-    const toolUses = reply.content.filter((b) => b.type === 'tool_use');
-    if (toolUses.length === 0) {
-      // No more tool calls and no return_picks → bail
-      return { error: 'Model finished without returning picks' };
-    }
-
-    const toolResults = [];
-    for (const call of toolUses) {
-      const result = await execTool(supabase, call.name ?? '', call.input ?? {});
-      toolResults.push({
-        type: 'tool_result',
-        tool_use_id: call.id,
-        content: JSON.stringify(result),
-      });
-    }
-    conversation.push({ role: 'user', content: toolResults });
   }
-
-  return { error: 'Conversation exceeded turn limit' };
+  if (!loop.ok) return { error: loop.error ?? 'Claude API error' };
+  if (loop.stopReason === 'max_steps') return { error: 'Conversation exceeded turn limit' };
+  return { error: 'Model finished without returning picks' };
 }
 
 // ---------------------------------------------------------------------------

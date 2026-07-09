@@ -140,6 +140,22 @@ serve(async (req) => {
 
     if (lookupError) throw lookupError;
     if (!existing) {
+      // Not a newsletter delivery — try the nurture_sends ledger
+      // (AOS-NURTURE-002) before giving up. Best-effort, additive.
+      const nurtureStatusRank: Record<string, number> = { queued: 0, delivered: 1, opened: 2, clicked: 3, bounced: 4, complained: 5 };
+      const { data: nurture } = await supabase
+        .from("nurture_sends")
+        .select("id, status")
+        .eq("resend_message_id", messageId)
+        .maybeSingle();
+      if (nurture) {
+        const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+        if ((nurtureStatusRank[mapping.status] ?? 0) >= (nurtureStatusRank[nurture.status] ?? 0)) patch.status = mapping.status;
+        if (event.type === "email.opened") patch.opened_at = new Date().toISOString();
+        if (event.type === "email.clicked") patch.clicked_at = new Date().toISOString();
+        await supabase.from("nurture_sends").update(patch).eq("id", nurture.id);
+        return new Response(JSON.stringify({ ok: true, nurture: true }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
       // Message id we don't recognize — likely a transactional email
       // from a different sender. Acknowledge and move on.
       return new Response(

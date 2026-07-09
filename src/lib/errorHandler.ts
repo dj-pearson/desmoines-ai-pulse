@@ -61,6 +61,12 @@ export function handleError(
     errorTracker.captureException(errorObj, context);
   }
 
+  // Ship to the production-error pipeline (AOS-DEV-001). Best-effort and
+  // non-blocking; PII is scrubbed server-side at ingest.
+  if (import.meta.env.PROD) {
+    reportErrorEvent(errorObj.message, context, severity);
+  }
+
   // Don't show user-facing errors for info/warning levels
   if (severity === ErrorSeverity.INFO || severity === ErrorSeverity.WARNING) {
     return;
@@ -69,6 +75,45 @@ export function handleError(
   // Show user-friendly error message based on error type
   const userMessage = getUserFriendlyMessage(errorObj);
   showErrorToUser(userMessage, severity);
+}
+
+// ── Production-error pipeline sink (AOS-DEV-001) ─────────────────────────────
+// Client-side throttle: cap sends of the same message to once per minute so an
+// error storm (e.g. a render loop) can't flood the sink.
+const recentSends = new Map<string, number>();
+const SEND_THROTTLE_MS = 60_000;
+
+function reportErrorEvent(message: string, context: ErrorContext, severity: ErrorSeverity): void {
+  try {
+    const now = Date.now();
+    const key = `${context.component ?? ''}:${context.action ?? ''}:${message}`.slice(0, 200);
+    const last = recentSends.get(key);
+    if (last && now - last < SEND_THROTTLE_MS) return;
+    recentSends.set(key, now);
+    if (recentSends.size > 200) recentSends.clear(); // bound memory
+
+    const url = import.meta.env.VITE_SUPABASE_URL;
+    const anon = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    if (!url || !anon) return;
+
+    // Fire-and-forget; never block or throw. PII is scrubbed server-side.
+    void fetch(`${url}/functions/v1/log-error`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: anon },
+      keepalive: true,
+      body: JSON.stringify({
+        message,
+        component: context.component,
+        action: context.action,
+        route: typeof window !== 'undefined' ? window.location?.pathname : undefined,
+        severity,
+        source: 'client',
+        userId: context.userId,
+      }),
+    }).catch(() => {});
+  } catch {
+    // Sink must never affect the app.
+  }
 }
 
 /**

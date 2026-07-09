@@ -15,6 +15,7 @@ import { validateURLForSSRF } from "../_shared/validation.ts";
 import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
 import { tryDomainAdapter } from "../_shared/domain-adapters/index.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+import { fetchAndStoreImage, CONTENT_TYPE_MAP } from "../_shared/imageStorage.ts";
 
 // Marker time for events without specific times (7:31:58 PM Central)
 const NO_TIME_MARKER = "19:31:58";
@@ -1143,44 +1144,65 @@ Return empty array [] if no competitive content found.`
             if (existingItems.length > 0) {
               const existingItem = existingItems[0];
 
-              // For events: Update source_url if we have a better one (external URL replacing catchdesmoines)
-              if (category === 'events' && transformedData.source_url) {
-                const oldUrl = existingItem.source_url || '';
-                const newUrl = transformedData.source_url || '';
+              // For events: heal a missing image and/or upgrade to a better
+              // source_url on the existing row, folded into a single UPDATE.
+              // Non-events categories fall through to the plain duplicate log.
+              if (category === 'events') {
+                const updates: Record<string, unknown> = {};
 
-                // Skip if URLs are identical - no update needed
-                if (oldUrl === newUrl) {
-                  console.log(`⏭️ Duplicate found (same URL): ${transformedData.title}`);
-                  continue;
+                // Heal a missing image (WEB-AUTO-016): the existing row has no
+                // image but this re-scrape carries one. Route it through the same
+                // SSRF/dimension-guarded fetchAndStoreImage path as ingest, keyed
+                // to the existing row id. Never overwrite a non-empty image_url
+                // (respect human-entered / earlier data). Idempotent: once healed
+                // the row has an image, so subsequent duplicate hits skip this and
+                // fetchAndStoreImage itself no-ops on an already-stored media asset.
+                const existingHasImage = !!(existingItem.image_url && String(existingItem.image_url).trim());
+                if (!existingHasImage && item.image_url && CONTENT_TYPE_MAP[category]) {
+                  const healedImageUrl = await fetchAndStoreImage(
+                    supabase,
+                    item.image_url,
+                    category,
+                    existingItem.id,
+                  );
+                  if (healedImageUrl) {
+                    updates.image_url = healedImageUrl;
+                  }
                 }
 
-                // Only update if:
+                // Upgrade source_url only when the new one is strictly better:
                 // 1. Old URL is a catchdesmoines list page (/events/) and new is a detail page
                 // 2. Old URL contains catchdesmoines.com and new is external
-                const oldIsCatchDesMoines = oldUrl.includes('catchdesmoines.com');
-                const oldIsListPage = oldUrl.includes('/events/') || oldUrl.includes('/events?');
-                const newIsDetailPage = newUrl.includes('/event/') && !newUrl.includes('/events/');
-                const newIsExternal = newUrl && !newUrl.includes('catchdesmoines.com');
+                const oldUrl = existingItem.source_url || '';
+                const newUrl = transformedData.source_url || '';
+                if (newUrl && oldUrl !== newUrl) {
+                  const oldIsCatchDesMoines = oldUrl.includes('catchdesmoines.com');
+                  const oldIsListPage = oldUrl.includes('/events/') || oldUrl.includes('/events?');
+                  const newIsDetailPage = newUrl.includes('/event/') && !newUrl.includes('/events/');
+                  const newIsExternal = newUrl && !newUrl.includes('catchdesmoines.com');
+                  if ((oldIsListPage && newIsDetailPage) || (oldIsCatchDesMoines && newIsExternal)) {
+                    updates.source_url = newUrl;
+                  }
+                }
 
-                if ((oldIsListPage && newIsDetailPage) || (oldIsCatchDesMoines && newIsExternal)) {
-                  console.log(`🔄 Updating source_url for: ${transformedData.title}`);
-                  console.log(`   Old: ${oldUrl}`);
-                  console.log(`   New: ${newUrl}`);
-
+                if (Object.keys(updates).length > 0) {
+                  updates.updated_at = new Date().toISOString();
                   const { error: updateError } = await supabase
                     .from(tableName)
-                    .update({
-                      source_url: newUrl,
-                      updated_at: new Date().toISOString()
-                    })
+                    .update(updates)
                     .eq('id', existingItem.id);
 
                   if (updateError) {
-                    console.error(`❌ Error updating source_url:`, updateError);
+                    console.error(`❌ Error updating duplicate event:`, updateError);
                     errors.push(updateError);
                   } else {
                     updatedCount++;
-                    console.log(`✅ Updated source_url for: ${transformedData.title}`);
+                    if (updates.image_url) {
+                      console.log(`🖼️ Healed missing image for: ${transformedData.title}`);
+                    }
+                    if (updates.source_url) {
+                      console.log(`🔄 Updated source_url for: ${transformedData.title} (${oldUrl} → ${newUrl})`);
+                    }
                   }
                 } else {
                   console.log(`⚠️ Duplicate found (no update needed): ${transformedData.title}`);
@@ -1193,6 +1215,26 @@ Return empty array [] if no competitive content found.`
               if (category === 'events') {
                 transformedData.is_featured = Math.random() > 0.8;
                 transformedData.created_at = new Date().toISOString();
+              }
+
+              // Persist the image the domain adapter already fetched (seatgeek /
+              // catchdesmoines / eventbrite / hyveetix all return item.image_url).
+              // Route it through the shared SSRF/dimension-guarded fetchAndStoreImage
+              // path (same as ai-crawler) so the remote image is validated and copied
+              // into Storage rather than hot-linked blindly. Only touch image_url when
+              // the adapter actually provided one — adapters that return image_url:null
+              // (barnstormers, milb, sports-schedule) keep the prior behavior. A
+              // fetch/validation failure leaves image_url NULL, so the row still inserts.
+              if (item.image_url && CONTENT_TYPE_MAP[category]) {
+                // Pre-assign the row id so the stored media_asset is keyed to this record.
+                const contentId = crypto.randomUUID();
+                transformedData.id = contentId;
+                transformedData.image_url = await fetchAndStoreImage(
+                  supabase,
+                  item.image_url,
+                  category,
+                  contentId,
+                );
               }
 
               // For events, get the inserted ID for SEO generation

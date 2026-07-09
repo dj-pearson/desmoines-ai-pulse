@@ -1,0 +1,39 @@
+# CI health reporter (AOS-DEV-005)
+# Fires when a test/CI workflow completes and records its outcome (conclusion,
+# duration, branch) to the agent-ci-health ingest, which the CI-health watcher
+# analyzes for flakiness and duration/failure-rate regressions.
+
+name: CI Health Report
+
+on:
+  workflow_run:
+    workflows: ["PR Checks", "E2E Tests", "Android CI", "iOS CI"]
+    types: [completed]
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Report run outcome
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          EDGE_FUNCTION_API_KEY: ${{ secrets.EDGE_FUNCTION_API_KEY }}
+          WF_NAME: ${{ github.event.workflow_run.name }}
+          WF_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          WF_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          WF_SHA: ${{ github.event.workflow_run.head_sha }}
+          WF_ID: ${{ github.event.workflow_run.id }}
+          WF_START: ${{ github.event.workflow_run.run_started_at }}
+          WF_END: ${{ github.event.workflow_run.updated_at }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$EDGE_FUNCTION_API_KEY" ]; then
+            echo "secrets not set — skipping."; exit 0
+          fi
+          # Duration in seconds from the run timestamps.
+          DUR=$(node -e "const s=new Date(process.env.WF_START).getTime(),e=new Date(process.env.WF_END).getTime();console.log(isFinite(s)&&isFinite(e)?Math.max(0,Math.round((e-s)/1000)):0)")
+          payload=$(node -e "process.stdout.write(JSON.stringify({mode:'ingest',workflow:process.env.WF_NAME,conclusion:process.env.WF_CONCLUSION,duration_s:Number(process.env.DUR),branch:process.env.WF_BRANCH,head_sha:process.env.WF_SHA,run_id:String(process.env.WF_ID)}))" DUR="$DUR")
+          curl -sS -X POST "${SUPABASE_URL}/functions/v1/agent-ci-health" \
+            -H "x-api-key: ${EDGE_FUNCTION_API_KEY}" -H "Content-Type: application/json" \
+            --data "$payload" \
+            && echo "reported ${WF_NAME}=${WF_CONCLUSION} (${DUR}s)"

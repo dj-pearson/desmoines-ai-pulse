@@ -68,20 +68,24 @@ wrong fix** — it would attach one image to every event on the page.
 
 Ranked by leverage:
 
-1. **Drain the backlog faster + stop re-trying failures.** Add an additive
-   `image_checked_at timestamptz` column (events/restaurants/attractions),
-   mirroring the existing `source_url_checked_at` pattern (WEB-AUTO-004). Have
-   `backfill-images` set it on every attempt and order by it, and add a dedicated
-   `backfill-images` cron every 2–4 hours (pg_cron, like
-   `20251123000000_setup_cron_scraping.sql`, wrapped in `jobRunner.runJob`).
-   Additive + safe per CLAUDE.md compat rules. **Biggest win for "lots of
-   listings have no picture."**
-2. **Per-item image at ingest (correct, not page-hero).** Extend the
-   `firecrawl-scraper` Claude prompt to extract a per-item `image_url` ONLY when
-   each item has its own image in the structured listing, and run it through
-   `fetchAndStoreImage` post-insert (mirror `ai-crawler`). Gets images at ingest
-   without the listing-page-hero cross-contamination. Needs careful testing — it
-   edits the core ingestion path.
+1. ✅ **SHIPPED (WEB-AUTO-018) — Drain the backlog faster + stop re-trying
+   failures.** Added the additive `image_checked_at timestamptz` column
+   (events/restaurants/attractions/playgrounds) plus partial `NULLS FIRST`
+   indexes on the imageless working set
+   (`20260620000001_image_checked_at_backfill.sql`). `backfill-images` now stamps
+   `image_checked_at` on every attempt (success or fail), orders never-checked
+   rows first, and skips rows re-checked within a 7-day retry window so permanent
+   failures (e.g. SeatGeek JS shells) stop crowding out fresh candidates.
+   Dedicated `backfill-images-{events,restaurants,attractions}` pg_cron jobs run
+   hourly / every 6h (see `docs/AUTOMATION_JOBS.md`). Additive + safe per CLAUDE.md
+   compat rules.
+2. ✅ **SHIPPED (WEB-AUTO-015/016) — Adapter image at ingest + duplicate-branch
+   self-heal.** `firecrawl-scraper` now persists the `image_url` the domain
+   adapters already fetched, routing it through the shared SSRF/dimension-guarded
+   `fetchAndStoreImage` at insert (mirroring `ai-crawler`), and heals a NULL
+   `image_url` on the events duplicate branch when a re-scrape carries an image —
+   so the backlog self-heals at the source without a manual campaign. Still open:
+   an AI relevance gate for low-confidence page-hero candidates (item 3).
 3. **AI relevance gate (accuracy).** Before storing a low-confidence candidate
    (page `<img>`, fuzzy Places), send it to Claude vision ("does this depict
    `<title>` in Des Moines?") using the existing `scraper.ts` vision plumbing

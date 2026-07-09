@@ -235,3 +235,34 @@ md += `Anything in §1/§2 that a shipped iOS/Android binary might rely on must 
 writeFileSync(OUT, md);
 console.log(`Wrote ${OUT}`);
 console.log(`policies=${policies.length} permissiveWrites=${permissiveWrites.length} anonWrites=${anonWrites.length} missingRls=${missingRls.length} unpinnedDefiners=${unpinnedDefiners.length}`);
+
+// AOS-SEC-006: machine-readable finding keys for the scheduled drift audit.
+// `tsx scripts/audit-rls.ts --json` writes docs/rls-audit-findings.json so the
+// CI drift sweep can diff against the accepted baseline.
+if (process.argv.includes('--json')) {
+  const findingKeys = [
+    ...permissiveWrites.map((p) => `permissive_write:${p.table}:${p.name}`),
+    ...anonWrites.map((p) => `anon_write:${p.table}:${p.name}`),
+    ...missingRls.map((t) => `missing_rls:${t}`),
+    ...unpinnedDefiners.map((f) => `unpinned_definer:${f.name}`),
+  ].sort();
+  const jsonOut = join(process.cwd(), 'docs', 'rls-audit-findings.json');
+  writeFileSync(
+    jsonOut,
+    JSON.stringify(
+      {
+        counts: {
+          policies: policies.length,
+          permissiveWrites: permissiveWrites.length,
+          anonWrites: anonWrites.length,
+          missingRls: missingRls.length,
+          unpinnedDefiners: unpinnedDefiners.length,
+        },
+        findingKeys,
+      },
+      null,
+      2,
+    ) + '\n',
+  );
+  console.log(`Wrote ${jsonOut} (${findingKeys.length} finding keys)`);
+}

@@ -5,6 +5,7 @@
  * Risk level: LOW
  */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { instrument } from "../_shared/instrument.ts"
 
 const NOMINATIM_API = "https://nominatim.openstreetmap.org/search";
 const APP_USER_AGENT = "DesMoinesInsider/1.0 (https://desmoinesinsider.com; mailto:admin@desmoinesinsider.com)";
@@ -14,7 +15,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-serve(async (req) => {
+serve(instrument("geocode-location", async (req) => {
   console.log(`Geocode request: ${req.method} ${req.url}`);
   
   // Handle CORS preflight requests
@@ -114,4 +115,4 @@ serve(async (req) => {
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     )
   }
-})
+}))

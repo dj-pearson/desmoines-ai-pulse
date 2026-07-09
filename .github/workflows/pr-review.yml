@@ -1,0 +1,59 @@
+# Automated PR code-review agent (AOS-DEV-006)
+# Deterministic CLAUDE.md compliance review of the PR diff: destructive
+# migrations, direct localStorage/process.env, unwrapped console logs, `any`.
+# Blocks only on high-confidence violations; nits are advisory. Fails open on the
+# reviewer's own error.
+
+name: AOS PR Review
+
+on:
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Review PR diff
+        id: review
+        run: |
+          set +e
+          git fetch origin "${{ github.base_ref }}" --depth=0 2>/dev/null || true
+          git diff "origin/${{ github.base_ref }}...HEAD" > pr.diff || git diff "origin/${{ github.base_ref }}" > pr.diff
+          node scripts/pr-review.mjs < pr.diff
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Record review (budgeted/audited)
+        if: always()
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          EDGE_FUNCTION_API_KEY: ${{ secrets.EDGE_FUNCTION_API_KEY }}
+          CODE: ${{ steps.review.outputs.code }}
+        run: |
+          [ -z "$SUPABASE_URL" ] && exit 0
+          # Re-run to capture the exact summary counts for the audit record.
+          node scripts/pr-review.mjs < pr.diff > review.out 2>&1 || true
+          HIGH=$(grep -oE '[0-9]+ blocking' review.out | grep -oE '[0-9]+' || echo 0)
+          ADV=$(grep -oE '[0-9]+ advisory' review.out | grep -oE '[0-9]+' || echo 0)
+          curl -sS -X POST "${SUPABASE_URL}/functions/v1/agent-pr-review" \
+            -H "x-api-key: ${EDGE_FUNCTION_API_KEY}" -H "Content-Type: application/json" \
+            --data "{\"high\":${HIGH:-0},\"advisory\":${ADV:-0},\"prNumber\":\"${{ github.event.pull_request.number }}\",\"prUrl\":\"${{ github.event.pull_request.html_url }}\"}" \
+            && echo "recorded review"
+
+      - name: Enforce blocking violations
+        run: |
+          if [ "${{ steps.review.outputs.code }}" != "0" ]; then
+            echo "::error::PR has high-confidence CLAUDE.md violations — see annotations. Requesting changes."
+            exit 1
+          fi
+          echo "No blocking violations."

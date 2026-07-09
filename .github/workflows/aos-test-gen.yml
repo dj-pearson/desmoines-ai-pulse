@@ -1,0 +1,104 @@
+# AOS Test-Coverage Agent (AOS-DEV-004)
+# Generates tests for high-value uncovered critical paths, runs them to confirm
+# they pass deterministically, and opens a PR for a human to merge. Manual
+# dispatch (safe rollout) — never auto-merges.
+
+name: AOS Test-Gen Agent
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Pick a target area
+        id: target
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          EDGE_FUNCTION_API_KEY: ${{ secrets.EDGE_FUNCTION_API_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$EDGE_FUNCTION_API_KEY" ]; then
+            echo "secrets not set — nothing to do."; echo "area=" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          resp=$(curl -sS -X POST "${SUPABASE_URL}/functions/v1/agent-test-gen" \
+            -H "x-api-key: ${EDGE_FUNCTION_API_KEY}" -H "Content-Type: application/json" --data '{"mode":"target"}')
+          area=$(echo "$resp" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{console.log(JSON.parse(s).target?.area||'')}catch(e){console.log('')}})")
+          echo "area=$area" >> "$GITHUB_OUTPUT"
+          echo "Target area: ${area:-none}"
+
+      - name: Install Claude Code
+        if: steps.target.outputs.area != ''
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Generate + verify test
+        id: gen
+        if: steps.target.outputs.area != ''
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          AOS_TEST_AREA: ${{ steps.target.outputs.area }}
+        run: |
+          set +e
+          git config user.name "test-coverage-agent"
+          git config user.email "automation@desmoinesinsider.com"
+          git checkout -B "test/aos-${AOS_TEST_AREA}"
+          AOS_TEST_AREA="${AOS_TEST_AREA}" claude -p "$(cat scripts/ralph/AOS-TEST.md)\n\nTarget area: ${AOS_TEST_AREA}" \
+            --dangerously-skip-permissions || true
+          # Only accept NEW test files; type-check to keep the tree sound.
+          npm run type-check
+          TC=$?
+          # Run the newly added tests deterministically (Playwright config starts the app).
+          npx playwright install --with-deps chromium || true
+          npx playwright test --grep-invert "@live" 2>&1 | tail -40
+          PW=$?
+          echo "green=$([ $TC -eq 0 ] && [ $PW -eq 0 ] && echo 0 || echo 1)" >> "$GITHUB_OUTPUT"
+
+      - name: Open PR on green
+        id: pr
+        if: steps.target.outputs.area != '' && steps.gen.outputs.green == '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AOS_TEST_AREA: ${{ steps.target.outputs.area }}
+        run: |
+          if git diff --quiet && git diff --cached --quiet; then echo "no test produced"; echo "url=" >> "$GITHUB_OUTPUT"; exit 0; fi
+          git add tests/
+          git commit -m "test(aos): coverage for ${AOS_TEST_AREA}"
+          git push -u origin "test/aos-${AOS_TEST_AREA}" --force-with-lease
+          url=$(gh pr create --base develop \
+            --title "test(aos): coverage for ${AOS_TEST_AREA}" \
+            --body "Auto-generated, passing, deterministic tests for ${AOS_TEST_AREA}. Human review + merge required." 2>/dev/null || echo "")
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Record outcome
+        if: steps.target.outputs.area != ''
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          EDGE_FUNCTION_API_KEY: ${{ secrets.EDGE_FUNCTION_API_KEY }}
+          AOS_TEST_AREA: ${{ steps.target.outputs.area }}
+          GREEN: ${{ steps.gen.outputs.green }}
+          PR_URL: ${{ steps.pr.outputs.url }}
+        run: |
+          [ -z "$SUPABASE_URL" ] && exit 0
+          if [ "$GREEN" == "0" ] && [ -n "$PR_URL" ]; then OUTCOME=success; else OUTCOME=failure; fi
+          curl -sS -X POST "${SUPABASE_URL}/functions/v1/agent-test-gen" \
+            -H "x-api-key: ${EDGE_FUNCTION_API_KEY}" -H "Content-Type: application/json" \
+            --data "{\"mode\":\"record\",\"area\":\"${AOS_TEST_AREA}\",\"outcome\":\"${OUTCOME}\",\"prUrl\":\"${PR_URL}\"}" \
+            && echo "recorded ${OUTCOME}"

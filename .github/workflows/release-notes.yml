@@ -1,0 +1,92 @@
+# Release-notes / changelog generator (AOS-DEV-007)
+# On demand (or when a release branch is cut), aggregates conventional commits /
+# merged PRs since the last tag into a categorized CHANGELOG entry, distinguishes
+# web/iOS/Android surfaces, flags backward-compat-sensitive changes, and opens a
+# DRAFT PR. Draft only — a human edits and publishes. Fails open.
+
+name: Release Notes Draft
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version for the changelog heading (e.g. 1.6.0)'
+        required: false
+        default: ''
+  push:
+    branches:
+      - 'release/**'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history + tags for the range
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Generate release notes (draft)
+        id: gen
+        env:
+          RELEASE_NOTES_FILE: release-notes.md
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          if [ -z "$VERSION" ]; then
+            # Derive from a release/* branch name when present.
+            case "${{ github.ref_name }}" in
+              release/*) VERSION="${{ github.ref_name }}"; VERSION="${VERSION#release/}" ;;
+              *) VERSION="Unreleased" ;;
+            esac
+          fi
+          node scripts/gen-release-notes.mjs --version "$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Prepend to CHANGELOG.md
+        run: |
+          touch CHANGELOG.md
+          { echo "# Changelog"; echo ""; cat release-notes.md; echo ""; tail -n +2 CHANGELOG.md 2>/dev/null || true; } > CHANGELOG.new
+          mv CHANGELOG.new CHANGELOG.md
+
+      - name: Open DRAFT PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if git diff --quiet; then echo "no changelog changes"; exit 0; fi
+          BR="chore/release-notes-${{ steps.gen.outputs.version }}"
+          BR="${BR// /-}"
+          git config user.name "release-notes-agent"
+          git config user.email "automation@desmoinesinsider.com"
+          git checkout -B "$BR"
+          git add CHANGELOG.md
+          git commit -m "docs(changelog): draft release notes for ${{ steps.gen.outputs.version }}"
+          git push -u origin "$BR" --force-with-lease
+          gh pr create --draft --base develop \
+            --title "docs(changelog): draft release notes for ${{ steps.gen.outputs.version }}" \
+            --body "$(cat release-notes.md)
+
+---
+_Automated **draft** (AOS-DEV-007). Review the backward-compatibility checklist above, edit as needed, then publish. Nothing is auto-released._" \
+            2>/dev/null || echo "PR may already exist"
+
+      - name: Record run (budgeted/audited)
+        if: always()
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          EDGE_FUNCTION_API_KEY: ${{ secrets.EDGE_FUNCTION_API_KEY }}
+          SUMMARY: ${{ steps.gen.outputs.summary }}
+        run: |
+          [ -z "$SUPABASE_URL" ] && exit 0
+          curl -sS -X POST "${SUPABASE_URL}/functions/v1/agent-release-notes" \
+            -H "x-api-key: ${EDGE_FUNCTION_API_KEY}" -H "Content-Type: application/json" \
+            --data "{\"version\":\"${{ steps.gen.outputs.version }}\",\"summary\":${SUMMARY:-null}}" \
+            && echo "recorded run"
