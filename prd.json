@@ -4439,8 +4439,8 @@
         "npm run validate passes"
       ],
       "priority": 65,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Outreach sequencing agent (guardrailed sends). Migration 20260709000053 adds additive crm_leads.contact_email (business-contact basic) + crm_leads.outreach_stopped, new outreach_templates (3-step sequence seeded, step 1 unapproved — approval-gated), outreach_sends ledger, and outreach_suppression list (RLS admin/sales via is_admin_or_sales) + registers outreach-sequencer agent (cron Wed 15:00, $20/mo). New _shared/outreachExecutors.ts registers a send_outreach approval executor (flips step-1 template approved on human approval); agent-approvals imports it. agent-outreach edge function (verify_jwt=false, requireAdminOrApiKey, runAgent): GUARDRAILS — (1) step-1 template must be approved before ANY auto-run, else it queues a one-time send_outreach approval (AOS-CORE-007) and sends nothing; (2) targets only status=qualified leads with a contact_email and outreach_stopped=false; (3) suppression list checked (email OR domain) before every send; (4) frequency cap >=4 days between steps, stops after step 3; (5) AOS-GOV-004 quality gate before send; (6) CAN-SPAM via renderEmail (physical address + one-click unsubscribe + List-Unsubscribe headers); every send audited (outreach_sent); first send flips lead to contacted. outreach-reply edge function (inbound-reply webhook) HALTS the sequence (outreach_stopped=true), marks the last send replied, escalates to a tier-2 human closer task (agent never negotiates/commits pricing), and adds opt-out replies to suppression; audited. config.toml x2 entries; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=69). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-PROSPECT-005",

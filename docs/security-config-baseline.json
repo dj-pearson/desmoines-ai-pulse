@@ -26,6 +26,7 @@
     "agent-milestones",
     "agent-onboarding-drip",
     "agent-ops-digest",
+    "agent-outreach",
     "agent-pr-review",
     "agent-reengagement",
     "agent-release-notes",
@@ -53,6 +54,7 @@
     "log-content-metrics",
     "log-error",
     "og-image",
+    "outreach-reply",
     "publish-article-webhook",
     "regenerate-sitemaps",
     "restaurant-opening-scraper",
@@ -68,7 +70,7 @@
     "support-ticket-reclassify",
     "version-check"
   ],
-  "verifyJwtCount": 67,
+  "verifyJwtCount": 69,
   "cspPresent": true,
   "cspHash": "1625510d45515045",
   "corsHash": "b1683c94fbad28a6"

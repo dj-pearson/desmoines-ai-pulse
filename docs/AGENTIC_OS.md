@@ -329,6 +329,27 @@ means zero LLM budget; each review is recorded as an audited run via
 `agent-pr-review`. (Semantic checks like RLS/rate-limit tightening are left out
 deliberately — a false-positive block is worse than a miss.)
 
+## Guardrailed outreach sequencing (AOS-PROSPECT-004)
+
+`agent-outreach` (cron, weekly) runs a personalized 3-step sequence to
+**qualified** leads that have a business-contact email — but only behind hard
+guardrails:
+
+- **Approval gate** — the **step-1 template must be approved** first. If it
+  isn't, the agent queues a one-time `send_outreach` approval (AOS-CORE-007) and
+  **sends nothing**. Approving it in the console runs the `send_outreach`
+  executor (`_shared/outreachExecutors.ts`), which flips the template to
+  approved so the sequence can begin. Every step template must be approved.
+- **CAN-SPAM** — sends render through `emailLayout` (physical address +
+  one-click unsubscribe + `List-Unsubscribe` headers). A **suppression list**
+  (`outreach_suppression`, by email or domain) is checked before every send.
+- **Frequency cap** — ≥ 4 days between steps; the sequence stops after step 3.
+- **Quality gate** — AOS-GOV-004 before any send; every send is audited.
+- **Never negotiates** — `outreach-reply` (an inbound-reply webhook) **halts the
+  sequence** (`crm_leads.outreach_stopped`) on any reply and opens a **tier-2
+  task for a human closer**; an opt-out reply also adds the address to
+  suppression. The agent never negotiates or commits pricing autonomously.
+
 ## Lead enrichment + fit scoring (AOS-PROSPECT-003)
 
 `agent-lead-enrichment` (cron, weekly) triages new CRM leads so sales works the

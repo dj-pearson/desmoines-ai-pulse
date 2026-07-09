@@ -25,6 +25,9 @@ import { executeApprovedAction } from "../_shared/agentApprovals.ts";
 // Side-effect import: registers the process_refund executor (AOS-CS-004) so an
 // approved refund actually runs when executeApprovedAction fires.
 import "../_shared/billingExecutors.ts";
+// Registers the send_outreach executor (AOS-PROSPECT-004): approving the request
+// flips the step-1 outreach template to approved so the sequence can run.
+import "../_shared/outreachExecutors.ts";
 import { createAgentTask } from "../_shared/agentTasks.ts";
 import { runJob } from "../_shared/jobRunner.ts";
 

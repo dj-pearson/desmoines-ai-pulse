@@ -7,9 +7,9 @@
 
 | Metric | Count |
 |---|---|
-| Migrations scanned | 309 |
-| Distinct policies (current) | 558 |
-| Tables with RLS enabled | 260 |
+| Migrations scanned | 310 |
+| Distinct policies (current) | 561 |
+| Tables with RLS enabled | 263 |
 | Tables with policies but no ENABLE RLS seen | 6 |
 | Permissive write policies USING/CHECK(true) | 30 |
 | Write policies granted to `anon` | 4 |
@@ -419,6 +419,9 @@
 | nurture_sends | nurture_sends_admin_read | SELECT | authenticated | is_admin() | — |
 | oauth_providers | Admin full access to oauth_providers | ALL | public | is_admin() | — |
 | ops_notification_log | ops_notification_admin_read | SELECT | authenticated | EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')) | — |
+| outreach_sends | outreach_sends_sales_read | SELECT | authenticated | public.is_admin_or_sales() | — |
+| outreach_suppression | outreach_suppression_sales | ALL | authenticated | public.is_admin_or_sales() | public.is_admin_or_sales() |
+| outreach_templates | outreach_templates_sales | ALL | authenticated | public.is_admin_or_sales() | public.is_admin_or_sales() |
 | partnership_applications | Admins can manage all applications | ALL | public | user_has_role_or_higher(auth.uid(), 'admin') | — |
 | partnership_applications | Users can create their own applications | INSERT | public | — | auth.uid() = user_id |
 | partnership_applications | Users can view their own applications | SELECT | public | auth.uid() = user_id | — |

@@ -317,3 +317,13 @@ verify_jwt = false
 # auto-qualifies high-fit. Auth via requireAdminOrApiKey.
 [functions.agent-lead-enrichment]
 verify_jwt = false
+
+# Outreach sequencer (AOS-PROSPECT-004). Cron; guardrailed multi-step outreach.
+# Auth via requireAdminOrApiKey.
+[functions.agent-outreach]
+verify_jwt = false
+
+# Outreach reply/opt-out handler (AOS-PROSPECT-004). Inbound webhook; halts
+# sequence + escalates to a human closer. Auth via requireAdminOrApiKey.
+[functions.outreach-reply]
+verify_jwt = false
