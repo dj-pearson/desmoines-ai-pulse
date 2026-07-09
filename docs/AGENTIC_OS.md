@@ -329,6 +329,22 @@ means zero LLM budget; each review is recorded as an audited run via
 `agent-pr-review`. (Semantic checks like RLS/rate-limit tightening are left out
 deliberately — a false-positive block is worse than a miss.)
 
+## Proposal / media-kit generator (AOS-PROSPECT-005)
+
+`generate-proposal` (on-demand from the CRM console) assembles a tailored
+advertiser proposal for an opportunity: **real audience stats** computed from
+platform data (registered users, monthly-active, newsletter subscribers,
+upcoming events, listed restaurants), placement options, and **pricing pulled
+ONLY from `ad_price_list`** — the agent **never invents prices** (if no active
+products are configured, it errors rather than guess). The output is a shareable
+**HTML doc draft** attached to the opportunity (`proposals`, status `draft` — for
+human review) and the generation is audited.
+
+The `/admin/crm` board gets a **Proposal** action per opportunity: it generates
+the draft (or **View**s an existing one), opening the doc in a new tab. Prices
+live in `ad_price_list` (admin/sales-managed) so the rate card is the single
+source of truth.
+
 ## Guardrailed outreach sequencing (AOS-PROSPECT-004)
 
 `agent-outreach` (cron, weekly) runs a personalized 3-step sequence to

@@ -47,6 +47,7 @@
     "dedupe-content",
     "extract-catchdesmoines-urls",
     "firecrawl-scraper",
+    "generate-proposal",
     "generate-seo-content",
     "geocode-location",
     "get-sponsored-pick",
@@ -70,7 +71,7 @@
     "support-ticket-reclassify",
     "version-check"
   ],
-  "verifyJwtCount": 69,
+  "verifyJwtCount": 70,
   "cspPresent": true,
   "cspHash": "1625510d45515045",
   "corsHash": "b1683c94fbad28a6"

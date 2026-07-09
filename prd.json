@@ -4454,8 +4454,8 @@
         "npm run validate passes"
       ],
       "priority": 66,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Proposal/media-kit generator agent. Migration 20260709000054 adds ad_price_list table (product_key, name, description, tier, price, unit, sort_order, active — seeded 5 real ad products: featured_listing $149/mo, newsletter_feature $299/campaign, homepage_banner $499/mo, event_promotion $199/campaign, premium_partner $799/mo; RLS admin/sales) + proposals table (opportunity_id, account_id, content jsonb, html, status draft|sent|accepted; RLS admin/sales) + registers proposal-generator agent (on-demand, $15/mo). generate-proposal edge function (verify_jwt=false, requireAdminOrApiKey, runAgent): for an opportunity, computes REAL audience stats from platform data (registered users, monthly-active lifecycle, active newsletter subscribers, upcoming events, listed restaurants), pulls pricing STRICTLY from ad_price_list (never invents prices — errors if no active products), assembles a shareable HTML doc draft (audience + placement options + pricing table), stores it in proposals (status draft — for human review) attached to the opportunity, and audits proposal_generated. crm-console gains get_proposal action + proposals in board payload. Frontend /admin/crm CrmBoard gets a per-opportunity Proposal button (useProposal hook) that generates the draft or Views an existing one, opening the doc in a new tab. config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=70). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-PROSPECT-006",

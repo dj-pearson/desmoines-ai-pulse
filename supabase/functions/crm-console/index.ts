@@ -43,12 +43,19 @@ Deno.serve(async (req) => {
 
   try {
     if (action === "board") {
-      const [leads, opps, accounts] = await Promise.all([
+      const [leads, opps, accounts, proposals] = await Promise.all([
         supabase.from("crm_leads").select("id, business_name, category, status, fit_score, next_action, next_action_at, account_id, created_at").order("created_at", { ascending: false }).limit(300),
         supabase.from("crm_opportunities").select("id, name, stage, value, next_action, next_action_at, account_id, campaign_id, closed_at, updated_at").order("updated_at", { ascending: false }).limit(300),
         supabase.from("crm_accounts").select("id, name, category, city, website, advertiser_user_id").order("created_at", { ascending: false }).limit(300),
+        supabase.from("proposals").select("id, opportunity_id, status, created_at").order("created_at", { ascending: false }).limit(300),
       ]);
-      return j({ ok: true, leads: leads.data ?? [], opportunities: opps.data ?? [], accounts: accounts.data ?? [] }, 200, corsHeaders);
+      return j({ ok: true, leads: leads.data ?? [], opportunities: opps.data ?? [], accounts: accounts.data ?? [], proposals: proposals.data ?? [] }, 200, corsHeaders);
+    }
+
+    if (action === "get_proposal") {
+      const { data, error } = await supabase.from("proposals").select("id, html, content, status").eq("id", String(body.id)).maybeSingle();
+      if (error) throw new Error(error.message);
+      return j({ ok: true, proposal: data }, 200, corsHeaders);
     }
 
     // Promote a discovered prospect_lead into a crm_account + crm_lead.

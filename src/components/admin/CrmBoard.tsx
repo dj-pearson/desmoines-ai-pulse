@@ -1,10 +1,10 @@
 import { useMemo } from "react";
-import { Briefcase, ChevronRight, UserPlus } from "lucide-react";
+import { Briefcase, ChevronRight, FileText, UserPlus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useCrmBoard, useCrmAction, CRM_STAGES, type CrmOpportunity } from "@/hooks/useCrm";
+import { useCrmBoard, useCrmAction, useProposal, CRM_STAGES, type CrmOpportunity } from "@/hooks/useCrm";
 import { useAuth } from "@/contexts/AuthContext";
 import { handleError } from "@/lib/errorHandler";
 import { cn } from "@/lib/utils";
@@ -28,7 +28,27 @@ function nextStage(stage: string): string | null {
 export default function CrmBoard() {
   const { data, isLoading, isError } = useCrmBoard();
   const action = useCrmAction();
+  const { generate, openProposal } = useProposal();
   const { user } = useAuth();
+
+  const proposalByOpp = useMemo(() => {
+    const m = new Map<string, string>();
+    (data?.proposals ?? []).forEach((p) => { if (!m.has(p.opportunity_id)) m.set(p.opportunity_id, p.id); });
+    return m;
+  }, [data]);
+
+  async function onProposal(oppId: string) {
+    const existing = proposalByOpp.get(oppId);
+    if (existing) return openProposal(existing);
+    try {
+      const res = await generate.mutateAsync(oppId);
+      toast.success("Proposal draft generated.");
+      if (res?.proposalId) openProposal(res.proposalId);
+    } catch (e) {
+      handleError(e, { component: "CrmBoard", action: "generate_proposal" });
+      toast.error("Couldn't generate the proposal.");
+    }
+  }
 
   const accountName = useMemo(() => {
     const m = new Map<string, string>();
@@ -118,11 +138,16 @@ export default function CrmBoard() {
                         <div key={o.id} className="rounded-md border bg-background p-2 text-sm">
                           <p className="font-medium">{accountName.get(o.account_id ?? "") ?? o.name}</p>
                           {o.value > 0 && <p className="text-xs text-muted-foreground">${o.value.toLocaleString()}</p>}
-                          {ns && (
-                            <Button size="sm" variant="ghost" className="mt-1 h-7 px-2 text-xs" onClick={() => run({ action: "advance_stage", id: o.id, stage: ns }, `Moved to ${ns}.`)} disabled={action.isPending}>
-                              {ns} <ChevronRight className="ml-1 h-3 w-3" />
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {ns && (
+                              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => run({ action: "advance_stage", id: o.id, stage: ns }, `Moved to ${ns}.`)} disabled={action.isPending}>
+                                {ns} <ChevronRight className="ml-1 h-3 w-3" />
+                              </Button>
+                            )}
+                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => onProposal(o.id)} disabled={generate.isPending}>
+                              <FileText className="mr-1 h-3 w-3" /> {proposalByOpp.has(o.id) ? "View" : "Proposal"}
                             </Button>
-                          )}
+                          </div>
                         </div>
                       );
                     })}

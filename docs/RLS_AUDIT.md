@@ -7,9 +7,9 @@
 
 | Metric | Count |
 |---|---|
-| Migrations scanned | 310 |
-| Distinct policies (current) | 561 |
-| Tables with RLS enabled | 263 |
+| Migrations scanned | 311 |
+| Distinct policies (current) | 563 |
+| Tables with RLS enabled | 265 |
 | Tables with policies but no ENABLE RLS seen | 6 |
 | Permissive write policies USING/CHECK(true) | 30 |
 | Write policies granted to `anon` | 4 |
@@ -143,6 +143,7 @@
 | accessibility_reports | Anyone can submit accessibility reports | INSERT | public | — | true |
 | activity_feed | System can insert activity | INSERT | public | — | true |
 | activity_feed | Users can view their own activity and followed users' activity | SELECT | public | auth.uid() = user_id OR EXISTS ( SELECT 1 FROM user_follows WHERE follower_id = auth.uid() AND following_id = activity_feed.user_id ) | — |
+| ad_price_list | ad_price_list_sales | ALL | authenticated | public.is_admin_or_sales() | public.is_admin_or_sales() |
 | ad_rate_card | Admins can manage rate card | ALL | public | EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')) | — |
 | ad_rate_card | Public can read rate card | SELECT | public | true | — |
 | admin_action_logs | Admins can view action logs | ALL | public | is_admin_or_root() | — |
@@ -442,6 +443,7 @@
 | profiles | Admins can delete profiles | DELETE | authenticated | user_has_role_or_higher(auth.uid(), 'admin'::user_role) | — |
 | profiles | Admins can update all profiles | UPDATE | authenticated | user_has_role_or_higher(auth.uid(), 'admin'::user_role) | user_has_role_or_higher(auth.uid(), 'admin'::user_role) |
 | profiles | Admins can view all profiles | SELECT | authenticated | user_has_role_or_higher(auth.uid(), 'admin'::user_role) | — |
+| proposals | proposals_sales | ALL | authenticated | public.is_admin_or_sales() | public.is_admin_or_sales() |
 | prospect_leads | prospect_leads_admin_read | SELECT | authenticated | is_admin() | — |
 | prospect_leads | prospect_leads_admin_write | UPDATE | authenticated | is_admin() | — |
 | provider_budgets | provider_budgets_admin_read | SELECT | authenticated | EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')) | — |

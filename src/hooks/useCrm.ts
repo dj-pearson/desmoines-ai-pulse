@@ -34,10 +34,18 @@ export interface CrmAccount {
   advertiser_user_id: string | null;
 }
 
+export interface CrmProposal {
+  id: string;
+  opportunity_id: string;
+  status: string;
+  created_at: string;
+}
+
 interface Board {
   leads: CrmLead[];
   opportunities: CrmOpportunity[];
   accounts: CrmAccount[];
+  proposals: CrmProposal[];
 }
 
 async function invoke<T>(body: Record<string, unknown>): Promise<T> {
@@ -62,6 +70,26 @@ export function useCrmAction() {
     mutationFn: (body: Record<string, unknown>) => invoke<{ ok: boolean }>(body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["crm-board"] }),
   });
+}
+
+/** Generate a proposal draft for an opportunity, then open it. */
+export function useProposal() {
+  const qc = useQueryClient();
+  const generate = useMutation({
+    mutationFn: (opportunityId: string) =>
+      supabase.functions.invoke("generate-proposal", { body: { opportunityId } }).then(({ data, error }) => {
+        if (error) throw error;
+        if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
+        return data as { proposalId: string };
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["crm-board"] }),
+  });
+  async function openProposal(id: string) {
+    const html = await invoke<{ proposal: { html: string } }>({ action: "get_proposal", id }).then((r) => r.proposal?.html ?? "");
+    const w = window.open("", "_blank");
+    if (w) { w.document.write(html); w.document.close(); }
+  }
+  return { generate, openProposal };
 }
 
 export const CRM_STAGES = ["new", "qualified", "contacted", "proposal", "won", "lost"] as const;

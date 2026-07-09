@@ -327,3 +327,8 @@ verify_jwt = false
 # sequence + escalates to a human closer. Auth via requireAdminOrApiKey.
 [functions.outreach-reply]
 verify_jwt = false
+
+# Proposal generator (AOS-PROSPECT-005). Admin/sales-invoked; builds a proposal
+# draft from real stats + the price list. Auth via requireAdminOrApiKey.
+[functions.generate-proposal]
+verify_jwt = false
