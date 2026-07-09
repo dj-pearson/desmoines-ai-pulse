@@ -4169,8 +4169,8 @@
         "npm run validate passes"
       ],
       "priority": 47,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Unified support intake. Additive migration 20260709000035 creates support_tickets (id, user_id nullable, channel enum web_form|email|in_app, subject, body, status enum new|ai_handling|awaiting_user|escalated|resolved|closed, priority, sentiment nullable, category, assigned_to nullable, contact_email, source_ref, sla_due_at, created_at, updated_at) + support_messages thread (ticket_id FK cascade, sender enum user|agent|admin|system, body, metadata, created_at) with enums support_channel/support_ticket_status/support_sender. The existing contact form is UNCHANGED — a SECURITY DEFINER trigger mirror_contact_to_support fires AFTER INSERT ON contact_submissions and creates the ticket + first message, so the public contact endpoint shape and its anti-abuse (anyone-can-insert RLS + rate limit) stay intact; mirroring is idempotent via unique source_ref (contact_submissions.id). Existing contact_submissions backfilled into tickets+messages (idempotent). RLS: users see own tickets/messages (user_id=auth.uid()), admins see all (is_admin()), admins update, authenticated users may open their own in_app ticket, agents write via service role (RLS-bypassing). Import/email path documented in AGENTIC_OS.md (email ingest inserts channel=email under service role — same shape the trigger uses, no schema change). No new edge function, no frontend change, no public endpoint change. npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-CS-002",

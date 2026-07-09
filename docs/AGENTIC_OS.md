@@ -329,6 +329,34 @@ means zero LLM budget; each review is recorded as an audited run via
 `agent-pr-review`. (Semantic checks like RLS/rate-limit tightening are left out
 deliberately — a false-positive block is worse than a miss.)
 
+## Unified support intake (AOS-CS-001)
+
+Every support request lands in one place — `support_tickets` (+ a
+`support_messages` thread) — regardless of channel (`web_form` | `email` |
+`in_app`). Ticket status is a real lifecycle enum
+(`new → ai_handling → awaiting_user → escalated → resolved → closed`), with
+nullable `sentiment`, `priority`, `sla_due_at`, and `assigned_to` that later CS
+agents fill in.
+
+**The public contact endpoint is unchanged.** Rather than rewrite the contact
+form (which would touch the public shape and its anti-abuse path), a
+`SECURITY DEFINER` trigger — `mirror_contact_to_support` — fires
+`AFTER INSERT ON contact_submissions` and creates the ticket + first message.
+So the form still inserts into `contact_submissions` exactly as before (its
+"anyone can insert" RLS + rate limiting intact), and the ticket is created
+server-side without needing a public INSERT policy on `support_tickets`.
+Mirroring is idempotent via a unique `source_ref` (the originating
+`contact_submissions.id`).
+
+**RLS:** users see their own tickets/messages (`user_id = auth.uid()`), admins
+see all (`is_admin()`), and agents write via the service role (RLS-bypassing).
+Authenticated users may open their own `in_app` ticket directly.
+
+**Import / backfill path:** the migration backfills all existing
+`contact_submissions` into tickets (idempotent). A future support-email ingest
+just inserts into `support_tickets` with `channel = 'email'` under the service
+role (same shape the trigger uses) — no schema change needed.
+
 ## Edge-function error-rate & cold-start monitor (AOS-MAINT-007)
 
 73 edge functions are otherwise unobservable. `_shared/instrument.ts` provides
