@@ -107,3 +107,8 @@ verify_jwt = false
 # signals and opens incident tasks. Does its own auth via requireAdminOrApiKey.
 [functions.agent-security-monitor]
 verify_jwt = false
+
+# Dependency CVE scan ingest (AOS-SEC-002). CI posts npm audit results here to
+# open/close remediation tasks. Does its own auth via requireAdminOrApiKey.
+[functions.agent-dep-scan]
+verify_jwt = false

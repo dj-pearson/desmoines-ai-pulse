@@ -280,6 +280,20 @@ through the `agent-control` edge function (admin-authenticated, audited) — tog
 writes `agent_registry.enabled`, run maps the agent to its edge function and
 fires it. A drill-in sheet shows that agent's run history with error details.
 
+## Dependency & CVE scanner (AOS-SEC-002)
+
+Because `npm audit` needs a Node environment, the scan runs in CI: the
+`.github/workflows/dependency-scan.yml` workflow runs `npm audit --json` daily
+and POSTs the report to the `agent-dep-scan` edge function (with
+`EDGE_FUNCTION_API_KEY`). The function opens remediation tasks per advisory —
+**low/moderate with a fix available → tier-1** (auto patch, handed to
+AOS-DEV-003 via the payload `handoff`), **high/critical → tier-2** (human) — and
+is idempotent per package (`cve:<name>` dedupe key). CVE tasks whose package no
+longer appears in the audit are **auto-closed** (`resolved`). The daily ops
+digest reports the open-CVE count. (Deno edge-function deps are pinned URLs with
+no standard CVE feed, so they're reviewed at upgrade time rather than
+auto-scanned.)
+
 ## Security anomaly detector (AOS-SEC-001)
 
 The `security-anomaly-detector` agent (`agent-security-monitor`, every 15 min)

@@ -46,13 +46,15 @@ Deno.serve(async (req) => {
     const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const nowIso = new Date().toISOString();
 
-    const [autoResolved, openTier1, openTier2, openTier3, overdue, failures24h] = await Promise.all([
+    const [autoResolved, openTier1, openTier2, openTier3, overdue, failures24h, openCves] = await Promise.all([
       count(supabase, "agent_tasks", (q) => q.eq("tier", 1).eq("status", "resolved").gte("updated_at", dayAgo)),
       count(supabase, "agent_tasks", (q) => q.eq("tier", 1).in("status", ["escalated", "assigned", "auto_resolving"])),
       count(supabase, "agent_tasks", (q) => q.eq("tier", 2).in("status", ["escalated", "assigned"])),
       count(supabase, "agent_tasks", (q) => q.eq("tier", 3).in("status", ["escalated", "assigned"])),
       count(supabase, "agent_tasks", (q) => q.not("sla_due_at", "is", null).lt("sla_due_at", nowIso).in("status", ["open", "escalated", "assigned"])),
       count(supabase, "automation_job_runs", (q) => q.in("status", ["failed", "failure"]).gte("started_at", dayAgo)),
+      // Security posture: open CVE remediation tasks (AOS-SEC-002).
+      count(supabase, "agent_tasks", (q) => q.eq("agent_key", "dependency-cve-scanner").in("status", ["open", "escalated", "assigned", "auto_resolving"])),
     ]);
 
     const openHuman = openTier2 + openTier3;
@@ -62,6 +64,7 @@ Deno.serve(async (req) => {
       `Open tier-1 (in-flight): ${openTier1}`,
       `Overdue tasks: ${overdue}`,
       `Agent failures (24h): ${failures24h}`,
+      `Open dependency CVEs: ${openCves}`,
     ].join("\n");
 
     // Date-keyed dedupe so a re-run same day coalesces instead of double-sending.
@@ -74,9 +77,9 @@ Deno.serve(async (req) => {
       capWindowMs: 20 * 60 * 60 * 1000, // ~one per day
     });
 
-    ctx.meta({ autoResolved, openHuman, overdue, failures24h, notify });
+    ctx.meta({ autoResolved, openHuman, overdue, failures24h, openCves, notify });
     ctx.processed(1);
-    return { autoResolved, openHuman, openTier1, overdue, failures24h, notify };
+    return { autoResolved, openHuman, openTier1, overdue, failures24h, openCves, notify };
   });
 
   return json({ ok: result.ok, ...(result.result ?? {}), status: result.status }, result.ok ? 200 : 500, corsHeaders);

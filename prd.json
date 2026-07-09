@@ -3869,8 +3869,8 @@
         "npm run validate passes"
       ],
       "priority": 27,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): scan runs in CI (npm audit needs Node) — .github/workflows/dependency-scan.yml runs npm audit --json daily (09:00 UTC) + workflow_dispatch and POSTs {audit} to agent-dep-scan with EDGE_FUNCTION_API_KEY (guarded when secrets unset). agent-dep-scan edge function (verify_jwt=false, requireAdminOrApiKey, runAgent-wrapped): parses npm audit v7 JSON; per advisory opens a task — low/moderate with fixAvailable -> tier-1 (auto patch, payload.handoff=AOS-DEV-003), high/critical or no-fix -> tier-2; idempotent per package via dedupeKey cve:<name>. Auto-closes scanner CVE tasks whose package no longer appears in the audit (status resolved). notifyOps on high/critical. Registered dependency-cve-scanner agent (live, security, no pg_cron since CI-triggered). Security posture (open CVE count) added to agent-ops-digest. Deno edge deps are pinned URLs (no standard CVE feed) — reviewed at upgrade, documented. Backward-compat additive-only. npm run validate passes (0 errors). Documented in AGENTIC_OS.md."
     },
     {
       "id": "AOS-SEC-003",
