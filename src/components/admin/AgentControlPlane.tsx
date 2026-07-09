@@ -33,6 +33,7 @@ import {
   useGlobalPause,
   useSetGlobalPause,
   useMonthlySpend,
+  useAgentQuality,
   useAgentConfigRow,
   useUpdateAgentConfig,
   successRate,
@@ -217,6 +218,7 @@ export default function AgentControlPlane() {
   const { user } = useAuth();
   const { data: agents, isLoading, isError, refetch, isFetching } = useAgentSummaries();
   const { data: monthSpend } = useMonthlySpend();
+  const { data: quality } = useAgentQuality();
   const { data: globalPaused } = useGlobalPause();
 
   const osSpend = useMemo(() => {
@@ -414,6 +416,11 @@ export default function AgentControlPlane() {
                             ${a.cost_usd_30d.toFixed(2)}/30d
                             {a.monthly_cost_budget_usd != null && ` of $${a.monthly_cost_budget_usd}`}
                           </span>
+                          {quality?.[a.agent_key] && (
+                            <span title="Avg LLM-judge quality score, 30d">
+                              quality {quality[a.agent_key].avg_score_30d} ({quality[a.agent_key].failed_30d} gated)
+                            </span>
+                          )}
                         </div>
                       </div>
                       <div className="flex shrink-0 flex-wrap items-center gap-2">

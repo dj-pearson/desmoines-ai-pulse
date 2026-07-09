@@ -149,6 +149,29 @@ export function useSetGlobalPause() {
   });
 }
 
+export interface AgentQuality {
+  agent_key: string;
+  avg_score_30d: number;
+  evals_30d: number;
+  passed_30d: number;
+  failed_30d: number;
+}
+
+/** Per-agent 30-day quality rollup (AOS-GOV-004). Keyed by agent_key. */
+export function useAgentQuality() {
+  return useQuery({
+    queryKey: ["agent-quality"],
+    queryFn: async (): Promise<Record<string, AgentQuality>> => {
+      const { data, error } = await db.from("agent_quality_summary").select("*");
+      if (error) throw error;
+      const map: Record<string, AgentQuality> = {};
+      for (const r of (data ?? []) as AgentQuality[]) map[r.agent_key] = r;
+      return map;
+    },
+    staleTime: 60 * 1000,
+  });
+}
+
 export interface AgentMonthSpend {
   agent_key: string;
   name: string;

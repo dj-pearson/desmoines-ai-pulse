@@ -3824,8 +3824,8 @@
         "npm run validate passes"
       ],
       "priority": 24,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): _shared/scoreOutput.ts scoreOutput(supabase,{agentKey,category,content,runId,taskId}) — LLM-judge single lightweight/Haiku call scoring content 0-100 against per-category RUBRIC vs per-category QUALITY_THRESHOLD; returns {score,passed,threshold,dimensions,reasons,evalCostUsd}. evaluateAndGate wraps it: below threshold -> createAgentTask tier-2 human review (downgrade, content+score in payload), returns gated=true; else gated=false so caller proceeds. Bounded/budgeted: single call, hard EVAL_MAX_TOKENS=400 cap, 20s timeout, no loop, eval_cost_usd recorded. Fail-safe: no key/error -> returns FAILING score so content gates to human, never silently ships. Migration 20260709000012 adds agent_quality_scores table (score/threshold/passed/dimensions/reasons/content_preview/run_id/task_id/eval_cost_usd) + admin RLS + agent_quality_summary 30d view. Dashboard: useAgentQuality hook + per-agent avg score + gated count shown on /admin/agents. npm run validate passes (0 errors). Documented in AGENTIC_OS.md."
     },
     {
       "id": "AOS-GOV-005",

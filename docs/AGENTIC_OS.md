@@ -280,6 +280,23 @@ through the `agent-control` edge function (admin-authenticated, audited) — tog
 writes `agent_registry.enabled`, run maps the agent to its edge function and
 fires it. A drill-in sheet shows that agent's run history with error details.
 
+## Output quality evaluation (AOS-GOV-004)
+
+Before an agent ships user-facing content, it runs it through the LLM-judge
+`scoreOutput` (`_shared/scoreOutput.ts`): a single lightweight (Haiku) call that
+scores the content 0–100 against a **per-category rubric** (brand voice +
+accuracy for `nurture`, helpfulness + safe info for `support`, etc.).
+`evaluateAndGate` wraps it: if the score is **below the per-category threshold**
+(`QUALITY_THRESHOLD`), the work is **downgraded to a tier-2 human review task**
+instead of auto-executing; otherwise the caller proceeds.
+
+Every score is stored in `agent_quality_scores` (with the run/task ids and the
+eval's own cost) and rolled up per agent in `agent_quality_summary`, surfaced on
+`/admin/agents`. The evaluator is **bounded**: one call with a hard 400-token
+cap — it can't loop, and its cost is recorded so it is itself budgeted.
+**Fail-safe**: if the judge can't run (no key/error), it returns a *failing*
+score so the content is gated to a human, never silently shipped.
+
 ## Guardrail policy (AOS-GOV-003)
 
 Each agent is constrained to an explicit **allowlist of action types**
