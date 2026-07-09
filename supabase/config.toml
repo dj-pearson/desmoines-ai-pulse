@@ -293,3 +293,8 @@ verify_jwt = false
 # users with age-out. Auth via requireAdminOrApiKey.
 [functions.agent-reengagement]
 verify_jwt = false
+
+# Milestone recognition (AOS-NURTURE-006). Cron; detects loyalty milestones,
+# in-app + optional email. Auth via requireAdminOrApiKey.
+[functions.agent-milestones]
+verify_jwt = false

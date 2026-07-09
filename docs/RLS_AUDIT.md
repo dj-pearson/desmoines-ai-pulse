@@ -7,9 +7,9 @@
 
 | Metric | Count |
 |---|---|
-| Migrations scanned | 304 |
-| Distinct policies (current) | 551 |
-| Tables with RLS enabled | 255 |
+| Migrations scanned | 305 |
+| Distinct policies (current) | 554 |
+| Tables with RLS enabled | 256 |
 | Tables with policies but no ENABLE RLS seen | 5 |
 | Permissive write policies USING/CHECK(true) | 30 |
 | Write policies granted to `anon` | 4 |
@@ -648,6 +648,9 @@
 | user_locations | Users can manage their own location | ALL | public | auth.uid() = user_id | — |
 | user_locations | Users can view public locations | SELECT | public | is_public = true OR auth.uid() = user_id | — |
 | user_locations | Users can view public locations and their own | SELECT | public | is_public = true OR auth.uid() = user_id | — |
+| user_milestones | user_milestones_admin_read | SELECT | authenticated | is_admin() | — |
+| user_milestones | user_milestones_owner_ack | UPDATE | authenticated | auth.uid() = user_id | auth.uid() = user_id |
+| user_milestones | user_milestones_owner_read | SELECT | authenticated | auth.uid() = user_id | — |
 | user_oauth_tokens | user_oauth_tokens_policy | ALL | public | auth.uid() = user_id | — |
 | user_preference_profiles | Anonymous users can manage session preferences | ALL | public | auth.uid() IS NULL AND user_id IS NULL | — |
 | user_preference_profiles | Service role can manage preference profiles | ALL | public | auth.role() = 'service_role' | — |

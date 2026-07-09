@@ -329,6 +329,23 @@ means zero LLM budget; each review is recorded as an audited run via
 `agent-pr-review`. (Semantic checks like RLS/rate-limit tightening are left out
 deliberately — a false-positive block is worse than a miss.)
 
+## Loyalty / milestone recognition (AOS-NURTURE-006)
+
+`agent-milestones` (cron, daily) recognizes engagement to build habit. For
+engaged users it detects the **highest newly-crossed** milestone across **saves**
+(5/10/25/50/100), **reviews** (1/5/10/25), **weekly activity streaks**
+(4/8/12/26/52 — consecutive ISO weeks with a save/review), and **account
+anniversaries** (within ±2 days). Signals are pulled in **bulk** (favorites +
+reviews for the batch, aggregated in memory).
+
+Each new milestone is recorded in `user_milestones` — which is **user-readable**
+(RLS), so that row *is* the in-app surface a frontend badge/toast can render, and
+the user can acknowledge it. Recognition **email is optional** and gated: consent
+(`messagingAllowed`), at most one milestone email per week, no overlap with other
+nurture (`recentlyMessaged`, 3-day), and the AOS-GOV-004 quality gate. Milestones
+are deduped by `(user, type, value)` so nobody is congratulated twice. The digest
+reports 7-day milestones recognized + emailed.
+
 ## Dormant-user re-engagement (AOS-NURTURE-005)
 
 `agent-reengagement` (cron, conservative weekly cadence) nudges **dormant** users

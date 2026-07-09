@@ -152,6 +152,11 @@ Deno.serve(async (req) => {
       ? `Weekly digest (7d) — ${wdSent} sent, ${wd.filter((r) => r.opened_at).length} opened, ${wd.filter((r) => r.clicked_at).length} clicked`
       : `Weekly digest (7d) — no sends`;
 
+    // Milestone recognition (AOS-NURTURE-006).
+    const { count: msRecognized } = await supabase.from("user_milestones").select("id", { count: "exact", head: true }).gte("created_at", weekAgo);
+    const { count: msEmailed } = await supabase.from("user_milestones").select("id", { count: "exact", head: true }).eq("emailed", true).gte("created_at", weekAgo);
+    const msLine = `Milestones (7d) — ${msRecognized ?? 0} recognized, ${msEmailed ?? 0} emailed`;
+
     // Re-engagement (AOS-NURTURE-005).
     const { data: reRows } = await supabase.from("nurture_sends").select("status, activated_at").eq("agent_key", "dormant-reengagement").gte("created_at", weekAgo).limit(5000);
     const re = (reRows ?? []) as { status: string; activated_at: string | null }[];
@@ -190,6 +195,7 @@ Deno.serve(async (req) => {
       nurLine,
       wdLine,
       reLine,
+      msLine,
       wbLine,
     ].join("\n");
 

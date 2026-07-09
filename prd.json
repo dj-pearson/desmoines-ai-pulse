@@ -4364,8 +4364,8 @@
         "npm run validate passes"
       ],
       "priority": 60,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Loyalty/streak/milestone recognition agent. Migration 20260709000048 adds user_milestones table (user_id, milestone_type saves|reviews|anniversary|streak, milestone_value, label, emailed, send_id, acknowledged_at; UNIQUE(user_id,type,value) dedupe) with RLS owner-read + owner-update-ack (this IS the in-app surface a frontend renders) + admin-read + registers milestone-recognition agent (cron daily 14:00, $15/mo). agent-milestones edge function (verify_jwt=false, requireAdminOrApiKey, runAgent) processes engaged users (active/onboarding/reactivated), pulls favorites/reviews in bulk (aggregated in memory), and detects the highest newly-crossed milestone across saves (5/10/25/50/100), reviews (1/5/10/25), weekly activity streaks (4/8/12/26/52 consecutive ISO weeks with a save/review), and account anniversaries (within +-2 days). Records the single most-notable new milestone in user_milestones (in-app, always). Optional recognition email gated on: consent (messagingAllowed), <=1 milestone email/week, no overlap with other nurture (recentlyMessaged 3d coordination), and AOS-GOV-004 quality gate; sent via sendNurtureEmail kind milestone_<type> (unsubscribe-respecting). Deduped by (user,type,value) so nobody is congratulated twice. Ops digest reports 7-day milestones recognized + emailed. config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=63). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-NURTURE-007",

@@ -21,6 +21,7 @@
     "agent-fraud-monitor",
     "agent-lifecycle",
     "agent-link-monitor",
+    "agent-milestones",
     "agent-onboarding-drip",
     "agent-ops-digest",
     "agent-pr-review",
@@ -63,7 +64,7 @@
     "support-ticket-reclassify",
     "version-check"
   ],
-  "verifyJwtCount": 62,
+  "verifyJwtCount": 63,
   "cspPresent": true,
   "cspHash": "1625510d45515045",
   "corsHash": "b1683c94fbad28a6"
