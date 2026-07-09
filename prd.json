@@ -3809,8 +3809,8 @@
         "npm run validate passes"
       ],
       "priority": 23,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): _shared/agentPolicy.ts — AGENT_POLICY per-agent allowlist (dev/maintenance/nurture/prospect/support/account-manager/security/governance agents) + FINANCIAL_DESTRUCTIVE_ACTIONS set; isActionAllowed (default-deny: unknown agent or unlisted action refused) + policyRequiresApproval (GUARDED_ACTIONS union financial/destructive). Enforced centrally in agentRuntime dispatch BEFORE execute: tools carrying an actionType are gated (read-only tools run free); disallowed -> handlePolicyViolation (writeAgentAudit policy_denied + createAgentTask tier-2 security anomaly + notifyOps high, returns denied_by_policy, tool NOT executed); allowed-but-financial/destructive -> queued for approval. Financial/destructive (refunds, unpublish, delete, mass-send, external_post, pricing) approval-required by default. Unit-style tests in agentPolicy.test.ts (deno test): allow/deny/default-deny/approval-required cases. npm run validate passes (0 errors). Documented in AGENTIC_OS.md."
     },
     {
       "id": "AOS-GOV-004",

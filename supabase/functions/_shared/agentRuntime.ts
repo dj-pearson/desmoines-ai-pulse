@@ -27,6 +27,7 @@ import { requiresApproval, createApproval } from "./agentApprovals.ts";
 import { createAgentTask } from "./agentTasks.ts";
 import { notifyOps } from "./notifyOps.ts";
 import { writeAgentAudit } from "./auditLog.ts";
+import { isActionAllowed, policyRequiresApproval } from "./agentPolicy.ts";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 
@@ -351,6 +352,41 @@ async function monthlyBudgetState(supabase: SupabaseClient, agentKey: string): P
   }
 }
 
+/** A policy-denied action: audit it and escalate a tier-2 anomaly (never drop). */
+async function handlePolicyViolation(
+  supabase: SupabaseClient,
+  agentKey: string,
+  actionType: string,
+  input: Record<string, unknown>,
+  runCorrelation: string,
+): Promise<void> {
+  // deno-lint-ignore no-explicit-any
+  await writeAgentAudit(supabase as any, {
+    agentKey,
+    runId: runCorrelation,
+    actionType: "policy_denied",
+    targetRef: actionType,
+    after: { deniedAction: actionType, input },
+  });
+  // deno-lint-ignore no-explicit-any
+  await createAgentTask(supabase as any, {
+    agentKey,
+    // deno-lint-ignore no-explicit-any
+    category: "security" as any,
+    title: `Policy violation: ${agentKey} attempted "${actionType}"`,
+    confidence: 0,
+    forceTier: 2,
+    payload: { anomaly: "policy_denied", actionType, input },
+  }).catch((e) => console.warn(`[agentRuntime:${agentKey}] policy task failed:`, e?.message ?? e));
+  // deno-lint-ignore no-explicit-any
+  await notifyOps(supabase as any, {
+    severity: "high",
+    title: `Policy violation: ${agentKey}`,
+    body: `${agentKey} attempted the out-of-policy action "${actionType}" (refused).`,
+    dedupeKey: `policy:${agentKey}:${actionType}`,
+  }).catch((e) => console.warn(`[agentRuntime:${agentKey}] policy notify failed:`, e?.message ?? e));
+}
+
 /** Record the budget breach: a failure run, a tier-2 task, and an ops alert. */
 async function handleBudgetBreach(supabase: SupabaseClient, agentKey: string, budget: MonthlyBudgetState): Promise<void> {
   const detail = `${agentKey} hit its monthly budget: $${budget.spendMtd.toFixed(2)} of $${budget.budgetUsd}.`;
@@ -455,19 +491,32 @@ export async function runAgent(config: RunAgentConfig): Promise<RunAgentResult> 
         dispatch: async (name, input) => {
           const tool = toolByName.get(name);
           if (!tool) return { error: `unknown tool: ${name}` };
-          // Human-in-the-loop gate (AOS-CORE-007): a guarded action is queued
-          // for approval and NOT executed. The model is told it's pending.
-          if (requiresApproval(tool.actionType)) {
-            const approval = await createApproval(supabase, {
-              agentKey: config.agentKey,
-              actionType: tool.actionType!,
-              payload: input,
-            });
-            return {
-              status: "queued_for_approval",
-              approval_id: approval.approvalId ?? null,
-              note: `Action "${tool.actionType}" requires human approval before it runs. It has been queued; do not retry.`,
-            };
+          const at = tool.actionType;
+          // Tools carrying an actionType are governed; read-only tools run free.
+          if (at) {
+            // Guardrail policy allowlist (AOS-GOV-003): refuse anything outside
+            // the agent's remit — audited + escalated, never silently dropped.
+            if (!isActionAllowed(config.agentKey, at)) {
+              await handlePolicyViolation(supabase, config.agentKey, at, input, runCorrelation);
+              return {
+                status: "denied_by_policy",
+                note: `Action "${at}" is not in ${config.agentKey}'s allowlist and was refused. Do not retry.`,
+              };
+            }
+            // Human-in-the-loop gate (AOS-CORE-007 + policy): a guarded /
+            // financial / destructive action is queued for approval, not run.
+            if (requiresApproval(at) || policyRequiresApproval(at)) {
+              const approval = await createApproval(supabase, {
+                agentKey: config.agentKey,
+                actionType: at,
+                payload: input,
+              });
+              return {
+                status: "queued_for_approval",
+                approval_id: approval.approvalId ?? null,
+                note: `Action "${at}" requires human approval before it runs. It has been queued; do not retry.`,
+              };
+            }
           }
           return await tool.execute(input);
         },

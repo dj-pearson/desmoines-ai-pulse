@@ -280,6 +280,24 @@ through the `agent-control` edge function (admin-authenticated, audited) — tog
 writes `agent_registry.enabled`, run maps the agent to its edge function and
 fires it. A drill-in sheet shows that agent's run history with error details.
 
+## Guardrail policy (AOS-GOV-003)
+
+Each agent is constrained to an explicit **allowlist of action types**
+(`_shared/agentPolicy.ts`), enforced centrally in the runtime dispatch before
+any action runs — so an agent can never act outside its remit, even if its
+prompt is manipulated. The policy is **default-deny**: a tool carrying an
+`actionType` runs only if that type is in the agent's `AGENT_POLICY` allowlist
+(read-only tools, which carry no `actionType`, always run). A disallowed action
+is **refused, audited** (`policy_denied` in `agent_audit_log`), and **escalated
+as a tier-2 security anomaly** with an ops alert — never silently dropped.
+
+**Financial/destructive** action types (`process_refund`, `issue_credit`,
+`modify_pricing`, `delete_records`, `destructive_fix`, `unpublish_content`,
+`send_bulk_email`, `external_post`) are **approval-required by policy**
+regardless of the allowlist — they queue a human approval (AOS-CORE-007) instead
+of running. The policy logic has unit-style tests in
+`_shared/agentPolicy.test.ts` (`deno test`).
+
 ## Immutable audit trail (AOS-GOV-002)
 
 `agent_audit_log` is the append-only record of every state-changing action an
