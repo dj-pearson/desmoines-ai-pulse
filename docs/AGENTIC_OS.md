@@ -329,6 +329,23 @@ means zero LLM budget; each review is recorded as an audited run via
 `agent-pr-review`. (Semantic checks like RLS/rate-limit tightening are left out
 deliberately — a false-positive block is worse than a miss.)
 
+## In-app support chat (AOS-CS-006)
+
+The `/support` route hosts an in-app chat (`SupportChat`) wired to the CS
+first-responder. `support-chat` **reuses the discover-chat edge pattern** —
+CORS, persistent per-IP rate limit, optional bearer auth — and is **available to
+all tiers** (auth is optional; an authenticated user is attached when present,
+no PremiumGate on core support). It grounds replies in the KB (`retrieveKb`,
+AOS-CS-003) and returns the answer with cited sources.
+
+When it **can't resolve** the question, or the user hits **"Talk to a human"**
+(a first-class button, plus phrasing detection), it opens a `support_tickets`
+row (`channel = in_app`), **attaches the full transcript** as `support_messages`,
+escalates to a tier-2 task, and tells the user a ticket was created. The widget
+is mobile-first and accessible: an `aria-live` conversation log, 44px touch
+targets, labelled input, and starter suggestions. Cost is attributed to the
+`support-chat` agent budget ($40/mo).
+
 ## Ticket sentiment + priority classifier with SLA (AOS-CS-005)
 
 `agent-ticket-classifier` (cron every 10 min) makes angry/urgent users jump the

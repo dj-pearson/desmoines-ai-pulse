@@ -7,7 +7,7 @@
 
 | Metric | Count |
 |---|---|
-| Migrations scanned | 296 |
+| Migrations scanned | 297 |
 | Distinct policies (current) | 545 |
 | Tables with RLS enabled | 250 |
 | Tables with policies but no ENABLE RLS seen | 5 |

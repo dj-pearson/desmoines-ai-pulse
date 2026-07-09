@@ -248,3 +248,8 @@ verify_jwt = false
 # Auth via requireAdminOrApiKey.
 [functions.support-ticket-reclassify]
 verify_jwt = false
+
+# In-app support chat (AOS-CS-006). Public; reuses discover-chat pattern (CORS +
+# rate limit + optional bearer auth). In-function auth; core support for all tiers.
+[functions.support-chat]
+verify_jwt = false

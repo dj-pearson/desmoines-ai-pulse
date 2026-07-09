@@ -48,13 +48,14 @@
     "saved-search-alerts",
     "scrape-events",
     "social-daily-poster",
+    "support-chat",
     "support-kb-admin",
     "support-kb-embed",
     "support-kb-search",
     "support-ticket-reclassify",
     "version-check"
   ],
-  "verifyJwtCount": 53,
+  "verifyJwtCount": 54,
   "cspPresent": true,
   "cspHash": "1625510d45515045",
   "corsHash": "b1683c94fbad28a6"

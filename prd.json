@@ -4244,8 +4244,8 @@
         "npm run validate passes"
       ],
       "priority": 52,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "In-app support chat wired to the CS agent. support-chat edge function reuses the discover-chat pattern (handleCors + checkRateLimitPersistent per-IP rate limit + optional bearer auth via supabase.auth.getUser — core support available to ALL tiers, no PremiumGate, auth optional but attaches user_id when present), runAgent-wrapped ($40/mo budget). Grounds replies in the KB via retrieveKb (CS-003) and drafts with Claude USING ONLY retrieved passages, returning {reply, canAnswer, sources}. When it can't resolve (canAnswer=false / assistant unavailable) OR the user requests a human (talkToHuman flag from the button, or HUMAN_RE phrasing), it opens a support_tickets row (channel in_app, status escalated), attaches the FULL transcript as support_messages, creates a deduped tier-2 routing task, and audits support_chat_escalation. Frontend: /support public route (Support page + SupportChat component + useSupportChat hook, lazyWithRetry) — mobile-first + accessible (aria-live conversation log, 44px touch targets, labelled input, starter suggestions) with a first-class 'Talk to a human' button. Migration 20260709000040 registers support-chat agent (on-demand); config.toml verify_jwt=false entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=54). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-CS-007",
