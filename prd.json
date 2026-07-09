@@ -3718,8 +3718,8 @@
         "npm run validate passes"
       ],
       "priority": 17,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): /admin/agents dashboard. Migration 20260709000007_agent_summary_30d.sql extends agent_run_summary view with 30-day rollups (runs/successes/failures/items/cost) appended additively. agent-control edge function (verify_jwt=false, requireAdminOrApiKey): mode=toggle sets agent_registry.enabled + audits; mode=run maps agent_key->edge function via RUN_MAP and fires it (service role) + audits; not_runnable for agents without a function. Frontend: useAgentControlPlane hook (useAgentSummaries from view, useAgentRunHistory from automation_job_runs, useToggleAgent/useRunAgent via functions.invoke). AgentControlPlane component: per-agent status/last-run/7d+30d success rate/items proc vs esc/30d spend vs budget (over-budget highlighted), enable Switch, Run-now button, Recharts 7-day spend BarChart (ResponsiveContainer), run-history drill-in Sheet with error details. AdminAgents page (lazy route), AdminNav link. Mobile-responsive + 44px targets + aria. npm run validate passes (0 errors). Documented in AGENTIC_OS.md."
     },
     {
       "id": "AOS-CORE-009",

@@ -92,3 +92,8 @@ verify_jwt = false
 # expired approvals. Does its own auth via requireAdminOrApiKey.
 [functions.agent-approvals]
 verify_jwt = false
+
+# Agent control plane (AOS-CORE-008). Admin toggle-enabled + run-now for agents.
+# Does its own auth via requireAdminOrApiKey (admin JWT).
+[functions.agent-control]
+verify_jwt = false

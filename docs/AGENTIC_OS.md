@@ -180,6 +180,17 @@ when) is written to the task's `resolution` jsonb as the human-action record. Th
 detail sheet shows the task payload, the producing agent's latest run (from
 `agent_run_summary`), and any AI-suggested resolution in the payload.
 
+## Control-plane dashboard (AOS-CORE-008)
+
+`/admin/agents` (protected) is the single operating view: every agent from
+`agent_registry` joined to its `agent_run_summary` rollup — last run, 7- and
+30-day success rate, items processed vs escalated, and 30-day spend vs the
+registry budget (over-budget highlighted), with a Recharts spend-by-agent chart.
+Each agent has an enable/disable `Switch` and a **Run now** button; both route
+through the `agent-control` edge function (admin-authenticated, audited) — toggle
+writes `agent_registry.enabled`, run maps the agent to its edge function and
+fires it. A drill-in sheet shows that agent's run history with error details.
+
 ## Human-in-the-loop approvals (AOS-CORE-007)
 
 Some actions must never run unattended (publishing, outreach, refunds,
