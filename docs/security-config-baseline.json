@@ -12,6 +12,7 @@
     "agent-escalation-router",
     "agent-fraud-monitor",
     "agent-ops-digest",
+    "agent-pr-review",
     "agent-runbook",
     "agent-secret-scan",
     "agent-security-monitor",
@@ -38,7 +39,7 @@
     "social-daily-poster",
     "version-check"
   ],
-  "verifyJwtCount": 37,
+  "verifyJwtCount": 38,
   "cspPresent": true,
   "cspHash": "1625510d45515045",
   "corsHash": "b1683c94fbad28a6"

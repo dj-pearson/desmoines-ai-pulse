@@ -168,3 +168,8 @@ verify_jwt = false
 # for flakiness/regressions. Does its own auth via requireAdminOrApiKey.
 [functions.agent-ci-health]
 verify_jwt = false
+
+# PR review record (AOS-DEV-006). CI posts the review summary here for an
+# audited run record. Does its own auth via requireAdminOrApiKey.
+[functions.agent-pr-review]
+verify_jwt = false

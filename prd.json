@@ -4034,8 +4034,8 @@
         "npm run validate passes"
       ],
       "priority": 38,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): scripts/pr-review.mjs — deterministic CLAUDE.md-compliance PR reviewer with hunk-aware line tracking; high-confidence rules (destructive migration DROP/RENAME COLUMN/TABLE/TYPE, direct localStorage, process.env in web code) emit ::error inline annotations + exit 1 (block/request-changes); advisory nits (unwrapped console, any) emit ::warning, never block; fails OPEN (internal error -> ::notice + exit 0). Tested against synthetic diff (correct lines + classification). .github/workflows/pr-review.yml (pull_request to main/develop): diffs base...HEAD, runs the reviewer (inline annotations + step summary), records the run via agent-pr-review, enforces block on exit!=0. agent-pr-review edge function (verify_jwt=false, requireAdminOrApiKey, runAgent-wrapped) records each review as a budgeted (deterministic=0 LLM cost) + audited (ledger + agent_audit_log pr_review_block/pass) run. Registered pr-review-agent (live, dev). Semantic RLS/rate-limit checks deliberately omitted (false-positive block worse than miss). npm run validate passes (0 errors). Documented in AGENTIC_OS.md."
     },
     {
       "id": "AOS-DEV-007",

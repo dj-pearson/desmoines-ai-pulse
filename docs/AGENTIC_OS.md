@@ -315,6 +315,20 @@ a PR **only when green** (red annotates the failure, no PR). Major-version bumps
 are escalated to deduped **tier-2** review tasks via `agent-dep-update`
 `mode:majors` — they can break, so a human reviews them.
 
+## PR code-review agent (AOS-DEV-006)
+
+`.github/workflows/pr-review.yml` runs on every PR to main/develop and reviews
+the diff **deterministically** (`scripts/pr-review.mjs`) for high-confidence
+CLAUDE.md violations: destructive migrations in one release (DROP/RENAME
+COLUMN/TABLE/TYPE), direct `localStorage`, `process.env` in web code — plus
+advisory nits (unwrapped `console`, `any`). Findings post as **inline
+annotations** (errors on the changed lines); the check **blocks only on
+high-confidence violations** and nits are advisory. It **fails open** — the
+reviewer's own error prints a notice and never hard-fails the PR. Deterministic
+means zero LLM budget; each review is recorded as an audited run via
+`agent-pr-review`. (Semantic checks like RLS/rate-limit tightening are left out
+deliberately — a false-positive block is worse than a miss.)
+
 ## Autonomous fix agent (AOS-DEV-002)
 
 The `dev-fix-agent` formalizes the Ralph loop for **tier-1 dev tasks** (from the
