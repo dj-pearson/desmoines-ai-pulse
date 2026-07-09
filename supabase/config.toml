@@ -133,3 +133,8 @@ verify_jwt = false
 # tier-2 review task. Does its own auth via requireAdminOrApiKey.
 [functions.agent-config-audit]
 verify_jwt = false
+
+# Compliance monitor (AOS-SEC-007). Weekly cron: deletion SLA / retention /
+# consent checks. Does its own auth via requireAdminOrApiKey.
+[functions.agent-compliance-monitor]
+verify_jwt = false

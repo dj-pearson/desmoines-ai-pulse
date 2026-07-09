@@ -1,6 +1,7 @@
 {
   "verifyJwtFalse": [
     "agent-approvals",
+    "agent-compliance-monitor",
     "agent-config-audit",
     "agent-control",
     "agent-dep-scan",
@@ -31,7 +32,7 @@
     "social-daily-poster",
     "version-check"
   ],
-  "verifyJwtCount": 30,
+  "verifyJwtCount": 31,
   "cspPresent": true,
   "cspHash": "1625510d45515045",
   "corsHash": "b1683c94fbad28a6"

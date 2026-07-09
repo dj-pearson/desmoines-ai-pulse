@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
     const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const nowIso = new Date().toISOString();
 
-    const [autoResolved, openTier1, openTier2, openTier3, overdue, failures24h, openCves] = await Promise.all([
+    const [autoResolved, openTier1, openTier2, openTier3, overdue, failures24h, openCves, openCompliance] = await Promise.all([
       count(supabase, "agent_tasks", (q) => q.eq("tier", 1).eq("status", "resolved").gte("updated_at", dayAgo)),
       count(supabase, "agent_tasks", (q) => q.eq("tier", 1).in("status", ["escalated", "assigned", "auto_resolving"])),
       count(supabase, "agent_tasks", (q) => q.eq("tier", 2).in("status", ["escalated", "assigned"])),
@@ -55,6 +55,8 @@ Deno.serve(async (req) => {
       count(supabase, "automation_job_runs", (q) => q.in("status", ["failed", "failure"]).gte("started_at", dayAgo)),
       // Security posture: open CVE remediation tasks (AOS-SEC-002).
       count(supabase, "agent_tasks", (q) => q.eq("agent_key", "dependency-cve-scanner").in("status", ["open", "escalated", "assigned", "auto_resolving"])),
+      // Compliance posture: open compliance review tasks (AOS-SEC-007).
+      count(supabase, "agent_tasks", (q) => q.eq("agent_key", "compliance-monitor").in("status", ["open", "escalated", "assigned"])),
     ]);
 
     const openHuman = openTier2 + openTier3;
@@ -65,6 +67,7 @@ Deno.serve(async (req) => {
       `Overdue tasks: ${overdue}`,
       `Agent failures (24h): ${failures24h}`,
       `Open dependency CVEs: ${openCves}`,
+      `Compliance — open review items: ${openCompliance}`,
     ].join("\n");
 
     // Date-keyed dedupe so a re-run same day coalesces instead of double-sending.

@@ -3944,8 +3944,8 @@
         "npm run validate passes"
       ],
       "priority": 32,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): agent-compliance-monitor edge function (verify_jwt=false, requireAdminOrApiKey, runAgent-wrapped, weekly Mon 06:00). Deletion SLA: account_deletion_tokens older than 30d (row cascade-deletes with the user, so a stale row = possibly-incomplete deletion) -> tier-2 review. Retention: counts rows past policy on login_attempts (90d/attempt_time) + security_audit_logs (180d/created_at), flags for review — NEVER hard-deletes (purge approval-gated, explicit note). Consent: REQUIRED_CONSENT_TYPES (privacy_policy, terms) each must have >0 granted consent_records; missing -> tier-2. All findings idempotent (dedupeKey compliance:<key>), governance category, notifyOps. Compliance section added to agent-ops-digest (open compliance review items). Data-export requests: no table exists yet -> best-effort, honestly noted in summary. Registered compliance-monitor agent (live, governance) + weekly cron; regenerated security-config baseline (verify_jwt=31). Does not mutate consent/deletion shapes older binaries depend on. npm run validate passes (0 errors). Completes AOS-SEC epic (001-007). Documented in AGENTIC_OS.md."
     },
     {
       "id": "AOS-DEV-001",

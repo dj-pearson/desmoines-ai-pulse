@@ -280,6 +280,23 @@ through the `agent-control` edge function (admin-authenticated, audited) — tog
 writes `agent_registry.enabled`, run maps the agent to its edge function and
 fires it. A drill-in sheet shows that agent's run history with error details.
 
+## Compliance monitor (AOS-SEC-007)
+
+The `compliance-monitor` agent (`agent-compliance-monitor`, weekly) tracks
+legal-risk gaps and opens tier-2 review tasks:
+
+- **Deletion SLA** — an `account_deletion_tokens` row still present past the
+  30-day SLA suggests a deletion request that may not have completed (the row
+  cascade-deletes with the user), so it's surfaced for review.
+- **Retention** — rows past policy on telemetry/PII tables (`login_attempts`
+  90d, `security_audit_logs` 180d) are **flagged for review only**; the agent
+  never hard-deletes — a retention purge is approval-gated.
+- **Consent** — required consent types must have granted-consent coverage.
+
+Open compliance items appear in the ops digest. (Data-export requests aren't yet
+tracked in a table, so that check is best-effort until one exists.) Nothing here
+mutates the consent/deletion shapes older mobile binaries depend on.
+
 ## RLS / config drift audit (AOS-SEC-006)
 
 The one-time WEB-SEC-005 RLS audit is now continuous. The
