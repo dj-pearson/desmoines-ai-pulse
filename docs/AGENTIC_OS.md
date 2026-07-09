@@ -329,6 +329,29 @@ means zero LLM budget; each review is recorded as an audited run via
 `agent-pr-review`. (Semantic checks like RLS/rate-limit tightening are left out
 deliberately — a false-positive block is worse than a miss.)
 
+## Dormant-user re-engagement (AOS-NURTURE-005)
+
+`agent-reengagement` (cron, conservative weekly cadence) nudges **dormant** users
+back with what they've missed + upcoming highlights, behind stacked guardrails
+applied in order:
+
+1. **Consent** (`messagingAllowed`) and **not already suppressed** (aged out).
+2. **Age-out** — `shouldAgeOut` suppresses a user who ignored their last
+   `MAX_ATTEMPTS` (3) re-engagement sends (no open/click/reactivation),
+   stamping `reengage_suppressed_at` so we stop spamming the unresponsive.
+3. **Cross-agent coordination** — `recentlyMessaged` checks the shared
+   `nurture_sends` ledger and **skips if *any* nurture agent** (onboarding,
+   win-back, digest, …) messaged this user within `COORD_WINDOW_DAYS` (7). This
+   is the coordination point: because every nurture agent writes to one ledger,
+   no user gets overlapping nurture + re-engagement in the same window.
+4. **Cadence cap** — ≥ 21 days between re-engagement sends.
+5. **Quality gate** (AOS-GOV-004) before send.
+
+Reactivations are measured (a prior send whose user is now active/reactivated is
+stamped `activated_at`); the digest reports 7-day sent + reactivated.
+`_shared/nurtureCoordination.ts` (`recentlyMessaged`, `shouldAgeOut`) is reusable
+by future nurture agents.
+
 ## Personalized weekly digest (AOS-NURTURE-004)
 
 `agent-weekly-digest` (cron, weekly) sends each user a digest of what's relevant

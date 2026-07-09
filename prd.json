@@ -4349,8 +4349,8 @@
         "npm run validate passes"
       ],
       "priority": 59,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Dormant-user re-engagement agent. New _shared/nurtureCoordination.ts with recentlyMessaged (queries the shared nurture_sends ledger for ANY non-skipped send to a user in a window — the cross-agent coordination point) and shouldAgeOut (true when the last N re-engagement sends were all ignored — no open/click/activation). Migration 20260709000047 adds additive profiles.reengage_suppressed_at + registers dormant-reengagement agent (cron Tue 16:00, conservative, $20/mo). agent-reengagement edge function (verify_jwt=false, requireAdminOrApiKey, runAgent) targets lifecycle_stage=dormant, not-suppressed users with stacked guardrails in order: (1) consent messagingAllowed + not suppressed; (2) age-out — shouldAgeOut after MAX_ATTEMPTS=3 ignored sends stamps reengage_suppressed_at to stop spamming; (3) cross-agent coordination — recentlyMessaged skips if ANY nurture agent messaged within COORD_WINDOW_DAYS=7 (no overlapping nurture+reengagement, enabled because all nurture agents write to one nurture_sends ledger); (4) re-engagement cadence cap REENGAGE_GAP_DAYS=21; (5) AOS-GOV-004 quality gate. Content = what's-coming-up highlights (events fetched once) via sendNurtureEmail (unsubscribe-respecting). Reactivations measured — a prior re-engagement send whose user is now active/reactivated is stamped activated_at. Ops digest reports 7-day re-engagement sent + reactivated. config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=62). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-NURTURE-006",

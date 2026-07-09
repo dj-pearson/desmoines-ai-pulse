@@ -288,3 +288,8 @@ verify_jwt = false
 # Auth via requireAdminOrApiKey.
 [functions.agent-weekly-digest]
 verify_jwt = false
+
+# Dormant re-engagement (AOS-NURTURE-005). Cron; coordinated nudges for dormant
+# users with age-out. Auth via requireAdminOrApiKey.
+[functions.agent-reengagement]
+verify_jwt = false
