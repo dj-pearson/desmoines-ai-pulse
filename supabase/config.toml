@@ -88,6 +88,13 @@ verify_jwt = false
 [functions.agent-escalation-router]
 verify_jwt = false
 
+# Consolidated AOS agent dispatcher — hosts the 34 former agent-<name> cron
+# functions, routed by agent_key at /functions/v1/agent-runner/<agent_key>.
+# Cron control-plane job; auth via requireAdminOrApiKey (same gate the individual
+# agents used). See supabase/functions/_shared/agents/.
+[functions.agent-runner]
+verify_jwt = false
+
 # Agent action approvals (AOS-CORE-007). Admin approve/reject + cron sweep of
 # expired approvals. Does its own auth via requireAdminOrApiKey.
 [functions.agent-approvals]
