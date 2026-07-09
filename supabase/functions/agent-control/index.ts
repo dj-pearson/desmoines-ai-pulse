@@ -60,9 +60,30 @@ Deno.serve(async (req) => {
   const agentKey = body.agentKey as string | undefined;
   const actorId = (body.actorId as string | undefined) ?? null;
 
-  if (!agentKey) return json({ error: "agentKey required" }, 400, corsHeaders);
-
   try {
+    // Global pause (AOS-CORE-009): one-click flip of the aos_kill_switch flag.
+    // Takes effect on the next agent invocation — no deploy. No agentKey needed.
+    if (mode === "global_pause") {
+      const paused = body.paused === true;
+      const { error } = await supabase
+        .from("feature_flags")
+        .update({ enabled: paused })
+        .eq("flag_key", "aos_kill_switch");
+      if (error) throw error;
+
+      await writeAuditLog(supabase, {
+        eventType: "agent_control",
+        actorId,
+        action: paused ? "global_pause_on" : "global_pause_off",
+        resource: "feature_flags",
+        severity: "high",
+        details: { flag: "aos_kill_switch", paused },
+      });
+      return json({ ok: true, paused }, 200, corsHeaders);
+    }
+
+    if (!agentKey) return json({ error: "agentKey required" }, 400, corsHeaders);
+
     if (mode === "toggle") {
       const enabled = body.enabled === true;
       const { error } = await supabase

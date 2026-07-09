@@ -28,6 +28,7 @@
  */
 
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { agentPaused } from "./agentGuards.ts";
 
 export type AgentRunStatus =
   | "running"
@@ -107,6 +108,44 @@ export async function runAgent<T>(
     skip: (reason) => { skipped = true; skipReason = reason ?? null; },
     meta: (m) => { metadata = { ...metadata, ...m }; },
   };
+
+  // Global/per-agent pause gate (AOS-CORE-009): stop before doing any work and
+  // record a SKIPPED run so the paused gap is visible in the ledger. fn() is
+  // never called while paused.
+  if (supabase) {
+    const pause = await agentPaused(supabase, agentKey);
+    if (pause.paused) {
+      let skipRunId: string | null = null;
+      try {
+        const nowIso = new Date().toISOString();
+        const { data } = await supabase
+          .from("automation_job_runs")
+          .insert({
+            job_name: agentKey,
+            agent_key: agentKey,
+            status: "skipped",
+            finished_at: nowIso,
+            summary: `paused: ${pause.reason}`,
+            metadata: { pausedReason: pause.reason },
+          })
+          .select("id")
+          .single();
+        skipRunId = data?.id ?? null;
+      } catch (err) {
+        console.warn(`[agentRun:${agentKey}] failed to record skipped run:`, err instanceof Error ? err.message : String(err));
+      }
+      return {
+        ok: true,
+        status: "skipped",
+        runId: skipRunId,
+        itemsProcessed: 0,
+        itemsEscalated: 0,
+        itemsFailed: 0,
+        tokensUsed: 0,
+        costUsd: 0,
+      };
+    }
+  }
 
   // Open the run row (best-effort).
   let runId: string | null = null;

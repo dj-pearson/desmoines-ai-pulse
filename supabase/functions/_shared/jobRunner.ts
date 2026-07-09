@@ -13,6 +13,7 @@
  * The wrapper never throws — a job-infra failure must not crash the function.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { agentPaused } from './agentGuards.ts';
 
 export interface JobContext {
   /** Add to the items-processed counter. */
@@ -32,11 +33,16 @@ export interface RunJobOptions {
   isTransient?: (err: unknown) => boolean;
   /** Admin alert email override (else ADMIN_ALERT_EMAIL / ALERT_EMAIL secret). */
   alertEmail?: string;
+  /** Agent key for the pause gate (AOS-CORE-009); defaults to jobName. */
+  agentKey?: string;
+  /** Skip the global/per-agent pause gate — for infra jobs (e.g. the health
+   *  watchdog) that must keep running during an incident pause. */
+  exemptFromPause?: boolean;
 }
 
 export interface JobResult<T> {
   ok: boolean;
-  status: 'success' | 'failed' | 'partial';
+  status: 'success' | 'failed' | 'partial' | 'skipped';
   runId: string | null;
   result?: T;
   error?: string;
@@ -61,6 +67,35 @@ export async function runJob<T>(
 ): Promise<JobResult<T>> {
   const { maxAttempts = 3, backoffMs = 1000, isTransient = () => true } = options;
   const supabase = serviceClient();
+
+  // Global/per-agent pause gate (AOS-CORE-009). Record a skipped run and exit
+  // without doing work when paused, so the gap is visible in the ledger. Infra
+  // jobs can opt out via exemptFromPause.
+  if (supabase && !options.exemptFromPause) {
+    const pause = await agentPaused(supabase, options.agentKey ?? jobName);
+    if (pause.paused) {
+      let skipId: string | null = null;
+      try {
+        const nowIso = new Date().toISOString();
+        const { data } = await supabase
+          .from('automation_job_runs')
+          .insert({ job_name: jobName, status: 'skipped', finished_at: nowIso, metadata: { pausedReason: pause.reason } })
+          .select('id')
+          .single();
+        skipId = data?.id ?? null;
+      } catch (err) {
+        console.warn(`[jobRunner:${jobName}] failed to record skipped run:`, err);
+      }
+      return {
+        ok: true,
+        status: 'skipped' as JobResult<T>['status'],
+        runId: skipId,
+        itemsProcessed: 0,
+        itemsFailed: 0,
+        attempts: 0,
+      };
+    }
+  }
 
   let itemsProcessed = 0;
   let itemsFailed = 0;

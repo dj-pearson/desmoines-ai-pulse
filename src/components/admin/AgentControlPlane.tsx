@@ -19,6 +19,8 @@ import {
   useAgentRunHistory,
   useToggleAgent,
   useRunAgent,
+  useGlobalPause,
+  useSetGlobalPause,
   successRate,
   type AgentSummary,
 } from "@/hooks/useAgentControlPlane";
@@ -73,10 +75,23 @@ function RunHistory({ agent, onClose }: { agent: AgentSummary; onClose: () => vo
 export default function AgentControlPlane() {
   const { user } = useAuth();
   const { data: agents, isLoading, isError, refetch, isFetching } = useAgentSummaries();
+  const { data: globalPaused } = useGlobalPause();
+  const setPause = useSetGlobalPause();
   const toggle = useToggleAgent();
   const run = useRunAgent();
   const [drill, setDrill] = useState<AgentSummary | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
+
+  async function onGlobalPause(paused: boolean) {
+    if (!user?.id) return;
+    try {
+      await setPause.mutateAsync({ paused, actorId: user.id });
+      toast.success(paused ? "All agents paused" : "Agents resumed");
+    } catch (error) {
+      handleError(error, { component: "AgentControlPlane", action: "global_pause" });
+      toast.error("Could not change the global pause.");
+    }
+  }
 
   const chartData = useMemo(
     () =>
@@ -131,6 +146,37 @@ export default function AgentControlPlane() {
             <Button variant="outline" size="sm" className="min-h-[44px]" onClick={() => refetch()} aria-label="Refresh agents">
               <RefreshCw className={cn("mr-2 h-4 w-4", isFetching && "animate-spin")} aria-hidden="true" /> Refresh
             </Button>
+          </div>
+
+          {/* Global kill switch — one-click incident pause for every agent. */}
+          <div
+            className={cn(
+              "mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3",
+              globalPaused && "border-destructive bg-destructive/10",
+            )}
+          >
+            <div className="flex items-center gap-2">
+              <AlertTriangle className={cn("h-5 w-5", globalPaused ? "text-destructive" : "text-muted-foreground")} aria-hidden="true" />
+              <div>
+                <p className="text-sm font-medium">
+                  {globalPaused ? "All agents are PAUSED" : "Global pause"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {globalPaused
+                    ? "No agent will take action until resumed. Scheduled runs record as skipped."
+                    : "Instantly stop every agent (no deploy). Takes effect on the next invocation."}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={!!globalPaused}
+                disabled={setPause.isPending}
+                onCheckedChange={onGlobalPause}
+                aria-label={globalPaused ? "Resume all agents" : "Pause all agents"}
+              />
+              <span className="text-xs font-medium">{globalPaused ? "Paused" : "Active"}</span>
+            </div>
           </div>
         </CardHeader>
         {chartData.length > 0 && (

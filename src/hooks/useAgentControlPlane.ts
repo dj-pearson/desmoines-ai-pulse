@@ -114,6 +114,41 @@ export function useRunAgent() {
   });
 }
 
+/** Current global pause state (aos_kill_switch feature flag). */
+export function useGlobalPause() {
+  return useQuery({
+    queryKey: ["aos-global-pause"],
+    queryFn: async (): Promise<boolean> => {
+      const { data, error } = await db
+        .from("feature_flags")
+        .select("enabled")
+        .eq("flag_key", "aos_kill_switch")
+        .maybeSingle();
+      if (error) throw error;
+      return (data as { enabled?: boolean } | null)?.enabled === true;
+    },
+    staleTime: 15 * 1000,
+    refetchInterval: 30 * 1000,
+  });
+}
+
+export function useSetGlobalPause() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ paused, actorId }: { paused: boolean; actorId: string }) => {
+      const { data, error } = await supabase.functions.invoke("agent-control", {
+        body: { mode: "global_pause", paused, actorId },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["aos-global-pause"] });
+      qc.invalidateQueries({ queryKey: ["agent-summaries"] });
+    },
+  });
+}
+
 export function successRate(successes: number, runs: number): number | null {
   if (!runs) return null;
   return Math.round((successes / runs) * 100);

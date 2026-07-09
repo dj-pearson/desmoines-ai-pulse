@@ -180,6 +180,34 @@ when) is written to the task's `resolution` jsonb as the human-action record. Th
 detail sheet shows the task payload, the producing agent's latest run (from
 `agent_run_summary`), and any AI-suggested resolution in the payload.
 
+## Kill switch + global pause (AOS-CORE-009)
+
+Every agent can be stopped instantly, without a deploy. An agent is **paused**
+when either the global kill switch (`aos_kill_switch` feature flag) is on, or its
+own `agent_registry.enabled` is false. The check (`_shared/agentGuards.ts`
+`agentPaused`) is enforced **centrally in the shared run wrappers** — `runJob`
+and `runAgent` — so *every* agent that records a run honors it without per-agent
+code. When paused, the wrapper records a **skipped** run and never calls the
+work function, so the gap is visible in the ledger and control-plane. The check
+is **fail-open**: a read error is treated as "not paused" so a database hiccup
+can never silently halt automation. Infra jobs (e.g. the health watchdog) can
+opt out with `runJob(..., { exemptFromPause: true })`.
+
+### How to pause in an incident
+
+1. Open **`/admin/agents`** and flip the red **Global pause** switch at the top
+   (one click; audited to `security_audit_logs`). It writes `aos_kill_switch =
+   true` and takes effect on the **next** agent invocation — within ~15s (the
+   guard's cache TTL), no deploy.
+2. Every scheduled agent then records a `skipped` run instead of acting; the
+   dashboard shows the gap.
+3. To stop a **single** misbehaving agent instead, toggle just that agent's
+   enable switch on the same page.
+4. Resume by flipping the switch back off.
+
+If the console is unreachable, the same effect comes from setting
+`feature_flags.enabled = true` where `flag_key = 'aos_kill_switch'` directly.
+
 ## Control-plane dashboard (AOS-CORE-008)
 
 `/admin/agents` (protected) is the single operating view: every agent from

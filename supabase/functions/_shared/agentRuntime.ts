@@ -22,7 +22,6 @@
 
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getAIConfig } from "./aiConfig.ts";
-import { getAgentConfig } from "./agentConfig.ts";
 import { runAgent as recordAgentRun } from "./agentRun.ts";
 import { requiresApproval, createApproval } from "./agentApprovals.ts";
 
@@ -323,19 +322,6 @@ function serviceClient(): SupabaseClient | null {
   return createClient(url, key);
 }
 
-async function killSwitchOn(supabase: SupabaseClient): Promise<boolean> {
-  try {
-    const { data } = await supabase
-      .from("feature_flags")
-      .select("enabled")
-      .eq("flag_key", "aos_kill_switch")
-      .maybeSingle();
-    return data?.enabled === true;
-  } catch {
-    // Fail-open: a flag read hiccup must not silently halt every agent.
-    return false;
-  }
-}
 
 /**
  * Run an autonomous agent through the guarded runtime. Returns `disabled`
@@ -348,19 +334,9 @@ export async function runAgent(config: RunAgentConfig): Promise<RunAgentResult> 
     return { status: "failure", error: "no service-role Supabase client available" };
   }
 
-  // Guardrail 1: global kill switch.
-  if (await killSwitchOn(supabase)) {
-    console.log(`[agentRuntime:${config.agentKey}] global kill switch on — not running`);
-    return { status: "disabled", disabledReason: "global kill switch" };
-  }
-
-  // Guardrail 2: per-agent enabled flag from the registry.
-  const agentCfg = await getAgentConfig(supabase, config.agentKey);
-  if (!agentCfg.enabled) {
-    console.log(`[agentRuntime:${config.agentKey}] disabled in registry — not running`);
-    return { status: "disabled", disabledReason: "agent disabled in registry" };
-  }
-
+  // The global kill switch + per-agent enabled gate (AOS-CORE-009) is enforced
+  // centrally by recordAgentRun below: when paused it records a SKIPPED run and
+  // never calls the loop, and we map that to `disabled` at the end.
   const apiKey = config.apiKey ?? Deno.env.get("ANTHROPIC_API_KEY") ?? Deno.env.get("CLAUDE_API");
   if (!apiKey) {
     return { status: "failure", error: "no Anthropic API key configured" };
@@ -447,6 +423,11 @@ export async function runAgent(config: RunAgentConfig): Promise<RunAgentResult> 
     },
     { client: supabase },
   );
+
+  // Paused: recordAgentRun short-circuited to a skipped run without acting.
+  if (ledger.status === "skipped") {
+    return { status: "disabled", disabledReason: "paused (global kill switch or agent disabled)", runId: ledger.runId };
+  }
 
   const loop = ledger.result;
   if (!ledger.ok || !loop) {

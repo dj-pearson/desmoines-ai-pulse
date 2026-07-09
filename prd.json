@@ -3733,8 +3733,8 @@
         "npm run validate passes"
       ],
       "priority": 18,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): _shared/agentGuards.ts agentPaused(supabase, agentKey) — paused when global aos_kill_switch flag on OR per-agent agent_registry.enabled=false; fail-open (read error => not paused) with 15s kill-switch cache. Enforced CENTRALLY in the shared run wrappers so every agent honors it without per-function code: jobRunner.runJob and agentRun.runAgent check agentPaused before any work and record a SKIPPED automation_job_runs row (fn never called); runJob gains agentKey + exemptFromPause opts (infra jobs like the watchdog can opt out); JobResult status union gains skipped. agentRuntime.runAgent simplified to delegate the gate to agentRun (removed its bespoke kill-switch/enabled checks), maps skipped->disabled. One-click global pause: agent-control mode=global_pause flips aos_kill_switch + audits (severity high); frontend useGlobalPause/useSetGlobalPause + a prominent red Pause-all banner Switch on /admin/agents. Takes effect next invocation (~15s), no deploy. Documented incident-pause runbook in docs/AGENTIC_OS.md. npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-CORE-010",
