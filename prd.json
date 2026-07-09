@@ -3959,8 +3959,8 @@
         "npm run validate passes"
       ],
       "priority": 33,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): full production-error pipeline. Migration 20260709000021 adds error_events table (signature, message_redacted, component/action/route, severity, source client|edge, user_id nullable for counts, created_at) + admin-read RLS + indexes; registers error-triage agent + */30 cron. _shared/scrubPii.ts scrubs emails/JWTs/keys/UUIDs/numbers/URL-params and computes a stable cluster signature (normalized message + component + action, SHA-256). log-error edge function (verify_jwt=false, rate-limited 60/min/IP, PII-scrubbed): ingests client + edge errors. errorHandler.ts reportErrorEvent ships errors in PROD (best-effort fire-and-forget, keepalive, client-side throttle 1/message/min, bounded memory) — no PII sent. agent-error-triage clusters error_events (24h) by signature into deduped dev tasks with frequency/first-last-seen/routes/affectedUsers/sample; tier-2 for high-frequency (>=10) user-facing, tier-1 backlog otherwise; upserts existing open task payloads; auto-closes signatures with no recurrence in window. Regenerated config baseline (verify_jwt=33). No PII from payloads stored (message_redacted only; user_id is uuid for counting). npm run validate passes (0 errors). Documented in AGENTIC_OS.md."
     },
     {
       "id": "AOS-DEV-002",

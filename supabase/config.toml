@@ -138,3 +138,13 @@ verify_jwt = false
 # consent checks. Does its own auth via requireAdminOrApiKey.
 [functions.agent-compliance-monitor]
 verify_jwt = false
+
+# Production error sink (AOS-DEV-001). Public: the web client posts errors, so
+# verify_jwt=false; rate-limited + PII-scrubbed in-fn.
+[functions.log-error]
+verify_jwt = false
+
+# Error triage clustering agent (AOS-DEV-001). Cron: clusters error_events into
+# dev tasks. Does its own auth via requireAdminOrApiKey.
+[functions.agent-error-triage]
+verify_jwt = false

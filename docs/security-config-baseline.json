@@ -5,6 +5,7 @@
     "agent-config-audit",
     "agent-control",
     "agent-dep-scan",
+    "agent-error-triage",
     "agent-escalation-router",
     "agent-fraud-monitor",
     "agent-ops-digest",
@@ -23,6 +24,7 @@
     "get-sponsored-pick",
     "image-transform",
     "log-content-metrics",
+    "log-error",
     "og-image",
     "publish-article-webhook",
     "regenerate-sitemaps",
@@ -32,7 +34,7 @@
     "social-daily-poster",
     "version-check"
   ],
-  "verifyJwtCount": 31,
+  "verifyJwtCount": 33,
   "cspPresent": true,
   "cspHash": "1625510d45515045",
   "corsHash": "b1683c94fbad28a6"

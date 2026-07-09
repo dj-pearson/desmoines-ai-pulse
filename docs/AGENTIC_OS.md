@@ -280,6 +280,22 @@ through the `agent-control` edge function (admin-authenticated, audited) — tog
 writes `agent_registry.enabled`, run maps the agent to its edge function and
 fires it. A drill-in sheet shows that agent's run history with error details.
 
+## Production-error pipeline (AOS-DEV-001)
+
+Raw error noise becomes actionable dev tasks. `@/lib/errorHandler` (and edge
+functions) ship errors to the `log-error` sink, which **scrubs PII** (emails,
+tokens, UUIDs, numbers, URL params) and stores a row in `error_events` with a
+stable cluster **signature** (`_shared/scrubPii.ts`). The client throttles sends
+(one per message/minute) so an error storm can't flood the sink.
+
+The `error-triage` agent (every 30 min, over 24h) clusters `error_events` by
+signature into de-duplicated dev tasks carrying **frequency, first/last seen,
+affected routes, and affected-user count**. Tier is set by severity/frequency:
+a high-frequency user-facing cluster (≥10 client-side occurrences) is **tier-2**,
+rare/benign is **tier-1 backlog**. A signature with no recurrence in the window
+**auto-closes** its task. No PII from error payloads is ever stored — only the
+scrubbed message and light context.
+
 ## Compliance monitor (AOS-SEC-007)
 
 The `compliance-monitor` agent (`agent-compliance-monitor`, weekly) tracks
