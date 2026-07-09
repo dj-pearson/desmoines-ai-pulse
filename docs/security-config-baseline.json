@@ -8,6 +8,7 @@
     "agent-compliance-monitor",
     "agent-config-audit",
     "agent-control",
+    "agent-csat",
     "agent-data-quality",
     "agent-db-health",
     "agent-dep-scan",
@@ -49,13 +50,14 @@
     "scrape-events",
     "social-daily-poster",
     "support-chat",
+    "support-csat-submit",
     "support-kb-admin",
     "support-kb-embed",
     "support-kb-search",
     "support-ticket-reclassify",
     "version-check"
   ],
-  "verifyJwtCount": 54,
+  "verifyJwtCount": 56,
   "cspPresent": true,
   "cspHash": "1625510d45515045",
   "corsHash": "b1683c94fbad28a6"

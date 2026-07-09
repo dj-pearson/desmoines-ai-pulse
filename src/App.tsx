@@ -173,6 +173,7 @@ import { CookieConsentBanner } from "@/components/CookieConsentBanner";
 // Contact page
 const Contact = lazyWithRetry(() => import("./pages/Contact"));
 const Support = lazyWithRetry(() => import("./pages/Support"));
+const Csat = lazyWithRetry(() => import("./pages/Csat"));
 
 // Public CAN-SPAM one-click unsubscribe
 const Unsubscribe = lazyWithRetry(() => import("./pages/Unsubscribe"));
@@ -450,6 +451,7 @@ const App = () => (
             {/* Contact page */}
             <Route path="/contact" element={<Contact />} />
             <Route path="/support" element={<Support />} />
+            <Route path="/csat" element={<Csat />} />
             {/* Community voting */}
             <Route path="/best-of" element={<BestOf />} />
             <Route path="/best-of/:category" element={<BestOfCategory />} />

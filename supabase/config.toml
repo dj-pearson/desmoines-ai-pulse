@@ -253,3 +253,13 @@ verify_jwt = false
 # rate limit + optional bearer auth). In-function auth; core support for all tiers.
 [functions.support-chat]
 verify_jwt = false
+
+# CSAT prompt sender (AOS-CS-007). Cron; posts CSAT prompts to resolved tickets.
+# Auth via requireAdminOrApiKey.
+[functions.agent-csat]
+verify_jwt = false
+
+# CSAT submission (AOS-CS-007). Public one-click rating link; rate-limited.
+# Records score + re-escalates low CSAT.
+[functions.support-csat-submit]
+verify_jwt = false

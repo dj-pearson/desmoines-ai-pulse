@@ -109,6 +109,27 @@ Deno.serve(async (req) => {
       ? `Edge functions — noisiest (5xx/24h): ${noisiest.map(([f, c]) => `${f} ${c}`).join(", ")}`
       : `Edge functions — no 5xx in 24h`;
 
+    // CSAT trend (30d) by channel and by auto-vs-human resolution (AOS-CS-007).
+    const csatSince = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: csatRows } = await supabase
+      .from("support_csat")
+      .select("score, channel, resolved_by")
+      .gte("created_at", csatSince)
+      .limit(5000);
+    const csat = (csatRows ?? []) as { score: number; channel: string | null; resolved_by: string | null }[];
+    const avgBy = (key: "channel" | "resolved_by") => {
+      const acc = new Map<string, { sum: number; n: number }>();
+      for (const r of csat) {
+        const k = (r[key] ?? "unknown") as string;
+        const a = acc.get(k) ?? { sum: 0, n: 0 };
+        a.sum += r.score; a.n += 1; acc.set(k, a);
+      }
+      return [...acc].map(([k, a]) => `${k} ${(a.sum / a.n).toFixed(1)}★ (n=${a.n})`).join(", ");
+    };
+    const csatLine = csat.length
+      ? `CSAT (30d) — by channel: ${avgBy("channel")}; by resolution: ${avgBy("resolved_by")}`
+      : `CSAT (30d) — no responses yet`;
+
     const openHuman = openTier2 + openTier3;
     const body = [
       `Tier-1 auto-resolutions (24h): ${autoResolved}`,
@@ -125,6 +146,7 @@ Deno.serve(async (req) => {
       dqLine,
       `Link health — dead links: ${deadLinks}`,
       edgeLine,
+      csatLine,
     ].join("\n");
 
     // Date-keyed dedupe so a re-run same day coalesces instead of double-sending.

@@ -4259,8 +4259,8 @@
         "npm run validate passes"
       ],
       "priority": 53,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Post-resolution CSAT loop with re-escalation. Migration 20260709000041 adds additive columns to support_tickets (resolved_at, resolved_by, csat_prompt_sent_at, csat_score) + a BEFORE UPDATE trigger stamping resolved_at on first transition to resolved + new support_csat table (score 1-5 CHECK, comment, channel, resolved_by, run_id) with RLS admin-read + user-read-own + registers csat-agent (cron hourly). agent-csat edge function (verify_jwt=false, requireAdminOrApiKey, runAgent) finds newly-resolved tickets without a CSAT prompt, determines resolved_by (auto if unassigned AND never SLA-escalated, else human), posts a lightweight in-app CSAT prompt to the thread with one-click 1-5 rating links (/csat?ticket=..&score=N — works in-app and email), stamps csat_prompt_sent_at+resolved_by. support-csat-submit edge function (public, rate-limited via checkRateLimitPersistent, no auth so email links work) validates score 1-5, records support_csat (channel+resolved_by) + support_tickets.csat_score, audits csat_recorded; low score <=2 auto-re-escalates — reopens ticket (status escalated, resolved_at cleared) + creates tier-2 task with ORIGINAL context (subject/body) + audits csat_reescalation. Frontend /csat public route (Csat page, lazyWithRetry) submits immediately on a one-click link or shows an accessible star picker (role=radiogroup, 44px targets) + optional comment. Ops digest reports 30-day CSAT trend by channel and by auto-vs-human resolution. config.toml x2; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=56). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-CS-008",

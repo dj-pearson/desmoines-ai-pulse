@@ -329,6 +329,26 @@ means zero LLM budget; each review is recorded as an audited run via
 `agent-pr-review`. (Semantic checks like RLS/rate-limit tightening are left out
 deliberately — a false-positive block is worse than a miss.)
 
+## Post-resolution CSAT loop (AOS-CS-007)
+
+"A resolved ticket the user hated is not resolved." When a ticket becomes
+`resolved` (a trigger stamps `resolved_at`), `agent-csat` (cron, hourly) posts a
+**lightweight CSAT prompt** to the thread — one-click 1–5 rating links
+(`/csat?ticket=…&score=N`) that work equally in-app and in email — and stamps
+`csat_prompt_sent_at` plus whether resolution was **auto** (agent, never touched
+by a human) or **human**.
+
+`support-csat-submit` (public, rate-limited, one-click) records the score in
+`support_csat` (with channel + resolved_by) and on the ticket. A **low score
+(≤ 2) auto-re-escalates**: the ticket reopens (`status = escalated`,
+`resolved_at` cleared) and a tier-2 task is created carrying the **original
+context** (subject/body) so a human can make it right. The `/csat` page submits
+immediately on a one-click link, or shows a star picker + optional comment.
+
+The ops digest reports the **30-day CSAT trend by channel and by
+auto-vs-human resolution** — the signal for whether auto-resolutions are
+actually satisfying users. Every record + re-escalation is audited.
+
 ## In-app support chat (AOS-CS-006)
 
 The `/support` route hosts an in-app chat (`SupportChat`) wired to the CS
