@@ -3611,8 +3611,8 @@
         "npm run validate passes"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): migration 20260709000001_agent_registry.sql creates agent_category enum (dev|maintain|nurture|prospect|support|manage|security|governance) + agent_registry table (agent_key unique, name, category, description, schedule_cron nullable, enabled default true, tier1_confidence_threshold default 0.85, monthly_cost_budget_usd nullable, owner_role, created_at/updated_at + trigger) + category/enabled indexes. Admin-only RLS for read AND write (governance config). Seeds 11 live WEB-AUTO jobs (content-ingest, data-quality-heal, backfill-images, dedupe-content, moderate-content, weekly-digest, ai-article-pipeline, social-media-manager, sitemap-refresh, validate-source-urls, job-health-watchdog) enabled=true + 8 AOS program agents (one per category) enabled=false; ON CONFLICT idempotent. Added _shared/agentConfig.ts getAgentConfig(supabase, agentKey) — reads enabled/threshold/budget, 60s cache, fail-safe permissive defaults with found flag; getAgentConfigByKey(url,key) overload. Created docs/AGENTIC_OS.md (schema, categories, getAgentConfig usage, how-to-add-an-agent). npm run validate passes (0 errors). Mirrors proven feature_flags migration; live apply belongs to Supabase runtime."
     },
     {
       "id": "AOS-CORE-002",
