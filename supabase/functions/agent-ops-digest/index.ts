@@ -157,6 +157,11 @@ Deno.serve(async (req) => {
     const { count: msEmailed } = await supabase.from("user_milestones").select("id", { count: "exact", head: true }).eq("emailed", true).gte("created_at", weekAgo);
     const msLine = `Milestones (7d) — ${msRecognized ?? 0} recognized, ${msEmailed ?? 0} emailed`;
 
+    // Prospecting: new leads (AOS-PROSPECT-001).
+    const { count: newLeads } = await supabase.from("prospect_leads").select("id", { count: "exact", head: true }).gte("created_at", weekAgo);
+    const { count: openLeads } = await supabase.from("prospect_leads").select("id", { count: "exact", head: true }).eq("status", "new");
+    const leadLine = `Prospecting — ${newLeads ?? 0} new leads (7d), ${openLeads ?? 0} open`;
+
     // Subscription nurture (AOS-NURTURE-007).
     const { data: subRows } = await supabase.from("nurture_sends").select("kind, status, activated_at").eq("agent_key", "subscription-nurture").gte("created_at", weekAgo).limit(5000);
     const subN = (subRows ?? []) as { kind: string; status: string; activated_at: string | null }[];
@@ -206,6 +211,7 @@ Deno.serve(async (req) => {
       reLine,
       msLine,
       subLine,
+      leadLine,
       wbLine,
     ].join("\n");
 

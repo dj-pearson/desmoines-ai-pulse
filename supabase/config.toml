@@ -303,3 +303,8 @@ verify_jwt = false
 # Auth via requireAdminOrApiKey.
 [functions.agent-subscription-nurture]
 verify_jwt = false
+
+# Lead sourcing (AOS-PROSPECT-001). Cron; discovers advertiser leads from existing
+# content (no external fetch). Auth via requireAdminOrApiKey.
+[functions.agent-lead-sourcing]
+verify_jwt = false

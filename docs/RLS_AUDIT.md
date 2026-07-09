@@ -7,9 +7,9 @@
 
 | Metric | Count |
 |---|---|
-| Migrations scanned | 306 |
-| Distinct policies (current) | 554 |
-| Tables with RLS enabled | 256 |
+| Migrations scanned | 307 |
+| Distinct policies (current) | 556 |
+| Tables with RLS enabled | 257 |
 | Tables with policies but no ENABLE RLS seen | 5 |
 | Permissive write policies USING/CHECK(true) | 30 |
 | Write policies granted to `anon` | 4 |
@@ -436,6 +436,8 @@
 | profiles | Admins can delete profiles | DELETE | authenticated | user_has_role_or_higher(auth.uid(), 'admin'::user_role) | — |
 | profiles | Admins can update all profiles | UPDATE | authenticated | user_has_role_or_higher(auth.uid(), 'admin'::user_role) | user_has_role_or_higher(auth.uid(), 'admin'::user_role) |
 | profiles | Admins can view all profiles | SELECT | authenticated | user_has_role_or_higher(auth.uid(), 'admin'::user_role) | — |
+| prospect_leads | prospect_leads_admin_read | SELECT | authenticated | is_admin() | — |
+| prospect_leads | prospect_leads_admin_write | UPDATE | authenticated | is_admin() | — |
 | provider_budgets | provider_budgets_admin_read | SELECT | authenticated | EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')) | — |
 | provider_usage | provider_usage_admin_read | SELECT | authenticated | EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')) | — |
 | pseo_generation_log | Admin read log | SELECT | public | EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')) | — |

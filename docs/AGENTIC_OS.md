@@ -329,6 +329,24 @@ means zero LLM budget; each review is recorded as an audited run via
 `agent-pr-review`. (Semantic checks like RLS/rate-limit tightening are left out
 deliberately — a false-positive block is worse than a miss.)
 
+## Local-business discovery / lead sourcing (AOS-PROSPECT-001)
+
+`agent-lead-sourcing` (cron, weekly) keeps a steady flow of advertiser leads.
+**Data sources are documented and safe: existing platform content only** —
+restaurants and attractions that are **not sponsored** (⇒ not already
+advertising) and **event venues** of upcoming events. It performs **no external
+fetch**, so there is no SSRF or cost-abuse surface; any future external
+enrichment must go through `_shared/fetchGuard` (WEB-SEC-001 allowlist + byte
+caps) and is intentionally off here. No gated/PII sources.
+
+Each candidate becomes a `prospect_leads` row capturing **source**
+(`existing_content:<table>`), **category** (restaurant / attraction /
+event_organizer), city, website, a **fit_reason** (why it's a fit — popularity,
+rating, has-website, hosts-events) and a **fit_score**. Leads are **deduped** by
+a stable `dedupe_key` (normalized name + city) against existing leads, so weekly
+runs don't pile up duplicates. The run is budgeted via `runAgent` and lead
+discovery is audited. The digest reports 7-day new leads + open leads.
+
 ## Subscription lifecycle nurture (AOS-NURTURE-007)
 
 `agent-subscription-nurture` (cron, daily) works the highest-leverage revenue

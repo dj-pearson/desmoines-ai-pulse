@@ -4394,8 +4394,8 @@
         "npm run validate passes"
       ],
       "priority": 62,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Local-business discovery agent (advertiser lead sourcing). Migration 20260709000050 adds prospect_leads table (business_name, category, city, website, source, source_ref, fit_reason, fit_score, status new|contacted|qualified|disqualified|converted, dedupe_key UNIQUE; RLS admin read/write + updated_at trigger) + registers lead-sourcing agent (cron Mon 06:00, $15/mo). agent-lead-sourcing edge function (verify_jwt=false, requireAdminOrApiKey, runAgent) discovers candidates from EXISTING CONTENT ONLY (documented data sources): restaurants + attractions that are NOT sponsored (=> not already advertising, filtered via .or is_sponsored null/false), and event venues of upcoming events. Performs NO external fetch — zero SSRF/cost-abuse surface; docstring notes any future enrichment must go through _shared/fetchGuard (WEB-SEC-001 allowlist + byte caps) and is intentionally OFF; no gated/PII sources. Each candidate captures source (existing_content:<table>), category, city, website, fit_reason (popularity/rating/has-website/hosts-events) and fit_score (0-1 rule-based). Deduped by stable dedupe_key (normalized name+city) against existing prospect_leads (batched .in lookups) AND within-run, so weekly runs don't pile duplicates. Bulk insert; lead discovery audited via writeAgentAudit (leads_discovered); run budgeted via runAgent. Ops digest reports 7-day new leads + open leads. config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=65). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-PROSPECT-002",
