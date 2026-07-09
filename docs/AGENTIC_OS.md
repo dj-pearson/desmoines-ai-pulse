@@ -141,6 +141,34 @@ ledger row via `run_correlation`.
 `discover-chat` is the first edge function refactored onto the harness — its
 bespoke loop is gone, its response is unchanged.
 
+## Tasks + escalation (AOS-CORE-004)
+
+`agent_tasks` is the shared record for every work item an agent produces,
+classified **tier-1 (auto-resolve)** vs **tier-2/3 (human)**. Agents file tasks
+with `createAgentTask` (`supabase/functions/_shared/agentTasks.ts`):
+
+```ts
+import { createAgentTask } from "../_shared/agentTasks.ts";
+
+const { tier, status } = await createAgentTask(supabase, {
+  agentKey: "dedupe-content",
+  category: "maintain",
+  title: "Merge duplicate: 'Farmers Market' x2",
+  confidence: 0.94,
+  payload: { primaryId, duplicateId },
+});
+// confidence >= the agent's tier1_confidence_threshold -> tier 1 (auto_resolving)
+// below it -> tier 2/3 (escalated to a human)
+```
+
+Tiering uses the agent's `tier1_confidence_threshold` from the registry:
+`confidence ≥ threshold` → tier 1; `≥ threshold/2` → tier 2; below → tier 3
+(senior review). An SLA due date is computed from a per-category policy
+(`SLA_HOURS`, tightest for `security`/`support`). The `agent_tasks_overdue` view
+surfaces open/assigned work past its SLA for the escalation console
+(AOS-CORE-006). RLS: agents write via the service role, admins read/update, and
+`created_at` is immutable (trigger).
+
 ## How to add a new agent
 
 1. **Register it.** Add a row to `agent_registry` in a new additive migration

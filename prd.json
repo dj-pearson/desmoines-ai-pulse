@@ -3657,8 +3657,8 @@
         "npm run validate passes"
       ],
       "priority": 13,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): migration 20260709000004_agent_tasks.sql creates agent_task_status enum (open|auto_resolving|resolved|escalated|assigned|closed|failed) + agent_tasks table (id, agent_key FK, category agent_category, tier int CHECK 1..3, title, payload jsonb, confidence numeric, status, assigned_to uuid nullable FK auth.users, sla_due_at, resolution jsonb nullable, created_at/updated_at) + status/tier/agent indexes + open-SLA partial index. updated_at trigger + freeze_created_at trigger (immutable created_at). RLS: admin read + update (service role writes bypass). agent_tasks_overdue view flags open/escalated/assigned tasks past SLA for the console. _shared/agentTasks.ts createAgentTask() applies per-category tier1_confidence_threshold from getAgentConfig: >=threshold tier1 auto_resolving, >=threshold/2 tier2 escalated, else tier3; SLA due computed from per-category SLA_HOURS policy const (security/support tightest); decideTier exported. npm run validate passes (0 errors). Documented in docs/AGENTIC_OS.md."
     },
     {
       "id": "AOS-CORE-005",
