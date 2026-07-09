@@ -157,6 +157,15 @@ Deno.serve(async (req) => {
     const { count: msEmailed } = await supabase.from("user_milestones").select("id", { count: "exact", head: true }).eq("emailed", true).gte("created_at", weekAgo);
     const msLine = `Milestones (7d) — ${msRecognized ?? 0} recognized, ${msEmailed ?? 0} emailed`;
 
+    // Subscription nurture (AOS-NURTURE-007).
+    const { data: subRows } = await supabase.from("nurture_sends").select("kind, status, activated_at").eq("agent_key", "subscription-nurture").gte("created_at", weekAgo).limit(5000);
+    const subN = (subRows ?? []) as { kind: string; status: string; activated_at: string | null }[];
+    const subSent = subN.filter((r) => r.status !== "skipped" && r.status !== "failed").length;
+    const subConv = subN.filter((r) => r.activated_at).length;
+    const subLine = subN.length
+      ? `Subscription nurture (7d) — ${subSent} sent, ${subConv} converted/recovered`
+      : `Subscription nurture (7d) — no sends`;
+
     // Re-engagement (AOS-NURTURE-005).
     const { data: reRows } = await supabase.from("nurture_sends").select("status, activated_at").eq("agent_key", "dormant-reengagement").gte("created_at", weekAgo).limit(5000);
     const re = (reRows ?? []) as { status: string; activated_at: string | null }[];
@@ -196,6 +205,7 @@ Deno.serve(async (req) => {
       wdLine,
       reLine,
       msLine,
+      subLine,
       wbLine,
     ].join("\n");
 

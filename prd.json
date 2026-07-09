@@ -4379,8 +4379,8 @@
         "npm run validate passes"
       ],
       "priority": 61,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Subscription lifecycle nurture (trial, dunning, upgrade). Migration 20260709000049 registers subscription-nurture agent (cron daily 13:00, $25/mo, provider stripe); added to agentPolicy allowlist (issue_credit/send_outreach/create_task). agent-subscription-nurture edge function (verify_jwt=false, requireAdminOrApiKey, runAgent) handles three touchpoints: (1) trial_ending — trialing subs within TRIAL_WINDOW_DAYS=3 of current_period_end get a keep-your-perks reminder; (2) dunning — past_due subs get a payment-update reminder on a ~3-day cadence aligned to Stripe smart retries (Stripe drives the actual charge; agent nudges), any courtesy credit would be approval-gated per AOS-CORE-007 never auto-applied; (3) upgrade_prompt — engaged free users (active lifecycle, no active/trialing paid sub) get a contextual upgrade nudge on a 30-day cadence. Reads only subscription status + tier — no schema tightening, so shipped iOS/Android clients keep the entitlement shapes they read. Every send consent-checked (messagingAllowed), frequency-capped (per-kind), and AOS-GOV-004 quality-gated; sent via sendNurtureEmail (unsubscribe-respecting). Conversion measured: a trial/upgrade send whose user later has an active paid subscription is stamped activated_at (converted); a dunning send whose sub recovers counts as recovered. Ops digest reports 7-day sent + converted/recovered. config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=64). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-PROSPECT-001",

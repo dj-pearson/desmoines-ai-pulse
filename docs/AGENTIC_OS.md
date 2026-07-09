@@ -329,6 +329,30 @@ means zero LLM budget; each review is recorded as an audited run via
 `agent-pr-review`. (Semantic checks like RLS/rate-limit tightening are left out
 deliberately — a false-positive block is worse than a miss.)
 
+## Subscription lifecycle nurture (AOS-NURTURE-007)
+
+`agent-subscription-nurture` (cron, daily) works the highest-leverage revenue
+touchpoints:
+
+- **Trial ending** — `trialing` subscriptions within 3 days of `current_period_end`
+  get a keep-your-perks reminder.
+- **Dunning** — `past_due` subscriptions get a payment-update reminder on a
+  ~3-day cadence **aligned to Stripe smart retries** (Stripe drives the actual
+  charge; the agent nudges). Any courtesy credit would be **approval-gated**
+  (AOS-CORE-007), never auto-applied.
+- **Upgrade prompts** — engaged free users (active lifecycle, no active/trialing
+  paid sub) get a contextual upgrade nudge aligned to the paywall model, on a
+  30-day cadence.
+
+It reads only subscription **status + tier** — no schema tightening, so shipped
+iOS/Android clients keep the entitlement shapes they read. Every send is
+consent-checked, frequency-capped, and quality-gated (AOS-GOV-004).
+**Conversion is measured**: a trial/upgrade send whose user later has an active
+paid subscription is stamped `activated_at` (converted); a dunning send whose
+subscription recovers counts as recovered. The digest reports 7-day
+sent + converted/recovered. The agent is allow-listed for `issue_credit` /
+`send_outreach` in `agentPolicy.ts`.
+
 ## Loyalty / milestone recognition (AOS-NURTURE-006)
 
 `agent-milestones` (cron, daily) recognizes engagement to build habit. For

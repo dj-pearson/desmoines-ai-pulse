@@ -298,3 +298,8 @@ verify_jwt = false
 # in-app + optional email. Auth via requireAdminOrApiKey.
 [functions.agent-milestones]
 verify_jwt = false
+
+# Subscription nurture (AOS-NURTURE-007). Cron; trial/dunning/upgrade touchpoints.
+# Auth via requireAdminOrApiKey.
+[functions.agent-subscription-nurture]
+verify_jwt = false
