@@ -3899,8 +3899,8 @@
         "npm run validate passes"
       ],
       "priority": 29,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): agent-fraud-monitor edge function (verify_jwt=false, requireAdminOrApiKey, runAgent-wrapped, every 6h). Correlates payments (status refunded/partially_refunded or refunded_amount>0 -> refund/chargeback risk per user), usage_events (per-user AI quota abuse >= 2000 units/24h), and user_subscriptions (active + non-trialing + no succeeded payment -> entitlement mismatch). Each finding opens a deduped tier-2 incident with evidence (createAgentTask dedupeKey per finding, audited via agent_audit_log); notifyOps summary. Takes NO account-affecting auto-action — all account impacts escalate to a human (WEB-SEC-002: never tightens shipped client limits below retry thresholds; tier-1 limited to safe throttling within existing infra, so nothing auto-throttles a paid account). Registered fraud-abuse-detector agent (live, security) + */6h cron. Backward-compat additive-only. npm run validate passes (0 errors). Documented in AGENTIC_OS.md."
     },
     {
       "id": "AOS-SEC-005",

@@ -280,6 +280,19 @@ through the `agent-control` edge function (admin-authenticated, audited) — tog
 writes `agent_registry.enabled`, run maps the agent to its edge function and
 fires it. A drill-in sheet shows that agent's run history with error details.
 
+## Fraud & abuse detector (AOS-SEC-004)
+
+The `fraud-abuse-detector` agent (`agent-fraud-monitor`, every 6h) correlates
+`payments` (refunds/chargebacks), `user_subscriptions` (entitlement), and
+`usage_events` (AI quota) over 24h to flag **refund/chargeback risk**, **per-user
+AI-quota abuse**, and **mismatched entitlements** (an active subscription with no
+successful payment). Each finding opens a deduped **tier-2 incident with
+evidence** for a human — the agent takes **no account-affecting action itself**.
+Per WEB-SEC-002 it never tightens shipped client rate limits below their retry
+thresholds; tier-1 auto-action is limited to safe throttling within the existing
+rate-limit infra, so account impacts (suspend, throttle a paid user, refund
+disputes) are always human-confirmed. Findings are audited via the task trail.
+
 ## Secret-leak scanning (AOS-SEC-003)
 
 Two layers, extending WEB-SEC-008 hygiene:

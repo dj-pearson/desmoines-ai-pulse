@@ -117,3 +117,8 @@ verify_jwt = false
 # here to open a tier-3 incident. Does its own auth via requireAdminOrApiKey.
 [functions.agent-secret-scan]
 verify_jwt = false
+
+# Fraud & abuse detector (AOS-SEC-004). Cron: correlates billing/subscription/AI
+# usage and opens incident tasks. Does its own auth via requireAdminOrApiKey.
+[functions.agent-fraud-monitor]
+verify_jwt = false
