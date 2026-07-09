@@ -12,6 +12,7 @@
     "agent-dep-scan",
     "agent-dep-update",
     "agent-dev-fix",
+    "agent-edge-metrics",
     "agent-error-triage",
     "agent-escalation-router",
     "agent-fraud-monitor",
@@ -46,7 +47,7 @@
     "social-daily-poster",
     "version-check"
   ],
-  "verifyJwtCount": 45,
+  "verifyJwtCount": 46,
   "cspPresent": true,
   "cspHash": "1625510d45515045",
   "corsHash": "b1683c94fbad28a6"

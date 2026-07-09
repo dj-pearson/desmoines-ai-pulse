@@ -208,3 +208,8 @@ verify_jwt = false
 # per-provider MTD spend vs budget, throttles/pauses. Auth via requireAdminOrApiKey.
 [functions.agent-api-watchdog]
 verify_jwt = false
+
+# Edge-function error-rate & cold-start monitor (AOS-MAINT-007). Cron-invoked;
+# aggregates edge_function_metrics + ledger for regressions. Auth via requireAdminOrApiKey.
+[functions.agent-edge-metrics]
+verify_jwt = false

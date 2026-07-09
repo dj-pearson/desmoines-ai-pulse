@@ -4154,8 +4154,8 @@
         "npm run validate passes"
       ],
       "priority": 46,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Edge-function error-rate & cold-start monitor. New _shared/instrument.ts wrapper — serve(instrument('fn', handler)) — times each invocation, derives HTTP status class (2xx/3xx/4xx/5xx), records a sampled row to new edge_function_metrics table (fire-and-forget, never alters response, never throws, skips OPTIONS; EDGE_METRICS_SAMPLE_RATE caps hot functions). Adopted in geocode-location as the reference (verified wrapper opens/closes correctly). agent-edge-metrics edge function (cron every 6h, verify_jwt=false, requireAdminOrApiKey, runAgent-wrapped so summaries land in the ledger) aggregates current-24h vs prior-24h baseline from BOTH edge_function_metrics (instrumented HTTP: 5xx vs 4xx rate, p95 latency, max=cold-start proxy) AND automation_job_runs (internal agent/cron functions: failure rate + duration p95). Opens deduped tier-2 tasks (edge-regression:<fn>) only on SERVER-side regressions — 5xx/failure rate >=10% with >=20 samples and not below baseline, or p95 >=2s and >=1.5x baseline; 4xx recorded as context but never alerts (user-caused, keeps alerts actionable). Digest surfaces noisiest functions by 5xx/24h. New edge_function_metrics table (additive, RLS admin-read). Migration 20260709000034 (table + agent_registry + pg_cron); config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=46). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-CS-001",

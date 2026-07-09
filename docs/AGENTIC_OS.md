@@ -329,6 +329,31 @@ means zero LLM budget; each review is recorded as an audited run via
 `agent-pr-review`. (Semantic checks like RLS/rate-limit tightening are left out
 deliberately — a false-positive block is worse than a miss.)
 
+## Edge-function error-rate & cold-start monitor (AOS-MAINT-007)
+
+73 edge functions are otherwise unobservable. `_shared/instrument.ts` provides
+a wrapper — `serve(instrument("fn-name", handler))` — that times each
+invocation, derives the HTTP status class (2xx/3xx/**4xx**/**5xx**), and records
+a sampled row to `edge_function_metrics` (fire-and-forget, never alters the
+response, never throws; OPTIONS preflights skipped; `EDGE_METRICS_SAMPLE_RATE`
+caps hot functions). `geocode-location` adopts it as the reference; new/hot
+functions opt in the same way.
+
+`agent-edge-metrics` (cron, every 6h) aggregates two 24h windows (current vs the
+prior-24h baseline) from **both** sources:
+
+- **`edge_function_metrics`** — instrumented HTTP functions: 5xx (server) vs 4xx
+  (user) rate, p95 latency, and max latency (a cold-start proxy).
+- **`automation_job_runs`** (the ledger) — internal agent/cron functions:
+  failure rate and run-duration p95.
+
+It opens a deduped **tier-2 task** per function that regresses on a **server**
+signal — 5xx/failure rate ≥ 10% (with ≥ 20 samples, and not below baseline) or
+p95 latency ≥ 2s and ≥ 1.5× baseline. **4xx is recorded as context but never
+alerts** — user-caused errors aren't a server bug, so keeping them out of the
+alert path keeps alerts actionable. The noisiest functions (by 5xx count) are
+surfaced in the ops digest.
+
 ## External-API cost & quota watchdog (AOS-MAINT-006)
 
 `agent-api-watchdog` (cron, hourly) keeps external-API spend under control per

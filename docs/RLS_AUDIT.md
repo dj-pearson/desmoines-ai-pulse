@@ -7,9 +7,9 @@
 
 | Metric | Count |
 |---|---|
-| Migrations scanned | 290 |
-| Distinct policies (current) | 535 |
-| Tables with RLS enabled | 245 |
+| Migrations scanned | 291 |
+| Distinct policies (current) | 536 |
+| Tables with RLS enabled | 246 |
 | Tables with policies but no ENABLE RLS seen | 5 |
 | Permissive write policies USING/CHECK(true) | 30 |
 | Write policies granted to `anon` | 4 |
@@ -285,6 +285,7 @@
 | discussion_threads | Anyone can view threads in public forums | SELECT | public | EXISTS ( SELECT 1 FROM public.discussion_forums WHERE id = forum_id AND is_public = true ) | — |
 | discussion_threads | Authenticated users can create threads | INSERT | public | — | auth.uid() IS NOT NULL AND auth.uid() = created_by |
 | discussion_threads | Thread creators can update their threads | UPDATE | public | auth.uid() = created_by | — |
+| edge_function_metrics | edge_metrics_admin_read | SELECT | authenticated | EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')) | — |
 | error_events | error_events_admin_read | SELECT | authenticated | EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')) | — |
 | event_archive | Admins can read event_archive | SELECT | authenticated | public.is_admin() | — |
 | event_attendance | Users can manage their own attendance | ALL | public | auth.uid() = user_id | — |

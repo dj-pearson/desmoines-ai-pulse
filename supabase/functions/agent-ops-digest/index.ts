@@ -93,6 +93,22 @@ Deno.serve(async (req) => {
       ? `Data quality — fill rate: ${[...latestByTable].map(([t, r]) => `${t} ${Math.round(r * 100)}%`).join(", ")}`
       : `Data quality — no snapshot yet`;
 
+    // Noisiest edge functions by 5xx count over 24h (AOS-MAINT-007).
+    const { data: edgeErrs } = await supabase
+      .from("edge_function_metrics")
+      .select("function_name")
+      .eq("status_class", "5xx")
+      .gte("created_at", dayAgo)
+      .limit(5000);
+    const noisyCounts = new Map<string, number>();
+    for (const e of (edgeErrs ?? []) as { function_name: string }[]) {
+      noisyCounts.set(e.function_name, (noisyCounts.get(e.function_name) ?? 0) + 1);
+    }
+    const noisiest = [...noisyCounts].sort((a, b) => b[1] - a[1]).slice(0, 3);
+    const edgeLine = noisiest.length
+      ? `Edge functions — noisiest (5xx/24h): ${noisiest.map(([f, c]) => `${f} ${c}`).join(", ")}`
+      : `Edge functions — no 5xx in 24h`;
+
     const openHuman = openTier2 + openTier3;
     const body = [
       `Tier-1 auto-resolutions (24h): ${autoResolved}`,
@@ -108,6 +124,7 @@ Deno.serve(async (req) => {
       backupLine,
       dqLine,
       `Link health — dead links: ${deadLinks}`,
+      edgeLine,
     ].join("\n");
 
     // Date-keyed dedupe so a re-run same day coalesces instead of double-sending.
