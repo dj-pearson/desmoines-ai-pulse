@@ -14,6 +14,7 @@
     "agent-runbook",
     "agent-secret-scan",
     "agent-security-monitor",
+    "agent-test-gen",
     "ai-crawler",
     "analyze-competitor",
     "bulk-enhance-events",
@@ -36,7 +37,7 @@
     "social-daily-poster",
     "version-check"
   ],
-  "verifyJwtCount": 35,
+  "verifyJwtCount": 36,
   "cspPresent": true,
   "cspHash": "1625510d45515045",
   "corsHash": "b1683c94fbad28a6"

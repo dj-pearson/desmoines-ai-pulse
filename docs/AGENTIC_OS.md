@@ -280,6 +280,18 @@ through the `agent-control` edge function (admin-authenticated, audited) — tog
 writes `agent_registry.enabled`, run maps the agent to its edge function and
 fires it. A drill-in sheet shows that agent's run history with error details.
 
+## Test-coverage agent (AOS-DEV-004)
+
+The `test-coverage-agent` (`aos-test-gen.yml`, manual dispatch) writes tests for
+high-value uncovered paths. `agent-test-gen` (`mode:target`) picks the next area
+— **error-cluster hotspots first** (AOS-DEV-001), then a curated critical-path
+rotation (auth, subscription/entitlement, edge-contract decode) — skipping areas
+with an already-open test task. The workflow drives Claude Code with
+`scripts/ralph/AOS-TEST.md` (which mandates **deterministic, no-live-network**
+tests), then **runs the generated tests** (type-check + Playwright); a PR to
+develop is opened **only when they pass**. A human reviews and merges — nothing
+auto-merges. `mode:record` tracks the delivered test / logs a failure.
+
 ## Dependency-update agent (AOS-DEV-003)
 
 The `dependency-update-agent` (`dependency-update.yml`, weekly) runs

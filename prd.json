@@ -4004,8 +4004,8 @@
         "npm run validate passes"
       ],
       "priority": 36,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): agent-test-gen edge function (verify_jwt=false, requireAdminOrApiKey): mode=target returns next uncovered area — error-cluster hotspots (open error-triage tasks component) prioritized, then curated CRITICAL_PATHS (auth-flow, subscription-entitlement, edge-contract-decode, trip-planner, favorites-ratings), skipping areas with an open test:<area> task; mode=record (runAgent-wrapped) tracks delivered test as resolved dev task w/ prUrl or logs failure (audited). .github/workflows/aos-test-gen.yml (workflow_dispatch = safe rollout): picks target, runs Claude Code with scripts/ralph/AOS-TEST.md (mandates deterministic, no-live-network, add-tests-only, must-pass), runs type-check + playwright test, opens a PR to develop ONLY when green — human review/merge required, never auto-merges/pushes protected. Registered test-coverage-agent (live, dev, budget 0). Claude Code run needs ANTHROPIC_API_KEY in CI (gated). npm run validate passes (0 errors). Documented in AGENTIC_OS.md."
     },
     {
       "id": "AOS-DEV-005",

@@ -158,3 +158,8 @@ verify_jwt = false
 # packages and to escalate majors. Does its own auth via requireAdminOrApiKey.
 [functions.agent-dep-update]
 verify_jwt = false
+
+# Test-coverage agent coordination (AOS-DEV-004). CI calls this to pick test
+# targets and record outcomes. Does its own auth via requireAdminOrApiKey.
+[functions.agent-test-gen]
+verify_jwt = false
