@@ -173,3 +173,8 @@ verify_jwt = false
 # audited run record. Does its own auth via requireAdminOrApiKey.
 [functions.agent-pr-review]
 verify_jwt = false
+
+# Release-notes draft record (AOS-DEV-007). CI posts the changelog-draft summary
+# here for an audited run record. Does its own auth via requireAdminOrApiKey.
+[functions.agent-release-notes]
+verify_jwt = false

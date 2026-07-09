@@ -329,6 +329,31 @@ means zero LLM budget; each review is recorded as an audited run via
 `agent-pr-review`. (Semantic checks like RLS/rate-limit tightening are left out
 deliberately — a false-positive block is worse than a miss.)
 
+## Release-notes / changelog generator (AOS-DEV-007)
+
+`.github/workflows/release-notes.yml` (manual dispatch, or on a `release/**`
+push) turns the commit history since the last `v*` tag into a **draft** changelog
+entry. `scripts/gen-release-notes.mjs` reads `git log <last-tag>..HEAD`
+**deterministically** (no LLM budget) and:
+
+- **Categorizes** each conventional commit into sections (feat / fix / perf /
+  refactor / docs / test / chore; anything else → _Other_).
+- **Distinguishes surfaces** by the files each commit touched — Web
+  (`src/`, `supabase/`, `public/`, root config), iOS (`ios/`, `*.swift`), Android
+  (`android/`, `*.kt/*.gradle`) — so a release note says which client each change
+  affects.
+- **Flags backward-compat-sensitive changes** for the release checklist per
+  CLAUDE.md: destructive statements in a migration (DROP/RENAME COLUMN/TABLE/TYPE,
+  SET NOT NULL, DROP DEFAULT) and **modified** edge-function contracts (newly
+  *added* functions are additive-safe and skipped). Each becomes an unchecked
+  checklist item — surfaced, never auto-blocked.
+- **Links merged PRs** (`(#123)` squash subjects + merge commits).
+
+The workflow prepends the entry to `CHANGELOG.md` and opens a **DRAFT PR to
+develop** — a human edits and publishes; nothing is auto-released. The generator
+**fails open** (a changelog hiccup never blocks CI), and each run is recorded as a
+budgeted/audited run via `agent-release-notes`.
+
 ## Autonomous fix agent (AOS-DEV-002)
 
 The `dev-fix-agent` formalizes the Ralph loop for **tier-1 dev tasks** (from the

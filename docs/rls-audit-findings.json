@@ -1,13 +1,11 @@
 {
   "counts": {
-    "policies": 526,
+    "policies": 528,
     "permissiveWrites": 30,
     "anonWrites": 4,
     "missingRls": 5,
-    "unpinnedDefiners": 50
-  },
-  "findingKeys": [
-    "anon_write:consent_records:Anonymous consent inserts with no user binding",
+    "unpinnedDefiners": 50Wrote /home/user/desmoines-ai-pulse/docs/rls-audit-findings.json (89 finding keys)
+with no user binding",
     "anon_write:user_roles:user_roles_deny_client_delete",
     "anon_write:user_roles:user_roles_deny_client_insert",
     "anon_write:user_roles:user_roles_deny_client_update",

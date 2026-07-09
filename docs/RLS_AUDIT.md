@@ -7,9 +7,9 @@
 
 | Metric | Count |
 |---|---|
-| Migrations scanned | 276 |
-| Distinct policies (current) | 526 |
-| Tables with RLS enabled | 236 |
+| Migrations scanned | 284 |
+| Distinct policies (current) | 528 |
+| Tables with RLS enabled | 238 |
 | Tables with policies but no ENABLE RLS seen | 5 |
 | Permissive write policies USING/CHECK(true) | 30 |
 | Write policies granted to `anon` | 4 |
@@ -211,6 +211,7 @@
 | campaign_notifications | Service role manages notifications | ALL | public | auth.role() = 'service_role' | — |
 | campaign_notifications | Users can read own notifications | SELECT | public | auth.uid() = recipient_user_id | — |
 | campaign_notifications | Users can update own notifications | UPDATE | public | auth.uid() = recipient_user_id | auth.uid() = recipient_user_id |
+| ci_runs | ci_runs_admin_read | SELECT | authenticated | EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')) | — |
 | community_challenges | Admins can manage challenges | ALL | public | EXISTS ( SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin') ) | — |
 | community_challenges | Anyone can view active challenges | SELECT | public | is_active = true | — |
 | competitor_content | Admin can manage competitor content | ALL | public | user_has_role_or_higher(auth.uid(), 'admin') | — |
@@ -280,6 +281,7 @@
 | discussion_threads | Anyone can view threads in public forums | SELECT | public | EXISTS ( SELECT 1 FROM public.discussion_forums WHERE id = forum_id AND is_public = true ) | — |
 | discussion_threads | Authenticated users can create threads | INSERT | public | — | auth.uid() IS NOT NULL AND auth.uid() = created_by |
 | discussion_threads | Thread creators can update their threads | UPDATE | public | auth.uid() = created_by | — |
+| error_events | error_events_admin_read | SELECT | authenticated | EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')) | — |
 | event_archive | Admins can read event_archive | SELECT | authenticated | public.is_admin() | — |
 | event_attendance | Users can manage their own attendance | ALL | public | auth.uid() = user_id | — |
 | event_attendance | Users can view all attendance | SELECT | public | true | — |

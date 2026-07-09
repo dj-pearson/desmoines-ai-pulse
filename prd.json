@@ -4049,8 +4049,8 @@
         "npm run validate passes"
       ],
       "priority": 39,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Deterministic release-notes/changelog generator. scripts/gen-release-notes.mjs reads `git log <last-tag>..HEAD` (no LLM), categorizes conventional commits into feat/fix/perf/refactor/docs/test/chore (+Other), distinguishes Web/iOS/Android surfaces by touched file paths, links merged PRs ((#n) + merge commits), and flags backward-compat-sensitive changes for the release checklist per CLAUDE.md — destructive migration statements (DROP/RENAME COLUMN/TABLE/TYPE, SET NOT NULL, DROP DEFAULT) and *modified* edge-function contracts (newly added functions skipped as additive-safe). Fails open so a changelog hiccup never blocks CI. .github/workflows/release-notes.yml (workflow_dispatch or release/** push) prepends to CHANGELOG.md and opens a DRAFT PR to develop — human edits/publishes, nothing auto-released. agent-release-notes edge function records each run (budgeted/audited via runAgent+writeAgentAudit); migration 20260709000027 registers release-notes-agent; config.toml verify_jwt=false; docs in AGENTIC_OS.md. Verified generator output against real repo history (correct categorization, surface tagging, and single compat-flag for the one modified edge fn). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-MAINT-001",
