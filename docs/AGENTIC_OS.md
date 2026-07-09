@@ -280,6 +280,23 @@ through the `agent-control` edge function (admin-authenticated, audited) — tog
 writes `agent_registry.enabled`, run maps the agent to its edge function and
 fires it. A drill-in sheet shows that agent's run history with error details.
 
+## Autonomous fix agent (AOS-DEV-002)
+
+The `dev-fix-agent` formalizes the Ralph loop for **tier-1 dev tasks** (from the
+error pipeline and dependency scanner). The `aos-fix-agent.yml` workflow
+(manual dispatch — a safe-rollout gate) claims a task via `agent-dev-fix`
+(`mode:claim`), cuts a `claude/aos-fix-<taskid>` branch **from develop**, runs a
+scoped fix (Claude Code with `scripts/ralph/AOS-FIX.md`), runs
+`npm run type-check && lint`, and — only on green — opens a **draft PR to
+develop** for a human to merge. It never commits to `main`/`develop` and never
+auto-merges.
+
+Each attempt is recorded via `agent-dev-fix` (`mode:record`, budgeted + audited
+through the ledger): a success resolves the task with the PR link; a failure
+keeps it open with the failure logged, and after 3 failed attempts it
+**escalates to tier-2**. Scope guardrails (blast-radius only, branching rules,
+abort-if-uncertain) live in `AOS-FIX.md`.
+
 ## Production-error pipeline (AOS-DEV-001)
 
 Raw error noise becomes actionable dev tasks. `@/lib/errorHandler` (and edge

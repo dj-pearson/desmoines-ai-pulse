@@ -148,3 +148,8 @@ verify_jwt = false
 # dev tasks. Does its own auth via requireAdminOrApiKey.
 [functions.agent-error-triage]
 verify_jwt = false
+
+# Autonomous fix agent claim/record (AOS-DEV-002). CI calls this to claim tier-1
+# dev tasks and record attempts. Does its own auth via requireAdminOrApiKey.
+[functions.agent-dev-fix]
+verify_jwt = false

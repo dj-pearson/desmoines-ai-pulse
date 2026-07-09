@@ -3974,8 +3974,8 @@
         "npm run validate passes"
       ],
       "priority": 34,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE (2026-07-09): formalized the Ralph loop (scripts/ralph/ralph.mjs) as an autonomous fix agent. agent-dev-fix edge function (verify_jwt=false, requireAdminOrApiKey): mode=claim returns the next open tier-1 dev task (category=dev, tier=1, under MAX_ATTEMPTS=3), marks it assigned + increments payload.fixAttempts (audited); mode=record (runAgent-wrapped = budgeted+audited ledger) resolves on success with prUrl, or on failure keeps the task open with lastFailureLog and escalates to tier-2 after 3 attempts (notifyOps). .github/workflows/aos-fix-agent.yml (workflow_dispatch only = safe rollout): claims a task, checks out claude/aos-fix-<taskid> from develop, installs Claude Code, runs the scoped fix via scripts/ralph/AOS-FIX.md, runs npm run type-check && lint, and ONLY on green opens a DRAFT PR to develop (gh pr create --draft) — never commits to main/develop, never auto-merges; records outcome. scripts/ralph/AOS-FIX.md instructions enforce blast-radius scope + branching rules + abort-if-uncertain. Registered dev-fix-agent (live, dev, budget 0). Actual Claude Code fix run needs ANTHROPIC_API_KEY in CI (gated). npm run validate passes (0 errors). Documented in AGENTIC_OS.md."
     },
     {
       "id": "AOS-DEV-003",
