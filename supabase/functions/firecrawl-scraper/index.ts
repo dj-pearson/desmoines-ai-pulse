@@ -1144,44 +1144,65 @@ Return empty array [] if no competitive content found.`
             if (existingItems.length > 0) {
               const existingItem = existingItems[0];
 
-              // For events: Update source_url if we have a better one (external URL replacing catchdesmoines)
-              if (category === 'events' && transformedData.source_url) {
-                const oldUrl = existingItem.source_url || '';
-                const newUrl = transformedData.source_url || '';
+              // For events: heal a missing image and/or upgrade to a better
+              // source_url on the existing row, folded into a single UPDATE.
+              // Non-events categories fall through to the plain duplicate log.
+              if (category === 'events') {
+                const updates: Record<string, unknown> = {};
 
-                // Skip if URLs are identical - no update needed
-                if (oldUrl === newUrl) {
-                  console.log(`⏭️ Duplicate found (same URL): ${transformedData.title}`);
-                  continue;
+                // Heal a missing image (WEB-AUTO-016): the existing row has no
+                // image but this re-scrape carries one. Route it through the same
+                // SSRF/dimension-guarded fetchAndStoreImage path as ingest, keyed
+                // to the existing row id. Never overwrite a non-empty image_url
+                // (respect human-entered / earlier data). Idempotent: once healed
+                // the row has an image, so subsequent duplicate hits skip this and
+                // fetchAndStoreImage itself no-ops on an already-stored media asset.
+                const existingHasImage = !!(existingItem.image_url && String(existingItem.image_url).trim());
+                if (!existingHasImage && item.image_url && CONTENT_TYPE_MAP[category]) {
+                  const healedImageUrl = await fetchAndStoreImage(
+                    supabase,
+                    item.image_url,
+                    category,
+                    existingItem.id,
+                  );
+                  if (healedImageUrl) {
+                    updates.image_url = healedImageUrl;
+                  }
                 }
 
-                // Only update if:
+                // Upgrade source_url only when the new one is strictly better:
                 // 1. Old URL is a catchdesmoines list page (/events/) and new is a detail page
                 // 2. Old URL contains catchdesmoines.com and new is external
-                const oldIsCatchDesMoines = oldUrl.includes('catchdesmoines.com');
-                const oldIsListPage = oldUrl.includes('/events/') || oldUrl.includes('/events?');
-                const newIsDetailPage = newUrl.includes('/event/') && !newUrl.includes('/events/');
-                const newIsExternal = newUrl && !newUrl.includes('catchdesmoines.com');
+                const oldUrl = existingItem.source_url || '';
+                const newUrl = transformedData.source_url || '';
+                if (newUrl && oldUrl !== newUrl) {
+                  const oldIsCatchDesMoines = oldUrl.includes('catchdesmoines.com');
+                  const oldIsListPage = oldUrl.includes('/events/') || oldUrl.includes('/events?');
+                  const newIsDetailPage = newUrl.includes('/event/') && !newUrl.includes('/events/');
+                  const newIsExternal = newUrl && !newUrl.includes('catchdesmoines.com');
+                  if ((oldIsListPage && newIsDetailPage) || (oldIsCatchDesMoines && newIsExternal)) {
+                    updates.source_url = newUrl;
+                  }
+                }
 
-                if ((oldIsListPage && newIsDetailPage) || (oldIsCatchDesMoines && newIsExternal)) {
-                  console.log(`🔄 Updating source_url for: ${transformedData.title}`);
-                  console.log(`   Old: ${oldUrl}`);
-                  console.log(`   New: ${newUrl}`);
-
+                if (Object.keys(updates).length > 0) {
+                  updates.updated_at = new Date().toISOString();
                   const { error: updateError } = await supabase
                     .from(tableName)
-                    .update({
-                      source_url: newUrl,
-                      updated_at: new Date().toISOString()
-                    })
+                    .update(updates)
                     .eq('id', existingItem.id);
 
                   if (updateError) {
-                    console.error(`❌ Error updating source_url:`, updateError);
+                    console.error(`❌ Error updating duplicate event:`, updateError);
                     errors.push(updateError);
                   } else {
                     updatedCount++;
-                    console.log(`✅ Updated source_url for: ${transformedData.title}`);
+                    if (updates.image_url) {
+                      console.log(`🖼️ Healed missing image for: ${transformedData.title}`);
+                    }
+                    if (updates.source_url) {
+                      console.log(`🔄 Updated source_url for: ${transformedData.title} (${oldUrl} → ${newUrl})`);
+                    }
                   }
                 } else {
                   console.log(`⚠️ Duplicate found (no update needed): ${transformedData.title}`);

@@ -2878,8 +2878,8 @@
         "npm run validate passes"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Evidence: firecrawl-scraper/index.ts:1147-1186 — the events duplicate branch updates ONLY source_url (external URL replacing a catchdesmoines URL), and on any other duplicate logs 'Duplicate found (no update needed)' and touches nothing. Result: the 253 existing imageless rows stay imageless no matter how often the scrapers re-run. DEPENDS ON WEB-AUTO-015 (the item must already carry image_url). With both landed, the regularly scheduled scrapes drain most of the backlog automatically within a cycle or two — no manual backfill campaign required."
+      "passes": true,
+      "notes": "Evidence: firecrawl-scraper/index.ts:1147-1186 — the events duplicate branch updates ONLY source_url (external URL replacing a catchdesmoines URL), and on any other duplicate logs 'Duplicate found (no update needed)' and touches nothing. Result: the 253 existing imageless rows stay imageless no matter how often the scrapers re-run. DEPENDS ON WEB-AUTO-015 (the item must already carry image_url). With both landed, the regularly scheduled scrapes drain most of the backlog automatically within a cycle or two — no manual backfill campaign required. | DONE (2026-07-09): events duplicate branch rewritten to accumulate updates into a single UPDATE. When the existing row image_url is NULL/empty and the re-scrape carries an image, heals via the same SSRF/dimension-guarded fetchAndStoreImage path (keyed to existing row id); never overwrites a non-empty image_url. Removed the early same-URL continue so stable-source_url re-scrapes can now heal. Folded image heal + source_url upgrade into one round-trip; logs 🖼️ Healed missing image. Idempotent (existingHasImage guard + fetchAndStoreImage media_asset no-op). Additive UPDATE only. npm run validate passes (0 errors)."
     },
     {
       "id": "WEB-AUTO-017",
