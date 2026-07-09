@@ -329,6 +329,34 @@ means zero LLM budget; each review is recorded as an audited run via
 `agent-pr-review`. (Semantic checks like RLS/rate-limit tightening are left out
 deliberately — a false-positive block is worse than a miss.)
 
+## AI first-responder (AOS-CS-002)
+
+`agent-support-responder` (cron every 10 min + on-demand per ticket) answers
+common support tickets and knows when to hand off. Per ticket whose latest
+message is from the **user**:
+
+1. **Anti-ping-pong** — it only engages when the user spoke last; if the agent
+   already replied and is waiting, it skips. After `MAX_AGENT_REPLIES` (2)
+   rounds without resolution it hands the ticket to a human rather than loop.
+2. **Forced escalation** — a **human request** (regex on "talk to a person",
+   etc.) or a **sensitive topic** (billing / account / legal, by keyword or
+   category) always escalates and never auto-sends.
+3. **Grounded draft** — retrieves KB passages (`retrieveKb`, AOS-CS-003) and
+   drafts an answer **using only those passages**, citing sources. If the model
+   reports it can't answer from the KB, or top similarity is low, that's low
+   confidence → escalate.
+4. **Quality gate** — before any auto-send, the draft passes the **AOS-GOV-004**
+   quality/safety judge (`scoreOutput`, `support` category). A failing score
+   escalates with the draft attached.
+5. **Send vs escalate** — high confidence (top similarity ≥ 0.75 + model can
+   answer) **and** gate pass → **auto-send** (tier-1): the reply (with sources)
+   is posted to the thread and the ticket moves to `awaiting_user`. Otherwise →
+   **tier-2 escalation** with the suggested draft stored as an *internal*
+   (unsent) agent message and a routing task carrying the reason + sources.
+
+Every auto-reply and escalation is written to the audit trail. Cost is
+attributed to the `support-responder` agent budget ($30/mo).
+
 ## Support knowledge base + retrieval (AOS-CS-003)
 
 Grounded answers need grounded sources. `support_kb` stores docs/FAQ/policy

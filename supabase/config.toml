@@ -228,3 +228,8 @@ verify_jwt = false
 # Auth via requireAdminOrApiKey.
 [functions.support-kb-search]
 verify_jwt = false
+
+# AI support first-responder (AOS-CS-002). Cron + on-demand; drafts grounded
+# answers, auto-sends on high confidence, escalates otherwise. Auth via requireAdminOrApiKey.
+[functions.agent-support-responder]
+verify_jwt = false

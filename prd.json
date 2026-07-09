@@ -4184,8 +4184,8 @@
         "npm run validate passes"
       ],
       "priority": 48,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "AI first-responder agent. agent-support-responder (cron every 10m + on-demand per ticketId, verify_jwt=false, requireAdminOrApiKey, runAgent-wrapped with $30/mo budget, provider anthropic) processes tickets whose latest message is from the user. Anti-ping-pong: only engages when user spoke last (skips if agent replied and is awaiting); after MAX_AGENT_REPLIES=2 rounds hands to a human. Forced escalation: human-request (HUMAN_RE) or sensitive topic (billing/account/legal via SENSITIVE_RE keywords or ticket category) always escalate, never auto-send — satisfies 'user can always request a human'. Retrieves grounded KB passages via retrieveKb (CS-003) and drafts an answer with Claude (getAIConfig default_model) USING ONLY those passages, returning JSON {answer, canAnswer, sources}; if canAnswer=false or top similarity <0.75 → low confidence → escalate. Before any auto-send runs the AOS-GOV-004 quality/safety gate (scoreOutput, support category); failing score escalates with draft attached. High confidence + gate pass + not sensitive → auto-send tier-1: posts reply with sources to support_messages, sets ticket awaiting_user, audits support_auto_reply. Otherwise → tier-2 escalation: stores suggested draft as internal unsent agent message (metadata.draft), creates deduped support-ticket:<id> routing task with reason+sources+suggestedDraft, sets ticket escalated, audits support_escalation. Every send/escalation audited via writeAgentAudit; cost attributed to budget. No new tables (uses support_tickets/messages + agent_tasks + agent_audit_log). Migration 20260709000037 (agent_registry + pg_cron); config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=50). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-CS-003",
