@@ -329,6 +329,28 @@ means zero LLM budget; each review is recorded as an audited run via
 `agent-pr-review`. (Semantic checks like RLS/rate-limit tightening are left out
 deliberately — a false-positive block is worse than a miss.)
 
+## Backup verification agent (AOS-MAINT-003)
+
+`agent-backup-verify` (cron, daily 06:30 UTC) answers "are backups real and
+restorable?" with two read-only checks recorded to `backup_checks` and the
+ledger:
+
+1. **Recency** — when a Supabase Management API token is configured
+   (`SUPABASE_ACCESS_TOKEN` + project ref, derived from `SUPABASE_URL`), it
+   fetches the physical backup list and computes the age of the most recent
+   backup. A backup older than `STALE_HOURS` (26h — daily cadence + slack) or a
+   missing backup is a failure. Without a token, recency is *unverifiable* and
+   recorded as such — it does **not** page (the spot check still runs).
+2. **Restore-sanity spot check** — row counts of core content tables
+   (`events`, `restaurants`, `attractions`, `profiles`). A core table returning
+   0 rows is a restore-sanity failure (an unexpectedly empty table is exactly the
+   signal a bad restore/backup would give).
+
+A stale/missing backup or a failed spot check opens a **tier-3 incident**
+(idempotent) and notifies ops immediately; a subsequent passing check
+**auto-resolves** it. Backup status (last check OK/FAILED, method, age) is
+surfaced in the ops digest.
+
 ## Database health agent (AOS-MAINT-002)
 
 `agent-db-health` (cron, daily 07:00 UTC) calls the **admin-only, read-only**

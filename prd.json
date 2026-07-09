@@ -4094,8 +4094,8 @@
         "npm run validate passes"
       ],
       "priority": 42,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Backup verification agent. agent-backup-verify (cron daily 06:30, verify_jwt=false, requireAdminOrApiKey, runAgent-wrapped so each check lands in the ledger) does two read-only checks: (1) backup recency via the Supabase Management API when SUPABASE_ACCESS_TOKEN + project ref are configured (ref derived from SUPABASE_URL) — fetches the backup list, computes age of the latest, and treats >26h (STALE_HOURS) or missing as a failure; without a token, recency is recorded as unverifiable and does NOT page; (2) restore-sanity spot check — row counts of core tables (events/restaurants/attractions/profiles), where a 0-row core table is a restore-sanity failure. Results recorded to new backup_checks table (additive; RLS admin-read, service-role writes). Stale/missing backup or failed spot check opens a tier-3 incident (idempotent via backup-verification-failed dedupe key) + immediate ops notify; a subsequent passing check auto-resolves the incident. Backup status (last check OK/FAILED, method, age) surfaced in the ops digest. Migration 20260709000030 (table + agent_registry + pg_cron); config.toml entry; AGENTIC_OS.md docs; regenerated security baselines (verify_jwt=42). npm run validate passes (0 errors)."
     },
     {
       "id": "AOS-MAINT-004",

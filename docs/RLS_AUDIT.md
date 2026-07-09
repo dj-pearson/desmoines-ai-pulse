@@ -7,9 +7,9 @@
 
 | Metric | Count |
 |---|---|
-| Migrations scanned | 286 |
-| Distinct policies (current) | 529 |
-| Tables with RLS enabled | 239 |
+| Migrations scanned | 287 |
+| Distinct policies (current) | 530 |
+| Tables with RLS enabled | 240 |
 | Tables with policies but no ENABLE RLS seen | 5 |
 | Permissive write policies USING/CHECK(true) | 30 |
 | Write policies granted to `anon` | 4 |
@@ -188,6 +188,7 @@
 | author_profiles | Users can update their own author profile | UPDATE | authenticated | user_id = auth.uid() | user_id = auth.uid() |
 | auto_approval_rules | Admin full access to auto_approval_rules | ALL | public | is_admin() | — |
 | automation_job_runs | automation_job_runs_admin_read | SELECT | authenticated | public.is_admin() | — |
+| backup_checks | backup_checks_admin_read | SELECT | authenticated | EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')) | — |
 | badges | Anyone can view active badges | SELECT | public | is_active = true | — |
 | blocked_email_domains | Admins can delete blocked email domains | DELETE | authenticated | EXISTS ( SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin') ) | — |
 | blocked_email_domains | Admins can insert blocked email domains | INSERT | authenticated | — | EXISTS ( SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin') ) |

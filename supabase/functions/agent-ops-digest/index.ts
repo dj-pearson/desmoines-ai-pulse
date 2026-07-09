@@ -65,6 +65,18 @@ Deno.serve(async (req) => {
       count(supabase, "agent_tasks", (q) => q.eq("agent_key", "uptime-monitor").in("status", ["open", "escalated", "assigned"])),
     ]);
 
+    // Backup status: the most recent verification (AOS-MAINT-003).
+    const { data: lastBackup } = await supabase
+      .from("backup_checks")
+      .select("ok, method, backup_age_hours, checked_at")
+      .order("checked_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const backupLine = lastBackup
+      ? `Backups — last check ${lastBackup.ok ? "OK" : "FAILED"} (${lastBackup.method}` +
+        `${lastBackup.backup_age_hours != null ? `, ${lastBackup.backup_age_hours}h old` : ""}) at ${String(lastBackup.checked_at).slice(0, 16)}`
+      : `Backups — no verification recorded yet`;
+
     const openHuman = openTier2 + openTier3;
     const body = [
       `Tier-1 auto-resolutions (24h): ${autoResolved}`,
@@ -77,6 +89,7 @@ Deno.serve(async (req) => {
       `CI health — open flaky/slow tasks: ${openFlaky}`,
       `DB health — open suggestions (slow query/index/bloat): ${openDbHealth}`,
       `Uptime — open outage incidents: ${openOutages}`,
+      backupLine,
     ].join("\n");
 
     // Date-keyed dedupe so a re-run same day coalesces instead of double-sending.

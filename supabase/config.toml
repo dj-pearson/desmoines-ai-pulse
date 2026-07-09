@@ -188,3 +188,8 @@ verify_jwt = false
 # the admin-only db_health_report RPC. Auth via requireAdminOrApiKey.
 [functions.agent-db-health]
 verify_jwt = false
+
+# Backup verification agent (AOS-MAINT-003). Cron-invoked; checks backup recency
+# + row-count restore-sanity (read-only). Auth via requireAdminOrApiKey.
+[functions.agent-backup-verify]
+verify_jwt = false
