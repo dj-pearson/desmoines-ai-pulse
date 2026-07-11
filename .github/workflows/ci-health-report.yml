@@ -7,7 +7,7 @@ name: CI Health Report
 
 on:
   workflow_run:
-    workflows: ["PR Checks", "E2E Tests", "Android CI", "iOS CI"]
+    workflows: ["PR Checks", "E2E (critical suites)", "Android CI", "iOS CI"]
     types: [completed]
 
 jobs:

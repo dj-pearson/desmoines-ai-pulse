@@ -5134,8 +5134,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: api-events/index.improved.ts, api-restaurants/index.improved.ts (Supabase deploys only index.ts)."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: api-events/index.improved.ts, api-restaurants/index.improved.ts (Supabase deploys only index.ts). | DONE 2026-07-11: deleted api-events/index.improved.ts and api-restaurants/index.improved.ts (Supabase deploys only index.ts; no references)."
     },
     {
       "id": "WEB-CI-001",
@@ -5192,8 +5192,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: .github/workflows/ci-health-report.yml (workflows: ['PR Checks','E2E Tests',...]); actual name 'E2E (critical suites)'."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: .github/workflows/ci-health-report.yml (workflows: ['PR Checks','E2E Tests',...]); actual name 'E2E (critical suites)'. | DONE 2026-07-11: ci-health-report.yml workflow_run list now uses 'E2E (critical suites)' (the actual workflow name) instead of 'E2E Tests'."
     },
     {
       "id": "WEB-CI-005",
@@ -5220,8 +5220,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: vite.config.ts build.sourcemap 'hidden' in prod; no map-strip step in prerender/deploy."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: vite.config.ts build.sourcemap 'hidden' in prod; no map-strip step in prerender/deploy. | DONE 2026-07-11: added scripts/strip-sourcemaps.mjs chained into build (vite build -> strip -> prerender); removes all dist/**/*.map so the published bundle serves no source maps. Verified removes nested maps."
     },
     {
       "id": "WEB-CI-007",
@@ -5264,8 +5264,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: 34 root *.sql, debug-catchdesmoines.js, debug-browser.js, etc."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: 34 root *.sql, debug-catchdesmoines.js, debug-browser.js, etc. | DONE 2026-07-11: root *.sql already removed (DB-006); moved debug-browser.js, debug-catchdesmoines.js, scrape.js, test-content-extraction.js, test-social-media-diversity.js into scripts/. Root now holds only config .js."
     },
     {
       "id": "WEB-OPS-003",
@@ -5293,8 +5293,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: package.json deps include @types/* (:119-120) + babel-plugin-react-remove-properties (:? ); devDeps have ts-node+tsx and Puppeteer+Playwright."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: package.json deps include @types/* (:119-120) + babel-plugin-react-remove-properties (:? ); devDeps have ts-node+tsx and Puppeteer+Playwright. | DONE 2026-07-11: moved @types/dompurify, @types/leaflet, babel-plugin-react-remove-properties to devDependencies; removed unused ts-node (scripts use tsx); kept puppeteer (prerender/scraper) + playwright (E2E) — both genuinely used; npm install + lockfile synced."
     }
   ]
 }
