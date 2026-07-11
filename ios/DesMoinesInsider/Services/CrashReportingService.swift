@@ -1,5 +1,6 @@
 import Foundation
 import Darwin
+import CryptoKit
 
 /// First-party crash & non-fatal reporting (IOS-AUDIT-FEAT-010).
 ///
@@ -48,10 +49,13 @@ final class CrashReportingService {
 
     /// Set anonymized user ID for crash attribution.
     func setUserId(_ userId: String) {
-        // Hash the user ID so no PII reaches disk / the backend.
-        let anonymized = userId.data(using: .utf8)!.map { String(format: "%02x", $0) }.joined()
-        let truncated = String(anonymized.prefix(16))
-        CrashStore.shared.setUserId(truncated)
+        // SHA-256 the user ID so no recoverable PII reaches disk / the backend.
+        // The previous implementation hex-encoded the raw UTF-8 bytes (reversible)
+        // and kept the first 8 characters of the plaintext UUID — not a hash.
+        // Mirrors AnalyticsService's SHA-256 anonymization (IOS-AUDIT-SEC-004).
+        let digest = SHA256.hash(data: Data(userId.utf8))
+        let truncated = digest.map { String(format: "%02x", $0) }.joined().prefix(16)
+        CrashStore.shared.setUserId(String(truncated))
         AppLogger.general.info("Crash reporting user set: \(truncated)")
     }
 

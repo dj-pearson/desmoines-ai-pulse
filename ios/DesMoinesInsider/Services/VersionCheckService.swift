@@ -34,15 +34,21 @@ final class VersionCheckService {
 
     private init() {}
 
+    /// Only `forceUpgrade` is required — it is the load-bearing field that gates
+    /// the blocking screen. Every other field is optional with a sensible
+    /// default so that a null/omitted peripheral field (e.g. `latestVersion`)
+    /// can never throw during decode and silently drop a legitimate
+    /// `forceUpgrade: true`, which would defeat the whole retire-old-binary
+    /// mechanism (IOS-AUDIT-REL-001).
     struct Response: Decodable {
-        let platform: String
-        let currentVersion: String
-        let minSupportedVersion: String
-        let latestVersion: String
+        let platform: String?
+        let currentVersion: String?
+        let minSupportedVersion: String?
+        let latestVersion: String?
         let forceUpgrade: Bool
-        let updateAvailable: Bool
-        let storeUrl: String
-        let message: String
+        let updateAvailable: Bool?
+        let storeUrl: String?
+        let message: String?
     }
 
     private struct Payload: Encodable {
@@ -61,12 +67,19 @@ final class VersionCheckService {
                 options: .init(body: Payload(platform: "ios", version: Config.appVersion))
             )
             forceUpgrade = response.forceUpgrade
-            storeURL = URL(string: response.storeUrl)
-            message = response.message
-            latestVersion = response.updateAvailable ? response.latestVersion : nil
+            // Only overwrite the App Store URL when the server actually supplied a
+            // valid one, so a null/blank `storeUrl` never nils out the only escape
+            // route on the blocking screen. ForceUpdateView also guards nil.
+            if let urlString = response.storeUrl, let url = URL(string: urlString) {
+                storeURL = url
+            }
+            if let serverMessage = response.message, !serverMessage.isEmpty {
+                message = serverMessage
+            }
+            latestVersion = (response.updateAvailable ?? false) ? response.latestVersion : nil
             #if DEBUG
             AppLogger.network.info(
-                "version-check: \(Config.appVersion) min=\(response.minSupportedVersion) force=\(response.forceUpgrade)"
+                "version-check: \(Config.appVersion) min=\(response.minSupportedVersion ?? "?") force=\(response.forceUpgrade)"
             )
             #endif
         } catch {

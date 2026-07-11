@@ -17,31 +17,31 @@ final class AttractionsViewModel {
     var searchText: String = "" {
         didSet {
             guard !suppressFilterSideEffects, searchText != oldValue else { return }
-            debounceSearch()
+            resetAndFetch()
         }
     }
     var selectedTypes: Set<AttractionType> = [] {
         didSet {
             guard !suppressFilterSideEffects, selectedTypes != oldValue else { return }
-            Task { await refresh() }
+            resetAndFetch()
         }
     }
     var minRating: Double = 0 {
         didSet {
             guard !suppressFilterSideEffects, minRating != oldValue else { return }
-            Task { await refresh() }
+            resetAndFetch()
         }
     }
     var featuredOnly: Bool = false {
         didSet {
             guard !suppressFilterSideEffects, featuredOnly != oldValue else { return }
-            Task { await refresh() }
+            resetAndFetch()
         }
     }
     var sortBy: SortOption = .newest {
         didSet {
             guard !suppressFilterSideEffects, sortBy != oldValue else { return }
-            Task { await refresh() }
+            resetAndFetch()
         }
     }
 
@@ -69,7 +69,14 @@ final class AttractionsViewModel {
     private let attractionsService = AttractionsService.shared
     private let pageSize = Config.defaultPageSize
     private var offset = 0
-    private var searchTask: Task<Void, Never>?
+    /// Single in-flight fetch for every reset (search + all filter changes),
+    /// debounced and cancellable so rapid filter changes can't leave a stale
+    /// response as the last writer (IOS-AUDIT-PERF-004).
+    private var fetchTask: Task<Void, Never>?
+    /// Bumped at the start of every reset fetch. A concurrent `loadMoreIfNeeded`
+    /// captures the value before its await and discards its page if a reset ran
+    /// meanwhile, so load-more can't append onto (or clobber) a reset's offset.
+    private var loadGeneration = 0
 
     /// Raw server rows accumulated across pages, in server (created_at desc)
     /// order. The displayed `attractions` are derived from this via client-side
@@ -87,24 +94,30 @@ final class AttractionsViewModel {
     }
 
     func refresh() async {
-        searchTask?.cancel()
+        loadGeneration &+= 1
+        let generation = loadGeneration
         isLoading = true
         errorMessage = nil
         offset = 0
 
         do {
             let response = try await attractionsService.fetchAttractions(query: buildQuery())
+            // Drop this result if it was cancelled or superseded by a newer reset
+            // while the request was in flight — otherwise the older response could
+            // overwrite results for the current filters (last-writer-wins race).
+            guard !Task.isCancelled, generation == loadGeneration else { return }
             rawAttractions = response.attractions
             attractions = applySort(rawAttractions)
             hasMore = response.hasMore
         } catch {
+            guard generation == loadGeneration else { return }
             errorMessage = error.localizedDescription
             rawAttractions = []
             attractions = []
             hasMore = false
         }
 
-        isLoading = false
+        if generation == loadGeneration { isLoading = false }
     }
 
     func loadMoreIfNeeded(currentItem: Attraction) async {
@@ -114,6 +127,7 @@ final class AttractionsViewModel {
               idx >= attractions.count - 5 else { return }
 
         isLoadingMore = true
+        let generation = loadGeneration
         // Offset is the count of RAW server rows fetched so far, not the
         // filtered/sorted display count — otherwise client-side filtering shifts
         // the offset and the next page repeats or skips server rows.
@@ -121,12 +135,16 @@ final class AttractionsViewModel {
 
         do {
             let response = try await attractionsService.fetchAttractions(query: buildQuery())
+            // A reset ran while this page was in flight — its offset/filters are
+            // now stale, so discard this page rather than appending to a list the
+            // reset already replaced.
+            guard generation == loadGeneration else { isLoadingMore = false; return }
             rawAttractions += response.attractions
             attractions = applySort(rawAttractions)
             hasMore = response.hasMore
         } catch {
             // Pagination failures shouldn't break the main view — just stop loading more.
-            hasMore = false
+            if generation == loadGeneration { hasMore = false }
         }
 
         isLoadingMore = false
@@ -141,7 +159,7 @@ final class AttractionsViewModel {
         minRating = 0
         featuredOnly = false
         suppressFilterSideEffects = false
-        Task { await refresh() }
+        resetAndFetch()
     }
 
     // MARK: - Private
@@ -179,15 +197,18 @@ final class AttractionsViewModel {
         }
     }
 
-    /// Debounce search input so we don't fire a request on every keystroke.
-    private func debounceSearch() {
-        searchTask?.cancel()
-        searchTask = Task { [searchText] in
-            try? await Task.sleep(for: .milliseconds(350))
+    /// Single debounced entry point for search + every filter change. Cancels any
+    /// pending fetch and replaces it, so a burst of filter mutations collapses to
+    /// one request and the newest wins (paired with the generation guard in
+    /// `refresh`). Suppressed during bulk updates (`clearFilters`), which fire one
+    /// fetch at the end.
+    private func resetAndFetch() {
+        guard !suppressFilterSideEffects else { return }
+        fetchTask?.cancel()
+        fetchTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(300))
             guard !Task.isCancelled else { return }
-            // Only refresh if the field we captured is still current
-            guard self.searchText == searchText else { return }
-            await refresh()
+            await self?.refresh()
         }
     }
 }

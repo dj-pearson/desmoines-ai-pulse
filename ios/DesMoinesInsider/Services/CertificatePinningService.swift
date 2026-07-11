@@ -26,6 +26,15 @@ final class CertificatePinningService: NSObject, URLSessionDelegate {
     /// - Current Supabase leaf certificate SPKI
     /// - Let's Encrypt R3 intermediate SPKI (backup)
     /// - ISRG Root X1 SPKI (backup)
+    ///
+    /// NOTE (hardening follow-up): several entries below are widely-used public
+    /// root CAs (GTS R4, ISRG X1, DigiCert G2). Because `urlSession(_:didReceive:)`
+    /// matches *any* cert in the chain, pinning to public roots means a cert from
+    /// any of those CAs satisfies the pin, which substantially weakens pinning.
+    /// Before enabling enforcement (`Config.certificatePinningEnforced`), re-pin
+    /// to the Supabase leaf + one issuer SPKI captured from the live host and
+    /// verify the computed hashes here match. `spkiSHA256Hash` now hashes the full
+    /// SPKI DER correctly, so a freshly-captured openssl hash will line up.
     private let pinnedSPKIHashes: Set<String> = [
         // Google Trust Services WE1 intermediate (current Supabase issuer)
         "kIdp6NNEd8wsugYyyIYFsi1ylMCED3hZbSR8ZFsa/A4=",
@@ -114,7 +123,52 @@ final class CertificatePinningService: NSObject, URLSessionDelegate {
 
     // MARK: - SPKI Hash Extraction
 
-    /// Extracts the SHA-256 hash of the Subject Public Key Info from a certificate.
+    /// ASN.1 SubjectPublicKeyInfo headers by (key algorithm, key size in bits).
+    ///
+    /// `SecKeyCopyExternalRepresentation` returns only the *raw* key material
+    /// (PKCS#1 `RSAPublicKey` for RSA, the X9.63 EC point for elliptic curves),
+    /// NOT the DER-encoded SubjectPublicKeyInfo. The pinned hashes are SPKI
+    /// hashes (generated via `openssl … pkey -pubin -outform der | dgst -sha256`),
+    /// which cover the full SPKI structure including the AlgorithmIdentifier.
+    /// To reproduce that hash we must prepend the matching algorithm-identifier
+    /// header to the raw key bytes before hashing. These header constants are the
+    /// canonical values used by TrustKit / OWASP pinning implementations.
+    private static let spkiHeaders: [String: [UInt8]] = [
+        "RSA-2048": [
+            0x30, 0x82, 0x01, 0x22, 0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86,
+            0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00, 0x03, 0x82, 0x01, 0x0f, 0x00,
+        ],
+        "RSA-4096": [
+            0x30, 0x82, 0x02, 0x22, 0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86,
+            0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00, 0x03, 0x82, 0x02, 0x0f, 0x00,
+        ],
+        "EC-256": [
+            0x30, 0x59, 0x30, 0x13, 0x06, 0x07, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02,
+            0x01, 0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07, 0x03,
+            0x42, 0x00,
+        ],
+        "EC-384": [
+            0x30, 0x76, 0x30, 0x10, 0x06, 0x07, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02,
+            0x01, 0x06, 0x05, 0x2b, 0x81, 0x04, 0x00, 0x22, 0x03, 0x62, 0x00,
+        ],
+    ]
+
+    /// Resolves the SPKI header for a public key from its algorithm + size.
+    private func spkiHeader(for publicKey: SecKey) -> [UInt8]? {
+        guard let attrs = SecKeyCopyAttributes(publicKey) as? [CFString: Any],
+              let keyType = attrs[kSecAttrKeyType] as? String,
+              let keySize = attrs[kSecAttrKeySizeInBits] as? Int else { return nil }
+
+        switch (keyType, keySize) {
+        case (kSecAttrKeyTypeRSA as String, 2048): return Self.spkiHeaders["RSA-2048"]
+        case (kSecAttrKeyTypeRSA as String, 4096): return Self.spkiHeaders["RSA-4096"]
+        case (kSecAttrKeyTypeECSECPrimeRandom as String, 256): return Self.spkiHeaders["EC-256"]
+        case (kSecAttrKeyTypeECSECPrimeRandom as String, 384): return Self.spkiHeaders["EC-384"]
+        default: return nil
+        }
+    }
+
+    /// Computes the base64 SHA-256 of a certificate's DER-encoded SubjectPublicKeyInfo.
     private func spkiSHA256Hash(of certificate: SecCertificate) -> String? {
         guard let publicKey = SecCertificateCopyKey(certificate) else { return nil }
 
@@ -123,8 +177,18 @@ final class CertificatePinningService: NSObject, URLSessionDelegate {
             return nil
         }
 
-        // Hash the raw public key data with SHA-256
-        let hash = SHA256.hash(data: publicKeyData)
+        guard let header = spkiHeader(for: publicKey) else {
+            // Unsupported key type/size — can't construct a comparable SPKI hash.
+            // Returning nil means this cert simply won't match a pin (fine in
+            // report-only; would need a new header constant before enforcing).
+            AppLogger.network.error("SPKI pinning: unsupported public key type/size; skipping cert")
+            return nil
+        }
+
+        // Reconstruct the full SPKI (header ‖ raw key) and hash that.
+        var spki = Data(header)
+        spki.append(publicKeyData)
+        let hash = SHA256.hash(data: spki)
         return Data(hash).base64EncodedString()
     }
 }

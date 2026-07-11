@@ -8,6 +8,8 @@ struct DesMoinesInsiderApp: App {
     /// notification taps actually work (IOS-AUDIT-FEAT-001 / FEAT-003).
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
+    @Environment(\.scenePhase) private var scenePhase
+
     @State private var authService = AuthService.shared
     @State private var favoritesService = FavoritesService.shared
     @State private var locationService = LocationService.shared
@@ -21,6 +23,10 @@ struct DesMoinesInsiderApp: App {
     @AppStorage("themeMode") private var themeModeRaw: String = ThemeMode.system.rawValue
     @State private var showJailbreakWarning = false
     @State private var awaitingBiometric = false
+    /// True once the app has actually entered the background, so a return to
+    /// `.active` re-engages the biometric lock — while a transient `.inactive`
+    /// (Control Center, the Face ID system sheet, a banner) does not.
+    @State private var didEnterBackground = false
     @State private var sessionExpiredMessage: String?
     /// Tracks in-session consent completion. ConsentService stores its state in
     /// UserDefaults via computed properties, which `@Observable` cannot track, so
@@ -96,6 +102,29 @@ struct DesMoinesInsiderApp: App {
                 Task {
                     sessionExpiredMessage = "You were signed out for inactivity. Sign in again to continue."
                     try? await authService.signOut()
+                }
+            }
+            .onChange(of: scenePhase) { _, newPhase in
+                switch newPhase {
+                case .background:
+                    didEnterBackground = true
+                case .active:
+                    // Re-engage the biometric lock after a real background cycle,
+                    // not just on cold launch (IOS-AUDIT-SEC-016). Ignores
+                    // transient .inactive so the Face ID sheet / Control Center
+                    // don't re-lock mid-session.
+                    if didEnterBackground {
+                        didEnterBackground = false
+                        if biometricService.isEnabled && authService.isAuthenticated {
+                            awaitingBiometric = true
+                        }
+                    }
+                    // Returning to the foreground counts as user activity.
+                    if authService.isAuthenticated {
+                        sessionTimeout.recordActivity()
+                    }
+                default:
+                    break
                 }
             }
             .onOpenURL { url in

@@ -18,7 +18,7 @@ final class ArticlesViewModel {
     var searchText: String = "" {
         didSet {
             guard searchText != oldValue else { return }
-            debounceSearch()
+            resetAndFetch()
         }
     }
 
@@ -26,7 +26,7 @@ final class ArticlesViewModel {
     var selectedCategory: String? {
         didSet {
             guard selectedCategory != oldValue else { return }
-            Task { await refresh() }
+            resetAndFetch()
         }
     }
 
@@ -41,7 +41,12 @@ final class ArticlesViewModel {
     private let cache = QueryCache.shared
     private let pageSize = Config.defaultPageSize
     private var offset = 0
-    private var searchTask: Task<Void, Never>?
+    /// Single debounced, cancellable fetch for search + the category filter so a
+    /// stale response can't win the last-writer race (IOS-AUDIT-PERF-004).
+    private var fetchTask: Task<Void, Never>?
+    /// Bumped per reset; a concurrent `loadMoreIfNeeded` discards its page if a
+    /// reset ran while it was in flight.
+    private var loadGeneration = 0
 
     /// Cache key for the unfiltered first page (offline cold-start, IOS-COMPLY-004).
     private static let homeCacheKey = "articles-home"
@@ -66,7 +71,8 @@ final class ArticlesViewModel {
     }
 
     func refresh() async {
-        searchTask?.cancel()
+        loadGeneration &+= 1
+        let generation = loadGeneration
         isLoading = true
         errorMessage = nil
         offset = 0
@@ -91,6 +97,8 @@ final class ArticlesViewModel {
 
         do {
             let response = try await service.fetchArticles(query: buildQuery())
+            // Discard if cancelled or superseded by a newer reset in flight.
+            guard !Task.isCancelled, generation == loadGeneration else { return }
             articles = response.articles
             hasMore = response.hasMore
             // Cache the unfiltered first page for offline/cold-start use.
@@ -102,13 +110,13 @@ final class ArticlesViewModel {
             Task { await SpotlightService.shared.indexArticles(toIndex) }
         } catch {
             // Don't overwrite cached content (already shown) with an error.
-            if articles.isEmpty {
+            if generation == loadGeneration, articles.isEmpty {
                 errorMessage = error.localizedDescription
                 hasMore = false
             }
         }
 
-        isLoading = false
+        if generation == loadGeneration { isLoading = false }
     }
 
     func loadMoreIfNeeded(currentItem: Article) async {
@@ -117,14 +125,17 @@ final class ArticlesViewModel {
               idx >= articles.count - 5 else { return }
 
         isLoadingMore = true
+        let generation = loadGeneration
         offset = articles.count
 
         do {
             let response = try await service.fetchArticles(query: buildQuery())
+            // A reset ran while this page was in flight — discard the stale page.
+            guard generation == loadGeneration else { isLoadingMore = false; return }
             articles += response.articles
             hasMore = response.hasMore
         } catch {
-            hasMore = false
+            if generation == loadGeneration { hasMore = false }
         }
 
         isLoadingMore = false
@@ -133,7 +144,7 @@ final class ArticlesViewModel {
     func clearFilters() {
         searchText = ""
         selectedCategory = nil
-        Task { await refresh() }
+        resetAndFetch()
     }
 
     // MARK: - Private
@@ -147,13 +158,14 @@ final class ArticlesViewModel {
         )
     }
 
-    private func debounceSearch() {
-        searchTask?.cancel()
-        searchTask = Task { [searchText] in
-            try? await Task.sleep(for: .milliseconds(350))
+    /// Single debounced entry point for search + the category filter; cancels any
+    /// pending fetch so a burst collapses to one request and the newest wins.
+    private func resetAndFetch() {
+        fetchTask?.cancel()
+        fetchTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(300))
             guard !Task.isCancelled else { return }
-            guard self.searchText == searchText else { return }
-            await refresh()
+            await self?.refresh()
         }
     }
 }

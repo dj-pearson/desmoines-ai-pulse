@@ -21,10 +21,16 @@ enum DateParser {
         let key = string as NSString
         if let cached = parseCache.object(forKey: key) { return cached as Date }
 
-        // 1. ISO 8601 with fractional seconds (e.g. "2025-06-15T19:00:00.000Z")
-        // 2. ISO 8601 without fractional seconds ("...T19:00:00Z" / "+00:00")
+        // 1. ISO 8601 with fractional seconds (e.g. "2025-06-15T19:00:00.000Z").
+        //    `ISO8601DateFormatter.withFractionalSeconds` only accepts EXACTLY 3
+        //    fractional digits, but Postgres `timestamptz` serializes at microsecond
+        //    precision (1–6 digits, e.g. ".123456+00:00"). Normalize the fraction to
+        //    3 digits before handing it to the formatter so those values parse
+        //    instead of silently returning nil (IOS-AUDIT-DATA-001).
+        // 2. ISO 8601 without fractional seconds ("...T19:00:00Z" / "+00:00").
         // 3. Fallback DateFormatter formats.
         let parsed = isoFractional.date(from: string)
+            ?? isoFractional.date(from: Self.normalizedFraction(string))
             ?? isoBasic.date(from: string)
             ?? fallbackFormatters.lazy.compactMap { $0.date(from: string) }.first
 
@@ -69,11 +75,40 @@ enum DateParser {
             "yyyy-MM-dd HH:mm:ss",
             "yyyy-MM-dd",
         ]
+        // These formats carry no timezone offset. The backend emits offset-less
+        // instants in UTC, so parse them as UTC rather than device-local — a
+        // user outside Central time would otherwise see event times shifted by
+        // their UTC offset (IOS-AUDIT-DATA-002).
+        let utc = TimeZone(identifier: "UTC")
         return formats.map { format in
             let f = DateFormatter()
             f.locale = Locale(identifier: "en_US_POSIX")
+            f.timeZone = utc
             f.dateFormat = format
             return f
         }
     }()
+
+    /// Rewrites the fractional-seconds component of an ISO-8601 string to exactly
+    /// 3 digits so `ISO8601DateFormatter.withFractionalSeconds` accepts Postgres
+    /// microsecond timestamps. Pads or truncates the run of digits after the
+    /// decimal point; returns the input unchanged when there is no fraction.
+    static func normalizedFraction(_ string: String) -> String {
+        guard let dot = string.firstIndex(of: ".") else { return string }
+        let afterDot = string.index(after: dot)
+        var end = afterDot
+        while end < string.endIndex, string[end].isNumber {
+            end = string.index(after: end)
+        }
+        let digitCount = string.distance(from: afterDot, to: end)
+        guard digitCount != 3 else { return string }
+        let digits = string[afterDot..<end]
+        let normalized: String
+        if digitCount > 3 {
+            normalized = String(digits.prefix(3))
+        } else {
+            normalized = digits + String(repeating: "0", count: 3 - digitCount)
+        }
+        return String(string[..<afterDot]) + normalized + String(string[end...])
+    }
 }

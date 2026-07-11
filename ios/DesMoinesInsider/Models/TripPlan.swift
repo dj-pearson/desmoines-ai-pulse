@@ -37,6 +37,28 @@ struct TripPlan: Identifiable, Decodable, Hashable {
         case packingList
     }
 
+    /// Tolerant decode: `title`/`startDate`/`endDate` come from the
+    /// generate-itinerary response / JSONB rather than enforced NOT NULL columns,
+    /// so a single null here must not fail the whole itinerary decode and blank
+    /// the trip screen. Defaults keep the properties non-optional for callers.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(String.self, forKey: .id) ?? ""
+        title = try c.decodeIfPresent(String.self, forKey: .title) ?? "Untitled Trip"
+        description = try c.decodeIfPresent(String.self, forKey: .description)
+        startDate = try c.decodeIfPresent(String.self, forKey: .startDate) ?? ""
+        endDate = try c.decodeIfPresent(String.self, forKey: .endDate) ?? ""
+        status = try c.decodeIfPresent(String.self, forKey: .status)
+        isPublic = try c.decodeIfPresent(Bool.self, forKey: .isPublic)
+        shareCode = try c.decodeIfPresent(String.self, forKey: .shareCode)
+        aiGenerated = try c.decodeIfPresent(Bool.self, forKey: .aiGenerated)
+        totalEstimatedCost = try c.decodeIfPresent(String.self, forKey: .totalEstimatedCost)
+        createdAt = try c.decodeIfPresent(String.self, forKey: .createdAt)
+        items = try c.decodeIfPresent([TripPlanItem].self, forKey: .items)
+        tips = try c.decodeIfPresent([String].self, forKey: .tips)
+        packingList = try c.decodeIfPresent([String].self, forKey: .packingList)
+    }
+
     // Cached formatters — `dateRangeDisplay` is read on every list/detail render.
     private static let dayInputFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -97,6 +119,30 @@ struct TripPlanItem: Identifiable, Decodable, Hashable {
         case aiSuggested = "ai_suggested"
         case aiReason = "ai_reason"
         case contentDetails = "content_details"
+    }
+
+    /// Tolerant decode: `day_number`/`order_index`/`item_type` come from
+    /// AI-generated JSONB, so one missing/null field must not fail the whole
+    /// itinerary decode. Defaults keep the properties non-optional for callers.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        itemId = try c.decodeIfPresent(String.self, forKey: .itemId) ?? ""
+        dayNumber = try c.decodeIfPresent(Int.self, forKey: .dayNumber) ?? 1
+        orderIndex = try c.decodeIfPresent(Int.self, forKey: .orderIndex) ?? 0
+        itemType = try c.decodeIfPresent(String.self, forKey: .itemType) ?? ""
+        title = try c.decodeIfPresent(String.self, forKey: .title)
+        description = try c.decodeIfPresent(String.self, forKey: .description)
+        location = try c.decodeIfPresent(String.self, forKey: .location)
+        startTime = try c.decodeIfPresent(String.self, forKey: .startTime)
+        endTime = try c.decodeIfPresent(String.self, forKey: .endTime)
+        durationMinutes = try c.decodeIfPresent(Int.self, forKey: .durationMinutes)
+        notes = try c.decodeIfPresent(String.self, forKey: .notes)
+        estimatedCost = try c.decodeIfPresent(String.self, forKey: .estimatedCost)
+        bookingUrl = try c.decodeIfPresent(String.self, forKey: .bookingUrl)
+        isConfirmed = try c.decodeIfPresent(Bool.self, forKey: .isConfirmed)
+        aiSuggested = try c.decodeIfPresent(Bool.self, forKey: .aiSuggested)
+        aiReason = try c.decodeIfPresent(String.self, forKey: .aiReason)
+        contentDetails = try c.decodeIfPresent(TripContentDetails.self, forKey: .contentDetails)
     }
 
     // Cached formatters — `startTimeDisplay` is read per itinerary row.
