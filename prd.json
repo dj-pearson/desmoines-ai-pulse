@@ -5249,8 +5249,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: DMI-Logo.psd (5MB), 2024_Dinner Menu...pdf (4.9MB), test-failures.json (1.5MB), screenshot_logs.txt (858KB)."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: DMI-Logo.psd (5MB), 2024_Dinner Menu...pdf (4.9MB), test-failures.json (1.5MB), screenshot_logs.txt (858KB). | DONE 2026-07-11: removed DMI-Logo.psd (5MB), sample menu PDF (4.9MB), screenshot_logs.txt, test-failures.json, and test-reports/ (23MB/62 files) from tracking; gitignored the generated ones + *.psd; docs/REMOVED_ASSETS.md documents recovery + where source binaries should live. Visual-regression snapshot baselines intentionally kept."
     },
     {
       "id": "WEB-OPS-002",

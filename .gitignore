@@ -105,3 +105,9 @@ android/app/google-services (2).json
 working.txt
 ex1.png
 ex2.png
+
+# WEB-OPS-001: generated test artifacts + heavy source binaries (see docs/REMOVED_ASSETS.md)
+test-reports/
+test-failures.json
+screenshot_logs.txt
+*.psd
