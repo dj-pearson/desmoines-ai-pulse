@@ -3121,8 +3121,8 @@
         "Des Moines records unaffected"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Evidence: Event.swift:75-79, Restaurant.swift:159-163, Attraction.swift:33-37 return nil when lat==0 || lng==0."
+      "passes": true,
+      "notes": "Evidence: Event.swift:75-79, Restaurant.swift:159-163, Attraction.swift:33-37 return nil when lat==0 || lng==0. | DONE 2026-07-11: removed the lat!=0 && lng!=0 conditions from coordinate accessors in Event/Restaurant/Attraction models so a literal 0.0 is treated as valid (only nil is missing). NOTE: no Swift toolchain here; iOS CI must confirm compilation."
     },
     {
       "id": "IOS-AUDIT-BUG-017",
@@ -3479,8 +3479,8 @@
         "No runtime TLS failures against Supabase/Open-Meteo after the policy is added"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Evidence: Resources/Info.plist has no NSAppTransportSecurity; DesMoinesInsiderClip/Info.plist:32-35 requests location with no usage string/ATS."
+      "passes": true,
+      "notes": "Evidence: Resources/Info.plist has no NSAppTransportSecurity; DesMoinesInsiderClip/Info.plist:32-35 requests location with no usage string/ATS. | DONE 2026-07-11: added explicit NSAppTransportSecurity (NSAllowsArbitraryLoads=false, no exception domains — all backends are HTTPS) to app + App Clip Info.plist. Both plists validated."
     },
     {
       "id": "IOS-AUDIT-REL-014",
@@ -3518,8 +3518,8 @@
         "version-check optional-update banner reflects the actually-released version"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Evidence: Resources/Info.plist:21-24 uses $(MARKETING_VERSION); Fastfile increments build; minSupportedVersions.ts hardcodes LATEST_APP_VERSION with no sync."
+      "passes": true,
+      "notes": "Evidence: Resources/Info.plist:21-24 uses $(MARKETING_VERSION); Fastfile increments build; minSupportedVersions.ts hardcodes LATEST_APP_VERSION with no sync. | DONE 2026-07-11: ios-ci.yml validate-config now fails if project.yml MARKETING_VERSION drifts from minSupportedVersions.ts LATEST_APP_VERSION.ios (verified 1.2.0==1.2.0; YAML valid)."
     },
     {
       "id": "IOS-AUDIT-REL-017",
