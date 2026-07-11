@@ -5206,8 +5206,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: no codeql/semgrep/snyk/trivy in .github/workflows; audit is daily/non-blocking."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: no codeql/semgrep/snyk/trivy in .github/workflows; audit is daily/non-blocking. | DONE 2026-07-11: added .github/workflows/codeql.yml (SAST, PRs to protected branches + push + weekly) and dependency-audit-pr.yml which runs scripts/audit-check.mjs to FAIL PRs on NEW high/critical npm-audit advisories, with .github/audit-allowlist.json documenting the 16 pre-existing accepted findings. Gate verified green locally."
     },
     {
       "id": "WEB-CI-006",

@@ -1,0 +1,34 @@
+# WEB-CI-005: PR-blocking dependency vulnerability gate.
+# Fails a PR when a NEW high/critical npm-audit advisory is introduced. Accepted
+# pre-existing advisories live in .github/audit-allowlist.json (with remediation
+# notes). Complements the daily non-blocking Dependency CVE Scan.
+name: Dependency Audit (PR)
+
+on:
+  pull_request:
+    branches: [main, develop, "release/**"]
+
+concurrency:
+  group: dep-audit-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: npm audit (high/critical gate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Fail on new high/critical advisories
+        run: node scripts/audit-check.mjs
