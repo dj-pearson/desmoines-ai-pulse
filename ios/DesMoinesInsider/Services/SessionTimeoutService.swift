@@ -34,6 +34,7 @@ final class SessionTimeoutService {
     private enum Keys {
         static let lastActivity = "session_last_activity"
         static let sessionStart = "session_start_time"
+        static let isAdmin = "session_is_admin"
     }
 
     // MARK: - State
@@ -49,6 +50,10 @@ final class SessionTimeoutService {
     private var isTracking = false
     private var checkTask: Task<Void, Never>?
 
+    /// Last time `recordActivity` actually persisted, used to throttle Keychain
+    /// writes when activity is driven by a continuous gesture (scroll/drag).
+    private var lastRecordedActivity: TimeInterval = 0
+
     // MARK: - Lifecycle
 
     /// Start tracking session timeouts. Call after successful authentication.
@@ -56,8 +61,14 @@ final class SessionTimeoutService {
         self.isAdmin = isAdmin
         self.isTracking = true
 
+        // Persist the admin flag so a cold-launch `isSessionValid()` check
+        // applies the correct (stricter) admin thresholds even before auth has
+        // re-resolved the role for this launch.
+        KeychainService.shared.saveString(key: Keys.isAdmin, value: isAdmin ? "1" : "0")
+
         let now = Date().timeIntervalSince1970
         KeychainService.shared.saveString(key: Keys.sessionStart, value: String(now))
+        lastRecordedActivity = 0   // force the first recordActivity to persist
         recordActivity()
 
         // Start periodic check
@@ -81,18 +92,26 @@ final class SessionTimeoutService {
 
         KeychainService.shared.delete(key: Keys.lastActivity)
         KeychainService.shared.delete(key: Keys.sessionStart)
+        KeychainService.shared.delete(key: Keys.isAdmin)
+        lastRecordedActivity = 0
 
         AppLogger.auth.info("Session timeout tracking stopped")
     }
 
-    /// Record user activity (resets idle timer). Call on scene phase changes.
+    /// Record user activity (resets the idle timer). Safe to call on every user
+    /// interaction — including continuous gestures — because the Keychain write
+    /// is throttled; idle resolution is 30s so sub-throttle staleness is
+    /// irrelevant. A pending warning is always cleared immediately, though, so
+    /// the banner disappears the instant the user interacts.
     func recordActivity() {
-        let now = Date().timeIntervalSince1970
-        KeychainService.shared.saveString(key: Keys.lastActivity, value: String(now))
-
         if case .warning = sessionState {
             sessionState = .active
         }
+
+        let now = Date().timeIntervalSince1970
+        guard now - lastRecordedActivity >= 5 else { return }
+        lastRecordedActivity = now
+        KeychainService.shared.saveString(key: Keys.lastActivity, value: String(now))
     }
 
     /// Check if the session is still valid on app restart.
@@ -104,9 +123,14 @@ final class SessionTimeoutService {
             return true // No tracking data
         }
 
+        // Use the persisted admin flag rather than the in-memory `isAdmin`, which
+        // is still its `false` default this early in cold launch — otherwise an
+        // admin would be granted the looser user thresholds.
+        let wasAdmin = KeychainService.shared.loadString(key: Keys.isAdmin) == "1"
+
         let now = Date().timeIntervalSince1970
-        let idleTimeout = isAdmin ? Timeout.adminIdle : Timeout.userIdle
-        let absoluteTimeout = isAdmin ? Timeout.adminAbsolute : Timeout.userAbsolute
+        let idleTimeout = wasAdmin ? Timeout.adminIdle : Timeout.userIdle
+        let absoluteTimeout = wasAdmin ? Timeout.adminAbsolute : Timeout.userAbsolute
 
         let idleExpired = (now - lastActivity) > idleTimeout
         let absoluteExpired = (now - sessionStart) > absoluteTimeout

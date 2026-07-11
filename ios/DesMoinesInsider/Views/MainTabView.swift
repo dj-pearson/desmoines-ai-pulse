@@ -121,6 +121,14 @@ struct MainTabView: View {
             }
         }
         .tint(Color.accentColor)
+        // Reset the idle-timeout timer on any touch/scroll within the authed UI
+        // so a user actively browsing isn't signed out mid-session. Runs
+        // simultaneously so it never blocks child taps/scrolls, and the service
+        // throttles the underlying Keychain write (IOS-AUDIT-SEC-017).
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in SessionTimeoutService.shared.recordActivity() }
+        )
         .onAppear {
             Self.configureTranslucentAppearance()
             InterstitialAdService.shared.noteSessionStart()
@@ -149,6 +157,8 @@ struct MainTabView: View {
             if oldTab != newTab {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
             }
+            // Navigating between tabs is real activity — reset the idle timer.
+            SessionTimeoutService.shared.recordActivity()
             // Major navigation boundary. Free tier only; the service enforces the
             // session cap, the "not on first sessions" rule and the min interval.
             guard storeKit.currentTier == .free else { return }
