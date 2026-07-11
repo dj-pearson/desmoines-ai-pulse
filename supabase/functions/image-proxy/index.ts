@@ -27,14 +27,23 @@ const ALLOWED_IMAGE_DOMAINS = [
   'geo3.ggpht.com',
 ]
 
-// Internal Supabase Storage URLs that can be accessed without auth
-const INTERNAL_STORAGE_PATTERNS = [
-  /\.supabase\.co\/storage\//,
-  /\.supabase\.in\/storage\//,
-]
-
+// Only THIS project's Supabase Storage origin may be fetched without auth.
+// Matching a loose substring like ".supabase.co/storage/" would let an attacker
+// host (e.g. evil.supabase.co.attacker.com/storage/ or another project's bucket)
+// bypass the JWT check, so we compare the hostname exactly against SUPABASE_URL.
 function isInternalStorageUrl(url: string): boolean {
-  return INTERNAL_STORAGE_PATTERNS.some(pattern => pattern.test(url));
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  if (!supabaseUrl) return false;
+  try {
+    const target = new URL(url);
+    const expected = new URL(supabaseUrl);
+    return (
+      target.hostname === expected.hostname &&
+      target.pathname.startsWith('/storage/')
+    );
+  } catch {
+    return false;
+  }
 }
 
 serve(async (req) => {

@@ -179,17 +179,10 @@ export async function requireAdminOrApiKey(
     profiles_error: profileErr?.message ?? null,
   });
 
+  // Diagnostic detail is logged server-side above; the client body stays generic
+  // so we don't leak user ids / role internals to callers.
   return new Response(
-    JSON.stringify({
-      error: 'Admin role required',
-      debug: {
-        userId,
-        user_roles_role: roleRow?.role ?? null,
-        profiles_user_role: profile?.user_role ?? null,
-        user_roles_error: roleErr?.message ?? null,
-        profiles_error: profileErr?.message ?? null,
-      },
-    }),
+    JSON.stringify({ error: 'Admin role required' }),
     { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
   );
 }

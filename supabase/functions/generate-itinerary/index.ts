@@ -464,8 +464,27 @@ Return ONLY the JSON object, no additional text.`;
       .insert(itemsToInsert);
 
     if (itemsError) {
-      console.error('Error creating trip items:', itemsError);
-      // Don't fail - trip plan is still created
+      // WEB-BE-006: the plan row is quota-counted (ai_generated=true) but is
+      // useless without its items. Rather than charge the user a quota unit for
+      // a broken empty plan, compensate by deleting the just-created plan and
+      // return a retriable error. (A monthly quota counts trip_plans rows, so
+      // removing the plan means it is not counted.)
+      console.error('Error creating trip items; rolling back the trip plan:', itemsError);
+      const { error: rollbackError } = await supabaseClient
+        .from('trip_plans')
+        .delete()
+        .eq('id', tripPlan.id);
+      if (rollbackError) {
+        console.error('Failed to roll back trip plan after items error:', rollbackError);
+      }
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Failed to save your itinerary. Please try again.',
+        code: 'itinerary_save_failed',
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     // Fetch the complete itinerary with item details

@@ -4696,8 +4696,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Bundles 5 LOW security findings from the review."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Bundles 5 LOW security findings from the review. | DONE 2026-07-11: 403 body no longer leaks role diagnostics (logged server-side); support-csat-submit requires JWT ticket-ownership before write; image-proxy internal-storage match is exact SUPABASE_URL origin (no substring bypass); geocode-location enforces checkRateLimitPersistent (60/60s); system-backup now requireAdminOrApiKey + truthful 501 not_implemented (no fabricated success)."
     },
     {
       "id": "WEB-DB-001",
@@ -4798,8 +4798,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: 20251204000000_security_features.sql:1142-1149 grants EXECUTE to anon,authenticated."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: 20251204000000_security_features.sql:1142-1149 grants EXECUTE to anon,authenticated. | DONE 2026-07-11: migration 20260711000030 revokes anon EXECUTE from 6 security RPCs with zero call sites in web OR mobile (is_account_locked, record_login_attempt, check_password_reset_rate_limit, record_password_reset_request, check_magic_link_rate_limit, validate_api_key); log_login_activity keeps anon (pre-auth failed-login logging). authenticated grants untouched."
     },
     {
       "id": "WEB-DB-008",
@@ -5078,8 +5078,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: generate-itinerary/index.ts:410 (plan insert), :456 (items insert, failure swallowed)."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: generate-itinerary/index.ts:410 (plan insert), :456 (items insert, failure swallowed). | DONE 2026-07-11: generate-itinerary now compensates a failed trip_plan_items insert by deleting the just-created plan (which is quota-counted) and returning a retriable 500, so a user isn't charged a quota unit for a broken empty plan."
     },
     {
       "id": "WEB-BE-007",
