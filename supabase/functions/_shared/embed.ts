@@ -4,6 +4,8 @@
  * so callers can attribute it to the agent budget. Throws on API error (callers
  * decide how to surface it).
  */
+import { fetchWithTimeout } from "./fetchWithTimeout.ts";
+
 const MODEL = "text-embedding-3-small";
 const DIMS = 1536;
 // text-embedding-3-small is ~$0.02 / 1M tokens.

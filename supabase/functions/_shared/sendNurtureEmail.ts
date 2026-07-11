@@ -9,6 +9,7 @@
  * never throwing, so one bad send can't abort a batch.
  */
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { fetchWithTimeout } from "./fetchWithTimeout.ts";
 import { renderEmail } from "./emailLayout.ts";
 
 export interface NurtureEmailArgs {

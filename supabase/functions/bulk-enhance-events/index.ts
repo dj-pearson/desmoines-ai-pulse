@@ -9,6 +9,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.43.1";
 import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -224,11 +225,11 @@ Generate writeups for ALL ${eventsToEnhance.length} events listed above. Each wr
       }
     );
 
-    const claudeResponse = await fetch(config.api_endpoint, {
+    const claudeResponse = await fetchWithTimeout(config.api_endpoint, {
       method: "POST",
       headers,
       body: JSON.stringify(requestBody)
-    });
+    }, 60_000);
 
     if (!claudeResponse.ok) {
       const errorText = await claudeResponse.text();

@@ -11,6 +11,7 @@ import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
 import { validateURLForSSRF } from "../_shared/validation.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { isHostAllowed, fetchTextWithSizeCap } from "../_shared/fetchGuard.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -274,7 +275,7 @@ Please provide analysis in the following JSON format:
 }
 `;
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
+  const response = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -289,7 +290,7 @@ Please provide analysis in the following JSON format:
         content: analysisPrompt
       }]
     })
-  });
+  }, 60_000);
 
   if (!response.ok) {
     throw new Error(`Claude API error: ${response.status}`);
@@ -375,7 +376,7 @@ Generate 5 content suggestions that would help us compete better. For each sugge
 Return as JSON array.
 `;
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
+  const response = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -390,7 +391,7 @@ Return as JSON array.
         content: suggestionPrompt
       }]
     })
-  });
+  }, 60_000);
 
   if (!response.ok) {
     throw new Error(`Claude API error: ${response.status}`);

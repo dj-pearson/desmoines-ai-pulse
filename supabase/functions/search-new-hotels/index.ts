@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -236,7 +237,7 @@ serve(async (req) => {
 
     // 1. Geocode the location
     const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(location)}&key=${GOOGLE_API_KEY}`;
-    const geocodeResponse = await fetch(geocodeUrl);
+    const geocodeResponse = await fetchWithTimeout(geocodeUrl);
 
     if (!geocodeResponse.ok) {
       throw new Error(`Geocoding failed: ${geocodeResponse.status}`);
@@ -266,7 +267,7 @@ serve(async (req) => {
       rankPreference: offset > 0 ? "DISTANCE" : "POPULARITY",
     };
 
-    const placesResponse = await fetch(placesUrl, {
+    const placesResponse = await fetchWithTimeout(placesUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

@@ -45,6 +45,7 @@
 
 import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
+import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -176,7 +177,7 @@ async function fetchGoogleJwks(): Promise<GoogleJwk[]> {
   if (cachedJwks && Date.now() - cachedJwks.fetchedAt < JWKS_TTL_MS) {
     return cachedJwks.keys;
   }
-  const res = await fetch(GOOGLE_OAUTH_CERTS_URL);
+  const res = await fetchWithTimeout(GOOGLE_OAUTH_CERTS_URL);
   if (!res.ok) throw new Error(`Failed to fetch Google JWKS: HTTP ${res.status}`);
   const body = await res.json();
   cachedJwks = { fetchedAt: Date.now(), keys: body.keys ?? [] };
@@ -304,7 +305,7 @@ async function getGoogleAccessToken(sa: ServiceAccountKey): Promise<string> {
   );
   const jwt = `${signingInput}.${base64UrlEncode(new Uint8Array(sig))}`;
 
-  const res = await fetch(GOOGLE_TOKEN_URL, {
+  const res = await fetchWithTimeout(GOOGLE_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
@@ -327,7 +328,7 @@ async function fetchSubscriptionState(
   purchaseToken: string,
 ): Promise<GoogleSubscriptionPurchase | null> {
   const url = `${GOOGLE_API_BASE}/applications/${packageName}/purchases/subscriptions/${subscriptionId}/tokens/${purchaseToken}`;
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (res.status === 200) return (await res.json()) as GoogleSubscriptionPurchase;

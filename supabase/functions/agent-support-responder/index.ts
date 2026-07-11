@@ -27,6 +27,7 @@ import { writeAgentAudit } from "../_shared/auditLog.ts";
 import { scoreOutput } from "../_shared/scoreOutput.ts";
 import { retrieveKb, type KbPassage } from "../_shared/kbRetrieve.ts";
 import { getAIConfig } from "../_shared/aiConfig.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 
 const AGENT_KEY = "support-responder";
 const BATCH = 10;
@@ -70,12 +71,12 @@ async function draftAnswer(
     `KNOWLEDGE BASE:\n${context || "(no passages retrieved)"}\n\nUSER QUESTION:\n${question.slice(0, 1500)}`;
 
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetchWithTimeout("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": config.anthropic_version },
       body: JSON.stringify({ model: config.default_model, max_tokens: 700, temperature: 0.2, messages: [{ role: "user", content: prompt }] }),
       signal: AbortSignal.timeout(30_000),
-    });
+    }, 60_000);
     if (!res.ok) return null;
     const data = await res.json();
     const text: string = (data.content ?? []).map((b: { text?: string }) => b.text ?? "").join("");

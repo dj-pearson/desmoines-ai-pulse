@@ -5,6 +5,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { escapeHtml } from "../_shared/escapeHtml.ts";
 import { renderEmail } from "../_shared/emailLayout.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -184,7 +185,7 @@ Don't miss out! We'll see you there!
       throw new Error("RESEND_API_KEY not configured");
     }
 
-    const response = await fetch("https://api.resend.com/emails", {
+    const response = await fetchWithTimeout("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

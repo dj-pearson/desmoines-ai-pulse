@@ -19,6 +19,7 @@ import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import { handleCors, getCorsHeaders, isOriginAllowed } from '../_shared/cors.ts';
 import { checkRateLimit, addRateLimitHeaders } from '../_shared/rateLimit.ts';
+import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -117,7 +118,7 @@ async function getGoogleAccessToken(
 ): Promise<string> {
   const jwt = await generateServiceAccountJWT(privateKey, clientEmail);
 
-  const response = await fetch(GOOGLE_TOKEN_URL, {
+  const response = await fetchWithTimeout(GOOGLE_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
@@ -165,7 +166,7 @@ async function verifySubscriptionWithGoogle(
 ): Promise<GoogleSubscriptionPurchase | null> {
   const url = `${GOOGLE_API_BASE}/applications/${packageName}/purchases/subscriptions/${productId}/tokens/${purchaseToken}`;
 
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',

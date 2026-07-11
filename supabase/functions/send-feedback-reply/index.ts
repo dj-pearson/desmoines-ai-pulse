@@ -17,6 +17,7 @@ import {
   isOriginAllowed,
 } from "../_shared/cors.ts";
 import { checkRateLimit, addRateLimitHeaders } from "../_shared/rateLimit.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const SUPPORT_FROM =
@@ -121,7 +122,7 @@ serve(async (req) => {
       ? submission.subject
       : `Re: ${submission.subject ?? "Your message to Des Moines Insider"}`;
 
-    const r = await fetch("https://api.resend.com/emails", {
+    const r = await fetchWithTimeout("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

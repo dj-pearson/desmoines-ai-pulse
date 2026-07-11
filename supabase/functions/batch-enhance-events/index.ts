@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -30,7 +31,7 @@ async function searchWithGoogle(query: string): Promise<SearchResult[]> {
   console.log('Google Search Engine ID:', googleSearchEngineId);
   console.log('Encoded query:', encodeURIComponent(query));
   
-  const response = await fetch(searchUrl);
+  const response = await fetchWithTimeout(searchUrl);
   
   console.log('Google Search API response status:', response.status);
   
@@ -137,7 +138,7 @@ Example format:
 
   try {
     console.log('About to make fetch request to Claude API...');
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -146,7 +147,7 @@ Example format:
       },
       body: JSON.stringify(requestBody),
       signal: controller.signal
-    });
+    }, 60_000);
 
     clearTimeout(timeoutId);
     console.log('Claude API response received');

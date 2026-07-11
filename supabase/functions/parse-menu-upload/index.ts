@@ -6,6 +6,7 @@
  * Risk level: LOW (admin-only feature, file size limited to 10 MB)
  */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getAIConfig } from "../_shared/aiConfig.ts";
 

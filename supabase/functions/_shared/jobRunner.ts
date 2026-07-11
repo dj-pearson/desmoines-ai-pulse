@@ -13,6 +13,7 @@
  * The wrapper never throws — a job-infra failure must not crash the function.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { fetchWithTimeout } from './fetchWithTimeout.ts';
 import { agentPaused } from './agentGuards.ts';
 
 export interface JobContext {

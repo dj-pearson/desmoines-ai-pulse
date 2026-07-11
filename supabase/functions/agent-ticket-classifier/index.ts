@@ -20,6 +20,7 @@ import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { runAgent } from "../_shared/agentRun.ts";
 import { createAgentTask } from "../_shared/agentTasks.ts";
 import { getAIConfig } from "../_shared/aiConfig.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 
 const AGENT_KEY = "ticket-classifier";
 const BATCH = 20;
@@ -63,12 +64,12 @@ async function classify(supabaseUrl: string, supabaseKey: string, subject: strin
     `{"sentiment":"positive|neutral|negative","urgency":"low|medium|high|critical","category":"billing|account|content|technical|feedback|general","confidence":0..1}.\n\n` +
     `SUBJECT: ${subject}\nBODY: ${bodyText.slice(0, 1500)}`;
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetchWithTimeout("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": config.anthropic_version },
       body: JSON.stringify({ model: config.lightweight_model, max_tokens: 200, temperature: 0, messages: [{ role: "user", content: prompt }] }),
       signal: AbortSignal.timeout(20_000),
-    });
+    }, 60_000);
     if (!res.ok) return null;
     const data = await res.json();
     const text: string = (data.content ?? []).map((b: { text?: string }) => b.text ?? "").join("");

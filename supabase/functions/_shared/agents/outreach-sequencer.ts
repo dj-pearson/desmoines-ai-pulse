@@ -14,6 +14,7 @@
  * Consolidated into `agent-runner` (was `agent-outreach/index.ts`).
  */
 import { scoreOutput } from "../scoreOutput.ts";
+import { fetchWithTimeout } from "../fetchWithTimeout.ts";
 import { createApproval } from "../agentApprovals.ts";
 import { writeAgentAudit } from "../auditLog.ts";
 import { renderEmail } from "../emailLayout.ts";

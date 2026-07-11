@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { validateURLForSSRF } from '../_shared/validation.ts';
+import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -32,7 +33,7 @@ async function searchGoogleForEvent(eventTitle: string, location: string, apiKey
       const cseId = "017576662512468239146:omuauf_lfve"; // General web search CSE
       const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cseId}&q=${encodeURIComponent(searchQuery)}&num=5`;
       
-      const response = await fetch(searchUrl);
+      const response = await fetchWithTimeout(searchUrl);
       
       if (!response.ok) {
         console.error(`API error for query "${searchQuery}": ${response.status} ${response.statusText}`);

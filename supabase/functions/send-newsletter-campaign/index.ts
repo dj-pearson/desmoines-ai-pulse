@@ -25,6 +25,7 @@ import {
   isOriginAllowed,
 } from "../_shared/cors.ts";
 import { checkRateLimit, addRateLimitHeaders } from "../_shared/rateLimit.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const FROM_ADDRESS = Deno.env.get("NEWSLETTER_FROM")
@@ -59,7 +60,7 @@ async function sendOne(
   if (!RESEND_API_KEY) {
     throw new Error("RESEND_API_KEY is not configured");
   }
-  const r = await fetch("https://api.resend.com/emails", {
+  const r = await fetchWithTimeout("https://api.resend.com/emails", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

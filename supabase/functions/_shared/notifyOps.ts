@@ -11,6 +11,8 @@
  *      OPS_WEBHOOK_URL (or SLACK_WEBHOOK_URL) for the webhook.
  */
 
+import { fetchWithTimeout } from "./fetchWithTimeout.ts";
+
 // deno-lint-ignore no-explicit-any
 type Client = any;
 

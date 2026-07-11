@@ -12,6 +12,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
 import { escapeHtml } from "../_shared/escapeHtml.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 
 serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -136,7 +137,7 @@ serve(async (req) => {
     if (recipientEmail) {
       if (resendApiKey) {
         try {
-          const res = await fetch("https://api.resend.com/emails", {
+          const res = await fetchWithTimeout("https://api.resend.com/emails", {
             method: "POST",
             headers: {
               Authorization: `Bearer ${resendApiKey}`,
@@ -158,7 +159,7 @@ serve(async (req) => {
         }
       } else if (sendgridApiKey) {
         try {
-          const res = await fetch("https://api.sendgrid.com/v3/mail/send", {
+          const res = await fetchWithTimeout("https://api.sendgrid.com/v3/mail/send", {
             method: "POST",
             headers: {
               Authorization: `Bearer ${sendgridApiKey}`,

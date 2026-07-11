@@ -5,6 +5,7 @@ import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/ai
 import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
 import { resolveEntitledTier, hasFeatureAccess } from "../_shared/entitlements.ts";
 import { getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 
 // Monthly trip-planner quota per tier (matches the web useSubscription copy /
 // WEB-FEAT-011). -1 = unlimited. Enforced server-side so the client gate can't
@@ -375,11 +376,11 @@ Return ONLY the JSON object, no additional text.`;
       }
     );
 
-    const aiResponse = await fetch(config.api_endpoint, {
+    const aiResponse = await fetchWithTimeout(config.api_endpoint, {
       method: 'POST',
       headers,
       body: JSON.stringify(requestBody)
-    });
+    }, 60_000);
 
     if (!aiResponse.ok) {
       const errorData = await aiResponse.text();

@@ -21,6 +21,7 @@ import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { runJob } from "../_shared/jobRunner.ts";
 import { renderEmail, SITE_URL } from "../_shared/emailLayout.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const DEFAULT_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -209,7 +210,7 @@ serve(async (req) => {
         });
 
         try {
-          const res = await fetch("https://api.resend.com/emails", {
+          const res = await fetchWithTimeout("https://api.resend.com/emails", {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${RESEND_API_KEY}` },
             body: JSON.stringify({

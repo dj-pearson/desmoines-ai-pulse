@@ -17,6 +17,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
 import { checkRateLimitPersistent } from '../_shared/rateLimit.ts';
 import { runJob } from '../_shared/jobRunner.ts';
+import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
 
 const AUTO_APPROVE_THRESHOLD = 85;
 const AUTO_REJECT_THRESHOLD = 50;
@@ -83,7 +84,7 @@ async function safetyCheck(s: Submission): Promise<{ safe: boolean; reasons: str
       `illegal activity, or is clearly not a real local event. Respond with STRICT JSON: ` +
       `{"safe": boolean, "reasons": string[]}.\n\n` +
       `Title: ${s.title}\nDescription: ${s.description ?? ''}\nVenue: ${s.venue ?? ''}\nCategory: ${s.category ?? ''}`;
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
@@ -91,7 +92,7 @@ async function safetyCheck(s: Submission): Promise<{ safe: boolean; reasons: str
         max_tokens: 300,
         messages: [{ role: 'user', content: prompt }],
       }),
-    });
+    }, 60_000);
     if (!res.ok) return { safe: true, reasons: [] };
     const data = await res.json();
     const text = data?.content?.[0]?.text ?? '';

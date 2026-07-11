@@ -23,6 +23,7 @@ import { fetchAndStoreImage as _fetchAndStoreImageShared } from "../_shared/imag
 import { tryDomainAdapter } from "../_shared/domain-adapters/index.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { isHostAllowed } from "../_shared/fetchGuard.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -849,7 +850,7 @@ Return empty array [] if no attractions found.`,
         for (const endpoint of apiEndpoints.slice(0, 3)) {
           // Try first 3 endpoints
           try {
-            const apiResponse = await fetch(endpoint, {
+            const apiResponse = await fetchWithTimeout(endpoint, {
               headers: {
                 "User-Agent":
                   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -890,11 +891,11 @@ Return empty array [] if no attractions found.`,
         }
       );
 
-      const claudeResponse = await fetch(config.api_endpoint, {
+      const claudeResponse = await fetchWithTimeout(config.api_endpoint, {
         method: "POST",
         headers,
         body: JSON.stringify(requestBody)
-      });
+      }, 60_000);
 
     if (claudeResponse.ok) {
       const claudeData = await claudeResponse.json();

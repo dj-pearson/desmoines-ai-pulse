@@ -16,6 +16,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
 import { checkRateLimit } from '../_shared/rateLimit.ts';
 import { renderEmail } from '../_shared/emailLayout.ts';
+import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
 
 // WEB-SEC-006 thresholds: lock on >10 failures for one email OR >5 from one IP
 // within a 10-minute detection window; the lockout itself lasts 15 minutes.
@@ -266,7 +267,7 @@ async function onLockout(supabase: any, ctx: {
       recipient: { email: recipient },
     });
 
-    await fetch('https://api.resend.com/emails', {
+    await fetchWithTimeout('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${resendKey}` },
       body: JSON.stringify({

@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { validateURLForSSRF } from "../_shared/validation.ts"
 import { checkRateLimit } from "../_shared/rateLimit.ts"
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -108,7 +109,7 @@ serve(async (req) => {
     }
 
     // Fetch the image from validated URL
-    const response = await fetch(imageUrl, {
+    const response = await fetchWithTimeout(imageUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
       }

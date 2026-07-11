@@ -24,6 +24,7 @@ import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts"
 import { escapeHtml } from "../_shared/escapeHtml.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
 import { renderEmail } from "../_shared/emailLayout.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 
 serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -185,7 +186,7 @@ serve(async (req) => {
 
       if (resendApiKey) {
         try {
-          const res = await fetch("https://api.resend.com/emails", {
+          const res = await fetchWithTimeout("https://api.resend.com/emails", {
             method: "POST",
             headers: {
               Authorization: `Bearer ${resendApiKey}`,
@@ -205,7 +206,7 @@ serve(async (req) => {
         }
       } else if (sendgridApiKey) {
         try {
-          const res = await fetch("https://api.sendgrid.com/v3/mail/send", {
+          const res = await fetchWithTimeout("https://api.sendgrid.com/v3/mail/send", {
             method: "POST",
             headers: {
               Authorization: `Bearer ${sendgridApiKey}`,

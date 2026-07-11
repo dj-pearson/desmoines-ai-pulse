@@ -5,6 +5,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { escapeHtml } from "../_shared/escapeHtml.ts";
 import { renderEmail } from "../_shared/emailLayout.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -143,7 +144,7 @@ async function sendDigestEmail(recipient: Recipient, supabase: any) {
     });
 
     // Send email via Resend
-    const resendResponse = await fetch("https://api.resend.com/emails", {
+    const resendResponse = await fetchWithTimeout("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
