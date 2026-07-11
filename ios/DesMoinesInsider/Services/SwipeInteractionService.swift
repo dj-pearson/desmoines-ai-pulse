@@ -29,6 +29,10 @@ final class SwipeInteractionService {
     private let localKey = "discover.swipedItems.v1"
     private let pendingKey = "discover.pendingSwipes.v1"
 
+    /// Single-flight guard so concurrent `record` calls don't each start a flush
+    /// that double-sends rows and blanks the other's queue (IOS-AUDIT-DATA-003).
+    private var isFlushing = false
+
     private init() {
         // Tolerate the legacy unordered array; cap on load.
         swipedOrder = Self.loadLocalArray(localKey).suffix(Self.maxSwipedKeys)
@@ -100,8 +104,12 @@ final class SwipeInteractionService {
             return
         }
 
-        var queue = Self.loadPending(pendingKey)
-        guard !queue.isEmpty else { return }
+        // Single-flight: a flush already running will pick up rows we've just
+        // appended (it re-reads the queue each loop), so a concurrent caller
+        // returning here can't double-send or blank the queue.
+        guard !isFlushing else { return }
+        isFlushing = true
+        defer { isFlushing = false }
 
         struct InsertRow: Encodable {
             let user_id: String
@@ -111,22 +119,35 @@ final class SwipeInteractionService {
             let source_context: [String: [String]]?
         }
 
-        let rows = queue.map {
-            InsertRow(
-                user_id: userId,
-                item_type: $0.itemType,
-                item_id: $0.itemId,
-                action: $0.action,
-                source_context: $0.sourceContext
-            )
-        }
+        // Drain in a loop so rows appended while an insert was in flight still
+        // get sent by this same flush.
+        while true {
+            let batch = Self.loadPending(pendingKey)
+            guard !batch.isEmpty else { return }
 
-        do {
-            try await client.from("swipe_interactions").insert(rows).execute()
-            queue.removeAll()
-            Self.savePending(pendingKey, queue: queue)
-        } catch {
-            // Leave queue intact; next swipe will retry.
+            let rows = batch.map {
+                InsertRow(
+                    user_id: userId,
+                    item_type: $0.itemType,
+                    item_id: $0.itemId,
+                    action: $0.action,
+                    source_context: $0.sourceContext
+                )
+            }
+
+            do {
+                try await client.from("swipe_interactions").insert(rows).execute()
+            } catch {
+                // Leave the queue intact; the next swipe will retry.
+                return
+            }
+
+            // Remove ONLY the rows we actually sent (the leading `batch.count`).
+            // New rows are appended at the end, so anything queued during the
+            // insert survives instead of being blanked.
+            var remaining = Self.loadPending(pendingKey)
+            remaining.removeFirst(min(batch.count, remaining.count))
+            Self.savePending(pendingKey, queue: remaining)
         }
     }
 

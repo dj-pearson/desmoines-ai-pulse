@@ -21,23 +21,23 @@ final class HotelsViewModel {
     var searchText: String = "" {
         didSet {
             guard !suppress, searchText != oldValue else { return }
-            debounceSearch()
+            resetAndFetch()
         }
     }
     var selectedAreas: Set<String> = [] {
-        didSet { guard !suppress, selectedAreas != oldValue else { return }; Task { await refresh() } }
+        didSet { guard !suppress, selectedAreas != oldValue else { return }; resetAndFetch() }
     }
     var selectedPriceRanges: Set<String> = [] {
-        didSet { guard !suppress, selectedPriceRanges != oldValue else { return }; Task { await refresh() } }
+        didSet { guard !suppress, selectedPriceRanges != oldValue else { return }; resetAndFetch() }
     }
     var minStars: Double = 0 {
-        didSet { guard !suppress, minStars != oldValue else { return }; Task { await refresh() } }
+        didSet { guard !suppress, minStars != oldValue else { return }; resetAndFetch() }
     }
     var featuredOnly: Bool = false {
-        didSet { guard !suppress, featuredOnly != oldValue else { return }; Task { await refresh() } }
+        didSet { guard !suppress, featuredOnly != oldValue else { return }; resetAndFetch() }
     }
     var sort: HotelsService.Sort = .featured {
-        didSet { guard !suppress, sort != oldValue else { return }; Task { await refresh() } }
+        didSet { guard !suppress, sort != oldValue else { return }; resetAndFetch() }
     }
 
     private var suppress = false
@@ -51,7 +51,12 @@ final class HotelsViewModel {
     private let service = HotelsService.shared
     private let pageSize = Config.defaultPageSize
     private var offset = 0
-    private var searchTask: Task<Void, Never>?
+    /// Single debounced, cancellable fetch for search + every filter change so a
+    /// stale response can't win the last-writer race (IOS-AUDIT-PERF-004).
+    private var fetchTask: Task<Void, Never>?
+    /// Bumped per reset; a concurrent `loadMoreIfNeeded` discards its page if a
+    /// reset ran while it was in flight.
+    private var loadGeneration = 0
 
     // MARK: - Load
 
@@ -67,24 +72,28 @@ final class HotelsViewModel {
     }
 
     func refresh() async {
-        searchTask?.cancel()
+        loadGeneration &+= 1
+        let generation = loadGeneration
         isLoading = true
         errorMessage = nil
         offset = 0
 
         do {
             let response = try await service.fetchHotels(query: buildQuery())
+            // Discard if cancelled or superseded by a newer reset in flight.
+            guard !Task.isCancelled, generation == loadGeneration else { return }
             hotels = response.hotels
             hasMore = response.hasMore
             let toIndex = response.hotels
             Task { await SpotlightService.shared.indexHotels(toIndex) }
         } catch {
+            guard generation == loadGeneration else { return }
             errorMessage = error.localizedDescription
             hotels = []
             hasMore = false
         }
 
-        isLoading = false
+        if generation == loadGeneration { isLoading = false }
     }
 
     func loadMoreIfNeeded(currentItem: Hotel) async {
@@ -93,14 +102,17 @@ final class HotelsViewModel {
               idx >= hotels.count - 5 else { return }
 
         isLoadingMore = true
+        let generation = loadGeneration
         offset = hotels.count
 
         do {
             let response = try await service.fetchHotels(query: buildQuery())
+            // A reset ran while this page was in flight — discard the stale page.
+            guard generation == loadGeneration else { isLoadingMore = false; return }
             hotels += response.hotels
             hasMore = response.hasMore
         } catch {
-            hasMore = false
+            if generation == loadGeneration { hasMore = false }
         }
 
         isLoadingMore = false
@@ -114,7 +126,7 @@ final class HotelsViewModel {
         minStars = 0
         featuredOnly = false
         suppress = false
-        Task { await refresh() }
+        resetAndFetch()
     }
 
     // MARK: - Private
@@ -132,13 +144,16 @@ final class HotelsViewModel {
         )
     }
 
-    private func debounceSearch() {
-        searchTask?.cancel()
-        searchTask = Task { [searchText] in
-            try? await Task.sleep(for: .milliseconds(350))
+    /// Single debounced entry point for search + every filter change; cancels any
+    /// pending fetch so a burst collapses to one request and the newest wins.
+    /// Suppressed during bulk updates (`clearFilters`).
+    private func resetAndFetch() {
+        guard !suppress else { return }
+        fetchTask?.cancel()
+        fetchTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(300))
             guard !Task.isCancelled else { return }
-            guard self.searchText == searchText else { return }
-            await refresh()
+            await self?.refresh()
         }
     }
 }

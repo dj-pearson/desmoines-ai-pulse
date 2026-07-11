@@ -74,13 +74,21 @@ final class MapViewModel {
     // MARK: - Load Data
 
     func loadNearbyContent() async {
-        // Cancel any in-flight fetch
+        // Run as the single cancellable fetch so a later search() (or reload)
+        // cancels this load instead of letting it finish and clobber newer
+        // results. Previously this cancelled fetchTask but never registered
+        // itself, so a search racing a nearby load could be overwritten.
         fetchTask?.cancel()
+        let task = Task { await performNearbyLoad() }
+        fetchTask = task
+        await task.value
+    }
 
+    private func performNearbyLoad() async {
         // In UI testing mode, skip location services entirely to avoid
         // permission dialogs and network delays on CI simulators.
         if Config.isUITesting {
-            await loadDefaultArea()
+            await performDefaultAreaLoad()
             return
         }
 
@@ -103,20 +111,29 @@ final class MapViewModel {
         } catch {
             guard !Task.isCancelled else { return }
             // Fall back to Des Moines center
-            await loadDefaultArea()
+            await performDefaultAreaLoad()
         }
 
+        guard !Task.isCancelled else { return }
         isLoading = false
         hasLoadedOnce = true
     }
 
     func loadDefaultArea() async {
+        fetchTask?.cancel()
+        let task = Task { await performDefaultAreaLoad() }
+        fetchTask = task
+        await task.value
+    }
+
+    private func performDefaultAreaLoad() async {
         isLoading = true
         currentLatitude = Config.defaultLatitude
         currentLongitude = Config.defaultLongitude
 
         await fetchAllContent()
 
+        guard !Task.isCancelled else { return }
         isLoading = false
         hasLoadedOnce = true
     }
@@ -143,6 +160,9 @@ final class MapViewModel {
         }()
 
         let (e, r, a) = await (fetchedEvents, fetchedRestaurants, fetchedAttractions)
+        // Don't let a superseded nearby/default load overwrite newer results
+        // (e.g. a search the user kicked off while this was in flight).
+        guard !Task.isCancelled else { return }
         events = e
         restaurants = r
         attractions = a
@@ -162,8 +182,17 @@ final class MapViewModel {
 
     func search() async {
         guard !searchText.trimmingCharacters(in: .whitespaces).isEmpty else {
-            // Clear search - reload nearby content
-            await fetchAllContent()
+            // Clear search — reload content for the current area as a fresh
+            // cancellable task so it can't race a subsequent search.
+            fetchTask?.cancel()
+            let task = Task {
+                isLoading = true
+                await fetchAllContent()
+                guard !Task.isCancelled else { return }
+                isLoading = false
+            }
+            fetchTask = task
+            await task.value
             return
         }
 
