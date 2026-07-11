@@ -4755,8 +4755,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: 20260709000052_crm_pipeline.sql FKs at crm_accounts:18-19, crm_leads:2x with no accompanying indexes."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: 20260709000052_crm_pipeline.sql FKs at crm_accounts:18-19, crm_leads:2x with no accompanying indexes. | DONE 2026-07-11: migration 20260711000001 adds indexes on all unindexed FK columns across crm_accounts/crm_leads/crm_opportunities/proposals/crm_activities (already-covered FKs omitted)."
     },
     {
       "id": "WEB-DB-005",
@@ -4769,8 +4769,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: 20260620000009_web_vitals.sql:26-31 (web_vitals_insert_any WITH CHECK true, no TO role)."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: 20260620000009_web_vitals.sql:26-31 (web_vitals_insert_any WITH CHECK true, no TO role). | DONE 2026-07-11: migration 20260711000002 replaces web_vitals WITH CHECK(true) policy with a shape/size-bounded policy scoped to anon+authenticated; RUM beacons still pass."
     },
     {
       "id": "WEB-DB-006",
