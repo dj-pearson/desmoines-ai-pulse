@@ -4843,8 +4843,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: useSupabase.ts:30,48,116,145,162,203; MonthlyEventsPage.tsx:43-57; EventsThisWeekend.tsx:48-54; OpenNowRestaurants.tsx:58; DietaryRestaurants.tsx:58,79; SportsHub/MusicHub."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: useSupabase.ts:30,48,116,145,162,203; MonthlyEventsPage.tsx:43-57; EventsThisWeekend.tsx:48-54; OpenNowRestaurants.tsx:58; DietaryRestaurants.tsx:58,79; SportsHub/MusicHub. | DONE 2026-07-11: column-projected 14 select('*') list/SEO queries (useSupabase featured/openings x6, MonthlyEventsPage, EventsThisWeekend, OpenNowRestaurants, DietaryRestaurants x2, SportsHub, MusicHub, EventsByLocation restaurants) to EVENT/RESTAURANT/ATTRACTION_LIST_COLUMNS; cards unchanged."
     },
     {
       "id": "WEB-PERF-011",

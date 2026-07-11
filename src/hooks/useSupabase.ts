@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Event, RestaurantOpening, Restaurant, Attraction, Playground } from "@/lib/types";
+import { EVENT_LIST_COLUMNS, RESTAURANT_LIST_COLUMNS, ATTRACTION_LIST_COLUMNS } from "@/lib/listColumns";
 
 /** Deterministic daily shuffle using a numeric seed (e.g. date as YYYYMMDD integer).
  *  Returns a new array — original is not mutated. */
@@ -27,7 +28,7 @@ export function useFeaturedEvents() {
       // Pass 1: sponsored events take priority
       const { data: sponsoredData, error: sponsoredError } = await supabase
         .from('events')
-        .select('*')
+        .select(EVENT_LIST_COLUMNS)
         .eq('is_sponsored', true)
         .gte('date', today)
         .order('date', { ascending: true });
@@ -45,7 +46,7 @@ export function useFeaturedEvents() {
       // Pass 2: fill remaining slots with rotated organic featured items
       const { data: featuredData, error: featuredError } = await supabase
         .from('events')
-        .select('*')
+        .select(EVENT_LIST_COLUMNS)
         .eq('is_featured', true)
         .eq('is_sponsored', false)
         .gte('date', today)
@@ -113,7 +114,7 @@ export function useRestaurantOpenings() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('restaurants')
-        .select('*')
+        .select(RESTAURANT_LIST_COLUMNS)
         .in('status', ['opening_soon', 'announced'])
         .order('opening_date', { ascending: true, nullsFirst: false });
       
@@ -142,7 +143,7 @@ export function useFeaturedRestaurants() {
       // Pass 1: sponsored restaurants take priority
       const { data: sponsoredData, error: sponsoredError } = await supabase
         .from('restaurants')
-        .select('*')
+        .select(RESTAURANT_LIST_COLUMNS)
         .eq('is_sponsored', true)
         .order('rating', { ascending: false });
 
@@ -159,7 +160,7 @@ export function useFeaturedRestaurants() {
       // Pass 2: organic featured + highly-rated (≥4.0) restaurants as rotation pool
       const { data: featuredData, error: featuredError } = await supabase
         .from('restaurants')
-        .select('*')
+        .select(RESTAURANT_LIST_COLUMNS)
         .or('is_featured.eq.true,rating.gte.4.0')
         .eq('is_sponsored', false)
         .order('rating', { ascending: false })
@@ -199,7 +200,7 @@ export function useFeaturedAttractions() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('attractions')
-        .select('*')
+        .select(ATTRACTION_LIST_COLUMNS)
         .eq('is_featured', true)
         .order('rating', { ascending: false })
         .limit(6);

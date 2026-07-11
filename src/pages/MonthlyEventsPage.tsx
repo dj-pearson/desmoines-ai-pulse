@@ -16,6 +16,7 @@ import { format, startOfMonth, endOfMonth, parseISO, isValid } from "date-fns";
 import { useState, useEffect } from "react";
 import { BRAND } from "@/lib/brandConfig";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { EVENT_LIST_COLUMNS } from "@/lib/listColumns";
 
 export default function MonthlyEventsPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -42,7 +43,7 @@ export default function MonthlyEventsPage() {
     queryFn: async () => {
       let query = supabase
         .from("events")
-        .select("*")
+        .select(EVENT_LIST_COLUMNS)
         .gte("date", format(monthStart, "yyyy-MM-dd"))
         .lte("date", format(monthEnd, "yyyy-MM-dd"))
         .order("date", { ascending: true })
