@@ -198,11 +198,11 @@ Return ONLY the JSON object, no other text.`;
       { supabaseUrl, supabaseKey: supabaseServiceKey }
     );
 
-    const aiResponse = await fetch(config.api_endpoint, {
+    const aiResponse = await fetchWithTimeout(config.api_endpoint, {
       method: 'POST',
       headers,
       body: JSON.stringify(requestBody)
-    });
+    }, 60_000);
 
     if (!aiResponse.ok) {
       const errorData = await aiResponse.text();

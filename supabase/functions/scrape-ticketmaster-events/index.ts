@@ -184,7 +184,7 @@ async function extractShowsWithBrowserlessFunction(): Promise<ScrapedShow[]> {
 
   console.log("🚀 Using Browserless /function for direct DOM extraction...");
 
-  const response = await fetch(browserlessUrl, {
+  const response = await fetchWithTimeout(browserlessUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ code }),

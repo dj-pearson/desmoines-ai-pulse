@@ -61,7 +61,7 @@ export async function sendNurtureEmail(
     const headers: Record<string, string> = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
     if (rendered.listUnsubscribe) headers["List-Unsubscribe"] = rendered.listUnsubscribe;
     if (rendered.listUnsubscribePost) headers["List-Unsubscribe-Post"] = rendered.listUnsubscribePost;
-    const res = await fetch("https://api.resend.com/emails", {
+    const res = await fetchWithTimeout("https://api.resend.com/emails", {
       method: "POST",
       headers,
       body: JSON.stringify({ from, to: [args.email], subject: args.subject, html: rendered.html, text: rendered.text }),

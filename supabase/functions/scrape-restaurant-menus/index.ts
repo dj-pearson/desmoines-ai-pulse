@@ -467,7 +467,7 @@ If no menu items can be found, return: {"sections": []}`;
 
   const aiConfig = await getAIConfig(supabaseUrl, supabaseKey);
 
-  const response = await fetch(aiConfig.api_endpoint, {
+  const response = await fetchWithTimeout(aiConfig.api_endpoint, {
     method: 'POST',
     headers: {
       'x-api-key': claudeApiKey,
@@ -479,7 +479,7 @@ If no menu items can be found, return: {"sections": []}`;
       max_tokens: parseInt(String(aiConfig.max_tokens_large), 10) || 8000,
       messages: [{ role: 'user', content: prompt }],
     }),
-  });
+  }, 60_000);
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -518,7 +518,7 @@ async function extractMenuFromPdf(
 
   const aiConfig = await getAIConfig(supabaseUrl, supabaseKey);
 
-  const response = await fetch(aiConfig.api_endpoint, {
+  const response = await fetchWithTimeout(aiConfig.api_endpoint, {
     method: 'POST',
     headers: {
       'x-api-key': claudeApiKey,
@@ -545,7 +545,7 @@ ${MENU_EXTRACTION_INSTRUCTIONS}`,
         ],
       }],
     }),
-  });
+  }, 60_000);
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -607,7 +607,7 @@ Extract the COMPLETE menu with every item visible across all images, organized b
 ${MENU_EXTRACTION_INSTRUCTIONS}`,
   });
 
-  const response = await fetch(aiConfig.api_endpoint, {
+  const response = await fetchWithTimeout(aiConfig.api_endpoint, {
     method: 'POST',
     headers: {
       'x-api-key': claudeApiKey,
@@ -619,7 +619,7 @@ ${MENU_EXTRACTION_INSTRUCTIONS}`,
       max_tokens: parseInt(String(aiConfig.max_tokens_large), 10) || 8000,
       messages: [{ role: 'user', content }],
     }),
-  });
+  }, 60_000);
 
   if (!response.ok) {
     const errorText = await response.text();

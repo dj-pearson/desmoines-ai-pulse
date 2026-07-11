@@ -21,11 +21,11 @@ export async function embedText(text: string): Promise<EmbedResult> {
   const apiKey = Deno.env.get("OPENAI_API_KEY");
   if (!apiKey) throw new Error("OPENAI_API_KEY not set");
   const input = text.slice(0, 8000); // keep well within the model's token limit
-  const res = await fetch("https://api.openai.com/v1/embeddings", {
+  const res = await fetchWithTimeout("https://api.openai.com/v1/embeddings", {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({ model: MODEL, input, dimensions: DIMS }),
-  });
+  }, 60_000);
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     throw new Error(`OpenAI embeddings ${res.status}: ${body.slice(0, 200)}`);

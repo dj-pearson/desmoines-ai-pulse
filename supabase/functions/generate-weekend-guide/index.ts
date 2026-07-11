@@ -136,11 +136,11 @@ Structure it with clear day sections and make it sound exciting and informative!
       }
     );
 
-    const claudeResponse = await fetch(config.api_endpoint, {
+    const claudeResponse = await fetchWithTimeout(config.api_endpoint, {
       method: 'POST',
       headers,
       body: JSON.stringify(requestBody)
-    });
+    }, 60_000);
 
     if (!claudeResponse.ok) {
       const errorText = await claudeResponse.text();

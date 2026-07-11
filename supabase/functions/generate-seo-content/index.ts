@@ -133,11 +133,11 @@ serve(async (req) => {
           }
         );
 
-        const claudeResponse = await fetch(config.api_endpoint, {
+        const claudeResponse = await fetchWithTimeout(config.api_endpoint, {
           method: 'POST',
           headers,
           body: JSON.stringify(requestBody)
-        });
+        }, 60_000);
 
         console.log('Claude API Response Status:', claudeResponse.status);
 

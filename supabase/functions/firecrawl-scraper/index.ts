@@ -288,11 +288,11 @@ Focus on Des Moines local SEO and GEO optimization for AI search engines.`;
       }
     );
 
-    const claudeResponse = await fetch(config.api_endpoint, {
+    const claudeResponse = await fetchWithTimeout(config.api_endpoint, {
       method: 'POST',
       headers,
       body: JSON.stringify(requestBody)
-    });
+    }, 60_000);
 
     if (!claudeResponse.ok) {
       console.error(`❌ SEO generation API error: ${claudeResponse.status}`);
@@ -851,11 +851,11 @@ Return empty array [] if no competitive content found.`
         }
       );
 
-      const claudeResponse = await fetch(aiConfig.api_endpoint, {
+      const claudeResponse = await fetchWithTimeout(aiConfig.api_endpoint, {
         method: "POST",
         headers: claudeHeaders,
         body: JSON.stringify(claudeRequestBody),
-      });
+      }, 60_000);
 
       if (!claudeResponse.ok) {
         const errorText = await claudeResponse.text();

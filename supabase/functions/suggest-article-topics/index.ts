@@ -197,7 +197,7 @@ Generate diverse, engaging topics that would genuinely help Des Moines residents
     const config = await getAIConfig(supabaseUrl, supabaseServiceKey);
     const headers = await getClaudeHeaders(claudeApiKey, supabaseUrl, supabaseServiceKey);
     
-    const response = await fetch(config.api_endpoint, {
+    const response = await fetchWithTimeout(config.api_endpoint, {
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -208,7 +208,7 @@ Generate diverse, engaging topics that would genuinely help Des Moines residents
           content: suggestionPrompt
         }]
       })
-    });
+    }, 60_000);
 
     console.log('Claude API response status:', response.status);
 

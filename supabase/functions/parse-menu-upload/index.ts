@@ -125,7 +125,7 @@ async function extractMenuFromFile(
 
   const aiConfig = await getAIConfig(supabaseUrl, supabaseKey);
 
-  const response = await fetch(aiConfig.api_endpoint, {
+  const response = await fetchWithTimeout(aiConfig.api_endpoint, {
     method: 'POST',
     headers: {
       'x-api-key': claudeApiKey,
@@ -148,7 +148,7 @@ async function extractMenuFromFile(
         },
       ],
     }),
-  });
+  }, 60_000);
 
   if (!response.ok) {
     const errorText = await response.text();

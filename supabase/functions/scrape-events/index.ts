@@ -445,13 +445,14 @@ Only include actual events, not navigation items, headers, or generic text. If n
       }
     );
 
-    const claudeResponse = await fetch(
+    const claudeResponse = await fetchWithTimeout(
       aiConfig.api_endpoint,
       {
         method: "POST",
         headers: claudeHeaders,
         body: JSON.stringify(claudeRequestBody),
-      }
+      },
+      60_000
     );
 
     if (claudeResponse.ok) {
@@ -1250,7 +1251,7 @@ async function scrapeWebsite(
   try {
     console.log(`🔍 Scraping ${job.name} from ${job.config.url}`);
 
-    const response = await fetch(job.config.url, {
+    const response = await fetchWithTimeout(job.config.url, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
@@ -1435,7 +1436,7 @@ async function analyzeWebsiteStructure(
     console.log(`🔍 Analyzing website structure for: ${url}`);
 
     // Fetch the website HTML
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
@@ -1640,13 +1641,14 @@ Format your response as JSON:
         { supabaseUrl, supabaseKey, customMaxTokens: 1000 }
       );
 
-      const claudeResponse = await fetch(
+      const claudeResponse = await fetchWithTimeout(
         aiConfig.api_endpoint,
         {
           method: "POST",
           headers,
           body: JSON.stringify(requestBody),
-        }
+        },
+        60_000
       );
 
       console.log(`🔍 Claude response status: ${claudeResponse.status}`);
@@ -1719,13 +1721,14 @@ Enhanced description:`,
         { supabaseUrl, supabaseKey, customMaxTokens: 200 }
       );
 
-      const claudeResponse = await fetch(
+      const claudeResponse = await fetchWithTimeout(
         aiConfig.api_endpoint,
         {
           method: "POST",
           headers,
           body: JSON.stringify(requestBody),
-        }
+        },
+        60_000
       );
 
       if (claudeResponse.ok) {

@@ -344,7 +344,7 @@ serve(async (req) => {
                     };
                   }
       
-                  const response = await fetch(webhookUrl, {
+                  const response = await fetchWithTimeout(webhookUrl, {
                     method: "POST",
                     headers: {
                       "Content-Type": "application/json",
@@ -538,7 +538,7 @@ serve(async (req) => {
               };
             }
 
-            const response = await fetch(webhookUrl, {
+            const response = await fetchWithTimeout(webhookUrl, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -792,11 +792,11 @@ Make it detailed and engaging for Facebook/LinkedIn. Include compelling details,
     }
   );
 
-  const shortResponse = await fetch(config.api_endpoint, {
+  const shortResponse = await fetchWithTimeout(config.api_endpoint, {
     method: "POST",
     headers,
     body: JSON.stringify(shortRequestBody)
-  });
+  }, 60_000);
 
   if (!shortResponse.ok) {
     const errorData = await shortResponse.json();
@@ -819,11 +819,11 @@ Make it detailed and engaging for Facebook/LinkedIn. Include compelling details,
     }
   );
 
-  const longResponse = await fetch(config.api_endpoint, {
+  const longResponse = await fetchWithTimeout(config.api_endpoint, {
     method: "POST",
     headers,
     body: JSON.stringify(longRequestBody)
-  });
+  }, 60_000);
 
   if (!longResponse.ok) {
     const errorData = await longResponse.json();
@@ -916,7 +916,7 @@ Make it detailed and engaging for Facebook/LinkedIn. Include compelling details,
           metadata: savedPost.metadata,
         };
 
-        const response = await fetch(webhookUrl, {
+        const response = await fetchWithTimeout(webhookUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

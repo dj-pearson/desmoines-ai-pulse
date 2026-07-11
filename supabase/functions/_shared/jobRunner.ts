@@ -200,7 +200,7 @@ export async function sendJobAlert(jobName: string, message: string, alertEmail?
       console.warn(`[jobRunner] alert not sent for "${jobName}" (missing ADMIN_ALERT_EMAIL or RESEND_API_KEY): ${message}`);
       return;
     }
-    await fetch('https://api.resend.com/emails', {
+    await fetchWithTimeout('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${resendKey}` },
       body: JSON.stringify({

@@ -204,11 +204,11 @@ Do not include any explanatory text outside the JSON. Return only the JSON objec
     }
   );
 
-  const response = await fetch(config.api_endpoint, {
+  const response = await fetchWithTimeout(config.api_endpoint, {
     method: 'POST',
     headers,
     body: JSON.stringify(requestBody)
-  });
+  }, 60_000);
 
   const aiResponse = await response.json();
   const enhancedContent = aiResponse.content[0].text;

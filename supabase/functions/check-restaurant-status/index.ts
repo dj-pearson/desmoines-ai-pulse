@@ -50,7 +50,7 @@ serve(async (req) => {
 
       try {
         // Check restaurant status using Google Places API (New)
-        const response = await fetch(
+        const response = await fetchWithTimeout(
           `https://places.googleapis.com/v1/places/${restaurant.google_place_id}`,
           {
             method: "GET",

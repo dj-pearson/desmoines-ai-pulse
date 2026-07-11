@@ -123,7 +123,7 @@ async function sendEmail(args: NotifyOpsArgs): Promise<boolean> {
       console.warn(`[notifyOps] email not sent (missing ADMIN_ALERT_EMAIL/RESEND_API_KEY): ${args.title}`);
       return false;
     }
-    const res = await fetch("https://api.resend.com/emails", {
+    const res = await fetchWithTimeout("https://api.resend.com/emails", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${resendKey}` },
       body: JSON.stringify({
@@ -144,7 +144,7 @@ async function sendWebhook(args: NotifyOpsArgs): Promise<boolean> {
   try {
     const url = Deno.env.get("OPS_WEBHOOK_URL") || Deno.env.get("SLACK_WEBHOOK_URL");
     if (!url) return false;
-    const res = await fetch(url, {
+    const res = await fetchWithTimeout(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text: `*[${args.severity.toUpperCase()}] ${args.title}*\n${args.body}` }),
