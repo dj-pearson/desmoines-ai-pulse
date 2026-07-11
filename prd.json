@@ -5278,8 +5278,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: 125 root .md files incl. 'restaurant-scraper-implementation (1).md'."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: 125 root .md files incl. 'restaurant-scraper-implementation (1).md'. | DONE 2026-07-11: root .md already consolidated under docs/ at HEAD; added docs/README.md categorized index and fixed inbound references (.github/DEPLOYMENT_CACHE_CHECKLIST, android/ANDROID_SETUP_GUIDE, ScraperSettings.tsx, 2 .ps1) to the new docs/ paths. Only the 9 canonical docs remain at root; removed untracked stale root-md duplicates."
     },
     {
       "id": "WEB-OPS-004",
