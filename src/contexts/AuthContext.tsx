@@ -491,7 +491,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       sessionKeysToRemove.forEach(key => sessionStorage.removeItem(key));
     } catch (error) {
-      // Ignore sessionStorage errors
+      // Intentional: best-effort cleanup on logout. sessionStorage may be
+      // unavailable (private mode / disabled storage); failing to clear stale
+      // keys here must not block logout, so it is safe to ignore.
     }
 
     log.info('logout', 'Logout complete');

@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { sessionStore } from '@/lib/safeStorage';
+import { handleError } from '@/lib/errorHandler';
 
 /**
  * Generates or retrieves a persistent session ID for analytics tracking.
@@ -96,8 +97,9 @@ export function usePageTracking(): void {
         pathname: location.pathname,
         sessionId: sessionIdRef.current,
         userId: user?.id ?? null,
-      }).catch(() => {
-        // Swallow — analytics must never crash the app
+      }).catch((error) => {
+        // handleError logs without throwing, so analytics still never crash the app.
+        handleError(error, { component: 'usePageTracking', action: 'recordPageView' });
       });
     }, 300);
 

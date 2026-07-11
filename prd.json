@@ -4918,8 +4918,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Bundles 3 leak findings (2 correctness HIGH/LOW + 1 MEDIUM)."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Bundles 3 leak findings (2 correctness HIGH/LOW + 1 MEDIUM). | DONE 2026-07-11: useVirtualList uses one stable resize handler ref (listener actually removed); CatchDesmoinUrlExtractor clears progress interval in finally; Hotels debounce held in useRef + cleared on unmount (removed window-any global)."
     },
     {
       "id": "WEB-QUAL-002",
@@ -4947,8 +4947,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: AuthContext.tsx:489-491; ProtectedRoute.tsx:92-94; plus tracking/useSimplePersonalization."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: AuthContext.tsx:489-491; ProtectedRoute.tsx:92-94; plus tracking/useSimplePersonalization. | DONE 2026-07-11: swallowed catches in useSimplePersonalization (4) + usePageTracking (1) now call handleError; AuthContext logout sessionStorage-cleanup ignore kept with justifying comment; ProtectedRoute already fixed."
     },
     {
       "id": "WEB-QUAL-004",
