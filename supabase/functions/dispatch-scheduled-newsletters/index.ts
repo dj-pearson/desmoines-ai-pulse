@@ -29,6 +29,14 @@ const FROM_ADDRESS =
     ?? "Des Moines Insider <events@desmoinesinsider.com>";
 const BATCH_SIZE = 5;
 const MAX_CAMPAIGNS_PER_RUN = 5;
+// Page size for reading large tables (recipients / prior deliveries) so a big
+// segment can't exceed function memory by materializing everything in one query.
+const DB_PAGE_SIZE = 1000;
+// A campaign left in 'sending' longer than this was almost certainly abandoned
+// by a crashed / timed-out prior invocation (edge functions are killed well
+// under a minute). Such rows are reclaimed and resumed. Must comfortably exceed
+// the longest real dispatch to avoid clobbering an in-flight run.
+const STUCK_SENDING_MINUTES = 15;
 
 interface Segment {
   sources?: string[];
@@ -46,16 +54,56 @@ async function resolveSegment(
   supabase: ReturnType<typeof createClient>,
   segment: Segment | null,
 ): Promise<{ email: string }[]> {
-  let q = supabase
-    .from("newsletter_subscribers")
-    .select("email")
-    .eq("status", "active");
-  if (segment?.sources && segment.sources.length > 0) {
-    q = q.in("source", segment.sources);
+  // Paginate so a large segment can't blow the function's memory by loading the
+  // whole subscriber list in a single unbounded query. Ordered by email for a
+  // stable window across pages.
+  const out: { email: string }[] = [];
+  for (let from = 0; ; from += DB_PAGE_SIZE) {
+    let q = supabase
+      .from("newsletter_subscribers")
+      .select("email")
+      .eq("status", "active");
+    if (segment?.sources && segment.sources.length > 0) {
+      q = q.in("source", segment.sources);
+    }
+    const { data, error } = await q
+      .order("email", { ascending: true })
+      .range(from, from + DB_PAGE_SIZE - 1);
+    if (error) throw error;
+    const rows = (data ?? []) as { email: string }[];
+    out.push(...rows);
+    if (rows.length < DB_PAGE_SIZE) break;
   }
-  const { data, error } = await q;
-  if (error) throw error;
-  return (data ?? []) as { email: string }[];
+  return out;
+}
+
+/**
+ * Emails that already have a delivery row for this campaign. Used to make a
+ * resume (after a reclaimed 'sending' crash) idempotent — we never re-send to a
+ * recipient that was already attempted. Paginated for the same memory reason.
+ */
+async function loadAttemptedRecipients(
+  supabase: ReturnType<typeof createClient>,
+  campaignId: string,
+): Promise<Set<string>> {
+  const attempted = new Set<string>();
+  for (let from = 0; ; from += DB_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("newsletter_deliveries")
+      .select("email")
+      .eq("campaign_id", campaignId)
+      .range(from, from + DB_PAGE_SIZE - 1);
+    if (error) {
+      // Non-fatal: if we can't read prior deliveries, fall back to attempting
+      // all recipients rather than silently dropping the send.
+      console.error("loadAttemptedRecipients failed:", error.message);
+      break;
+    }
+    const rows = (data ?? []) as { email: string }[];
+    for (const r of rows) attempted.add(r.email.toLowerCase());
+    if (rows.length < DB_PAGE_SIZE) break;
+  }
+  return attempted;
 }
 
 async function sendOne(
@@ -91,7 +139,19 @@ async function dispatchCampaign(
   supabase: ReturnType<typeof createClient>,
   campaign: CampaignRow,
 ): Promise<{ delivered: number; failed: number; errors: string[] }> {
-  const recipients = await resolveSegment(supabase, campaign.segment);
+  const allRecipients = await resolveSegment(supabase, campaign.segment);
+  // Idempotent resume: skip any recipient already attempted for this campaign
+  // (delivery row exists) so a reclaimed/resumed dispatch never double-sends.
+  const attempted = await loadAttemptedRecipients(supabase, campaign.id);
+  const recipients = attempted.size === 0
+    ? allRecipients
+    : allRecipients.filter((r) => !attempted.has(r.email.toLowerCase()));
+  if (attempted.size > 0) {
+    console.log(
+      `Campaign ${campaign.id}: resuming — ${attempted.size} already attempted, ` +
+        `${recipients.length} remaining of ${allRecipients.length}`,
+    );
+  }
   let delivered = 0;
   let failed = 0;
   const errors: string[] = [];
@@ -170,6 +230,23 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
+
+    // Reclaim campaigns stranded in 'sending' by a crashed/timed-out prior run
+    // (flips them back to 'scheduled' so the claim below resumes them). Runs
+    // before the claim so a stuck row can be picked up in the same invocation.
+    // Non-fatal — a reclaim failure must not block dispatching healthy rows.
+    const { data: reclaimedCount, error: reclaimError } = await supabase.rpc(
+      "reclaim_stuck_newsletter_campaigns",
+      { p_older_than_minutes: STUCK_SENDING_MINUTES },
+    );
+    if (reclaimError) {
+      console.error(
+        "reclaim_stuck_newsletter_campaigns failed:",
+        reclaimError.message,
+      );
+    } else if (typeof reclaimedCount === "number" && reclaimedCount > 0) {
+      console.log(`Reclaimed ${reclaimedCount} stuck 'sending' campaign(s)`);
+    }
 
     // Atomically claim up to MAX_CAMPAIGNS_PER_RUN due rows.
     const { data: claimed, error: claimError } = await supabase.rpc(

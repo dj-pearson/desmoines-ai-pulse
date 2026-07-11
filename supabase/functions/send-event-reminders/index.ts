@@ -6,10 +6,25 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { escapeHtml } from "../_shared/escapeHtml.ts";
 import { renderEmail } from "../_shared/emailLayout.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { requireAdminOrApiKey, timingSafeEqual } from "../_shared/apiKeyAuth.ts";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+// Public site base for user-facing links. Never derive these from SUPABASE_URL
+// (that points at the API host, not the marketing site the user should land on).
+const SITE_BASE_URL = (
+  Deno.env.get("VITE_SITE_URL") ||
+  Deno.env.get("SITE_URL") ||
+  "https://desmoinesinsider.com"
+).replace(/\/+$/, "");
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+};
 
 interface Reminder {
   reminder_id: string;
@@ -26,14 +41,28 @@ interface Reminder {
 }
 
 serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
   try {
-    // Verify this is a cron request or authenticated request
-    const authHeader = req.headers.get("authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      });
+    // Authenticate the caller. FAIL CLOSED: the previous check only verified a
+    // header was PRESENT — any non-empty Authorization passed. Now accept, in
+    // order: a matching CRON_SECRET bearer, or — via requireAdminOrApiKey — the
+    // EDGE_FUNCTION_API_KEY, the service-role key (the pg_cron caller sends
+    // `Bearer <service_role_key>`), or an admin user JWT. If none match the
+    // request is rejected; if nothing is configured it still cannot pass, so it
+    // can never run unauthenticated.
+    const cronSecret = Deno.env.get("CRON_SECRET");
+    const authHeaderRaw =
+      req.headers.get("Authorization") || req.headers.get("authorization") || "";
+    const bearer = authHeaderRaw.toLowerCase().startsWith("bearer ")
+      ? authHeaderRaw.slice(7).trim()
+      : "";
+    const cronOk = !!cronSecret && !!bearer && timingSafeEqual(bearer, cronSecret);
+    if (!cronOk) {
+      const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+      if (authFailure) return authFailure;
     }
 
     // Create Supabase client with service role
@@ -94,13 +123,32 @@ serve(async (req) => {
 
 async function sendReminderEmail(reminder: Reminder, supabase: any) {
   try {
+    // Atomically CLAIM this reminder BEFORE doing any sending. Flip sent_at from
+    // NULL → now() conditionally: if another (overlapping) cron run already
+    // claimed it, zero rows are affected and we skip — so a crash mid-send or a
+    // duplicate invocation can never double-send. This makes delivery at-most-once.
+    const { data: claimedRows, error: claimError } = await supabase
+      .from("user_event_reminders")
+      .update({ sent_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq("id", reminder.reminder_id)
+      .is("sent_at", null)
+      .select("id");
+
+    if (claimError) {
+      throw new Error(`Failed to claim reminder: ${claimError.message}`);
+    }
+    if (!claimedRows || claimedRows.length === 0) {
+      console.log(`↷ Reminder ${reminder.reminder_id} already claimed — skipping`);
+      return { success: false, skipped: "already_claimed" };
+    }
+
     // Format event time
     const eventTime = formatEventTime(reminder.event_start_utc || reminder.event_date);
     const timeUntil = formatTimeUntil(reminder.reminder_type);
 
     // Build email content
     const subject = `Reminder: ${escapeHtml(reminder.event_title)} ${timeUntil}`;
-    const eventUrl = `${SUPABASE_URL.replace('/v1', '')}/events/${createSlug(reminder.event_title)}`;
+    const eventUrl = `${SITE_BASE_URL}/events/${createSlug(reminder.event_title)}`;
 
     const bodyHtml = `
   <div style="background: linear-gradient(135deg, #2D1B69 0%, #8B0000 50%, #DC143C 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">

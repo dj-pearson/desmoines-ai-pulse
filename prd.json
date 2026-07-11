@@ -5049,8 +5049,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: send-event-reminders/index.ts:30-36 (header-presence auth), :187/:224 (send-then-mark), :102 (SUPABASE_URL link)."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: send-event-reminders/index.ts:30-36 (header-presence auth), :187/:224 (send-then-mark), :102 (SUPABASE_URL link). | DONE 2026-07-11: send-event-reminders now uses requireAdminOrApiKey (+ timing-safe CRON_SECRET) fail-closed; claims each reminder row (update sent_at where sent_at is null) BEFORE the Resend send (at-most-once, no crash dupes); builds event links from VITE_SITE_URL/SITE_URL not SUPABASE_URL. No migration needed (sent_at already exists)."
     },
     {
       "id": "WEB-BE-005",
@@ -5064,8 +5064,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: dispatch-scheduled-newsletters/index.ts:174 (claim->'sending'), :267 (maxAttempts:1), :44-58 (unbounded resolveSegment)."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: dispatch-scheduled-newsletters/index.ts:174 (claim->'sending'), :267 (maxAttempts:1), :44-58 (unbounded resolveSegment). | DONE 2026-07-11: dispatch-scheduled-newsletters reclaims stuck 'sending' rows via reclaim_stuck_newsletter_campaigns RPC (>15min); paginates resolveSegment in 1000-row pages; filters already-attempted recipients from newsletter_deliveries so a resume never double-sends. Migration 20260711000011 (additive: claimed_at + partial index + 2 RPCs)."
     },
     {
       "id": "WEB-BE-006",
@@ -5092,8 +5092,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: play-rtdn-webhook/index.ts:587-598 (catch), :656-667 (logs fetch_error but returns 200)."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: play-rtdn-webhook/index.ts:587-598 (catch), :656-667 (logs fetch_error but returns 200). | DONE 2026-07-11: play-rtdn-webhook throws TransientPlayApiError on network/timeout/5xx/429/408 from Google Play API and returns 503 (no log row / no mutation) so Pub/Sub retries; permanent/duplicate/success/test all still 200-ack (shipped behavior preserved). Reconciliation via validate-android-receipt noted."
     },
     {
       "id": "WEB-BE-008",

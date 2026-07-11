@@ -129,6 +129,29 @@ interface GoogleSubscriptionPurchase {
 }
 
 // ---------------------------------------------------------------------------
+// Transient upstream failures
+// ---------------------------------------------------------------------------
+
+/**
+ * Signals a *transient* failure talking to Google (network error, timeout, 5xx,
+ * 408, 429). These are safe — and desirable — to retry, so the webhook returns a
+ * non-2xx status and lets Pub/Sub redeliver the notification. Permanent failures
+ * (bad request, auth/config, 404) throw a plain Error / return null instead and
+ * are acked (200), because redelivery wouldn't help.
+ */
+class TransientPlayApiError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'TransientPlayApiError';
+  }
+}
+
+/** HTTP statuses from Google that are worth retrying. */
+function isTransientHttpStatus(status: number): boolean {
+  return status >= 500 || status === 429 || status === 408;
+}
+
+// ---------------------------------------------------------------------------
 // Base64 helpers
 // ---------------------------------------------------------------------------
 
@@ -305,16 +328,29 @@ async function getGoogleAccessToken(sa: ServiceAccountKey): Promise<string> {
   );
   const jwt = `${signingInput}.${base64UrlEncode(new Uint8Array(sig))}`;
 
-  const res = await fetchWithTimeout(GOOGLE_TOKEN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-      assertion: jwt,
-    }),
-  });
+  let res: Response;
+  try {
+    res = await fetchWithTimeout(GOOGLE_TOKEN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+        assertion: jwt,
+      }),
+    });
+  } catch (err) {
+    // Network error / timeout reaching Google's OAuth endpoint — transient.
+    throw new TransientPlayApiError(
+      `Google token endpoint unreachable: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
   if (!res.ok) {
     const body = await res.text().catch(() => '');
+    if (isTransientHttpStatus(res.status)) {
+      throw new TransientPlayApiError(
+        `Google token exchange transient failure: ${res.status} ${body}`,
+      );
+    }
     throw new Error(`Google token exchange failed: ${res.status} ${body}`);
   }
   const data = await res.json();
@@ -328,12 +364,28 @@ async function fetchSubscriptionState(
   purchaseToken: string,
 ): Promise<GoogleSubscriptionPurchase | null> {
   const url = `${GOOGLE_API_BASE}/applications/${packageName}/purchases/subscriptions/${subscriptionId}/tokens/${purchaseToken}`;
-  const res = await fetchWithTimeout(url, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  let res: Response;
+  try {
+    res = await fetchWithTimeout(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+  } catch (err) {
+    // Network error / timeout reaching the Play Developer API — transient.
+    throw new TransientPlayApiError(
+      `Play subscriptions.get unreachable: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
   if (res.status === 200) return (await res.json()) as GoogleSubscriptionPurchase;
   const body = await res.text().catch(() => '');
-  console.error(`Play API error: status=${res.status}, body=${body}`);
+  if (isTransientHttpStatus(res.status)) {
+    // 5xx/429/408 — Google is temporarily unavailable; signal a retry.
+    throw new TransientPlayApiError(
+      `Play subscriptions.get transient failure: status=${res.status}, body=${body}`,
+    );
+  }
+  // Permanent (4xx): the purchase can't be retrieved, but the notification is
+  // still handled below via the notificationType-derived status. Ack (200).
+  console.error(`Play API permanent error: status=${res.status}, body=${body}`);
   return null;
 }
 
@@ -585,6 +637,7 @@ serve(async (req) => {
 
   let purchase: GoogleSubscriptionPurchase | null = null;
   let fetchError: string | null = null;
+  let transientFailure = false;
   try {
     const accessToken = await getGoogleAccessToken(sa);
     purchase = await fetchSubscriptionState(
@@ -595,7 +648,26 @@ serve(async (req) => {
     );
   } catch (err) {
     fetchError = err instanceof Error ? err.message : String(err);
+    transientFailure = err instanceof TransientPlayApiError;
     console.error(`Play API fetch failed for messageId=${messageId}:`, fetchError);
+  }
+
+  // TRANSIENT upstream failure (network / timeout / 5xx / 429) reaching the
+  // Google Play Developer API. Return a non-2xx so Pub/Sub REDELIVERS this
+  // notification and we retry against fresh state. Crucially we do NOT insert a
+  // play_rtdn_log row (nor mutate user_subscriptions) here: leaving message_id
+  // unrecorded keeps the idempotency guard from short-circuiting the retry, and
+  // avoids persisting a half-applied state. Permanent failures fall through and
+  // are acked (200) below. As a backstop, the next /validate-android-receipt
+  // call from the app reconciles any state we couldn't fetch here.
+  if (transientFailure) {
+    console.error(
+      `Transient Play API failure for messageId=${messageId}; returning 503 so Pub/Sub retries`,
+    );
+    return new Response(
+      JSON.stringify({ error: 'Upstream temporarily unavailable, retry', retry: true }),
+      { status: 503, headers: { 'Content-Type': 'application/json' } },
+    );
   }
 
   // Resolve the user_subscriptions row (Android, by purchaseToken)
