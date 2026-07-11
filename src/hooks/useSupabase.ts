@@ -92,8 +92,8 @@ export function useEvents(filters?: { category?: string; location?: string; date
         query = query.ilike('location', `%${filters.location}%`);
       }
       
-      const { data, error } = await query.order('date', { ascending: true });
-      
+      const { data, error } = await query.order('date', { ascending: true }).limit(100);
+
       if (error) {
         console.error('Error fetching events:', error);
         throw error;

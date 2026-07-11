@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { toast } from 'sonner';
 import { createLogger } from '@/lib/logger';
+import { EVENT_LIST_COLUMNS, RESTAURANT_LIST_COLUMNS, ATTRACTION_LIST_COLUMNS } from '@/lib/listColumns';
 
 const log = createLogger('useAdvancedSearch');
 
@@ -189,9 +190,10 @@ export function useAdvancedSearch() {
   const searchEvents = async (searchFilters: AdvancedSearchFilters): Promise<SearchResult[]> => {
     let query = supabase
       .from('events')
-      .select('*')
+      .select(EVENT_LIST_COLUMNS)
       .gte('date', new Date().toISOString())
-      .neq('is_hidden', true); // Exclude soft-hidden stale events (WEB-AUTO-006)
+      .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
+      .limit(50);
 
     // Apply text search
     if (searchFilters.query) {
@@ -234,7 +236,8 @@ export function useAdvancedSearch() {
   const searchRestaurants = async (searchFilters: AdvancedSearchFilters): Promise<SearchResult[]> => {
     let query = supabase
       .from('restaurants')
-      .select('*');
+      .select(RESTAURANT_LIST_COLUMNS)
+      .limit(50);
 
     // Apply text search
     if (searchFilters.query) {
@@ -280,7 +283,8 @@ export function useAdvancedSearch() {
   const searchAttractions = async (searchFilters: AdvancedSearchFilters): Promise<SearchResult[]> => {
     let query = supabase
       .from('attractions')
-      .select('*');
+      .select(ATTRACTION_LIST_COLUMNS)
+      .limit(50);
 
     // Apply text search
     if (searchFilters.query) {
@@ -320,7 +324,8 @@ export function useAdvancedSearch() {
   const searchPlaygrounds = async (searchFilters: AdvancedSearchFilters): Promise<SearchResult[]> => {
     let query = supabase
       .from('playgrounds')
-      .select('*');
+      .select('*') // No playground LIST_COLUMNS constant exists; projection left as-is
+      .limit(50);
 
     // Apply text search
     if (searchFilters.query) {

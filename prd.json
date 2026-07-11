@@ -4858,8 +4858,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: useAdvancedSearch.ts:190-192,235-237,281-283,321-323; useSupabase.ts:81-94; MonthlyEventsPage.tsx:62-69."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: useAdvancedSearch.ts:190-192,235-237,281-283,321-323; useSupabase.ts:81-94; MonthlyEventsPage.tsx:62-69. | DONE 2026-07-11: useAdvancedSearch 4 queries bounded (.limit 50) + projected to LIST_COLUMNS (playgrounds no constant); useSupabase.useEvents .limit(100); MonthlyEventsPage derives categories from fetched rows (removed 2nd full-range query)."
     },
     {
       "id": "WEB-PERF-012",
@@ -4873,8 +4873,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: src/hooks/useTrending.ts:91-157 (per-item awaited query in a for loop)."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: src/hooks/useTrending.ts:91-157 (per-item awaited query in a for loop). | DONE 2026-07-11: useTrending enrichment replaced per-item awaited loop with one batched .in('id', ids) query per content type + column projection; order preserved."
     },
     {
       "id": "WEB-PERF-013",
