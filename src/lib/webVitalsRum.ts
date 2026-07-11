@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { sessionStore } from "@/lib/safeStorage";
 
 /**
  * Real-user web-vitals collection (WEB-PERF-007). Reports LCP/CLS/INP/TTFB from a
@@ -34,16 +35,11 @@ function pageGroup(path: string): string {
 }
 
 function sessionId(): string {
-  try {
-    let id = sessionStorage.getItem(SESSION_KEY);
-    if (!id) {
-      id = crypto.randomUUID();
-      sessionStorage.setItem(SESSION_KEY, id);
-    }
-    return id;
-  } catch {
-    return crypto.randomUUID();
-  }
+  const existing = sessionStore.getString(SESSION_KEY);
+  if (existing) return existing;
+  const id = crypto.randomUUID();
+  sessionStore.setString(SESSION_KEY, id);
+  return id;
 }
 
 let started = false;

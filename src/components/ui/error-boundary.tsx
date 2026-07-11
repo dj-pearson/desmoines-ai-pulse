@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, RefreshCw, Home } from "lucide-react";
 import { Link } from "react-router-dom";
+import { sessionStore } from "@/lib/safeStorage";
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -47,14 +48,10 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     // Example: Sentry.captureException(error, { contexts: { react: errorInfo } });
 
     // Store error in sessionStorage for debugging (cleared on successful navigation)
-    try {
-      const recentErrors = JSON.parse(sessionStorage.getItem('app_errors') || '[]');
-      recentErrors.push(errorDetails);
-      // Keep only last 10 errors
-      sessionStorage.setItem('app_errors', JSON.stringify(recentErrors.slice(-10)));
-    } catch (storageError) {
-      console.error('Failed to store error details:', storageError);
-    }
+    const recentErrors = sessionStore.get<unknown[]>('app_errors', []) ?? [];
+    recentErrors.push(errorDetails);
+    // Keep only last 10 errors
+    sessionStore.set('app_errors', recentErrors.slice(-10));
   }
 
   resetError = () => {

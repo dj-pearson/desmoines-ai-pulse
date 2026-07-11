@@ -461,7 +461,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Continue with cleanup anyway
     }
 
-    // Clear all Supabase-related localStorage items
+    // Clear all Supabase-related localStorage items.
+    // INTENTIONAL low-level exception to the @/lib/safeStorage rule
+    // (WEB-QUAL-002): this enumerates every key (length/key(i)) to remove only
+    // the supabase/sb-* auth keys, which the storage helper interface doesn't
+    // support. Both blocks are already guarded against storage-access errors.
     try {
       const keysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {

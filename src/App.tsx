@@ -5,6 +5,7 @@ import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { RouteErrorBoundary } from "@/components/ui/route-error-boundary";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { lazy, Suspense, useState, useEffect, ComponentType } from "react";
+import { sessionStore } from "@/lib/safeStorage";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { useKeyboardAware } from "@/hooks/useKeyboardAware";
 import { usePageTransition } from "@/hooks/usePageTransition";
@@ -36,13 +37,13 @@ function lazyWithRetry(
 ) {
   return lazy(() =>
     importFn().catch((error) => {
-      const hasReloaded = sessionStorage.getItem("chunk_reload");
+      const hasReloaded = sessionStore.getString("chunk_reload");
       if (!hasReloaded) {
-        sessionStorage.setItem("chunk_reload", "1");
+        sessionStore.setString("chunk_reload", "1");
         window.location.reload();
         return new Promise(() => {}); // never resolves; reload will take over
       }
-      sessionStorage.removeItem("chunk_reload");
+      sessionStore.remove("chunk_reload");
       throw error; // let the error boundary handle it
     })
   );

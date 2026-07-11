@@ -2,25 +2,22 @@ import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { sessionStore } from '@/lib/safeStorage';
 
 /**
  * Generates or retrieves a persistent session ID for analytics tracking.
- * Stored in sessionStorage so it persists across page navigations
- * but resets when the browser tab is closed.
+ * Stored in sessionStorage (via safeStorage) so it persists across page
+ * navigations but resets when the browser tab is closed, and never throws
+ * in private-browsing mode.
  */
 function getSessionId(): string {
   const key = 'analytics_session_id';
-  try {
-    const existing = sessionStorage.getItem(key);
-    if (existing) return existing;
+  const existing = sessionStore.getString(key);
+  if (existing) return existing;
 
-    const id = crypto.randomUUID();
-    sessionStorage.setItem(key, id);
-    return id;
-  } catch {
-    // Fallback for private browsing or storage errors
-    return crypto.randomUUID();
-  }
+  const id = crypto.randomUUID();
+  sessionStore.setString(key, id);
+  return id;
 }
 
 /**

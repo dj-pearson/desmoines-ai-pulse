@@ -4933,8 +4933,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: csrf.tsx:27,43,100; webVitalsRum.ts:38,41; usePageTracking.ts:14,18; ~20 raw calls across src."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: csrf.tsx:27,43,100; webVitalsRum.ts:38,41; usePageTracking.ts:14,18; ~20 raw calls across src. | DONE 2026-07-11: added sessionStore (sessionStorage-backed safeStorage) + migrated csrf, webVitalsRum, usePageTracking, App chunk-reload, error-boundary, ProtectedRoute to safeStorage; documented 2 intentional low-level exceptions (Supabase auth-storage adapter, logout key-enumeration)."
     },
     {
       "id": "WEB-QUAL-003",

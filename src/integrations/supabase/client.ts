@@ -20,7 +20,13 @@ if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
 }
 
 // Safe localStorage accessor that falls back to in-memory storage
-// when localStorage is unavailable (e.g., restricted WKWebView contexts)
+// when localStorage is unavailable (e.g., restricted WKWebView contexts).
+//
+// INTENTIONAL low-level exception to the @/lib/safeStorage rule (WEB-QUAL-002):
+// the Supabase client's `auth.storage` option requires a full native `Storage`
+// implementation (length/key/clear included), which the storage/sessionStore
+// helpers don't expose. This accessor is itself a guarded safe-storage adapter
+// with its own in-memory fallback, so it satisfies the same crash-safety goal.
 function getAuthStorage(): Storage {
   try {
     const testKey = '__supabase_storage_test__';

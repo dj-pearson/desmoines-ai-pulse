@@ -3,6 +3,7 @@ import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermission } from "@/hooks/usePermission";
 import { type Permission, type UserRole } from "@/lib/security";
+import { sessionStore } from "@/lib/safeStorage";
 import { ShieldAlert, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -87,11 +88,7 @@ export function ProtectedRoute({
   // Clear any stored errors on successful navigation to a protected route
   useEffect(() => {
     if (user && !isLoading) {
-      try {
-        sessionStorage.removeItem('app_errors');
-      } catch (e) {
-        // Ignore storage errors
-      }
+      sessionStore.remove('app_errors');
     }
   }, [user, isLoading]);
 
