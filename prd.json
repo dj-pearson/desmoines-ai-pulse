@@ -4784,8 +4784,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: 34 root *.sql files (add-restaurant-city-column.sql, cleanup_duplicate_column.sql, fix-all-cron-jobs.sql, ...)."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: 34 root *.sql files (add-restaurant-city-column.sql, cleanup_duplicate_column.sql, fix-all-cron-jobs.sql, ...). | DONE 2026-07-11: 34 root *.sql classified (9 schema/15 cron/10 debug); idempotent migration 20260711000003 captures untracked restaurants.opening_timeframe/source_url + restaurant_openings.opening_timeframe; destructive DROP excluded; docs/ROOT_SQL_RECONCILIATION.md; all 34 root files removed."
     },
     {
       "id": "WEB-DB-007",
@@ -5005,8 +5005,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: 34 functions with bare fetch to external APIs (e.g. generate-itinerary/index.ts)."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: 34 functions with bare fetch to external APIs (e.g. generate-itinerary/index.ts). | DONE 2026-07-11: _shared/fetchWithTimeout.ts (AbortSignal.timeout) wired into ~59 edge functions + 5 shared modules covering all Claude/OpenAI/Resend/Google/webhook/scrape calls (60s LLM, 30s default); Deno test vs simulated hung upstream. Internal Supabase calls untouched."
     },
     {
       "id": "WEB-BE-002",
