@@ -197,7 +197,7 @@ export async function requireAdminOrApiKey(
 /**
  * Timing-safe string comparison to prevent timing attacks.
  */
-function timingSafeEqual(a: string, b: string): boolean {
+export function timingSafeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
 
   const encoder = new TextEncoder();

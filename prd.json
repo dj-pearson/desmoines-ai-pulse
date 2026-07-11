@@ -4619,8 +4619,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Root fix behind SEC-012/013. Evidence: supabase/functions/_shared/validation.ts:220-260."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Root fix behind SEC-012/013. Evidence: supabase/functions/_shared/validation.ts:220-260. | DONE 2026-07-11: validation.ts isPrivateIP rewritten to reject decimal/hex/octal/short IPv4, IPv4-mapped IPv6, metadata IPs; added resolvesToPrivateAddress + validateURLForSSRFResolved; 38 unit assertions pass."
     },
     {
       "id": "WEB-SEC-012",
@@ -4634,8 +4634,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: supabase/functions/image-transform/index.ts:60-69 (validateURLForSSRF with no allowedDomains)."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: supabase/functions/image-transform/index.ts:60-69 (validateURLForSSRF with no allowedDomains). | DONE 2026-07-11: image-transform enforces isImageHostAllowed domain allowlist + fetchArrayBufferWithSizeCap (10MB streaming cap) via _shared/fetchGuard."
     },
     {
       "id": "WEB-SEC-013",
@@ -4649,8 +4649,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: supabase/functions/seo-audit/index.ts:96 (fetch of caller url via service-role client); run-scheduled-audit/index.ts:29-40 (if(cronSecret){...} fail-open)."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: supabase/functions/seo-audit/index.ts:96 (fetch of caller url via service-role client); run-scheduled-audit/index.ts:29-40 (if(cronSecret){...} fail-open). | DONE 2026-07-11: seo-audit now requireAdminOrApiKey + validateURLForSSRFResolved before fetch; run-scheduled-audit fails closed (no more if(cronSecret) fail-open)."
     },
     {
       "id": "WEB-SEC-014",
@@ -4664,8 +4664,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: supabase/functions/nlp-search/index.ts:7 (ACAO '*'), :78-105 (Claude call with no rate limit)."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: supabase/functions/nlp-search/index.ts:7 (ACAO '*'), :78-105 (Claude call with no rate limit). | DONE 2026-07-11: nlp-search uses env-aware getCorsHeaders (no wildcard) + checkRateLimitPersistent (30/60s per-user/IP) before Claude call; 429 carries CORS."
     },
     {
       "id": "WEB-SEC-015",

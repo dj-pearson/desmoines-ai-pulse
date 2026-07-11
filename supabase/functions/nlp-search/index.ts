@@ -3,11 +3,14 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
 import { getAIConfig, buildLightweightClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
 import { sanitizePostgrestPattern } from "../_shared/validation.ts";
+import { getCorsHeaders, handleCors, isOriginAllowed, addCorsHeaders } from "../_shared/cors.ts";
+import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+/** Environment-aware CORS headers for a given request origin (no wildcard). */
+function corsFor(req: Request): Record<string, string> {
+  const origin = req.headers.get('origin') || undefined;
+  return getCorsHeaders(origin && isOriginAllowed(origin) ? origin : undefined);
+}
 
 /**
  * NLP Search - Natural Language Search Parser
@@ -76,9 +79,9 @@ interface ParsedSearchIntent {
 }
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+  const preflight = handleCors(req);
+  if (preflight) return preflight;
+  const corsHeaders = corsFor(req);
 
   const startTime = Date.now();
 
@@ -102,6 +105,32 @@ serve(async (req) => {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
+    }
+
+    // Best-effort per-user identity for rate-limit keying (falls back to IP).
+    const authHeaderIn = req.headers.get('Authorization');
+    let userId: string | null = null;
+    if (authHeaderIn?.startsWith('Bearer ')) {
+      try {
+        const { data: { user } } = await supabaseClient.auth.getUser(authHeaderIn.slice(7));
+        userId = user?.id ?? null;
+      } catch { /* anon key or invalid token → key by IP */ }
+    }
+
+    // COST GUARD: DB-backed rate limit BEFORE any Claude call. Generous ceiling
+    // so real users (and shipped clients that retry) are never blocked, but a
+    // script can't burn Claude spend. Keyed per-user when a JWT is present,
+    // else per-IP. Fails OPEN on a rate-limit DB outage.
+    const rl = await checkRateLimitPersistent(req, {
+      endpoint: 'nlp-search',
+      windowMs: 60 * 1000,
+      max: 30,
+      userId: userId ?? undefined,
+      message: 'Search rate limit exceeded. Please slow down and try again shortly.',
+    });
+    if (!rl.success && rl.response) {
+      const origin = req.headers.get('origin') || undefined;
+      return addCorsHeaders(rl.response, origin && isOriginAllowed(origin) ? origin : undefined);
     }
 
     console.log(`NLP Search: Parsing query "${query}"`);
@@ -390,15 +419,7 @@ Return ONLY the JSON object, no other text.`;
 
     const responseTime = Date.now() - startTime;
 
-    // Log search analytics
-    const authHeader = req.headers.get('Authorization');
-    let userId = null;
-    if (authHeader) {
-      const token = authHeader.replace('Bearer ', '');
-      const { data: { user } } = await supabaseClient.auth.getUser(token);
-      userId = user?.id;
-    }
-
+    // Log search analytics (reuse the userId resolved for rate-limit keying).
     await supabaseClient.from('search_analytics').insert({
       user_id: userId,
       search_query: query,

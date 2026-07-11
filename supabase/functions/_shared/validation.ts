@@ -215,48 +215,169 @@ export interface SSRFValidationResult {
 }
 
 /**
- * Check if an IP address is in a private range
+ * Parse a single inet_aton component (decimal, 0x-hex, or 0-octal) to a number.
+ * Returns null if the token is not a valid numeric component.
  */
-function isPrivateIP(hostname: string): boolean {
-  // Check for localhost variants
-  if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') {
+function parseIPComponent(token: string): number | null {
+  if (token === '') return null;
+  let n: number;
+  if (/^0x[0-9a-f]+$/i.test(token)) n = parseInt(token, 16);
+  else if (/^0[0-7]+$/.test(token)) n = parseInt(token, 8);
+  else if (/^[0-9]+$/.test(token)) n = parseInt(token, 10);
+  else return null;
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Normalize any inet_aton-accepted IPv4 form to four octets.
+ * Handles dotted-quad, decimal (2130706433), hex (0x7f000001), octal (0177.0.0.1),
+ * and the short a.b / a.b.c forms (127.1 → 127.0.0.1). Returns null if not IPv4.
+ */
+function inetAtonToOctets(host: string): number[] | null {
+  const parts = host.split('.');
+  if (parts.length === 0 || parts.length > 4) return null;
+  const nums: number[] = [];
+  for (const p of parts) {
+    const n = parseIPComponent(p);
+    if (n === null) return null;
+    nums.push(n);
+  }
+  let value: number;
+  switch (nums.length) {
+    case 1:
+      value = nums[0];
+      break;
+    case 2:
+      if (nums[0] > 0xff || nums[1] > 0xffffff) return null;
+      value = nums[0] * 0x1000000 + nums[1];
+      break;
+    case 3:
+      if (nums[0] > 0xff || nums[1] > 0xff || nums[2] > 0xffff) return null;
+      value = nums[0] * 0x1000000 + nums[1] * 0x10000 + nums[2];
+      break;
+    default: // 4
+      if (nums.some((n) => n > 0xff)) return null;
+      value = nums[0] * 0x1000000 + nums[1] * 0x10000 + nums[2] * 0x100 + nums[3];
+  }
+  if (value < 0 || value > 0xffffffff) return null;
+  return [(value >>> 24) & 255, (value >>> 16) & 255, (value >>> 8) & 255, value & 255];
+}
+
+/** True if four octets fall in a loopback/private/link-local/reserved range. */
+function areOctetsPrivate([a, b]: number[]): boolean {
+  if (a === 0) return true; // 0.0.0.0/8 ("this host")
+  if (a === 10) return true; // 10.0.0.0/8
+  if (a === 127) return true; // 127.0.0.0/8 loopback
+  if (a === 169 && b === 254) return true; // 169.254.0.0/16 link-local (incl. 169.254.169.254 metadata)
+  if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12
+  if (a === 192 && b === 168) return true; // 192.168.0.0/16
+  if (a === 100 && b >= 64 && b <= 127) return true; // 100.64.0.0/10 CGNAT
+  if (a >= 224) return true; // 224.0.0.0/4 multicast + 240.0.0.0/4 reserved + 255.255.255.255
+  return false;
+}
+
+/** Expand an IPv6 literal (incl. embedded IPv4) to eight 16-bit groups, or null. */
+function expandIPv6(input: string): number[] | null {
+  let h = input.toLowerCase().replace(/%.*$/, ''); // strip zone id
+  // Fold a trailing embedded IPv4 (e.g. ::ffff:127.0.0.1) into two hex groups.
+  const lastColon = h.lastIndexOf(':');
+  if (h.includes('.') && lastColon !== -1) {
+    const v4 = inetAtonToOctets(h.slice(lastColon + 1));
+    if (!v4) return null;
+    const g6 = ((v4[0] << 8) | v4[1]).toString(16);
+    const g7 = ((v4[2] << 8) | v4[3]).toString(16);
+    h = h.slice(0, lastColon + 1) + g6 + ':' + g7;
+  }
+  const halves = h.split('::');
+  if (halves.length > 2) return null;
+  const head = halves[0] ? halves[0].split(':') : [];
+  const tail = halves.length === 2 && halves[1] ? halves[1].split(':') : [];
+  let groups: string[];
+  if (halves.length === 2) {
+    const missing = 8 - (head.length + tail.length);
+    if (missing < 0) return null;
+    groups = [...head, ...Array(missing).fill('0'), ...tail];
+  } else {
+    groups = head;
+  }
+  if (groups.length !== 8) return null;
+  const out: number[] = [];
+  for (const g of groups) {
+    if (!/^[0-9a-f]{1,4}$/.test(g)) return null;
+    out.push(parseInt(g, 16));
+  }
+  return out;
+}
+
+/** True if an expanded IPv6 address is loopback/unspecified/link-local/ULA/mapped-private. */
+function isPrivateIPv6(groups: number[]): boolean {
+  const allZeroButLast = groups.slice(0, 7).every((g) => g === 0);
+  if (allZeroButLast && groups[7] === 1) return true; // ::1 loopback
+  if (groups.every((g) => g === 0)) return true; // :: unspecified
+  if ((groups[0] & 0xffc0) === 0xfe80) return true; // fe80::/10 link-local
+  if ((groups[0] & 0xfe00) === 0xfc00) return true; // fc00::/7 unique-local (incl. fd00:ec2::254 metadata)
+  if ((groups[0] & 0xffc0) === 0xfec0) return true; // fec0::/10 site-local (deprecated)
+  // IPv4-mapped (::ffff:a.b.c.d) / IPv4-compatible — re-check the embedded v4.
+  if (groups.slice(0, 5).every((g) => g === 0) && (groups[5] === 0xffff || groups[5] === 0)) {
+    return areOctetsPrivate([groups[6] >> 8, groups[6] & 0xff, groups[7] >> 8, groups[7] & 0xff]);
+  }
+  return false;
+}
+
+/**
+ * Check if a hostname is (or resolves in-string to) a private/internal address.
+ * Rejects encoded IPv4 (decimal/hex/octal/short forms), IPv6 incl. IPv4-mapped
+ * and cloud-metadata addresses, plus internal-looking hostnames. This is a
+ * literal-form guard; callers that must defeat DNS rebinding should additionally
+ * enforce a host allowlist or resolve via {@link resolvesToPrivateAddress}.
+ */
+export function isPrivateIP(hostname: string): boolean {
+  // Normalize brackets/zone id from URL.hostname (IPv6 comes bracketless from URL, but be safe).
+  const host = hostname.replace(/^\[|\]$/g, '').replace(/%.*$/, '').toLowerCase();
+
+  if (host === 'localhost' || host === '' ) return true;
+
+  const octets = inetAtonToOctets(host);
+  if (octets) return areOctetsPrivate(octets);
+
+  if (host.includes(':')) {
+    const groups = expandIPv6(host);
+    if (groups) return isPrivateIPv6(groups);
+    // Unparseable IPv6-looking literal — treat as unsafe rather than fetchable.
     return true;
   }
 
-  // Check for IPv4 private ranges
-  const ipv4Match = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-  if (ipv4Match) {
-    const [, a, b] = ipv4Match.map(Number);
+  // Internal-looking hostnames (defense in depth; not a substitute for DNS resolution).
+  const privatePatterns = [/^localhost$/i, /\.local$/i, /\.internal$/i, /\.localhost$/i];
+  return privatePatterns.some((pattern) => pattern.test(host));
+}
 
-    // 10.0.0.0/8
-    if (a === 10) return true;
-
-    // 172.16.0.0/12
-    if (a === 172 && b >= 16 && b <= 31) return true;
-
-    // 192.168.0.0/16
-    if (a === 192 && b === 168) return true;
-
-    // 169.254.0.0/16 (link-local)
-    if (a === 169 && b === 254) return true;
-
-    // 127.0.0.0/8 (loopback)
-    if (a === 127) return true;
-
-    // 0.0.0.0/8
-    if (a === 0) return true;
+/**
+ * Resolve a hostname and return true if any resolved address is private/internal.
+ * Defeats DNS-rebinding hostnames that point at internal IPs. Fails CLOSED
+ * (returns true) if resolution errors, so a resolver outage can't open the guard.
+ * Skips resolution for literal IPs (already covered by {@link isPrivateIP}).
+ */
+export async function resolvesToPrivateAddress(hostname: string): Promise<boolean> {
+  const host = hostname.replace(/^\[|\]$/g, '').replace(/%.*$/, '');
+  // Literal IPs don't need DNS; isPrivateIP already classified them.
+  if (inetAtonToOctets(host) || host.includes(':')) return isPrivateIP(host);
+  // Deno.resolveDns is available in the edge runtime; guard for other runtimes.
+  const resolver = (globalThis as { Deno?: { resolveDns?: (h: string, t: string) => Promise<string[]> } }).Deno;
+  if (!resolver?.resolveDns) return false; // no resolver → rely on caller allowlist
+  try {
+    const [a, aaaa] = await Promise.allSettled([
+      resolver.resolveDns(host, 'A'),
+      resolver.resolveDns(host, 'AAAA'),
+    ]);
+    const ips: string[] = [];
+    if (a.status === 'fulfilled') ips.push(...a.value);
+    if (aaaa.status === 'fulfilled') ips.push(...aaaa.value);
+    if (ips.length === 0) return true; // resolves to nothing usable → treat as unsafe
+    return ips.some((ip) => isPrivateIP(ip));
+  } catch {
+    return true; // fail closed on resolver error
   }
-
-  // Check for common private hostnames
-  const privatePatterns = [
-    /^localhost$/i,
-    /^127\.\d+\.\d+\.\d+$/,
-    /\.local$/i,
-    /\.internal$/i,
-    /\.localhost$/i,
-  ];
-
-  return privatePatterns.some(pattern => pattern.test(hostname));
 }
 
 /**
@@ -321,4 +442,25 @@ export function validateURLForSSRF(
   }
 
   return { valid: true, url: parsedUrl };
+}
+
+/**
+ * SSRF validation that additionally resolves the hostname and blocks it if any
+ * resolved address is private/internal (DNS-rebinding defense). Use for guards
+ * that fetch arbitrary caller-supplied URLs without a host allowlist (e.g.
+ * seo-audit). Fails closed on resolution errors.
+ */
+export async function validateURLForSSRFResolved(
+  urlString: string,
+  options: SSRFValidationOptions = {},
+): Promise<SSRFValidationResult> {
+  const base = validateURLForSSRF(urlString, options);
+  if (!base.valid || !base.url) return base;
+  // Only resolve when private IPs are being blocked and no allowlist already gates the host.
+  const blockPrivate = options.blockPrivateIPs ?? true;
+  const hasAllowlist = (options.allowedDomains?.length ?? 0) > 0;
+  if (blockPrivate && !hasAllowlist && (await resolvesToPrivateAddress(base.url.hostname))) {
+    return { valid: false, error: 'Host resolves to a private/internal address' };
+  }
+  return base;
 }
