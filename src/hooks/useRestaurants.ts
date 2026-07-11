@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 import { getRestaurantRotationSeed } from "@/lib/restaurantRotation";
+import { RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
 import { STALE_TIME } from "@/lib/queryConfig";
 
 type Restaurant = Database["public"]["Tables"]["restaurants"]["Row"];
@@ -127,7 +128,11 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
 
       let query = supabase
         .from("restaurants")
-        .select("*", { count: "exact" })
+        // Project only the card/list fields (WEB-PERF-009) — drops heavy
+        // SEO/GEO/tsvector/geometry columns the list never renders. Count uses
+        // the planner estimate ("planned") instead of forcing a full-table
+        // exact count on every filter/sort.
+        .select(RESTAURANT_LIST_COLUMNS, { count: "planned" })
         .neq("is_merged", true); // Hide rows merged into a duplicate (WEB-AUTO-005)
 
       // Use full-text search with tsvector for better performance and relevance ranking

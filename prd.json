@@ -4828,8 +4828,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: src/hooks/useRestaurants.ts:130; src/lib/listColumns.ts:15 (RESTAURANT_LIST_COLUMNS unused)."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: src/hooks/useRestaurants.ts:130; src/lib/listColumns.ts:15 (RESTAURANT_LIST_COLUMNS unused). | DONE 2026-07-11: useRestaurants list query now selects RESTAURANT_LIST_COLUMNS with count:'planned' instead of select('*',{count:'exact'}); cards unchanged."
     },
     {
       "id": "WEB-PERF-010",
