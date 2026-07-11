@@ -3,6 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, RefreshCw, Home } from "lucide-react";
 import { Link } from "react-router-dom";
+import { sessionStore } from "@/lib/safeStorage";
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger('ErrorBoundary');
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -41,20 +45,16 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     };
 
     // Log detailed error information
-    console.error('🔴 Error Boundary caught an error:', errorDetails);
+    logger.error('componentDidCatch', 'Error Boundary caught an error', errorDetails);
 
     // In production, you would send this to an error tracking service
     // Example: Sentry.captureException(error, { contexts: { react: errorInfo } });
 
     // Store error in sessionStorage for debugging (cleared on successful navigation)
-    try {
-      const recentErrors = JSON.parse(sessionStorage.getItem('app_errors') || '[]');
-      recentErrors.push(errorDetails);
-      // Keep only last 10 errors
-      sessionStorage.setItem('app_errors', JSON.stringify(recentErrors.slice(-10)));
-    } catch (storageError) {
-      console.error('Failed to store error details:', storageError);
-    }
+    const recentErrors = sessionStore.get<unknown[]>('app_errors', []) ?? [];
+    recentErrors.push(errorDetails);
+    // Keep only last 10 errors
+    sessionStore.set('app_errors', recentErrors.slice(-10));
   }
 
   resetError = () => {

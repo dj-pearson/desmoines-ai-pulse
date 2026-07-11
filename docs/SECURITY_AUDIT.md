@@ -303,6 +303,61 @@ Located in `supabase/functions/_shared/`:
 
 ---
 
+## SECURITY DEFINER search_path (WEB-DB-001)
+
+SECURITY DEFINER functions run with the definer's privileges. Any such function
+that does not pin `search_path` is exposed to schema-shadowing privilege
+escalation (a caller who can create objects in an earlier-searched schema can
+substitute the tables/functions the body references). `is_admin()` — which gates
+admin RLS — was in this state, alongside ~40 other definer functions.
+
+**Fix:** migration `20260711000000_pin_search_path_and_close_role_escalation.sql`
+
+1. `is_admin()` is `CREATE OR REPLACE`'d with `SET search_path = public, pg_temp`
+   (matching its sibling `user_has_role_or_higher()`), body unchanged.
+2. Every remaining `public` SECURITY DEFINER function **without** a pinned
+   `search_path` is fixed additively via
+   `ALTER FUNCTION … SET search_path = public, pg_temp` (no body/signature
+   change), driven by a catalog loop so the set stays complete as functions are
+   added.
+
+**Verify the status of every definer function (should return zero rows after the
+migration):**
+
+```sql
+SELECT n.nspname, p.proname, pg_get_function_identity_arguments(p.oid) AS args
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public'
+  AND p.prosecdef = TRUE
+  AND NOT EXISTS (
+    SELECT 1 FROM unnest(COALESCE(p.proconfig, ARRAY[]::text[])) cfg
+    WHERE cfg LIKE 'search_path=%'
+  )
+ORDER BY p.proname;
+```
+
+To list every definer function **with** its pinned value:
+
+```sql
+SELECT p.proname,
+       (SELECT cfg FROM unnest(COALESCE(p.proconfig, ARRAY[]::text[])) cfg
+        WHERE cfg LIKE 'search_path=%') AS search_path
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public' AND p.prosecdef = TRUE
+ORDER BY p.proname;
+```
+
+## profiles.role self-escalation (WEB-DB-002)
+
+`is_admin()` trusts `profiles.role`, but the `validate_profile_user_id()`
+escalation-prevention trigger only guarded `profiles.user_role` — leaving a
+self-service path to admin via `UPDATE profiles SET role='admin'`. The same
+migration extends the trigger to reject a non-admin setting/raising
+`profiles.role` to a non-`user` value (benign self-updates still pass).
+Regression test: `supabase/tests/web_db_002_role_escalation.sql`.
+
 ## Action Items
 
 1. **US-013**: Add API key authentication to data processing functions (ai-crawler, scrape-events, restaurant-opening-scraper, firecrawl-scraper, bulk-enhance-events, bulk-event-updater)

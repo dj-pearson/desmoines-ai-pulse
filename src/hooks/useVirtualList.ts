@@ -66,19 +66,23 @@ export function useVirtualList(options: UseVirtualListOptions): UseVirtualListRe
     });
   }, [isVirtualized]);
 
+  const handleResize = useCallback(() => {
+    setViewportHeight(window.innerHeight);
+  }, []);
+
   useEffect(() => {
     if (!isVirtualized) return;
 
     setViewportHeight(window.innerHeight);
     window.addEventListener('scroll', handleScroll, { passive: true });
-    window.addEventListener('resize', () => setViewportHeight(window.innerHeight));
+    window.addEventListener('resize', handleResize);
 
     return () => {
       window.removeEventListener('scroll', handleScroll);
-      window.removeEventListener('resize', () => setViewportHeight(window.innerHeight));
+      window.removeEventListener('resize', handleResize);
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [handleScroll, isVirtualized]);
+  }, [handleScroll, handleResize, isVirtualized]);
 
   if (!isVirtualized) {
     return {

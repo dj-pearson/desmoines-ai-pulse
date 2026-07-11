@@ -9,6 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Trophy, MapPin, Calendar, Clock, Ticket } from 'lucide-react';
+import { EVENT_LIST_COLUMNS } from '@/lib/listColumns';
 
 function useSportsEvents(timeframe: 'today' | 'week') {
   const now = new Date();
@@ -21,7 +22,7 @@ function useSportsEvents(timeframe: 'today' | 'week') {
     queryFn: async () => {
       let query = supabase
         .from('events')
-        .select('*')
+        .select(EVENT_LIST_COLUMNS)
         .or('category.ilike.%Sport%,category.ilike.%Game%,category.ilike.%Baseball%,category.ilike.%Hockey%,category.ilike.%Basketball%,category.ilike.%Football%,category.ilike.%Soccer%')
         .order('date', { ascending: true })
         .limit(20);

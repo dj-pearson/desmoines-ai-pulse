@@ -95,5 +95,5 @@ If all else fails, force new cache version:
 
 ## 📚 Related Documentation
 
-- See `CLOUDFLARE_CACHE_FIX.md` for full technical details
+- See `docs/fixes/CLOUDFLARE_CACHE_FIX.md` for full technical details
 - See `DEPLOYMENT.md` for complete deployment guide

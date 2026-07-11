@@ -6,25 +6,22 @@ This folder holds **versioned GitHub Rulesets** (not classic branch protection r
 
 | Ruleset | Branch pattern | Block delete | Block force-push | Require PR | Required approvals |
 |---|---|---|---|---|---|
-| `protect-main` | `main` | ✅ | ✅ | ✅ | 0 (solo) |
-| `protect-develop` | `develop` | ✅ | ✅ | ✅ | 0 (solo) |
-| `protect-release` | `release/*` | ✅ | ✅ | ✅ | 0 (solo) |
+| `protect-main` | `main` | ✅ | ✅ | ✅ | 1 |
+| `protect-develop` | `develop` | ✅ | ✅ | ✅ | 1 |
+| `protect-release` | `release/*` | ✅ | ✅ | ✅ | 1 |
 | `protect-hotfix` | `hotfix/*` | ✅ | ✅ | ❌ (direct commits OK; gate is the PR into `main`) | n/a |
 
 Repository admins (`actor_id: 5`, `RepositoryRole`) can bypass `always` — i.e. emergencies. Use sparingly.
 
-### Why `required_approving_review_count: 0`?
+### Required approvals
 
-This is a solo repo. GitHub will not let you approve your own PR, so requiring ≥ 1 approval would deadlock every merge. PRs are still required (the `pull_request` rule enforces that); you just self-merge. **When a second active contributor joins, bump these to `1`** and re-apply (see "Re-apply loop" below).
+`protect-main`, `protect-develop`, and `protect-release` require **1 approving review** (WEB-CI-001). Because GitHub won't let you approve your own PR, a genuine solo merge with no other reviewer available goes through the admin `bypass_actors` path — keep that for the solo case only, and let real reviews gate everything else. Automated/Copilot review can satisfy this if enabled.
 
-### Why no `required_status_checks` yet?
+### Required status checks
 
-GitHub treats a required check that has never run on a PR as **pending forever**, blocking all merges. The existing workflow names in this repo (`pr-checks.yml` job `Lint, Type Check, Test & Build`, etc.) only become "real" check names after they've run on a PR at least once. Adding them prematurely breaks merges.
-
-**To add them later**, after you've seen the check names show up green on a PR:
+The three protected rulesets require the `pr-checks.yml` validation checks to pass before merge:
 
 ```jsonc
-// add to the "rules" array of main.json / develop.json
 {
   "type": "required_status_checks",
   "parameters": {
@@ -32,14 +29,17 @@ GitHub treats a required check that has never run on a PR as **pending forever**
     "do_not_enforce_on_create": false,
     "required_status_checks": [
       { "context": "Lint, Type Check, Test & Build", "integration_id": 15368 },
-      { "context": "Android CI",                     "integration_id": 15368 },
-      { "context": "iOS CI",                         "integration_id": 15368 }
+      { "context": "Secret Scanning (gitleaks)",      "integration_id": 15368 }
     ]
   }
 }
 ```
 
-`integration_id: 15368` is GitHub Actions. Use the exact `context` string GitHub shows on the PR checks tab (often the job `name:`, not the workflow `name:`). For `iOS CI` / `Android CI`, those workflows are path-filtered (`ios/**`, `android/**`) and won't run on every PR — make them required **only** if you want to force every PR to touch those paths, otherwise leave them off.
+`integration_id: 15368` is GitHub Actions. The `context` strings are the **job `name:`** values in `pr-checks.yml` (not the workflow `name:`), which is what GitHub shows on the PR checks tab. `pr-checks.yml` now runs on PRs into `main`, `develop`, and `release/*` (WEB-CI-002), so these checks appear on every protected-branch PR.
+
+> **First-apply caveat:** GitHub treats a required check that has *never* run on a PR as pending forever. Before re-applying these rulesets, make sure `pr-checks.yml` has run green on at least one PR into each protected branch so the check contexts are "real".
+
+**iOS/Android CI** (`Android CI`, `iOS CI`) are path-filtered (`ios/**`, `android/**`) and won't run on every PR — deliberately left out of the required set so web-only PRs aren't blocked waiting on a check that never starts. Add them only if you want to force every PR through those builds.
 
 ## Apply / re-apply (the loop)
 

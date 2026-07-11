@@ -2,6 +2,9 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useToast } from "./use-toast";
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('useGamification');
 
 export interface UserReputation {
   user_id: string;
@@ -85,7 +88,7 @@ export function useGamification() {
       if (error) {
         // Only log unexpected errors
         if (error.code !== '42501' && error.code !== 'PGRST301' && !error.message?.includes('permission denied')) {
-          console.error("Error fetching reputation:", error);
+          logger.error('fetchUserReputation', 'Error fetching reputation', { error });
         }
         setReputation(null);
         return;
@@ -114,7 +117,7 @@ export function useGamification() {
       const mockBadges = [] as Badge[];
       setBadges(mockBadges);
     } catch (error) {
-      console.error("Error fetching badges:", error);
+      logger.error('fetchUserBadges', 'Error fetching badges', { error });
     }
   };
 
@@ -124,7 +127,7 @@ export function useGamification() {
       const mockAvailableBadges = [] as Badge[];
       setAvailableBadges(mockAvailableBadges);
     } catch (error) {
-      console.error("Error fetching available badges:", error);
+      logger.error('fetchAvailableBadges', 'Error fetching available badges', { error });
     }
   };
 
@@ -134,7 +137,7 @@ export function useGamification() {
       const mockChallenges = [] as CommunityChallenge[];
       setChallenges(mockChallenges);
     } catch (error) {
-      console.error("Error fetching challenges:", error);
+      logger.error('fetchChallenges', 'Error fetching challenges', { error });
     }
   };
 
@@ -146,7 +149,7 @@ export function useGamification() {
       const mockActivities = [] as Activity[];
       setActivities(mockActivities);
     } catch (error) {
-      console.error("Error fetching activities:", error);
+      logger.error('fetchActivities', 'Error fetching activities', { error });
     }
   };
 
@@ -156,7 +159,7 @@ export function useGamification() {
       const mockLeaderboard: any[] = [];
       setLeaderboard(mockLeaderboard);
     } catch (error) {
-      console.error("Error fetching leaderboard:", error);
+      logger.error('fetchLeaderboard', 'Error fetching leaderboard', { error });
     }
   };
 
@@ -171,7 +174,7 @@ export function useGamification() {
 
     try {
       // Mock awarding points since function doesn't exist
-      console.log("Points would be awarded:", {
+      logger.debug('awardPoints', 'Points would be awarded', {
         p_user_id: user.id,
         p_activity_type: activityType,
         p_points: points,
@@ -190,7 +193,7 @@ export function useGamification() {
       });
 
     } catch (error) {
-      console.error("Error awarding points:", error);
+      logger.error('awardPoints', 'Error awarding points', { error });
       toast({
         title: "Error",
         description: "Failed to award points",
@@ -204,7 +207,7 @@ export function useGamification() {
 
     try {
       // Mock joining challenge since table doesn't exist
-      console.log("Challenge join would be recorded:", {
+      logger.debug('joinChallenge', 'Challenge join would be recorded', {
         user_id: user.id,
         challenge_id: challengeId,
         progress: {},
@@ -218,7 +221,7 @@ export function useGamification() {
 
       await fetchChallenges();
     } catch (error) {
-      console.error("Error joining challenge:", error);
+      logger.error('joinChallenge', 'Error joining challenge', { error });
       toast({
         title: "Error",
         description: "Failed to join challenge",

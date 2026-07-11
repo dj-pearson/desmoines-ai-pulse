@@ -16,6 +16,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
 import { runJob } from '../_shared/jobRunner.ts';
 import { renderEmail, SITE_URL } from '../_shared/emailLayout.ts';
+import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
 
 // deno-lint-ignore no-explicit-any
 type Supa = any;
@@ -36,7 +37,7 @@ async function sendEmail(
   if (!RESEND_API_KEY || !to) return false;
   const { html, text } = renderEmail({ bodyHtml, bodyText, recipient: { email: to }, category });
   try {
-    const res = await fetch('https://api.resend.com/emails', {
+    const res = await fetchWithTimeout('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${RESEND_API_KEY}` },
       body: JSON.stringify({ from: FROM, to: [to], subject, html, text }),

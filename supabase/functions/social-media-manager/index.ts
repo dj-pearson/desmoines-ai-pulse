@@ -1,7 +1,8 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.43.1";
-import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
+import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -182,7 +183,7 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const claudeApiKey = Deno.env.get("CLAUDE_API");
+    const claudeApiKey = getAnthropicApiKey();
 
     if (!claudeApiKey) {
       throw new Error("Claude API key not configured");
@@ -343,7 +344,7 @@ serve(async (req) => {
                     };
                   }
       
-                  const response = await fetch(webhookUrl, {
+                  const response = await fetchWithTimeout(webhookUrl, {
                     method: "POST",
                     headers: {
                       "Content-Type": "application/json",
@@ -537,7 +538,7 @@ serve(async (req) => {
               };
             }
 
-            const response = await fetch(webhookUrl, {
+            const response = await fetchWithTimeout(webhookUrl, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -791,11 +792,11 @@ Make it detailed and engaging for Facebook/LinkedIn. Include compelling details,
     }
   );
 
-  const shortResponse = await fetch(config.api_endpoint, {
+  const shortResponse = await fetchWithTimeout(config.api_endpoint, {
     method: "POST",
     headers,
     body: JSON.stringify(shortRequestBody)
-  });
+  }, 60_000);
 
   if (!shortResponse.ok) {
     const errorData = await shortResponse.json();
@@ -803,10 +804,12 @@ Make it detailed and engaging for Facebook/LinkedIn. Include compelling details,
   }
 
   const shortData = await shortResponse.json();
-  if (!shortData.content || !shortData.content[0] || !shortData.content[0].text) {
-    throw new Error("Invalid response format from Claude API for short content");
+  const shortExtracted = extractClaudeText(shortData);
+  if (!shortExtracted.ok) {
+    console.error("Claude response not usable:", shortExtracted.reason, shortExtracted.detail);
+    throw new Error(`AI response ${shortExtracted.reason}: ${shortExtracted.detail}`);
   }
-  const shortContent = shortData.content[0].text;
+  const shortContent = shortExtracted.text;
 
   // Generate long post
   const longRequestBody = await buildClaudeRequest(
@@ -818,11 +821,11 @@ Make it detailed and engaging for Facebook/LinkedIn. Include compelling details,
     }
   );
 
-  const longResponse = await fetch(config.api_endpoint, {
+  const longResponse = await fetchWithTimeout(config.api_endpoint, {
     method: "POST",
     headers,
     body: JSON.stringify(longRequestBody)
-  });
+  }, 60_000);
 
   if (!longResponse.ok) {
     const errorData = await longResponse.json();
@@ -830,10 +833,12 @@ Make it detailed and engaging for Facebook/LinkedIn. Include compelling details,
   }
 
   const longData = await longResponse.json();
-  if (!longData.content || !longData.content[0] || !longData.content[0].text) {
-    throw new Error("Invalid response format from Claude API for long content");
+  const longExtracted = extractClaudeText(longData);
+  if (!longExtracted.ok) {
+    console.error("Claude response not usable:", longExtracted.reason, longExtracted.detail);
+    throw new Error(`AI response ${longExtracted.reason}: ${longExtracted.detail}`);
   }
-  const longContent = longData.content[0].text;
+  const longContent = longExtracted.text;
 
   // Get active webhooks
   const { data: webhooks } = await supabase
@@ -915,7 +920,7 @@ Make it detailed and engaging for Facebook/LinkedIn. Include compelling details,
           metadata: savedPost.metadata,
         };
 
-        const response = await fetch(webhookUrl, {
+        const response = await fetchWithTimeout(webhookUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

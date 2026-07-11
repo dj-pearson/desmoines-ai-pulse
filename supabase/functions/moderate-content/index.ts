@@ -29,6 +29,8 @@ import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
 import { requireAdminOrApiKey } from '../_shared/apiKeyAuth.ts';
 import { checkRateLimitPersistent } from '../_shared/rateLimit.ts';
 import { runJob } from '../_shared/jobRunner.ts';
+import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
+import { getAnthropicApiKey } from '../_shared/aiConfig.ts';
 
 type SupabaseClient = ReturnType<typeof createClient>;
 type ContentType = 'review' | 'contact';
@@ -66,7 +68,7 @@ function clamp01(n: unknown): number {
 
 /** Claude moderation scoring. Returns ok:false (NOT throwing) when AI errors. */
 async function scoreText(text: string, kind: ContentType): Promise<Scores> {
-  const key = Deno.env.get('ANTHROPIC_API_KEY') || Deno.env.get('CLAUDE_API') || Deno.env.get('CLAUDE_API_KEY');
+  const key = getAnthropicApiKey();
   if (!key) return { toxicity: 0, spam: 0, off_topic: 0, reasons: [], ok: false };
   const context =
     kind === 'review'
@@ -82,11 +84,11 @@ async function scoreText(text: string, kind: ContentType): Promise<Scores> {
     `{"toxicity":number,"spam":number,"off_topic":number,"reasons":string[]}.\n\n` +
     `TEXT:\n${text.slice(0, 4000)}`;
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({ model: MODEL, max_tokens: 300, messages: [{ role: 'user', content: prompt }] }),
-    });
+    }, 60_000);
     if (!res.ok) return { toxicity: 0, spam: 0, off_topic: 0, reasons: [], ok: false };
     const data = await res.json();
     const raw = data?.content?.[0]?.text ?? '';

@@ -3,7 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 import { getRestaurantRotationSeed } from "@/lib/restaurantRotation";
+import { RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
 import { STALE_TIME } from "@/lib/queryConfig";
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger("useRestaurants");
 
 type Restaurant = Database["public"]["Tables"]["restaurants"]["Row"];
 type RestaurantInsert = Database["public"]["Tables"]["restaurants"]["Insert"];
@@ -118,16 +122,21 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
         // Fall through to the legacy query path on RPC error so the page
         // still renders if the migration hasn't been applied yet.
         if (rpcError) {
-          console.warn(
-            "useRestaurants: rotation RPC failed, falling back to direct query",
-            rpcError
+          logger.warn(
+            'fetchRestaurants',
+            'rotation RPC failed, falling back to direct query',
+            { error: rpcError }
           );
         }
       }
 
       let query = supabase
         .from("restaurants")
-        .select("*", { count: "exact" })
+        // Project only the card/list fields (WEB-PERF-009) — drops heavy
+        // SEO/GEO/tsvector/geometry columns the list never renders. Count uses
+        // the planner estimate ("planned") instead of forcing a full-table
+        // exact count on every filter/sort.
+        .select(RESTAURANT_LIST_COLUMNS, { count: "planned" })
         .neq("is_merged", true); // Hide rows merged into a duplicate (WEB-AUTO-005)
 
       // Use full-text search with tsvector for better performance and relevance ranking
@@ -242,7 +251,7 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
 
       // Fallback to fuzzy search if no results found with full-text search
       if (filters.search && (!data || data.length === 0)) {
-        console.log('useRestaurants: No results with full-text search, trying fuzzy search...');
+        logger.debug('fetchRestaurants', 'No results with full-text search, trying fuzzy search', { search: filters.search });
         try {
           const { data: fuzzyData, error: fuzzyError } = await supabase
             .rpc('fuzzy_search_restaurants', {
@@ -253,11 +262,11 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
           if (!fuzzyError && fuzzyData) {
             data = fuzzyData as unknown as Restaurant[];
             count = fuzzyData.length;
-            console.log('useRestaurants: Fuzzy search found', fuzzyData.length, 'restaurants');
+            logger.info('fetchRestaurants', 'Fuzzy search found restaurants', { count: fuzzyData.length });
           }
         } catch (fuzzyErr) {
           // Fuzzy search function not available yet - silently continue
-          console.log('useRestaurants: Fuzzy search not available, using existing results');
+          logger.debug('fetchRestaurants', 'Fuzzy search not available, using existing results', { error: fuzzyErr });
         }
       }
 
@@ -268,7 +277,7 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
         totalCount: count || 0,
       });
     } catch (error) {
-      console.error("Error fetching restaurants:", error);
+      logger.error('fetchRestaurants', 'Error fetching restaurants', { error });
       setState((prev) => ({
         ...prev,
         isLoading: false,
@@ -304,7 +313,7 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
       fetchRestaurants();
       return data;
     } catch (error) {
-      console.error("Error creating restaurant:", error);
+      logger.error('createRestaurant', 'Error creating restaurant', { error });
       throw error;
     }
   };
@@ -323,7 +332,7 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
       fetchRestaurants();
       return data;
     } catch (error) {
-      console.error("Error updating restaurant:", error);
+      logger.error('updateRestaurant', 'Error updating restaurant', { error });
       throw error;
     }
   };
@@ -339,7 +348,7 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
 
       fetchRestaurants();
     } catch (error) {
-      console.error("Error deleting restaurant:", error);
+      logger.error('deleteRestaurant', 'Error deleting restaurant', { error });
       throw error;
     }
   };

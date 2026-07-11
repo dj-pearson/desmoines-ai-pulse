@@ -1,7 +1,10 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import { createLogger } from "@/lib/logger";
 import { Database } from "@/integrations/supabase/types";
+
+const logger = createLogger("useProfile");
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 
@@ -43,7 +46,7 @@ export function useProfile() {
         .maybeSingle();
 
       if (error) {
-        console.error("Error fetching profile:", error);
+        logger.error('fetchProfile', 'Error fetching profile', { error });
         setError(error.message);
         return;
       }
@@ -62,7 +65,7 @@ export function useProfile() {
           .single();
 
         if (createError) {
-          console.error("Error creating profile:", createError);
+          logger.error('fetchProfile', 'Error creating profile', { error: createError });
           setError(createError.message);
           return;
         }
@@ -72,7 +75,7 @@ export function useProfile() {
         setProfile(data);
       }
     } catch (error) {
-      console.error("Error fetching profile:", error);
+      logger.error('fetchProfile', 'Error fetching profile', { error });
       setError(error instanceof Error ? error.message : "Failed to fetch profile");
     } finally {
       setIsLoading(false);
@@ -99,7 +102,7 @@ export function useProfile() {
       setProfile(data);
       return data;
     } catch (error) {
-      console.error("Error updating profile:", error);
+      logger.error('updateProfile', 'Error updating profile', { error });
       throw error;
     }
   };

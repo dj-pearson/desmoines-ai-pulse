@@ -10,6 +10,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
 import { getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -182,7 +183,7 @@ serve(async (req) => {
         }
         `;
 
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${openAIApiKey}`,
@@ -197,7 +198,7 @@ serve(async (req) => {
             temperature: 0.7,
             max_tokens: 1000,
           }),
-        });
+        }, 60_000);
 
         if (response.ok) {
           const aiData = await response.json();

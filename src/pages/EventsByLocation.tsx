@@ -16,6 +16,7 @@ import { MapPin, Calendar, Users, Star } from "lucide-react";
 import { format, parseISO, isAfter } from "date-fns";
 import { BRAND } from "@/lib/brandConfig";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
 
 // Suburb mapping for SEO-friendly URLs and proper names
 const SUBURBS = {
@@ -148,7 +149,7 @@ export default function EventsByLocation() {
 
       const { data, error } = await supabase
         .from("restaurants")
-        .select("*")
+        .select(RESTAURANT_LIST_COLUMNS)
         .eq("status", "active")
         .limit(5);
 
@@ -395,8 +396,8 @@ export default function EventsByLocation() {
             <CardTitle>About {suburbInfo.name}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {faqData.map((faq, index) => (
-              <div key={index} className="border-b pb-4 last:border-b-0">
+            {faqData.map((faq) => (
+              <div key={faq.question} className="border-b pb-4 last:border-b-0">
                 <h3 className="font-semibold mb-2">{faq.question}</h3>
                 <p className="text-muted-foreground">{faq.answer}</p>
               </div>

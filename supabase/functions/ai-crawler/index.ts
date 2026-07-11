@@ -17,12 +17,13 @@ import {
   parseISO,
 } from "https://esm.sh/date-fns@2.30.0";
 import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts";
-import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
+import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey } from "../_shared/aiConfig.ts";
 import { scrapeUrl, scrapeUrls } from "../_shared/scraper.ts";
 import { fetchAndStoreImage as _fetchAndStoreImageShared } from "../_shared/imageStorage.ts";
 import { tryDomainAdapter } from "../_shared/domain-adapters/index.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { isHostAllowed } from "../_shared/fetchGuard.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -849,7 +850,7 @@ Return empty array [] if no attractions found.`,
         for (const endpoint of apiEndpoints.slice(0, 3)) {
           // Try first 3 endpoints
           try {
-            const apiResponse = await fetch(endpoint, {
+            const apiResponse = await fetchWithTimeout(endpoint, {
               headers: {
                 "User-Agent":
                   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -890,11 +891,11 @@ Return empty array [] if no attractions found.`,
         }
       );
 
-      const claudeResponse = await fetch(config.api_endpoint, {
+      const claudeResponse = await fetchWithTimeout(config.api_endpoint, {
         method: "POST",
         headers,
         body: JSON.stringify(requestBody)
-      });
+      }, 60_000);
 
     if (claudeResponse.ok) {
       const claudeData = await claudeResponse.json();
@@ -1550,7 +1551,7 @@ Deno.serve(async (req) => {
     // Initialize services
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const claudeApiKey = Deno.env.get("CLAUDE_API");
+    const claudeApiKey = getAnthropicApiKey();
 
     if (!claudeApiKey) {
       return new Response(

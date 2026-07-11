@@ -50,10 +50,24 @@ Deno.serve(async (req) => {
 
   const { data: ticket } = await supabase
     .from("support_tickets")
-    .select("id, channel, resolved_by, subject, body, csat_score")
+    .select("id, user_id, channel, resolved_by, subject, body, csat_score")
     .eq("id", ticketId)
     .maybeSingle();
   if (!ticket) return j({ error: "ticket not found" }, 404, corsHeaders);
+
+  // Ownership check (before any write): only the authenticated ticket owner may
+  // submit CSAT. The verify_jwt=false setting lets email links reach us, so we
+  // verify the caller's JWT here and compare it to the ticket's owner.
+  const authHeader = req.headers.get("Authorization") || "";
+  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+  const { data: userRes } = token
+    ? await supabase.auth.getUser(token)
+    : { data: { user: null } };
+  const requesterId = userRes?.user?.id ?? null;
+  if (!ticket.user_id || requesterId !== ticket.user_id) {
+    return j({ error: "Not authorized to rate this ticket" }, 403, corsHeaders);
+  }
+
   if (ticket.csat_score != null) return j({ ok: true, alreadyRated: true }, 200, corsHeaders);
 
   await supabase.from("support_csat").insert({

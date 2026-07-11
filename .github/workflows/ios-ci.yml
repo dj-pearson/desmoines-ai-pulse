@@ -349,6 +349,18 @@ jobs:
           grep 'MARKETING_VERSION:' ios/project.yml
           grep 'CURRENT_PROJECT_VERSION:' ios/project.yml
 
+          # IOS-AUDIT-REL-016: the iOS MARKETING_VERSION and the backend
+          # LATEST_APP_VERSION.ios (consumed by the version-check flow) must stay
+          # in lock-step. Fail the job if they drift so a release can't ship a
+          # binary the backend doesn't recognize as current.
+          MKT_VERSION=$(grep 'MARKETING_VERSION:' ios/project.yml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          BACKEND_VERSION=$(grep -A3 'const LATEST_APP_VERSION' supabase/functions/_shared/minSupportedVersions.ts | grep -m1 'ios:' | sed 's/.*"\(.*\)".*/\1/')
+          echo "iOS MARKETING_VERSION: $MKT_VERSION | backend LATEST_APP_VERSION.ios: $BACKEND_VERSION"
+          if [ "$MKT_VERSION" != "$BACKEND_VERSION" ]; then
+            echo "::error::Version drift: project.yml MARKETING_VERSION ($MKT_VERSION) != minSupportedVersions.ts LATEST_APP_VERSION.ios ($BACKEND_VERSION)"
+            ERRORS=$((ERRORS + 1))
+          fi
+
           echo ""
           SWIFT_COUNT=$(find ios/DesMoinesInsider -name "*.swift" | wc -l | xargs)
           echo "Swift files: $SWIFT_COUNT"

@@ -2,6 +2,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { validateURLForSSRF } from '../_shared/validation.ts';
 import { runJob } from '../_shared/jobRunner.ts';
+import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
+import { getAnthropicApiKey } from '../_shared/aiConfig.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -17,10 +19,10 @@ async function isUrlLive(url: string): Promise<boolean> {
     const t = setTimeout(() => ctrl.abort(), 8000);
     let res: Response;
     try {
-      res = await fetch(url, { method: 'HEAD', redirect: 'follow', signal: ctrl.signal });
+      res = await fetchWithTimeout(url, { method: 'HEAD', redirect: 'follow', signal: ctrl.signal });
       // Some servers reject HEAD; retry with GET on 405/501.
       if (res.status === 405 || res.status === 501) {
-        res = await fetch(url, { method: 'GET', redirect: 'follow', signal: ctrl.signal });
+        res = await fetchWithTimeout(url, { method: 'GET', redirect: 'follow', signal: ctrl.signal });
       }
     } finally {
       clearTimeout(t);
@@ -34,7 +36,7 @@ async function isUrlLive(url: string): Promise<boolean> {
 /** Wayback Machine fallback: latest archived snapshot of a dead URL, if any. */
 async function waybackLookup(url: string): Promise<string | null> {
   try {
-    const res = await fetch(`https://archive.org/wayback/available?url=${encodeURIComponent(url)}`);
+    const res = await fetchWithTimeout(`https://archive.org/wayback/available?url=${encodeURIComponent(url)}`);
     if (!res.ok) return null;
     const data = await res.json();
     const snap = data?.archived_snapshots?.closest;
@@ -116,7 +118,7 @@ async function findActualEventUrl(event: any): Promise<string | null> {
     }
 
     // Fetch the aggregator page
-    const response = await fetch(event.source_url, {
+    const response = await fetchWithTimeout(event.source_url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
       }
@@ -214,7 +216,7 @@ Instructions:
 
 URL:`;
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -229,7 +231,7 @@ URL:`;
           content: prompt
         }]
       })
-    });
+    }, 60_000);
 
     if (!response.ok) {
       console.log(`⚠️ Claude API error: ${response.status}`);
@@ -266,7 +268,7 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const claudeApiKey = Deno.env.get('CLAUDE_API');
+    const claudeApiKey = getAnthropicApiKey();
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     console.log('🚀 Starting source URL validation...');
@@ -320,7 +322,7 @@ serve(async (req) => {
         if (!actualUrl && useAI && claudeApiKey) {
           const aiFetchCheck = validateURLForSSRF(event.source_url);
           if (aiFetchCheck.valid) {
-            const response = await fetch(event.source_url);
+            const response = await fetchWithTimeout(event.source_url);
             if (response.ok) {
               const html = await response.text();
               actualUrl = await findUrlWithAI(event, html, claudeApiKey);

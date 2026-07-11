@@ -69,6 +69,10 @@ export default function CatchDesmoinUrlExtractor() {
     }
     setProgress(0);
 
+    // Declared outside try so the finally block can always clear it,
+    // even if the fetch below throws.
+    let progressInterval: ReturnType<typeof setInterval> | undefined;
+
     try {
       // Get auth token
       const { data: { session } } = await supabase.auth.getSession();
@@ -78,7 +82,7 @@ export default function CatchDesmoinUrlExtractor() {
       }
 
       // Show progress animation
-      const progressInterval = setInterval(() => {
+      progressInterval = setInterval(() => {
         setProgress((prev) => {
           if (prev >= 90) return 90;
           return prev + 5;
@@ -136,6 +140,8 @@ export default function CatchDesmoinUrlExtractor() {
         setResult(errorResult);
       }
     } finally {
+      // Always clear the progress interval so it can never leak on error.
+      if (progressInterval) clearInterval(progressInterval);
       if (dryRun) {
         setIsDryRunning(false);
       } else {

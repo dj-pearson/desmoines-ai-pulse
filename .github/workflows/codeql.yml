@@ -1,0 +1,38 @@
+# WEB-CI-005: Static application security testing (SAST) via CodeQL.
+# Runs on PRs into protected branches, on push to main/develop, and weekly.
+name: CodeQL
+
+on:
+  pull_request:
+    branches: [main, develop, "release/**"]
+  push:
+    branches: [main, develop]
+  schedule:
+    - cron: '30 5 * * 1' # weekly, Monday 05:30 UTC
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: CodeQL Analyze (javascript-typescript)
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          queries: security-and-quality
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:javascript-typescript"

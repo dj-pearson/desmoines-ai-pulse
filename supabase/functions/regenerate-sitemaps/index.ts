@@ -22,6 +22,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { runJob } from "../_shared/jobRunner.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 
 const BASE_URL =
   Deno.env.get("SITE_URL") || Deno.env.get("VITE_SITE_URL") || "https://desmoinesinsider.com";
@@ -218,7 +219,7 @@ async function pingSearchEngines(): Promise<Record<string, unknown>> {
   await Promise.all(
     targets.map(async (t) => {
       try {
-        const res = await fetch(t.url, { method: "GET" });
+        const res = await fetchWithTimeout(t.url, { method: "GET" });
         results[t.name] = res.status;
       } catch (err) {
         results[t.name] = err instanceof Error ? err.message : String(err);
@@ -256,7 +257,7 @@ async function submitToIndexingApi(urls: string[]): Promise<Record<string, unkno
     const cryptoKey = await crypto.subtle.importKey("pkcs8", keyBytes, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]);
     const sig = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", cryptoKey, new TextEncoder().encode(signingInput));
     const jwt = `${signingInput}.${enc(new Uint8Array(sig))}`;
-    const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+    const tokenRes = await fetchWithTimeout("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion: jwt }),
@@ -268,7 +269,7 @@ async function submitToIndexingApi(urls: string[]): Promise<Record<string, unkno
     let ok = 0;
     for (const url of capped) {
       try {
-        const r = await fetch("https://indexing.googleapis.com/v3/urlNotifications:publish", {
+        const r = await fetchWithTimeout("https://indexing.googleapis.com/v3/urlNotifications:publish", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${access_token}` },
           body: JSON.stringify({ url, type: "URL_UPDATED" }),

@@ -13,9 +13,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar, MapPin, ChevronLeft, ChevronRight, Clock } from "lucide-react";
 import { format, startOfMonth, endOfMonth, parseISO, isValid } from "date-fns";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { BRAND } from "@/lib/brandConfig";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { EVENT_LIST_COLUMNS } from "@/lib/listColumns";
 
 export default function MonthlyEventsPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -37,45 +38,40 @@ export default function MonthlyEventsPage() {
   const monthStart = startOfMonth(targetDate);
   const monthEnd = endOfMonth(targetDate);
   
-  const { data: events, isLoading } = useQuery({
-    queryKey: ["monthly-events", monthYear, selectedCategory],
+  // Fetch the full month once; category filtering + category list are derived
+  // in memory to avoid a second full-range query (WEB-PERF-011).
+  const { data: allEvents, isLoading } = useQuery({
+    queryKey: ["monthly-events", monthYear],
     queryFn: async () => {
-      let query = supabase
+      const { data, error } = await supabase
         .from("events")
-        .select("*")
+        .select(EVENT_LIST_COLUMNS)
         .gte("date", format(monthStart, "yyyy-MM-dd"))
         .lte("date", format(monthEnd, "yyyy-MM-dd"))
         .order("date", { ascending: true })
         .order("time", { ascending: true });
 
-      if (selectedCategory !== "all") {
-        query = query.eq("category", selectedCategory);
-      }
-
-      const { data, error } = await query;
       if (error) throw error;
       return data || [];
     },
     enabled: isValidDate, // Only run query if date is valid
   });
 
-  const { data: categories } = useQuery({
-    queryKey: ["monthly-event-categories", monthYear],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("events")
-        .select("category")
-        .gte("date", format(monthStart, "yyyy-MM-dd"))
-        .lte("date", format(monthEnd, "yyyy-MM-dd"));
+  // Category filter applied in memory (preserves the previous grid behavior).
+  const events = useMemo(() => {
+    if (!allEvents) return allEvents;
+    if (selectedCategory === "all") return allEvents;
+    return allEvents.filter((event) => event.category === selectedCategory);
+  }, [allEvents, selectedCategory]);
 
-      if (error) throw error;
-      const uniqueCategories = [
-        ...new Set(data.map((event) => event.category)),
-      ].filter(Boolean);
-      return uniqueCategories.sort();
-    },
-    enabled: isValidDate, // Only run query if date is valid
-  });
+  // Distinct category list derived from the already-fetched rows.
+  const categories = useMemo(
+    () =>
+      [...new Set((allEvents || []).map((event) => event.category))]
+        .filter(Boolean)
+        .sort(),
+    [allEvents]
+  );
 
   useDocumentTitle(isValidDate ? `${format(targetDate, "MMMM yyyy")} Events` : "Monthly Events");
 

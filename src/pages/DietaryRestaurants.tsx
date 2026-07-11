@@ -15,6 +15,7 @@ import { Leaf, Wheat, Beef, MapPin, FilterX } from "lucide-react";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
 
 const dietaryOptions = [
   { id: "vegan", label: "Vegan", icon: Leaf, color: "text-green-600", keywords: ["vegan"] },
@@ -55,7 +56,7 @@ export default function DietaryRestaurants() {
           // No filter selected, show all restaurants
           const { data, error } = await supabase
             .from("restaurants")
-            .select("*")
+            .select(RESTAURANT_LIST_COLUMNS)
             .order("name")
             .limit(100);
 
@@ -76,7 +77,7 @@ export default function DietaryRestaurants() {
 
           const { data, error } = await supabase
             .from("restaurants")
-            .select("*")
+            .select(RESTAURANT_LIST_COLUMNS)
             .or(orConditions)
             .order("name")
             .limit(100);

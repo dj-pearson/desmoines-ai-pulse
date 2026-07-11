@@ -1,0 +1,21 @@
+{
+  "_comment": "WEB-CI-005: package names whose high/critical npm-audit advisories are ACCEPTED (pre-existing, mostly transitive dev-tooling) as of 2026-07-11. scripts/audit-check.mjs ignores these so the PR gate blocks only NEW high/critical advisories. Remediate by upgrading the dependency, then remove it from this list. Do NOT add a package here without a tracking note.",
+  "acceptedPackages": [
+    "@remix-run/router",
+    "basic-ftp",
+    "flatted",
+    "jspdf",
+    "linkify-it",
+    "lodash",
+    "lodash-es",
+    "minimatch",
+    "picomatch",
+    "react-router",
+    "react-router-dom",
+    "rollup",
+    "undici",
+    "vite",
+    "vitest",
+    "ws"
+  ]
+}

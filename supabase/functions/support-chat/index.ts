@@ -17,7 +17,8 @@ import { runAgent } from "../_shared/agentRun.ts";
 import { createAgentTask } from "../_shared/agentTasks.ts";
 import { writeAgentAudit } from "../_shared/auditLog.ts";
 import { retrieveKb } from "../_shared/kbRetrieve.ts";
-import { getAIConfig } from "../_shared/aiConfig.ts";
+import { getAIConfig, getAnthropicApiKey } from "../_shared/aiConfig.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 
 const AGENT_KEY = "support-chat";
 const HUMAN_RE = /\b(speak|talk|connect|escalate|transfer)\b.{0,20}\b(human|person|agent|representative|rep|someone|support team)\b|\bhuman\b.{0,10}\bplease\b/i;
@@ -31,7 +32,7 @@ function j(body: unknown, status: number, headers: Record<string, string>): Resp
 }
 
 async function draft(supabaseUrl: string, supabaseKey: string, history: Msg[], passages: { title: string; content: string; source: string | null }[]) {
-  const apiKey = Deno.env.get("CLAUDE_API") ?? Deno.env.get("ANTHROPIC_API_KEY");
+  const apiKey = getAnthropicApiKey();
   if (!apiKey) return null;
   const config = await getAIConfig(supabaseUrl, supabaseKey);
   const context = passages.map((p, i) => `[${i + 1}] (${p.source ?? "KB"}) ${p.title}\n${p.content}`).join("\n\n");
@@ -41,12 +42,12 @@ async function draft(supabaseUrl: string, supabaseKey: string, history: Msg[], p
     `set "canAnswer" to false and offer to connect the user with a human. Cite sources you used. ` +
     `Return ONLY compact JSON: {"reply":"...","canAnswer":true|false,"sources":["label"...]}.\n\nKNOWLEDGE BASE:\n${context || "(none)"}`;
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetchWithTimeout("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": config.anthropic_version },
       body: JSON.stringify({ model: config.default_model, max_tokens: 700, temperature: 0.2, system, messages: history.slice(-8) }),
       signal: AbortSignal.timeout(30_000),
-    });
+    }, 60_000);
     if (!res.ok) return null;
     const data = await res.json();
     const text: string = (data.content ?? []).map((b: { text?: string }) => b.text ?? "").join("");

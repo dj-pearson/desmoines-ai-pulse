@@ -13,6 +13,7 @@
  * The wrapper never throws — a job-infra failure must not crash the function.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { fetchWithTimeout } from './fetchWithTimeout.ts';
 import { agentPaused } from './agentGuards.ts';
 
 export interface JobContext {
@@ -29,7 +30,20 @@ export interface RunJobOptions {
   maxAttempts?: number;
   /** Base backoff in ms (default 1000; doubles each retry). */
   backoffMs?: number;
-  /** Classify an error as transient (retryable). Default: retry everything. */
+  /**
+   * Opt IN to whole-body retry (WEB-BE-008). On a transient failure runJob
+   * re-invokes the ENTIRE `fn` body, so a non-idempotent, insert-heavy job would
+   * double-write on retry. Retry is therefore OPT-IN and defaults to OFF:
+   * without this flag (or an `isTransient` predicate) a job fails fast after one
+   * attempt and alerts once. Only set `retriable: true` for jobs whose body is
+   * idempotent (safe to run twice). For finer control, pass `isTransient`.
+   */
+  retriable?: boolean;
+  /**
+   * Classify an error as transient (retryable). Takes precedence over
+   * `retriable`. Default (no predicate, `retriable` unset): NEVER retry — see
+   * the idempotency note on `retriable`.
+   */
   isTransient?: (err: unknown) => boolean;
   /** Admin alert email override (else ADMIN_ALERT_EMAIL / ALERT_EMAIL secret). */
   alertEmail?: string;
@@ -65,7 +79,11 @@ export async function runJob<T>(
   fn: (ctx: JobContext) => Promise<T>,
   options: RunJobOptions = {},
 ): Promise<JobResult<T>> {
-  const { maxAttempts = 3, backoffMs = 1000, isTransient = () => true } = options;
+  const { maxAttempts = 3, backoffMs = 1000 } = options;
+  // Retry is opt-in (WEB-BE-008): an explicit isTransient predicate wins, else
+  // `retriable: true` retries on any error, else the job never retries so
+  // non-idempotent bodies can't double-write.
+  const isTransient = options.isTransient ?? (options.retriable ? () => true : () => false);
   const supabase = serviceClient();
 
   // Global/per-agent pause gate (AOS-CORE-009). Record a skipped run and exit
@@ -199,7 +217,7 @@ export async function sendJobAlert(jobName: string, message: string, alertEmail?
       console.warn(`[jobRunner] alert not sent for "${jobName}" (missing ADMIN_ALERT_EMAIL or RESEND_API_KEY): ${message}`);
       return;
     }
-    await fetch('https://api.resend.com/emails', {
+    await fetchWithTimeout('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${resendKey}` },
       body: JSON.stringify({

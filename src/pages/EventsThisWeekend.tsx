@@ -22,6 +22,7 @@ import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { EVENT_LIST_COLUMNS } from "@/lib/listColumns";
 
 export default function EventsThisWeekend() {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
@@ -47,7 +48,7 @@ export default function EventsThisWeekend() {
 
       const { data, error } = await supabase
         .from("events")
-        .select("*")
+        .select(EVENT_LIST_COLUMNS)
         .gte("date", startUtc)
         .lte("date", endUtc)
         .order("event_start_utc", { ascending: true, nullsFirst: false })
@@ -380,8 +381,8 @@ export default function EventsThisWeekend() {
                 <CardTitle>Frequently Asked Questions</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {faqData.map((faq, index) => (
-                  <div key={index} className="border-b pb-4 last:border-b-0">
+                {faqData.map((faq) => (
+                  <div key={faq.question} className="border-b pb-4 last:border-b-0">
                     <h3 className="font-semibold mb-2">{faq.question}</h3>
                     <p className="text-muted-foreground">{faq.answer}</p>
                   </div>

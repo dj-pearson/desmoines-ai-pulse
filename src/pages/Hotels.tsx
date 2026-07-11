@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { Helmet } from "react-helmet-async";
 import { useHotels, useHotelFilterOptions } from "@/hooks/useHotels";
 import HotelCard from "@/components/HotelCard";
@@ -98,15 +98,23 @@ export default function Hotels() {
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<SortOption>("featured");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
   // Debounce search
   const handleSearch = (value: string) => {
     setSearch(value);
-    clearTimeout((window as any).__hotelSearchTimeout);
-    (window as any).__hotelSearchTimeout = setTimeout(() => {
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    searchTimeoutRef.current = setTimeout(() => {
       setDebouncedSearch(value);
     }, 300);
   };
+
+  // Clear any pending debounce timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    };
+  }, []);
 
   const { hotels, isLoading, totalCount, error: hotelsError, refetch } = useHotels({
     search: debouncedSearch,

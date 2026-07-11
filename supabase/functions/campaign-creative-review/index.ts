@@ -16,6 +16,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
 import { requireAdminOrApiKey } from '../_shared/apiKeyAuth.ts';
 import { runJob } from '../_shared/jobRunner.ts';
+import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
+import { getAnthropicApiKey } from '../_shared/aiConfig.ts';
 
 // Minimum pixel dimensions per placement.
 const MIN_DIMS: Record<string, { w: number; h: number }> = {
@@ -48,8 +50,8 @@ async function urlResolves(rawUrl: string): Promise<boolean> {
     const ac = new AbortController();
     const t = setTimeout(() => ac.abort(), 6000);
     try {
-      let res = await fetch(rawUrl, { method: 'HEAD', redirect: 'follow', signal: ac.signal });
-      if (!res.ok) res = await fetch(rawUrl, { method: 'GET', redirect: 'follow', signal: ac.signal });
+      let res = await fetchWithTimeout(rawUrl, { method: 'HEAD', redirect: 'follow', signal: ac.signal });
+      if (!res.ok) res = await fetchWithTimeout(rawUrl, { method: 'GET', redirect: 'follow', signal: ac.signal });
       // A redirect that lands on a non-https URL is disallowed.
       if (res.url && !res.url.startsWith('https:')) return false;
       return res.ok;
@@ -68,7 +70,7 @@ async function imageLoads(rawUrl: string): Promise<boolean> {
     const ac = new AbortController();
     const t = setTimeout(() => ac.abort(), 6000);
     try {
-      const res = await fetch(rawUrl, { method: 'HEAD', signal: ac.signal });
+      const res = await fetchWithTimeout(rawUrl, { method: 'HEAD', signal: ac.signal });
       const type = res.headers.get('content-type') || '';
       return res.ok && type.startsWith('image/');
     } finally {
@@ -81,11 +83,11 @@ async function imageLoads(rawUrl: string): Promise<boolean> {
 
 /** Claude brand-safety check. Returns true (safe) when no API key is configured. */
 async function brandSafe(text: string): Promise<{ safe: boolean; note: string }> {
-  const key = Deno.env.get('ANTHROPIC_API_KEY');
+  const key = getAnthropicApiKey();
   if (!key) return { safe: true, note: 'skipped (no ANTHROPIC_API_KEY)' };
   if (!text.trim()) return { safe: true, note: 'empty' };
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -104,7 +106,7 @@ async function brandSafe(text: string): Promise<{ safe: boolean; note: string }>
           },
         ],
       }),
-    });
+    }, 60_000);
     if (!res.ok) return { safe: true, note: `claude error ${res.status} (failed open)` };
     const data = await res.json();
     const verdict = String(data?.content?.[0]?.text || '').toUpperCase();

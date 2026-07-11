@@ -73,8 +73,9 @@ struct Event: Identifiable, Codable, Hashable {
     }
 
     var coordinate: CLLocationCoordinate2D? {
-        guard let lat = latitude, let lng = longitude,
-              lat != 0, lng != 0 else { return nil }
+        // A missing coordinate is null in the DB (Double? == nil); a literal 0.0
+        // is a valid location and must not be masked (IOS-AUDIT-BUG-016).
+        guard let lat = latitude, let lng = longitude else { return nil }
         return CLLocationCoordinate2D(latitude: lat, longitude: lng)
     }
 

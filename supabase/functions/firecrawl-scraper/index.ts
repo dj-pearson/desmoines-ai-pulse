@@ -5,12 +5,13 @@
  * Risk level: MEDIUM
  */
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { parseISO, format as dateFnsFormat } from "https://esm.sh/date-fns@3.6.0";
 import { fromZonedTime } from "https://esm.sh/date-fns-tz@3.2.0";
 import { scrapeUrl, scrapeUrls } from "../_shared/scraper.ts";
-import { getAIConfig, buildClaudeRequest, buildLightweightClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
+import { getAIConfig, buildClaudeRequest, buildLightweightClaudeRequest, getClaudeHeaders, getAnthropicApiKey } from "../_shared/aiConfig.ts";
 import { validateURLForSSRF } from "../_shared/validation.ts";
 import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
 import { tryDomainAdapter } from "../_shared/domain-adapters/index.ts";
@@ -287,11 +288,11 @@ Focus on Des Moines local SEO and GEO optimization for AI search engines.`;
       }
     );
 
-    const claudeResponse = await fetch(config.api_endpoint, {
+    const claudeResponse = await fetchWithTimeout(config.api_endpoint, {
       method: 'POST',
       headers,
       body: JSON.stringify(requestBody)
-    });
+    }, 60_000);
 
     if (!claudeResponse.ok) {
       console.error(`❌ SEO generation API error: ${claudeResponse.status}`);
@@ -537,7 +538,7 @@ serve(async (req) => {
       }
 
       // Extract events using Claude AI for this page
-      const claudeApiKey = Deno.env.get('CLAUDE_API');
+      const claudeApiKey = getAnthropicApiKey();
       
       if (!claudeApiKey) {
         console.error(`❌ Claude API key not found`);
@@ -850,11 +851,11 @@ Return empty array [] if no competitive content found.`
         }
       );
 
-      const claudeResponse = await fetch(aiConfig.api_endpoint, {
+      const claudeResponse = await fetchWithTimeout(aiConfig.api_endpoint, {
         method: "POST",
         headers: claudeHeaders,
         body: JSON.stringify(claudeRequestBody),
-      });
+      }, 60_000);
 
       if (!claudeResponse.ok) {
         const errorText = await claudeResponse.text();
@@ -1252,7 +1253,7 @@ Return empty array [] if no competitive content found.`
 
                 // Generate SEO content for newly inserted events using lightweight AI (Haiku)
                 if (category === 'events' && insertedData?.[0]?.id) {
-                  const claudeApiKey = Deno.env.get('CLAUDE_API');
+                  const claudeApiKey = getAnthropicApiKey();
                   if (claudeApiKey) {
                     // Include known venue info for better SEO
                     const seoVenueInfo = knownVenue

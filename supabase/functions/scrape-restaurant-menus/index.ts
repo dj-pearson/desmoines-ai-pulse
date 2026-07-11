@@ -5,12 +5,13 @@
  * Risk level: MEDIUM
  */
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts";
 import { fetchPdfAsBase64, fetchImageAsBase64, detectImageMediaType } from "../_shared/scraper.ts";
 import type { FetchedImage } from "../_shared/scraper.ts";
-import { getAIConfig } from "../_shared/aiConfig.ts";
+import { getAIConfig, getAnthropicApiKey } from "../_shared/aiConfig.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -19,7 +20,7 @@ const corsHeaders = {
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const claudeApiKey = Deno.env.get('CLAUDE_API')!;
+const claudeApiKey = getAnthropicApiKey()!;
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -466,7 +467,7 @@ If no menu items can be found, return: {"sections": []}`;
 
   const aiConfig = await getAIConfig(supabaseUrl, supabaseKey);
 
-  const response = await fetch(aiConfig.api_endpoint, {
+  const response = await fetchWithTimeout(aiConfig.api_endpoint, {
     method: 'POST',
     headers: {
       'x-api-key': claudeApiKey,
@@ -478,7 +479,7 @@ If no menu items can be found, return: {"sections": []}`;
       max_tokens: parseInt(String(aiConfig.max_tokens_large), 10) || 8000,
       messages: [{ role: 'user', content: prompt }],
     }),
-  });
+  }, 60_000);
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -517,7 +518,7 @@ async function extractMenuFromPdf(
 
   const aiConfig = await getAIConfig(supabaseUrl, supabaseKey);
 
-  const response = await fetch(aiConfig.api_endpoint, {
+  const response = await fetchWithTimeout(aiConfig.api_endpoint, {
     method: 'POST',
     headers: {
       'x-api-key': claudeApiKey,
@@ -544,7 +545,7 @@ ${MENU_EXTRACTION_INSTRUCTIONS}`,
         ],
       }],
     }),
-  });
+  }, 60_000);
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -606,7 +607,7 @@ Extract the COMPLETE menu with every item visible across all images, organized b
 ${MENU_EXTRACTION_INSTRUCTIONS}`,
   });
 
-  const response = await fetch(aiConfig.api_endpoint, {
+  const response = await fetchWithTimeout(aiConfig.api_endpoint, {
     method: 'POST',
     headers: {
       'x-api-key': claudeApiKey,
@@ -618,7 +619,7 @@ ${MENU_EXTRACTION_INSTRUCTIONS}`,
       max_tokens: parseInt(String(aiConfig.max_tokens_large), 10) || 8000,
       messages: [{ role: 'user', content }],
     }),
-  });
+  }, 60_000);
 
   if (!response.ok) {
     const errorText = await response.text();

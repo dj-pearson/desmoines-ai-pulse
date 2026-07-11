@@ -4,6 +4,7 @@ import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts"
 import { requireApiKey } from "../_shared/apiKeyAuth.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
 import { writeAuditLog, auditIp } from "../_shared/auditLog.ts";
+import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
 
 interface GooglePlaceDetails {
   id: string;
@@ -151,7 +152,7 @@ serve(async (req) => {
             console.log(`Searching for: "${searchQuery}"`)
             const searchUrl = `https://places.googleapis.com/v1/places:searchText`
             
-            const searchResponse = await fetch(searchUrl, {
+            const searchResponse = await fetchWithTimeout(searchUrl, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -210,7 +211,7 @@ serve(async (req) => {
         if (placeId) {
           const detailsUrl = `https://places.googleapis.com/v1/places/${placeId}`
           
-          const detailsResponse = await fetch(detailsUrl, {
+          const detailsResponse = await fetchWithTimeout(detailsUrl, {
             method: 'GET',
             headers: {
               'X-Goog-Api-Key': googleApiKey,

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import { storage } from '@/lib/safeStorage';
 
 const STORAGE_KEY = 'a11y-preferences';
@@ -99,22 +99,26 @@ export function AccessibilityProvider({ children }: { children: React.ReactNode 
     setPreferences(DEFAULT_PREFERENCES);
   }, []);
 
-  const hasCustomPreferences = Object.entries(preferences).some(
-    ([key, value]) => value !== DEFAULT_PREFERENCES[key as keyof AccessibilityPreferences]
-  );
+  // Memoize the context value so app-wide consumers only re-render when the
+  // preferences actually change, not on every provider re-render (WEB-PERF-014).
+  // All handlers are useCallback-stable, so `preferences` is the only real dep.
+  const value = useMemo(() => {
+    const hasCustomPreferences = Object.entries(preferences).some(
+      ([key, v]) => v !== DEFAULT_PREFERENCES[key as keyof AccessibilityPreferences]
+    );
+    return {
+      preferences,
+      setPreference,
+      togglePreference,
+      increaseFontSize,
+      decreaseFontSize,
+      resetPreferences,
+      hasCustomPreferences,
+    };
+  }, [preferences, setPreference, togglePreference, increaseFontSize, decreaseFontSize, resetPreferences]);
 
   return (
-    <AccessibilityContext.Provider
-      value={{
-        preferences,
-        setPreference,
-        togglePreference,
-        increaseFontSize,
-        decreaseFontSize,
-        resetPreferences,
-        hasCustomPreferences,
-      }}
-    >
+    <AccessibilityContext.Provider value={value}>
       {children}
     </AccessibilityContext.Provider>
   );

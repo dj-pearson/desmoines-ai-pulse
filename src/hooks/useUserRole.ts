@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { createLogger } from "@/lib/logger";
 import { User } from "@supabase/supabase-js";
+
+const logger = createLogger('useUserRole');
 
 export type UserRole = 'user' | 'moderator' | 'admin' | 'root_admin';
 
@@ -31,10 +34,10 @@ export function useUserRole(user?: User | null) {
     let isMounted = true;
     
     const fetchUserRole = async () => {
-      console.log("fetchUserRole called, user:", user?.id || 'null');
-      
+      logger.debug('fetchUserRole', 'fetchUserRole called', { userId: user?.id || 'null' });
+
       if (!user) {
-        console.log("No user found, setting default role");
+        logger.debug('fetchUserRole', 'No user found, setting default role');
         if (isMounted) {
           setState({ userRole: 'user', isLoading: false, error: null });
         }
@@ -47,7 +50,7 @@ export function useUserRole(user?: User | null) {
       }
 
       try {
-        console.log("fetchUserRole: checking for user ID:", user.id);
+        logger.debug('fetchUserRole', 'checking for user ID', { userId: user.id });
 
         // Check user_roles table first (authoritative source)
         const { data: roleData, error: roleError } = await supabase
@@ -58,10 +61,10 @@ export function useUserRole(user?: User | null) {
           .limit(1)
           .maybeSingle();
 
-        console.log("user_roles query result:", { roleData, roleError });
+        logger.debug('fetchUserRole', 'user_roles query result', { roleData, roleError });
 
         if (!roleError && roleData?.role) {
-          console.log("Found role in user_roles:", roleData.role);
+          logger.debug('fetchUserRole', 'Found role in user_roles', { role: roleData.role });
           if (isMounted) {
             setState({
               userRole: roleData.role as UserRole,
@@ -79,10 +82,10 @@ export function useUserRole(user?: User | null) {
           .eq("user_id", user.id)
           .maybeSingle();
 
-        console.log("profiles query result:", { profile, profileError });
+        logger.debug('fetchUserRole', 'profiles query result', { profile, profileError });
 
         const userRole = profile?.user_role as UserRole || 'user';
-        console.log("Final userRole determined:", userRole);
+        logger.debug('fetchUserRole', 'Final userRole determined', { userRole });
         
         if (isMounted) {
           setState({
@@ -92,7 +95,7 @@ export function useUserRole(user?: User | null) {
           });
         }
       } catch (error) {
-        console.error("Error fetching user role:", error);
+        logger.error('fetchUserRole', 'Error fetching user role', { error });
         if (isMounted) {
           setState({
             userRole: 'user',
@@ -137,7 +140,7 @@ export function useUserRole(user?: User | null) {
       return data;
     } catch (error) {
       if (import.meta.env.DEV) {
-        console.error("Error assigning role:", error);
+        logger.error('assignRole', 'Error assigning role', { error });
       }
       throw error;
     }
@@ -161,7 +164,7 @@ export function useUserRole(user?: User | null) {
 
       return data || [];
     } catch (error) {
-      console.error("Error fetching all users:", error);
+      logger.error('getAllUsers', 'Error fetching all users', { error });
       throw error;
     }
   };

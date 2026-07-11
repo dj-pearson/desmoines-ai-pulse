@@ -69,5 +69,13 @@
 			</array>
 		</dict>
 	</array>
+	<!-- IOS-AUDIT-REL-013: explicit App Transport Security. All backends
+	     (Supabase, Open-Meteo, Google) are HTTPS, so arbitrary loads stay off
+	     and no exception domains are declared. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<false/>
+	</dict>
 </dict>
 </plist>

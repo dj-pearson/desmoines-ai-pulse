@@ -16,6 +16,7 @@ import { format } from "date-fns";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
 
 interface Restaurant {
   id: string;
@@ -55,7 +56,7 @@ export default function OpenNowRestaurants() {
         // In production, this would use actual hours data from the database
         const { data, error } = await supabase
           .from("restaurants")
-          .select("*")
+          .select(RESTAURANT_LIST_COLUMNS)
           .order("name")
           .limit(100);
 

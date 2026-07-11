@@ -10,11 +10,49 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { getAIConfig, getClaudeHeaders } from "../_shared/aiConfig.ts";
+import { getAIConfig, getClaudeHeaders, getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
 import { requireApiKey } from "../_shared/apiKeyAuth.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
 import { validateURLForSSRF } from "../_shared/validation.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+
+/**
+ * Webhook signature (WEB-BE-009).
+ *
+ * When ARTICLE_WEBHOOK_SECRET is set, every outbound delivery carries an
+ * `X-Webhook-Signature: sha256=<hex>` header. The value is an HMAC-SHA256, in
+ * lowercase hex, computed over the EXACT UTF-8 bytes of the JSON request body
+ * (the same string we POST — do not re-serialize before verifying).
+ *
+ * Receivers verify by recomputing HMAC-SHA256(secret, rawBody) and comparing
+ * (constant-time) against the hex after `sha256=`. Node example:
+ *   const expected = crypto.createHmac('sha256', SECRET).update(rawBody).digest('hex');
+ *   const ok = crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(sig));
+ *
+ * The header is ADDITIVE — receivers that ignore it keep working, and if the
+ * secret is unset we log a warning and send unsigned rather than break them.
+ */
+async function signPayload(secret: string, body: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(body));
+  return Array.from(new Uint8Array(sig))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+/** True for transient failures worth retrying: network error, 429, or 5xx. */
+function isTransientStatus(status: number): boolean {
+  return status === 429 || status >= 500;
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -72,7 +110,7 @@ serve(async (req) => {
 
     // Get AI configuration
     const aiConfig = await getAIConfig(supabaseUrl, supabaseServiceKey);
-    const claudeApiKey = Deno.env.get('CLAUDE_API') || Deno.env.get('CLAUDE_API_KEY');
+    const claudeApiKey = getAnthropicApiKey();
 
     if (!claudeApiKey) {
       throw new Error('Claude API key not configured');
@@ -121,7 +159,12 @@ Return ONLY a JSON object with this exact structure:
     }
 
     const aiData = await aiResponse.json();
-    const aiContent = aiData.content[0].text;
+    const extracted = extractClaudeText(aiData);
+    if (!extracted.ok) {
+      console.error("Claude response not usable:", extracted.reason, extracted.detail);
+      throw new Error(`AI response ${extracted.reason}: ${extracted.detail}`);
+    }
+    const aiContent = extracted.text;
 
     // Parse AI response
     let descriptions;
@@ -160,17 +203,70 @@ Return ONLY a JSON object with this exact structure:
 
     console.log('Sending webhook to:', webhookUrl);
 
-    // Send webhook
-    const webhookResponse = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(webhookPayload)
-    });
+    // Serialize once so the signature covers the EXACT bytes we transmit.
+    const rawBody = JSON.stringify(webhookPayload);
 
-    if (!webhookResponse.ok) {
-      console.error('Webhook delivery failed:', webhookResponse.status);
+    const webhookHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    // Sign the payload when a shared secret is configured (WEB-BE-009).
+    // Falls back gracefully to unsigned delivery so existing receivers keep working.
+    const webhookSecret = Deno.env.get('ARTICLE_WEBHOOK_SECRET');
+    if (webhookSecret) {
+      const signature = await signPayload(webhookSecret, rawBody);
+      webhookHeaders['X-Webhook-Signature'] = `sha256=${signature}`;
+    } else {
+      console.warn('ARTICLE_WEBHOOK_SECRET not set — sending webhook without signature');
+    }
+
+    // Deliver with a hard timeout and bounded retry with exponential backoff.
+    // Retry only transient failures (network error / 429 / 5xx); never 4xx.
+    const maxAttempts = 3;
+    const backoffMs = [500, 1000, 2000];
+    let webhookResponse: Response | undefined;
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      let transient = false;
+      try {
+        webhookResponse = await fetchWithTimeout(webhookUrl, {
+          method: 'POST',
+          headers: webhookHeaders,
+          body: rawBody,
+        });
+
+        if (webhookResponse.ok) {
+          lastError = undefined;
+          break;
+        }
+
+        // Permanent 4xx: don't retry — fail immediately.
+        if (!isTransientStatus(webhookResponse.status)) {
+          console.error('Webhook delivery failed (permanent):', webhookResponse.status);
+          throw new Error('Webhook delivery failed');
+        }
+
+        // Transient status (429 / 5xx) — eligible for retry.
+        transient = true;
+        lastError = new Error(`Webhook delivery failed with status ${webhookResponse.status}`);
+        console.warn(`Webhook delivery attempt ${attempt}/${maxAttempts} failed with status ${webhookResponse.status}`);
+      } catch (err) {
+        // A thrown permanent-failure error must propagate, not be retried.
+        if (err instanceof Error && err.message === 'Webhook delivery failed') throw err;
+        // Network error / timeout — transient.
+        transient = true;
+        lastError = err;
+        console.warn(`Webhook delivery attempt ${attempt}/${maxAttempts} errored:`, err);
+      }
+
+      if (transient && attempt < maxAttempts) {
+        await sleep(backoffMs[attempt - 1]);
+      }
+    }
+
+    if (!webhookResponse || !webhookResponse.ok) {
+      console.error('Webhook delivery failed after retries:', lastError);
       throw new Error('Webhook delivery failed');
     }
 

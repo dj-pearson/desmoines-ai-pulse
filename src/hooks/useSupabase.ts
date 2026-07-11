@@ -1,6 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Event, RestaurantOpening, Restaurant, Attraction, Playground } from "@/lib/types";
+import { EVENT_LIST_COLUMNS, RESTAURANT_LIST_COLUMNS, ATTRACTION_LIST_COLUMNS } from "@/lib/listColumns";
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger("useSupabase");
 
 /** Deterministic daily shuffle using a numeric seed (e.g. date as YYYYMMDD integer).
  *  Returns a new array — original is not mutated. */
@@ -27,13 +31,13 @@ export function useFeaturedEvents() {
       // Pass 1: sponsored events take priority
       const { data: sponsoredData, error: sponsoredError } = await supabase
         .from('events')
-        .select('*')
+        .select(EVENT_LIST_COLUMNS)
         .eq('is_sponsored', true)
         .gte('date', today)
         .order('date', { ascending: true });
 
       if (sponsoredError) {
-        console.error('Error fetching sponsored events:', sponsoredError);
+        logger.error('useFeaturedEvents', 'Error fetching sponsored events', { error: sponsoredError });
         throw sponsoredError;
       }
 
@@ -45,7 +49,7 @@ export function useFeaturedEvents() {
       // Pass 2: fill remaining slots with rotated organic featured items
       const { data: featuredData, error: featuredError } = await supabase
         .from('events')
-        .select('*')
+        .select(EVENT_LIST_COLUMNS)
         .eq('is_featured', true)
         .eq('is_sponsored', false)
         .gte('date', today)
@@ -53,7 +57,7 @@ export function useFeaturedEvents() {
         .limit(20); // fetch more than needed to enable rotation
 
       if (featuredError) {
-        console.error('Error fetching featured events:', featuredError);
+        logger.error('useFeaturedEvents', 'Error fetching featured events', { error: featuredError });
         throw featuredError;
       }
 
@@ -81,7 +85,7 @@ export function useEvents(filters?: { category?: string; location?: string; date
       let query = supabase.from('events').select('*');
       
       const dateFilter = filters?.date || today;
-      console.log('Fetching events for date >=', dateFilter);
+      logger.info('useEvents', 'Fetching events', { from: dateFilter });
       query = query.gte('date', dateFilter);
       
       if (filters?.category) {
@@ -91,13 +95,13 @@ export function useEvents(filters?: { category?: string; location?: string; date
         query = query.ilike('location', `%${filters.location}%`);
       }
       
-      const { data, error } = await query.order('date', { ascending: true });
-      
+      const { data, error } = await query.order('date', { ascending: true }).limit(100);
+
       if (error) {
-        console.error('Error fetching events:', error);
+        logger.error('useEvents', 'Error fetching events', { error });
         throw error;
       }
-      console.log('Events fetched:', data?.length, 'events');
+      logger.info('useEvents', 'Events fetched', { count: data?.length });
       return data?.map(transformEvent) || [];
     },
     staleTime: 60000,
@@ -113,15 +117,15 @@ export function useRestaurantOpenings() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('restaurants')
-        .select('*')
+        .select(RESTAURANT_LIST_COLUMNS)
         .in('status', ['opening_soon', 'announced'])
         .order('opening_date', { ascending: true, nullsFirst: false });
       
       if (error) {
-        console.error('Error fetching restaurant openings:', error);
+        logger.error('useRestaurantOpenings', 'Error fetching restaurant openings', { error });
         throw error;
       }
-      console.log('Restaurant openings fetched:', data?.length);
+      logger.info('useRestaurantOpenings', 'Restaurant openings fetched', { count: data?.length });
       return data?.map(transformRestaurant) || [];
     },
     staleTime: 120000, // 2 minutes
@@ -142,12 +146,12 @@ export function useFeaturedRestaurants() {
       // Pass 1: sponsored restaurants take priority
       const { data: sponsoredData, error: sponsoredError } = await supabase
         .from('restaurants')
-        .select('*')
+        .select(RESTAURANT_LIST_COLUMNS)
         .eq('is_sponsored', true)
         .order('rating', { ascending: false });
 
       if (sponsoredError) {
-        console.error('Error fetching sponsored restaurants:', sponsoredError);
+        logger.error('useFeaturedRestaurants', 'Error fetching sponsored restaurants', { error: sponsoredError });
         throw sponsoredError;
       }
 
@@ -159,14 +163,14 @@ export function useFeaturedRestaurants() {
       // Pass 2: organic featured + highly-rated (≥4.0) restaurants as rotation pool
       const { data: featuredData, error: featuredError } = await supabase
         .from('restaurants')
-        .select('*')
+        .select(RESTAURANT_LIST_COLUMNS)
         .or('is_featured.eq.true,rating.gte.4.0')
         .eq('is_sponsored', false)
         .order('rating', { ascending: false })
         .limit(30); // fetch more than needed to enable rotation
 
       if (featuredError) {
-        console.error('Error fetching featured restaurants:', featuredError);
+        logger.error('useFeaturedRestaurants', 'Error fetching featured restaurants', { error: featuredError });
         throw featuredError;
       }
 
@@ -199,7 +203,7 @@ export function useFeaturedAttractions() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('attractions')
-        .select('*')
+        .select(ATTRACTION_LIST_COLUMNS)
         .eq('is_featured', true)
         .order('rating', { ascending: false })
         .limit(6);

@@ -1,8 +1,11 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { createLogger } from "@/lib/logger";
 import { Database } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+
+const logger = createLogger("useRatings");
 
 type Rating = Database["public"]["Tables"]["user_ratings"]["Row"];
 type RatingInsert = Database["public"]["Tables"]["user_ratings"]["Insert"];
@@ -94,7 +97,7 @@ export function useRatings({ contentType, contentId }: UseRatingsProps) {
         error: null,
       });
     } catch (error) {
-      console.error("Error fetching ratings:", error);
+      logger.error('fetchRatings', 'Error fetching ratings', { error });
       setState(prev => ({
         ...prev,
         isLoading: false,
@@ -177,7 +180,7 @@ export function useRatings({ contentType, contentId }: UseRatingsProps) {
       await fetchRatings();
       return true;
     } catch (error) {
-      console.error("Error submitting rating:", error);
+      logger.error('submitRating', 'Error submitting rating', { error });
       toast({
         title: "Error",
         description: "Failed to submit rating. Please try again.",
@@ -208,7 +211,7 @@ export function useRatings({ contentType, contentId }: UseRatingsProps) {
       await fetchRatings();
       return true;
     } catch (error) {
-      console.error("Error deleting rating:", error);
+      logger.error('deleteRating', 'Error deleting rating', { error });
       toast({
         title: "Error",
         description: "Failed to delete rating. Please try again.",
@@ -236,7 +239,7 @@ export function useRatings({ contentType, contentId }: UseRatingsProps) {
       });
       return true;
     } catch (error) {
-      console.error("Error reporting review:", error);
+      logger.error('reportReview', 'Error reporting review', { error });
       toast({
         title: "Error",
         description: "Couldn't submit your report. Please try again.",
@@ -277,7 +280,7 @@ export function useRatings({ contentType, contentId }: UseRatingsProps) {
       await fetchRatings();
       return true;
     } catch (error) {
-      console.error("Error voting:", error);
+      logger.error('voteHelpful', 'Error voting', { error });
       toast({
         title: "Error",
         description: "Failed to record vote. Please try again.",
@@ -329,7 +332,7 @@ export function useUserReputation(userId?: string) {
         setReputation(data || null);
         setError(null);
       } catch (err) {
-        console.error("Error fetching user reputation:", err);
+        logger.error('useUserReputation', 'Error fetching user reputation', { error: err });
         setError(err instanceof Error ? err.message : "Failed to fetch reputation");
       } finally {
         setIsLoading(false);

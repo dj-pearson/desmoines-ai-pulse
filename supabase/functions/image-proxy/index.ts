@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { validateURLForSSRF } from "../_shared/validation.ts"
 import { checkRateLimit } from "../_shared/rateLimit.ts"
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -26,14 +27,23 @@ const ALLOWED_IMAGE_DOMAINS = [
   'geo3.ggpht.com',
 ]
 
-// Internal Supabase Storage URLs that can be accessed without auth
-const INTERNAL_STORAGE_PATTERNS = [
-  /\.supabase\.co\/storage\//,
-  /\.supabase\.in\/storage\//,
-]
-
+// Only THIS project's Supabase Storage origin may be fetched without auth.
+// Matching a loose substring like ".supabase.co/storage/" would let an attacker
+// host (e.g. evil.supabase.co.attacker.com/storage/ or another project's bucket)
+// bypass the JWT check, so we compare the hostname exactly against SUPABASE_URL.
 function isInternalStorageUrl(url: string): boolean {
-  return INTERNAL_STORAGE_PATTERNS.some(pattern => pattern.test(url));
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  if (!supabaseUrl) return false;
+  try {
+    const target = new URL(url);
+    const expected = new URL(supabaseUrl);
+    return (
+      target.hostname === expected.hostname &&
+      target.pathname.startsWith('/storage/')
+    );
+  } catch {
+    return false;
+  }
 }
 
 serve(async (req) => {
@@ -108,7 +118,7 @@ serve(async (req) => {
     }
 
     // Fetch the image from validated URL
-    const response = await fetch(imageUrl, {
+    const response = await fetchWithTimeout(imageUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
       }

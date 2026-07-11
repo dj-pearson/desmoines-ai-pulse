@@ -29,7 +29,7 @@ import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import { handleCors, getCorsHeaders, isOriginAllowed } from '../_shared/cors.ts';
 import { checkRateLimitPersistent, addRateLimitHeaders } from '../_shared/rateLimit.ts';
-import { getAIConfig } from '../_shared/aiConfig.ts';
+import { getAIConfig, getAnthropicApiKey } from '../_shared/aiConfig.ts';
 import { sanitizePostgrestPattern } from '../_shared/validation.ts';
 import { runToolLoop, type ToolSchema } from '../_shared/agentRuntime.ts';
 import { resolveEntitledTier } from '../_shared/entitlements.ts';
@@ -320,7 +320,7 @@ serve(async (req) => {
   });
   if (!rl.success && rl.response) return addRateLimitHeaders(rl.response, rl);
 
-  const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
+  const apiKey = getAnthropicApiKey();
   if (!apiKey) {
     return new Response(JSON.stringify({ error: 'Server configuration error' }), {
       status: 500,

@@ -7,6 +7,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -71,7 +72,7 @@ serve(async (req) => {
       const googleClientId = Deno.env.get("GOOGLE_CLIENT_ID");
       const googleClientSecret = Deno.env.get("GOOGLE_CLIENT_SECRET");
 
-      const refreshResponse = await fetch("https://oauth2.googleapis.com/token", {
+      const refreshResponse = await fetchWithTimeout("https://oauth2.googleapis.com/token", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
@@ -114,7 +115,7 @@ serve(async (req) => {
     console.log(`Fetching GSC properties for credential ${credentialId}...`);
 
     // Fetch properties from GSC API
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       "https://www.googleapis.com/webmasters/v3/sites",
       {
         headers: {

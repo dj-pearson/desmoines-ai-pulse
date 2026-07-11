@@ -9,6 +9,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 import { errorResponse } from "../_shared/errorResponse.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -102,7 +103,7 @@ View details in the SEO Dashboard: ${Deno.env.get("VITE_SITE_URL") || "https://d
           const recipients = preferences?.map((p) => p.email_address).filter(Boolean) || [];
 
           if (recipients.length > 0) {
-            const emailResponse = await fetch("https://api.resend.com/emails", {
+            const emailResponse = await fetchWithTimeout("https://api.resend.com/emails", {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -179,7 +180,7 @@ View details in the SEO Dashboard: ${Deno.env.get("VITE_SITE_URL") || "https://d
           ],
         };
 
-        const slackResponse = await fetch(slackWebhookUrl, {
+        const slackResponse = await fetchWithTimeout(slackWebhookUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -239,7 +240,7 @@ View details in the SEO Dashboard: ${Deno.env.get("VITE_SITE_URL") || "https://d
           ],
         };
 
-        const discordResponse = await fetch(discordWebhookUrl, {
+        const discordResponse = await fetchWithTimeout(discordWebhookUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

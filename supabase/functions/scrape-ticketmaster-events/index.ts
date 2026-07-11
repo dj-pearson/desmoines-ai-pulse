@@ -1,4 +1,5 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { scrapeUrl, getScraperConfig } from "../_shared/scraper.ts";
@@ -183,7 +184,7 @@ async function extractShowsWithBrowserlessFunction(): Promise<ScrapedShow[]> {
 
   console.log("🚀 Using Browserless /function for direct DOM extraction...");
 
-  const response = await fetch(browserlessUrl, {
+  const response = await fetchWithTimeout(browserlessUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ code }),

@@ -14,6 +14,7 @@
  * Consolidated into `agent-runner` (was `agent-outreach/index.ts`).
  */
 import { scoreOutput } from "../scoreOutput.ts";
+import { fetchWithTimeout } from "../fetchWithTimeout.ts";
 import { createApproval } from "../agentApprovals.ts";
 import { writeAgentAudit } from "../auditLog.ts";
 import { renderEmail } from "../emailLayout.ts";
@@ -103,7 +104,7 @@ export const run: AgentRun = async (ctx, { supabase }) => {
         const headers: Record<string, string> = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
         if (rendered.listUnsubscribe) headers["List-Unsubscribe"] = rendered.listUnsubscribe;
         if (rendered.listUnsubscribePost) headers["List-Unsubscribe-Post"] = rendered.listUnsubscribePost;
-        const res = await fetch("https://api.resend.com/emails", { method: "POST", headers, body: JSON.stringify({ from, to: [email], subject, html: rendered.html, text: rendered.text }) });
+        const res = await fetchWithTimeout("https://api.resend.com/emails", { method: "POST", headers, body: JSON.stringify({ from, to: [email], subject, html: rendered.html, text: rendered.text }) });
         const jb = await res.json().catch(() => ({}));
         if (res.ok) { status = "queued"; messageId = jb?.id ?? null; sent++; } else status = "failed";
       } catch { status = "failed"; }

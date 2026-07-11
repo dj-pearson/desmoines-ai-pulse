@@ -228,7 +228,7 @@ export function ScraperSettings() {
           <p className="text-sm text-muted-foreground">
             For detailed setup instructions, see{" "}
             <a 
-              href="/README-SCRAPER-SETUP.md" 
+              href="/docs/scraping/README-SCRAPER-SETUP.md"
               className="text-primary hover:underline"
               target="_blank"
               rel="noopener noreferrer"

@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Music, MapPin, Users, Calendar, Clock, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { EVENT_LIST_COLUMNS } from '@/lib/listColumns';
 
 const GENRE_FILTERS = ['All', 'Rock', 'Country', 'Jazz', 'Hip-Hop', 'Electronic', 'Classical', 'Blues', 'Folk'];
 
@@ -30,7 +31,7 @@ function useMusicEvents(timeframe: 'tonight' | 'weekend' | 'upcoming') {
     queryFn: async () => {
       let query = supabase
         .from('events')
-        .select('*')
+        .select(EVENT_LIST_COLUMNS)
         .or('category.ilike.%Music%,category.ilike.%Concert%,category.ilike.%Live Music%')
         .order('date', { ascending: true })
         .limit(20);

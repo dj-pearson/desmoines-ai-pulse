@@ -5,9 +5,10 @@
  * Risk level: MEDIUM
  */
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
+import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey } from "../_shared/aiConfig.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 
 const corsHeaders = {
@@ -444,13 +445,14 @@ Only include actual events, not navigation items, headers, or generic text. If n
       }
     );
 
-    const claudeResponse = await fetch(
+    const claudeResponse = await fetchWithTimeout(
       aiConfig.api_endpoint,
       {
         method: "POST",
         headers: claudeHeaders,
         body: JSON.stringify(claudeRequestBody),
-      }
+      },
+      60_000
     );
 
     if (claudeResponse.ok) {
@@ -1249,7 +1251,7 @@ async function scrapeWebsite(
   try {
     console.log(`🔍 Scraping ${job.name} from ${job.config.url}`);
 
-    const response = await fetch(job.config.url, {
+    const response = await fetchWithTimeout(job.config.url, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
@@ -1434,7 +1436,7 @@ async function analyzeWebsiteStructure(
     console.log(`🔍 Analyzing website structure for: ${url}`);
 
     // Fetch the website HTML
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
@@ -1639,13 +1641,14 @@ Format your response as JSON:
         { supabaseUrl, supabaseKey, customMaxTokens: 1000 }
       );
 
-      const claudeResponse = await fetch(
+      const claudeResponse = await fetchWithTimeout(
         aiConfig.api_endpoint,
         {
           method: "POST",
           headers,
           body: JSON.stringify(requestBody),
-        }
+        },
+        60_000
       );
 
       console.log(`🔍 Claude response status: ${claudeResponse.status}`);
@@ -1718,13 +1721,14 @@ Enhanced description:`,
         { supabaseUrl, supabaseKey, customMaxTokens: 200 }
       );
 
-      const claudeResponse = await fetch(
+      const claudeResponse = await fetchWithTimeout(
         aiConfig.api_endpoint,
         {
           method: "POST",
           headers,
           body: JSON.stringify(requestBody),
-        }
+        },
+        60_000
       );
 
       if (claudeResponse.ok) {
@@ -1816,7 +1820,7 @@ serve(async (req) => {
         );
       }
 
-      const claudeApiKey = Deno.env.get("CLAUDE_API");
+      const claudeApiKey = getAnthropicApiKey();
 
       console.log(
         `🔑 API Keys availability - Claude: ${
@@ -2046,7 +2050,7 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const claudeApiKey = Deno.env.get("CLAUDE_API");
+    const claudeApiKey = getAnthropicApiKey();
 
     // Fetch existing events from the last 60 days for duplicate checking
     console.log("Fetching existing events for duplicate detection...");

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { EVENT_LIST_COLUMNS, RESTAURANT_LIST_COLUMNS, ATTRACTION_LIST_COLUMNS } from '@/lib/listColumns';
 
 interface TrendingItem {
   id: string;
@@ -89,67 +90,76 @@ export function useTrending(config: FallbackConfig = { useRealData: true, minIte
   };
 
   const enrichTrendingWithContent = async (trendingScores: Array<Record<string, unknown>>) => {
-    const enriched = [];
+    // Batch content lookups: one query per content type via .in('id', ids)
+    // instead of a per-item awaited query (WEB-PERF-012).
+    const idsByType: Record<string, string[]> = {
+      event: [],
+      restaurant: [],
+      attraction: [],
+      playground: [],
+    };
 
     for (const score of trendingScores) {
-      let content = null;
-      
-      try {
-        switch (score.content_type) {
-          case 'event': {
-            const { data: event } = await supabase
-              .from('events')
-              .select('*')
-              .eq('id', score.content_id)
-              .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
-              .maybeSingle();
-            content = event;
-            break;
-          }
-          case 'restaurant': {
-            const { data: restaurant } = await supabase
-              .from('restaurants')
-              .select('*')
-              .eq('id', score.content_id)
-              .single();
-            content = restaurant;
-            break;
-          }
-          case 'attraction': {
-            const { data: attraction } = await supabase
-              .from('attractions')
-              .select('*')
-              .eq('id', score.content_id)
-              .single();
-            content = attraction;
-            break;
-          }
-          case 'playground': {
-            const { data: playground } = await supabase
-              .from('playgrounds')
-              .select('*')
-              .eq('id', score.content_id)
-              .single();
-            content = playground;
-            break;
-          }
-        }
+      const type = score.content_type as string;
+      const id = score.content_id as string;
+      if (idsByType[type] && id) {
+        idsByType[type].push(id);
+      }
+    }
 
-        if (content) {
-          enriched.push({
-            id: score.id,
-            contentType: score.content_type,
-            contentId: score.content_id,
-            score: score.score,
-            rank: score.rank,
-            views24h: score.views_24h,
-            views7d: score.views_7d,
-            velocityScore: score.velocity_score,
-            content
-          });
+    // A map keyed by `${type}:${id}` so results can be re-associated in order.
+    const contentByKey = new Map<string, Record<string, unknown>>();
+
+    try {
+      const [eventsRes, restaurantsRes, attractionsRes, playgroundsRes] = await Promise.all([
+        idsByType.event.length
+          ? supabase
+              .from('events')
+              .select(EVENT_LIST_COLUMNS)
+              .in('id', idsByType.event)
+              .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
+          : null,
+        idsByType.restaurant.length
+          ? supabase.from('restaurants').select(RESTAURANT_LIST_COLUMNS).in('id', idsByType.restaurant)
+          : null,
+        idsByType.attraction.length
+          ? supabase.from('attractions').select(ATTRACTION_LIST_COLUMNS).in('id', idsByType.attraction)
+          : null,
+        idsByType.playground.length
+          ? supabase.from('playgrounds').select('*').in('id', idsByType.playground) // No playground LIST_COLUMNS constant
+          : null,
+      ]);
+
+      const collect = (type: string, rows: unknown) => {
+        for (const row of (rows as Array<Record<string, unknown>>) || []) {
+          contentByKey.set(`${type}:${row.id}`, row);
         }
-      } catch (error) {
-        console.error(`Error fetching content for ${score.content_type}:${score.content_id}`, error);
+      };
+
+      collect('event', eventsRes?.data);
+      collect('restaurant', restaurantsRes?.data);
+      collect('attraction', attractionsRes?.data);
+      collect('playground', playgroundsRes?.data);
+    } catch (error) {
+      console.error('Error batch-fetching trending content', error);
+    }
+
+    // Re-associate content in the original trending order.
+    const enriched = [];
+    for (const score of trendingScores) {
+      const content = contentByKey.get(`${score.content_type}:${score.content_id}`);
+      if (content) {
+        enriched.push({
+          id: score.id,
+          contentType: score.content_type,
+          contentId: score.content_id,
+          score: score.score,
+          rank: score.rank,
+          views24h: score.views_24h,
+          views7d: score.views_7d,
+          velocityScore: score.velocity_score,
+          content
+        });
       }
     }
 

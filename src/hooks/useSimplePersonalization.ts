@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
+import { handleError } from '@/lib/errorHandler';
 
 interface SimpleRecommendation {
   id: string;
@@ -90,7 +91,7 @@ export function useSimplePersonalization(options: RecommendationOptions = {}) {
         searchCount: searches.length
       };
     } catch (error) {
-      // Silently handle errors
+      handleError(error, { component: 'useSimplePersonalization', action: 'getUserPreferencesFromSearch' });
       return null;
     }
   };
@@ -141,7 +142,7 @@ export function useSimplePersonalization(options: RecommendationOptions = {}) {
         .slice(0, 20);
 
     } catch (error) {
-      // Silently handle errors
+      handleError(error, { component: 'useSimplePersonalization', action: 'getTrendingContent' });
       return [];
     }
   };
@@ -161,7 +162,7 @@ export function useSimplePersonalization(options: RecommendationOptions = {}) {
       if (error) return [];
       return recentViews || [];
     } catch (error) {
-      // Silently handle errors
+      handleError(error, { component: 'useSimplePersonalization', action: 'getUserRecentActivity' });
       return [];
     }
   };
@@ -317,7 +318,8 @@ export function useSimplePersonalization(options: RecommendationOptions = {}) {
       // Silently handle permission errors - analytics are optional
       if (error) return;
     } catch (error) {
-      // Silently handle all errors - analytics failures shouldn't affect user experience
+      // handleError logs without throwing, so analytics failures still never affect the user experience.
+      handleError(error, { component: 'useSimplePersonalization', action: 'trackRecommendationClick' });
     }
   };
 

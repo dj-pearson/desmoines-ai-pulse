@@ -1,10 +1,11 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
-import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
+import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
 import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
 import { resolveEntitledTier, hasFeatureAccess } from "../_shared/entitlements.ts";
 import { getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 
 // Monthly trip-planner quota per tier (matches the web useSubscription copy /
 // WEB-FEAT-011). -1 = unlimited. Enforced server-side so the client gate can't
@@ -87,7 +88,7 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
     const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    const claudeApiKey = Deno.env.get('CLAUDE_API') || Deno.env.get('CLAUDE_API_KEY');
+    const claudeApiKey = getAnthropicApiKey();
     if (!claudeApiKey) {
       throw new Error('CLAUDE_API key is required');
     }
@@ -375,11 +376,11 @@ Return ONLY the JSON object, no additional text.`;
       }
     );
 
-    const aiResponse = await fetch(config.api_endpoint, {
+    const aiResponse = await fetchWithTimeout(config.api_endpoint, {
       method: 'POST',
       headers,
       body: JSON.stringify(requestBody)
-    });
+    }, 60_000);
 
     if (!aiResponse.ok) {
       const errorData = await aiResponse.text();
@@ -388,7 +389,12 @@ Return ONLY the JSON object, no additional text.`;
     }
 
     const aiResult = await aiResponse.json();
-    const itineraryText = aiResult.content[0].text;
+    const extracted = extractClaudeText(aiResult);
+    if (!extracted.ok) {
+      console.error("Claude response not usable:", extracted.reason, extracted.detail);
+      throw new Error(`AI response ${extracted.reason}: ${extracted.detail}`);
+    }
+    const itineraryText = extracted.text;
 
     let generatedItinerary: GeneratedItinerary;
     try {
@@ -458,8 +464,27 @@ Return ONLY the JSON object, no additional text.`;
       .insert(itemsToInsert);
 
     if (itemsError) {
-      console.error('Error creating trip items:', itemsError);
-      // Don't fail - trip plan is still created
+      // WEB-BE-006: the plan row is quota-counted (ai_generated=true) but is
+      // useless without its items. Rather than charge the user a quota unit for
+      // a broken empty plan, compensate by deleting the just-created plan and
+      // return a retriable error. (A monthly quota counts trip_plans rows, so
+      // removing the plan means it is not counted.)
+      console.error('Error creating trip items; rolling back the trip plan:', itemsError);
+      const { error: rollbackError } = await supabaseClient
+        .from('trip_plans')
+        .delete()
+        .eq('id', tripPlan.id);
+      if (rollbackError) {
+        console.error('Failed to roll back trip plan after items error:', rollbackError);
+      }
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Failed to save your itinerary. Please try again.',
+        code: 'itinerary_save_failed',
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     // Fetch the complete itinerary with item details

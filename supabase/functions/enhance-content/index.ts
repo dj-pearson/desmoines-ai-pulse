@@ -1,14 +1,15 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
+import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const claudeApiKey = Deno.env.get('CLAUDE_API');
+const claudeApiKey = getAnthropicApiKey();
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
@@ -203,14 +204,19 @@ Do not include any explanatory text outside the JSON. Return only the JSON objec
     }
   );
 
-  const response = await fetch(config.api_endpoint, {
+  const response = await fetchWithTimeout(config.api_endpoint, {
     method: 'POST',
     headers,
     body: JSON.stringify(requestBody)
-  });
+  }, 60_000);
 
   const aiResponse = await response.json();
-  const enhancedContent = aiResponse.content[0].text;
+  const extracted = extractClaudeText(aiResponse);
+  if (!extracted.ok) {
+    console.error("Claude response not usable:", extracted.reason, extracted.detail);
+    throw new Error(`AI response ${extracted.reason}: ${extracted.detail}`);
+  }
+  const enhancedContent = extracted.text;
   
   try {
     // Parse the AI response as JSON - handle both wrapped and unwrapped JSON
