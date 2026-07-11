@@ -3,6 +3,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, RefreshCw, ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger('RouteErrorBoundary');
 
 interface RouteErrorBoundaryState {
   hasError: boolean;
@@ -38,7 +41,7 @@ class RouteErrorBoundary extends React.Component<RouteErrorBoundaryProps, RouteE
     }
 
     if (import.meta.env.DEV) {
-      console.error('[RouteErrorBoundary]', {
+      logger.error('componentDidCatch', 'Route error boundary caught an error', {
         message: error.message,
         stack: error.stack,
         componentStack: errorInfo.componentStack,

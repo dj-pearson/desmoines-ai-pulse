@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('useEventSocial');
 
 export interface EventAttendee {
   id: string;
@@ -125,7 +128,7 @@ export function useEventSocial(eventId: string) {
       })));
       setLiveStats(statsData);
     } catch (error) {
-      console.error('Error fetching event social data:', error);
+      logger.error('fetchEventSocialData', 'Error fetching event social data', { error });
     } finally {
       setIsLoading(false);
     }
@@ -149,7 +152,7 @@ export function useEventSocial(eventId: string) {
           filter: `event_id=eq.${eventId}`,
         },
         (payload) => {
-          console.log('Attendees change:', payload);
+          logger.debug('realtime', 'Attendees change', { payload });
           if (payload.eventType === 'INSERT') {
             setAttendees(prev => [payload.new as EventAttendee, ...prev]);
           } else if (payload.eventType === 'UPDATE') {
@@ -175,7 +178,7 @@ export function useEventSocial(eventId: string) {
           filter: `event_id=eq.${eventId}`,
         },
         (payload) => {
-          console.log('Discussions change:', payload);
+          logger.debug('realtime', 'Discussions change', { payload });
           if (payload.eventType === 'INSERT') {
             setDiscussions(prev => [payload.new as EventDiscussion, ...prev]);
           } else if (payload.eventType === 'UPDATE') {
@@ -201,7 +204,7 @@ export function useEventSocial(eventId: string) {
           filter: `event_id=eq.${eventId}`,
         },
         (payload) => {
-          console.log('Stats change:', payload);
+          logger.debug('realtime', 'Stats change', { payload });
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
             setLiveStats(payload.new as EventLiveStats);
           }
@@ -247,7 +250,7 @@ export function useEventSocial(eventId: string) {
         description: `You are now marked as "${status}" for this event`,
       });
     } catch (error) {
-      console.error('Error updating attendance status:', error);
+      logger.error('updateAttendanceStatus', 'Error updating attendance status', { error });
       toast({
         title: "Error",
         description: "Failed to update your attendance status",
@@ -278,7 +281,7 @@ export function useEventSocial(eventId: string) {
         description: "You've successfully checked in to this event",
       });
     } catch (error) {
-      console.error('Error checking in:', error);
+      logger.error('checkInToEvent', 'Error checking in', { error });
       toast({
         title: "Error",
         description: "Failed to check in to the event",
@@ -312,7 +315,7 @@ export function useEventSocial(eventId: string) {
         description: "Your comment has been posted",
       });
     } catch (error) {
-      console.error('Error adding discussion:', error);
+      logger.error('addDiscussion', 'Error adding discussion', { error });
       toast({
         title: "Error",
         description: "Failed to post your comment",
@@ -340,7 +343,7 @@ export function useEventSocial(eventId: string) {
         d.id === discussionId ? { ...d, likes_count: d.likes_count + 1 } : d
       ));
     } catch (error) {
-      console.error('Error liking discussion:', error);
+      logger.error('likeDiscussion', 'Error liking discussion', { error });
     }
   }, [user]);
 

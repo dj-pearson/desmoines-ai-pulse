@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { createLogger } from '@/lib/logger';
 import { useAuth } from './useAuth';
+
+const logger = createLogger('usePersonalizedRecommendations');
 
 interface RecommendationItem {
   id: string;
@@ -93,7 +96,7 @@ export function usePersonalizedRecommendations() {
         preferred_price_ranges: preferredPrices
       };
     } catch (error) {
-      console.log('No preferences found, using defaults');
+      logger.debug('getUserPreferences', 'No preferences found, using defaults', { error: String(error) });
       return null;
     }
   }, [user?.id]);
@@ -185,7 +188,7 @@ export function usePersonalizedRecommendations() {
 
       return scoredEvents.sort((a, b) => b.score - a.score).slice(0, 6);
     } catch (error) {
-      console.error('Error generating event recommendations:', error);
+      logger.error('getPersonalizedEvents', 'Error generating event recommendations', { error });
       return [];
     }
   }, []);
@@ -268,7 +271,7 @@ export function usePersonalizedRecommendations() {
 
       return scoredRestaurants.sort((a, b) => b.score - a.score).slice(0, 6);
     } catch (error) {
-      console.error('Error generating restaurant recommendations:', error);
+      logger.error('getPersonalizedRestaurants', 'Error generating restaurant recommendations', { error });
       return [];
     }
   }, []);
@@ -311,14 +314,14 @@ export function usePersonalizedRecommendations() {
             });
           }
         } catch (contentError) {
-          console.error('Error fetching trending content:', contentError);
+          logger.error('getTrendingRecommendations', 'Error fetching trending content', { error: contentError });
         }
       }
 
       return trendingItems.slice(0, 8);
     } catch (error) {
-      console.error('Error generating trending recommendations:', error);
-      
+      logger.error('getTrendingRecommendations', 'Error generating trending recommendations', { error });
+
       // Fallback to featured content if trending fails
       const { data: featuredEvents } = await supabase
         .from('events')
@@ -377,7 +380,7 @@ export function usePersonalizedRecommendations() {
         trending
       });
 
-      console.log('Personalized recommendations generated:', {
+      logger.debug('generateRecommendations', 'Personalized recommendations generated', {
         events: events.length,
         restaurants: restaurants.length,
         attractions: attractionRecommendations.length,
@@ -387,7 +390,7 @@ export function usePersonalizedRecommendations() {
       });
 
     } catch (error) {
-      console.error('Error generating recommendations:', error);
+      logger.error('generateRecommendations', 'Error generating recommendations', { error });
     } finally {
       setIsLoading(false);
     }
@@ -408,9 +411,9 @@ export function usePersonalizedRecommendations() {
         page_url: window.location.href
       });
 
-      console.log('Recommendation interaction tracked:', { recommendationId, action });
+      logger.debug('trackRecommendationInteraction', 'Recommendation interaction tracked', { recommendationId, action });
     } catch (error) {
-      console.error('Error tracking recommendation interaction:', error);
+      logger.error('trackRecommendationInteraction', 'Error tracking recommendation interaction', { error });
     }
   }, [sessionId, user?.id]);
 

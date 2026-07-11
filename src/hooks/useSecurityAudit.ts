@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { useAuth } from './useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('useSecurityAudit');
 
 interface SecurityEvent {
   id: string;
@@ -55,10 +58,10 @@ export function useSecurityAudit() {
         });
 
       if (error) {
-        console.error('Error logging security event:', error);
+        logger.error('logSecurityEvent', 'Error logging security event', { error });
       }
     } catch (err) {
-      console.error('Error logging security event:', err);
+      logger.error('logSecurityEvent', 'Error logging security event', { error: err });
     }
   };
 
@@ -83,7 +86,7 @@ export function useSecurityAudit() {
         resource,
       });
     } catch (err) {
-      console.error('Error logging admin action:', err);
+      logger.error('logAdminAction', 'Error logging admin action', { error: err });
     }
   };
 
@@ -173,7 +176,7 @@ export function useSecurityAudit() {
         .gte('timestamp', startDate.toISOString());
 
       if (typeError) {
-        console.error('Error fetching type stats:', typeError);
+        logger.error('getSecurityStats', 'Error fetching type stats', { error: typeError });
         return null;
       }
 
@@ -184,7 +187,7 @@ export function useSecurityAudit() {
         .gte('timestamp', startDate.toISOString());
 
       if (severityError) {
-        console.error('Error fetching severity stats:', severityError);
+        logger.error('getSecurityStats', 'Error fetching severity stats', { error: severityError });
         return null;
       }
 
@@ -219,7 +222,7 @@ export function useSecurityAudit() {
         },
       };
     } catch (err) {
-      console.error('Error fetching security stats:', err);
+      logger.error('getSecurityStats', 'Error fetching security stats', { error: err });
       return null;
     }
   };

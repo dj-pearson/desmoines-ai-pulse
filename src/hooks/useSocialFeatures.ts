@@ -1,5 +1,8 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "./useAuth";
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('useSocialFeatures');
 
 interface Friend {
   id: string;
@@ -78,38 +81,38 @@ export function useSocialFeatures() {
 
   const sendFriendRequest = async (friendId: string) => {
     if (!user) return false;
-    console.log("Friend request would be sent to:", friendId);
+    logger.debug('sendFriendRequest', 'Friend request would be sent', { friendId });
     await fetchFriends();
     return true;
   };
 
   const respondToFriendRequest = async (requestId: string, response: 'accept' | 'decline') => {
-    console.log("Friend request response:", requestId, response);
+    logger.debug('respondToFriendRequest', 'Friend request response', { requestId, response });
     await fetchFriends();
     return true;
   };
 
   const createFriendGroup = async (groupData: { name: string; description?: string; is_public: boolean }) => {
     if (!user) return null;
-    console.log("Friend group would be created:", groupData);
+    logger.debug('createFriendGroup', 'Friend group would be created', { groupData });
     await fetchFriendGroups();
     return { id: '1', ...groupData, created_by: user.id, created_at: new Date().toISOString() };
   };
 
   const joinFriendGroup = async (groupId: string) => {
     if (!user) return false;
-    console.log("Joining friend group:", groupId);
+    logger.debug('joinFriendGroup', 'Joining friend group', { groupId });
     return true;
   };
 
   const leaveFriendGroup = async (groupId: string) => {
     if (!user) return false;
-    console.log("Leaving friend group:", groupId);
+    logger.debug('leaveFriendGroup', 'Leaving friend group', { groupId });
     return true;
   };
 
   const getEventAttendance = async (eventId: string) => {
-    console.log("Getting attendance for event:", eventId);
+    logger.debug('getEventAttendance', 'Getting attendance for event', { eventId });
     return {
       going: 0,
       interested: 0,
@@ -120,12 +123,12 @@ export function useSocialFeatures() {
 
   const updateEventAttendance = async (eventId: string, status: 'interested' | 'going' | 'maybe' | 'not_going') => {
     if (!user) return false;
-    console.log("Updating attendance:", eventId, status);
+    logger.debug('updateEventAttendance', 'Updating attendance', { eventId, status });
     return true;
   };
 
   const getEventUGC = async (eventId: string): Promise<UserGeneratedContent> => {
-    console.log("Getting UGC for event:", eventId);
+    logger.debug('getEventUGC', 'Getting UGC for event', { eventId });
     return {
       tips: [],
       reviews: [],
@@ -139,7 +142,7 @@ export function useSocialFeatures() {
     attended: boolean;
   }) => {
     if (!user) return null;
-    console.log("Submitting review:", eventId, reviewData);
+    logger.debug('submitEventReview', 'Submitting review', { eventId, reviewData });
     return { id: '1', ...reviewData, event_id: eventId, user_id: user.id, created_at: new Date().toISOString() };
   };
 
@@ -148,7 +151,7 @@ export function useSocialFeatures() {
     tip_category: string;
   }) => {
     if (!user) return null;
-    console.log("Submitting tip:", eventId, tipData);
+    logger.debug('submitEventTip', 'Submitting tip', { eventId, tipData });
     return { id: '1', ...tipData, event_id: eventId, user_id: user.id, created_at: new Date().toISOString() };
   };
 
@@ -157,28 +160,28 @@ export function useSocialFeatures() {
     caption?: string;
   }) => {
     if (!user) return null;
-    console.log("Submitting photo:", eventId, photoData);
+    logger.debug('submitEventPhoto', 'Submitting photo', { eventId, photoData });
     return { id: '1', ...photoData, event_id: eventId, user_id: user.id, created_at: new Date().toISOString() };
   };
 
   const voteOnContent = async (contentType: 'review' | 'tip' | 'photo', contentId: string, isHelpful: boolean) => {
     if (!user) return false;
-    console.log("Voting on content:", contentType, contentId, isHelpful);
+    logger.debug('voteOnContent', 'Voting on content', { contentType, contentId, isHelpful });
     return true;
   };
 
   const getFriendsNearEvent = async (latitude: number, longitude: number, radiusKm: number = 25) => {
-    console.log("Getting friends near event:", latitude, longitude, radiusKm);
+    logger.debug('getFriendsNearEvent', 'Getting friends near event', { latitude, longitude, radiusKm });
     return [];
   };
 
   const searchUsers = async (query: string) => {
-    console.log("Searching users:", query);
+    logger.debug('searchUsers', 'Searching users', { query });
     return [];
   };
 
   const getUserSocialStats = async (userId: string) => {
-    console.log("Getting social stats for user:", userId);
+    logger.debug('getUserSocialStats', 'Getting social stats for user', { userId });
     return {
       friendsCount: 0,
       groupsCount: 0,
@@ -191,19 +194,19 @@ export function useSocialFeatures() {
 
   const blockUser = async (userId: string) => {
     if (!user) return false;
-    console.log("Blocking user:", userId);
+    logger.debug('blockUser', 'Blocking user', { userId });
     return true;
   };
 
   const unblockUser = async (userId: string) => {
     if (!user) return false;
-    console.log("Unblocking user:", userId);
+    logger.debug('unblockUser', 'Unblocking user', { userId });
     return true;
   };
 
   const reportContent = async (contentType: 'review' | 'tip' | 'photo', contentId: string, reason: string) => {
     if (!user) return false;
-    console.log("Reporting content:", contentType, contentId, reason);
+    logger.debug('reportContent', 'Reporting content', { contentType, contentId, reason });
     return true;
   };
 

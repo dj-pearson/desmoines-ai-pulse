@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { createLogger } from '@/lib/logger';
 import { useAuth } from './useAuth';
 import { useProfile } from './useProfile';
 import { useFeedback } from './useFeedback';
 import { Event } from '@/lib/types';
+
+const logger = createLogger('useSmartRecommendations');
 
 interface SmartRecommendation {
   event: Event;
@@ -75,7 +78,7 @@ export function useSmartRecommendations() {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to generate recommendations';
       setError(errorMessage);
-      console.error('Smart recommendations error:', err);
+      logger.error('generateRecommendations', 'Smart recommendations error', { error: err });
       return [];
     } finally {
       setIsLoading(false);
@@ -156,7 +159,7 @@ export function useSmartRecommendations() {
         }));
 
     } catch (error) {
-      console.error('Collaborative filtering error:', error);
+      logger.error('generateCollaborativeRecommendations', 'Collaborative filtering error', { error });
       return [];
     }
   };
@@ -195,7 +198,7 @@ export function useSmartRecommendations() {
       })).sort((a, b) => b.score - a.score);
 
     } catch (error) {
-      console.error('Content-based filtering error:', error);
+      logger.error('generateContentBasedRecommendations', 'Content-based filtering error', { error });
       return [];
     }
   };
@@ -244,7 +247,7 @@ export function useSmartRecommendations() {
       return eventsToRecommend;
 
     } catch (error) {
-      console.error('Trending recommendations error:', error);
+      logger.error('generateTrendingRecommendations', 'Trending recommendations error', { error });
       return [];
     }
   };

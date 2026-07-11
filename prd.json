@@ -4976,8 +4976,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: 285 console.* occ / 62 files; src/lib/logger.ts exists but under-used."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: 285 console.* occ / 62 files; src/lib/logger.ts exists but under-used. | DONE 2026-07-11: converted raw console.* to createLogger across ~35 hot-path src files (hooks/contexts/components/lib/integrations) — ~190 calls, verbose→debug, dev-only kept behind import.meta.env.DEV; type-check + eslint clean."
     },
     {
       "id": "WEB-QUAL-006",
@@ -4990,8 +4990,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: TripPlanner.tsx:837,857; EventsByLocation.tsx:399; EventsThisWeekend.tsx:384."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: TripPlanner.tsx:837,857; EventsByLocation.tsx:399; EventsThisWeekend.tsx:384. | DONE 2026-07-11: TripPlanner reorderable itinerary items already keyed by item.item_id (stable); fixed index-keyed FAQ/dynamic lists in EventsByLocation + EventsThisWeekend to stable keys (faq.question)."
     },
     {
       "id": "WEB-BE-001",

@@ -381,8 +381,8 @@ export default function EventsThisWeekend() {
                 <CardTitle>Frequently Asked Questions</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {faqData.map((faq, index) => (
-                  <div key={index} className="border-b pb-4 last:border-b-0">
+                {faqData.map((faq) => (
+                  <div key={faq.question} className="border-b pb-4 last:border-b-0">
                     <h3 className="font-semibold mb-2">{faq.question}</h3>
                     <p className="text-muted-foreground">{faq.answer}</p>
                   </div>

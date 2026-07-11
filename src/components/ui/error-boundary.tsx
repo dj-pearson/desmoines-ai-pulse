@@ -4,6 +4,9 @@ import { Button } from "@/components/ui/button";
 import { AlertTriangle, RefreshCw, Home } from "lucide-react";
 import { Link } from "react-router-dom";
 import { sessionStore } from "@/lib/safeStorage";
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger('ErrorBoundary');
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -42,7 +45,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     };
 
     // Log detailed error information
-    console.error('🔴 Error Boundary caught an error:', errorDetails);
+    logger.error('componentDidCatch', 'Error Boundary caught an error', errorDetails);
 
     // In production, you would send this to an error tracking service
     // Example: Sentry.captureException(error, { contexts: { react: errorInfo } });

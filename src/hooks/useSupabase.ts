@@ -2,6 +2,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Event, RestaurantOpening, Restaurant, Attraction, Playground } from "@/lib/types";
 import { EVENT_LIST_COLUMNS, RESTAURANT_LIST_COLUMNS, ATTRACTION_LIST_COLUMNS } from "@/lib/listColumns";
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger("useSupabase");
 
 /** Deterministic daily shuffle using a numeric seed (e.g. date as YYYYMMDD integer).
  *  Returns a new array — original is not mutated. */
@@ -34,7 +37,7 @@ export function useFeaturedEvents() {
         .order('date', { ascending: true });
 
       if (sponsoredError) {
-        console.error('Error fetching sponsored events:', sponsoredError);
+        logger.error('useFeaturedEvents', 'Error fetching sponsored events', { error: sponsoredError });
         throw sponsoredError;
       }
 
@@ -54,7 +57,7 @@ export function useFeaturedEvents() {
         .limit(20); // fetch more than needed to enable rotation
 
       if (featuredError) {
-        console.error('Error fetching featured events:', featuredError);
+        logger.error('useFeaturedEvents', 'Error fetching featured events', { error: featuredError });
         throw featuredError;
       }
 
@@ -82,7 +85,7 @@ export function useEvents(filters?: { category?: string; location?: string; date
       let query = supabase.from('events').select('*');
       
       const dateFilter = filters?.date || today;
-      console.log('Fetching events for date >=', dateFilter);
+      logger.info('useEvents', 'Fetching events', { from: dateFilter });
       query = query.gte('date', dateFilter);
       
       if (filters?.category) {
@@ -95,10 +98,10 @@ export function useEvents(filters?: { category?: string; location?: string; date
       const { data, error } = await query.order('date', { ascending: true }).limit(100);
 
       if (error) {
-        console.error('Error fetching events:', error);
+        logger.error('useEvents', 'Error fetching events', { error });
         throw error;
       }
-      console.log('Events fetched:', data?.length, 'events');
+      logger.info('useEvents', 'Events fetched', { count: data?.length });
       return data?.map(transformEvent) || [];
     },
     staleTime: 60000,
@@ -119,10 +122,10 @@ export function useRestaurantOpenings() {
         .order('opening_date', { ascending: true, nullsFirst: false });
       
       if (error) {
-        console.error('Error fetching restaurant openings:', error);
+        logger.error('useRestaurantOpenings', 'Error fetching restaurant openings', { error });
         throw error;
       }
-      console.log('Restaurant openings fetched:', data?.length);
+      logger.info('useRestaurantOpenings', 'Restaurant openings fetched', { count: data?.length });
       return data?.map(transformRestaurant) || [];
     },
     staleTime: 120000, // 2 minutes
@@ -148,7 +151,7 @@ export function useFeaturedRestaurants() {
         .order('rating', { ascending: false });
 
       if (sponsoredError) {
-        console.error('Error fetching sponsored restaurants:', sponsoredError);
+        logger.error('useFeaturedRestaurants', 'Error fetching sponsored restaurants', { error: sponsoredError });
         throw sponsoredError;
       }
 
@@ -167,7 +170,7 @@ export function useFeaturedRestaurants() {
         .limit(30); // fetch more than needed to enable rotation
 
       if (featuredError) {
-        console.error('Error fetching featured restaurants:', featuredError);
+        logger.error('useFeaturedRestaurants', 'Error fetching featured restaurants', { error: featuredError });
         throw featuredError;
       }
 

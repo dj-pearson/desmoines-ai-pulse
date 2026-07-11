@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('useTrendingContent');
 
 interface TrendingItem {
   id: string;
@@ -59,7 +62,7 @@ export function useTrending(options: TrendingOptions = {}) {
         if (enhancedError) throw enhancedError;
         trendingData = enhancedData;
       } catch (_enhancedError) {
-        console.log('Enhanced trending not available, using fallback method');
+        logger.debug('fetchTrendingItems', 'Enhanced trending not available, using fallback method');
         // Fallback to calculating trending from existing analytics
         trendingData = await calculateTrendingFromAnalytics();
       }
@@ -92,7 +95,7 @@ export function useTrending(options: TrendingOptions = {}) {
                 contentByKey.set(`${type}:${row.id as string}`, row);
               });
             } catch (_contentError) {
-              console.log(`Could not batch-fetch content for ${type}`);
+              logger.debug('fetchTrendingItems', 'Could not batch-fetch content', { type });
             }
           })
         );
@@ -111,7 +114,7 @@ export function useTrending(options: TrendingOptions = {}) {
 
       setTrendingItems(enrichedItems);
     } catch (err) {
-      console.error('Error fetching trending items:', err);
+      logger.error('fetchTrendingItems', 'Error fetching trending items', { error: err });
       setError('Failed to load trending content');
     } finally {
       setIsLoading(false);
@@ -178,7 +181,7 @@ export function useTrending(options: TrendingOptions = {}) {
         .slice(0, limit);
         
     } catch (error) {
-      console.error('Error calculating trending from analytics:', error);
+      logger.error('calculateTrendingFromAnalytics', 'Error calculating trending from analytics', { error });
       return [];
     }
   };

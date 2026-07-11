@@ -1,6 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { createLogger } from "@/lib/logger";
 import { useAuth } from "@/contexts/AuthContext";
+
+const logger = createLogger('useLoginActivity');
 
 interface LoginActivity {
   id: string;
@@ -83,7 +86,7 @@ export function useLoginActivity() {
         });
 
       if (error) {
-        console.error('Error fetching login activity:', error);
+        logger.error('fetchLoginActivity', 'Error fetching login activity', { error });
         throw error;
       }
 
@@ -110,7 +113,7 @@ export function useLoginActivity() {
         });
 
       if (error) {
-        console.error('Error logging activity:', error);
+        logger.error('logActivity', 'Error logging activity', { error });
         throw error;
       }
 
@@ -157,7 +160,7 @@ export function useLoginActivity() {
             },
           },
         })
-        .catch((err) => console.warn('security alert failed', err));
+        .catch((err) => logger.warn('logSuccessfulLogin', 'security alert failed', { error: err }));
     }
 
     return activity;
