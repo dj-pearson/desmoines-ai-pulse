@@ -5149,8 +5149,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. CRITICAL. Evidence: .github/rulesets/main.json, develop.json, release.json (no required_status_checks; review count 0)."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. CRITICAL. Evidence: .github/rulesets/main.json, develop.json, release.json (no required_status_checks; review count 0). | DONE 2026-07-11: pr-checks.yml runs on main/develop/release/*; main/develop/release rulesets require 1 review + Lint/Type/Test/Build + gitleaks status checks."
     },
     {
       "id": "WEB-CI-002",
@@ -5163,8 +5163,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: .github/workflows/pr-checks.yml (on: pull_request: branches: [main])."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: .github/workflows/pr-checks.yml (on: pull_request: branches: [main]). | DONE 2026-07-11: pr-checks.yml runs on main/develop/release/*; main/develop/release rulesets require 1 review + Lint/Type/Test/Build + gitleaks status checks."
     },
     {
       "id": "WEB-CI-003",
