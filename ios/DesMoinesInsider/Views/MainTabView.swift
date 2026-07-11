@@ -7,13 +7,11 @@ import SwiftUI
 struct MainTabView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
 
-    @State private var selectedTab = Tab.home {
-        didSet {
-            if oldValue != selectedTab {
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            }
-        }
-    }
+    // Haptic on tab change lives in `.onChange(of: selectedTab)` below, not in a
+    // `didSet`: SwiftUI mutates this through the `$selectedTab` binding on a real
+    // tab-bar tap, which does not invoke the property observer, so a `didSet`
+    // haptic only fired for programmatic switches (IOS-AUDIT-UX-004).
+    @State private var selectedTab = Tab.home
 
     enum Tab: String, CaseIterable {
         case home, restaurants, search, map, favorites, profile
@@ -145,7 +143,12 @@ struct MainTabView: View {
         .sheet(item: $deepLinkPresentation) { presentation in
             DeepLinkResolverView(presentation: presentation)
         }
-        .onChange(of: selectedTab) { _, _ in
+        .onChange(of: selectedTab) { oldTab, newTab in
+            // Light haptic on every tab change (fires for real tab-bar taps too,
+            // which a `didSet` on the @State would miss).
+            if oldTab != newTab {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            }
             // Major navigation boundary. Free tier only; the service enforces the
             // session cap, the "not on first sessions" rule and the min interval.
             guard storeKit.currentTier == .free else { return }

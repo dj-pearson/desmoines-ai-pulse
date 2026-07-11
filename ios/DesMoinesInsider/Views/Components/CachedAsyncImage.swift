@@ -119,8 +119,14 @@ struct CachedAsyncImage<Placeholder: View>: View {
             let (data, response) = try await URLSession.shared.data(from: url)
             // Decode at most to the display cap; keeps the in-memory bitmap small
             // for oversized source images (a 3000x2000 photo no longer allocates
-            // ~24 MB for a list thumbnail).
-            if let uiImage = ImageDownsampler.decode(data, maxPixelSize: maxPixels) {
+            // ~24 MB for a list thumbnail). Run the decode off the main actor — as
+            // the disk path already does — so a large first-load image doesn't
+            // hitch scrolling on a cold cache (IOS-AUDIT-PERF-003).
+            let maxPixelSize = maxPixels
+            let uiImage = await Task.detached(priority: .utility) {
+                ImageDownsampler.decode(data, maxPixelSize: maxPixelSize)
+            }.value
+            if let uiImage {
                 // Show tiny blurred thumbnail first for progressive feel
                 if thumbnail == nil {
                     thumbnail = Self.generateThumbnail(from: uiImage)

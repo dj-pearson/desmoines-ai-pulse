@@ -103,24 +103,13 @@ struct Article: Identifiable, Codable, Hashable {
 
     // MARK: - Date parsing
 
-    // Cached parsers — `parseTimestamp` runs during decode of every article.
-    private static let isoWithFraction: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-    private static let isoPlain: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
-
-    /// Tolerant ISO-8601 parse: handles fractional seconds and the
-    /// Postgres `+00:00` / `Z` variants Supabase returns.
+    /// Tolerant parse delegating to the single app-wide `DateParser`, which
+    /// handles Postgres microsecond fractional seconds, the `+00:00` / `Z`
+    /// variants, and the space-separated / date-only fallbacks. Previously this
+    /// had its own two-formatter parser that silently returned nil on
+    /// microsecond timestamps and lacked the non-ISO fallbacks (IOS-AUDIT-DATA-001).
     static func parseTimestamp(_ string: String?) -> Date? {
-        guard let string, !string.isEmpty else { return nil }
-        if let date = isoWithFraction.date(from: string) { return date }
-        return isoPlain.date(from: string)
+        DateParser.parse(string)
     }
 }
 
