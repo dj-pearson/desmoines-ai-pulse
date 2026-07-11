@@ -18,92 +18,81 @@ import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
 import { checkRateLimitPersistent } from '../_shared/rateLimit.ts';
 import { runJob } from '../_shared/jobRunner.ts';
 import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
-import { getAnthropicApiKey } from '../_shared/aiConfig.ts';
-
-const AUTO_APPROVE_THRESHOLD = 85;
-const AUTO_REJECT_THRESHOLD = 50;
-
-interface Submission {
-  id: string;
-  user_id: string;
-  title: string;
-  description: string | null;
-  date: string | null;
-  venue: string | null;
-  location: string | null;
-  category: string | null;
-  price: string | null;
-  image_url: string | null;
-  website_url: string | null;
-  contact_email: string | null;
-  status: string;
-}
+import { getAnthropicApiKey, extractClaudeText } from '../_shared/aiConfig.ts';
+import {
+  AUTO_APPROVE_THRESHOLD,
+  AUTO_REJECT_THRESHOLD,
+  buildSafetyRequest,
+  decideTriage,
+  scoreCompleteness,
+  type SafetyVerdict,
+  type Submission,
+} from './logic.ts';
 
 function json(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...headers, 'Content-Type': 'application/json' } });
 }
 
-/** Deterministic completeness/quality score (0-100) + reasons. */
-function scoreCompleteness(s: Submission): { score: number; reasons: string[]; dateValid: boolean } {
-  const reasons: string[] = [];
-  let score = 0;
-
-  if (s.title && s.title.trim().length >= 5) score += 20; else reasons.push('Title missing or too short');
-
-  const desc = (s.description ?? '').trim();
-  if (desc.length >= 120) score += 25;
-  else if (desc.length >= 40) { score += 12; reasons.push('Description is short'); }
-  else reasons.push('Description missing or too short');
-
-  let dateValid = false;
-  if (s.date) {
-    const d = new Date(s.date);
-    if (!isNaN(d.getTime()) && d.getTime() > Date.now() - 24 * 3600 * 1000) {
-      dateValid = true;
-      score += 20;
-    } else reasons.push('Event date is missing, invalid, or in the past');
-  } else reasons.push('Event date is missing');
-
-  if ((s.venue && s.venue.trim()) || (s.location && s.location.trim())) score += 15;
-  else reasons.push('No venue or location');
-
-  if (s.category && s.category.trim()) score += 10; else reasons.push('No category');
-  if (s.image_url && /^https?:\/\//.test(s.image_url)) score += 5;
-  if (s.website_url && /^https?:\/\//.test(s.website_url)) score += 5;
-
-  return { score: Math.min(100, score), reasons, dateValid };
-}
-
-/** Claude content-safety check. Fails SAFE-PENDING (no flag) if AI errors. */
-async function safetyCheck(s: Submission): Promise<{ safe: boolean; reasons: string[] }> {
+/**
+ * Claude content-safety check. FAILS CLOSED: on a missing key, upstream error,
+ * refusal, or unparseable response the verdict is UNDETERMINED (determined:false),
+ * and the caller keeps the submission out of the auto-approve path.
+ */
+async function safetyCheck(s: Submission): Promise<SafetyVerdict> {
   const key = getAnthropicApiKey();
-  if (!key) return { safe: true, reasons: [] };
+  if (!key) return { safe: false, determined: false, reasons: ['Safety check unavailable (no API key)'] };
   try {
-    const prompt =
-      `You are moderating a community event submission for a family-friendly local events site. ` +
-      `Flag it ONLY if it contains hate speech, harassment, explicit sexual content, scams/spam, ` +
-      `illegal activity, or is clearly not a real local event. Respond with STRICT JSON: ` +
-      `{"safe": boolean, "reasons": string[]}.\n\n` +
-      `Title: ${s.title}\nDescription: ${s.description ?? ''}\nVenue: ${s.venue ?? ''}\nCategory: ${s.category ?? ''}`;
+    const { system, userContent } = buildSafetyRequest(s);
     const res = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
         model: 'claude-3-haiku-20240307',
         max_tokens: 300,
-        messages: [{ role: 'user', content: prompt }],
+        system,
+        messages: [{ role: 'user', content: userContent }],
       }),
     }, 60_000);
-    if (!res.ok) return { safe: true, reasons: [] };
+    if (!res.ok) return { safe: false, determined: false, reasons: [`Safety check upstream error (${res.status})`] };
     const data = await res.json();
-    const text = data?.content?.[0]?.text ?? '';
-    const match = text.match(/\{[\s\S]*\}/);
-    if (!match) return { safe: true, reasons: [] };
-    const parsed = JSON.parse(match[0]);
-    return { safe: parsed.safe !== false, reasons: Array.isArray(parsed.reasons) ? parsed.reasons : [] };
+    const extracted = extractClaudeText(data);
+    if (!extracted.ok) return { safe: false, determined: false, reasons: [`Safety check ${extracted.reason}`] };
+    const match = extracted.text.match(/\{[\s\S]*\}/);
+    if (!match) return { safe: false, determined: false, reasons: ['Safety check returned no JSON'] };
+    let parsed: { safe?: unknown; reasons?: unknown };
+    try {
+      parsed = JSON.parse(match[0]);
+    } catch {
+      return { safe: false, determined: false, reasons: ['Safety check JSON parse failed'] };
+    }
+    if (typeof parsed.safe !== 'boolean') {
+      return { safe: false, determined: false, reasons: ['Safety check returned no boolean verdict'] };
+    }
+    return {
+      safe: parsed.safe,
+      determined: true,
+      reasons: Array.isArray(parsed.reasons) ? parsed.reasons.map(String) : [],
+    };
   } catch (_e) {
-    return { safe: true, reasons: [] };
+    return { safe: false, determined: false, reasons: ['Safety check exception'] };
   }
+}
+
+/**
+ * Pure triage decision. Auto-approve requires a DETERMINED-safe verdict; an
+ * undetermined safety result can never auto-approve (fail closed → human queue).
+ * A confirmed-unsafe verdict auto-rejects; low quality score auto-rejects.
+ */
+export function decideTriage(
+  score: number,
+  dateValid: boolean,
+  safety: SafetyVerdict,
+): 'approved' | 'rejected' | 'pending' {
+  const confirmedUnsafe = safety.determined && !safety.safe;
+  if (confirmedUnsafe) return 'rejected';
+  if (score < AUTO_REJECT_THRESHOLD) return 'rejected';
+  if (score >= AUTO_APPROVE_THRESHOLD && dateValid && safety.determined && safety.safe) return 'approved';
+  return 'pending';
 }
 
 Deno.serve(async (req) => {
@@ -164,13 +153,14 @@ Deno.serve(async (req) => {
   const result = await runJob('triage-event-submission', async (ctx) => {
     const { score, reasons, dateValid } = scoreCompleteness(submission);
     const safety = await safetyCheck(submission);
+    // Surface an undetermined safety verdict in the admin queue too.
+    if (!safety.determined) safety.reasons.push('verdict undetermined — routed for human review');
     const allReasons = [...reasons, ...safety.reasons.map((r) => `Safety: ${r}`)];
-    const safetyFlag = !safety.safe;
+    // Only a DETERMINED-unsafe verdict is a real content flag; undetermined
+    // (AI error/refusal/parse-fail) is NOT a flag but also blocks auto-approve.
+    const safetyFlag = safety.determined && !safety.safe;
 
-    let decision: 'approved' | 'rejected' | 'pending';
-    if (safetyFlag || score < AUTO_REJECT_THRESHOLD) decision = 'rejected';
-    else if (score >= AUTO_APPROVE_THRESHOLD && dateValid) decision = 'approved';
-    else decision = 'pending';
+    const decision = decideTriage(score, dateValid, safety);
 
     // Persist score + reasons on the submission regardless of outcome.
     const patch: Record<string, unknown> = {

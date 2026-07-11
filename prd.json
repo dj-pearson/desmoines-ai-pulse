@@ -4679,8 +4679,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: supabase/functions/triage-event-submission/index.ts:80-104 (safetyCheck interpolation + fail-open insert)."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: supabase/functions/triage-event-submission/index.ts:80-104 (safetyCheck interpolation + fail-open insert). | DONE 2026-07-11: triage-event-submission moderation now uses a system prompt + nonce-delimited untrusted data (injection can't flip verdict) and fails CLOSED (undetermined AI response → pending/human review, never auto-approve). Pure logic extracted to logic.ts; logic.test.ts covers injection strings + fail-closed decisions (10 assertions)."
     },
     {
       "id": "WEB-SEC-016",
@@ -5020,8 +5020,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: CLAUDE_API / CLAUDE_API_KEY / ANTHROPIC_API_KEY across campaign-creative-review, triage-event-submission, nlp-search, etc."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: CLAUDE_API / CLAUDE_API_KEY / ANTHROPIC_API_KEY across campaign-creative-review, triage-event-submission, nlp-search, etc. | DONE 2026-07-11: 29 edge functions now read the key via getAnthropicApiKey() (canonical ANTHROPIC_API_KEY + CLAUDE_API/CLAUDE_API_KEY fallbacks, deprecation plan documented in aiConfig.ts)."
     },
     {
       "id": "WEB-BE-003",
@@ -5034,8 +5034,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: 12 functions deref content[0].text unguarded (e.g. publish-article-webhook/index.ts:124)."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: 12 functions deref content[0].text unguarded (e.g. publish-article-webhook/index.ts:124). | DONE 2026-07-11: 12 functions (14 derefs) now use extractClaudeText() to guard content[0].text; empty/refused/overloaded/malformed responses degrade gracefully via existing try/catch instead of crashing."
     },
     {
       "id": "WEB-BE-004",
