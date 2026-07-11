@@ -8,7 +8,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { getAIConfig, buildLightweightClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
+import { getAIConfig, buildLightweightClaudeRequest, getClaudeHeaders, getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
 import { requireApiKey } from "../_shared/apiKeyAuth.ts";
@@ -53,7 +53,7 @@ serve(async (req) => {
 
     console.log('Supabase client created');
 
-    const claudeApiKey = Deno.env.get('CLAUDE_API');
+    const claudeApiKey = getAnthropicApiKey();
     if (!claudeApiKey) {
       console.error('CLAUDE_API environment variable not found');
       throw new Error('Claude API key not found');
@@ -146,7 +146,12 @@ serve(async (req) => {
         }
 
         const claudeData = await claudeResponse.json();
-        const generatedContent = claudeData.content[0].text;
+        const extracted = extractClaudeText(claudeData);
+        if (!extracted.ok) {
+          console.error("Claude response not usable:", extracted.reason, extracted.detail);
+          throw new Error(`AI response ${extracted.reason}: ${extracted.detail}`);
+        }
+        const generatedContent = extracted.text;
 
         // Parse the structured response
         const seoData = parseClaudeResponse(generatedContent);

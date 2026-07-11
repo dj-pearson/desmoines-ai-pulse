@@ -11,7 +11,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { parseISO, format as dateFnsFormat } from "https://esm.sh/date-fns@3.6.0";
 import { fromZonedTime } from "https://esm.sh/date-fns-tz@3.2.0";
 import { scrapeUrl, scrapeUrls } from "../_shared/scraper.ts";
-import { getAIConfig, buildClaudeRequest, buildLightweightClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
+import { getAIConfig, buildClaudeRequest, buildLightweightClaudeRequest, getClaudeHeaders, getAnthropicApiKey } from "../_shared/aiConfig.ts";
 import { validateURLForSSRF } from "../_shared/validation.ts";
 import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
 import { tryDomainAdapter } from "../_shared/domain-adapters/index.ts";
@@ -538,7 +538,7 @@ serve(async (req) => {
       }
 
       // Extract events using Claude AI for this page
-      const claudeApiKey = Deno.env.get('CLAUDE_API');
+      const claudeApiKey = getAnthropicApiKey();
       
       if (!claudeApiKey) {
         console.error(`❌ Claude API key not found`);
@@ -1253,7 +1253,7 @@ Return empty array [] if no competitive content found.`
 
                 // Generate SEO content for newly inserted events using lightweight AI (Haiku)
                 if (category === 'events' && insertedData?.[0]?.id) {
-                  const claudeApiKey = Deno.env.get('CLAUDE_API');
+                  const claudeApiKey = getAnthropicApiKey();
                   if (claudeApiKey) {
                     // Include known venue info for better SEO
                     const seoVenueInfo = knownVenue

@@ -17,7 +17,7 @@ import { runAgent } from "../_shared/agentRun.ts";
 import { createAgentTask } from "../_shared/agentTasks.ts";
 import { writeAgentAudit } from "../_shared/auditLog.ts";
 import { retrieveKb } from "../_shared/kbRetrieve.ts";
-import { getAIConfig } from "../_shared/aiConfig.ts";
+import { getAIConfig, getAnthropicApiKey } from "../_shared/aiConfig.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 
 const AGENT_KEY = "support-chat";
@@ -32,7 +32,7 @@ function j(body: unknown, status: number, headers: Record<string, string>): Resp
 }
 
 async function draft(supabaseUrl: string, supabaseKey: string, history: Msg[], passages: { title: string; content: string; source: string | null }[]) {
-  const apiKey = Deno.env.get("CLAUDE_API") ?? Deno.env.get("ANTHROPIC_API_KEY");
+  const apiKey = getAnthropicApiKey();
   if (!apiKey) return null;
   const config = await getAIConfig(supabaseUrl, supabaseKey);
   const context = passages.map((p, i) => `[${i + 1}] (${p.source ?? "KB"}) ${p.title}\n${p.content}`).join("\n\n");

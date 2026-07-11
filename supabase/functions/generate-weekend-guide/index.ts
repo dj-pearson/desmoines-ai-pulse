@@ -2,7 +2,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
-import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
+import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -17,7 +17,7 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const claudeApiKey = Deno.env.get('CLAUDE_API');
+    const claudeApiKey = getAnthropicApiKey();
 
     if (!claudeApiKey) {
       throw new Error('Claude API key not configured');
@@ -148,7 +148,12 @@ Structure it with clear day sections and make it sound exciting and informative!
     }
 
     const claudeData = await claudeResponse.json();
-    const generatedContent = claudeData.content[0].text;
+    const extracted = extractClaudeText(claudeData);
+    if (!extracted.ok) {
+      console.error("Claude response not usable:", extracted.reason, extracted.detail);
+      throw new Error(`AI response ${extracted.reason}: ${extracted.detail}`);
+    }
+    const generatedContent = extracted.text;
 
     console.log('Generated content length:', generatedContent.length);
 

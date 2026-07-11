@@ -19,7 +19,7 @@ import { handleCors, getCorsHeaders } from "../_shared/cors.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { runAgent } from "../_shared/agentRun.ts";
 import { createAgentTask } from "../_shared/agentTasks.ts";
-import { getAIConfig } from "../_shared/aiConfig.ts";
+import { getAIConfig, getAnthropicApiKey } from "../_shared/aiConfig.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 
 const AGENT_KEY = "ticket-classifier";
@@ -56,7 +56,7 @@ function derivePriority(c: Classification): string {
 }
 
 async function classify(supabaseUrl: string, supabaseKey: string, subject: string, bodyText: string): Promise<{ c: Classification; costUsd: number } | null> {
-  const apiKey = Deno.env.get("CLAUDE_API") ?? Deno.env.get("ANTHROPIC_API_KEY");
+  const apiKey = getAnthropicApiKey();
   if (!apiKey) return null;
   const config = await getAIConfig(supabaseUrl, supabaseKey);
   const prompt =

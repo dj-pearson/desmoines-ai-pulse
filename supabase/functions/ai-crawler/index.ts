@@ -17,7 +17,7 @@ import {
   parseISO,
 } from "https://esm.sh/date-fns@2.30.0";
 import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts";
-import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
+import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey } from "../_shared/aiConfig.ts";
 import { scrapeUrl, scrapeUrls } from "../_shared/scraper.ts";
 import { fetchAndStoreImage as _fetchAndStoreImageShared } from "../_shared/imageStorage.ts";
 import { tryDomainAdapter } from "../_shared/domain-adapters/index.ts";
@@ -1551,7 +1551,7 @@ Deno.serve(async (req) => {
     // Initialize services
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const claudeApiKey = Deno.env.get("CLAUDE_API");
+    const claudeApiKey = getAnthropicApiKey();
 
     if (!claudeApiKey) {
       return new Response(

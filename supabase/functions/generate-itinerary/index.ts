@@ -1,7 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
-import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
+import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
 import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
 import { resolveEntitledTier, hasFeatureAccess } from "../_shared/entitlements.ts";
 import { getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
@@ -88,7 +88,7 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
     const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    const claudeApiKey = Deno.env.get('CLAUDE_API') || Deno.env.get('CLAUDE_API_KEY');
+    const claudeApiKey = getAnthropicApiKey();
     if (!claudeApiKey) {
       throw new Error('CLAUDE_API key is required');
     }
@@ -389,7 +389,12 @@ Return ONLY the JSON object, no additional text.`;
     }
 
     const aiResult = await aiResponse.json();
-    const itineraryText = aiResult.content[0].text;
+    const extracted = extractClaudeText(aiResult);
+    if (!extracted.ok) {
+      console.error("Claude response not usable:", extracted.reason, extracted.detail);
+      throw new Error(`AI response ${extracted.reason}: ${extracted.detail}`);
+    }
+    const itineraryText = extracted.text;
 
     let generatedItinerary: GeneratedItinerary;
     try {

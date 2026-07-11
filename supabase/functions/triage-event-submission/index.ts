@@ -18,6 +18,7 @@ import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
 import { checkRateLimitPersistent } from '../_shared/rateLimit.ts';
 import { runJob } from '../_shared/jobRunner.ts';
 import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
+import { getAnthropicApiKey } from '../_shared/aiConfig.ts';
 
 const AUTO_APPROVE_THRESHOLD = 85;
 const AUTO_REJECT_THRESHOLD = 50;
@@ -75,7 +76,7 @@ function scoreCompleteness(s: Submission): { score: number; reasons: string[]; d
 
 /** Claude content-safety check. Fails SAFE-PENDING (no flag) if AI errors. */
 async function safetyCheck(s: Submission): Promise<{ safe: boolean; reasons: string[] }> {
-  const key = Deno.env.get('ANTHROPIC_API_KEY') || Deno.env.get('CLAUDE_API') || Deno.env.get('CLAUDE_API_KEY');
+  const key = getAnthropicApiKey();
   if (!key) return { safe: true, reasons: [] };
   try {
     const prompt =

@@ -26,7 +26,7 @@ import { createAgentTask } from "../_shared/agentTasks.ts";
 import { writeAgentAudit } from "../_shared/auditLog.ts";
 import { scoreOutput } from "../_shared/scoreOutput.ts";
 import { retrieveKb, type KbPassage } from "../_shared/kbRetrieve.ts";
-import { getAIConfig } from "../_shared/aiConfig.ts";
+import { getAIConfig, getAnthropicApiKey } from "../_shared/aiConfig.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 
 const AGENT_KEY = "support-responder";
@@ -56,7 +56,7 @@ async function draftAnswer(
   question: string,
   passages: KbPassage[],
 ): Promise<{ draft: Draft; costUsd: number } | null> {
-  const apiKey = Deno.env.get("CLAUDE_API") ?? Deno.env.get("ANTHROPIC_API_KEY");
+  const apiKey = getAnthropicApiKey();
   if (!apiKey) return null;
   const config = await getAIConfig(supabaseUrl, supabaseKey);
   const context = passages

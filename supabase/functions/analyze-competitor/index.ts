@@ -12,6 +12,7 @@ import { validateURLForSSRF } from "../_shared/validation.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { isHostAllowed, fetchTextWithSizeCap } from "../_shared/fetchGuard.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -44,7 +45,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const claudeApiKey = Deno.env.get('CLAUDE_API');
+    const claudeApiKey = getAnthropicApiKey();
     if (!claudeApiKey) {
       throw new Error('CLAUDE_API is required');
     }
@@ -297,7 +298,12 @@ Please provide analysis in the following JSON format:
   }
 
   const aiResponse = await response.json();
-  const analysisText = aiResponse.content[0].text;
+  const extracted = extractClaudeText(aiResponse);
+  if (!extracted.ok) {
+    console.error("Claude response not usable:", extracted.reason, extracted.detail);
+    throw new Error(`AI response ${extracted.reason}: ${extracted.detail}`);
+  }
+  const analysisText = extracted.text;
   
   let analysis;
   try {
@@ -398,7 +404,12 @@ Return as JSON array.
   }
 
   const aiResponse = await response.json();
-  const suggestionsText = aiResponse.content[0].text;
+  const extracted = extractClaudeText(aiResponse);
+  if (!extracted.ok) {
+    console.error("Claude response not usable:", extracted.reason, extracted.detail);
+    throw new Error(`AI response ${extracted.reason}: ${extracted.detail}`);
+  }
+  const suggestionsText = extracted.text;
   
   let suggestions;
   try {

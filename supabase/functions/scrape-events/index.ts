@@ -8,7 +8,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
+import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey } from "../_shared/aiConfig.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 
 const corsHeaders = {
@@ -1820,7 +1820,7 @@ serve(async (req) => {
         );
       }
 
-      const claudeApiKey = Deno.env.get("CLAUDE_API");
+      const claudeApiKey = getAnthropicApiKey();
 
       console.log(
         `🔑 API Keys availability - Claude: ${
@@ -2050,7 +2050,7 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const claudeApiKey = Deno.env.get("CLAUDE_API");
+    const claudeApiKey = getAnthropicApiKey();
 
     // Fetch existing events from the last 60 days for duplicate checking
     console.log("Fetching existing events for duplicate detection...");

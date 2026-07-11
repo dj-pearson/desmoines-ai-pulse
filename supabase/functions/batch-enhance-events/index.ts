@@ -2,6 +2,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
+import { getAnthropicApiKey, extractClaudeText } from '../_shared/aiConfig.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -10,7 +11,7 @@ const corsHeaders = {
 
 const googleSearchApiKey = Deno.env.get('GOOGLE_SEARCH_API') || Deno.env.get('GOOGLE_PROGRAMMATIC_KEY');
 const googleSearchEngineId = Deno.env.get('GOOGLE_SEARCH_ENGINE_ID') || 'a67b454ea60fc4b35';
-const claudeApiKey = Deno.env.get('CLAUDE_API');
+const claudeApiKey = getAnthropicApiKey();
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
@@ -162,7 +163,12 @@ Example format:
     }
 
     const data = await response.json();
-    const content = data.content[0]?.text || '{}';
+    const extracted = extractClaudeText(data);
+    if (!extracted.ok) {
+      console.error("Claude response not usable:", extracted.reason, extracted.detail);
+      throw new Error(`AI response ${extracted.reason}: ${extracted.detail}`);
+    }
+    const content = extracted.text;
     
     // Extract JSON from the response
     const jsonMatch = content.match(/\{[\s\S]*\}/);

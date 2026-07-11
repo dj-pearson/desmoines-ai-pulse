@@ -17,7 +17,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { getAIConfig, getClaudeHeaders } from "../_shared/aiConfig.ts";
+import { getAIConfig, getClaudeHeaders, getAnthropicApiKey } from "../_shared/aiConfig.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
 
 const corsHeaders = {
@@ -64,7 +64,7 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-    const claudeApiKey = Deno.env.get('CLAUDE_API');
+    const claudeApiKey = getAnthropicApiKey();
 
     if (!claudeApiKey) {
       return jsonResponse({ error: 'Claude API key not configured' }, 500);

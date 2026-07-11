@@ -17,6 +17,7 @@ import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
 import { requireAdminOrApiKey } from '../_shared/apiKeyAuth.ts';
 import { runJob } from '../_shared/jobRunner.ts';
 import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
+import { getAnthropicApiKey } from '../_shared/aiConfig.ts';
 
 // Minimum pixel dimensions per placement.
 const MIN_DIMS: Record<string, { w: number; h: number }> = {
@@ -82,7 +83,7 @@ async function imageLoads(rawUrl: string): Promise<boolean> {
 
 /** Claude brand-safety check. Returns true (safe) when no API key is configured. */
 async function brandSafe(text: string): Promise<{ safe: boolean; note: string }> {
-  const key = Deno.env.get('ANTHROPIC_API_KEY');
+  const key = getAnthropicApiKey();
   if (!key) return { safe: true, note: 'skipped (no ANTHROPIC_API_KEY)' };
   if (!text.trim()) return { safe: true, note: 'empty' };
   try {

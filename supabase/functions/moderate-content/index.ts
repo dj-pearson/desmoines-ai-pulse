@@ -30,6 +30,7 @@ import { requireAdminOrApiKey } from '../_shared/apiKeyAuth.ts';
 import { checkRateLimitPersistent } from '../_shared/rateLimit.ts';
 import { runJob } from '../_shared/jobRunner.ts';
 import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
+import { getAnthropicApiKey } from '../_shared/aiConfig.ts';
 
 type SupabaseClient = ReturnType<typeof createClient>;
 type ContentType = 'review' | 'contact';
@@ -67,7 +68,7 @@ function clamp01(n: unknown): number {
 
 /** Claude moderation scoring. Returns ok:false (NOT throwing) when AI errors. */
 async function scoreText(text: string, kind: ContentType): Promise<Scores> {
-  const key = Deno.env.get('ANTHROPIC_API_KEY') || Deno.env.get('CLAUDE_API') || Deno.env.get('CLAUDE_API_KEY');
+  const key = getAnthropicApiKey();
   if (!key) return { toxicity: 0, spam: 0, off_topic: 0, reasons: [], ok: false };
   const context =
     kind === 'review'

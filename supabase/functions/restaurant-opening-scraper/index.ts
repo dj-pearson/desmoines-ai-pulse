@@ -10,6 +10,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { scrapeUrl } from "../_shared/scraper.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { getAnthropicApiKey } from "../_shared/aiConfig.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -19,7 +20,7 @@ const corsHeaders = {
 // Initialize Supabase client
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const claudeApiKey = Deno.env.get('CLAUDE_API')!;
+const claudeApiKey = getAnthropicApiKey()!;
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 

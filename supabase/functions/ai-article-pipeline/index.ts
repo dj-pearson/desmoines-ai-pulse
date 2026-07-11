@@ -21,7 +21,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
 import { requireAdminOrApiKey } from '../_shared/apiKeyAuth.ts';
 import { runJob } from '../_shared/jobRunner.ts';
-import { getAIConfig, getClaudeHeaders } from '../_shared/aiConfig.ts';
+import { getAIConfig, getClaudeHeaders, getAnthropicApiKey } from '../_shared/aiConfig.ts';
 
 const PAUSE_FLAG = 'ai_article_pipeline_enabled';
 const DAILY_CAP = 1;
@@ -209,7 +209,7 @@ Deno.serve(async (req) => {
     let safetyChecked = false;
     try {
       const aiCfg = await getAIConfig(url, serviceKey);
-      const claudeKey = Deno.env.get('CLAUDE_API') || Deno.env.get('CLAUDE_API_KEY');
+      const claudeKey = getAnthropicApiKey();
       if (claudeKey) {
         const headers = await getClaudeHeaders(claudeKey, url, serviceKey);
         const safetyRes = await fetch(aiCfg.api_endpoint, {

@@ -1,7 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
-import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
+import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 
@@ -31,7 +31,7 @@ serve(async (req) => {
     
     const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    const claudeApiKey = Deno.env.get('CLAUDE_API') || Deno.env.get('CLAUDE_API_KEY');
+    const claudeApiKey = getAnthropicApiKey();
     if (!claudeApiKey) {
       throw new Error('CLAUDE_API key is required');
     }
@@ -247,7 +247,12 @@ Write the COMPLETE article from start to finish. No placeholders, no "[Content c
     }
 
     const aiResponse = await response.json();
-    const articleText = aiResponse.content[0].text;
+    const extracted = extractClaudeText(aiResponse);
+    if (!extracted.ok) {
+      console.error("Claude response not usable:", extracted.reason, extracted.detail);
+      throw new Error(`AI response ${extracted.reason}: ${extracted.detail}`);
+    }
+    const articleText = extracted.text;
     
     let articleData;
     try {

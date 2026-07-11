@@ -10,7 +10,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { getAIConfig, getClaudeHeaders } from "../_shared/aiConfig.ts";
+import { getAIConfig, getClaudeHeaders, getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
 import { requireApiKey } from "../_shared/apiKeyAuth.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
@@ -72,7 +72,7 @@ serve(async (req) => {
 
     // Get AI configuration
     const aiConfig = await getAIConfig(supabaseUrl, supabaseServiceKey);
-    const claudeApiKey = Deno.env.get('CLAUDE_API') || Deno.env.get('CLAUDE_API_KEY');
+    const claudeApiKey = getAnthropicApiKey();
 
     if (!claudeApiKey) {
       throw new Error('Claude API key not configured');
@@ -121,7 +121,12 @@ Return ONLY a JSON object with this exact structure:
     }
 
     const aiData = await aiResponse.json();
-    const aiContent = aiData.content[0].text;
+    const extracted = extractClaudeText(aiData);
+    if (!extracted.ok) {
+      console.error("Claude response not usable:", extracted.reason, extracted.detail);
+      throw new Error(`AI response ${extracted.reason}: ${extracted.detail}`);
+    }
+    const aiContent = extracted.text;
 
     // Parse AI response
     let descriptions;

@@ -2,7 +2,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
-import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
+import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -31,7 +31,7 @@ serve(async (req) => {
     
     const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    const claudeApiKey = Deno.env.get('CLAUDE_API') || Deno.env.get('CLAUDE_API_KEY');
+    const claudeApiKey = getAnthropicApiKey();
     console.log('Claude API key found:', !!claudeApiKey);
     
     if (!claudeApiKey) {
@@ -219,7 +219,12 @@ Generate diverse, engaging topics that would genuinely help Des Moines residents
     }
 
     const aiResponse = await response.json();
-    const suggestionsText = aiResponse.content[0].text;
+    const extracted = extractClaudeText(aiResponse);
+    if (!extracted.ok) {
+      console.error("Claude response not usable:", extracted.reason, extracted.detail);
+      throw new Error(`AI response ${extracted.reason}: ${extracted.detail}`);
+    }
+    const suggestionsText = extracted.text;
     
     let suggestionsData;
     try {
