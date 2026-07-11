@@ -4813,8 +4813,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: 20260506000003_subscription_per_platform_uniqueness.sql:28-57; 20251110000010_add_social_features.sql (DROP...CASCADE recreate)."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: 20260506000003_subscription_per_platform_uniqueness.sql:28-57; 20251110000010_add_social_features.sql (DROP...CASCADE recreate). | DONE 2026-07-11: scripts/check-migration-safety.mjs scans non-grandfathered migrations for DROP COLUMN/TABLE/TYPE, RENAME, SET NOT NULL, tightened CHECK, DROP FUNCTION; fails PR unless migration-override label set. Baseline grandfathers all 318 existing migrations (incl. the 2 known examples). Wired as a Migration Safety job in pr-checks.yml. Verified pass/fail/override."
     },
     {
       "id": "WEB-PERF-009",

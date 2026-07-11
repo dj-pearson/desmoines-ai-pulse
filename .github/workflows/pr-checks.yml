@@ -54,3 +54,22 @@ jobs:
 
       - name: Build production bundle
         run: npm run build
+
+  migration-safety:
+    name: Migration Safety
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # WEB-DB-008: block destructive single-release migration changes. Attach the
+      # `migration-override` label to the PR to bypass when the change is genuinely safe.
+      - name: Check new migrations for destructive changes
+        env:
+          MIGRATION_SAFETY_OVERRIDE: ${{ contains(github.event.pull_request.labels.*.name, 'migration-override') }}
+        run: node scripts/check-migration-safety.mjs
