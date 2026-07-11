@@ -147,6 +147,14 @@ enum ContentType: String, Codable {
     case restaurant
     case attraction
     case playground
+
+    /// Decode tolerantly. The backing DB enum can gain values additively per
+    /// CLAUDE.md's backward-compat rules; an unrecognized value falls back to
+    /// `.event` instead of throwing and failing the whole response decode.
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = ContentType(rawValue: raw) ?? .event
+    }
 }
 
 // MARK: - User Role
@@ -156,6 +164,14 @@ enum UserRole: String, Codable {
     case moderator
     case admin
     case rootAdmin = "root_admin"
+
+    /// Decode tolerantly, defaulting an unknown role to the least-privileged
+    /// `.user` — both to honor additive enum growth and to fail safe (an
+    /// unrecognized role must never be treated as elevated).
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = UserRole(rawValue: raw) ?? .user
+    }
 }
 
 // MARK: - Sort Option
@@ -234,6 +250,14 @@ enum SubscriptionTier: String, Codable {
     case free
     case insider
     case vip
+
+    /// Decode tolerantly, defaulting an unknown tier to `.free` — fail safe so a
+    /// backend value this binary doesn't recognize never unlocks premium and
+    /// never crashes the response decode (additive-enum backward-compat rule).
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = SubscriptionTier(rawValue: raw) ?? .free
+    }
 
     var displayName: String {
         switch self {
