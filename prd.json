@@ -4711,8 +4711,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: 20260128000000_fix_is_admin_function.sql:36 (no SET search_path); ~40 migrations define definer funcs without search_path (e.g. 20250729000000_enhanced_analytics_system.sql)."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: 20260128000000_fix_is_admin_function.sql:36 (no SET search_path); ~40 migrations define definer funcs without search_path (e.g. 20250729000000_enhanced_analytics_system.sql). | DONE 2026-07-11: migration 20260711000000 pins search_path=public,pg_temp on is_admin() (CREATE OR REPLACE) + all public SECURITY DEFINER fns via catalog-loop ALTER FUNCTION; documented in docs/SECURITY_AUDIT.md."
     },
     {
       "id": "WEB-DB-002",
@@ -4726,8 +4726,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: is_admin() 20260128000000...:26-32 trusts profiles.role; escalation trigger 20250905021821:83-88 only guards profiles.user_role."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: is_admin() 20260128000000...:26-32 trusts profiles.role; escalation trigger 20250905021821:83-88 only guards profiles.user_role. | DONE 2026-07-11: same migration extends validate_profile_user_id() trigger to block non-admins setting/raising profiles.role; regression test supabase/tests/web_db_002_role_escalation.sql."
     },
     {
       "id": "WEB-DB-003",
