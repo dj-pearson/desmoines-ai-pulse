@@ -1,7 +1,7 @@
 {
   "project": "Des Moines AI Pulse — Web Platform Autonomy & Core Uplift",
   "branchName": "claude/web-platform-autonomy",
-  "description": "Deep uplift of the WEB platform across Security, Autonomy, Performance, UX, and Features. The governing theme: the site should run itself — content ingestion, data quality, moderation, publishing, marketing, and ops must not require manual admin touches; humans only handle escalated exceptions. Clusters in priority order: (1) WEB-SEC: close the publicly-callable/cost-abusable edge function holes and harden authz before adding more automation on top of them; (2) WEB-AUTO: build the autonomy control plane (job observability) then convert every manual admin queue (event submissions, data backfills, broken links, dedupe, stale content, articles, newsletters, moderation, creative approval, sitemaps, social, subscription lifecycle) into a self-running pipeline with AI scoring + human-exception escalation; (3) WEB-PERF: query payload + bundle + re-render fixes toward the <500KB / LCP<2.5s budgets; (4) WEB-UX: list-page state, loading/error consistency, a11y; (5) WEB-FEAT: web parity with shipped iOS monetization (contextual paywalls, annual+trial, ads/sponsored) plus engagement loops (saved searches+alerts, guest favorites, personalization). CONSTRAINTS THAT BIND EVERY STORY: follow CLAUDE.md backward-compatibility rules — live iOS/Android binaries call edge functions (get_active_ads, discover-chat, generate-itinerary, image-transform, validate-*-receipt, etc.), so NEVER tighten validation, rename/remove endpoints or fields, or lower rate limits below what shipped clients retry against in a single release; DB changes additive-only per the deprecation flow; console logs wrapped in import.meta.env.DEV; storage via @/lib/safeStorage; errors via @/lib/errorHandler. Ralph picks the highest-priority story with passes:false.",
+  "description": "Deep uplift of the WEB platform across Security, Autonomy, Performance, UX, and Features. The governing theme: the site should run itself — content ingestion, data quality, moderation, publishing, marketing, and ops must not require manual admin touches; humans only handle escalated exceptions. Clusters in priority order: (1) WEB-SEC: close the publicly-callable/cost-abusable edge function holes and harden authz before adding more automation on top of them; (2) WEB-AUTO: build the autonomy control plane (job observability) then convert every manual admin queue (event submissions, data backfills, broken links, dedupe, stale content, articles, newsletters, moderation, creative approval, sitemaps, social, subscription lifecycle) into a self-running pipeline with AI scoring + human-exception escalation; (3) WEB-PERF: query payload + bundle + re-render fixes toward the <500KB / LCP<2.5s budgets; (4) WEB-UX: list-page state, loading/error consistency, a11y; (5) WEB-FEAT: web parity with shipped iOS monetization (contextual paywalls, annual+trial, ads/sponsored) plus engagement loops (saved searches+alerts, guest favorites, personalization). CONSTRAINTS THAT BIND EVERY STORY: follow CLAUDE.md backward-compatibility rules — live iOS/Android binaries call edge functions (get_active_ads, discover-chat, generate-itinerary, image-transform, validate-*-receipt, etc.), so NEVER tighten validation, rename/remove endpoints or fields, or lower rate limits below what shipped clients retry against in a single release; DB changes additive-only per the deprecation flow; console logs wrapped in import.meta.env.DEV; storage via @/lib/safeStorage; errors via @/lib/errorHandler. Ralph picks the highest-priority story with passes:false. ADDED 2026-07-11 (WEB CODE REVIEW BATCH, passes:false): a fresh security/performance/correctness/backend/CI review appended clusters WEB-SEC-011+, WEB-DB-*, WEB-PERF-009+, WEB-QUAL-*, WEB-BE-*, WEB-CI-*, WEB-OPS-* — same backward-compat constraints apply; Ralph picks the highest-priority passes:false story.",
   "userStories": [
     {
       "id": "WEB-SEC-001",
@@ -4606,6 +4606,695 @@
       "priority": 76,
       "passes": false,
       "notes": ""
+    },
+    {
+      "id": "WEB-SEC-011",
+      "title": "Fix SSRF private-address filter to reject encoded IPs and DNS-rebinding hostnames",
+      "description": "As the platform owner, I need the shared SSRF guard to actually block internal targets, because isPrivateIP only matches literal dotted-quad IPv4 and never resolves DNS, so every fetch-guarded function can still be pointed at 169.254.169.254 via decimal/hex/octal or a hostname that resolves internally.",
+      "acceptanceCriteria": [
+        "_shared/validation.ts isPrivateIP/blockPrivateIPs rejects decimal (http://2130706433), hex/octal, IPv4-in-IPv6, and 0.0.0.0/localhost forms",
+        "Hostnames are resolved (or an allowlist is enforced) so a public name resolving to a private/link-local IP is blocked; cloud metadata IPs (169.254.169.254, fd00:ec2::254) are denied",
+        "Unit tests cover each bypass class; existing allowed public URLs still pass",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Root fix behind SEC-012/013. Evidence: supabase/functions/_shared/validation.ts:220-260."
+    },
+    {
+      "id": "WEB-SEC-012",
+      "title": "Add a fetch-domain allowlist and size cap to the public image-transform proxy",
+      "description": "As the platform owner, I need the verify_jwt=false image-transform function to only fetch approved image hosts, because it currently passes any caller URL through validateURLForSSRF with no domain allowlist and returns the raw bytes, making it an open SSRF proxy and bandwidth amplifier.",
+      "acceptanceCriteria": [
+        "image-transform validates the target host against a configurable allowlist (project Supabase storage + known CDN/source domains) and rejects everything else with 400 before fetching",
+        "Response size is capped with a streaming limit; oversized responses are aborted",
+        "Uses the hardened isHostAllowed/fetch-size-cap helpers from _shared (align with WEB-SEC-001 fetchGuard)",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: supabase/functions/image-transform/index.ts:60-69 (validateURLForSSRF with no allowedDomains)."
+    },
+    {
+      "id": "WEB-SEC-013",
+      "title": "Add SSRF validation + authorization to seo-audit and remove run-scheduled-audit fail-open auth",
+      "description": "As the platform owner, I need seo-audit to stop fetching arbitrary caller URLs with the service-role client, and run-scheduled-audit to not skip auth when its secret is unset, because today any authenticated user can reflect internal responses (e.g. http://169.254.169.254) and the scheduled trigger is unauthenticated whenever CRON_SECRET is absent.",
+      "acceptanceCriteria": [
+        "seo-audit validates the caller URL through the hardened SSRF guard (public http/https host only, no private/link-local) before fetch; unauthorized callers are rejected",
+        "run-scheduled-audit requires the cron/admin secret unconditionally: if CRON_SECRET is unset the function fails closed (401), never open",
+        "seo-audit does not expose internal/service responses to non-admin callers",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: supabase/functions/seo-audit/index.ts:96 (fetch of caller url via service-role client); run-scheduled-audit/index.ts:29-40 (if(cronSecret){...} fail-open)."
+    },
+    {
+      "id": "WEB-SEC-014",
+      "title": "Rate-limit and tighten CORS on the public nlp-search Claude endpoint",
+      "description": "As the platform owner, I need nlp-search to enforce per-IP/user rate limits and a proper CORS origin, because it is a verify_jwt=false endpoint that calls Claude on every request with only a length check and a hardcoded wildcard Access-Control-Allow-Origin, so it is a cost-abuse vector missed by the WEB-SEC-002 pass.",
+      "acceptanceCriteria": [
+        "nlp-search enforces the shared DB-backed rate limiter (per-IP and, when available, per-user) before any Claude call",
+        "CORS uses the environment-aware corsHeaders allowlist instead of a hardcoded '*'",
+        "Requests over the limit return 429 without calling Claude",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases (nlp-search is called by web/mobile — do not lower limits below what shipped clients retry against)",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: supabase/functions/nlp-search/index.ts:7 (ACAO '*'), :78-105 (Claude call with no rate limit)."
+    },
+    {
+      "id": "WEB-SEC-015",
+      "title": "Harden triage-event-submission against moderation prompt injection",
+      "description": "As the platform owner, I need the AI safety check on public event submissions to resist prompt injection, because attacker-controlled title/description are interpolated directly into the moderation prompt and the verdict fail-opens into a public events insert.",
+      "acceptanceCriteria": [
+        "Submitted fields are passed as clearly delimited/escaped untrusted data (not interpolated as instructions); a jailbreak attempt in the text cannot flip the safety verdict",
+        "The moderation step fails CLOSED (queue for human review, do not auto-insert) on ambiguous/parse-failed/refused AI responses",
+        "Add regression cases with known injection strings",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: supabase/functions/triage-event-submission/index.ts:80-104 (safetyCheck interpolation + fail-open insert)."
+    },
+    {
+      "id": "WEB-SEC-016",
+      "title": "Security hardening bundle: 403 debug leak, CSAT ownership, image-proxy bypass, geocode rate-limit, backup stub",
+      "description": "As the platform owner, I need a set of small but real authz/abuse gaps closed, because each is independently exploitable and cheap to fix.",
+      "acceptanceCriteria": [
+        "requireAdminOrApiKey 403 body no longer returns the role-diagnostic debug object (userId/role rows) to the caller (_shared/apiKeyAuth.ts:180-200)",
+        "support-csat-submit requires proof of ownership (signed token or authenticated ticket owner) before writing CSAT/updating tickets (support-csat-submit/index.ts:44-84)",
+        "image-proxy internal-storage detection matches only the project storage origin (not any substring '.supabase.co/storage/') so the JWT check can't be bypassed (image-proxy/index.ts:30-36)",
+        "geocode-location enforces the shared rate limiter (verify_jwt=false, currently none) (geocode-location/index.ts:13-16)",
+        "system-backup either requires admin/cron auth or is removed as a misleading stub that returns fabricated success (system-backup/index.ts:1-69)",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Bundles 5 LOW security findings from the review."
+    },
+    {
+      "id": "WEB-DB-001",
+      "title": "Pin search_path on is_admin() and all SECURITY DEFINER functions",
+      "description": "As the platform owner, I need every SECURITY DEFINER function to pin search_path, because is_admin() (which gates admin RLS) and ~40 other definer functions run without a fixed search_path, exposing a schema-shadowing privilege-escalation surface.",
+      "acceptanceCriteria": [
+        "is_admin() is recreated with SET search_path = public, pg_temp (matching its sibling user_has_role_or_higher())",
+        "The ~40 SECURITY DEFINER functions missing a pinned search_path are updated via CREATE OR REPLACE (additive, no signature change)",
+        "A written list of every definer function and its search_path status is added to docs/SECURITY_AUDIT.md",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases; CREATE OR REPLACE only — no dropped/renamed functions",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: 20260128000000_fix_is_admin_function.sql:36 (no SET search_path); ~40 migrations define definer funcs without search_path (e.g. 20250729000000_enhanced_analytics_system.sql)."
+    },
+    {
+      "id": "WEB-DB-002",
+      "title": "Close the profiles.role self-escalation gap left by the role-escalation trigger",
+      "description": "As the platform owner, I need admin authority to not be grantable by users editing their own profile, because is_admin() trusts profiles.role while the escalation-prevention trigger only guards profiles.user_role, leaving a self-service path to admin that undercuts the server-side-roles lockdown.",
+      "acceptanceCriteria": [
+        "The escalation-prevention trigger also blocks non-privileged users from setting/raising profiles.role (mirror the user_role guard), OR is_admin() stops trusting profiles.role and reads only the guarded source",
+        "An authenticated non-admin cannot elevate themselves to admin/root_admin by any UPDATE on their profile row",
+        "Regression test asserts the escalation attempt is denied",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: is_admin() 20260128000000...:26-32 trusts profiles.role; escalation trigger 20250905021821:83-88 only guards profiles.user_role."
+    },
+    {
+      "id": "WEB-DB-003",
+      "title": "Regenerate Supabase types.ts to cover AOS/CRM/support tables the frontend queries untyped",
+      "description": "As a developer, I need the generated types to include every live table, because ~57 recently-created tables (agent_registry, crm_leads, crm_opportunities, support_tickets, error_events, etc.) are absent from types.ts, forcing `.from(\"table\" as any)` casts that defeat type safety.",
+      "acceptanceCriteria": [
+        "src/integrations/supabase/types.ts is regenerated from the current schema and includes all live tables in use by the frontend",
+        "The `.from(... as any)` and `as any[]` casts added only to work around missing types are removed where the real type now exists",
+        "type-check passes with the regenerated types",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: types.ts (9457 lines) missing agent_registry/crm_*/support_*/error_events; SearchTrafficDashboard.tsx uses .from('gsc_*' as any)."
+    },
+    {
+      "id": "WEB-DB-004",
+      "title": "Add missing indexes on foreign-key columns (CRM and related new tables)",
+      "description": "As the platform owner, I need FK columns on the new CRM/agent tables indexed, because unindexed FKs (crm_accounts.owner/advertiser_user_id, crm_leads.prospect_lead_id/account_id/owner, and peers) cause slow joins and lock contention as those tables grow.",
+      "acceptanceCriteria": [
+        "CREATE INDEX (CONCURRENTLY where possible) added for each unindexed FK column on crm_accounts, crm_leads, crm_opportunities and the other new tables identified in the review",
+        "EXPLAIN confirms index usage on the representative join/filter queries",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases; index creation is additive",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: 20260709000052_crm_pipeline.sql FKs at crm_accounts:18-19, crm_leads:2x with no accompanying indexes."
+    },
+    {
+      "id": "WEB-DB-005",
+      "title": "Constrain unbounded anonymous INSERT on web_vitals",
+      "description": "As the platform owner, I need the web_vitals ingest to resist flooding, because the RLS policy is INSERT WITH CHECK (true) with no role restriction or rate limiting, so anyone can write unlimited rows.",
+      "acceptanceCriteria": [
+        "web_vitals insert is bounded: restrict to expected roles and/or funnel writes through a rate-limited edge function, or add a per-source cap",
+        "Legitimate real-user web-vitals reporting (WEB-PERF-007) still succeeds",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: 20260620000009_web_vitals.sql:26-31 (web_vitals_insert_any WITH CHECK true, no TO role)."
+    },
+    {
+      "id": "WEB-DB-006",
+      "title": "Reconcile root-level *.sql schema changes into the tracked migration ledger",
+      "description": "As the platform owner, I need production schema to be reproducible from supabase/migrations, because 34 loose root SQL files (schema + cron changes like add-restaurant-city-column.sql, fix-*-cron.sql) were applied outside migration tracking, so the ledger no longer reproduces prod.",
+      "acceptanceCriteria": [
+        "Each root SQL file is classified: already-in-prod (captured as an idempotent tracked migration or documented as superseded) vs obsolete (removed)",
+        "supabase/migrations reproduces the current prod schema; a written reconciliation note lists the disposition of every root SQL file",
+        "Root SQL files are deleted or moved out of the repo root after reconciliation (coordinate with WEB-OPS-002)",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases; reconciliation migrations must be idempotent/no-ops against prod",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: 34 root *.sql files (add-restaurant-city-column.sql, cleanup_duplicate_column.sql, fix-all-cron-jobs.sql, ...)."
+    },
+    {
+      "id": "WEB-DB-007",
+      "title": "Scope down overbroad anon EXECUTE grants on security/rate-limit RPCs",
+      "description": "As the platform owner, I need login-security RPCs not granted to anon where authenticated is sufficient, because is_account_locked/record_login_attempt/log_login_activity are EXECUTE-granted to anon, widening the abuse surface.",
+      "acceptanceCriteria": [
+        "EXECUTE grants on the security RPCs are reduced to the minimum role actually required by the login flow (drop anon where the call is only made post-auth or from an edge function using service role)",
+        "Login/lockout flows still function end-to-end",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases (do not remove a grant a shipped client relies on without verifying the call path)",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: 20251204000000_security_features.sql:1142-1149 grants EXECUTE to anon,authenticated."
+    },
+    {
+      "id": "WEB-DB-008",
+      "title": "Add a migration-safety linter to catch destructive single-release changes",
+      "description": "As a developer, I need CI to flag destructive migrations, because past migrations shipped a NOT NULL + UNIQUE swap in one release (subscription_per_platform_uniqueness) and a DROP TABLE ... CASCADE + recreate (social features) in one file, violating the CLAUDE.md multi-release deprecation flow.",
+      "acceptanceCriteria": [
+        "A CI check scans new migrations for DROP COLUMN/TABLE/TYPE, RENAME, added NOT NULL, tightened CHECK, enum-value removal, and RPC signature changes, and fails (or requires an explicit override label) when found",
+        "The two historical examples are documented as known/accepted in the check's baseline",
+        "Check is wired into the PR validation workflow",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: 20260506000003_subscription_per_platform_uniqueness.sql:28-57; 20251110000010_add_social_features.sql (DROP...CASCADE recreate)."
+    },
+    {
+      "id": "WEB-PERF-009",
+      "title": "Column-project the restaurants browse hook and drop exact count on the list query",
+      "description": "As a user, I need the /restaurants list to load less data, because the primary browse hook still does select('*', { count: 'exact' }) even though RESTAURANT_LIST_COLUMNS exists unused, over-fetching every column and forcing a full-table count on each filter/sort.",
+      "acceptanceCriteria": [
+        "useRestaurants list query selects RESTAURANT_LIST_COLUMNS (card fields only), not '*'",
+        "count uses 'planned'/'estimated' or a separate cheaper path instead of 'exact' on every request",
+        "Restaurant cards render identically (no missing fields)",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: src/hooks/useRestaurants.ts:130; src/lib/listColumns.ts:15 (RESTAURANT_LIST_COLUMNS unused)."
+    },
+    {
+      "id": "WEB-PERF-010",
+      "title": "select('*') sweep: column-project the remaining hot list/SEO queries",
+      "description": "As a user, I need list and SEO/hub pages to fetch only card columns, because several hot queries still select('*'): legacy useSupabase featured hooks, MonthlyEventsPage, EventsThisWeekend, and the SEO hub pages.",
+      "acceptanceCriteria": [
+        "Column projection applied to useSupabase featured/openings hooks, MonthlyEventsPage, EventsThisWeekend, and OpenNowRestaurants/DietaryRestaurants/SportsHub/MusicHub/EventsByLocation",
+        "Rendered cards are visually unchanged",
+        "A short list of every converted query is recorded in the PR",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: useSupabase.ts:30,48,116,145,162,203; MonthlyEventsPage.tsx:43-57; EventsThisWeekend.tsx:48-54; OpenNowRestaurants.tsx:58; DietaryRestaurants.tsx:58,79; SportsHub/MusicHub."
+    },
+    {
+      "id": "WEB-PERF-011",
+      "title": "Bound unbounded queries and fix advanced-search full-table scans",
+      "description": "As the platform owner, I need list queries to have limits, because advanced search runs select('*') with no .limit() across events/restaurants/attractions/playgrounds, useSupabase.useEvents has no limit, and MonthlyEventsPage issues a redundant second full-range query just for categories.",
+      "acceptanceCriteria": [
+        "useAdvancedSearch adds a bounded .limit()/pagination on all four table queries and projects columns",
+        "useSupabase.useEvents adds a sensible .limit()/pagination",
+        "MonthlyEventsPage derives categories from the already-fetched rows instead of a second full-range query",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: useAdvancedSearch.ts:190-192,235-237,281-283,321-323; useSupabase.ts:81-94; MonthlyEventsPage.tsx:62-69."
+    },
+    {
+      "id": "WEB-PERF-012",
+      "title": "Eliminate the remaining trending N+1 on the home page",
+      "description": "As a user, I need the home trending rail to load in one round-trip, because enrichTrendingWithContent loops trendingScores and awaits a separate select('*').eq('id', ...) per item — up to 10 sequential queries on first paint.",
+      "acceptanceCriteria": [
+        "useTrending enrichment fetches all needed rows in a single batched query (e.g. .in('id', ids)) with column projection",
+        "No per-item awaited query remains in the trending path",
+        "Home trending rail renders the same items",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: src/hooks/useTrending.ts:91-157 (per-item awaited query in a for loop)."
+    },
+    {
+      "id": "WEB-PERF-013",
+      "title": "Move manual-fetch data hooks onto TanStack Query for caching and dedup",
+      "description": "As a user, I need core data hooks to cache and dedupe, because useEvents, useAdvancedSearch, and useTrending use manual useState/useEffect with no cache, staleTime, or request dedup, causing refetch storms and duplicate network work.",
+      "acceptanceCriteria": [
+        "useEvents (primary list hook), useAdvancedSearch, and useTrending are migrated to useQuery with appropriate queryKey + staleTime/gcTime",
+        "Filter changes update the queryKey (no manual refetch effects); no duplicate in-flight requests for the same key",
+        "Existing consumers keep the same public hook API/return shape",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: useEvents.ts:29-35,215-224; useAdvancedSearch.ts:71-127; useTrending.ts:29-42 (all manual fetch)."
+    },
+    {
+      "id": "WEB-PERF-014",
+      "title": "Render hygiene: memoize the AccessibilityProvider value and virtualize large card grids",
+      "description": "As a user, I need large pages to render smoothly, because AccessibilityProvider passes a new inline object as its app-wide context value on every render, and 100+ row card grids render every row with no virtualization.",
+      "acceptanceCriteria": [
+        "AccessibilityContext provider value is wrapped in useMemo so app-wide consumers don't re-render on every parent render",
+        "A virtualization approach (e.g. @tanstack/react-virtual) is applied to the largest card grids (Dietary/OpenNow restaurants, long event lists)",
+        "No visual/behavioral regression in the affected lists",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: src/contexts/AccessibilityContext.tsx:107-117; no virtualization lib present anywhere."
+    },
+    {
+      "id": "WEB-QUAL-001",
+      "title": "Fix leaked listeners, intervals, and window-global timeouts",
+      "description": "As a user, I need effects to clean up, because useVirtualList adds a resize listener with one inline arrow and removes a different arrow (never detached), CatchDesmoinUrlExtractor leaks a setInterval when the fetch throws, and Hotels stores a debounce on (window as any).__hotelSearchTimeout that is never cleared.",
+      "acceptanceCriteria": [
+        "useVirtualList uses a single stable handler reference for add/removeEventListener so the resize listener is actually removed on unmount (src/hooks/useVirtualList.ts:74,78)",
+        "CatchDesmoinUrlExtractor clears its progress interval in a finally/catch so it can't leak on fetch error (CatchDesmoinUrlExtractor.tsx:81-97)",
+        "Hotels debounce is held in a useRef and cleared on unmount instead of a window global cast to any (Hotels.tsx:105-106)",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Bundles 3 leak findings (2 correctness HIGH/LOW + 1 MEDIUM)."
+    },
+    {
+      "id": "WEB-QUAL-002",
+      "title": "Route all client storage through @/lib/safeStorage",
+      "description": "As a user in private/locked-down browsers, I need storage access not to crash the app, because ~20 raw localStorage/sessionStorage calls bypass the mandated safeStorage wrapper (CLAUDE.md), including the CSRF token store.",
+      "acceptanceCriteria": [
+        "The ~20 raw localStorage/sessionStorage calls (csrf.tsx, webVitalsRum.ts, usePageTracking.ts, App.tsx, AuthContext, ProtectedRoute, etc.) are migrated to storage.get/set/remove from @/lib/safeStorage",
+        "safeStorage.ts itself and any intentional low-level exceptions are documented",
+        "Behavior is unchanged when storage is available; no throw when it is blocked",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases; preserve existing storage keys (treat as a schema)",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: csrf.tsx:27,43,100; webVitalsRum.ts:38,41; usePageTracking.ts:14,18; ~20 raw calls across src."
+    },
+    {
+      "id": "WEB-QUAL-003",
+      "title": "Replace swallowed catch blocks with @/lib/errorHandler",
+      "description": "As a developer, I need errors surfaced instead of silently dropped, because several empty/comment-only catch blocks (AuthContext, ProtectedRoute, tracking, personalization) hide failures that should go through handleError.",
+      "acceptanceCriteria": [
+        "Empty/comment-only catches are replaced with handleError(error, { component, action }) (or a justified, commented intentional-ignore)",
+        "No behavioral regression; genuinely optional operations still degrade gracefully",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: AuthContext.tsx:489-491; ProtectedRoute.tsx:92-94; plus tracking/useSimplePersonalization."
+    },
+    {
+      "id": "WEB-QUAL-004",
+      "title": "Reduce `any` usage and adopt generated Supabase types in the worst offenders",
+      "description": "As a developer, I need stronger typing in data/security-critical modules, because there are ~385 `any` occurrences across 127 files, worst in SearchTrafficDashboard (20 untyped .from() casts) and validation/security modules.",
+      "acceptanceCriteria": [
+        "After types.ts is regenerated (WEB-DB-003), remove the `.from(... as any)`/`as any[]` casts in SearchTrafficDashboard and other data modules where a real type now exists",
+        "Reduce `any` in the top offender files (security/validation modules) by typing inputs/returns; no new `any` introduced",
+        "type-check passes",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: 385 any occ / 127 files; SearchTrafficDashboard.tsx (20). Depends on WEB-DB-003."
+    },
+    {
+      "id": "WEB-QUAL-005",
+      "title": "Adopt the leveled logger instead of raw console.* in production paths",
+      "description": "As the platform owner, I need production logging to be intentional, because there are 285 raw console.* calls across 62 files despite src/lib/logger.ts providing a PROD-suppressing leveled logger.",
+      "acceptanceCriteria": [
+        "Raw console.* in shipped src paths are replaced with the createLogger utility (or wrapped in import.meta.env.DEV where a dev-only log is intended)",
+        "No console.* noise remains in hot production paths; esbuild.drop still strips any stragglers",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: 285 console.* occ / 62 files; src/lib/logger.ts exists but under-used."
+    },
+    {
+      "id": "WEB-QUAL-006",
+      "title": "Replace array-index React keys on dynamic/reorderable lists",
+      "description": "As a user, I need reorderable and filtered lists to update correctly, because array index is used as the React key on dynamic content lists — most damagingly the TripPlanner reorderable itinerary, where index keys cause incorrect DOM reuse on reorder.",
+      "acceptanceCriteria": [
+        "TripPlanner itinerary items use a stable unique id as key (fixes reorder correctness)",
+        "Other index-keyed dynamic lists (EventsByLocation, EventsThisWeekend) switch to stable ids where the data provides one",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: TripPlanner.tsx:837,857; EventsByLocation.tsx:399; EventsThisWeekend.tsx:384."
+    },
+    {
+      "id": "WEB-BE-001",
+      "title": "Add fetch timeouts/AbortSignal to all external API calls in edge functions",
+      "description": "As the platform owner, I need every outbound call to Claude/OpenAI/Resend/Google to time out, because ~34 functions call these with a bare fetch() and no AbortSignal, so a hung upstream burns a full function invocation (cost + latency).",
+      "acceptanceCriteria": [
+        "A shared fetch-with-timeout helper (AbortSignal.timeout) is used by the ~34 functions calling api.anthropic.com/api.openai.com/api.resend.com/googleapis.com",
+        "On timeout the function returns a clean error/retry path (no crash, no partial spend counted incorrectly)",
+        "A representative function is tested against a simulated hung upstream",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: 34 functions with bare fetch to external APIs (e.g. generate-itinerary/index.ts)."
+    },
+    {
+      "id": "WEB-BE-002",
+      "title": "Standardize the Anthropic API key env var name across all edge functions",
+      "description": "As the platform owner, I need one canonical Anthropic key name, because the key is read as CLAUDE_API, CLAUDE_API_KEY, and ANTHROPIC_API_KEY across disjoint function sets, so a key rotation silently breaks whichever functions read a different name.",
+      "acceptanceCriteria": [
+        "A single shared accessor returns the Anthropic key, reading one canonical env var with the legacy names as documented fallbacks (additive, no outage during transition)",
+        "All functions use the accessor; a written note lists the canonical name and the deprecation plan for the aliases",
+        "supabase secrets doc/.env.example updated",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases; keep reading old names for one release so rotation is safe",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: CLAUDE_API / CLAUDE_API_KEY / ANTHROPIC_API_KEY across campaign-creative-review, triage-event-submission, nlp-search, etc."
+    },
+    {
+      "id": "WEB-BE-003",
+      "title": "Guard AI response shape before dereferencing content[0].text",
+      "description": "As the platform owner, I need functions to survive AI refusals/overloads, because 12 functions read aiData.content[0].text with no shape check and crash on empty/refused/rate-limited responses.",
+      "acceptanceCriteria": [
+        "A shared helper safely extracts the text (checks content array + type) and returns a typed error when the response is empty/refused/overloaded",
+        "The 12 affected functions use it and degrade gracefully (retry or escalate) instead of throwing",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: 12 functions deref content[0].text unguarded (e.g. publish-article-webhook/index.ts:124)."
+    },
+    {
+      "id": "WEB-BE-004",
+      "title": "Harden send-event-reminders: real auth, dedupe, and correct links",
+      "description": "As the platform owner, I need reminder sends to be authorized, idempotent, and link to the real site, because the function 401s only on a missing Authorization header (any anon-key JWT triggers a blast), can double-send on a crash between Resend and mark_reminder_sent, and builds event URLs from SUPABASE_URL pointing at a non-site host.",
+      "acceptanceCriteria": [
+        "send-event-reminders requires the shared admin/cron auth (role/secret verified), not merely the presence of a header",
+        "Reminders are marked in-flight before/transactionally with the Resend send (or dedup via idempotency key) so a crash cannot cause duplicate emails",
+        "Event links are built from the public site base URL (VITE_SITE_URL / configured host), not SUPABASE_URL",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: send-event-reminders/index.ts:30-36 (header-presence auth), :187/:224 (send-then-mark), :102 (SUPABASE_URL link)."
+    },
+    {
+      "id": "WEB-BE-005",
+      "title": "Fix dispatch-scheduled-newsletters stuck-'sending' state and unbounded recipient list",
+      "description": "As the platform owner, I need newsletter dispatch to recover from crashes and not blow up on large segments, because a crashed run leaves the campaign stuck in 'sending' (claimed with maxAttempts:1) and resolveSegment loads the entire recipient list per invocation with no batching.",
+      "acceptanceCriteria": [
+        "A crashed/timed-out dispatch is reclaimable (stuck-'sending' rows are detected and reset or resumed) rather than permanently stuck",
+        "Recipient resolution is batched/paginated so a large segment does not exceed function limits",
+        "Idempotent per-recipient send tracking prevents duplicates on resume",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: dispatch-scheduled-newsletters/index.ts:174 (claim->'sending'), :267 (maxAttempts:1), :44-58 (unbounded resolveSegment)."
+    },
+    {
+      "id": "WEB-BE-006",
+      "title": "Make generate-itinerary quota-consumption transactional with item creation",
+      "description": "As a subscriber, I need a failed itinerary not to burn my monthly quota, because the function inserts trip_plans then trip_plan_items separately and swallows an items-insert failure, leaving an item-less plan that still counts against quota.",
+      "acceptanceCriteria": [
+        "trip_plans + trip_plan_items are created atomically (single RPC/transaction) or the plan is rolled back / not quota-counted when items fail",
+        "A user whose items insert fails is not charged a quota unit and sees a retriable error",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: generate-itinerary/index.ts:410 (plan insert), :456 (items insert, failure swallowed)."
+    },
+    {
+      "id": "WEB-BE-007",
+      "title": "Stop play-rtdn-webhook from acking transient Google Play API failures",
+      "description": "As the platform owner, I need Play subscription state to stay consistent, because on a transient getGoogleAccessToken/fetchSubscriptionState failure the webhook logs 'fetch_error' but still returns 200, so Play never retries and the subscription is never reconciled.",
+      "acceptanceCriteria": [
+        "On a transient upstream failure the webhook returns a non-2xx so Google Play retries (while still 200-acking permanent/duplicate notifications)",
+        "A reconciliation path re-fetches state for notifications that failed transiently",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases (do not change the success/duplicate ack behavior shipped clients depend on)",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: play-rtdn-webhook/index.ts:587-598 (catch), :656-667 (logs fetch_error but returns 200)."
+    },
+    {
+      "id": "WEB-BE-008",
+      "title": "Make jobRunner safe for non-idempotent jobs (don't blind-retry the whole body)",
+      "description": "As the platform owner, I need the job runner to not double-write, because jobRunner defaults isTransient=()=>true and re-invokes the entire job fn up to maxAttempts, so any non-idempotent job (insert-heavy) double-writes on a mid-run error.",
+      "acceptanceCriteria": [
+        "jobRunner default is safe: either isTransient defaults to false (opt-in retry) or non-idempotent callers declare non-retriable / use an idempotency key",
+        "Insert-heavy jobs are audited and made idempotent or marked non-retriable",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: _shared/jobRunner.ts:68 (isTransient default true), :128-140 (re-invokes whole fn)."
+    },
+    {
+      "id": "WEB-BE-009",
+      "title": "Add timeout, retry, and signature to publish-article-webhook outbound delivery",
+      "description": "As the platform owner, I need outbound article webhooks to be reliable and verifiable, because the delivery POST has no AbortSignal, no retry, and no HMAC/shared-secret for the receiver to verify authenticity.",
+      "acceptanceCriteria": [
+        "Outbound POST uses a fetch timeout and a bounded retry with backoff on transient failures",
+        "Payload is signed (HMAC over body with a shared secret) and the signature header is documented for receivers",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: publish-article-webhook/index.ts:164-175 (bare POST, no timeout/retry/signature)."
+    },
+    {
+      "id": "WEB-BE-010",
+      "title": "Remove dead index.improved.ts duplicate endpoint implementations",
+      "description": "As a developer, I need one source of truth per function, because api-events/index.improved.ts and api-restaurants/index.improved.ts sit next to the deployed index.ts, already diverge, and invite edits to code that never ships.",
+      "acceptanceCriteria": [
+        "The unused index.improved.ts files are removed (or their improvements merged into the deployed index.ts and then the duplicate deleted)",
+        "Only index.ts entrypoints remain for api-events and api-restaurants",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: api-events/index.improved.ts, api-restaurants/index.improved.ts (Supabase deploys only index.ts)."
+    },
+    {
+      "id": "WEB-CI-001",
+      "title": "Make CI blocking: require status checks and reviews on protected branches",
+      "description": "As the platform owner, I need merges gated by CI, because the main/develop/release rulesets define only a pull_request rule with required_approving_review_count:0 and NO required_status_checks, so lint/type-check/tests/build/gitleaks never block a merge while Cloudflare auto-deploys main.",
+      "acceptanceCriteria": [
+        ".github/rulesets/{main,develop,release}.json require the validation status checks (lint, type-check, unit test, build, gitleaks) to pass before merge",
+        "At least one approving review is required on protected branches",
+        "A merge with a failing required check is blocked (verified on a scratch PR)",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. CRITICAL. Evidence: .github/rulesets/main.json, develop.json, release.json (no required_status_checks; review count 0)."
+    },
+    {
+      "id": "WEB-CI-002",
+      "title": "Run PR validation on develop, not just main",
+      "description": "As a developer, I need validation where work actually lands, because pr-checks.yml triggers only on PRs into main, but per CLAUDE.md all non-emergency work lands on develop first, so lint/type-check/unit/build never gate the develop branch.",
+      "acceptanceCriteria": [
+        "pr-checks.yml (validate job) triggers on pull_request into develop and release/* as well as main",
+        "The develop-targeted PR runs lint, type-check, unit tests, and build",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: .github/workflows/pr-checks.yml (on: pull_request: branches: [main])."
+    },
+    {
+      "id": "WEB-CI-003",
+      "title": "Make E2E blocking and triage the failing Playwright suite",
+      "description": "As the platform owner, I need E2E to actually gate merges, because the critical E2E step uses continue-on-error:true and ~28% of Playwright tests (841/2997) currently fail, so real regressions can merge.",
+      "acceptanceCriteria": [
+        "The known-failing tests are triaged: real regressions fixed, obsolete tests updated/removed, and any genuinely flaky ones quarantined into a separate non-blocking lane with tracking",
+        "A stable critical-journey E2E subset runs as a REQUIRED, non-continue-on-error check",
+        "The current pass rate and the quarantined set are documented",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: TEST_FAILURES_REPORT.md (841/2997 fail); e2e.yml continue-on-error:true."
+    },
+    {
+      "id": "WEB-CI-004",
+      "title": "Fix ci-health-report workflow-name mismatch so E2E runs are ingested",
+      "description": "As the platform owner, I need CI health to track E2E, because ci-health-report.yml keys on workflow name 'E2E Tests' while the actual workflow is 'E2E (critical suites)', so E2E runs are never ingested.",
+      "acceptanceCriteria": [
+        "ci-health-report.yml workflow_run list uses the exact current workflow names",
+        "An E2E run appears in the ingested health report after the fix",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: .github/workflows/ci-health-report.yml (workflows: ['PR Checks','E2E Tests',...]); actual name 'E2E (critical suites)'."
+    },
+    {
+      "id": "WEB-CI-005",
+      "title": "Add SAST/CodeQL scanning and gate dependency CVE audit on PRs",
+      "description": "As the platform owner, I need static security analysis in CI, because there is no CodeQL/Semgrep/Snyk/Trivy and npm audit runs only daily and non-blocking with no PR gate.",
+      "acceptanceCriteria": [
+        "A SAST workflow (CodeQL or equivalent) runs on PRs to protected branches and on a schedule",
+        "Dependency vulnerability audit runs on PRs and fails on high/critical advisories (with a documented allowlist for accepted findings)",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: no codeql/semgrep/snyk/trivy in .github/workflows; audit is daily/non-blocking."
+    },
+    {
+      "id": "WEB-CI-006",
+      "title": "Keep production source maps out of the deployed bundle",
+      "description": "As the platform owner, I need prod source maps not served publicly, because build.sourcemap='hidden' still emits .map files into dist and nothing strips them before the Cloudflare deploy, exposing readable source.",
+      "acceptanceCriteria": [
+        "The deploy pipeline removes/withholds *.map from the published dist (or uploads them only to an error-tracking service, not the public site)",
+        "Production site no longer serves .map files (verified)",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: vite.config.ts build.sourcemap 'hidden' in prod; no map-strip step in prerender/deploy."
+    },
+    {
+      "id": "WEB-CI-007",
+      "title": "Advance the strictNullChecks migration and add a strict type-check CI gate",
+      "description": "As a developer, I need the strict-TS migration to progress and hold, because tsconfig.json has strictNullChecks/noImplicitAny off and tsconfig.strict.json includes only ~10 files with no CI gate, so strictness never expands.",
+      "acceptanceCriteria": [
+        "A batch of additional already-compliant files is added to tsconfig.strict.json include",
+        "type-check:strict runs in CI (non-blocking at first is acceptable, but it must run and report) and the compliant-file count is tracked",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: tsconfig.json (strictNullChecks:false); tsconfig.strict.json includes ~10 files; no CI gate."
+    },
+    {
+      "id": "WEB-OPS-001",
+      "title": "Remove large committed binaries and generated logs from the repo",
+      "description": "As a developer, I need a lean repo, because ~15MB+ of binaries/generated logs are tracked at root (DMI-Logo.psd 5MB, dinner-menu PDF 4.9MB, test-failures.json 1.5MB, screenshot_logs.txt 858KB, TEST_FAILURES_REPORT.md), bloating clones and CI.",
+      "acceptanceCriteria": [
+        "Large binaries/generated artifacts are removed from tracking (moved to release assets / storage / git-lfs as appropriate) and added to .gitignore",
+        "Generated test-output files are no longer committed",
+        "A note documents where the removed assets now live",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: DMI-Logo.psd (5MB), 2024_Dinner Menu...pdf (4.9MB), test-failures.json (1.5MB), screenshot_logs.txt (858KB)."
+    },
+    {
+      "id": "WEB-OPS-002",
+      "title": "Clean up stray root SQL and debug scripts",
+      "description": "As a developer, I need the repo root free of one-off scripts, because 34 root *.sql files and several debug-*.js files clutter the root and mislead where schema/scripts live (coordinate schema-affecting SQL with WEB-DB-006).",
+      "acceptanceCriteria": [
+        "Debug-*.js and one-off scripts are moved into scripts/ (or deleted if obsolete)",
+        "Root SQL files are removed after their schema changes are reconciled into migrations (WEB-DB-006) or confirmed obsolete",
+        "Repo root no longer contains ad-hoc *.sql / debug-*.js files",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: 34 root *.sql, debug-catchdesmoines.js, debug-browser.js, etc."
+    },
+    {
+      "id": "WEB-OPS-003",
+      "title": "Consolidate root Markdown documentation into docs/",
+      "description": "As a developer, I need discoverable docs, because there are 125 Markdown files at the repo root including near-duplicates (restaurant-scraper-implementation.md and '... (1).md').",
+      "acceptanceCriteria": [
+        "Root Markdown docs are organized under docs/ with an index; obvious duplicates are removed",
+        "The canonical top-level docs referenced by CLAUDE.md (README, DEVELOPER_GUIDE, DEPLOYMENT, etc.) remain resolvable (kept or redirected)",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: 125 root .md files incl. 'restaurant-scraper-implementation (1).md'."
+    },
+    {
+      "id": "WEB-OPS-004",
+      "title": "package.json hygiene: fix dependency placement and drop duplicate tooling",
+      "description": "As a developer, I need clean dependencies, because type-only packages and a build-time Babel plugin sit in dependencies, and two overlapping tool stacks are installed (ts-node + tsx; Puppeteer + Playwright).",
+      "acceptanceCriteria": [
+        "@types/dompurify, @types/leaflet, and babel-plugin-react-remove-properties are moved to devDependencies",
+        "Unused duplicate tooling is removed (ts-node if scripts use tsx; consolidate Puppeteer/Playwright unless both are genuinely required — document the reason if kept)",
+        "npm install and all package scripts still work",
+        "Backward-compat per CLAUDE.md: no edge-function request/response shape changes, no tightened validation/rate limits, DB changes additive-only across releases",
+        "npm run validate passes with no new errors"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: package.json deps include @types/* (:119-120) + babel-plugin-react-remove-properties (:? ); devDeps have ts-node+tsx and Puppeteer+Playwright."
     }
   ]
 }
