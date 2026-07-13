@@ -5295,6 +5295,114 @@
       "priority": 3,
       "passes": true,
       "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: package.json deps include @types/* (:119-120) + babel-plugin-react-remove-properties (:? ); devDeps have ts-node+tsx and Puppeteer+Playwright. | DONE 2026-07-11: moved @types/dompurify, @types/leaflet, babel-plugin-react-remove-properties to devDependencies; removed unused ts-node (scripts use tsx); kept puppeteer (prerender/scraper) + playwright (E2E) — both genuinely used; npm install + lockfile synced."
+    },
+    {
+      "id": "WEB-QA-001",
+      "title": "Fix /advertise page hard crash (React error #130 — undefined component)",
+      "description": "As the platform owner, I need the Advertise With Us page to load, because it currently throws into the app error boundary ('This page encountered an error') on every visit, blocking the primary self-serve advertiser conversion path and losing ad revenue.",
+      "acceptanceCriteria": [
+        "Root-cause the React #130 (Element type is invalid: got undefined) on /advertise — almost certainly a broken/renamed import or a missing default/named export in the Advertise route tree (or a lazy() import resolving to undefined); the route/title resolve correctly so it is the component, not routing",
+        "/advertise renders its full content with no error boundary and no console errors on load; 'Try Again' path also renders (the crash is currently deterministic, not transient)",
+        "Add a Playwright smoke assertion that /advertise (and the linked Business Partnership route) mounts without hitting the error boundary, so this regression is caught in CI",
+        "Audit sibling monetization/B2B routes reachable from the footer (Business Partnership, etc.) for the same undefined-import pattern",
+        "npm run validate passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "FOUND 2026-07-13 (5-PERSONA QA PASS — production live, desmoinesinsider.com; persona: Diana / local business owner). SEVERITY: HIGH — revenue-blocking. Evidence: navigating to /advertise renders the generic ErrorBoundary fallback ('This page encountered an error / Something went wrong loading this page'); console shows 'Minified React error #130 ...?invariant=130&args[]=undefined&args[]=' with stack in vendor-react-*.js (Element type is invalid: expected string/class/function but got undefined). Clicking 'Try Again' does not recover it — deterministic. Page <title> is correct ('Advertise with Des Moines Insider - Reach Local Audiences') so the route exists; the failure is a component/import resolving to undefined."
+    },
+    {
+      "id": "WEB-QA-002",
+      "title": "Fix event listing→detail mismatch (listed events 404 as 'Event Not Found')",
+      "description": "As a visitor, I need every event that appears in a listing to open a working detail page, because at least one event surfaced by filters ('Ringling Bros...') links to an 'Event Not Found' page, turning the primary events happy-path into a dead end.",
+      "acceptanceCriteria": [
+        "Reproduce: /events?category=Family surfaces the Ringling Bros. card, whose detail URL (/events/ringling-bros-and-barnum-bailey-presents-the-greatest-show-on-earth-des-moines-2026-10-01) renders 'Event Not Found'",
+        "Determine whether the listing query and the detail query disagree (slug generation mismatch, detail lookup filtering on a stricter condition e.g. status/visibility/date the list does not apply, or a stale/orphaned row) and fix so a listed event always resolves",
+        "Add a data-integrity guard: an event that cannot resolve a detail page must not be rendered as a clickable card (or the detail lookup must use the same predicate as the list)",
+        "Backward-compat per CLAUDE.md: additive-only DB changes; no edge-function request/response shape changes; no tightened validation that could break shipped iOS/Android event fetches",
+        "Add a test that asserts every card in a listing response resolves to a 200 detail render for a representative sample",
+        "npm run validate passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "FOUND 2026-07-13 (5-PERSONA QA PASS — production live; persona: Marcus / weekend dad). SEVERITY: HIGH — breaks the core events flow and torches trust. Evidence: Family filter returns 1 result; clicking it navigates to the slug above and shows the 'Event Not Found — This event may have ended or been removed' state. Likely related to WEB-QA-003 (events querying is unhealthy). Note the surfaced event is also dated 2026-10-01 (~3 months out) which is a separate content-freshness concern, not the bug here."
+    },
+    {
+      "id": "WEB-QA-003",
+      "title": "Fix homepage events + active-ad fetch errors on load (useEvents / useActiveAds)",
+      "description": "As a visitor, I need the homepage to load real event and ad data without errors, because on every homepage load the console logs database query failures ('useEvents: Database query error', 'Error fetching events', 'useActiveAds:fetchActiveAd Error fetching active ad'), which correlates with a suspiciously thin surface ('2 Events Today' against a marketed '500+ events weekly').",
+      "acceptanceCriteria": [
+        "Reproduce and capture the actual error payload behind the logged 'Object' for useEvents and useActiveAds (log the message/code/details, not just the object, wrapped in import.meta.env.DEV per CLAUDE.md)",
+        "Root-cause the homepage events query failure — note the featured restaurants/attractions/playgrounds REST calls succeed (200) while the events request does not even appear as a completed network request, suggesting the query errors before/at fetch (malformed select, RLS denial, or bad column/filter)",
+        "Homepage loads with zero error-level console messages from useEvents and useActiveAds; events widgets populate; the 'Events Today' / 'New This Week' counters reflect real data",
+        "useActiveAds fetch failure must degrade gracefully (it currently still shows a fallback house/partner ad) but should stop logging an error on the happy path",
+        "Reconcile the '500+ events weekly' homepage claim with actual inventory once the query is fixed (adjust copy or ingestion), so the trust stats are defensible",
+        "Backward-compat per CLAUDE.md: additive-only DB changes; no tightening of get_active_ads / events shapes that shipped mobile binaries read",
+        "npm run validate passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "FOUND 2026-07-13 (5-PERSONA QA PASS — production live; personas: all, first seen by Marcus/Gary). SEVERITY: HIGH — core content path is erroring. Evidence: on https://desmoinesinsider.com load, console errors from vendor-three-*.js: '[useEvents] Database query error: Object', 'Error fetching events: Object', '[useActiveAds:fetchActiveAd] Error fetching active ad Object' (ad error recurs on /events too). Network capture shows featured restaurants/attractions/playgrounds at 200 but NO completed events REST request. Homepage shows only '2 Events Today' vs the '500+ events weekly' trust claim."
+    },
+    {
+      "id": "WEB-QA-004",
+      "title": "Restaurants list: blank result count + 'Most Popular' sort surfaces only 'Opening Soon' venues",
+      "description": "As a visitor browsing restaurants, I need an accurate result count and a sort that leads with places I can actually visit, because the results header renders a blank count ('___ found') and the default 'Most Popular' sort puts three 'Opening Soon' venues at the top.",
+      "acceptanceCriteria": [
+        "The restaurants results header shows the real count (e.g. 'N found') — the number currently renders blank while the equivalent events page correctly shows 'N results'; align the two",
+        "Default 'Most Popular' sort deprioritizes or clearly separates 'Opening Soon' (not-yet-open) venues so currently-operating restaurants lead, OR the sort semantics are made explicit; a first-time visitor should see places they can eat at now",
+        "Per-card date chips (e.g. '3/30/2026', '4/28/2026') are labeled so their meaning (opening date vs added date) is unambiguous, or removed if not user-facing",
+        "npm run validate passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FOUND 2026-07-13 (5-PERSONA QA PASS — production live; personas: Priya / newcomer, Zoe). SEVERITY: MED. Evidence: /restaurants results bar reads 'Most Popular ▾   found' with no number rendered before 'found'; top 3 cards (Le's Chinese Bar-B-Que, Marv's Mainstreet Dive, Bonchon) all carry an 'Opening Soon' badge under the 'Most Popular' sort; cards show unlabeled dates 3/30/2026 & 4/28/2026. Contrast: /events correctly renders '1 results' (though see WEB-QA-006 for the plural bug)."
+    },
+    {
+      "id": "WEB-QA-005",
+      "title": "Resolve AI-planning expectation gap (marketed as free, hard-paywalled)",
+      "description": "As a first-time visitor, I need the homepage's prominent AI promises to match what I can actually do, because 'AI Plan My Night', 'Let AI build your itinerary', and '24/7 AI Assistant' are front-and-center free-looking CTAs, but clicking through to the Trip Planner hits an immediate Insider-only paywall ('Upgrade to Unlock') with no free taste.",
+      "acceptanceCriteria": [
+        "Decide and implement the intended funnel: either (a) give anonymous/free users a limited free itinerary (e.g. 1 trip) before the paywall, or (b) label the homepage AI CTAs as a premium feature up front so the paywall is not a surprise",
+        "The gold 'AI Plan My Night' homepage CTA and the '24/7 AI Assistant' stat set accurate expectations for a logged-out visitor",
+        "Preserve the existing good AI-accuracy disclaimer on the Trip Planner ('AI output may be inaccurate... confirm hours/prices... nothing here is a paid endorsement unless labeled')",
+        "Backward-compat per CLAUDE.md: no tightening of generate-itinerary quota/shape below what shipped iOS/Android binaries rely on (see WEB-SEC-002 tier quotas)",
+        "npm run validate passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FOUND 2026-07-13 (5-PERSONA QA PASS — production live; personas: Priya / newcomer, Gary / skeptic). SEVERITY: MED — conversion friction / expectation mismatch, not a defect. Evidence: homepage headlines 'First AI-Powered Conversational City Guide', gold CTA 'AI Plan My Night / Let AI build your itinerary', stat '24/7 AI Assistant'; /trip-planner immediately shows an Insider-gated card 'AI Trip Planner — Insider members get 5 trips/month, VIP unlimited' with 'Upgrade to Unlock' and no free path. Product decision, flagged for triage."
+    },
+    {
+      "id": "WEB-QA-006",
+      "title": "UI polish bundle: plural copy, missing event images, ad-badge overlap, light-mode nav/hero seam",
+      "description": "As a visitor, I need consistent visual polish, because several small defects across pages read as unfinished: an incorrect plural, events with no image, an ad label overlapping ad copy, and a hard color seam in light mode.",
+      "acceptanceCriteria": [
+        "Result-count copy is grammatically correct for singular (currently '1 events in Des Moines' — should be '1 event'); use a pluralization helper across list pages",
+        "Event cards without an image show a designed fallback rather than a bare placeholder calendar icon (seen on the Ringling Bros. Family card), or the ingestion backfills an image",
+        "The 'AD' badge on banner ad slots no longer overlaps the ad's own headline text (seen on the Marriott Bonvoy unit: 'AD' covers the leading 'Di' of 'Discover')",
+        "Light theme is visually consistent — the nav bar flips to light while the hero immediately below stays dark, creating a hard white/dark seam under the nav; confirm this is intentional (hero background art) or fix the seam",
+        "npm run validate passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FOUND 2026-07-13 (5-PERSONA QA PASS — production live; personas: Marcus, Zoe). SEVERITY: LOW (cosmetic/polish). Evidence: /events?category=Family header 'Family Events / 1 events in Des Moines'; that event card shows a placeholder calendar glyph instead of an image; banner ad slot renders 'AD' badge overlapping the ad headline ('...scover your path less traveled'); selecting Light in the theme dropdown turns the top nav white while the hero section remains dark navy."
+    },
+    {
+      "id": "WEB-QA-007",
+      "title": "QA coverage follow-up: verify mobile-device rendering and logged-in / uncovered flows",
+      "description": "As the platform owner, I need the surfaces the 5-persona pass could not reach to be verified, because that walkthrough ran at desktop viewport width and logged-out, leaving true mobile rendering and authenticated features unconfirmed.",
+      "acceptanceCriteria": [
+        "Verify true mobile rendering (real device or DevTools device emulation at iPhone/Pixel widths) for the homepage, events list/detail, restaurants, pricing, and auth — the persona pass could not force a sub-400px viewport (browser reported ~1544px), so responsive layout, the mobile nav/hamburger, and touch targets are unverified",
+        "Verify logged-in flows: Free-tier limits (3 favorites, 0 alerts/saved searches per subscription config), saved searches, review submission + AI auto-moderation (WEB-AUTO-009), and social sharing",
+        "Verify B2B/contact surfaces not reached: contact form submission, Business Partnership page, and reviews moderation UI",
+        "Verify SEO landing pages and secondary sections not reached: /events/today, /restaurants/open-now and similar, Attractions/Explore, and Articles/blog",
+        "File any new defects found as their own WEB-QA-* stories with severity and evidence",
+        "This is a verification/testing story — no product code change required unless a defect is found"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FOUND 2026-07-13 (5-PERSONA QA PASS — production live). SEVERITY: N/A (coverage gap). The persona pass (Marcus/mobile dad, Priya/newcomer, Gary/skeptic, Zoe/power user, Diana/business owner) covered homepage, events list+detail+filters, trip-planner, restaurants, pricing, auth, and theme toggle, but could not verify: true mobile viewport rendering (window stayed desktop-width), any authenticated feature (no account created — signup is out of scope for automated QA), contact/reviews submission, Stripe checkout, and SEO landing/attractions/articles pages."
     }
   ]
 }
