@@ -13,7 +13,7 @@ import InteractiveDateSelector from "@/components/InteractiveDateSelector";
 import { useAnalytics } from "@/hooks/useAnalytics";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchRestaurantFilterFacets } from "@/hooks/useRestaurants";
+import { getRestaurantFilterOptions } from "@/hooks/useRestaurants";
 
 interface SearchSectionProps {
   onSearch: (
@@ -68,7 +68,7 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
       } else if (category === "Restaurants") {
         // Distinct cuisines from the cached facets RPC instead of fetching the
         // whole cuisine column to dedupe client-side (WEB-PERF-002).
-        const facets = await fetchRestaurantFilterFacets();
+        const facets = await getRestaurantFilterOptions();
         return facets.cuisines.map((c) => c.cuisine).sort();
       }
       return [];

@@ -5,7 +5,7 @@ import { render, act } from "@testing-library/react";
  * WEB-PERF-005 — render-count proof for the AuthContext split.
  *
  * A TOKEN_REFRESHED tick changes only `session`/`user`. Components that read the
- * split status context (useAuthStatus — what Header/BottomNav now use) must NOT
+ * split status context (useAuthFlags — what Header/BottomNav now use) must NOT
  * re-render on it, while full-state consumers (useAuthState) still do.
  */
 
@@ -42,7 +42,7 @@ vi.mock("@/integrations/supabase/client", () => ({
 
 import {
   AuthProvider,
-  useAuthStatus,
+  useAuthFlags,
   useAuthState,
 } from "@/contexts/AuthContext";
 
@@ -51,7 +51,7 @@ let stateRenders = 0;
 
 function StatusConsumer() {
   statusRenders++;
-  useAuthStatus();
+  useAuthFlags();
   return null;
 }
 

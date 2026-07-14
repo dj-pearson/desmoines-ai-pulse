@@ -2,6 +2,6 @@
 export {
   useAuth,
   useAuthState,
-  useAuthStatus,
+  useAuthFlags,
   useAuthActions,
 } from "@/contexts/AuthContext";

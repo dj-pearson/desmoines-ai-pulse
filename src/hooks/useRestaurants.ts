@@ -422,7 +422,7 @@ async function fetchFilterOptionsFallback(): Promise<FilterOptionsResult> {
   return { cuisines, locations };
 }
 
-async function getRestaurantFilterOptions(): Promise<FilterOptionsResult> {
+export async function getRestaurantFilterOptions(): Promise<FilterOptionsResult> {
   return (await fetchFilterOptionsRpc()) ?? (await fetchFilterOptionsFallback());
 }
 
