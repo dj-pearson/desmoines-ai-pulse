@@ -11,14 +11,14 @@
  * transcript, and escalates to tier-2.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
-import { checkRateLimitPersistent, addRateLimitHeaders } from "../_shared/rateLimit.ts";
-import { runAgent } from "../_shared/agentRun.ts";
-import { createAgentTask } from "../_shared/agentTasks.ts";
-import { writeAgentAudit } from "../_shared/auditLog.ts";
-import { retrieveKb } from "../_shared/kbRetrieve.ts";
-import { getAIConfig, getAnthropicApiKey } from "../_shared/aiConfig.ts";
-import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { handleCors, getCorsHeaders, isOriginAllowed } from "../../cors.ts";
+import { checkRateLimitPersistent, addRateLimitHeaders } from "../../rateLimit.ts";
+import { runAgent } from "../../agentRun.ts";
+import { createAgentTask } from "../../agentTasks.ts";
+import { writeAgentAudit } from "../../auditLog.ts";
+import { retrieveKb } from "../../kbRetrieve.ts";
+import { getAIConfig, getAnthropicApiKey } from "../../aiConfig.ts";
+import { fetchWithTimeout } from "../../fetchWithTimeout.ts";
 
 const AGENT_KEY = "support-chat";
 const HUMAN_RE = /\b(speak|talk|connect|escalate|transfer)\b.{0,20}\b(human|person|agent|representative|rep|someone|support team)\b|\bhuman\b.{0,10}\bplease\b/i;
@@ -91,7 +91,7 @@ async function openTicket(supabase: Client, userId: string | null, history: Msg[
   return ticketId;
 }
 
-Deno.serve(async (req) => {
+export default (async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
   const origin = req.headers.get("origin") || "";

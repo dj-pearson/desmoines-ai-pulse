@@ -29,7 +29,7 @@ export function useSupportChat() {
   const call = useCallback(async (history: ChatMessage[], talkToHuman = false) => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("support-chat", {
+      const { data, error } = await supabase.functions.invoke("support/support-chat", {
         body: { messages: history.map((m) => ({ role: m.role, content: m.content })), talkToHuman },
       });
       if (error) throw error;

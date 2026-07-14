@@ -25,7 +25,7 @@ export default function Csat() {
     if (!ticketId || withScore < 1 || submitting) return;
     setSubmitting(true);
     try {
-      const { data, error } = await supabase.functions.invoke("support-csat-submit", {
+      const { data, error } = await supabase.functions.invoke("support/support-csat-submit", {
         body: { ticketId, score: withScore, comment: comment.trim() || undefined },
       });
       if (error) throw error;

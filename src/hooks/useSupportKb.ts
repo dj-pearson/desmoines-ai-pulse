@@ -35,7 +35,7 @@ export function useKbArticles() {
   return useQuery({
     queryKey: ["support-kb-articles"],
     queryFn: async (): Promise<KbArticle[]> => {
-      const { data, error } = await supabase.functions.invoke("support-kb-admin", { body: { action: "list" } });
+      const { data, error } = await supabase.functions.invoke("support/support-kb-admin", { body: { action: "list" } });
       if (error) throw error;
       return (data?.articles ?? []) as KbArticle[];
     },
@@ -48,7 +48,7 @@ export function useUpsertKbArticle() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (article: KbUpsert) => {
-      const { data, error } = await supabase.functions.invoke("support-kb-admin", {
+      const { data, error } = await supabase.functions.invoke("support/support-kb-admin", {
         body: { action: "upsert", ...article },
       });
       if (error) throw error;
@@ -63,7 +63,7 @@ export function useDeleteKbArticle() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { data, error } = await supabase.functions.invoke("support-kb-admin", { body: { action: "delete", id } });
+      const { data, error } = await supabase.functions.invoke("support/support-kb-admin", { body: { action: "delete", id } });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       return data;
@@ -76,7 +76,7 @@ export function useDeleteKbArticle() {
 export function useKbSearch() {
   return useMutation({
     mutationFn: async (query: string): Promise<KbPassage[]> => {
-      const { data, error } = await supabase.functions.invoke("support-kb-search", { body: { query } });
+      const { data, error } = await supabase.functions.invoke("support/support-kb-search", { body: { query } });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       return (data?.passages ?? []) as KbPassage[];

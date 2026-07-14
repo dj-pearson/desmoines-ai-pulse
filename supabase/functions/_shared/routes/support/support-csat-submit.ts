@@ -10,10 +10,10 @@
  * the original context ("a resolved ticket the user hated is not resolved").
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
-import { checkRateLimitPersistent, addRateLimitHeaders } from "../_shared/rateLimit.ts";
-import { createAgentTask } from "../_shared/agentTasks.ts";
-import { writeAgentAudit } from "../_shared/auditLog.ts";
+import { handleCors, getCorsHeaders, isOriginAllowed } from "../../cors.ts";
+import { checkRateLimitPersistent, addRateLimitHeaders } from "../../rateLimit.ts";
+import { createAgentTask } from "../../agentTasks.ts";
+import { writeAgentAudit } from "../../auditLog.ts";
 
 const AGENT_KEY = "csat-agent";
 const LOW_CSAT = 2; // ≤ this re-escalates
@@ -25,7 +25,7 @@ function j(body: unknown, status: number, headers: Record<string, string>): Resp
   return new Response(JSON.stringify(body), { status, headers: { ...headers, "Content-Type": "application/json" } });
 }
 
-Deno.serve(async (req) => {
+export default (async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
   const origin = req.headers.get("origin") || "";

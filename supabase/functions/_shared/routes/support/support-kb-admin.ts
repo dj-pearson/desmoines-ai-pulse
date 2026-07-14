@@ -9,9 +9,9 @@
  * re-embed so a saved article is immediately retrievable.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { handleCors, getCorsHeaders } from "../_shared/cors.ts";
-import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
-import { embedText, toVectorLiteral } from "../_shared/embed.ts";
+import { handleCors, getCorsHeaders } from "../../cors.ts";
+import { requireAdminOrApiKey } from "../../apiKeyAuth.ts";
+import { embedText, toVectorLiteral } from "../../embed.ts";
 
 // deno-lint-ignore no-explicit-any
 type Client = any;
@@ -29,7 +29,7 @@ async function embedArticle(supabase: Client, id: string, title: string, content
   }
 }
 
-Deno.serve(async (req) => {
+export default (async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
   const corsHeaders = getCorsHeaders(req.headers.get("origin") || undefined);

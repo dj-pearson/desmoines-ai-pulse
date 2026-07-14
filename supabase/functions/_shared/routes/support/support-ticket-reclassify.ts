@@ -9,8 +9,8 @@
  * classification_source = 'human'. Also lists tickets for the console.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { handleCors, getCorsHeaders } from "../_shared/cors.ts";
-import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+import { handleCors, getCorsHeaders } from "../../cors.ts";
+import { requireAdminOrApiKey } from "../../apiKeyAuth.ts";
 
 const SLA_HOURS: Record<string, number> = { urgent: 2, high: 8, normal: 24, low: 72 };
 
@@ -21,7 +21,7 @@ function json(body: unknown, status = 200, headers: Record<string, string> = {})
   return new Response(JSON.stringify(body), { status, headers: { ...headers, "Content-Type": "application/json" } });
 }
 
-Deno.serve(async (req) => {
+export default (async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
   const corsHeaders = getCorsHeaders(req.headers.get("origin") || undefined);

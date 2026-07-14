@@ -32,7 +32,7 @@ export function useSupportTickets() {
   return useQuery({
     queryKey: ["support-tickets"],
     queryFn: async (): Promise<SupportTicket[]> => {
-      const { data, error } = await supabase.functions.invoke("support-ticket-reclassify", { body: { action: "list" } });
+      const { data, error } = await supabase.functions.invoke("support/support-ticket-reclassify", { body: { action: "list" } });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       return (data?.tickets ?? []) as SupportTicket[];
@@ -47,7 +47,7 @@ export function useReclassifyTicket() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: ReclassifyInput) => {
-      const { data, error } = await supabase.functions.invoke("support-ticket-reclassify", {
+      const { data, error } = await supabase.functions.invoke("support/support-ticket-reclassify", {
         body: { action: "reclassify", ...input },
       });
       if (error) throw error;

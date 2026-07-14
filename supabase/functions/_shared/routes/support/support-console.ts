@@ -9,12 +9,12 @@
  * add_note (internal), merge (duplicate), canned (library).
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { handleCors, getCorsHeaders } from "../_shared/cors.ts";
-import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
-import { writeAgentAudit } from "../_shared/auditLog.ts";
-import { retrieveKb } from "../_shared/kbRetrieve.ts";
-import { getAIConfig, getAnthropicApiKey } from "../_shared/aiConfig.ts";
-import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { handleCors, getCorsHeaders } from "../../cors.ts";
+import { requireAdminOrApiKey } from "../../apiKeyAuth.ts";
+import { writeAgentAudit } from "../../auditLog.ts";
+import { retrieveKb } from "../../kbRetrieve.ts";
+import { getAIConfig, getAnthropicApiKey } from "../../aiConfig.ts";
+import { fetchWithTimeout } from "../../fetchWithTimeout.ts";
 
 const AGENT_KEY = "support-console";
 
@@ -49,7 +49,7 @@ async function suggest(supabaseUrl: string, supabaseKey: string, thread: { sende
   }
 }
 
-Deno.serve(async (req) => {
+export default (async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
   const corsHeaders = getCorsHeaders(req.headers.get("origin") || undefined);

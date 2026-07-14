@@ -78,41 +78,6 @@ verify_jwt = false
 [functions.agent-runbook]
 verify_jwt = false
 
-# Support KB embed (AOS-CS-003). Cron + admin-invoked; re-embeds KB articles.
-# Auth via requireAdminOrApiKey.
-[functions.support-kb-embed]
-verify_jwt = false
-
-# Support KB admin CRUD (AOS-CS-003). Admin console writes + inline re-embed.
-# Auth via requireAdminOrApiKey.
-[functions.support-kb-admin]
-verify_jwt = false
-
-# Support KB retrieval (AOS-CS-003). Grounded top-passage retrieval with sources.
-# Auth via requireAdminOrApiKey.
-[functions.support-kb-search]
-verify_jwt = false
-
-# Ticket reclassify (AOS-CS-005). Admin console list + human correction/feedback.
-# Auth via requireAdminOrApiKey.
-[functions.support-ticket-reclassify]
-verify_jwt = false
-
-# In-app support chat (AOS-CS-006). Public; reuses discover-chat pattern (CORS +
-# rate limit + optional bearer auth). In-function auth; core support for all tiers.
-[functions.support-chat]
-verify_jwt = false
-
-# CSAT submission (AOS-CS-007). Public one-click rating link; rate-limited.
-# Records score + re-escalates low CSAT.
-[functions.support-csat-submit]
-verify_jwt = false
-
-# Human ticket console (AOS-CS-008). Admin tier-2/3 workspace backend.
-# Auth via requireAdminOrApiKey.
-[functions.support-console]
-verify_jwt = false
-
 # CRM console (AOS-PROSPECT-002). Admin/sales pipeline CRUD. Auth via requireAdminOrApiKey.
 [functions.crm-console]
 verify_jwt = false
@@ -152,4 +117,12 @@ verify_jwt = false
 # /functions/v1/maintenance/<name>. Handlers self-authenticate or are the
 # existing public telemetry endpoints; gateway JWT check stays off.
 [functions.maintenance]
+verify_jwt = false
+
+# Consolidated support / knowledge-base dispatcher — hosts support-chat,
+# support-console, support-csat-submit, support-kb-admin, support-kb-embed,
+# support-kb-search and support-ticket-reclassify, routed by name at
+# /functions/v1/support/<name>. Each handler self-authenticates
+# (requireAdminOrApiKey / getUser); gateway JWT check stays off.
+[functions.support]
 verify_jwt = false

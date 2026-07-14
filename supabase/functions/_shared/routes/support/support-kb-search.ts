@@ -9,10 +9,10 @@
  * (AOS-CS-002) via the shared retrieveKb helper. Cost attributed to support-kb.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { handleCors, getCorsHeaders } from "../_shared/cors.ts";
-import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
-import { runAgent } from "../_shared/agentRun.ts";
-import { retrieveKb } from "../_shared/kbRetrieve.ts";
+import { handleCors, getCorsHeaders } from "../../cors.ts";
+import { requireAdminOrApiKey } from "../../apiKeyAuth.ts";
+import { runAgent } from "../../agentRun.ts";
+import { retrieveKb } from "../../kbRetrieve.ts";
 
 const AGENT_KEY = "support-kb";
 
@@ -23,7 +23,7 @@ function json(body: unknown, status = 200, headers: Record<string, string> = {})
   return new Response(JSON.stringify(body), { status, headers: { ...headers, "Content-Type": "application/json" } });
 }
 
-Deno.serve(async (req) => {
+export default (async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
   const corsHeaders = getCorsHeaders(req.headers.get("origin") || undefined);

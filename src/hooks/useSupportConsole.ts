@@ -33,7 +33,7 @@ export interface CannedResponse {
 }
 
 async function invoke<T>(body: Record<string, unknown>): Promise<T> {
-  const { data, error } = await supabase.functions.invoke("support-console", { body });
+  const { data, error } = await supabase.functions.invoke("support/support-console", { body });
   if (error) throw error;
   if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
   return data as T;
