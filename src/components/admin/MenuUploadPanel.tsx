@@ -123,7 +123,7 @@ export function MenuUploadPanel({ restaurants }: MenuUploadPanelProps) {
     setSections([]);
     try {
       const ext = file.name.split(".").pop()?.toLowerCase() as string;
-      const { data, error } = await supabase.functions.invoke("parse-menu-upload", {
+      const { data, error } = await supabase.functions.invoke("images/parse-menu-upload", {
         body: {
           restaurant_id: restaurantId,
           file_base64: fileBase64,
@@ -153,7 +153,7 @@ export function MenuUploadPanel({ restaurants }: MenuUploadPanelProps) {
     setSaving(true);
     try {
       const ext = file.name.split(".").pop()?.toLowerCase() as string;
-      const { data, error } = await supabase.functions.invoke("parse-menu-upload", {
+      const { data, error } = await supabase.functions.invoke("images/parse-menu-upload", {
         body: {
           restaurant_id: restaurantId,
           file_base64: fileBase64,

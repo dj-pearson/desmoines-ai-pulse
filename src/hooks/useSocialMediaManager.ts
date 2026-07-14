@@ -100,7 +100,7 @@ export function useSocialMediaManager() {
       setGenerating(true);
       try {
         logger.info('generatePost', 'Generating post', { data });
-        const { data: responseData, error } = await supabase.functions.invoke('social-media-manager', {
+        const { data: responseData, error } = await supabase.functions.invoke('social/social-media-manager', {
           body: {
             action: 'generate',
             contentType: data.contentType,
@@ -132,7 +132,7 @@ export function useSocialMediaManager() {
     let success = false;
     await preserveScrollPosition(async () => {
       try {
-        const { data: _data, error } = await supabase.functions.invoke('social-media-manager', {
+        const { data: _data, error } = await supabase.functions.invoke('social/social-media-manager', {
           body: {
             action: 'publish',
             postId: id
@@ -263,7 +263,7 @@ export function useSocialMediaManager() {
 
   const debugContent = async () => {
     try {
-      const { data, error } = await supabase.functions.invoke('social-media-manager', {
+      const { data, error } = await supabase.functions.invoke('social/social-media-manager', {
         body: {
           action: 'debug'
         }

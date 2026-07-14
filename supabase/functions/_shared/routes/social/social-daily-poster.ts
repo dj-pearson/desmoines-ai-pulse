@@ -19,11 +19,10 @@
  * Auth: verify_jwt=false in config.toml; does its own auth via requireAdminOrApiKey
  * (cron service-role key or admin JWT). Trigger: pg_cron daily.
  */
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
-import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
-import { runJob } from "../_shared/jobRunner.ts";
+import { getCorsHeaders, handleCors } from "../../cors.ts";
+import { requireAdminOrApiKey } from "../../apiKeyAuth.ts";
+import { runJob } from "../../jobRunner.ts";
 
 const NO_REPEAT_DAYS = 30;
 
@@ -103,7 +102,7 @@ async function postViaManager(
   subjectType: string,
   targetContentId: string,
 ): Promise<{ ok: boolean; status: number }> {
-  const res = await fetch(`${supabaseUrl}/functions/v1/social-media-manager`, {
+  const res = await fetch(`${supabaseUrl}/functions/v1/social/social-media-manager`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
     body: JSON.stringify({
@@ -144,7 +143,7 @@ async function postWithRetry(
   return { ...last, attempts: 2 };
 }
 
-serve(async (req) => {
+export default (async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
   const corsHeaders = getCorsHeaders(req.headers.get("origin") || undefined);

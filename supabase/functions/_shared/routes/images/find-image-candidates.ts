@@ -15,14 +15,14 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import {
   extractAllImagesFromHtml,
   type ImageCandidate,
-} from "../_shared/imageStorage.ts";
+} from "../../imageStorage.ts";
 import {
   findExistingVenueRecord,
   getGooglePlacesPhotos,
-} from "../_shared/imageFallbacks.ts";
-import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
-import { validateURLForSSRF } from "../_shared/validation.ts";
-import { fetchTextWithSizeCap } from "../_shared/fetchGuard.ts";
+} from "../../imageFallbacks.ts";
+import { requireAdminOrApiKey } from "../../apiKeyAuth.ts";
+import { validateURLForSSRF } from "../../validation.ts";
+import { fetchTextWithSizeCap } from "../../fetchGuard.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -98,7 +98,7 @@ async function candidatesFromPage(pageUrl: string): Promise<ImageCandidate[]> {
   }
 }
 
-Deno.serve(async (req) => {
+export default (async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const authError = await requireAdminOrApiKey(req, corsHeaders);

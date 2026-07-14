@@ -27,7 +27,7 @@ async function submitUrlsToGoogleIndexing(
     throw new Error('Authentication required');
   }
 
-  const { data, error } = await supabase.functions.invoke('google-indexing-api', {
+  const { data, error } = await supabase.functions.invoke('gsc/google-indexing-api', {
     body: { urls, type },
   });
 

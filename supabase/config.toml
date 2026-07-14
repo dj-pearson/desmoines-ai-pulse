@@ -34,11 +34,6 @@ verify_jwt = false
 [functions.image-transform]
 verify_jwt = false
 
-# Daily social auto-posting orchestrator (WEB-AUTO-012). Admin/internal tooling:
-# does its own auth via requireAdminOrApiKey (cron service-role key or admin JWT).
-[functions.social-daily-poster]
-verify_jwt = false
-
 # Dynamic OG-image cards for social shares (WEB-FEAT-008). Public: crawlers hit it
 # with no auth, so verify_jwt=false (like image-transform). Rate-limited in-fn.
 [functions.og-image]
@@ -125,4 +120,21 @@ verify_jwt = false
 # /functions/v1/support/<name>. Each handler self-authenticates
 # (requireAdminOrApiKey / getUser); gateway JWT check stays off.
 [functions.support]
+verify_jwt = false
+
+# Consolidated admin image-management dispatcher (apply-image,
+# backfill-images, find-image-candidates, parse-menu-upload) at
+# /functions/v1/images/<name>. image-transform stays standalone (public proxy).
+[functions.images]
+verify_jwt = false
+
+# Consolidated Google Search Console / indexing dispatcher
+# (gsc-fetch-properties, gsc-sync-data, google-indexing-api) at
+# /functions/v1/gsc/<name>. gsc-oauth stays standalone (OAuth redirect URI).
+[functions.gsc]
+verify_jwt = false
+
+# Consolidated social-posting dispatcher (social-daily-poster,
+# social-media-manager, manage-social-account) at /functions/v1/social/<name>.
+[functions.social]
 verify_jwt = false

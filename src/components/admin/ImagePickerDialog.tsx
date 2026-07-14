@@ -88,7 +88,7 @@ export default function ImagePickerDialog({
       setRecord(null);
       try {
         const { data, error } = await supabase.functions.invoke(
-          "find-image-candidates",
+          "images/find-image-candidates",
           { body: { category, id: recordId } },
         );
         if (cancelled) return;
@@ -114,7 +114,7 @@ export default function ImagePickerDialog({
   const apply = async (url: string) => {
     setApplying(true);
     try {
-      const { data, error } = await supabase.functions.invoke("apply-image", {
+      const { data, error } = await supabase.functions.invoke("images/apply-image", {
         body: { category, id: recordId, imageUrl: url },
       });
       if (error) throw error;

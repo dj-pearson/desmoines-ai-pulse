@@ -121,7 +121,7 @@ export default (async (req) => {
 
       // ---- Stage 3: image backfill (delegate to backfill-images) ----
       try {
-        const res = await fetch(`${url}/functions/v1/backfill-images`, {
+        const res = await fetch(`${url}/functions/v1/images/backfill-images`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${serviceKey}` },
           body: JSON.stringify({ contentType: table, limit: BATCH }),

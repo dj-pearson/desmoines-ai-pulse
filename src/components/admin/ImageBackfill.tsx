@@ -142,7 +142,7 @@ export default function ImageBackfill() {
 
   const runBatch = async (offset: number): Promise<BatchResult | null> => {
     try {
-      const { data, error } = await supabase.functions.invoke('backfill-images', {
+      const { data, error } = await supabase.functions.invoke('images/backfill-images', {
         body: {
           category,
           offset,

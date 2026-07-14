@@ -174,7 +174,7 @@ export default function SocialAccountsManager() {
     try {
       const { data, error } = await supabase.functions.invoke<{
         accounts: SocialAccount[];
-      }>("manage-social-account", { body: { action: "list" } });
+      }>("social/manage-social-account", { body: { action: "list" } });
       if (error) throw error;
       setAccounts(data?.accounts ?? []);
     } catch (err) {
@@ -206,7 +206,7 @@ export default function SocialAccountsManager() {
           return;
         }
         const { error } = await supabase.functions.invoke(
-          "manage-social-account",
+          "social/manage-social-account",
           {
             body: {
               action: "create",
@@ -225,7 +225,7 @@ export default function SocialAccountsManager() {
         toast.success(`Added ${formPlatform} account ${formHandle}`);
       } else if (dialog.mode === "rotate" && dialog.targetId) {
         const { error } = await supabase.functions.invoke(
-          "manage-social-account",
+          "social/manage-social-account",
           {
             body: {
               action: "rotate",
@@ -261,7 +261,7 @@ export default function SocialAccountsManager() {
       const { data, error } = await supabase.functions.invoke<{
         ok: boolean;
         error?: string;
-      }>("manage-social-account", {
+      }>("social/manage-social-account", {
         body: { action: "test", id: account.id },
       });
       if (error) throw error;
@@ -286,7 +286,7 @@ export default function SocialAccountsManager() {
     setBusyId(account.id);
     try {
       const { error } = await supabase.functions.invoke(
-        "manage-social-account",
+        "social/manage-social-account",
         { body: { action: "delete", id: account.id } },
       );
       if (error) throw error;

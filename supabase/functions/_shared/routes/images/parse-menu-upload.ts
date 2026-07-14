@@ -5,10 +5,9 @@
  * Alternative measures: Service role key for DB writes, Anthropic API key kept server-side.
  * Risk level: LOW (admin-only feature, file size limited to 10 MB)
  */
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { fetchWithTimeout } from "../../fetchWithTimeout.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { getAIConfig, getAnthropicApiKey } from "../_shared/aiConfig.ts";
+import { getAIConfig, getAnthropicApiKey } from "../../aiConfig.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -175,7 +174,7 @@ async function extractMenuFromFile(
   return null;
 }
 
-serve(async (req) => {
+export default (async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }

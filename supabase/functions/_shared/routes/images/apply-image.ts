@@ -1,8 +1,8 @@
 /// <reference types="https://esm.sh/@supabase/functions-js/src/edge-runtime.d.ts" />
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { fetchAndStoreImage } from "../_shared/imageStorage.ts";
-import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+import { fetchAndStoreImage } from "../../imageStorage.ts";
+import { requireAdminOrApiKey } from "../../apiKeyAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -19,7 +19,7 @@ interface ApplyImageRequest {
   imageUrl: string;
 }
 
-Deno.serve(async (req) => {
+export default (async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const authError = await requireAdminOrApiKey(req, corsHeaders);

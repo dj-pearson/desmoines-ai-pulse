@@ -11,12 +11,10 @@
  *
  * SECURITY: verify_jwt = true (requires authenticated admin user)
  */
-
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { getCorsHeaders, handleCors, isOriginAllowed } from "../_shared/cors.ts";
-import { checkRateLimit } from "../_shared/rateLimit.ts";
-import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { getCorsHeaders, handleCors, isOriginAllowed } from "../../cors.ts";
+import { checkRateLimit } from "../../rateLimit.ts";
+import { fetchWithTimeout } from "../../fetchWithTimeout.ts";
 
 const INDEXING_API_ENDPOINT = "https://indexing.googleapis.com/v3/urlNotifications:publish";
 const BATCH_ENDPOINT = "https://indexing.googleapis.com/batch";
@@ -175,7 +173,7 @@ async function submitUrl(
   }
 }
 
-serve(async (req) => {
+export default (async (req) => {
   // Handle CORS preflight
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;

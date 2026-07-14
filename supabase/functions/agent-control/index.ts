@@ -27,14 +27,14 @@ function json(body: unknown, status = 200, headers: Record<string, string> = {})
 
 // agent_key -> { fn: edge function name, body: default invocation body }
 const RUN_MAP: Record<string, { fn: string; body: Record<string, unknown> }> = {
-  "backfill-images": { fn: "backfill-images", body: { category: "events", batchSize: 10 } },
+  "backfill-images": { fn: "images/backfill-images", body: { category: "events", batchSize: 10 } },
   "data-quality-heal": { fn: "maintenance/data-quality-heal", body: {} },
   "dedupe-content": { fn: "ingest/dedupe-content", body: {} },
   "moderate-content": { fn: "moderate-content", body: { mode: "sweep" } },
   "validate-source-urls": { fn: "ingest/validate-source-urls", body: {} },
   "ai-article-pipeline": { fn: "ai-article-pipeline", body: {} },
   "weekly-digest": { fn: "notifications/assemble-weekly-digest", body: {} },
-  "social-media-manager": { fn: "social-daily-poster", body: {} },
+  "social-media-manager": { fn: "social/social-daily-poster", body: {} },
   "sitemap-refresh": { fn: "maintenance/regenerate-sitemaps", body: {} },
   "job-health-watchdog": { fn: "maintenance/job-health-watchdog", body: {} },
   "escalation-router": { fn: "agent-escalation-router", body: {} },

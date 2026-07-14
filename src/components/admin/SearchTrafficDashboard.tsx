@@ -210,7 +210,7 @@ export function SearchTrafficDashboard() {
         toast.info("Fetching your Search Console properties…");
         const { data: session } = await supabase.auth.getSession();
         const propRes = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/gsc-fetch-properties`,
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/gsc/gsc-fetch-properties`,
           {
             method: "POST",
             headers: {
@@ -246,7 +246,7 @@ export function SearchTrafficDashboard() {
       let totalPages = 0;
 
       for (const propertyId of propertiesToSync) {
-        const { data, error } = await supabase.functions.invoke("gsc-sync-data", {
+        const { data, error } = await supabase.functions.invoke("gsc/gsc-sync-data", {
           body: { propertyId, dateRange: 28 },
         });
 
@@ -365,7 +365,7 @@ export function SearchTrafficDashboard() {
       }
 
       const propRes = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/gsc-fetch-properties`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/gsc/gsc-fetch-properties`,
         {
           method: "POST",
           headers: {

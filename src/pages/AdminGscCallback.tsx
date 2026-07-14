@@ -65,7 +65,7 @@ export default function AdminGscCallback() {
       let count = 0;
       try {
         const propRes = await fetch(
-          `${supabaseUrl}/functions/v1/gsc-fetch-properties`,
+          `${supabaseUrl}/functions/v1/gsc/gsc-fetch-properties`,
           {
             method: "POST",
             headers: {

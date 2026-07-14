@@ -16,15 +16,13 @@
  *
  * Story: ADMIN-SOCIAL-001
  */
-
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import {
   handleCors,
   getCorsHeaders,
   isOriginAllowed,
-} from "../_shared/cors.ts";
-import { checkRateLimit, addRateLimitHeaders } from "../_shared/rateLimit.ts";
+} from "../../cors.ts";
+import { checkRateLimit, addRateLimitHeaders } from "../../rateLimit.ts";
 
 const ADMIN_ROLES = ["admin", "root_admin"] as const;
 type Platform = "twitter" | "facebook" | "instagram" | "linkedin";
@@ -143,7 +141,7 @@ async function verifyToken(platform: Platform, token: string): Promise<void> {
   throw new Error(`Unknown platform: ${platform}`);
 }
 
-serve(async (req) => {
+export default (async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
 

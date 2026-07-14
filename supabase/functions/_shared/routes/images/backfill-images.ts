@@ -5,16 +5,16 @@ import {
   fetchAndStoreImage,
   extractImageFromHtml,
   CONTENT_TYPE_MAP,
-} from "../_shared/imageStorage.ts";
-import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
-import { validateURLForSSRF } from "../_shared/validation.ts";
-import { runAgent } from "../_shared/agentRun.ts";
+} from "../../imageStorage.ts";
+import { requireAdminOrApiKey } from "../../apiKeyAuth.ts";
+import { validateURLForSSRF } from "../../validation.ts";
+import { runAgent } from "../../agentRun.ts";
 import {
   findExistingVenueRecord,
   scrapeImageFromWebsite,
   getGooglePlacesPhoto,
   getCategoryDefaultImage,
-} from "../_shared/imageFallbacks.ts";
+} from "../../imageFallbacks.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -156,7 +156,7 @@ async function scrapeImageUrl(pageUrl: string): Promise<string | null> {
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
 
-Deno.serve(async (req) => {
+export default (async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
