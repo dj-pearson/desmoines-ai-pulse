@@ -176,7 +176,7 @@ export function useAnalytics() {
           .filter(e => allowedTypes.has(e.metric_type as string) && allowedContent.has(e.content_type as string) && isUuid(e.content_id));
 
         if (metricEvents.length > 0) {
-          await supabase.functions.invoke('log-content-metrics', {
+          await supabase.functions.invoke('maintenance/log-content-metrics', {
             body: { events: metricEvents },
           });
         }

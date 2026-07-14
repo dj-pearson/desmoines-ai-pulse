@@ -32,7 +32,7 @@ export default function AdminCleanupControls() {
   const handleCleanup = async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('cleanup-old-events', {
+      const { data, error } = await supabase.functions.invoke('maintenance/cleanup-old-events', {
         body: {
           retentionMonths,
           dryRun: isDryRun

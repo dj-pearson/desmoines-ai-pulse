@@ -8,9 +8,9 @@
  * human to notice.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
-import { requireAdminOrApiKey } from '../_shared/apiKeyAuth.ts';
-import { sendJobAlert } from '../_shared/jobRunner.ts';
+import { handleCors, getCorsHeaders } from '../../cors.ts';
+import { requireAdminOrApiKey } from '../../apiKeyAuth.ts';
+import { sendJobAlert } from '../../jobRunner.ts';
 
 // Expected max age (hours) between successful runs per job = ~2x the cadence.
 // A job missing for longer than this has effectively missed two runs.
@@ -23,7 +23,7 @@ const EXPECTED_MAX_AGE_HOURS: Record<string, number> = {
   'data-quality-heal': 48,              // nightly -> 2 days (WEB-AUTO-003)
 };
 
-Deno.serve(async (req) => {
+export default (async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
   const origin = req.headers.get('origin') || undefined;

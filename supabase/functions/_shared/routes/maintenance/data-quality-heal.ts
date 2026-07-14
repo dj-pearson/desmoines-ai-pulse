@@ -14,9 +14,9 @@
  * through the WEB-AUTO-001 jobRunner.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
-import { requireAdminOrApiKey } from '../_shared/apiKeyAuth.ts';
-import { runJob } from '../_shared/jobRunner.ts';
+import { handleCors, getCorsHeaders } from '../../cors.ts';
+import { requireAdminOrApiKey } from '../../apiKeyAuth.ts';
+import { runJob } from '../../jobRunner.ts';
 
 const TABLES = ['events', 'restaurants', 'attractions'] as const;
 const BATCH = 25;
@@ -36,7 +36,7 @@ const SEO_TYPE: Record<string, string> = {
   attractions: 'attractions',
 };
 
-Deno.serve(async (req) => {
+export default (async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
   const origin = req.headers.get('origin') || undefined;

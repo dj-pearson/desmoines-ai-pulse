@@ -97,7 +97,7 @@ function reportErrorEvent(message: string, context: ErrorContext, severity: Erro
     if (!url || !anon) return;
 
     // Fire-and-forget; never block or throw. PII is scrubbed server-side.
-    void fetch(`${url}/functions/v1/log-error`, {
+    void fetch(`${url}/functions/v1/maintenance/log-error`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', apikey: anon },
       keepalive: true,

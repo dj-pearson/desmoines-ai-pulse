@@ -1,6 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
-import { requireApiKey } from "../_shared/apiKeyAuth.ts";
+import { handleCors, getCorsHeaders, isOriginAllowed } from "../../cors.ts";
+import { requireApiKey } from "../../apiKeyAuth.ts";
 
 interface UpdateEventRequest {
   eventId: string;
@@ -25,7 +25,7 @@ function isValidTimezone(tz: string): boolean {
   return /^[A-Za-z_]+\/[A-Za-z_\/]+$/.test(tz) || /^(UTC|GMT)([+-]\d{1,2})?$/.test(tz);
 }
 
-Deno.serve(async (req) => {
+export default (async (req) => {
   // Handle CORS preflight requests
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;

@@ -17,12 +17,11 @@
  *
  * Trigger: pg_cron every 6h, or invoke manually from the admin tools.
  */
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
-import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
-import { runJob } from "../_shared/jobRunner.ts";
-import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { getCorsHeaders, handleCors } from "../../cors.ts";
+import { requireAdminOrApiKey } from "../../apiKeyAuth.ts";
+import { runJob } from "../../jobRunner.ts";
+import { fetchWithTimeout } from "../../fetchWithTimeout.ts";
 
 const BASE_URL =
   Deno.env.get("SITE_URL") || Deno.env.get("VITE_SITE_URL") || "https://desmoinesinsider.com";
@@ -283,7 +282,7 @@ async function submitToIndexingApi(urls: string[]): Promise<Record<string, unkno
   }
 }
 
-serve(async (req) => {
+export default (async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
   const corsHeaders = getCorsHeaders(req.headers.get("origin") || undefined);

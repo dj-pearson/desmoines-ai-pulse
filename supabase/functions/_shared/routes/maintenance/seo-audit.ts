@@ -4,13 +4,11 @@
 // Purpose: Comprehensive SEO audit of a given URL
 // Returns: Detailed audit results with scores and recommendations
 // ============================================================================
-
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
-import { errorResponse } from "../_shared/errorResponse.ts";
-import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
-import { validateURLForSSRFResolved } from "../_shared/validation.ts";
+import { errorResponse } from "../../errorResponse.ts";
+import { requireAdminOrApiKey } from "../../apiKeyAuth.ts";
+import { validateURLForSSRFResolved } from "../../validation.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -45,7 +43,7 @@ interface AuditResult {
   recommendations: any[];
 }
 
-serve(async (req) => {
+export default (async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });

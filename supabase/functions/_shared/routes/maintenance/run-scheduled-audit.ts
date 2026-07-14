@@ -4,12 +4,10 @@
 // Purpose: Execute scheduled SEO audits (called by cron jobs)
 // Returns: Audit results and alert status
 // ============================================================================
-
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
-import { errorResponse } from "../_shared/errorResponse.ts";
-import { requireAdminOrApiKey, timingSafeEqual } from "../_shared/apiKeyAuth.ts";
+import { errorResponse } from "../../errorResponse.ts";
+import { requireAdminOrApiKey, timingSafeEqual } from "../../apiKeyAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -17,7 +15,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-serve(async (req) => {
+export default (async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -102,7 +100,7 @@ serve(async (req) => {
       try {
         // Call seo-audit function
         const auditResponse = await fetch(
-          `${supabaseUrl}/functions/v1/seo-audit`,
+          `${supabaseUrl}/functions/v1/maintenance/seo-audit`,
           {
             method: "POST",
             headers: {

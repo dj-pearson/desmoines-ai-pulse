@@ -61,7 +61,7 @@ export function SEOManager() {
 
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("seo-audit", {
+      const { data, error } = await supabase.functions.invoke("maintenance/seo-audit", {
         body: { url: auditUrl, auditType: "full", saveResults: true },
       });
 

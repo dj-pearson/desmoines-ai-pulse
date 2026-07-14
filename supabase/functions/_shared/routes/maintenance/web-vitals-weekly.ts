@@ -9,9 +9,9 @@
  * without exposing the raw web_vitals rows.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
-import { requireAdminOrApiKey } from '../_shared/apiKeyAuth.ts';
-import { runJob, sendJobAlert } from '../_shared/jobRunner.ts';
+import { handleCors, getCorsHeaders } from '../../cors.ts';
+import { requireAdminOrApiKey } from '../../apiKeyAuth.ts';
+import { runJob, sendJobAlert } from '../../jobRunner.ts';
 
 // Core Web Vitals budgets (good thresholds). CLS is unitless; others are ms.
 const BUDGETS: Record<string, number> = {
@@ -49,7 +49,7 @@ function rollup(rows: Row[]): Record<string, number> {
   return out;
 }
 
-Deno.serve(async (req) => {
+export default (async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
   const origin = req.headers.get('origin') || undefined;

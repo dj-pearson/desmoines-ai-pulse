@@ -12,15 +12,15 @@
  * The error-triage agent clusters these into dev tasks.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { handleCors, getCorsHeaders } from "../_shared/cors.ts";
-import { checkRateLimitPersistent, addRateLimitHeaders } from "../_shared/rateLimit.ts";
-import { scrubPii, errorSignature } from "../_shared/scrubPii.ts";
+import { handleCors, getCorsHeaders } from "../../cors.ts";
+import { checkRateLimitPersistent, addRateLimitHeaders } from "../../rateLimit.ts";
+import { scrubPii, errorSignature } from "../../scrubPii.ts";
 
 function json(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...headers, "Content-Type": "application/json" } });
 }
 
-Deno.serve(async (req) => {
+export default (async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
   const corsHeaders = getCorsHeaders(req.headers.get("origin") || undefined);

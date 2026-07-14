@@ -19,9 +19,9 @@
  * authenticated non-admins that verify_jwt alone would let through).
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0'
-import { handleCors, getCorsHeaders } from '../_shared/cors.ts'
-import { requireAdminOrApiKey } from '../_shared/apiKeyAuth.ts'
-import { runJob } from '../_shared/jobRunner.ts'
+import { handleCors, getCorsHeaders } from '../../cors.ts'
+import { requireAdminOrApiKey } from '../../apiKeyAuth.ts'
+import { runJob } from '../../jobRunner.ts'
 
 const DEFAULT_HIDE_AFTER_DAYS = 30;
 const DEFAULT_DELETE_AFTER_DAYS = 180;
@@ -93,7 +93,7 @@ async function deleteEventImages(
   return { deletedFiles, errors };
 }
 
-Deno.serve(async (req) => {
+export default (async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
   const origin = req.headers.get('origin') || undefined;
