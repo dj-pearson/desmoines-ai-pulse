@@ -262,7 +262,7 @@ export default function GooglePlacesHotelTools() {
 
     try {
       const { data, error } = await supabase.functions.invoke(
-        "search-new-hotels",
+        "ingest/search-new-hotels",
         {
           body: {
             location: searchLocation,

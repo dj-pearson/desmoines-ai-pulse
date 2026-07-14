@@ -31,7 +31,7 @@ const RUN_MAP: Record<string, { fn: string; body: Record<string, unknown> }> = {
   "data-quality-heal": { fn: "maintenance/data-quality-heal", body: {} },
   "dedupe-content": { fn: "ingest/dedupe-content", body: {} },
   "moderate-content": { fn: "moderate-content", body: { mode: "sweep" } },
-  "validate-source-urls": { fn: "validate-source-urls", body: {} },
+  "validate-source-urls": { fn: "ingest/validate-source-urls", body: {} },
   "ai-article-pipeline": { fn: "ai-article-pipeline", body: {} },
   "weekly-digest": { fn: "notifications/assemble-weekly-digest", body: {} },
   "social-media-manager": { fn: "social-daily-poster", body: {} },

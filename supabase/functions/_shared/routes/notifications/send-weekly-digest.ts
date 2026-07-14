@@ -1,11 +1,9 @@
 // send-weekly-digest - Sends personalized weekly event digests to users
 // Runs weekly via pg_cron: Sunday at 8 AM
-
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { escapeHtml } from "../_shared/escapeHtml.ts";
-import { renderEmail } from "../_shared/emailLayout.ts";
-import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { escapeHtml } from "../../escapeHtml.ts";
+import { renderEmail } from "../../emailLayout.ts";
+import { fetchWithTimeout } from "../../fetchWithTimeout.ts";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -30,7 +28,7 @@ interface DigestContent {
   trending_events: any[];
 }
 
-serve(async (req) => {
+export default (async (req) => {
   try {
     // Verify authorization
     const authHeader = req.headers.get("authorization");

@@ -265,7 +265,7 @@ export default function GooglePlacesRestaurantTools() {
     try {
       // Call Supabase Edge Function for Google Places search
       const { data, error } = await supabase.functions.invoke(
-        "search-new-restaurants",
+        "ingest/search-new-restaurants",
         {
           body: {
             location: searchLocation,

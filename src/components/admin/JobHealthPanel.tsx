@@ -24,9 +24,9 @@ interface JobHealthRow {
 // Jobs that can be re-run by invoking their edge function from the admin UI.
 const RERUNNABLE: Record<string, string> = {
   "cleanup-old-events": "maintenance/cleanup-old-events",
-  "validate-source-urls": "validate-source-urls",
+  "validate-source-urls": "ingest/validate-source-urls",
   "generate-sitemaps": "generate-sitemaps",
-  "dispatch-scheduled-newsletters": "dispatch-scheduled-newsletters",
+  "dispatch-scheduled-newsletters": "notifications/dispatch-scheduled-newsletters",
   "job-health-watchdog": "maintenance/job-health-watchdog",
   "data-quality-heal": "maintenance/data-quality-heal",
   "dedupe-content": "ingest/dedupe-content",

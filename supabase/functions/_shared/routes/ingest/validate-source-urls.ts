@@ -1,9 +1,8 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { validateURLForSSRF } from '../_shared/validation.ts';
-import { runJob } from '../_shared/jobRunner.ts';
-import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
-import { getAnthropicApiKey } from '../_shared/aiConfig.ts';
+import { validateURLForSSRF } from '../../validation.ts';
+import { runJob } from '../../jobRunner.ts';
+import { fetchWithTimeout } from '../../fetchWithTimeout.ts';
+import { getAnthropicApiKey } from '../../aiConfig.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -259,7 +258,7 @@ URL:`;
   }
 }
 
-serve(async (req) => {
+export default (async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });

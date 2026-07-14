@@ -103,7 +103,7 @@ export function SEOManager() {
   const crawlSite = async (startUrl: string, maxPages: number = 50) => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("crawl-site", {
+      const { data, error } = await supabase.functions.invoke("ingest/crawl-site", {
         body: { startUrl, maxPages, maxDepth: 3, saveResults: true },
       });
 
