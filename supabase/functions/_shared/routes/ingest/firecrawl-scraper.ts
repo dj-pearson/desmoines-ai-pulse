@@ -5,18 +5,17 @@
  * Risk level: MEDIUM
  */
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
-import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { fetchWithTimeout } from "../../fetchWithTimeout.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { parseISO, format as dateFnsFormat } from "https://esm.sh/date-fns@3.6.0";
 import { fromZonedTime } from "https://esm.sh/date-fns-tz@3.2.0";
-import { scrapeUrl, scrapeUrls } from "../_shared/scraper.ts";
-import { getAIConfig, buildClaudeRequest, buildLightweightClaudeRequest, getClaudeHeaders, getAnthropicApiKey } from "../_shared/aiConfig.ts";
-import { validateURLForSSRF } from "../_shared/validation.ts";
-import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
-import { tryDomainAdapter } from "../_shared/domain-adapters/index.ts";
-import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
-import { fetchAndStoreImage, CONTENT_TYPE_MAP } from "../_shared/imageStorage.ts";
+import { scrapeUrl, scrapeUrls } from "../../scraper.ts";
+import { getAIConfig, buildClaudeRequest, buildLightweightClaudeRequest, getClaudeHeaders, getAnthropicApiKey } from "../../aiConfig.ts";
+import { validateURLForSSRF } from "../../validation.ts";
+import { checkRateLimitPersistent } from "../../rateLimit.ts";
+import { tryDomainAdapter } from "../../domain-adapters/index.ts";
+import { requireAdminOrApiKey } from "../../apiKeyAuth.ts";
+import { fetchAndStoreImage, CONTENT_TYPE_MAP } from "../../imageStorage.ts";
 
 // Marker time for events without specific times (7:31:58 PM Central)
 const NO_TIME_MARKER = "19:31:58";
@@ -431,7 +430,7 @@ FORMAT AS JSON ARRAY ONLY - no other text:
 🚨 Extract EVERY home game. Return [] ONLY if no games found. Include source_url (ticket link) for each event.`;
 }
 
-serve(async (req) => {
+export default (async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });

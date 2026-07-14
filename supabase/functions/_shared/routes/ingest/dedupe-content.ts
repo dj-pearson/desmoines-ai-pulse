@@ -16,9 +16,9 @@
  * (cron sends the service-role bearer; the admin "re-run" sends an admin JWT).
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
-import { requireAdminOrApiKey } from '../_shared/apiKeyAuth.ts';
-import { runJob } from '../_shared/jobRunner.ts';
+import { handleCors, getCorsHeaders } from '../../cors.ts';
+import { requireAdminOrApiKey } from '../../apiKeyAuth.ts';
+import { runJob } from '../../jobRunner.ts';
 
 const AUTO_MERGE_MIN = 0.9;       // name similarity to auto-merge
 const QUEUE_MIN = 0.7;            // name similarity to surface for review
@@ -36,7 +36,7 @@ interface Pair {
   b_richness: number;
 }
 
-Deno.serve(async (req) => {
+export default (async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
   const corsHeaders = getCorsHeaders(req.headers.get('origin') || undefined);

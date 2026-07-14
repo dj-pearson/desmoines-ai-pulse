@@ -262,7 +262,7 @@ export function useScraping() {
         .eq("id", jobId);
 
       // Call the Supabase edge function
-      const { data, error } = await supabase.functions.invoke("scrape-events", {
+      const { data, error } = await supabase.functions.invoke("ingest/scrape-events", {
         body: { jobId },
         headers: {
           "x-trigger-source": "admin-dashboard",

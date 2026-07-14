@@ -126,7 +126,7 @@ export default function AdminAI() {
                       onClick={async () => {
                         try {
                           const { data, error } = await supabase.functions.invoke(
-                            "restaurant-opening-scraper",
+                            "ingest/restaurant-opening-scraper",
                             { body: {} }
                           );
                           if (error) throw error;

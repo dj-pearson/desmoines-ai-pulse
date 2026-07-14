@@ -5,12 +5,11 @@
  * Risk level: MEDIUM
  */
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { scrapeUrl } from "../_shared/scraper.ts";
-import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
-import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
-import { getAnthropicApiKey } from "../_shared/aiConfig.ts";
+import { scrapeUrl } from "../../scraper.ts";
+import { requireAdminOrApiKey } from "../../apiKeyAuth.ts";
+import { fetchWithTimeout } from "../../fetchWithTimeout.ts";
+import { getAnthropicApiKey } from "../../aiConfig.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -63,7 +62,7 @@ const DEFAULT_SOURCES: ScraperSource[] = [
   }
 ];
 
-serve(async (req) => {
+export default (async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }

@@ -37,7 +37,7 @@ export default function CatchDesmoinUrlExtractor() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      const response = await fetch(`https://wtkhfqpmcegzcbngroui.supabase.co/functions/v1/extract-catchdesmoines-urls`, {
+      const response = await fetch(`https://wtkhfqpmcegzcbngroui.supabase.co/functions/v1/ingest/extract-catchdesmoines-urls`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
@@ -89,7 +89,7 @@ export default function CatchDesmoinUrlExtractor() {
         });
       }, 1000);
 
-      const response = await fetch(`https://wtkhfqpmcegzcbngroui.supabase.co/functions/v1/extract-catchdesmoines-urls`, {
+      const response = await fetch(`https://wtkhfqpmcegzcbngroui.supabase.co/functions/v1/ingest/extract-catchdesmoines-urls`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,

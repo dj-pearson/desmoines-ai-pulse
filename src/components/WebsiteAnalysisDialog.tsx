@@ -81,7 +81,7 @@ export default function WebsiteAnalysisDialog({
     try {
       log.info('analyze', 'Starting website analysis', { data: { url: scrapingJob.config.url } });
 
-      const { data, error } = await supabase.functions.invoke("scrape-events", {
+      const { data, error } = await supabase.functions.invoke("ingest/scrape-events", {
         body: {
           websiteUrl: scrapingJob.config.url,
         },
@@ -142,7 +142,7 @@ export default function WebsiteAnalysisDialog({
   const applySelector = async (field: string, selector: string) => {
     setIsUpdating(true);
     try {
-      const { data, error } = await supabase.functions.invoke("scrape-events", {
+      const { data, error } = await supabase.functions.invoke("ingest/scrape-events", {
         body: {
           jobId: scrapingJob.id,
           selectors: {
@@ -201,7 +201,7 @@ export default function WebsiteAnalysisDialog({
         category: analysisResult.analysis.suggestedSelectors.category[0],
       };
 
-      const { data, error } = await supabase.functions.invoke("scrape-events", {
+      const { data, error } = await supabase.functions.invoke("ingest/scrape-events", {
         body: {
           jobId: scrapingJob.id,
           selectors: bestSelectors,

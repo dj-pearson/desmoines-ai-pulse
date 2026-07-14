@@ -18,7 +18,7 @@ export default function FixBrokenEventUrls() {
     setResult(null);
 
     try {
-      const { data, error } = await supabase.functions.invoke('fix-broken-event-urls', {
+      const { data, error } = await supabase.functions.invoke('ingest/fix-broken-event-urls', {
         method: 'POST'
       });
 

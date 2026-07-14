@@ -4,10 +4,9 @@
  * Alternative measures: URL format validation on all extracted links, domain exclusion list prevents following restricted domains
  * Risk level: LOW
  */
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { scrapeUrl } from "../_shared/scraper.ts";
-import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+import { scrapeUrl } from "../../scraper.ts";
+import { requireAdminOrApiKey } from "../../apiKeyAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -461,7 +460,7 @@ async function processEventUrl(
   return { visitUrl, detailPageUrl: eventSourceUrl };
 }
 
-serve(async (req) => {
+export default (async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });

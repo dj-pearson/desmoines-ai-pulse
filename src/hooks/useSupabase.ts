@@ -236,7 +236,7 @@ export function useEventScraper() {
   
   return useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke('scrape-events');
+      const { data, error } = await supabase.functions.invoke('ingest/scrape-events');
       if (error) throw error;
       return data;
     },

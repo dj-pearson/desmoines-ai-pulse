@@ -12,15 +12,6 @@ verify_jwt = false
 [functions.get-sponsored-pick]
 verify_jwt = false
 
-[functions.restaurant-opening-scraper]
-verify_jwt = false
-
-[functions.firecrawl-scraper]
-verify_jwt = false
-
-[functions.ai-crawler]
-verify_jwt = false
-
 [functions.analyze-competitor]
 verify_jwt = false
 
@@ -33,9 +24,6 @@ verify_jwt = false
 [functions.publish-article-webhook]
 verify_jwt = false
 
-[functions.scrape-events]
-verify_jwt = false
-
 [functions.personalized-recommendations]
 # Accesses user-specific data; user id is derived from the JWT, never the body.
 verify_jwt = true
@@ -43,18 +31,10 @@ verify_jwt = true
 [functions.geocode-location]
 verify_jwt = false
 
-[functions.extract-catchdesmoines-urls]
-verify_jwt = false
-
 [functions.generate-seo-content]
 verify_jwt = false
 
 [functions.image-transform]
-verify_jwt = false
-
-# Weekly duplicate detection + merge (WEB-AUTO-005). Admin/internal tooling:
-# does its own auth via requireAdminOrApiKey (cron service-role key or admin JWT).
-[functions.dedupe-content]
 verify_jwt = false
 
 # Nightly stale-event lifecycle cleanup (WEB-AUTO-006). Admin/internal tooling:
@@ -168,4 +148,13 @@ verify_jwt = false
 # Proposal generator (AOS-PROSPECT-005). Admin/sales-invoked; builds a proposal
 # draft from real stats + the price list. Auth via requireAdminOrApiKey.
 [functions.generate-proposal]
+verify_jwt = false
+
+# Consolidated content-ingestion dispatcher — hosts the former scrape-events,
+# restaurant-opening-scraper, ai-crawler, firecrawl-scraper,
+# extract-catchdesmoines-urls, dedupe-content and fix-broken-event-urls
+# functions, routed by name at /functions/v1/ingest/<name>. Each handler
+# self-authenticates (requireAdminOrApiKey / getUser), so the gateway JWT
+# check stays off. See supabase/functions/_shared/routes/ingest/.
+[functions.ingest]
 verify_jwt = false

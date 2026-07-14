@@ -102,7 +102,7 @@ export default function MergeReviewPanel() {
   const runScan = async () => {
     setScanning(true);
     try {
-      const { error: invErr } = await supabase.functions.invoke("dedupe-content", {
+      const { error: invErr } = await supabase.functions.invoke("ingest/dedupe-content", {
         body: { manual: true },
       });
       if (invErr) throw invErr;

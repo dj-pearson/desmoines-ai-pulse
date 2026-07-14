@@ -141,7 +141,7 @@ const CompetitorAnalysis = () => {
     try {
       // Call the Firecrawl scraper for each competitor
       for (const competitor of competitors) {
-        const { data, error } = await supabase.functions.invoke('firecrawl-scraper', {
+        const { data, error } = await supabase.functions.invoke('ingest/firecrawl-scraper', {
           body: {
             url: competitor.website_url,
             category: 'competitor_analysis',

@@ -17,13 +17,13 @@ import {
   parseISO,
 } from "https://esm.sh/date-fns@2.30.0";
 import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts";
-import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey } from "../_shared/aiConfig.ts";
-import { scrapeUrl, scrapeUrls } from "../_shared/scraper.ts";
-import { fetchAndStoreImage as _fetchAndStoreImageShared } from "../_shared/imageStorage.ts";
-import { tryDomainAdapter } from "../_shared/domain-adapters/index.ts";
-import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
-import { isHostAllowed } from "../_shared/fetchGuard.ts";
-import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey } from "../../aiConfig.ts";
+import { scrapeUrl, scrapeUrls } from "../../scraper.ts";
+import { fetchAndStoreImage as _fetchAndStoreImageShared } from "../../imageStorage.ts";
+import { tryDomainAdapter } from "../../domain-adapters/index.ts";
+import { requireAdminOrApiKey } from "../../apiKeyAuth.ts";
+import { isHostAllowed } from "../../fetchGuard.ts";
+import { fetchWithTimeout } from "../../fetchWithTimeout.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1483,7 +1483,7 @@ async function insertData(
   };
 }
 
-Deno.serve(async (req) => {
+export default (async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
