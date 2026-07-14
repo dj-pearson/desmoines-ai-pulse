@@ -148,7 +148,7 @@ export function useRatings({ contentType, contentId }: UseRatingsProps) {
       let verdict: string | null = null;
       if (hasText && data?.id) {
         try {
-          const { data: modRes } = await supabase.functions.invoke("moderate-content", {
+          const { data: modRes } = await supabase.functions.invoke("content/moderate-content", {
             body: { contentType: "review", contentId: data.id },
           });
           verdict = (modRes as { decision?: string } | null)?.decision ?? null;

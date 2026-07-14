@@ -152,7 +152,7 @@ const AIArticleGenerator: React.FC = () => {
     try {
       setIsGenerating(true);
       
-      const { data, error } = await supabase.functions.invoke('generate-article', {
+      const { data, error } = await supabase.functions.invoke('content/generate-article', {
         body: settings
       });
 
@@ -189,7 +189,7 @@ const AIArticleGenerator: React.FC = () => {
     try {
       setIsLoadingSuggestions(true);
       
-      const { data, error } = await supabase.functions.invoke('suggest-article-topics', {
+      const { data, error } = await supabase.functions.invoke('content/suggest-article-topics', {
         body: {
           category: categoryFilter,
           focusArea: focusArea,

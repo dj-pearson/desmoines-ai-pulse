@@ -252,7 +252,7 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
             batchIds.includes(p.eventId) ? { ...p, status: "searching" as const } : p
           ));
 
-          const { data, error } = await supabase.functions.invoke('batch-enhance-events', {
+          const { data, error } = await supabase.functions.invoke('content/batch-enhance-events', {
             body: {
               eventIds: batchIds,
               fields: fieldsArray,
@@ -305,7 +305,7 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
         
       } else {
         // Process all at once (original behavior)
-        const { data, error } = await supabase.functions.invoke('batch-enhance-events', {
+        const { data, error } = await supabase.functions.invoke('content/batch-enhance-events', {
           body: {
             eventIds: Array.from(selectedEvents),
             fields: fieldsArray,

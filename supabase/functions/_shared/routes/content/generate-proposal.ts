@@ -12,10 +12,10 @@
  * shareable HTML doc DRAFT attached to the opportunity, for human review.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { handleCors, getCorsHeaders } from "../_shared/cors.ts";
-import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
-import { runAgent } from "../_shared/agentRun.ts";
-import { writeAgentAudit } from "../_shared/auditLog.ts";
+import { handleCors, getCorsHeaders } from "../../cors.ts";
+import { requireAdminOrApiKey } from "../../apiKeyAuth.ts";
+import { runAgent } from "../../agentRun.ts";
+import { writeAgentAudit } from "../../auditLog.ts";
 
 const AGENT_KEY = "proposal-generator";
 
@@ -37,7 +37,7 @@ async function count(supabase: Client, table: string, apply?: (q: Client) => Cli
   return count ?? 0;
 }
 
-Deno.serve(async (req) => {
+export default (async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
   const corsHeaders = getCorsHeaders(req.headers.get("origin") || undefined);

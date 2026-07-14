@@ -1,8 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
-import { getAnthropicApiKey, extractClaudeText } from '../_shared/aiConfig.ts';
+import { fetchWithTimeout } from '../../fetchWithTimeout.ts';
+import { getAnthropicApiKey, extractClaudeText } from '../../aiConfig.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -222,7 +221,7 @@ function mapToClaudeFields(dbFields: string[]): string[] {
   return dbFields.map(field => reverseMap[field] || field);
 }
 
-serve(async (req) => {
+export default (async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }

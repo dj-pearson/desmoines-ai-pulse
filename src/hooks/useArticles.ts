@@ -256,7 +256,7 @@ export const useArticles = (options?: { autoLoad?: boolean }) => {
     try {
       setLoading(true);
       
-      const { data, error } = await supabase.functions.invoke('generate-article', {
+      const { data, error } = await supabase.functions.invoke('content/generate-article', {
         body: { suggestionId, customPrompt }
       });
 

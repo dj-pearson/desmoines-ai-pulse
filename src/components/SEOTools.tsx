@@ -587,7 +587,7 @@ ${JSON.stringify(eventListSchema, null, 2)}
     setIsSeoGenerating(prev => ({ ...prev, [contentType]: true }));
     
     try {
-      const { data, error } = await supabase.functions.invoke('generate-seo-content', {
+      const { data, error } = await supabase.functions.invoke('content/generate-seo-content', {
         body: { contentType, batchSize: 10 }
       });
 

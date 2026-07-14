@@ -140,7 +140,7 @@ export default function AIEnhancementManager() {
         description: `Processing up to ${batchSize} events`
       });
 
-      const { data, error } = await supabase.functions.invoke('bulk-enhance-events', {
+      const { data, error } = await supabase.functions.invoke('content/bulk-enhance-events', {
         body: {
           batchSize,
           triggerSource: 'manual'

@@ -5,15 +5,14 @@
  * Risk level: MEDIUM
  */
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
-import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { fetchWithTimeout } from "../../fetchWithTimeout.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { getAIConfig, buildLightweightClaudeRequest, getClaudeHeaders, getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
-import { checkRateLimit } from "../_shared/rateLimit.ts";
-import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
-import { requireApiKey } from "../_shared/apiKeyAuth.ts";
+import { getAIConfig, buildLightweightClaudeRequest, getClaudeHeaders, getAnthropicApiKey, extractClaudeText } from "../../aiConfig.ts";
+import { checkRateLimit } from "../../rateLimit.ts";
+import { handleCors, getCorsHeaders, isOriginAllowed } from "../../cors.ts";
+import { requireApiKey } from "../../apiKeyAuth.ts";
 
-serve(async (req) => {
+export default (async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
 

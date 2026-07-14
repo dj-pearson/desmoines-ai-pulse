@@ -125,7 +125,7 @@ export function SEOManager() {
   const analyzeContent = async (url: string, targetKeyword?: string) => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("analyze-content", {
+      const { data, error } = await supabase.functions.invoke("content/analyze-content", {
         body: { url, targetKeyword, saveResults: true },
       });
 
@@ -147,7 +147,7 @@ export function SEOManager() {
   const analyzeImages = async (url: string) => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("analyze-images", {
+      const { data, error } = await supabase.functions.invoke("content/analyze-images", {
         body: { url, saveResults: true },
       });
 

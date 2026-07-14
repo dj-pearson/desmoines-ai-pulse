@@ -1,10 +1,9 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
-import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
-import { requireApiKey } from "../_shared/apiKeyAuth.ts";
-import { checkRateLimit } from "../_shared/rateLimit.ts";
-import { writeAuditLog, auditIp } from "../_shared/auditLog.ts";
-import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
+import { handleCors, getCorsHeaders, isOriginAllowed } from "../../cors.ts";
+import { requireApiKey } from "../../apiKeyAuth.ts";
+import { checkRateLimit } from "../../rateLimit.ts";
+import { writeAuditLog, auditIp } from "../../auditLog.ts";
+import { fetchWithTimeout } from '../../fetchWithTimeout.ts';
 
 interface GooglePlaceDetails {
   id: string;
@@ -42,7 +41,7 @@ interface RestaurantUpdate {
   updated_at: string;
 }
 
-serve(async (req) => {
+export default (async (req) => {
   // Handle CORS preflight requests
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;

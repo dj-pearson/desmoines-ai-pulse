@@ -38,7 +38,7 @@ export function useBulkRestaurantUpdate() {
 
       setProgress(`Updating restaurants (batch size: ${batchSize})...`);
 
-      const { data, error } = await supabase.functions.invoke('bulk-update-restaurants', {
+      const { data, error } = await supabase.functions.invoke('content/bulk-update-restaurants', {
         body: {
           batchSize,
           forceUpdate,

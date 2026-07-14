@@ -4,11 +4,9 @@
 // Purpose: Analyze images for SEO optimization (alt text, size, format)
 // Returns: Image analysis with optimization recommendations
 // ============================================================================
-
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
-import { errorResponse } from "../_shared/errorResponse.ts";
+import { errorResponse } from "../../errorResponse.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,7 +19,7 @@ interface ImageAnalysisRequest {
   saveResults?: boolean;
 }
 
-serve(async (req) => {
+export default (async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }

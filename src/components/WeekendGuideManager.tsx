@@ -67,7 +67,7 @@ export default function WeekendGuideManager() {
     try {
       setGenerating(true);
       
-      const { data, error } = await supabase.functions.invoke('generate-weekend-guide', {
+      const { data, error } = await supabase.functions.invoke('content/generate-weekend-guide', {
         body: { trigger: 'manual' }
       });
 

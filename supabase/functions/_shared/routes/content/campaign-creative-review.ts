@@ -13,11 +13,11 @@
  * auto-approval rate via the jobRunner.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
-import { requireAdminOrApiKey } from '../_shared/apiKeyAuth.ts';
-import { runJob } from '../_shared/jobRunner.ts';
-import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
-import { getAnthropicApiKey } from '../_shared/aiConfig.ts';
+import { handleCors, getCorsHeaders } from '../../cors.ts';
+import { requireAdminOrApiKey } from '../../apiKeyAuth.ts';
+import { runJob } from '../../jobRunner.ts';
+import { fetchWithTimeout } from '../../fetchWithTimeout.ts';
+import { getAnthropicApiKey } from '../../aiConfig.ts';
 
 // Minimum pixel dimensions per placement.
 const MIN_DIMS: Record<string, { w: number; h: number }> = {
@@ -207,7 +207,7 @@ async function reviewOne(supabase: Supa, creative: Record<string, unknown>) {
   return approved;
 }
 
-Deno.serve(async (req) => {
+export default (async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
   const origin = req.headers.get('origin') || undefined;

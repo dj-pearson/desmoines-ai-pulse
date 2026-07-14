@@ -233,7 +233,7 @@ export function useGeneratePage() {
       dimensions: Array<{ dimension: string; slug: string; name: string; tier: number }>;
       forceRegenerate?: boolean;
     }) => {
-      const { data, error } = await supabase.functions.invoke('generate-pseo-page', {
+      const { data, error } = await supabase.functions.invoke('content/generate-pseo-page', {
         body: {
           pageTypeId: params.pageTypeId,
           dimensions: params.dimensions,
@@ -291,7 +291,7 @@ export function useBatchGenerate() {
 
       for (const combo of combinations) {
         try {
-          const { data, error } = await supabase.functions.invoke('generate-pseo-page', {
+          const { data, error } = await supabase.functions.invoke('content/generate-pseo-page', {
             body: {
               pageTypeId: params.pageTypeId,
               dimensions: combo,

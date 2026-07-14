@@ -96,7 +96,7 @@ export function CompetitorAnalysisDashboard() {
   const runAnalysis = async (type: 'scrape' | 'analyze' | 'suggest', competitorId?: string) => {
     setAnalyzing(true);
     try {
-      const response = await supabase.functions.invoke('analyze-competitor', {
+      const response = await supabase.functions.invoke('content/analyze-competitor', {
         body: { competitorId, analysisType: type }
       });
 

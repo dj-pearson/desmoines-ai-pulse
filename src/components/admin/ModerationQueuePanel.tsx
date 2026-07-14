@@ -88,7 +88,7 @@ export default function ModerationQueuePanel() {
   const runSweep = async () => {
     setSweeping(true);
     try {
-      const { error: invErr } = await supabase.functions.invoke("moderate-content", {
+      const { error: invErr } = await supabase.functions.invoke("content/moderate-content", {
         body: { mode: "sweep" },
       });
       if (invErr) throw invErr;

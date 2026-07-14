@@ -5,14 +5,13 @@
  * Risk level: HIGH
  */
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
-import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
-import { validateURLForSSRF } from "../_shared/validation.ts";
-import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
-import { isHostAllowed, fetchTextWithSizeCap } from "../_shared/fetchGuard.ts";
-import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
-import { getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
+import { checkRateLimitPersistent } from "../../rateLimit.ts";
+import { validateURLForSSRF } from "../../validation.ts";
+import { requireAdminOrApiKey } from "../../apiKeyAuth.ts";
+import { isHostAllowed, fetchTextWithSizeCap } from "../../fetchGuard.ts";
+import { fetchWithTimeout } from "../../fetchWithTimeout.ts";
+import { getAnthropicApiKey, extractClaudeText } from "../../aiConfig.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -24,7 +23,7 @@ interface CompetitorAnalysisRequest {
   analysisType: 'scrape' | 'analyze' | 'suggest';
 }
 
-serve(async (req) => {
+export default (async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }

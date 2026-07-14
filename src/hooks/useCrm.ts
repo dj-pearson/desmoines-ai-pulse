@@ -80,7 +80,7 @@ export function useProposal() {
   const qc = useQueryClient();
   const generate = useMutation({
     mutationFn: (opportunityId: string) =>
-      supabase.functions.invoke("generate-proposal", { body: { opportunityId } }).then(({ data, error }) => {
+      supabase.functions.invoke("content/generate-proposal", { body: { opportunityId } }).then(({ data, error }) => {
         if (error) throw error;
         if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
         return data as { proposalId: string };

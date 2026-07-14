@@ -25,12 +25,12 @@
  * approved (moderation off = trust-through; content never gets stuck hidden).
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
-import { requireAdminOrApiKey } from '../_shared/apiKeyAuth.ts';
-import { checkRateLimitPersistent } from '../_shared/rateLimit.ts';
-import { runJob } from '../_shared/jobRunner.ts';
-import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
-import { getAnthropicApiKey } from '../_shared/aiConfig.ts';
+import { handleCors, getCorsHeaders } from '../../cors.ts';
+import { requireAdminOrApiKey } from '../../apiKeyAuth.ts';
+import { checkRateLimitPersistent } from '../../rateLimit.ts';
+import { runJob } from '../../jobRunner.ts';
+import { fetchWithTimeout } from '../../fetchWithTimeout.ts';
+import { getAnthropicApiKey } from '../../aiConfig.ts';
 
 type SupabaseClient = ReturnType<typeof createClient>;
 type ContentType = 'review' | 'contact';
@@ -229,7 +229,7 @@ async function moderateOne(
   return { decision, scores };
 }
 
-Deno.serve(async (req) => {
+export default (async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
   const origin = req.headers.get('origin') || undefined;

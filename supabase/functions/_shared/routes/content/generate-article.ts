@@ -1,9 +1,8 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
-import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
-import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
-import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey, extractClaudeText } from "../../aiConfig.ts";
+import { requireAdminOrApiKey } from "../../apiKeyAuth.ts";
+import { fetchWithTimeout } from "../../fetchWithTimeout.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -20,7 +19,7 @@ interface ArticleGenerationRequest {
   customInstructions?: string;
 }
 
-serve(async (req) => {
+export default (async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }

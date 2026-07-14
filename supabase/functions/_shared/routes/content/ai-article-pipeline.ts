@@ -18,10 +18,10 @@
  * admin UI) are untouched.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
-import { requireAdminOrApiKey } from '../_shared/apiKeyAuth.ts';
-import { runJob } from '../_shared/jobRunner.ts';
-import { getAIConfig, getClaudeHeaders, getAnthropicApiKey } from '../_shared/aiConfig.ts';
+import { handleCors, getCorsHeaders } from '../../cors.ts';
+import { requireAdminOrApiKey } from '../../apiKeyAuth.ts';
+import { runJob } from '../../jobRunner.ts';
+import { getAIConfig, getClaudeHeaders, getAnthropicApiKey } from '../../aiConfig.ts';
 
 const PAUSE_FLAG = 'ai_article_pipeline_enabled';
 const DAILY_CAP = 1;
@@ -74,7 +74,7 @@ function normalizeTitle(t: string): string {
   return (t || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
-Deno.serve(async (req) => {
+export default (async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
   const origin = req.headers.get('origin') || undefined;
@@ -122,7 +122,7 @@ Deno.serve(async (req) => {
     const recentTokenSets = (recent ?? []).map((a) => tokenize(a.title as string));
 
     // --- 1) topic selection -------------------------------------------------
-    const topicRes = await fetch(`${url}/functions/v1/suggest-article-topics`, {
+    const topicRes = await fetch(`${url}/functions/v1/content/suggest-article-topics`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${serviceKey}` },
       body: JSON.stringify({ suggestionCount: 8, excludeExistingTopics: true }),
@@ -149,7 +149,7 @@ Deno.serve(async (req) => {
     }
 
     // --- 2) draft generation ------------------------------------------------
-    const genRes = await fetch(`${url}/functions/v1/generate-article`, {
+    const genRes = await fetch(`${url}/functions/v1/content/generate-article`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${serviceKey}` },
       body: JSON.stringify({

@@ -12,12 +12,6 @@ verify_jwt = false
 [functions.get-sponsored-pick]
 verify_jwt = false
 
-[functions.analyze-competitor]
-verify_jwt = false
-
-[functions.bulk-enhance-events]
-verify_jwt = false
-
 [functions.publish-article-webhook]
 verify_jwt = false
 
@@ -26,9 +20,6 @@ verify_jwt = false
 verify_jwt = true
 
 [functions.geocode-location]
-verify_jwt = false
-
-[functions.generate-seo-content]
 verify_jwt = false
 
 [functions.image-transform]
@@ -82,11 +73,6 @@ verify_jwt = false
 [functions.outreach-reply]
 verify_jwt = false
 
-# Proposal generator (AOS-PROSPECT-005). Admin/sales-invoked; builds a proposal
-# draft from real stats + the price list. Auth via requireAdminOrApiKey.
-[functions.generate-proposal]
-verify_jwt = false
-
 # Consolidated content-ingestion dispatcher — hosts the former scrape-events,
 # restaurant-opening-scraper, ai-crawler, firecrawl-scraper,
 # extract-catchdesmoines-urls, dedupe-content and fix-broken-event-urls
@@ -137,4 +123,14 @@ verify_jwt = false
 # Consolidated social-posting dispatcher (social-daily-poster,
 # social-media-manager, manage-social-account) at /functions/v1/social/<name>.
 [functions.social]
+verify_jwt = false
+
+# Consolidated AI content dispatcher (generation / analysis / enhancement):
+# ai-article-pipeline, analyze-*, *-enhance-events, bulk-update-restaurants,
+# campaign-creative-review, enhance-content, generate-* (article, proposal,
+# pseo-page, seo-content, weekend-guide, hotel-affiliate-urls),
+# moderate-content, pseo-batch-worker, suggest-article-topics — routed by name
+# at /functions/v1/content/<name>. Self-auth handlers keep their auth; the
+# gateway-only ones are gated in the router (all admin/cron-only).
+[functions.content]
 verify_jwt = false
