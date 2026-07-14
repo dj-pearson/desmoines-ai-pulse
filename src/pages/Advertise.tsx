@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, Star, Eye, Target, Megaphone, Zap, TrendingUp } from "lucide-react";
+import { CalendarIcon, Star, Eye, Target, Megaphone, Zap, TrendingUp, PanelRight } from "lucide-react";
 import { format, addDays, differenceInDays } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useCampaigns, fetchRateCard } from "@/hooks/useCampaigns";
@@ -33,6 +33,7 @@ const ICON_MAP: Record<PlacementType, React.ElementType> = {
   top_banner: Star,
   featured_spot: Eye,
   below_fold: Target,
+  sidebar: PanelRight,
   sponsored_listing: Megaphone,
 };
 
@@ -41,7 +42,8 @@ const PLACEMENT_OPTIONS = (Object.values(PLACEMENT_SPECS) as typeof PLACEMENT_SP
   name: spec.name,
   description: spec.description,
   dailyCost: spec.dailyCost,
-  icon: ICON_MAP[spec.type],
+  // Fallback keeps the page alive if a new PlacementType is added without an icon
+  icon: ICON_MAP[spec.type] ?? Megaphone,
   features: spec.features,
   noCreativeRequired: spec.noCreativeRequired ?? false,
   assetRequirements: {
