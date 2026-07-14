@@ -186,3 +186,16 @@ These fail `vite build` (Rollup) — so main has been un-buildable/un-deployable
 - DO NOT trust `npm run type-check` / `npm run validate` — run `npm run build` to actually verify a web story (see the new no-op pattern at top).
 - Unrelated defect spotted, not yet fixed (candidate WEB-QA-* / relates to WEB-QA-003): `[usePageTracking] Failed to record page view: invalid input syntax for type uuid: "/advertise"` — usePageTracking sends a path string into a uuid column; logs a 400 on every page view.
 ---
+
+---
+## 2026-07-13 - WEB-QA-002 (Fix event listing→detail 404 mismatch)
+**Root cause:** EventDetails resolved the event by scanning the full `useEvents()` array and `.find()`-ing by slug. `useEvents()` with no `limit` returns at most PostgREST's ~1000-row default (ordered date ASC), so an event a few months out fell beyond the cap → absent from the array → "Event Not Found", even though the category-filtered `/events` listing (few rows) still rendered its card.
+**Fix:** new `useEventBySlug(slug)` hook (src/hooks/useEvents.ts) — parses the trailing `-YYYY-MM-DD` from the slug and runs a targeted `date BETWEEN target±2d` query with the SAME `is_merged`/`is_hidden` predicates as the list, `select('*')` for the full SEO/GEO row, then matches `createEventSlugWithCentralTime` in the tiny result set. Position/cap-independent → any listed event resolves. EventDetails now uses it for the main event (keeps `useEvents()` only for the related/nearby rails).
+**Test:** tests/event-detail-resolution.spec.ts — walks the cards on /events, asserts each opens without "Event Not Found"; fails loudly if 0 cards (also catches a broken list query).
+**Verified:** 4/4 sampled cards resolve in-browser (0 not-found), playwright green, `npm run build` succeeds, targeted eslint 0 errors.
+
+**Learnings for future iterations:**
+- **PostgREST caps un-`limit`ed `.select()` at ~1000 rows.** Any code that fetches a full list and then `.find()`s a specific row by a client-computed key (slug, etc.) is silently wrong past 1000 rows. Resolve single records with a targeted/bounded query, not an in-memory scan of a list hook.
+- **Event slugs have no DB column** — they're `createEventSlugWithCentralTime(title, event)` = `slugify(title)-YYYY-MM-DD`. To look one up server-side, bound the query by the date embedded in the slug (±2d for TZ drift) then match the computed slug client-side.
+- WEB-QA-002 verified per-request but its distant-event repro (Ringling Bros Oct) wasn't in this dev DB's near-term /events view; the fix is position-independent so near-term samples exercise the identical code path.
+---

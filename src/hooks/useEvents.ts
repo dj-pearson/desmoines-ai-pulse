@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { EVENT_LIST_COLUMNS } from "@/lib/listColumns";
+import { createEventSlugWithCentralTime } from "@/lib/timezone";
 import { createLogger } from "@/lib/logger";
 import { Database } from "@/integrations/supabase/types";
 
@@ -235,4 +236,98 @@ export function useEvents(filters: EventFilters = {}) {
     toggleEventFeatured,
     toggleEventEnhanced,
   };
+}
+
+interface EventBySlugState {
+  event: Event | null;
+  isLoading: boolean;
+  notFound: boolean;
+}
+
+/**
+ * Resolve a single event from its URL slug (WEB-QA-002).
+ *
+ * Event detail slugs are `${slugify(title)}-YYYY-MM-DD` (Central-time date, see
+ * createEventSlugWithCentralTime). Detail pages used to resolve an event by
+ * scanning the full `useEvents()` list and `.find()`-ing the slug — but that
+ * list is un-paginated and therefore capped at PostgREST's ~1000-row default
+ * (ordered by date ASC). Any event beyond that cap (e.g. a few months out)
+ * was absent from the array, so a card that appeared in a narrower filtered
+ * listing 404'd as "Event Not Found" on its detail page.
+ *
+ * This resolves the event with a tight date-window query using the SAME
+ * visibility predicates as the list (`is_merged`/`is_hidden`), so any listed
+ * event always resolves regardless of how far out it is. Full row (`*`) so the
+ * detail page gets the SEO/GEO columns the list projection drops.
+ */
+export function useEventBySlug(slug: string | undefined) {
+  const [state, setState] = useState<EventBySlugState>({
+    event: null,
+    isLoading: true,
+    notFound: false,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!slug) {
+      setState({ event: null, isLoading: false, notFound: true });
+      return;
+    }
+
+    const resolve = async () => {
+      setState((prev) => ({ ...prev, isLoading: true, notFound: false }));
+      try {
+        let query = supabase
+          .from("events")
+          .select("*")
+          .neq("is_merged", true)
+          .neq("is_hidden", true);
+
+        // Bound the query by the date embedded in the slug so the result set
+        // stays small and cap-proof. ±2 days absorbs any Central/UTC boundary
+        // drift between the slug's date and the stored `date` column.
+        const dateMatch = slug.match(/-(\d{4})-(\d{2})-(\d{2})$/);
+        if (dateMatch) {
+          const [, y, m, d] = dateMatch;
+          const target = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d)));
+          const iso = (dt: Date) => dt.toISOString().split("T")[0];
+          const from = new Date(target);
+          from.setUTCDate(from.getUTCDate() - 2);
+          const to = new Date(target);
+          to.setUTCDate(to.getUTCDate() + 2);
+          query = query.gte("date", iso(from)).lte("date", iso(to));
+        } else {
+          // Legacy title-only slug (dateless event): bounded fallback scan.
+          query = query.limit(1000);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        const match =
+          (data as Event[] | null)?.find(
+            (e) => createEventSlugWithCentralTime(e.title, e) === slug,
+          ) ?? null;
+
+        if (!cancelled) {
+          setState({ event: match, isLoading: false, notFound: !match });
+        }
+      } catch (error) {
+        logger.error("useEventBySlug", "Error resolving event by slug", {
+          error,
+        });
+        if (!cancelled) {
+          setState({ event: null, isLoading: false, notFound: true });
+        }
+      }
+    };
+
+    resolve();
+    return () => {
+      cancelled = true;
+    };
+  }, [slug]);
+
+  return state;
 }

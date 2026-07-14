@@ -1,6 +1,6 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
-import { useEvents } from "@/hooks/useEvents";
+import { useEvents, useEventBySlug } from "@/hooks/useEvents";
 import { RatingSystem } from "@/components/RatingSystem";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -53,12 +53,11 @@ import { LazyLocationMap } from "@/components/LazyLocationMap";
 export default function EventDetails() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
-  const { events, isLoading } = useEvents();
-
-  const event = events.find((e) => {
-    const eventSlug = createEventSlugWithCentralTime(e.title, e);
-    return eventSlug === slug;
-  });
+  // Resolve the detail event with a targeted, cap-proof query (WEB-QA-002)
+  // instead of scanning the (row-capped) full events list.
+  const { event, isLoading } = useEventBySlug(slug);
+  // Full list is still used for the related/nearby rails below.
+  const { events } = useEvents();
 
   // Track page view and content interactions
   const { trackShare, trackClick } = useContentTracking(event?.id, 'event');

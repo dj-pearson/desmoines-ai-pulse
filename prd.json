@@ -5324,8 +5324,8 @@
         "npm run validate passes"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "FOUND 2026-07-13 (5-PERSONA QA PASS — production live; persona: Marcus / weekend dad). SEVERITY: HIGH — breaks the core events flow and torches trust. Evidence: Family filter returns 1 result; clicking it navigates to the slug above and shows the 'Event Not Found — This event may have ended or been removed' state. Likely related to WEB-QA-003 (events querying is unhealthy). Note the surfaced event is also dated 2026-10-01 (~3 months out) which is a separate content-freshness concern, not the bug here."
+      "passes": true,
+      "notes": "DONE (2026-07-13): Root cause = EventDetails resolved the event by scanning the FULL useEvents() list and .find()-ing the slug, but useEvents() with no limit is capped at PostgREST default (~1000 rows) ordered by date ASC — so any event beyond the cap (e.g. Ringling Bros 2026-10-01, months out) was absent from the array and 404d as Event Not Found, while the category-filtered /events listing (few rows) still showed it. Fix: new useEventBySlug(slug) hook in src/hooks/useEvents.ts resolves a single event via a targeted date-window query (parses the trailing -YYYY-MM-DD from the slug, queries date in [target-2d,target+2d] with the SAME is_merged/is_hidden visibility predicates as the list, select * for full SEO/GEO row), then matches createEventSlugWithCentralTime among the tiny result set — position/cap-independent, so any listed event resolves. EventDetails.tsx now uses useEventBySlug for the main event (keeps useEvents() only for related/nearby rails). Data-integrity guard satisfied via the same-predicate resolution (AC option b). Added tests/event-detail-resolution.spec.ts: walks the cards on /events and asserts each opens without Event Not Found (fails loudly if 0 cards, catching a broken list query too). Verified: 4/4 sampled cards resolve in-browser (0 not-found), playwright test green, npm run build succeeds, lint 0 errors."
     },
     {
       "id": "WEB-QA-003",
