@@ -84,7 +84,7 @@ export default function WeeklyDigestControls() {
     try {
       const { data, error } = await supabase.functions.invoke<
         PreviewResult & { ok: boolean }
-      >("assemble-weekly-digest", { body: { action: "preview" } });
+      >("notifications/assemble-weekly-digest", { body: { action: "preview" } });
       if (error) throw error;
       if (!data?.ok) throw new Error("Preview failed");
       setPreview(data);

@@ -1,12 +1,10 @@
 // send-event-reminders - Cron job to send email reminders for upcoming events
 // Runs every hour via pg_cron: */0 * * * *
-
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { escapeHtml } from "../_shared/escapeHtml.ts";
-import { renderEmail } from "../_shared/emailLayout.ts";
-import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
-import { requireAdminOrApiKey, timingSafeEqual } from "../_shared/apiKeyAuth.ts";
+import { escapeHtml } from "../../escapeHtml.ts";
+import { renderEmail } from "../../emailLayout.ts";
+import { fetchWithTimeout } from "../../fetchWithTimeout.ts";
+import { requireAdminOrApiKey, timingSafeEqual } from "../../apiKeyAuth.ts";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -40,7 +38,7 @@ interface Reminder {
   time_until_event: string;
 }
 
-serve(async (req) => {
+export default (async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }

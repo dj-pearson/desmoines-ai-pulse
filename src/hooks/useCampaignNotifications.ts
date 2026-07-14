@@ -56,7 +56,7 @@ export async function sendCampaignNotification(payload: NotificationPayload): Pr
 
     // Attempt to send email notification via edge function
     try {
-      await supabase.functions.invoke('send-campaign-notification', {
+      await supabase.functions.invoke('notifications/send-campaign-notification', {
         body: {
           recipientUserId: payload.recipientUserId,
           recipientEmail: payload.recipientEmail,

@@ -284,7 +284,7 @@ export default function FeedbackInbox() {
         ok: boolean;
         message_id?: string | null;
         error?: string;
-      }>("send-feedback-reply", {
+      }>("notifications/send-feedback-reply", {
         body: { submission_id: detail.id, body_html: replyBody },
       });
       if (error) throw error;

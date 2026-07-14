@@ -146,7 +146,7 @@ export function useLoginActivity() {
     const isNewDevice = risk.includes('new_device') || risk.includes('new_ip');
     if (isNewDevice) {
       void supabase.functions
-        .invoke('send-security-notification', {
+        .invoke('notifications/send-security-notification', {
           body: {
             event_type: 'new_device_login',
             context: {

@@ -15,13 +15,12 @@
  * Auth: verify_jwt=false; does its own auth via requireAdminOrApiKey (cron
  * service-role key or admin JWT). Trigger: pg_cron nightly.
  */
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
-import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
-import { runJob } from "../_shared/jobRunner.ts";
-import { renderEmail, SITE_URL } from "../_shared/emailLayout.ts";
-import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { getCorsHeaders, handleCors } from "../../cors.ts";
+import { requireAdminOrApiKey } from "../../apiKeyAuth.ts";
+import { runJob } from "../../jobRunner.ts";
+import { renderEmail, SITE_URL } from "../../emailLayout.ts";
+import { fetchWithTimeout } from "../../fetchWithTimeout.ts";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const DEFAULT_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -109,7 +108,7 @@ function fmtDate(date: string | null): string {
 
 type Supa = ReturnType<typeof createClient>;
 
-serve(async (req) => {
+export default (async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
   const corsHeaders = getCorsHeaders(req.headers.get("origin") || undefined);

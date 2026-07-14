@@ -17,16 +17,14 @@
  * - campaign_refunded → advertiser
  * - creative_deadline_warning → advertiser
  */
-
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
-import { escapeHtml } from "../_shared/escapeHtml.ts";
-import { checkRateLimit } from "../_shared/rateLimit.ts";
-import { renderEmail } from "../_shared/emailLayout.ts";
-import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { handleCors, getCorsHeaders, isOriginAllowed } from "../../cors.ts";
+import { escapeHtml } from "../../escapeHtml.ts";
+import { checkRateLimit } from "../../rateLimit.ts";
+import { renderEmail } from "../../emailLayout.ts";
+import { fetchWithTimeout } from "../../fetchWithTimeout.ts";
 
-serve(async (req) => {
+export default (async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
 

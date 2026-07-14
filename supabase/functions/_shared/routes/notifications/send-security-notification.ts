@@ -16,13 +16,11 @@
  * unsubscribe link, but we still include the postal address and brand via
  * the shared renderEmail helper with category: "transactional".
  */
-
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
-import { escapeHtml } from "../_shared/escapeHtml.ts";
-import { renderEmail, SITE_URL } from "../_shared/emailLayout.ts";
-import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { handleCors, getCorsHeaders, isOriginAllowed } from "../../cors.ts";
+import { escapeHtml } from "../../escapeHtml.ts";
+import { renderEmail, SITE_URL } from "../../emailLayout.ts";
+import { fetchWithTimeout } from "../../fetchWithTimeout.ts";
 
 type EventType =
   | "new_device_login"
@@ -112,7 +110,7 @@ function renderContextText(ctx: RequestBody["context"]): string {
   return rows.length ? `\n${rows.join("\n")}\n` : "";
 }
 
-serve(async (req) => {
+export default (async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
 

@@ -172,7 +172,7 @@ export default function NewsletterCampaignsManager() {
     try {
       const { data, error } = await supabase.functions.invoke<{
         count: number;
-      }>("send-newsletter-campaign", {
+      }>("notifications/send-newsletter-campaign", {
         body: { action: "preview_count", segment: buildSegment() },
       });
       if (error) throw error;
@@ -206,7 +206,7 @@ export default function NewsletterCampaignsManager() {
         ok: boolean;
         sent_to?: string;
         error?: string;
-      }>("send-newsletter-campaign", {
+      }>("notifications/send-newsletter-campaign", {
         body: {
           action: "send_test",
           subject,
@@ -247,7 +247,7 @@ export default function NewsletterCampaignsManager() {
         delivered?: number;
         failed?: number;
         recipient_count?: number;
-      }>("send-newsletter-campaign", {
+      }>("notifications/send-newsletter-campaign", {
         body: {
           action,
           subject,

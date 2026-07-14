@@ -52,11 +52,6 @@ verify_jwt = false
 [functions.social-daily-poster]
 verify_jwt = false
 
-# Nightly saved-search event-alert digest (WEB-FEAT-003). Admin/internal tooling:
-# does its own auth via requireAdminOrApiKey (cron service-role key or admin JWT).
-[functions.saved-search-alerts]
-verify_jwt = false
-
 # Dynamic OG-image cards for social shares (WEB-FEAT-008). Public: crawlers hit it
 # with no auth, so verify_jwt=false (like image-transform). Rate-limited in-fn.
 [functions.og-image]
@@ -157,4 +152,13 @@ verify_jwt = false
 # self-authenticates (requireAdminOrApiKey / getUser), so the gateway JWT
 # check stays off. See supabase/functions/_shared/routes/ingest/.
 [functions.ingest]
+verify_jwt = false
+
+# Consolidated notifications dispatcher — hosts the former
+# send-campaign-notification, send-event-reminders, send-feedback-reply,
+# send-newsletter-campaign, send-security-notification, assemble-weekly-digest
+# and saved-search-alerts functions, routed by name at
+# /functions/v1/notifications/<name>. Each handler self-authenticates
+# (requireAdminOrApiKey / getUser), so the gateway JWT check stays off.
+[functions.notifications]
 verify_jwt = false

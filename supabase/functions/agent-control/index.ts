@@ -29,11 +29,11 @@ function json(body: unknown, status = 200, headers: Record<string, string> = {})
 const RUN_MAP: Record<string, { fn: string; body: Record<string, unknown> }> = {
   "backfill-images": { fn: "backfill-images", body: { category: "events", batchSize: 10 } },
   "data-quality-heal": { fn: "data-quality-heal", body: {} },
-  "dedupe-content": { fn: "dedupe-content", body: {} },
+  "dedupe-content": { fn: "ingest/dedupe-content", body: {} },
   "moderate-content": { fn: "moderate-content", body: { mode: "sweep" } },
   "validate-source-urls": { fn: "validate-source-urls", body: {} },
   "ai-article-pipeline": { fn: "ai-article-pipeline", body: {} },
-  "weekly-digest": { fn: "assemble-weekly-digest", body: {} },
+  "weekly-digest": { fn: "notifications/assemble-weekly-digest", body: {} },
   "social-media-manager": { fn: "social-daily-poster", body: {} },
   "sitemap-refresh": { fn: "regenerate-sitemaps", body: {} },
   "job-health-watchdog": { fn: "job-health-watchdog", body: {} },

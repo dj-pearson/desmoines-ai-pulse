@@ -623,7 +623,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // account holder knows their password changed even if their session
       // is stolen by an attacker. Fire-and-forget.
       void supabase.functions
-        .invoke('send-security-notification', {
+        .invoke('notifications/send-security-notification', {
           body: {
             event_type: 'password_changed',
             context: {

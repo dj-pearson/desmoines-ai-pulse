@@ -29,9 +29,9 @@ const RERUNNABLE: Record<string, string> = {
   "dispatch-scheduled-newsletters": "dispatch-scheduled-newsletters",
   "job-health-watchdog": "job-health-watchdog",
   "data-quality-heal": "data-quality-heal",
-  "dedupe-content": "dedupe-content",
+  "dedupe-content": "ingest/dedupe-content",
   "ai-article-pipeline": "ai-article-pipeline",
-  "assemble-weekly-digest": "assemble-weekly-digest",
+  "assemble-weekly-digest": "notifications/assemble-weekly-digest",
   "moderate-content": "moderate-content",
 };
 
