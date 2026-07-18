@@ -353,7 +353,20 @@ export default function Advertise() {
                   return (
                     <div key={option.type} className="border rounded-lg p-4">
                       <div className="flex items-start space-x-3">
+                        {/*
+                          Radix renders Checkbox as a <button role="checkbox">
+                          whose only child is an icon, so without an explicit
+                          label it has NO accessible name — a screen reader
+                          announced all five of these as just "checkbox,
+                          unchecked", with no way to tell which ad placement
+                          was being selected. The visible name lives in the
+                          sibling <h3>, which is not programmatically
+                          associated. Labelling by id keeps the visual layout
+                          untouched. WCAG 4.1.2.
+                        */}
                         <Checkbox
+                          id={`placement-${option.type}`}
+                          aria-labelledby={`placement-label-${option.type}`}
                           checked={isSelected}
                           onCheckedChange={(checked) =>
                             handlePlacementToggle(option.type, checked as boolean)
@@ -361,8 +374,10 @@ export default function Advertise() {
                         />
                         <div className="flex-1">
                           <div className="flex items-center space-x-2 mb-2">
-                            <Icon className="h-5 w-5 text-primary" />
-                            <h3 className="font-semibold">{option.name}</h3>
+                            <Icon className="h-5 w-5 text-primary" aria-hidden="true" />
+                            <h3 className="font-semibold" id={`placement-label-${option.type}`}>
+                              {option.name}
+                            </h3>
                             <span className="text-sm text-muted-foreground">
                               ${option.dailyCost}/day
                             </span>
