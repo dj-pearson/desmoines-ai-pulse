@@ -74,7 +74,8 @@ export function usePersonalizedRecommendations() {
       // Use existing search_analytics table to derive preferences
       const { data: searches } = await supabase
         .from('search_analytics')
-        .select('query, category, location, price_filter')
+        // Facets live in the `search_filters` JSON, not as columns (WEB-QA-012).
+        .select('search_query, search_filters')
         .eq('user_id', user?.id)
         .order('created_at', { ascending: false })
         .limit(50);
@@ -82,9 +83,12 @@ export function usePersonalizedRecommendations() {
       if (!searches || searches.length === 0) return null;
 
       // Derive preferences from search history
-      const categories = searches.map(s => s.category).filter(Boolean);
-      const locations = searches.map(s => s.location).filter(Boolean);
-      const priceFilters = searches.map(s => s.price_filter).filter(Boolean);
+      // Facets live inside the `search_filters` JSON, not as columns (WEB-QA-012).
+      const facets = (s: { search_filters: unknown }) =>
+        (s.search_filters ?? {}) as Record<string, string | null | undefined>;
+      const categories = searches.map(s => facets(s).category).filter(Boolean);
+      const locations = searches.map(s => facets(s).location).filter(Boolean);
+      const priceFilters = searches.map(s => facets(s).priceRange).filter(Boolean);
 
       const preferredCategories = getTopItems(categories, 3);
       const preferredLocations = getTopItems(locations, 3);

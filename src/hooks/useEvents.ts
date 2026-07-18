@@ -11,6 +11,12 @@ type Event = Database["public"]["Tables"]["events"]["Row"];
 type EventInsert = Database["public"]["Tables"]["events"]["Insert"];
 type EventUpdate = Database["public"]["Tables"]["events"]["Update"];
 
+/** Stable empty array. Returning a fresh `[]` literal on every render gives
+ *  `events` a new identity each time, which re-fires any consumer useEffect that
+ *  depends on it and produced a "Maximum update depth exceeded" render loop in
+ *  SmartEventNavigation. Must stay module-level. */
+const EMPTY_EVENTS: Event[] = [];
+
 /** Payload the query resolves to; the hook flattens it into its public shape. */
 interface EventsResult {
   events: Event[];
@@ -251,7 +257,7 @@ export function useEvents(filters: EventFilters = {}) {
   return {
     // Public shape preserved exactly for existing consumers (WEB-PERF-013):
     // `error` stays a string | null rather than the Error object useQuery returns.
-    events: data?.events ?? [],
+    events: data?.events ?? EMPTY_EVENTS,
     totalCount: data?.totalCount ?? 0,
     isLoading,
     error: error ? (error instanceof Error ? error.message : "Failed to fetch events") : null,

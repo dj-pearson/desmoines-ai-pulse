@@ -71,6 +71,10 @@ const defaultFilters: AdvancedSearchFilters = {
   tags: []
 };
 
+/** Stable empty array — a fresh `[]` default would give `results` a new identity
+ *  every render and re-fire consumer effects that depend on it. */
+const EMPTY_RESULTS: SearchResult[] = [];
+
 export function useAdvancedSearch() {
   const { user } = useAuth();
   const [filters, setFilters] = useState<AdvancedSearchFilters>(defaultFilters);
@@ -192,7 +196,7 @@ export function useAdvancedSearch() {
   const searchQueryKey = (f: AdvancedSearchFilters | null) =>
     ['advanced-search', f, userLocation] as const;
 
-  const { data: results = [], isFetching: loading } = useQuery({
+  const { data: results = EMPTY_RESULTS, isFetching: loading } = useQuery({
     queryKey: searchQueryKey(submittedFilters),
     queryFn: () => executeSearch(submittedFilters as AdvancedSearchFilters),
     enabled: submittedFilters !== null,

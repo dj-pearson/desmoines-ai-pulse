@@ -208,18 +208,31 @@ export function useAnalytics() {
   // Enhanced search tracking with user journey data
   const trackSearch = async (query: string, filters: Record<string, string | undefined>, resultsCount: number, clickedResultId?: string) => {
     try {
-      // Track in existing search analytics table
+      // Track in existing search analytics table.
+      //
+      // The facet values (category/location/date/price) and the session id have
+      // no dedicated columns - they belong in the `search_filters` JSON column.
+      // This insert previously named them as top-level columns and was silenced
+      // by an `as never` cast, so it failed with 42703 on every search and no
+      // search analytics was ever recorded (WEB-QA-012).
+      //
+      // clickedResultId is deliberately NOT written to `clicked_event_id`: that
+      // column is a foreign key to events, and a search result can be a
+      // restaurant or attraction, which would violate the constraint. It stays
+      // in search_filters until a content-type-agnostic column exists.
       await supabase.from('search_analytics').insert({
-        session_id: sessionId,
-        user_id: userId,
-        query: query,
-        category: filters.category,
-        location: filters.location,
-        date_filter: filters.dateFilter,
-        price_filter: filters.priceRange,
+        user_id: userId ?? null,
+        search_query: query,
         results_count: resultsCount,
-        clicked_result_id: clickedResultId
-      } as never);
+        search_filters: {
+          sessionId,
+          category: filters.category ?? null,
+          location: filters.location ?? null,
+          dateFilter: filters.dateFilter ?? null,
+          priceRange: filters.priceRange ?? null,
+          clickedResultId: clickedResultId ?? null,
+        },
+      });
 
       // Track as enhanced interaction
       await trackEvent({

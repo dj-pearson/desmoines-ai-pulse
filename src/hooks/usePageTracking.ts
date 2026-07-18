@@ -44,7 +44,11 @@ async function recordPageView(params: {
 
   const { error } = await supabase.from('user_analytics').insert({
     event_type: 'page_view',
-    content_id: pathname,
+    // `content_id` is a uuid column, so writing the pathname into it made every
+    // page-view insert fail with "invalid input syntax for type uuid" — meaning
+    // no page view was ever recorded. A page is not a content row, so this stays
+    // null; the path is already captured by `page_url` below (WEB-QA-013).
+    content_id: null,
     content_type: 'page',
     page_url: window.location.href,
     referrer: document.referrer || null,
