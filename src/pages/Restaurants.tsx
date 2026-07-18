@@ -464,7 +464,7 @@ export default function Restaurants() {
                     onClick={() => setViewMode("list")}
                     variant="ghost"
                     size="icon"
-                    className={`h-8 w-8 rounded-full ${
+                    className={`h-11 w-11 sm:h-8 sm:w-8 rounded-full ${
                       viewMode === "list"
                         ? "bg-white/30 text-white"
                         : "text-white/60 hover:text-white hover:bg-white/10"
@@ -477,7 +477,7 @@ export default function Restaurants() {
                     onClick={() => setViewMode("map")}
                     variant="ghost"
                     size="icon"
-                    className={`h-8 w-8 rounded-full ${
+                    className={`h-11 w-11 sm:h-8 sm:w-8 rounded-full ${
                       viewMode === "map"
                         ? "bg-white/30 text-white"
                         : "text-white/60 hover:text-white hover:bg-white/10"
