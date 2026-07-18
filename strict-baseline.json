@@ -1,5 +1,5 @@
 {
-  "total": 88,
+  "total": 61,
   "files": {
     "src/components/Header.tsx": 6,
     "src/components/PlaygroundsMap.tsx": 1,
@@ -14,19 +14,17 @@
     "src/hooks/useProfile.ts": 3,
     "src/hooks/useProximitySearch.ts": 2,
     "src/hooks/useRestaurants.ts": 1,
-    "src/hooks/useSceneUpdates.ts": 2,
     "src/hooks/useSupabase.ts": 1,
     "src/hooks/useUserPreferences.ts": 7,
-    "src/hooks/useVoting.ts": 13,
     "src/lib/consentLog.ts": 1,
     "src/lib/contentValidation.ts": 3,
     "src/lib/conversionTracking.ts": 1,
     "src/lib/sponsoredTracking.ts": 1,
-    "src/pages/Attractions.tsx": 7,
+    "src/pages/Attractions.tsx": 1,
     "src/pages/EventsPage.tsx": 4,
     "src/pages/EventsToday.tsx": 1,
     "src/pages/FreeEvents.tsx": 1,
     "src/pages/Playgrounds.tsx": 7,
-    "src/pages/Restaurants.tsx": 10
+    "src/pages/Restaurants.tsx": 4
   }
 }

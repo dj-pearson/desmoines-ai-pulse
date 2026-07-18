@@ -35,7 +35,10 @@ export interface VoteResult {
   vote_count: number;
   // Joined entity data
   name?: string;
-  image_url?: string;
+  /** Nullable in the database (restaurants.image_url / attractions.image_url),
+   *  so the optional marker alone was not enough — `string | undefined` cannot
+   *  hold the `null` those columns actually return. */
+  image_url?: string | null;
 }
 
 /**
@@ -46,7 +49,7 @@ export function useVotingCategories() {
     queryKey: ['voting-categories'],
     queryFn: async (): Promise<VotingCategory[]> => {
       const { data: categories, error } = await supabase
-        .from('voting_categories' as string)
+        .from('voting_categories')
         .select('*')
         .eq('is_active', true)
         .order('name');
@@ -58,7 +61,7 @@ export function useVotingCategories() {
 
       // Get vote counts per category
       const { data: counts } = await supabase
-        .from('votes' as string)
+        .from('votes')
         .select('category_id');
 
       const countMap: Record<string, number> = {};
@@ -86,7 +89,7 @@ export function useCategoryResults(categorySlug: string) {
     queryFn: async (): Promise<{ category: VotingCategory | null; results: VoteResult[] }> => {
       // Fetch the category
       const { data: catData, error: catError } = await supabase
-        .from('voting_categories' as string)
+        .from('voting_categories')
         .select('*')
         .eq('slug', categorySlug)
         .single();
@@ -99,7 +102,7 @@ export function useCategoryResults(categorySlug: string) {
 
       // Fetch votes for this category
       const { data: votes, error: votesError } = await supabase
-        .from('votes' as string)
+        .from('votes')
         .select('entity_type, entity_id, custom_entry')
         .eq('category_id', category.id);
 
@@ -197,7 +200,7 @@ export function useUserVote(categoryId: string) {
       if (!user) return null;
 
       const { data, error } = await supabase
-        .from('votes' as string)
+        .from('votes')
         .select('*')
         .eq('category_id', categoryId)
         .eq('user_id', user.id)
@@ -234,13 +237,13 @@ export function useCastVote() {
 
       // Upsert: delete existing vote then insert new one
       await supabase
-        .from('votes' as string)
+        .from('votes')
         .delete()
         .eq('category_id', categoryId)
         .eq('user_id', user.id);
 
       const { error } = await supabase
-        .from('votes' as string)
+        .from('votes')
         .insert({
           category_id: categoryId,
           entity_type: entityType,

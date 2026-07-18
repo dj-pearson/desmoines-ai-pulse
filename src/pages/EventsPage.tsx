@@ -153,7 +153,14 @@ export default function EventsPage() {
   const setLocation = (v: string) => setParam("location", v, { def: "any-location", resetsPage: true });
   const setPriceRange = (v: string) => setParam("price", v, { def: "any-price", resetsPage: true });
   const setSortBy = (v: string) => setParam("sort", v, { def: "date_asc", resetsPage: true });
-  const setPage = (v: number) => setParam("page", v, { def: 1 });
+  /** Accepts a number OR a React-style updater. Three call sites below pass an
+   *  updater (Load More / Previous / Next), and before this signature existed
+   *  that function was handed straight to setParam, which does String(value) —
+   *  serialising the function SOURCE into the ?page= param. getNum then parsed
+   *  NaN and fell back to 1, so those controls silently did nothing. Surfaced by
+   *  the strict type-check (WEB-CI-007). */
+  const setPage = (v: number | ((prev: number) => number)) =>
+    setParam("page", typeof v === "function" ? v(page) : v, { def: 1 });
 
   // Local immediate search input; writes to URL 'q' debounced.
   const [searchQuery, setSearchQuery] = useState(() => debouncedSearchQuery);
