@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { formatCount } from "@/lib/pluralize";
 
 interface EnhancedGroupPlannerProps {
   groupId: string;
@@ -154,7 +155,7 @@ export function EnhancedGroupPlanner({ groupId, groupName, onClose }: EnhancedGr
                 {groupName} - Enhanced Event Planning
               </CardTitle>
               <Badge variant="secondary">
-                {selectedEvents.length} events selected
+                {formatCount(selectedEvents.length, 'event')} selected
               </Badge>
             </div>
             

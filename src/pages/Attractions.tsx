@@ -53,6 +53,7 @@ import { SponsoredImpressionMarker } from "@/components/SponsoredImpressionMarke
 import { arrangeSponsored, isSponsoredActive, logSponsoredClick } from "@/lib/sponsored";
 import { SearchAutocomplete, addRecentSearch } from "@/components/SearchAutocomplete";
 import { usePrefetchAttraction } from "@/hooks/usePrefetchDetail";
+import { formatCount } from "@/lib/pluralize";
 import {
   Sheet,
   SheetContent,
@@ -538,7 +539,7 @@ export default function Attractions() {
                 Clear Filters
               </Button>
               <div className="text-sm text-gray-500">
-                {filteredAttractions?.length || 0} attractions found
+                {formatCount(filteredAttractions?.length || 0, 'attraction')} found
               </div>
             </div>
           </div>

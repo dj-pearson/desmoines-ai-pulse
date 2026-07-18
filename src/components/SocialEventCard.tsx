@@ -116,16 +116,38 @@ function SocialEventCardComponent({
                 }}
               />
             ) : null}
-            {/* Fallback when no image */}
+            {/* Designed fallback when the event has no image (WEB-QA-006).
+                Previously a flat grey box with a lone calendar glyph, which read
+                as a broken/missing image rather than a deliberate treatment.
+                Now it is a category-tinted panel — reusing the same WEB-UX-006
+                category tokens the date badge uses — with a soft dot texture and
+                the category set as a typographic element, so an imageless card
+                looks intentional next to cards that do have art. */}
             <div
-              className={`w-full h-full bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 items-center justify-center flex-col gap-2 ${
+              className={`relative w-full h-full overflow-hidden items-center justify-center flex-col gap-3 ${categoryStyle.icon} ${
                 event.image_url ? 'hidden' : 'flex'
               }`}
             >
-              <div className={`rounded-full p-4 ${categoryStyle.icon}`}>
-                <Calendar className={`h-8 w-8 ${categoryStyle.text}`} />
+              {/* Subtle dot texture so the panel isn't a flat wash of colour */}
+              <div
+                aria-hidden="true"
+                className="absolute inset-0 opacity-[0.18]"
+                style={{
+                  backgroundImage:
+                    'radial-gradient(currentColor 1px, transparent 1px)',
+                  backgroundSize: '14px 14px',
+                }}
+              />
+              <div
+                className={`relative rounded-2xl px-3 py-3 ${categoryStyle.bg} shadow-sm`}
+              >
+                <Calendar className="h-7 w-7 text-white" />
               </div>
-              <span className="text-xs text-muted-foreground mt-1">{event.category}</span>
+              <span
+                className={`relative text-sm font-semibold uppercase tracking-wider ${categoryStyle.text}`}
+              >
+                {event.category}
+              </span>
             </div>
 
             {/* Bottom gradient for text readability */}

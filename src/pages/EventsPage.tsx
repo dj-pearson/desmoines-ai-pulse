@@ -55,6 +55,7 @@ import { EventInlineFilters } from "@/components/EventInlineFilters";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { SearchAutocomplete, addRecentSearch } from "@/components/SearchAutocomplete";
+import { formatCount } from "@/lib/pluralize";
 
 // Lazy load heavy map component (includes Leaflet library ~150KB)
 const EventsMap = lazy(() => import("@/components/EventsMap"));
@@ -863,7 +864,7 @@ export default function EventsPage() {
               </h2>
               {!isLoading && (
                 <p className="text-sm text-muted-foreground mt-0.5" aria-live="polite">
-                  {events?.length || 0} events in Des Moines{isNearMeActive ? ' near you' : ''}
+                  {formatCount(events?.length || 0, 'event')} in Des Moines{isNearMeActive ? ' near you' : ''}
                 </p>
               )}
             </div>
@@ -951,7 +952,7 @@ export default function EventsPage() {
 
           {!isLoading && events && events.length > 0 && !hasMore && (
             <div className="flex justify-center mt-8 mb-4 text-sm text-muted-foreground">
-              Showing all {events.length} events
+              Showing all {formatCount(events.length, 'event')}
             </div>
           )}
 

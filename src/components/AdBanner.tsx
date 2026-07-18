@@ -105,8 +105,13 @@ export function AdBanner({ placement, className = "", fallback }: AdBannerProps)
           <div className="absolute inset-0 bg-gradient-to-r from-black/50 via-black/30 to-transparent" />
         )}
 
-        {/* Content wrapper */}
-        <div className="relative z-10 flex items-center justify-between w-full p-3 md:p-4">
+        {/* Content wrapper.
+            Left padding clears the absolutely-positioned "Ad" badge above
+            (WEB-QA-006). With a uniform p-3 the headline started at 12px while
+            the badge occupies roughly 6-38px, so on short banner units the badge
+            sat on top of the first characters of the title. The badge is FTC
+            disclosure and must stay legible, so the text yields to it. */}
+        <div className="relative z-10 flex items-center justify-between w-full py-3 pr-3 pl-12 md:py-4 md:pr-4 md:pl-14">
           <div className="flex-1 min-w-0 mr-3 md:mr-4">
             {ad.title && (
               <h3 className={`font-semibold mb-0.5 line-clamp-1 ${ad.image_url ? 'text-white drop-shadow-lg' : 'text-foreground'} ${placement === 'featured_spot' ? 'text-base md:text-lg' : 'text-sm md:text-base'}`}>

@@ -14,6 +14,7 @@ import { useEventsNearby, useGeolocation, getDistanceDisplay } from '@/hooks/use
 import type { MapLocation } from '@/components/InteractiveMap';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import { formatCount } from "@/lib/pluralize";
 
 // Lazy load map component
 const EventsMap = lazy(() => import('@/components/InteractiveMap').then(mod => ({ default: mod.InteractiveMap })));
@@ -206,7 +207,7 @@ export default function EventsNearMe() {
           {/* Results Count */}
           <div className="mb-4">
             <p className="text-sm text-muted-foreground">
-              Found {events.length} events within {radiusMiles} miles
+              Found {formatCount(events.length, 'event')} within {formatCount(radiusMiles, 'mile')}
               {location && ' of your location'}
             </p>
           </div>
