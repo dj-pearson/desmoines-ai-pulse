@@ -81,11 +81,28 @@ serve(async (req) => {
     // re-run side effects (e.g. duplicate campaign_notifications). The id is only
     // recorded AFTER successful processing below, so a failed/partial event stays
     // unrecorded and is safely reprocessed on Stripe's retry.
-    const { data: alreadyProcessed } = await supabase
+    // Capture the error rather than discarding it. stripe_webhook_events DOES
+    // exist, so this guard works today — but dropping the error means that if
+    // the table ever becomes unreachable (permission change, outage, a rename),
+    // the lookup returns nothing, every redelivery reads as "not yet processed",
+    // and the guard fails OPEN silently on a payments webhook. That is exactly
+    // how play-rtdn-webhook's identical guard came to be permanently dead
+    // without anyone noticing (WEB-BE-030).
+    const { data: alreadyProcessed, error: idempotencyLookupError } = await supabase
       .from("stripe_webhook_events")
       .select("id")
       .eq("id", event.id)
       .maybeSingle();
+
+    if (idempotencyLookupError) {
+      // Not fatal: returning non-2xx would make Stripe retry the event, which
+      // is the very thing this guard exists to make safe. Proceed, but say so
+      // loudly — duplicate side effects are recoverable, a silent fail-open is
+      // not diagnosable.
+      console.error(
+        `stripe_webhook_events lookup failed (idempotency DISABLED for event ${event.id}): ${idempotencyLookupError.message}`,
+      );
+    }
 
     if (alreadyProcessed) {
       console.log(`Duplicate Stripe event ${event.id} (${event.type}) — already processed, skipping`);
