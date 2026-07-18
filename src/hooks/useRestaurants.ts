@@ -41,6 +41,29 @@ interface RestaurantFilters {
   offset?: number;
 }
 
+/** Full rating range — i.e. the user has not actually narrowed by rating.
+ *
+ *  Sending these bounds anyway is not harmless (WEB-QA-011). The filter compares
+ *  `rating >= min AND rating <= max`, and for a restaurant with a NULL rating
+ *  both comparisons evaluate to NULL, so the row is dropped. The default [0, 5]
+ *  therefore silently excluded every unrated restaurant — 46 of 480 (~10%),
+ *  which are disproportionately the newest listings. Treat the full range as
+ *  "no filter" and send NULL so the predicate is skipped entirely.
+ */
+const RATING_MIN = 0;
+const RATING_MAX = 5;
+
+// Type predicate, not a plain boolean: callers index `rating[0]`/`rating[1]`
+// straight after this check, and under strictNullChecks a boolean return would
+// not narrow `number[] | undefined`. Narrowing to a fixed-length tuple lets that
+// indexing typecheck without a non-null assertion.
+function hasRatingFilter(
+  rating: number[] | undefined
+): rating is [number, number] {
+  if (!rating || rating.length !== 2) return false;
+  return rating[0] > RATING_MIN || rating[1] < RATING_MAX;
+}
+
 /** Statuses a visitor cannot actually go and eat at today. */
 const UNVISITABLE_STATUSES = new Set(["opening_soon", "closed"]);
 
@@ -123,14 +146,8 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
             filters.location && filters.location.length > 0
               ? filters.location
               : null,
-          min_rating:
-            filters.rating && filters.rating.length === 2
-              ? filters.rating[0]
-              : null,
-          max_rating:
-            filters.rating && filters.rating.length === 2
-              ? filters.rating[1]
-              : null,
+          min_rating: hasRatingFilter(filters.rating) ? filters.rating[0] : null,
+          max_rating: hasRatingFilter(filters.rating) ? filters.rating[1] : null,
           featured_only: !!filters.featuredOnly,
           limit_count: limit,
           offset_count: offset,
@@ -195,8 +212,10 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
         query = query.in("price_range", filters.priceRange);
       }
 
-      // Apply rating filter
-      if (filters.rating && filters.rating.length === 2) {
+      // Apply rating filter. Same guard as the RPC path above — the default
+      // [0, 5] must not be sent, or unrated restaurants get filtered out
+      // (WEB-QA-011).
+      if (hasRatingFilter(filters.rating)) {
         query = query
           .gte("rating", filters.rating[0])
           .lte("rating", filters.rating[1]);
