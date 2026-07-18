@@ -362,7 +362,9 @@ export default function DietaryRestaurants() {
             </h2>
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {restaurants.map((restaurant) => (
-                <RestaurantCard key={restaurant.id} restaurant={restaurant} />
+                <div key={restaurant.id} className="content-auto">
+                  <RestaurantCard restaurant={restaurant} />
+                </div>
               ))}
             </div>
           </>
