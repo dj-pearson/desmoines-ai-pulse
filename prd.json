@@ -6080,17 +6080,16 @@
     },
     {
       "id": "WEB-PERF-025",
-      "title": "get_active_ads is called 6 times per page load and every call fails",
+      "title": "get_active_ads fails on every page load and is retried 3x per placement",
       "description": "As the platform owner, I need ad serving to make one working call per placement, because every page issues six get_active_ads requests and all six currently return HTTP 300.",
       "acceptanceCriteria": [
-        "Apply migration 20260718000001 so the RPC stops returning PGRST203 (see WEB-QA-020) — until then all six calls fail on every page view on every surface",
-        "Investigate why there are SIX calls. Web declares three servable placements (top_banner, featured_spot, below_fold), so six suggests each placement is being requested twice — likely two AdBanner instances per placement, or a remount",
-        "Deduplicate via the react-query cache so one placement resolves once per page",
-        "Re-measure after the migration: expect 3 calls returning 200, not 6 returning 300"
+        "Apply migration 20260718000001 so the RPC stops returning PGRST203 (see WEB-QA-020). That alone takes the homepage from 6 failing calls to 2 succeeding ones",
+        "Consider treating 3xx as non-retryable in shouldRetry (src/lib/queryConfig.ts). A PostgREST 300 means \"could not choose the best candidate function\" — a permanent schema condition that will never resolve by waiting, yet the current policy retries it because the guard only excludes 4xx",
+        "Re-measure after the migration: expect 2 calls returning 200 on the homepage, not 6 returning 300"
       ],
       "priority": 3,
       "passes": false,
-      "notes": "MEASURED 2026-07-18 (claude/prd-loop-schema-gaps) on a production build. Every list page and the homepage issue exactly 6 get_active_ads calls, and every response status was 300 (PGRST203, the ambiguous overload). Confirmed on /events, /restaurants, /attractions and /. So this is two problems stacked: the RPC is broken for everyone (WEB-QA-020, one command to fix), AND it is being called twice as many times as there are placements. The second is worth fixing regardless — once the migration lands, six working calls per page view is six round trips where three would do, on every page, for every visitor. Severity 3 because the failing calls degrade gracefully to the house-ad fallback and cost only latency today. It becomes a real revenue-path concern the moment ads work again."
+      "notes": "MEASURED 2026-07-18 (claude/prd-loop-schema-gaps) on a production build. Every list page and the homepage issue exactly 6 get_active_ads calls, and every response status was 300 (PGRST203, the ambiguous overload). Confirmed on /events, /restaurants, /attractions and /. So this is two problems stacked: the RPC is broken for everyone (WEB-QA-020, one command to fix), AND it is being called twice as many times as there are placements. The second is worth fixing regardless — once the migration lands, six working calls per page view is six round trips where three would do, on every page, for every visitor. Severity 3 because the failing calls degrade gracefully to the house-ad fallback and cost only latency today. It becomes a real revenue-path concern the moment ads work again. | DIAGNOSIS CORRECTED 2026-07-19. I originally wrote that six calls meant each placement was being requested twice and recommended deduplication. THAT WAS WRONG, and inspecting the request payloads disproved it. There are only TWO distinct placements on the homepage (top_banner, below_fold) and each is requested exactly THREE times. React-query deduplicates by queryKey, so identical keys cannot produce parallel requests — three attempts per key is RETRY behaviour. Root cause: src/lib/queryConfig.ts shouldRetry() declines to retry 4xx (except 408/429) but PGRST203 surfaces as HTTP 300, which is not >= 400, so it falls through to the retryable branch and burns MAX_RETRIES on a permanent condition. CONSEQUENCE FOR THE FIX: there is no dedup work to do. Applying 20260718000001 takes this from 6 failing calls to 2 succeeding ones by itself. The only optional hardening is excluding 3xx from retry, which matters mainly for how loudly the next such failure fails. I am recording the error rather than quietly editing it because the original wording would have sent someone hunting for a duplicate-render bug that does not exist."
     }
   ]
 }
