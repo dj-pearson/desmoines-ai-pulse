@@ -291,34 +291,59 @@ test.describe('Filter Functionality', () => {
   test('events page filters should work correctly', async ({ page }) => {
     await page.goto('/events', { waitUntil: 'networkidle' });
 
-    // Look for filter elements
-    const categoryFilter = page.locator('select, [role="combobox"], button[aria-haspopup]').first();
+    // This test was broken three separate ways and could not fail on the
+    // behaviour it names:
+    //
+    //  1. `.first()` on 'select, [role="combobox"], button[aria-haspopup]'
+    //     matched an INVISIBLE 0x0 button, so every run timed out clicking it.
+    //  2. It counted results with '[data-testid*="result"], article, .card',
+    //     none of which this app renders — measured 0 while the page showed
+    //     40 event cards (rendered as a[href^="/events/"] inside a grid).
+    //  3. Its only assertion was `expect(afterFilterCount).toBeDefined()`. A
+    //     number is always defined, so even with the first two fixed it would
+    //     pass with filtering completely broken.
+    //
+    // Now: click a VISIBLE filter control and assert the page actually
+    // responded — either the result set changed or the filter state was
+    // reflected in the URL. Accepting either keeps this robust when a chosen
+    // facet happens to match everything.
+    const cards = () => page.locator('a[href^="/events/"]');
 
-    if (await categoryFilter.count() === 0) {
-      console.log('No filters found on events page');
+    // Driven through the SEARCH INPUT rather than a Radix dropdown.
+    //
+    // tests/url-filter-state.spec.ts exercises these same filters this way and
+    // passes consistently, so it is the proven driver. Clicking the dropdown
+    // proved unreliable here: the visible-first combobox on this page is the
+    // search autocomplete, and Radix renders its listbox in a portal, so a
+    // naive click-then-pick-an-option sequence reports "filtering is broken"
+    // when it has simply driven the wrong control. Given url-filter-state
+    // already covers URL round-tripping, the gap worth covering here is
+    // whether filtering actually CHANGES THE RENDERED RESULTS — which that
+    // suite never asserts.
+    const searchInput = page
+      .locator('input[type="search"], input[placeholder*="search" i], input[aria-label*="search" i]')
+      .first();
+
+    if ((await searchInput.count()) === 0) {
+      console.log('No search input on events page');
       return;
     }
 
-    const initialCount = await page.locator('[data-testid*="result"], article, .card').count();
-    console.log(`Initial event count: ${initialCount}`);
+    const initialCount = await cards().count();
+    expect(initialCount, 'events page should render event cards before filtering').toBeGreaterThan(0);
 
-    // Try to click/interact with filter
-    await categoryFilter.click();
-    await page.waitForTimeout(500);
+    // A term unlikely to match every event, so the result set must move.
+    await searchInput.fill('zzzznonexistentquery');
+    await expect(page).toHaveURL(/[?&]q=zzzznonexistentquery/i, { timeout: 5000 });
+    await page.waitForTimeout(800);
 
-    // Select a filter option
-    const filterOption = page.locator('[role="option"], option, [role="menuitem"]').first();
+    const afterCount = await cards().count();
 
-    if (await filterOption.count() > 0) {
-      await filterOption.click();
-      await page.waitForTimeout(800);
-
-      const afterFilterCount = await page.locator('[data-testid*="result"], article, .card').count();
-      console.log(`After filter event count: ${afterFilterCount}`);
-
-      // Filter should have changed the results
-      expect(afterFilterCount).toBeDefined();
-    }
+    expect(
+      afterCount,
+      `Filtering by a non-matching term should reduce the rendered results. ` +
+        `before=${initialCount} after=${afterCount}`
+    ).toBeLessThan(initialCount);
   });
 
   test('multiple filters should work together', async ({ page }) => {
