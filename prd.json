@@ -6034,6 +6034,20 @@
       "priority": 3,
       "passes": false,
       "notes": "MEASURED 2026-07-18 (claude/prd-loop-schema-gaps) on the production build. /attractions at 320x568 reports scrollWidth=321 against clientWidth=320 — exactly 1px. Every other audited route and viewport is clean. SEVERITY 3 and deliberately NOT fixed: 1px is not user-visible, and the elements the probe surfaced report right edges of 328-374 while the document overflows by only 1px. That means they sit inside a clipped or scrollable ancestor and are not necessarily the cause. Guessing at a 1px fix from that evidence is how a working layout gets broken. Needs a devtools session at a 320px viewport. CONTEXT: this was the ONLY genuine failure among 105 mobile-responsive tests. The other three were false positives in the content-fits-viewport test, which counted horizontal-carousel children as overflow — at 375px it reported 24 overflowing elements on /, 64 on /events and 67 on /restaurants, while documentElement.scrollWidth was exactly 375 on all three. That test was rewritten in ca03f45d and the suite now sits at 104 passed / 1 failed."
+    },
+    {
+      "id": "WEB-UX-032",
+      "title": "Shared Checkbox renders a 20x20px hit area, below every touch-target guideline",
+      "description": "As a touch user, I need checkboxes big enough to tap reliably, because the shared component renders a 20x20px target and 46% of buttons on /advertise fall below the 44x44 recommendation as a result.",
+      "acceptanceCriteria": [
+        "Decide the target: WCAG 2.2 AA (2.5.8) requires 24x24 minimum; 44x44 is the Apple/Android and WCAG AAA recommendation this suite checks against",
+        "Enlarge the hit area in src/components/ui/checkbox.tsx — padding or a wrapper can expand the target WITHOUT changing the visual box size, which avoids a site-wide visual change",
+        "Audit other small controls at the same time (radio, switch, icon-only buttons) rather than fixing checkbox alone",
+        "links-and-buttons touch-target test on /advertise goes green — it is the last remaining failure in that suite"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "MEASURED 2026-07-18 (claude/prd-loop-schema-gaps). The five ad-placement checkboxes on /advertise render at 20x20px (Tailwind h-4 w-4 plus border). The links-and-buttons touch-target test allows 20% of buttons under 44x44 and measured 46%. NOT FIXED HERE, deliberately: these are instances of the shared shadcn ui/checkbox, so resizing changes every checkbox in the product. That is a design-system decision with visual consequences across admin forms, filters and settings — not something to change from a test failure. The low-risk path is expanding the HIT AREA via padding while keeping the drawn box at 16px, which satisfies the guideline without a visual redesign. RELATED AND ALREADY FIXED (e4b65fcc): the same five checkboxes had no accessible name at all — no id, aria-label, aria-labelledby or associated label — so a screen reader announced them as bare \"checkbox\". They are now associated with their visible h3 via aria-labelledby. Size is the remaining half of the problem."
     }
   ]
 }
