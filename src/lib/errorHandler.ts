@@ -250,6 +250,36 @@ export function withErrorBoundary<T extends (...args: any[]) => any>(
 }
 
 /**
+ * Extract a human-readable message from an unknown thrown value.
+ *
+ * Exists so `catch` blocks can be typed `catch (error)` — which TypeScript
+ * gives the type `unknown` — instead of `catch (error: any)` purely to reach
+ * `.message` (WEB-QUAL-004). `any` there is not free: it silently permits
+ * `error.mesage`, `error.response.data` and similar unchecked access on a value
+ * that may not be an Error at all. Anything can be thrown in JS, including
+ * strings, and Supabase/PostgREST rejections are plain objects, not Errors.
+ *
+ * @param error - the caught value, of genuinely unknown shape
+ * @param fallback - returned when no message can be recovered
+ */
+export function getErrorMessage(
+  error: unknown,
+  fallback = 'An unexpected error occurred'
+): string {
+  if (typeof error === 'string') return error || fallback;
+  if (error instanceof Error) return error.message || fallback;
+
+  // PostgREST/Supabase errors are plain objects carrying `message`, and often
+  // `details`/`hint`, without being Error instances.
+  if (error && typeof error === 'object') {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string' && message) return message;
+  }
+
+  return fallback;
+}
+
+/**
  * Safe JSON parse with error handling
  */
 export function safeJsonParse<T>(json: string, fallback: T): T {

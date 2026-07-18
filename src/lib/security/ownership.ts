@@ -8,6 +8,7 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
+import type { Database } from '@/integrations/supabase/types';
 import {
   type SecurityContext,
   type SecurityCheckResult,
@@ -50,18 +51,21 @@ export async function isResourceOwner(
   }
 
   try {
-    const { data, error } = await (supabase
-      .from(tableName as any)
-      .select(ownerColumn) as any)
+    // `ownerColumn` is a runtime string, so the select projection cannot be
+    // statically typed; the row is therefore read as an index map rather than
+    // `any`, which keeps property access on it checked (WEB-QUAL-004).
+    const { data, error } = await supabase
+      .from(tableName)
+      .select(ownerColumn)
       .eq('id', resourceId)
-      .single();
+      .single<Record<string, unknown>>();
 
     if (error || !data) {
       return false;
     }
 
     // Check direct ownership
-    const ownerId = (data as any)[ownerColumn];
+    const ownerId = data[ownerColumn];
     return ownerId === context.userId;
   } catch (error) {
     logger.error('isResourceOwner', 'Error checking ownership', { resourceType, resourceId, error: String(error) });
@@ -256,11 +260,11 @@ export async function validateResourceAccess<T = Record<string, unknown>>(
 
   try {
     // Fetch the resource
-    const { data, error } = await (supabase
-      .from(tableName as any)
-      .select(config?.select || '*') as any)
+    const { data, error } = await supabase
+      .from(tableName)
+      .select(config?.select || '*')
       .eq('id', resourceId)
-      .single();
+      .single<Record<string, unknown>>();
 
     if (error || !data) {
       return {
@@ -300,28 +304,61 @@ export async function validateResourceAccess<T = Record<string, unknown>>(
 // =============================================================================
 
 /**
- * Map resource type to database table name
+ * Map resource type to database table name.
+ *
+ * The value type is `TableName`, i.e. `keyof Database['public']['Tables']`, so
+ * TypeScript verifies at compile time that every name here is a table that
+ * actually exists. That check is the point of this map (WEB-QUAL-004): it was
+ * previously typed `Record<OwnableResource, string>`, and under that looser type
+ * SIX of the fifteen entries pointed at tables that do not exist —
+ * `reviews`, `ratings`, `favorites`, `advertisements`, `saved_itineraries` and
+ * `event_alerts`. Three were simply renamed (see below); three have no
+ * identified equivalent.
+ *
+ * The consequence was silent: `isResourceOwner` would query a nonexistent
+ * table, get an error, and hit `if (error || !data) return false` — i.e. every
+ * ownership check for those six resource types denied. That fails CLOSED, so it
+ * was not a vulnerability, but it would have broken legitimate actions (a user
+ * unable to edit their own review) the moment this module was wired up.
+ *
+ * Nothing calls it today — `useResourceOwnership` currently has no consumers —
+ * which is why the breakage went unnoticed.
+ *
+ * `null` means "no verified table for this resource type". It is deliberately
+ * NOT a guess. Mapping one of these to the wrong table is the dangerous
+ * direction: an ownership check against a table whose `user_id` belongs to a
+ * different entity could fail OPEN. `getTableName` returning null makes
+ * `isResourceOwner` log an explicit error and deny, which is the safe outcome
+ * and is loud enough to diagnose. Resolve these before wiring this module in.
  */
-function getTableName(resourceType: OwnableResource): string | null {
-  const tableMap: Record<OwnableResource, string> = {
+type TableName = keyof Database['public']['Tables'];
+
+function getTableName(resourceType: OwnableResource): TableName | null {
+  const tableMap: Record<OwnableResource, TableName | null> = {
     event: 'events',
     restaurant: 'restaurants',
     attraction: 'attractions',
-    review: 'reviews',
-    rating: 'ratings',
-    favorite: 'favorites',
+    // Renamed; verified to carry the `user_id` column OWNERSHIP_COLUMNS expects.
+    review: 'event_reviews',
+    rating: 'user_ratings',
+    favorite: 'content_favorites',
     discussion: 'event_discussions',
     discussion_reply: 'discussion_replies',
     photo: 'event_photos',
     campaign: 'campaigns',
-    advertisement: 'advertisements',
     profile: 'profiles',
-    trip_plan: 'saved_itineraries',
     saved_search: 'saved_searches',
-    event_alert: 'event_alerts',
+    // UNRESOLVED — no table in the current schema corresponds to these.
+    // `advertisements` (owner column `campaign_id`), `saved_itineraries` and
+    // `event_alerts` all previously pointed at nonexistent tables.
+    // `curated_itineraries` and `advertising_packages` exist but are editorial /
+    // pricing tables, not per-user records, so neither is a safe substitute.
+    advertisement: null,
+    trip_plan: null,
+    event_alert: null,
   };
 
-  return tableMap[resourceType] || null;
+  return tableMap[resourceType] ?? null;
 }
 
 /**
