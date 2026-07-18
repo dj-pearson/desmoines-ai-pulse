@@ -73,7 +73,13 @@ const RestaurantsMap = lazy(() => import("@/components/RestaurantsMap"));
 
 
 const sortOptions = [
-  { value: "popularity", label: "Most Popular", icon: TrendingUp },
+  // Labeled "Recommended", not "Most Popular" (WEB-QA-004). This option routes
+  // through get_rotated_restaurants, which shuffles by a rotation seed so the
+  // top of the list varies between visits — it is deliberately NOT a popularity
+  // ranking, and calling it "Most Popular" told visitors the three venues at the
+  // top were the city's most popular when the order was largely arbitrary.
+  // "Highest Rated" below remains the deterministic quality sort.
+  { value: "popularity", label: "Recommended", icon: TrendingUp },
   { value: "rating", label: "Highest Rated", icon: Star },
   { value: "newest", label: "Newest", icon: Clock },
   { value: "alphabetical", label: "A-Z", icon: SlidersHorizontal },
@@ -563,7 +569,13 @@ export default function Restaurants() {
                     "Searching..."
                   ) : (
                     <span>
-                      <strong className="text-foreground">{totalCount}</strong> found
+                      {/* Never render a bare "found" with no number (WEB-QA-004):
+                          PostgREST can return a null count, so fall back to the
+                          number of rows actually on screen. */}
+                      <strong className="text-foreground">
+                        {totalCount ?? restaurants.length}
+                      </strong>{" "}
+                      found
                     </span>
                   )}
                 </p>

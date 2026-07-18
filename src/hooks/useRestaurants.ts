@@ -41,6 +41,33 @@ interface RestaurantFilters {
   offset?: number;
 }
 
+/** Statuses a visitor cannot actually go and eat at today. */
+const UNVISITABLE_STATUSES = new Set(["opening_soon", "closed"]);
+
+/**
+ * Sink not-yet-open and closed venues below the ones a visitor can visit now,
+ * preserving relative order within each group (WEB-QA-004).
+ *
+ * The default sort routes through `get_rotated_restaurants`, which deliberately
+ * shuffles by a rotation seed so the top of the list isn't identical on every
+ * visit. That shuffle ignores `status`, so "Opening Soon" venues regularly
+ * landed in the first row of cards — the QA pass saw three of them leading the
+ * list. This is a stable partition rather than a re-sort, so the rotation's
+ * variety is kept intact within each group.
+ *
+ * Done client-side on purpose: the ordering lives in the RPC, and changing that
+ * is a migration. This needs no schema change and no shape change.
+ */
+function deprioritizeUnvisitable(list: Restaurant[]): Restaurant[] {
+  const visitable: Restaurant[] = [];
+  const unvisitable: Restaurant[] = [];
+  for (const r of list) {
+    const status = (r as { status?: string | null }).status ?? "";
+    (UNVISITABLE_STATUSES.has(status) ? unvisitable : visitable).push(r);
+  }
+  return [...visitable, ...unvisitable];
+}
+
 export function useRestaurants(filters: RestaurantFilters = {}) {
   const [state, setState] = useState<RestaurantsState>({
     restaurants: [],
@@ -111,7 +138,9 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
 
         if (!rpcError && rpcData) {
           setState({
-            restaurants: rpcData.map((r) => r.restaurant_data),
+            restaurants: deprioritizeUnvisitable(
+              rpcData.map((r) => r.restaurant_data)
+            ),
             isLoading: false,
             error: null,
             totalCount:
@@ -133,10 +162,17 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
       let query = supabase
         .from("restaurants")
         // Project only the card/list fields (WEB-PERF-009) — drops heavy
-        // SEO/GEO/tsvector/geometry columns the list never renders. Count uses
-        // the planner estimate ("planned") instead of forcing a full-table
-        // exact count on every filter/sort.
-        .select(RESTAURANT_LIST_COLUMNS, { count: "planned" })
+        // SEO/GEO/tsvector/geometry columns the list never renders.
+        //
+        // Count is "estimated", not "planned" (WEB-QA-004). A "planned" count is
+        // purely the planner's row estimate and comes back NULL whenever the
+        // planner has no usable statistic for the filtered query — which is why
+        // the results header rendered a blank number before "found". "estimated"
+        // returns an exact count under PostgREST's threshold and falls back to
+        // the planner estimate only for large result sets, so it keeps the
+        // WEB-PERF-009 intent (no forced full-table count on every filter/sort)
+        // while always yielding a number.
+        .select(RESTAURANT_LIST_COLUMNS, { count: "estimated" })
         .neq("is_merged", true); // Hide rows merged into a duplicate (WEB-AUTO-005)
 
       // Use full-text search with tsvector for better performance and relevance ranking
