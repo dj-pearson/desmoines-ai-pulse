@@ -27,25 +27,45 @@ final class CertificatePinningService: NSObject, URLSessionDelegate {
     /// - Let's Encrypt R3 intermediate SPKI (backup)
     /// - ISRG Root X1 SPKI (backup)
     ///
-    /// NOTE (hardening follow-up): several entries below are widely-used public
-    /// root CAs (GTS R4, ISRG X1, DigiCert G2). Because `urlSession(_:didReceive:)`
-    /// matches *any* cert in the chain, pinning to public roots means a cert from
-    /// any of those CAs satisfies the pin, which substantially weakens pinning.
-    /// Before enabling enforcement (`Config.certificatePinningEnforced`), re-pin
-    /// to the Supabase leaf + one issuer SPKI captured from the live host and
-    /// verify the computed hashes here match. `spkiSHA256Hash` now hashes the full
-    /// SPKI DER correctly, so a freshly-captured openssl hash will line up.
+    /// VERIFIED AGAINST THE LIVE HOST 2026-07-18 (IOS-AUDIT-SEC-001).
+    /// Re-run `scripts/verify-cert-pins.sh` to reproduce; it prints the SPKI hash
+    /// of every cert in the live chain so these can be diffed.
+    ///
+    /// Live chain for wtkhfqpmcegzcbngroui.supabase.co on that date:
+    ///   leaf  CN=supabase.co                    ZcJbApTb7wyllleAjHw2vYAskqdT+DhMY9aPDFwAtf4=
+    ///   int.  Google Trust Services, CN=WE1     kIdp6NNEd8wsugYyyIYFsi1ylMCED3hZbSR8ZFsa/A4=
+    ///   root  GTS Root R4                      mEflZT5enoR1FuXLgYYGqnVEoZvmf9c2bVBpiOjYQ0c=
+    ///
+    /// Removed 2026-07-18: Let's Encrypt R3, ISRG Root X1, and DigiCert Global
+    /// Root G2. None of them appear anywhere in Supabase's live chain, so they
+    /// could never satisfy a legitimate connection — but because
+    /// `urlSession(_:didReceive:)` accepts if *any* chain cert matches *any* pin,
+    /// their presence meant a cert from any of those very widely-used CAs would
+    /// pass pinning. They only ever widened the accept set. Removing them is a
+    /// strict tightening with no rotation cost.
+    ///
+    /// STILL BROADER THAN IDEAL: `GTS Root R4` is a public root, so any
+    /// Google-Trust-Services-issued certificate satisfies the pin. It is kept
+    /// deliberately as the rotation backup — Supabase's leaf and intermediate
+    /// both chain to it, so it is the one pin that survives a leaf or
+    /// intermediate reissue. Narrowing to leaf+intermediate only would be
+    /// stronger but would brick clients on the next rotation with no fallback.
+    ///
+    /// The leaf pin rotates (GTS issues short-lived certs, ~90 days), so it must
+    /// NOT be the only pin — it is here to tighten the common case, while WE1
+    /// carries continuity across leaf reissues.
+    ///
+    /// BEFORE FLIPPING `Config.certificatePinningEnforced` (IOS-AUDIT-SEC-013):
+    /// re-run the verify script, confirm the leaf hash below still matches or
+    /// update it, and confirm at least two pins in this set are present in the
+    /// live chain so a single rotation cannot lock every client out.
     private let pinnedSPKIHashes: Set<String> = [
-        // Google Trust Services WE1 intermediate (current Supabase issuer)
+        // Supabase leaf, CN=supabase.co — verified live 2026-07-18. Rotates ~90d.
+        "ZcJbApTb7wyllleAjHw2vYAskqdT+DhMY9aPDFwAtf4=",
+        // Google Trust Services WE1 intermediate (current Supabase issuer) — verified live 2026-07-18.
         "kIdp6NNEd8wsugYyyIYFsi1ylMCED3hZbSR8ZFsa/A4=",
-        // GTS Root R4 (current Supabase root)
+        // GTS Root R4 (current Supabase root) — verified live 2026-07-18. Rotation backup; see note above.
         "mEflZT5enoR1FuXLgYYGqnVEoZvmf9c2bVBpiOjYQ0c=",
-        // Let's Encrypt R3 intermediate (fallback)
-        "jQJTbIh0grw0/1TkHSumWb+Fs0Ggogr621gT3PvPKG0=",
-        // ISRG Root X1 (fallback)
-        "C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=",
-        // DigiCert Global Root G2 (fallback)
-        "i7WTqTvh0OioIruIfFR4kMPnBqrS2rdiVPl/s2uC/CY=",
     ]
 
     /// When `true`, pinning failures are logged but connections are NOT blocked.
