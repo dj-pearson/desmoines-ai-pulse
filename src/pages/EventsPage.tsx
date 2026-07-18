@@ -186,7 +186,10 @@ export default function EventsPage() {
     setCustomDateFilter(null);
     clearParams(["q", "category", "preset", "location", "price", "sort"]);
     setIsNearMeActive(false);
-    setShowMobileFilters(false);
+    // NOTE: a setShowMobileFilters(false) call sat here referencing state that no
+    // longer exists. It threw ReferenceError on every "Clear all filters" click,
+    // aborting the handler before the confirmation toast below ever fired
+    // (WEB-QA-017).
     toast({
       title: "Filters Cleared",
       description: "All filters have been reset",
