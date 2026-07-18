@@ -179,11 +179,19 @@ final class CertificatePinningService: NSObject, URLSessionDelegate {
               let keyType = attrs[kSecAttrKeyType] as? String,
               let keySize = attrs[kSecAttrKeySizeInBits] as? Int else { return nil }
 
+        // The CFString algorithm constants can't be referenced directly inside a
+        // `case` pattern: `kSecAttrKeyTypeRSA as String` is parsed as an `as` cast
+        // pattern (CFString can't match a String value), and a bare local constant
+        // would bind rather than match. Compare against the bridged Strings via a
+        // `where` clause instead.
+        let rsaKeyType = kSecAttrKeyTypeRSA as String
+        let ecKeyType = kSecAttrKeyTypeECSECPrimeRandom as String
+
         switch (keyType, keySize) {
-        case (kSecAttrKeyTypeRSA as String, 2048): return Self.spkiHeaders["RSA-2048"]
-        case (kSecAttrKeyTypeRSA as String, 4096): return Self.spkiHeaders["RSA-4096"]
-        case (kSecAttrKeyTypeECSECPrimeRandom as String, 256): return Self.spkiHeaders["EC-256"]
-        case (kSecAttrKeyTypeECSECPrimeRandom as String, 384): return Self.spkiHeaders["EC-384"]
+        case (let type, 2048) where type == rsaKeyType: return Self.spkiHeaders["RSA-2048"]
+        case (let type, 4096) where type == rsaKeyType: return Self.spkiHeaders["RSA-4096"]
+        case (let type, 256) where type == ecKeyType: return Self.spkiHeaders["EC-256"]
+        case (let type, 384) where type == ecKeyType: return Self.spkiHeaders["EC-384"]
         default: return nil
         }
     }
