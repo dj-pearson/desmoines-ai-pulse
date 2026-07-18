@@ -49,6 +49,20 @@ jobs:
       - name: Run TypeScript type check
         run: npm run type-check
 
+      # Named-import integrity: a named import with no matching export is not a
+      # type error, and esbuild strips types without checking, so it reaches
+      # production as an undefined component (React #130). See WEB-QA-001.
+      - name: Check import/export integrity
+        run: npm run check-imports
+
+      # strictNullChecks migration ratchet (WEB-CI-007). The strict project
+      # cannot pass yet (~88 real errors), so this does not gate on zero — it
+      # fails only if a file gets WORSE or a new file starts erroring. Baseline
+      # lives in strict-baseline.json; re-baseline with
+      # `npm run type-check:strict:update` after improving.
+      - name: strictNullChecks ratchet
+        run: npm run type-check:strict:ratchet
+
       - name: Run unit tests with coverage
         run: npm run test:unit -- --coverage
 

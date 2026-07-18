@@ -16,6 +16,7 @@ import { Link } from "react-router-dom";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { formatCount } from "@/lib/pluralize";
 
 interface EventItem {
   id: string;
@@ -85,7 +86,7 @@ export default function EventsToday() {
   const faqData = [
     {
       question: `What's happening today in Des Moines?`,
-      answer: `We have ${todaysEvents.length} events happening today in Des Moines and surrounding areas. See our complete list with times, locations, and details.`,
+      answer: `We have ${formatCount(todaysEvents.length, 'event')} happening today in Des Moines and surrounding areas. See our complete list with times, locations, and details.`,
     },
     {
       question: "How current is this information?",

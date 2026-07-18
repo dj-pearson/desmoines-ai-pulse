@@ -150,17 +150,17 @@ export default function Footer() {
               <div className="flex gap-3" role="group" aria-label="Social media links">
                 <a href="https://facebook.com" target="_blank" rel="noopener noreferrer"
                    aria-label="Follow us on Facebook (opens in new tab)"
-                   className="w-9 h-9 rounded-full bg-neutral-800 hover:bg-neutral-700 flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-neutral-900">
+                   className="tap-area-44 w-9 h-9 rounded-full bg-neutral-800 hover:bg-neutral-700 flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-neutral-900">
                   <Facebook className="h-4 w-4" aria-hidden="true" />
                 </a>
                 <a href="https://twitter.com" target="_blank" rel="noopener noreferrer"
                    aria-label="Follow us on Twitter (opens in new tab)"
-                   className="w-9 h-9 rounded-full bg-neutral-800 hover:bg-neutral-700 flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-neutral-900">
+                   className="tap-area-44 w-9 h-9 rounded-full bg-neutral-800 hover:bg-neutral-700 flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-neutral-900">
                   <Twitter className="h-4 w-4" aria-hidden="true" />
                 </a>
                 <a href="https://instagram.com" target="_blank" rel="noopener noreferrer"
                    aria-label="Follow us on Instagram (opens in new tab)"
-                   className="w-9 h-9 rounded-full bg-neutral-800 hover:bg-neutral-700 flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-neutral-900">
+                   className="tap-area-44 w-9 h-9 rounded-full bg-neutral-800 hover:bg-neutral-700 flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-neutral-900">
                   <Instagram className="h-4 w-4" aria-hidden="true" />
                 </a>
               </div>

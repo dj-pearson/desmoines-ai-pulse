@@ -39,6 +39,7 @@ import { SEOOpportunities } from "./SearchTrafficDashboard/SEOOpportunities";
 import { SiteHealth } from "./SearchTrafficDashboard/SiteHealth";
 import { ComparativeAnalysis } from "./SearchTrafficDashboard/ComparativeAnalysis";
 import { createLogger } from '@/lib/logger';
+import { getErrorMessage } from "@/lib/errorHandler";
 
 const log = createLogger('SearchTrafficDashboard');
 
@@ -79,7 +80,7 @@ export function SearchTrafficDashboard() {
 
       // Load GSC properties (split into two queries to avoid PostgREST join 400 errors)
       const { data: properties, error } = await supabase
-        .from("gsc_properties" as any)
+        .from("gsc_properties")
         .select("id, property_url, property_type, status, last_sync_at, created_at, oauth_credential_id")
         .order("created_at", { ascending: false });
 
@@ -87,24 +88,24 @@ export function SearchTrafficDashboard() {
         log.debug('loadProviders', 'gsc_properties not available yet', { data: error });
       }
 
-      const propRows = (properties || []) as any[];
+      const propRows = properties || [];
 
       // Separately fetch credential status for all credential IDs
-      const credIds = propRows.map((p: any) => p.oauth_credential_id).filter(Boolean);
+      const credIds = propRows.map((p) => p.oauth_credential_id).filter(Boolean);
       const credMap: Record<string, { id: string; is_active: boolean; expires_at: string }> = {};
 
       if (credIds.length > 0) {
         const { data: creds } = await supabase
-          .from("gsc_oauth_credentials" as any)
+          .from("gsc_oauth_credentials")
           .select("id, is_active, expires_at")
           .in("id", credIds);
 
-        for (const cred of (creds || []) as any[]) {
+        for (const cred of creds || []) {
           credMap[cred.id] = cred;
         }
       }
 
-      const providers: ConnectedProvider[] = propRows.map((prop: any) => {
+      const providers: ConnectedProvider[] = propRows.map((prop) => {
         const cred = credMap[prop.oauth_credential_id];
         const isExpired = cred?.expires_at ? new Date(cred.expires_at) < new Date() : false;
         const isActive = cred?.is_active === true;
@@ -134,13 +135,13 @@ export function SearchTrafficDashboard() {
       // can click Sync Data to pull their properties.
       if (providers.length === 0) {
         const { data: activeCreds } = await supabase
-          .from("gsc_oauth_credentials" as any)
+          .from("gsc_oauth_credentials")
           .select("id, is_active, expires_at, created_at")
           .eq("is_active", true)
           .order("created_at", { ascending: false })
           .limit(1);
 
-        const latestCred = ((activeCreds || []) as any[])[0];
+        const latestCred = (activeCreds || [])[0];
         if (latestCred) {
           const isExpired = latestCred.expires_at
             ? new Date(latestCred.expires_at) < new Date()
@@ -263,9 +264,9 @@ export function SearchTrafficDashboard() {
       });
 
       loadConnectedProviders();
-    } catch (error: any) {
+    } catch (error) {
       log.error('syncData', 'Sync error', { data: error });
-      toast.error("Failed to sync data", { description: error.message || "Please try again later" });
+      toast.error("Failed to sync data", { description: getErrorMessage(error, "Please try again later") });
     } finally {
       setSyncing(false);
     }
@@ -300,10 +301,10 @@ export function SearchTrafficDashboard() {
       window.URL.revokeObjectURL(url);
 
       toast.success("Export completed!");
-    } catch (error: any) {
+    } catch (error) {
       log.error('exportData', 'Export error', { data: error });
       toast.error("Failed to export data", {
-        description: error.message || "Please try again later",
+        description: getErrorMessage(error, "Please try again later"),
       });
     }
   };
@@ -315,20 +316,20 @@ export function SearchTrafficDashboard() {
       if (!user) return;
 
       const { data: creds } = await supabase
-        .from("gsc_oauth_credentials" as any)
+        .from("gsc_oauth_credentials")
         .select("id")
         .eq("user_id", user.id);
 
-      const credIds = ((creds || []) as any[]).map((c) => c.id);
+      const credIds = (creds || []).map((c) => c.id);
 
       if (credIds.length > 0) {
         await supabase
-          .from("gsc_properties" as any)
+          .from("gsc_properties")
           .delete()
           .in("oauth_credential_id", credIds);
 
         await supabase
-          .from("gsc_oauth_credentials" as any)
+          .from("gsc_oauth_credentials")
           .update({ is_active: false })
           .in("id", credIds);
       }
@@ -338,9 +339,9 @@ export function SearchTrafficDashboard() {
       toast.success("Disconnected", {
         description: "All GSC connections removed. Connect again to start fresh.",
       });
-    } catch (error: any) {
+    } catch (error) {
       log.error('disconnect', 'Disconnect failed', { data: error });
-      toast.error("Failed to disconnect", { description: error.message });
+      toast.error("Failed to disconnect", { description: getErrorMessage(error) });
     }
   };
 
@@ -392,7 +393,7 @@ export function SearchTrafficDashboard() {
         toast.success(`Properties refreshed: ${propJson.count ?? 0} found`);
       }
       await loadConnectedProviders();
-    } catch (error: any) {
+    } catch (error) {
       log.error('refreshProps', 'Refresh failed', { data: error });
       toast.error("Failed to refresh properties");
     }
@@ -417,10 +418,10 @@ export function SearchTrafficDashboard() {
 
       // Fetch all properties, then delete those that don't match the domain
       const { data: allProps } = await supabase
-        .from("gsc_properties" as any)
+        .from("gsc_properties")
         .select("id, property_url");
 
-      const toDelete = ((allProps || []) as any[])
+      const toDelete = (allProps || [])
         .filter((p) => !p.property_url.toLowerCase().includes(domain))
         .map((p) => p.id);
 
@@ -431,18 +432,18 @@ export function SearchTrafficDashboard() {
       }
 
       const { error } = await supabase
-        .from("gsc_properties" as any)
+        .from("gsc_properties")
         .delete()
         .in("id", toDelete);
 
       if (error) {
-        toast.error("Could not remove extra properties", { description: error.message });
+        toast.error("Could not remove extra properties", { description: getErrorMessage(error) });
         return;
       }
 
       toast.success(`Removed ${toDelete.length} extra properties. Now showing ${domain} only.`);
       await loadConnectedProviders();
-    } catch (err: any) {
+    } catch (err) {
       log.error('directCleanup', 'Cleanup failed', { data: err });
       toast.error("Cleanup failed — use Disconnect and reconnect instead.");
     }

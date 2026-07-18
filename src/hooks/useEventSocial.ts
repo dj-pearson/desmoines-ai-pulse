@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { createLogger } from '@/lib/logger';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 
 const logger = createLogger('useEventSocial');
 
@@ -138,7 +139,9 @@ export function useEventSocial(eventId: string) {
   useEffect(() => {
     if (!eventId) return;
 
-    const channels = [];
+    // Typed explicitly: an empty array literal infers never[]/any[] here, which
+    // strict mode reports as an implicit-any escape (TS7034/TS7005).
+    const channels: RealtimeChannel[] = [];
 
     // Subscribe to attendees changes
     const attendeesChannel = supabase

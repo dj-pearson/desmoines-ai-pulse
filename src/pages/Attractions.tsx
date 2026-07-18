@@ -53,6 +53,7 @@ import { SponsoredImpressionMarker } from "@/components/SponsoredImpressionMarke
 import { arrangeSponsored, isSponsoredActive, logSponsoredClick } from "@/lib/sponsored";
 import { SearchAutocomplete, addRecentSearch } from "@/components/SearchAutocomplete";
 import { usePrefetchAttraction } from "@/hooks/usePrefetchDetail";
+import { formatCount } from "@/lib/pluralize";
 import {
   Sheet,
   SheetContent,
@@ -115,7 +116,14 @@ export default function Attractions() {
 
   const ITEMS_PER_PAGE = 30;
   const page = getNum("page", 1);
-  const setPage = (v: number) => setParam("page", v, { def: 1 });
+  /** Accepts a number OR a React-style updater. Three call sites below pass an
+   *  updater (Load More / Previous / Next), and before this signature existed
+   *  that function was handed straight to setParam, which does String(value) —
+   *  serialising the function SOURCE into the ?page= param. getNum then parsed
+   *  NaN and fell back to 1, so those controls silently did nothing. Surfaced by
+   *  the strict type-check (WEB-CI-007). */
+  const setPage = (v: number | ((prev: number) => number)) =>
+    setParam("page", typeof v === "function" ? v(page) : v, { def: 1 });
 
   // Get all attractions first
   const { attractions: allAttractions, isLoading, error, refetch } = useAttractions({});
@@ -538,7 +546,7 @@ export default function Attractions() {
                 Clear Filters
               </Button>
               <div className="text-sm text-gray-500">
-                {filteredAttractions?.length || 0} attractions found
+                {formatCount(filteredAttractions?.length || 0, 'attraction')} found
               </div>
             </div>
           </div>

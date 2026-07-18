@@ -44,56 +44,96 @@ export function FavoritesView() {
     enabled: favoritedEvents.length > 0,
   });
 
-  // Fetch favorited restaurants (from user interactions)
+  // Fetch favorited restaurants.
+  //
+  // Reads `content_favorites`, which is where useContentFavorites (the hook
+  // behind every non-event FavoriteButton) actually writes. This previously read
+  // `user_restaurant_interactions`, which nothing writes to, so saved
+  // restaurants never appeared here (WEB-QA-010).
   const { data: favoritedRestaurants = [], isLoading: restaurantsLoading } = useQuery({
     queryKey: ["favorited-restaurants", user?.id],
     queryFn: async () => {
       if (!user) return [];
 
-      try {
-        const { data, error } = await supabase
-          .from("user_restaurant_interactions" as any)
-          .select("restaurant_id, restaurants(*)")
-          .eq("user_id", user.id)
-          .eq("interaction_type", "favorite");
+      // Two steps, not an embedded join: content_favorites.content_id is
+      // polymorphic (it points at whichever table content_type names), so there
+      // is no foreign key for PostgREST to traverse and `restaurants:content_id(*)`
+      // fails with PGRST200.
+      const { data: rows, error } = await supabase
+        .from("content_favorites")
+        .select("content_id")
+        .eq("user_id", user.id)
+        .eq("content_type", "restaurant");
 
-        if (error) {
-          log.debug('fetchRestaurants', 'Restaurant favorites not available yet');
-          return [];
-        }
-
-        return (data || []).map((item: any) => item.restaurants).filter(Boolean);
-      } catch (err) {
-        log.debug('fetchRestaurants', 'Restaurant favorites table not available');
+      if (error) {
+        log.error('fetchRestaurants', 'Failed to load favorited restaurants', {
+          message: error.message, code: error.code, details: error.details, hint: error.hint,
+        });
         return [];
       }
+
+      const ids = (rows || []).map((r) => r.content_id).filter(Boolean);
+      if (ids.length === 0) return [];
+
+      const { data, error: contentError } = await supabase
+        .from("restaurants")
+        .select("*")
+        .in("id", ids);
+
+      if (contentError) {
+        log.error('fetchRestaurants', 'Failed to load restaurants rows for favorites', {
+          message: contentError.message, code: contentError.code,
+        });
+        return [];
+      }
+
+      return data || [];
     },
     enabled: !!user,
   });
 
-  // Fetch favorited attractions
+  // Fetch favorited attractions. Same source as restaurants above — the write
+  // path is useContentFavorites -> content_favorites (WEB-QA-010). This
+  // previously read `user_attraction_interactions`, which does not exist in the
+  // schema at all, so the query always errored and the block always returned [].
   const { data: favoritedAttractions = [], isLoading: attractionsLoading } = useQuery({
     queryKey: ["favorited-attractions", user?.id],
     queryFn: async () => {
       if (!user) return [];
 
-      try {
-        const { data, error } = await supabase
-          .from("user_attraction_interactions" as any)
-          .select("attraction_id, attractions(*)")
-          .eq("user_id", user.id)
-          .eq("interaction_type", "favorite");
+      // Two steps, not an embedded join: content_favorites.content_id is
+      // polymorphic (it points at whichever table content_type names), so there
+      // is no foreign key for PostgREST to traverse and `attractions:content_id(*)`
+      // fails with PGRST200.
+      const { data: rows, error } = await supabase
+        .from("content_favorites")
+        .select("content_id")
+        .eq("user_id", user.id)
+        .eq("content_type", "attraction");
 
-        if (error) {
-          log.debug('fetchAttractions', 'Attraction favorites not available yet');
-          return [];
-        }
-
-        return (data || []).map((item: any) => item.attractions).filter(Boolean);
-      } catch (err) {
-        log.debug('fetchAttractions', 'Attraction favorites table not available');
+      if (error) {
+        log.error('fetchAttractions', 'Failed to load favorited attractions', {
+          message: error.message, code: error.code, details: error.details, hint: error.hint,
+        });
         return [];
       }
+
+      const ids = (rows || []).map((r) => r.content_id).filter(Boolean);
+      if (ids.length === 0) return [];
+
+      const { data, error: contentError } = await supabase
+        .from("attractions")
+        .select("*")
+        .in("id", ids);
+
+      if (contentError) {
+        log.error('fetchAttractions', 'Failed to load attractions rows for favorites', {
+          message: contentError.message, code: contentError.code,
+        });
+        return [];
+      }
+
+      return data || [];
     },
     enabled: !!user,
   });

@@ -70,7 +70,8 @@ export function useSimplePersonalization(options: RecommendationOptions = {}) {
     try {
       const { data: searches, error } = await supabase
         .from('search_analytics')
-        .select('query, category, location, price_filter')
+        // Facets live in the `search_filters` JSON, not as columns (WEB-QA-012).
+        .select('search_query, search_filters')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(20);
@@ -80,9 +81,12 @@ export function useSimplePersonalization(options: RecommendationOptions = {}) {
       if (!searches || searches.length === 0) return null;
 
       // Analyze search patterns
-      const categories = searches.map(s => s.category).filter(Boolean);
-      const locations = searches.map(s => s.location).filter(Boolean);
-      const priceRanges = searches.map(s => s.price_filter).filter(Boolean);
+      // Facets live inside the `search_filters` JSON, not as columns (WEB-QA-012).
+      const facets = (s: { search_filters: unknown }) =>
+        (s.search_filters ?? {}) as Record<string, string | null | undefined>;
+      const categories = searches.map(s => facets(s).category).filter(Boolean);
+      const locations = searches.map(s => facets(s).location).filter(Boolean);
+      const priceRanges = searches.map(s => facets(s).priceRange).filter(Boolean);
 
       return {
         preferredCategories: getTopItems(categories, 3),

@@ -62,7 +62,7 @@ function FilterPill({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
-          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border transition-all whitespace-nowrap ${
+          className={`flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-xl text-sm font-medium border transition-all whitespace-nowrap ${
             isActive || activeCount > 0
               ? "bg-[#2D1B69] text-white border-[#2D1B69] shadow-md"
               : "bg-white dark:bg-card text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-gray-300 shadow-sm"

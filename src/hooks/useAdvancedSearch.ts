@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { STALE_TIME, GC_TIME, shouldRetry } from '@/lib/queryConfig';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { toast } from 'sonner';
@@ -69,12 +71,19 @@ const defaultFilters: AdvancedSearchFilters = {
   tags: []
 };
 
+/** Stable empty array — a fresh `[]` default would give `results` a new identity
+ *  every render and re-fire consumer effects that depend on it. */
+const EMPTY_RESULTS: SearchResult[] = [];
+
 export function useAdvancedSearch() {
   const { user } = useAuth();
   const [filters, setFilters] = useState<AdvancedSearchFilters>(defaultFilters);
-  const [results, setResults] = useState<SearchResult[]>([]);
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
-  const [loading, setLoading] = useState(false);
+  /** The filters of the most recently submitted search. This hook is imperative
+   *  by design — consumers call performSearch(...) — so the query is keyed on
+   *  what was submitted rather than on the live `filters` state (WEB-PERF-013). */
+  const [submittedFilters, setSubmittedFilters] = useState<AdvancedSearchFilters | null>(null);
+  const queryClient = useQueryClient();
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
 
   // Get user's location
@@ -141,9 +150,10 @@ export function useAdvancedSearch() {
   };
 
   // Enhanced search function
-  const performSearch = useCallback(async (searchFilters: AdvancedSearchFilters) => {
-    setLoading(true);
-    try {
+  /** Runs the actual search. Kept as a hook-scope closure because it depends on
+   *  userLocation and the per-type search helpers defined below. */
+  const executeSearch = useCallback(async (searchFilters: AdvancedSearchFilters): Promise<SearchResult[]> => {
+    {
       const searchResults: SearchResult[] = [];
 
       // Search different content types based on category filter
@@ -176,16 +186,42 @@ export function useAdvancedSearch() {
       const filteredResults = filterByLocation(searchResults, searchFilters);
       
       // Sort results
-      const sortedResults = sortResults(filteredResults, searchFilters);
+      return sortResults(filteredResults, searchFilters);
+    }
+  }, [userLocation]);
 
-      setResults(sortedResults);
+  /** Cache key for a submitted search. Identical searches reuse the cache and
+   *  concurrent identical ones dedupe, which the manual useState version could
+   *  not do. */
+  const searchQueryKey = (f: AdvancedSearchFilters | null) =>
+    ['advanced-search', f, userLocation] as const;
+
+  const { data: results = EMPTY_RESULTS, isFetching: loading } = useQuery({
+    queryKey: searchQueryKey(submittedFilters),
+    queryFn: () => executeSearch(submittedFilters as AdvancedSearchFilters),
+    enabled: submittedFilters !== null,
+    staleTime: STALE_TIME.SHORT,
+    gcTime: GC_TIME,
+    retry: shouldRetry,
+  });
+
+  const performSearch = useCallback(async (searchFilters: AdvancedSearchFilters) => {
+    setSubmittedFilters(searchFilters);
+    try {
+      // fetchQuery shares the key above, so this both awaits the result for
+      // callers that need it and primes the cache the useQuery above reads.
+      return await queryClient.fetchQuery({
+        queryKey: searchQueryKey(searchFilters),
+        queryFn: () => executeSearch(searchFilters),
+        staleTime: STALE_TIME.SHORT,
+        gcTime: GC_TIME,
+      });
     } catch (error) {
       log.error('performSearch', 'Search error', { error });
       toast.error('Search failed. Please try again.');
-    } finally {
-      setLoading(false);
+      return [];
     }
-  }, [userLocation]);
+  }, [executeSearch, queryClient, userLocation]);
 
   const searchEvents = async (searchFilters: AdvancedSearchFilters): Promise<SearchResult[]> => {
     let query = supabase
@@ -472,7 +508,7 @@ export function useAdvancedSearch() {
 
   const resetFilters = () => {
     setFilters(defaultFilters);
-    setResults([]);
+    setSubmittedFilters(null);
   };
 
   return {

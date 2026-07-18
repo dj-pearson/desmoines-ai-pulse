@@ -64,7 +64,11 @@ export default function Playgrounds() {
   // Get unique age ranges and locations for filter options
   const ageRanges = useMemo(() => {
     const uniqueRanges = new Set(
-      allPlaygrounds.map((playground) => playground.age_range).filter(Boolean)
+      allPlaygrounds
+        .map((playground) => playground.age_range)
+        // Type predicate, not .filter(Boolean): the latter does not narrow away
+        // `null` in TypeScript, so consumers below still saw `string | null`.
+        .filter((r): r is string => Boolean(r))
     );
     return Array.from(uniqueRanges).sort();
   }, [allPlaygrounds]);
@@ -73,7 +77,7 @@ export default function Playgrounds() {
     const uniqueLocations = new Set(
       allPlaygrounds
         .map((playground) => playground.location)
-        .filter(Boolean)
+        .filter((l): l is string => Boolean(l))
         .map((loc) => {
           const parts = loc.split(",");
           return parts[parts.length - 2]?.trim() || parts[0]?.trim() || loc;

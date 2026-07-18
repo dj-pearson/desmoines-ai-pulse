@@ -9,6 +9,7 @@ import LocalSEO from "@/components/LocalSEO";
 import { FAQSection } from "@/components/FAQSection";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { formatCount } from "@/lib/pluralize";
 
 export default function NeighborhoodsPage() {
   useDocumentTitle("Neighborhoods");
@@ -158,7 +159,7 @@ export default function NeighborhoodsPage() {
                 <div className="flex justify-between items-start">
                   <CardTitle className="text-xl">{neighborhood.name}</CardTitle>
                   <Badge variant="secondary" className="text-xs">
-                    {neighborhood.eventCount} events
+                    {formatCount(neighborhood.eventCount, 'event')}
                   </Badge>
                 </div>
               </CardHeader>

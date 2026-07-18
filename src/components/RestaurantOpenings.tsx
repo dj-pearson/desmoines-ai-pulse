@@ -133,13 +133,17 @@ export function RestaurantOpenings() {
                     {(restaurant.openingDate ||
                       restaurant.openingTimeframe) && (
                       <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 flex-shrink-0" />
+                        <Calendar className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                        {/* Label the date (WEB-QA-004). This chip rendered as a
+                            bare "3/30/2026" next to a calendar glyph, which reads
+                            ambiguously as the date the listing was added — the
+                            footer below genuinely is "Added <date>". */}
                         <span>
                           {restaurant.openingDate
-                            ? new Date(
+                            ? `Opens ${new Date(
                                 restaurant.openingDate
-                              ).toLocaleDateString()
-                            : restaurant.openingTimeframe}
+                              ).toLocaleDateString()}`
+                            : `Opens ${restaurant.openingTimeframe}`}
                         </span>
                       </div>
                     )}

@@ -28,9 +28,19 @@ import SubmitEventButton from "@/components/SubmitEventButton";
 interface UserMenuProps {
   isAuthenticated: boolean;
   isAdmin: boolean;
-  profile: { first_name?: string; last_name?: string; email?: string } | null;
-  userLevel: number | null;
-  userXP: number | null;
+  /** Only the fields these menus render. Declared with `| null` rather than
+   *  optional because the underlying profile columns are nullable — a row
+   *  straight from the database has `first_name: string | null`, which does not
+   *  satisfy `first_name?: string`. */
+  profile: {
+    first_name?: string | null;
+    last_name?: string | null;
+    email?: string | null;
+  } | null;
+  /** useGamification derives these from `reputation?.…`, so they are undefined
+   *  before the query resolves — not null. */
+  userLevel: number | null | undefined;
+  userXP: number | null | undefined;
   onLogout: () => void;
   getInitials: () => string;
 }

@@ -23,6 +23,7 @@ import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { EVENT_LIST_COLUMNS } from "@/lib/listColumns";
+import { formatCount } from "@/lib/pluralize";
 
 export default function EventsThisWeekend() {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
@@ -109,7 +110,7 @@ export default function EventsThisWeekend() {
   const faqData = [
     {
       question: "What's happening this weekend in Des Moines?",
-      answer: `We have ${weekendEvents.length} events happening this weekend in Des Moines and surrounding areas. See our complete list with dates, times, and maps on one page.`,
+      answer: `We have ${formatCount(weekendEvents.length, 'event')} happening this weekend in Des Moines and surrounding areas. See our complete list with dates, times, and maps on one page.`,
     },
     {
       question: "Are there kid-friendly events this weekend?",

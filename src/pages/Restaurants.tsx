@@ -73,7 +73,13 @@ const RestaurantsMap = lazy(() => import("@/components/RestaurantsMap"));
 
 
 const sortOptions = [
-  { value: "popularity", label: "Most Popular", icon: TrendingUp },
+  // Labeled "Recommended", not "Most Popular" (WEB-QA-004). This option routes
+  // through get_rotated_restaurants, which shuffles by a rotation seed so the
+  // top of the list varies between visits — it is deliberately NOT a popularity
+  // ranking, and calling it "Most Popular" told visitors the three venues at the
+  // top were the city's most popular when the order was largely arbitrary.
+  // "Highest Rated" below remains the deterministic quality sort.
+  { value: "popularity", label: "Recommended", icon: TrendingUp },
   { value: "rating", label: "Highest Rated", icon: Star },
   { value: "newest", label: "Newest", icon: Clock },
   { value: "alphabetical", label: "A-Z", icon: SlidersHorizontal },
@@ -156,7 +162,14 @@ export default function Restaurants() {
 
   const ITEMS_PER_PAGE = 30;
   const page = getNum("page", 1);
-  const setPage = (v: number) => setParam("page", v, { def: 1 });
+  /** Accepts a number OR a React-style updater. Three call sites below pass an
+   *  updater (Load More / Previous / Next), and before this signature existed
+   *  that function was handed straight to setParam, which does String(value) —
+   *  serialising the function SOURCE into the ?page= param. getNum then parsed
+   *  NaN and fell back to 1, so those controls silently did nothing. Surfaced by
+   *  the strict type-check (WEB-CI-007). */
+  const setPage = (v: number | ((prev: number) => number)) =>
+    setParam("page", typeof v === "function" ? v(page) : v, { def: 1 });
 
   const { restaurants, isLoading, error, totalCount, refetch } = useRestaurants(filters);
   const filterOptions = useRestaurantFilterOptions();
@@ -458,7 +471,7 @@ export default function Restaurants() {
                     onClick={() => setViewMode("list")}
                     variant="ghost"
                     size="icon"
-                    className={`h-8 w-8 rounded-full ${
+                    className={`h-11 w-11 sm:h-8 sm:w-8 rounded-full ${
                       viewMode === "list"
                         ? "bg-white/30 text-white"
                         : "text-white/60 hover:text-white hover:bg-white/10"
@@ -471,7 +484,7 @@ export default function Restaurants() {
                     onClick={() => setViewMode("map")}
                     variant="ghost"
                     size="icon"
-                    className={`h-8 w-8 rounded-full ${
+                    className={`h-11 w-11 sm:h-8 sm:w-8 rounded-full ${
                       viewMode === "map"
                         ? "bg-white/30 text-white"
                         : "text-white/60 hover:text-white hover:bg-white/10"
@@ -563,7 +576,13 @@ export default function Restaurants() {
                     "Searching..."
                   ) : (
                     <span>
-                      <strong className="text-foreground">{totalCount}</strong> found
+                      {/* Never render a bare "found" with no number (WEB-QA-004):
+                          PostgREST can return a null count, so fall back to the
+                          number of rows actually on screen. */}
+                      <strong className="text-foreground">
+                        {totalCount ?? restaurants.length}
+                      </strong>{" "}
+                      found
                     </span>
                   )}
                 </p>
@@ -802,10 +821,12 @@ export default function Restaurants() {
                       key={cuisine}
                       onClick={() => {
                         setFilters((prev) => ({ ...prev, cuisine: [cuisine] }));
-                        setActiveCuisineQuick('');
+                        // A setActiveCuisineQuick('') call sat here referencing
+                        // removed state; it threw before the scroll below could
+                        // run (WEB-QA-017).
                         document.getElementById('all-restaurants-heading')?.scrollIntoView({ behavior: 'smooth' });
                       }}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border border-gray-200 dark:border-gray-700 bg-white dark:bg-card text-gray-700 dark:text-gray-300 hover:border-[#2D1B69] dark:hover:border-primary hover:bg-[#2D1B69]/5 dark:hover:bg-primary/10 transition-all duration-200 shadow-sm"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 min-h-[44px] rounded-full text-sm font-medium border border-gray-200 dark:border-gray-700 bg-white dark:bg-card text-gray-700 dark:text-gray-300 hover:border-[#2D1B69] dark:hover:border-primary hover:bg-[#2D1B69]/5 dark:hover:bg-primary/10 transition-all duration-200 shadow-sm"
                     >
                       <ChefHat className="h-3.5 w-3.5 text-muted-foreground" />
                       {cuisine}

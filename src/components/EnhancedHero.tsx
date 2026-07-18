@@ -109,6 +109,20 @@ export function EnhancedHero({
       {/* Animated background gradient overlay for extra depth */}
       <div className="absolute inset-0 bg-gradient-to-br from-[#2D1B69]/10 via-transparent to-[#8B0000]/10 pointer-events-none" />
 
+      {/* Light-mode seam softener (WEB-QA-006).
+          The hero art is intentionally dark in BOTH themes, but the nav above it
+          follows the theme. In dark mode the header (rgba(6,10,19,.6)) sits flush
+          against this hero and the edge is invisible; in light mode the header is
+          near-white and produced a hard white-to-navy line directly under the nav.
+          This fades the top edge of the hero toward the page background so the
+          transition reads as intentional depth instead of a clipping artifact.
+          Dark-mode is explicitly zeroed out so the existing (already correct)
+          appearance is untouched. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-background/70 to-transparent dark:hidden"
+      />
+
       {/* Content */}
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Top badge */}

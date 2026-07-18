@@ -55,6 +55,7 @@ import { EventInlineFilters } from "@/components/EventInlineFilters";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { SearchAutocomplete, addRecentSearch } from "@/components/SearchAutocomplete";
+import { formatCount } from "@/lib/pluralize";
 
 // Lazy load heavy map component (includes Leaflet library ~150KB)
 const EventsMap = lazy(() => import("@/components/EventsMap"));
@@ -152,7 +153,14 @@ export default function EventsPage() {
   const setLocation = (v: string) => setParam("location", v, { def: "any-location", resetsPage: true });
   const setPriceRange = (v: string) => setParam("price", v, { def: "any-price", resetsPage: true });
   const setSortBy = (v: string) => setParam("sort", v, { def: "date_asc", resetsPage: true });
-  const setPage = (v: number) => setParam("page", v, { def: 1 });
+  /** Accepts a number OR a React-style updater. Three call sites below pass an
+   *  updater (Load More / Previous / Next), and before this signature existed
+   *  that function was handed straight to setParam, which does String(value) —
+   *  serialising the function SOURCE into the ?page= param. getNum then parsed
+   *  NaN and fell back to 1, so those controls silently did nothing. Surfaced by
+   *  the strict type-check (WEB-CI-007). */
+  const setPage = (v: number | ((prev: number) => number)) =>
+    setParam("page", typeof v === "function" ? v(page) : v, { def: 1 });
 
   // Local immediate search input; writes to URL 'q' debounced.
   const [searchQuery, setSearchQuery] = useState(() => debouncedSearchQuery);
@@ -178,7 +186,10 @@ export default function EventsPage() {
     setCustomDateFilter(null);
     clearParams(["q", "category", "preset", "location", "price", "sort"]);
     setIsNearMeActive(false);
-    setShowMobileFilters(false);
+    // NOTE: a setShowMobileFilters(false) call sat here referencing state that no
+    // longer exists. It threw ReferenceError on every "Clear all filters" click,
+    // aborting the handler before the confirmation toast below ever fired
+    // (WEB-QA-017).
     toast({
       title: "Filters Cleared",
       description: "All filters have been reset",
@@ -273,10 +284,16 @@ export default function EventsPage() {
         return { events: filteredData, totalCount: filteredData.length };
       }
 
+      // Visibility predicates MUST match the detail lookup (useEventBySlug) and
+      // useEvents. When the list was more permissive than the detail, merged/hidden
+      // rows rendered as clickable cards that dead-ended on "Event Not Found"
+      // (WEB-QA-002). Any filter added here needs to be added there too.
       let query = supabase
         .from("events")
         .select("id, title, date, location, category, image_url, price, venue, is_featured, event_start_utc, event_start_local, city, latitude, longitude, enhanced_description, original_description", { count: 'exact' })
-        .gte("date", new Date().toISOString().split("T")[0]);
+        .gte("date", new Date().toISOString().split("T")[0])
+        .neq("is_merged", true)
+        .neq("is_hidden", true);
 
       // Push the active sort into the query so it covers the full result set,
       // not just the current page (WEB-UX-018). 'newest' = recently added.
@@ -716,7 +733,7 @@ export default function EventsPage() {
                   <button
                     key={key}
                     onClick={() => handleDatePreset(key)}
-                    className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                    className={`inline-flex items-center gap-1.5 px-4 py-2 min-h-[44px] rounded-full text-sm font-medium transition-all ${
                       activeDatePreset === key
                         ? "bg-white text-slate-900 shadow-lg shadow-white/20"
                         : "bg-white/10 text-white/80 hover:bg-white/20 hover:text-white border border-white/10"
@@ -857,7 +874,7 @@ export default function EventsPage() {
               </h2>
               {!isLoading && (
                 <p className="text-sm text-muted-foreground mt-0.5" aria-live="polite">
-                  {events?.length || 0} events in Des Moines{isNearMeActive ? ' near you' : ''}
+                  {formatCount(events?.length || 0, 'event')} in Des Moines{isNearMeActive ? ' near you' : ''}
                 </p>
               )}
             </div>
@@ -945,7 +962,7 @@ export default function EventsPage() {
 
           {!isLoading && events && events.length > 0 && !hasMore && (
             <div className="flex justify-center mt-8 mb-4 text-sm text-muted-foreground">
-              Showing all {events.length} events
+              Showing all {formatCount(events.length, 'event')}
             </div>
           )}
 

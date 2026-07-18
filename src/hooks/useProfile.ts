@@ -8,19 +8,18 @@ const logger = createLogger("useProfile");
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 
-export interface UserProfile {
-  id: string;
-  user_id: string;
-  first_name: string | null;
-  last_name: string | null;
-  phone: string | null;
-  email: string | null;
-  communication_preferences: any;
-  interests: string[];
-  location: string | null;
-  created_at: string;
-  updated_at: string;
-}
+/**
+ * Derived from the generated schema rather than hand-maintained (WEB-CI-007).
+ *
+ * The previous hand-written interface had drifted: it declared
+ * `interests: string[]` where the column is nullable and
+ * `communication_preferences: any` where it is Json, so a row read straight from
+ * `profiles` did not satisfy the type the hook claimed to hold. Aliasing the Row
+ * type means it cannot drift again — a schema change surfaces at compile time.
+ *
+ * Per CLAUDE.md: prefer the generated Supabase types over local redefinitions.
+ */
+export type UserProfile = Database["public"]["Tables"]["profiles"]["Row"];
 
 export function useProfile() {
   const [profile, setProfile] = useState<UserProfile | null>(null);

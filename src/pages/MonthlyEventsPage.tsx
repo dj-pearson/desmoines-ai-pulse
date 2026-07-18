@@ -17,6 +17,7 @@ import { useState, useEffect, useMemo } from "react";
 import { BRAND } from "@/lib/brandConfig";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { EVENT_LIST_COLUMNS } from "@/lib/listColumns";
+import { formatCount } from "@/lib/pluralize";
 
 export default function MonthlyEventsPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -105,7 +106,7 @@ export default function MonthlyEventsPage() {
   const faqData = [
     {
       question: `What events are happening in ${monthDisplayName} in Des Moines?`,
-      answer: `We have ${events?.length || 0} events scheduled for ${monthDisplayName} in Des Moines and surrounding areas. Browse our complete calendar with dates, times, locations, and ticket information.`,
+      answer: `We have ${formatCount(events?.length || 0, 'event')} scheduled for ${monthDisplayName} in Des Moines and surrounding areas. Browse our complete calendar with dates, times, locations, and ticket information.`,
     },
     {
       question: "How often is the monthly calendar updated?",
@@ -296,7 +297,7 @@ export default function MonthlyEventsPage() {
                   
                   <div className="text-center">
                     <div className="text-lg font-semibold">{monthDisplayName}</div>
-                    <div className="text-sm text-muted-foreground">{events.length} events</div>
+                    <div className="text-sm text-muted-foreground">{formatCount(events.length, 'event')}</div>
                   </div>
                   
                   <Button

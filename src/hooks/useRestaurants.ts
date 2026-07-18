@@ -41,6 +41,56 @@ interface RestaurantFilters {
   offset?: number;
 }
 
+/** Full rating range — i.e. the user has not actually narrowed by rating.
+ *
+ *  Sending these bounds anyway is not harmless (WEB-QA-011). The filter compares
+ *  `rating >= min AND rating <= max`, and for a restaurant with a NULL rating
+ *  both comparisons evaluate to NULL, so the row is dropped. The default [0, 5]
+ *  therefore silently excluded every unrated restaurant — 46 of 480 (~10%),
+ *  which are disproportionately the newest listings. Treat the full range as
+ *  "no filter" and send NULL so the predicate is skipped entirely.
+ */
+const RATING_MIN = 0;
+const RATING_MAX = 5;
+
+// Type predicate, not a plain boolean: callers index `rating[0]`/`rating[1]`
+// straight after this check, and under strictNullChecks a boolean return would
+// not narrow `number[] | undefined`. Narrowing to a fixed-length tuple lets that
+// indexing typecheck without a non-null assertion.
+function hasRatingFilter(
+  rating: number[] | undefined
+): rating is [number, number] {
+  if (!rating || rating.length !== 2) return false;
+  return rating[0] > RATING_MIN || rating[1] < RATING_MAX;
+}
+
+/** Statuses a visitor cannot actually go and eat at today. */
+const UNVISITABLE_STATUSES = new Set(["opening_soon", "closed"]);
+
+/**
+ * Sink not-yet-open and closed venues below the ones a visitor can visit now,
+ * preserving relative order within each group (WEB-QA-004).
+ *
+ * The default sort routes through `get_rotated_restaurants`, which deliberately
+ * shuffles by a rotation seed so the top of the list isn't identical on every
+ * visit. That shuffle ignores `status`, so "Opening Soon" venues regularly
+ * landed in the first row of cards — the QA pass saw three of them leading the
+ * list. This is a stable partition rather than a re-sort, so the rotation's
+ * variety is kept intact within each group.
+ *
+ * Done client-side on purpose: the ordering lives in the RPC, and changing that
+ * is a migration. This needs no schema change and no shape change.
+ */
+function deprioritizeUnvisitable(list: Restaurant[]): Restaurant[] {
+  const visitable: Restaurant[] = [];
+  const unvisitable: Restaurant[] = [];
+  for (const r of list) {
+    const status = (r as { status?: string | null }).status ?? "";
+    (UNVISITABLE_STATUSES.has(status) ? unvisitable : visitable).push(r);
+  }
+  return [...visitable, ...unvisitable];
+}
+
 export function useRestaurants(filters: RestaurantFilters = {}) {
   const [state, setState] = useState<RestaurantsState>({
     restaurants: [],
@@ -96,14 +146,8 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
             filters.location && filters.location.length > 0
               ? filters.location
               : null,
-          min_rating:
-            filters.rating && filters.rating.length === 2
-              ? filters.rating[0]
-              : null,
-          max_rating:
-            filters.rating && filters.rating.length === 2
-              ? filters.rating[1]
-              : null,
+          min_rating: hasRatingFilter(filters.rating) ? filters.rating[0] : null,
+          max_rating: hasRatingFilter(filters.rating) ? filters.rating[1] : null,
           featured_only: !!filters.featuredOnly,
           limit_count: limit,
           offset_count: offset,
@@ -111,7 +155,9 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
 
         if (!rpcError && rpcData) {
           setState({
-            restaurants: rpcData.map((r) => r.restaurant_data),
+            restaurants: deprioritizeUnvisitable(
+              rpcData.map((r) => r.restaurant_data)
+            ),
             isLoading: false,
             error: null,
             totalCount:
@@ -133,10 +179,17 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
       let query = supabase
         .from("restaurants")
         // Project only the card/list fields (WEB-PERF-009) — drops heavy
-        // SEO/GEO/tsvector/geometry columns the list never renders. Count uses
-        // the planner estimate ("planned") instead of forcing a full-table
-        // exact count on every filter/sort.
-        .select(RESTAURANT_LIST_COLUMNS, { count: "planned" })
+        // SEO/GEO/tsvector/geometry columns the list never renders.
+        //
+        // Count is "estimated", not "planned" (WEB-QA-004). A "planned" count is
+        // purely the planner's row estimate and comes back NULL whenever the
+        // planner has no usable statistic for the filtered query — which is why
+        // the results header rendered a blank number before "found". "estimated"
+        // returns an exact count under PostgREST's threshold and falls back to
+        // the planner estimate only for large result sets, so it keeps the
+        // WEB-PERF-009 intent (no forced full-table count on every filter/sort)
+        // while always yielding a number.
+        .select(RESTAURANT_LIST_COLUMNS, { count: "estimated" })
         .neq("is_merged", true); // Hide rows merged into a duplicate (WEB-AUTO-005)
 
       // Use full-text search with tsvector for better performance and relevance ranking
@@ -159,8 +212,10 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
         query = query.in("price_range", filters.priceRange);
       }
 
-      // Apply rating filter
-      if (filters.rating && filters.rating.length === 2) {
+      // Apply rating filter. Same guard as the RPC path above — the default
+      // [0, 5] must not be sent, or unrated restaurants get filtered out
+      // (WEB-QA-011).
+      if (hasRatingFilter(filters.rating)) {
         query = query
           .gte("rating", filters.rating[0])
           .lte("rating", filters.rating[1]);
@@ -424,6 +479,18 @@ async function fetchFilterOptionsFallback(): Promise<FilterOptionsResult> {
 
 async function getRestaurantFilterOptions(): Promise<FilterOptionsResult> {
   return (await fetchFilterOptionsRpc()) ?? (await fetchFilterOptionsFallback());
+}
+
+/**
+ * Cached cuisine/location facets for consumers outside the hook layer
+ * (SearchSection's subcategory list, WEB-PERF-002).
+ *
+ * This export was missing while SearchSection imported it, which crashed the
+ * homepage into the route error boundary — a missing named export is an
+ * `undefined` binding once bundled (React error #130). See WEB-QA-001/003.
+ */
+export async function fetchRestaurantFilterFacets(): Promise<FilterOptionsResult> {
+  return getRestaurantFilterOptions();
 }
 
 // Hook to get cuisine counts for "Browse by Cuisine" section

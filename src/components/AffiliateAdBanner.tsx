@@ -57,9 +57,18 @@ export function AffiliateAdBanner({ placement, className = '' }: AffiliateAdBann
       role="complementary"
       aria-label={`${partner.name} affiliate advertisement`}
     >
-      {/* FTC-compliant Ad label */}
-      <div className="absolute top-1.5 left-1.5 z-20">
-        <span className="text-[10px] font-medium bg-black/60 text-white/90 px-1.5 py-0.5 rounded tracking-wide uppercase">
+      {/* FTC-compliant Ad label.
+          Rendered ABOVE the creative rather than overlaid on it (WEB-QA-006).
+          This unit's headline is baked into the partner's image, so an
+          absolutely-positioned badge sat directly on top of that artwork — the
+          QA pass caught it covering the leading "Di" of "Discover". Padding
+          cannot fix text that lives inside a bitmap, so the disclosure gets its
+          own line. Still clear and conspicuous, and immediately adjacent to the
+          ad, which is what the FTC guidance asks for.
+          (AdBanner renders its headline as real DOM text, so it keeps the
+          overlaid badge and just reserves left padding instead.) */}
+      <div className="mb-1 flex">
+        <span className="text-[10px] font-medium bg-muted text-muted-foreground px-1.5 py-0.5 rounded tracking-wide uppercase">
           Ad
         </span>
       </div>

@@ -76,7 +76,11 @@ function FavoriteButtonView({
         onToggle();
       }}
       disabled={isToggling}
-      className={cn(className)}
+      // tap-area-44 rather than a bigger button: this sits on top of card
+      // imagery in a fixed corner, so growing it would cover the photo and
+      // shift the badges around it. The overlay only applies on touch
+      // pointers (WEB-QA-009).
+      className={cn("tap-area-44", className)}
       aria-label={ariaLabel}
       aria-pressed={favorited}
     >

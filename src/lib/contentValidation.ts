@@ -3,12 +3,40 @@
  * Validates content submissions and calculates confidence scores
  */
 
+import type { Database } from '@/integrations/supabase/types';
+
+type Tables = Database['public']['Tables'];
+
+/**
+ * Validator inputs are `Partial<Row>` rather than `Row` (WEB-QUAL-004).
+ *
+ * These functions exist precisely to validate content that has NOT been
+ * verified yet — submissions and crawler output — so required fields may be
+ * missing. `Partial` models that honestly, while still constraining field NAMES
+ * and value types against the real schema, which plain `any` did not: a typo
+ * like `event.titel` used to validate clean and silently report the field as
+ * missing.
+ */
+export type EventInput = Partial<Tables['events']['Row']>;
+export type RestaurantInput = Partial<Tables['restaurants']['Row']>;
+export type AttractionInput = Partial<Tables['attractions']['Row']>;
+export type PlaygroundInput = Partial<Tables['playgrounds']['Row']>;
+
+/** Any content record these validators accept. */
+export type ValidatableContent =
+  | EventInput
+  | RestaurantInput
+  | AttractionInput
+  | PlaygroundInput;
+
 export interface ValidationResult {
   field: string;
   isValid: boolean;
   severity: 'error' | 'warning' | 'info';
   message: string;
-  suggestedValue?: any;
+  /** Replacement value for an auto-fixable finding. Scalar by construction —
+   *  see autoFixContent, which writes it straight onto the record. */
+  suggestedValue?: string | number | boolean | null;
   autoFixable?: boolean;
 }
 
@@ -105,7 +133,7 @@ export function isValidImageUrl(url: string | null | undefined): boolean {
 /**
  * Validates event content
  */
-export function validateEvent(event: any): ContentValidationReport {
+export function validateEvent(event: EventInput): ContentValidationReport {
   const results: ValidationResult[] = [];
   let confidenceScore = 100;
 
@@ -260,7 +288,7 @@ export function validateEvent(event: any): ContentValidationReport {
 /**
  * Validates restaurant content
  */
-export function validateRestaurant(restaurant: any): ContentValidationReport {
+export function validateRestaurant(restaurant: RestaurantInput): ContentValidationReport {
   const results: ValidationResult[] = [];
   let confidenceScore = 100;
 
@@ -362,7 +390,7 @@ export function validateRestaurant(restaurant: any): ContentValidationReport {
 /**
  * Validates attraction content
  */
-export function validateAttraction(attraction: any): ContentValidationReport {
+export function validateAttraction(attraction: AttractionInput): ContentValidationReport {
   const results: ValidationResult[] = [];
   let confidenceScore = 100;
 
@@ -428,7 +456,7 @@ export function validateAttraction(attraction: any): ContentValidationReport {
 /**
  * Validates playground content
  */
-export function validatePlayground(playground: any): ContentValidationReport {
+export function validatePlayground(playground: PlaygroundInput): ContentValidationReport {
   const results: ValidationResult[] = [];
   let confidenceScore = 100;
 
@@ -484,8 +512,31 @@ export function validatePlayground(playground: any): ContentValidationReport {
  * Main validation function - routes to appropriate validator
  */
 export function validateContent(
+  contentType: 'event',
+  content: EventInput
+): ContentValidationReport;
+export function validateContent(
+  contentType: 'restaurant',
+  content: RestaurantInput
+): ContentValidationReport;
+export function validateContent(
+  contentType: 'attraction',
+  content: AttractionInput
+): ContentValidationReport;
+export function validateContent(
+  contentType: 'playground',
+  content: PlaygroundInput
+): ContentValidationReport;
+export function validateContent(
   contentType: 'event' | 'restaurant' | 'attraction' | 'playground',
-  content: any
+  content: ValidatableContent
+): ContentValidationReport;
+// Overloads above tie `content` to `contentType` at every call site
+// (WEB-QUAL-004). The implementation signature stays on the union because the
+// switch below is what actually narrows it.
+export function validateContent(
+  contentType: 'event' | 'restaurant' | 'attraction' | 'playground',
+  content: ValidatableContent
 ): ContentValidationReport {
   switch (contentType) {
     case 'event':
@@ -517,8 +568,11 @@ export function validateContent(
 /**
  * Auto-fixes content based on validation results
  */
-export function autoFixContent(content: any, validationResults: ValidationResult[]): any {
-  const fixed = { ...content };
+export function autoFixContent<T extends ValidatableContent>(
+  content: T,
+  validationResults: ValidationResult[]
+): T {
+  const fixed: Record<string, unknown> = { ...content };
 
   validationResults.forEach(result => {
     if (result.autoFixable && result.suggestedValue !== undefined) {
@@ -526,5 +580,5 @@ export function autoFixContent(content: any, validationResults: ValidationResult
     }
   });
 
-  return fixed;
+  return fixed as T;
 }

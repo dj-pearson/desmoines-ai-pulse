@@ -34,24 +34,21 @@ export function useUserPreferences() {
     try {
       setIsLoading(true);
 
-      // Try to load from Supabase if user is authenticated
-      if (user) {
-        const { data, error } = await supabase
-          .from('user_preferences')
-          .select('*')
-          .eq('user_id', user.id)
-          .single();
+      // NOTE: preferences are LOCAL-ONLY, by necessity (WEB-QA-015).
+      //
+      // This used to read from a `user_preferences` table that does not exist in
+      // the schema and never has. Every call failed, the failure was swallowed as
+      // non-critical, and the localStorage path below silently did all the real
+      // work — so preferences have never synced across devices or survived
+      // clearing site data, for any user.
+      //
+      // The dead call is removed rather than left in place: it produced a
+      // guaranteed error on every load and made the strict type-check
+      // unresolvable (the unknown table name forced Supabase to consider all 245
+      // table overloads, giving TS2589 "excessively deep"). Restoring real sync
+      // needs a table and a shape decision — tracked as WEB-QA-015.
 
-        if (data && !error) {
-          setPreferences(data as UserPreferences);
-          // Also save to safeStorage as backup
-          storage.set(STORAGE_KEY, data);
-          setIsLoading(false);
-          return;
-        }
-      }
-
-      // Fallback to safeStorage
+      // Load from safeStorage
       const stored = storage.get<UserPreferences>(STORAGE_KEY);
       if (stored) {
         setPreferences(stored);
@@ -94,18 +91,8 @@ export function useUserPreferences() {
         // Save to safeStorage immediately
         storage.set(STORAGE_KEY, updated);
 
-        // Try to save to Supabase if authenticated
-        if (user) {
-          const { error } = await supabase.from('user_preferences').upsert({
-            user_id: user.id,
-            ...updated,
-          });
-
-          if (error) {
-            log.debug('savePreferences', 'Could not sync preferences to Supabase', { error: String(error) });
-            // Not critical - localStorage backup exists
-          }
-        }
+        // No remote write: there is no `user_preferences` table. See the note in
+        // loadPreferences and WEB-QA-015.
 
         return updated;
       } catch (error) {
@@ -130,7 +117,7 @@ export function useUserPreferences() {
   );
 
   const updateCuisine = useCallback(
-    (updates: Partial<typeof preferences.cuisine>) => {
+    (updates: Partial<UserPreferences['cuisine']>) => {
       if (!preferences) return;
       return savePreferences({
         cuisine: { ...preferences.cuisine, ...updates },
@@ -140,7 +127,7 @@ export function useUserPreferences() {
   );
 
   const updateLocation = useCallback(
-    (updates: Partial<typeof preferences.location>) => {
+    (updates: Partial<UserPreferences['location']>) => {
       if (!preferences) return;
       return savePreferences({
         location: { ...preferences.location, ...updates },
@@ -150,7 +137,7 @@ export function useUserPreferences() {
   );
 
   const updateNotifications = useCallback(
-    (updates: Partial<typeof preferences.notifications>) => {
+    (updates: Partial<UserPreferences['notifications']>) => {
       if (!preferences) return;
       return savePreferences({
         notifications: { ...preferences.notifications, ...updates },
