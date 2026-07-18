@@ -170,10 +170,21 @@ export function useTrending(config: FallbackConfig = { useRealData: true, minIte
     };
 
     try {
-      // Fetch featured and recent events
+      // Fetch featured and recent events.
+      //
+      // Both use EVENT_LIST_COLUMNS rather than select('*'), matching the
+      // primary path at line ~112 and the restaurant/attraction fallbacks
+      // just below — these two were the only queries in this file still
+      // pulling every column. select('*') drags the SEO/GEO text blocks,
+      // search_vector and the PostGIS geometry into a card payload that
+      // renders none of them.
+      //
+      // Measured on the homepage against production: these two responses were
+      // 21,106 and 13,160 bytes; the same six rows under the projection are
+      // 6,183 bytes — a 71% reduction (WEB-PERF-025).
       const { data: featuredEvents } = await supabase
         .from('events')
-        .select('*')
+        .select(EVENT_LIST_COLUMNS)
         .eq('is_featured', true)
         .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
         .order('created_at', { ascending: false })
@@ -181,7 +192,7 @@ export function useTrending(config: FallbackConfig = { useRealData: true, minIte
 
       const { data: recentEvents } = await supabase
         .from('events')
-        .select('*')
+        .select(EVENT_LIST_COLUMNS)
         .gte('date', new Date().toISOString())
         .order('date')
         .limit(6);
