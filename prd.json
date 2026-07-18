@@ -5918,6 +5918,22 @@
       "priority": 3,
       "passes": false,
       "notes": "FOUND 2026-07-18 while measuring Core Web Vitals on a production build (see WEB-PERF-020). Resource timing on a cold homepage load shows two events requests with the same EVENT_LIST_COLUMNS projection and the same date/is_merged/is_hidden filters, differing only in that one carries limit=100 and the other carries no limit at all. Both AllInclusiveDashboard and SmartEventNavigation are mounted on the homepage and each calls useEvents with different filter objects, which produces different query keys, so react-query cannot dedupe them. SEVERITY 3 deliberately: these are parallel XHRs after first paint, so they do not block LCP directly (LCP is the hero H1 at 2328ms, gated on hydration). The cost is server load, bandwidth, and interaction latency once the lists populate — not the headline metric. NOT FIXED HERE: adding a limit changes what SmartEventNavigation renders, and I could not establish from the code how many events it is meant to show. A wrong limit silently truncates a homepage module, which is worse than a slow query."
+    },
+    {
+      "id": "WEB-SEO-002",
+      "title": "12 prerendered routes render no SEOHead, so they ship with no canonical and the site-wide default description",
+      "description": "As the platform owner, I need every indexable route to declare its own SEO metadata, because a dozen routes ship with no canonical of their own and all 31 share a single meta description.",
+      "acceptanceCriteria": [
+        "Add SEOHead (with an explicit url prop) to: /advertise, /business, /calendar, /deals, /itineraries, /map, /pricing, and the five /events/<city> pages",
+        "/business and /map additionally render no h1 at all — add one",
+        "Give the five /events/<city> pages distinct titles. They currently all share the same \"Events by Location\" title, which reads as duplicate content across Altoona, Ankeny, Clive, Johnston and Urbandale",
+        "/calendar duplicates the homepage title verbatim",
+        "All 31 routes currently share ONE meta description (the static default in index.html). Give at least the top landing routes their own",
+        "Re-run the audit and expect: 31 routes, 0 missing canonical, 0 duplicate title groups, 0 duplicate canonical groups"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 (claude/prd-loop-schema-gaps) by auditing the actual prerendered output rather than the source, across all 31 dist/**/index.html files with HTML comments stripped. EXPOSED BY, NOT CAUSED BY, commit 6d1bf574. These 12 routes never rendered SEOHead; they were silently inheriting the hardcoded homepage canonical from index.html. That inherited tag was actively harmful — it told crawlers each route was a duplicate of the homepage — so removing it is a net improvement, since Google self-canonicalizes to the page URL when no tag is present. The underlying gap is that these pages have no SEO identity of their own. STATE AFTER THE FIX: 31 routes, 0 missing title, 0 missing description, 12 missing canonical, 5 missing h1, 0 duplicate canonical groups, 2 duplicate title groups, and all 31 sharing one description. CONTEXT WORTH KEEPING: the prerender step exists specifically to fix soft-404 and \"discovered, not indexed\" (PROD-SEO-001). Before this fix it emitted 31 pages that each declared the homepage as their canonical — it was actively instructing Google not to index the very routes it was built to get indexed. That is a plausible cause of the original symptom, so re-check Search Console once this deploys."
     }
   ]
 }
