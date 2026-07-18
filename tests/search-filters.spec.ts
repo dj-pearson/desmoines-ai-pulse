@@ -437,9 +437,24 @@ test.describe('Search Accessibility', () => {
 
     console.log('Search input ARIA attributes:', ariaAttributes);
 
-    // Should have either aria-label or an associated label
-    const hasProperLabel = ariaAttributes.ariaLabel || ariaAttributes.hasLabel;
-    expect(hasProperLabel, 'Search input should have proper labeling').toBe(true);
+    // Should have either aria-label or an associated label.
+    //
+    // This was `expect(ariaLabel || hasLabel).toBe(true)`. ariaLabel is a
+    // STRING and hasLabel is a boolean, so the expression evaluates to the
+    // label text when an aria-label is present — and toBe(true) is strict
+    // equality, so a truthy string fails it. The assertion was INVERTED: it
+    // could only pass on an input that had no aria-label but did have a
+    // <label for>. A correctly labelled input failed by construction.
+    //
+    // Verified on the production build: /events has exactly one search input,
+    // carrying aria-label="Search events (Press 'f' to focus)". Correct markup,
+    // failing test.
+    const hasProperLabel = Boolean(ariaAttributes.ariaLabel || ariaAttributes.hasLabel);
+    expect(
+      hasProperLabel,
+      `Search input should have aria-label or an associated <label for>. ` +
+        `Got aria-label=${JSON.stringify(ariaAttributes.ariaLabel)}, hasLabel=${ariaAttributes.hasLabel}`
+    ).toBe(true);
   });
 
   test('search results should be announced to screen readers', async ({ page }) => {
