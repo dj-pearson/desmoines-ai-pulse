@@ -1054,9 +1054,13 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
         TripPlannerScreen(
             state = state,
             allInterests = viewModel.allInterests,
+            allAccessibilityNeeds = viewModel.allAccessibilityNeeds,
+            allDietaryRestrictions = viewModel.allDietaryRestrictions,
             onSetStartOffset = viewModel::setStartOffset,
             onSetLength = viewModel::setLength,
             onToggleInterest = viewModel::toggleInterest,
+            onToggleAccessibilityNeed = viewModel::toggleAccessibilityNeed,
+            onToggleDietaryRestriction = viewModel::toggleDietaryRestriction,
             onSetGroupSize = viewModel::setGroupSize,
             onSetHasChildren = viewModel::setHasChildren,
             onSetBudget = viewModel::setBudget,

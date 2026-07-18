@@ -46,9 +46,13 @@ import com.desmoines.aipulse.data.model.TripPlan
 fun TripPlannerScreen(
     state: TripPlannerUiState,
     allInterests: List<String>,
+    allAccessibilityNeeds: List<String>,
+    allDietaryRestrictions: List<String>,
     onSetStartOffset: (Int) -> Unit,
     onSetLength: (Int) -> Unit,
     onToggleInterest: (String) -> Unit,
+    onToggleAccessibilityNeed: (String) -> Unit,
+    onToggleDietaryRestriction: (String) -> Unit,
     onSetGroupSize: (Int) -> Unit,
     onSetHasChildren: (Boolean) -> Unit,
     onSetBudget: (TripBudget) -> Unit,
@@ -88,9 +92,13 @@ fun TripPlannerScreen(
                 PlannerForm(
                     state = state,
                     allInterests = allInterests,
+                    allAccessibilityNeeds = allAccessibilityNeeds,
+                    allDietaryRestrictions = allDietaryRestrictions,
                     onSetStartOffset = onSetStartOffset,
                     onSetLength = onSetLength,
                     onToggleInterest = onToggleInterest,
+                    onToggleAccessibilityNeed = onToggleAccessibilityNeed,
+                    onToggleDietaryRestriction = onToggleDietaryRestriction,
                     onSetGroupSize = onSetGroupSize,
                     onSetHasChildren = onSetHasChildren,
                     onSetBudget = onSetBudget,
@@ -108,9 +116,13 @@ fun TripPlannerScreen(
 private fun PlannerForm(
     state: TripPlannerUiState,
     allInterests: List<String>,
+    allAccessibilityNeeds: List<String>,
+    allDietaryRestrictions: List<String>,
     onSetStartOffset: (Int) -> Unit,
     onSetLength: (Int) -> Unit,
     onToggleInterest: (String) -> Unit,
+    onToggleAccessibilityNeed: (String) -> Unit,
+    onToggleDietaryRestriction: (String) -> Unit,
     onSetGroupSize: (Int) -> Unit,
     onSetHasChildren: (Boolean) -> Unit,
     onSetBudget: (TripBudget) -> Unit,
@@ -142,6 +154,30 @@ private fun PlannerForm(
                 leadingIcon = if (interest in state.interests) {
                     { Icon(Icons.Filled.AutoAwesome, contentDescription = null, modifier = Modifier.height(16.dp)) }
                 } else null,
+                colors = FilterChipDefaults.filterChipColors(),
+            )
+        }
+    }
+
+    SectionLabel("Accessibility")
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        allAccessibilityNeeds.forEach { need ->
+            FilterChip(
+                selected = need in state.accessibilityNeeds,
+                onClick = { onToggleAccessibilityNeed(need) },
+                label = { Text(need.replaceFirstChar { it.uppercase() }) },
+                colors = FilterChipDefaults.filterChipColors(),
+            )
+        }
+    }
+
+    SectionLabel("Dietary needs")
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        allDietaryRestrictions.forEach { restriction ->
+            FilterChip(
+                selected = restriction in state.dietaryRestrictions,
+                onClick = { onToggleDietaryRestriction(restriction) },
+                label = { Text(restriction.replaceFirstChar { it.uppercase() }) },
                 colors = FilterChipDefaults.filterChipColors(),
             )
         }

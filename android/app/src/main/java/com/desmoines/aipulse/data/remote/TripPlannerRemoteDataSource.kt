@@ -25,13 +25,28 @@ import java.time.ZoneOffset
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** Preferences the form collects for generate-itinerary. */
+/**
+ * Preferences the form collects for generate-itinerary.
+ *
+ * Carries all ten fields the edge function accepts
+ * (generate-itinerary/index.ts:35-52). It previously carried five, so
+ * accessibility and dietary requirements were simply unreachable on Android —
+ * a user-facing regression against web, not a missing nicety (XPLAT-010).
+ *
+ * The optional fields default to empty and are omitted from the payload when
+ * empty, so a request that does not use them is byte-identical to before.
+ */
 data class TripPreferences(
     val interests: List<String>,
     val budget: String,
     val pace: String,
     val groupSize: Int,
     val hasChildren: Boolean,
+    val childAges: List<Int> = emptyList(),
+    val accessibilityNeeds: List<String> = emptyList(),
+    val dietaryRestrictions: List<String> = emptyList(),
+    val mustSee: List<String> = emptyList(),
+    val avoidCategories: List<String> = emptyList(),
 )
 
 @Serializable
@@ -60,6 +75,22 @@ class TripPlannerRemoteDataSource @Inject constructor(
                 put("pace", prefs.pace)
                 put("groupSize", prefs.groupSize)
                 put("hasChildren", prefs.hasChildren)
+                // Omitted when empty so an unused field never widens the request.
+                if (prefs.childAges.isNotEmpty()) {
+                    putJsonArray("childAges") { prefs.childAges.forEach { add(it) } }
+                }
+                if (prefs.accessibilityNeeds.isNotEmpty()) {
+                    putJsonArray("accessibilityNeeds") { prefs.accessibilityNeeds.forEach { add(it) } }
+                }
+                if (prefs.dietaryRestrictions.isNotEmpty()) {
+                    putJsonArray("dietaryRestrictions") { prefs.dietaryRestrictions.forEach { add(it) } }
+                }
+                if (prefs.mustSee.isNotEmpty()) {
+                    putJsonArray("mustSee") { prefs.mustSee.forEach { add(it) } }
+                }
+                if (prefs.avoidCategories.isNotEmpty()) {
+                    putJsonArray("avoidCategories") { prefs.avoidCategories.forEach { add(it) } }
+                }
             }
         }
         val response = db().functions("generate-itinerary", body = payload)
