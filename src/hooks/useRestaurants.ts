@@ -426,6 +426,18 @@ async function getRestaurantFilterOptions(): Promise<FilterOptionsResult> {
   return (await fetchFilterOptionsRpc()) ?? (await fetchFilterOptionsFallback());
 }
 
+/**
+ * Cached cuisine/location facets for consumers outside the hook layer
+ * (SearchSection's subcategory list, WEB-PERF-002).
+ *
+ * This export was missing while SearchSection imported it, which crashed the
+ * homepage into the route error boundary — a missing named export is an
+ * `undefined` binding once bundled (React error #130). See WEB-QA-001/003.
+ */
+export async function fetchRestaurantFilterFacets(): Promise<FilterOptionsResult> {
+  return getRestaurantFilterOptions();
+}
+
 // Hook to get cuisine counts for "Browse by Cuisine" section
 export function useCuisineCounts() {
   const { data, isLoading } = useQuery({

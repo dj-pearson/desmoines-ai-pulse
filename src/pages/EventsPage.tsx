@@ -273,10 +273,16 @@ export default function EventsPage() {
         return { events: filteredData, totalCount: filteredData.length };
       }
 
+      // Visibility predicates MUST match the detail lookup (useEventBySlug) and
+      // useEvents. When the list was more permissive than the detail, merged/hidden
+      // rows rendered as clickable cards that dead-ended on "Event Not Found"
+      // (WEB-QA-002). Any filter added here needs to be added there too.
       let query = supabase
         .from("events")
         .select("id, title, date, location, category, image_url, price, venue, is_featured, event_start_utc, event_start_local, city, latitude, longitude, enhanced_description, original_description", { count: 'exact' })
-        .gte("date", new Date().toISOString().split("T")[0]);
+        .gte("date", new Date().toISOString().split("T")[0])
+        .neq("is_merged", true)
+        .neq("is_hidden", true);
 
       // Push the active sort into the query so it covers the full result set,
       // not just the current page (WEB-UX-018). 'newest' = recently added.

@@ -110,7 +110,15 @@ export function useEvents(filters: EventFilters = {}) {
       let { data, error, count } = await query;
 
       if (error) {
-        logger.error('fetchEvents', 'Database query error', { error });
+        // Surface the PostgREST fields explicitly. Logging the bare object rendered
+        // as a collapsed `Object` in production consoles, which is why a missing
+        // column (42703) went undiagnosed on the homepage (WEB-QA-003).
+        logger.error('fetchEvents', 'Database query error', {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+        });
         throw error;
       }
 

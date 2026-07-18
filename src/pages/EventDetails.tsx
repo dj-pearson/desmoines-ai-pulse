@@ -1,5 +1,6 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
+import { useEventBySlug } from "@/hooks/useEventBySlug";
 import { useEvents } from "@/hooks/useEvents";
 import { RatingSystem } from "@/components/RatingSystem";
 import Header from "@/components/Header";
@@ -50,15 +51,19 @@ import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { NearbyContent } from "@/components/NearbyContent";
 import { LazyLocationMap } from "@/components/LazyLocationMap";
 
+/** Upcoming events fetched to populate the related/nearby rails (3 shown each). */
+const RELATED_POOL_SIZE = 50;
+
 export default function EventDetails() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
-  const { events, isLoading } = useEvents();
+  // Targeted, date-windowed lookup — see useEventBySlug for why the old
+  // fetch-everything-then-Array.find approach 404'd listed events (WEB-QA-002).
+  const { event, isLoading } = useEventBySlug(slug);
 
-  const event = events.find((e) => {
-    const eventSlug = createEventSlugWithCentralTime(e.title, e);
-    return eventSlug === slug;
-  });
+  // Only feeds the "related"/"nearby" rails below — bounded on purpose, since
+  // those render at most 3 items each and never need the full upcoming set.
+  const { events: relatedPool } = useEvents({ limit: RELATED_POOL_SIZE });
 
   // Track page view and content interactions
   const { trackShare, trackClick } = useContentTracking(event?.id, 'event');
@@ -78,7 +83,7 @@ export default function EventDetails() {
   );
 
   const relatedEvents = event
-    ? events
+    ? relatedPool
         .filter((e) =>
           e.id !== event.id &&
           e.category === event.category &&
@@ -89,7 +94,7 @@ export default function EventDetails() {
 
   // Nearby events (different category, same timeframe)
   const nearbyEvents = event
-    ? events
+    ? relatedPool
         .filter((e) =>
           e.id !== event.id &&
           e.category !== event.category &&
