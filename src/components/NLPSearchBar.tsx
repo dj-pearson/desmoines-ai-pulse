@@ -137,8 +137,13 @@ export function NLPSearchBar({
               size="sm"
               className="h-8 w-8 p-0"
               onClick={handleClear}
+              aria-label="Clear search"
             >
-              <X className="h-4 w-4" />
+              {/* Icon-only buttons expose no accessible name — the SVG is the
+                  only child and carries no text — so a screen reader announced
+                  these as just "button". WCAG 4.1.2 (axe button-name, critical).
+                  The icons are decorative once the button is labelled. */}
+              <X className="h-4 w-4" aria-hidden="true" />
             </Button>
           )}
           <Button
@@ -146,8 +151,9 @@ export function NLPSearchBar({
             onClick={() => query.length >= 3 && search(query)}
             disabled={query.length < 3 || isSearching}
             className="h-8"
+            aria-label="Search"
           >
-            <Search className="h-4 w-4" />
+            <Search className="h-4 w-4" aria-hidden="true" />
           </Button>
         </div>
       </div>
