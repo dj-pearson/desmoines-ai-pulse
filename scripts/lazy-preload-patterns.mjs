@@ -50,3 +50,40 @@ export function stripLazyPreloads(html) {
   }
   return [out, count];
 }
+
+/**
+ * Undo the font stylesheet's own onload mutation.
+ *
+ * index.html ships the correct async-CSS pattern:
+ *
+ *   <link rel="preload" as="style" href="…fonts.googleapis…"
+ *         onload="this.onload=null;this.rel='stylesheet'">
+ *
+ * That handler is the whole point — it flips the link to a stylesheet only
+ * AFTER it has downloaded, so the font CSS never blocks first paint. But the
+ * prerenderer runs the page in Chromium, the handler fires, and page.content()
+ * serializes the MUTATED link with rel="stylesheet" already applied. The
+ * shipped HTML therefore render-blocks on a third-party origin from the very
+ * first byte, which is exactly what the pattern existed to prevent.
+ *
+ * Measured on a production build before this fix: the local CSS resolved in
+ * 10-17ms, the fonts.googleapis.com request took 3035ms, and FCP landed at
+ * 3204ms — immediately after it. Every route's first paint was gated on a
+ * third-party request, and on a network where fonts.googleapis.com is slow or
+ * blocked the page shows nothing at all.
+ *
+ * Same class of bug as the modulepreload stripping above: prerendering bakes
+ * runtime DOM mutations into the initial HTML and silently defeats any
+ * optimisation that depends on progressive behaviour.
+ */
+export function restoreAsyncFontLinks(html) {
+  let count = 0;
+  const out = html.replace(
+    /<link([^>]*?)rel="stylesheet"([^>]*?onload="this\.onload=null;this\.rel='stylesheet'"[^>]*?)>/g,
+    (_m, before, after) => {
+      count++;
+      return `<link${before}rel="preload"${after}>`;
+    },
+  );
+  return [out, count];
+}

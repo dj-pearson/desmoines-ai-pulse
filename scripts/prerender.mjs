@@ -18,7 +18,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
-import { stripLazyPreloads } from './lazy-preload-patterns.mjs';
+import { stripLazyPreloads, restoreAsyncFontLinks } from './lazy-preload-patterns.mjs';
 import process from 'node:process';
 
 const DIST = path.resolve('dist');
@@ -148,6 +148,7 @@ async function main() {
   let ok = 0;
   let failed = 0;
   let strippedTotal = 0;
+  let restoredFontsTotal = 0;
   for (const route of ROUTES) {
     const page = await browser.newPage();
     try {
@@ -179,7 +180,12 @@ async function main() {
       // Recharts and D3 on the homepage). Strip them back out — the build
       // plugin already removed the build-time copies, and this removes the
       // runtime-injected ones. See scripts/lazy-preload-patterns.mjs.
-      const [html, strippedPreloads] = stripLazyPreloads(captured);
+      const [dePreloaded, strippedPreloads] = stripLazyPreloads(captured);
+      // Chromium already fired the font link's onload, flipping rel to
+      // "stylesheet" in the live DOM. Serializing that makes the shipped HTML
+      // render-block on fonts.googleapis.com. Put it back to preload.
+      const [html, restoredFonts] = restoreAsyncFontLinks(dePreloaded);
+      if (restoredFonts > 0) restoredFontsTotal += restoredFonts;
       if (strippedPreloads > 0) {
         strippedTotal += strippedPreloads;
       }
@@ -202,7 +208,7 @@ async function main() {
 
   await browser.close().catch(() => {});
   server.close();
-  console.log(`[prerender] done: ${ok} prerendered, ${failed} skipped, of ${ROUTES.length} routes; stripped ${strippedTotal} runtime-injected modulepreload link(s)`);
+  console.log(`[prerender] done: ${ok} prerendered, ${failed} skipped, of ${ROUTES.length} routes; stripped ${strippedTotal} runtime-injected modulepreload link(s); restored ${restoredFontsTotal} async font link(s)`);
 }
 
 main()
