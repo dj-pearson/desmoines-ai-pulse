@@ -5875,6 +5875,34 @@
       "priority": 3,
       "passes": false,
       "notes": "FOUND 2026-07-18. src/components/OptimizedImage.tsx getTransformedUrl sends any non-Supabase-Storage URL to /functions/v1/image-transform with width/format/quality params. The test at src/components/__tests__/OptimizedImage.test.ts asserts the opposite (\"returns external URLs unchanged (no transform applied)\") and documents the reason inline as WEB-PERF-004. This is NOT simply a stale test. The test encodes a deliberate performance decision; the implementation does the thing that decision rejected. Because the test never ran green (see WEB-CI-020), nothing ever flagged the divergence. SEVERITY kept at 3 deliberately: I did not measure how many external images a real page actually loads, so the impact is unquantified. Measure before prioritising — if most images are Supabase Storage URLs, the proxy path is rarely taken and this is minor. NOT FIXED HERE: changing image routing alters what every page requests, and the right answer depends on whether image-transform has gained resizing since WEB-PERF-004. That is a product/infra fact I could not establish from the code alone."
+    },
+    {
+      "id": "WEB-UX-030",
+      "title": "Color contrast fails WCAG AA across the site (71 nodes on /events alone)",
+      "description": "As a low-vision visitor, I need text to meet the 4.5:1 contrast ratio CLAUDE.md commits to, because axe reports serious color-contrast violations on every measured public page except /auth.",
+      "acceptanceCriteria": [
+        "Identify the offending token(s) in the Tailwind theme — the volume (71 nodes on one page) points at a small number of shared colours, most likely muted-foreground on a light surface, not 71 separate mistakes",
+        "Raise the failing token(s) to 4.5:1 for body text and 3:1 for large text, and re-run the axe probe on / /events /restaurants /pricing",
+        "Fix at the token level, not per-component — a per-instance fix will drift straight back",
+        "Verify in dark mode as well; the probe only covered the default theme",
+        "Once clean, remove continue-on-error from the accessibility job in e2e.yml so this cannot regress silently (see WEB-CI-021)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "MEASURED 2026-07-18 (claude/prd-loop-schema-gaps) with @axe-core/playwright against a running app, tags wcag2a+wcag2aa+wcag21a+wcag21aa. Per-page violation counts: / = critical/button-name(1) + serious/color-contrast(10); /events = serious/color-contrast(71); /restaurants = critical/button-name(1) + serious/color-contrast(30); /pricing = serious/color-contrast(6); /auth = CLEAN (0). The button-name half is FIXED in commit 6ad76efd (NLPSearchBar icon buttons). Everything remaining is colour contrast. NOT ATTEMPTED, deliberately: contrast is fixed by changing theme tokens, which is a brand/design decision with site-wide visual consequences. Guessing at replacement colours would be worse than reporting the measurement. The concentration (71 nodes on one page) strongly suggests one or two shared tokens rather than scattered one-offs, so the real fix is probably small once someone picks the values. CONTEXT: CLAUDE.md Quality Standards claims \"A11y: WCAG 2.1 AA, keyboard nav, ARIA labels, 4.5:1 contrast\". The full suite result was 66 passed / 24 failed, so that claim is currently aspirational rather than met."
+    },
+    {
+      "id": "WEB-CI-021",
+      "title": "The accessibility suite runs in CI but cannot fail the build",
+      "description": "As a maintainer, I need a11y regressions to block, because e2e.yml runs the accessibility suite with continue-on-error: true, so 24 failing tests have never surfaced as a red build.",
+      "acceptanceCriteria": [
+        "Once WEB-UX-030 is fixed, remove continue-on-error from the \"Run critical E2E suites\" step in .github/workflows/e2e.yml, or split accessibility into its own blocking job",
+        "If the suite is too flaky to block on wholesale, gate on the axe checks only (they are deterministic) and leave the keyboard/focus tests advisory — partial enforcement beats none",
+        "Record the current failure list as a baseline if a ratchet is preferred, matching the strict-baseline and schema-baseline convention already used here"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FOUND 2026-07-18. .github/workflows/e2e.yml runs tests/accessibility.spec.ts (plus links-and-buttons, forms, mobile-responsive) under `continue-on-error: true`. The suite is genuinely strict — it asserts zero axe violations against wcag2a/2aa/21a/21aa — but nothing acts on the result. Ran it locally: 66 passed, 24 failed, 11.5 minutes. Failures span axe violations, keyboard navigation, focus visibility, skip links, heading hierarchy (h1 count and level skips), icon-button labels, touch targets, and document titles. This is the same shape as WEB-CI-020 (the unit lane failing under a supposedly blocking check): a quality gate that exists, runs, and cannot fail. Worth treating the two together — the pattern is guards that are present but inert."
     }
   ]
 }
