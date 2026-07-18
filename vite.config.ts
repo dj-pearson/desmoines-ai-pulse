@@ -19,17 +19,51 @@ function removeLazyPreloads(): Plugin {
   return {
     name: "remove-lazy-preloads",
     enforce: "post",
-    transformIndexHtml(html) {
-      // Remove modulepreload for lazy-loaded vendor chunks that are NOT
-      // needed on initial page load. These will load on-demand when needed.
-      return html
-        .replace(/<link rel="modulepreload"[^>]*vendor-maps[^>]*>/g, "")
-        .replace(/<link rel="modulepreload"[^>]*vendor-three[^>]*>/g, "")
-        .replace(/<link rel="modulepreload"[^>]*vendor-editor[^>]*>/g, "")
-        .replace(/<link rel="modulepreload"[^>]*vendor-recharts[^>]*>/g, "")
-        .replace(/<link rel="modulepreload"[^>]*vendor-d3[^>]*>/g, "")
-        .replace(/<link rel="modulepreload"[^>]*HeroCityLite[^>]*>/g, "")
-        .replace(/<link rel="modulepreload"[^>]*HeroCity[^>]*>/g, "");
+    /**
+     * MUST run in generateBundle, NOT transformIndexHtml.
+     *
+     * Vite injects <link rel="modulepreload"> during the build-html plugin's
+     * generateBundle, which is AFTER every transformIndexHtml hook has run —
+     * including hooks declared with order:"post". So the previous
+     * transformIndexHtml implementation was rewriting HTML that did not yet
+     * contain a single preload link, and silently did nothing for the life of
+     * the file. The regexes were never the problem; they match the emitted
+     * markup exactly (verified). Every production build shipped ~440KB gzipped
+     * of 3D engine, rich-text editor, Recharts and D3 preloads on first paint.
+     *
+     * Editing the emitted asset here is the only stage where those links exist.
+     */
+    generateBundle(_options, bundle) {
+      const PATTERNS = [
+        /<link rel="modulepreload"[^>]*vendor-maps[^>]*>\s*/g,
+        /<link rel="modulepreload"[^>]*vendor-three[^>]*>\s*/g,
+        /<link rel="modulepreload"[^>]*vendor-editor[^>]*>\s*/g,
+        /<link rel="modulepreload"[^>]*vendor-recharts[^>]*>\s*/g,
+        /<link rel="modulepreload"[^>]*vendor-d3[^>]*>\s*/g,
+        /<link rel="modulepreload"[^>]*HeroCityLite[^>]*>\s*/g,
+        /<link rel="modulepreload"[^>]*HeroCity[^>]*>\s*/g,
+      ];
+
+      let stripped = 0;
+      for (const asset of Object.values(bundle)) {
+        if (asset.type !== "asset" || !asset.fileName.endsWith(".html")) continue;
+        let html = String(asset.source);
+        for (const re of PATTERNS) {
+          html = html.replace(re, () => {
+            stripped++;
+            return "";
+          });
+        }
+        asset.source = html;
+      }
+
+      // Loud on regression: if the chunk names change, this silently stops
+      // working again, which is exactly how it went unnoticed before.
+      if (stripped === 0) {
+        this.warn(
+          "remove-lazy-preloads stripped 0 preload links — chunk names may have changed; the critical-path budget is unguarded"
+        );
+      }
     },
   };
 }
