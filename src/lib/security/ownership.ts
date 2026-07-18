@@ -324,20 +324,22 @@ export async function validateResourceAccess<T = Record<string, unknown>>(
  * Nothing calls it today — `useResourceOwnership` currently has no consumers —
  * which is why the breakage went unnoticed.
  *
- * `null` means "no verified table for this resource type". It is deliberately
- * NOT a guess. Mapping one of these to the wrong table is the dangerous
- * direction: an ownership check against a table whose `user_id` belongs to a
- * different entity could fail OPEN. `getTableName` returning null makes
- * `isResourceOwner` log an explicit error and deny, which is the safe outcome
- * and is loud enough to diagnose. Resolve these before wiring this module in.
+ * RESOLVED 2026-07-18 (WEB-SEC-020): the three that had no real table —
+ * 'advertisement', 'trip_plan' and 'event_alert' — have been removed from
+ * OwnableResource entirely rather than left mapped to null. See the comment on
+ * that type for the reasoning and for how to re-add one safely. Every entry
+ * below now resolves to a table the compiler has verified exists.
+ *
+ * The `| null` return is kept as a guard for future additions, not because any
+ * current entry needs it.
  */
 type TableName = keyof Database['public']['Tables'];
 
 function getTableName(resourceType: OwnableResource): TableName | null {
-  const tableMap: Record<OwnableResource, TableName | null> = {
-    event: 'events',
-    restaurant: 'restaurants',
-    attraction: 'attractions',
+  // Value type is TableName with NO `| null`: every resource type must resolve
+  // to a real table, and the compiler now rejects both a nonexistent table name
+  // and a null placeholder (WEB-SEC-020).
+  const tableMap: Record<OwnableResource, TableName> = {
     // Renamed; verified to carry the `user_id` column OWNERSHIP_COLUMNS expects.
     review: 'event_reviews',
     rating: 'user_ratings',
@@ -348,14 +350,6 @@ function getTableName(resourceType: OwnableResource): TableName | null {
     campaign: 'campaigns',
     profile: 'profiles',
     saved_search: 'saved_searches',
-    // UNRESOLVED — no table in the current schema corresponds to these.
-    // `advertisements` (owner column `campaign_id`), `saved_itineraries` and
-    // `event_alerts` all previously pointed at nonexistent tables.
-    // `curated_itineraries` and `advertising_packages` exist but are editorial /
-    // pricing tables, not per-user records, so neither is a safe substitute.
-    advertisement: null,
-    trip_plan: null,
-    event_alert: null,
   };
 
   return tableMap[resourceType] ?? null;
