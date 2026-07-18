@@ -5401,8 +5401,93 @@
         "This is a verification/testing story — no product code change required unless a defect is found"
       ],
       "priority": 2,
+      "passes": true,
+      "notes": "FOUND 2026-07-13 (5-PERSONA QA PASS — production live). SEVERITY: N/A (coverage gap). The persona pass (Marcus/mobile dad, Priya/newcomer, Gary/skeptic, Zoe/power user, Diana/business owner) covered homepage, events list+detail+filters, trip-planner, restaurants, pricing, auth, and theme toggle, but could not verify: true mobile viewport rendering (window stayed desktop-width), any authenticated feature (no account created — signup is out of scope for automated QA), contact/reviews submission, Stripe checkout, and SEO landing/attractions/articles pages. | RESOLVED 2026-07-18 (claude/web-qa-p1-fixes) — with one AC explicitly NOT covered; see below. MOBILE RENDERING (AC1) VERIFIED: swept 14 routes x 3 viewports (320x568, 375x667 iPhone SE, 393x851 Pixel 5) with isMobile/hasTouch, measuring document overflow, error boundaries and HTTP status. Found real horizontal overflow on SIX routes at EVERY phone width - /events, /restaurants, /attractions, /articles, /playgrounds, /neighborhoods - up to 215px at 320px wide. Root-caused and FIXED as WEB-QA-008 (FAQ accordion questions could not wrap because the shadcn Button base sets whitespace-nowrap). The sweep went from 18 problematic combinations to 1 after the fix, the survivor being a 1px rounding artifact. Mobile nav verified: bottom nav present on every sampled route, labelled hamburger present everywhere except /auth (appears intentional). Touch targets measured and filed as WEB-QA-009. SEO LANDING + SECONDARY SECTIONS (AC4) VERIFIED: /events/today, /restaurants/open-now, /attractions, /articles, /playgrounds, /neighborhoods all return 2xx and mount without an error boundary at all three phone widths. B2B/CONTACT SURFACES (AC3) PARTIALLY VERIFIED: /advertise, /business-partnership and /contact all mount cleanly at phone widths (/advertise only because WEB-QA-001 fixed its React #130 crash earlier in this same branch). NOT verified: actual contact-form SUBMISSION and the reviews moderation UI - both require either sending real data to production or an authenticated admin session. LOGGED-IN FLOWS (AC2) NOT VERIFIED AT ALL. This is the significant coverage gap and it is unchanged from the original persona pass. Free-tier limits (3 favorites, 0 alerts/saved searches), saved searches, review submission with AI auto-moderation (WEB-AUTO-009) and social sharing all require an authenticated account. The story notes state signup is out of scope for automated QA, and creating an account against the production database is not something to do unilaterally. Everything behind auth therefore remains unconfirmed and needs a human pass or a seeded test account. STATIC ANALYSIS FOUND SOMETHING THE SWEEP ALONE WOULD NOT HAVE: while verifying the favorites surface, the regenerated types showed the favorites write path and read path target different tables (filed as WEB-QA-010) - so even a manual logged-in pass of AC2 would likely find restaurant/attraction favorites silently broken. DEFECTS FILED PER AC5: WEB-QA-008 (mobile overflow, MED, fixed), WEB-QA-009 (touch targets, LOW-MED), WEB-QA-010 (favorites read/write mismatch, MED), WEB-QA-011 (get_rotated_restaurants inconsistent total_count, LOW), WEB-QA-012 (search_analytics 42703, LOW), WEB-SEC-020 (unmapped ownership resource types, MED latent). METHOD NOTE: naive overflow detection is misleading and cost two wrong diagnoses before the real one. Carousel children inside an overflow-x:auto container legitimately extend past the viewport, and position:fixed elements with inset-x-0 size to the EXPANDED layout viewport, so they report widths of exactly viewport + overflow and look like the biggest offenders while actually being symptoms. Any future overflow hunt must exclude clipped ancestors and fixed subtrees before ranking candidates."
+    },
+    {
+      "id": "WEB-QA-008",
+      "title": "FAQ accordion questions cannot wrap, giving every FAQ page horizontal scroll on phones",
+      "description": "As a mobile visitor, I need pages not to scroll sideways, because the FAQ accordion question text could not wrap and pushed the whole document wider than the viewport on every page that renders an FAQ section.",
+      "acceptanceCriteria": [
+        "FAQ question text wraps at mobile widths instead of overflowing",
+        "No horizontal document overflow on /events, /restaurants, /attractions, /articles, /playgrounds, /neighborhoods at 320px, 375px and 393px",
+        "npm run validate passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "FOUND AND FIXED 2026-07-18 during WEB-QA-007 mobile verification (claude/web-qa-p1-fixes). SEVERITY: MED - affected six routes at every phone width on a mobile-first product. ROOT CAUSE: FAQSection rendered the question inside a shadcn Button, whose base variant sets whitespace-nowrap (components/ui/button.tsx line 8). The question span therefore could not wrap, and as a flex child it also would not shrink below its content width (default min-width:auto). The span rendered up to 381px wide inside a 375px viewport. DIAGNOSIS NOTE WORTH KEEPING: the first two rounds of measurement blamed the wrong elements. The widest overflowing nodes were carousel children inside a legitimate overflow-x:auto container (fine by design), and then position:fixed elements with inset-x-0 (cookie banner, bottom nav, toast viewport) whose widths were exactly 375 + docOverflow - they stretch to the expanded layout viewport, so they are symptoms of the overflow rather than causes. Only after excluding fixed subtrees and clipped ancestors did the FAQ span surface as the true culprit. FIX: whitespace-normal on the Button to override the base style, plus min-w-0 break-words on the span. VERIFIED: a 42-combination sweep (14 routes x 3 viewports) went from 18 problematic to 1, and the remaining one is a 1px sub-pixel rounding artifact on /attractions at 320px (tracked in WEB-QA-009)."
+    },
+    {
+      "id": "WEB-QA-009",
+      "title": "Touch targets below 44px across mobile list and filter UI",
+      "description": "As a mobile visitor, I need tap targets large enough to hit reliably, because filter chips, pagination links and icon buttons render between 20px and 40px tall at phone widths.",
+      "acceptanceCriteria": [
+        "Interactive controls meet a 44x44px minimum at mobile widths, or document a deliberate exception",
+        "Covers at minimum: event date-preset chips (92x38, 119x38), restaurant action buttons (114x40, 130x36), pricing page links (38x20) and auth form controls (293x40)",
+        "Exclude genuinely non-visual elements (the 1x1 skip link and 1x1 hidden selects are intentional)",
+        "Also resolve the residual 1px horizontal overflow on /attractions at 320px",
+        "npm run validate passes"
+      ],
+      "priority": 3,
       "passes": false,
-      "notes": "FOUND 2026-07-13 (5-PERSONA QA PASS — production live). SEVERITY: N/A (coverage gap). The persona pass (Marcus/mobile dad, Priya/newcomer, Gary/skeptic, Zoe/power user, Diana/business owner) covered homepage, events list+detail+filters, trip-planner, restaurants, pricing, auth, and theme toggle, but could not verify: true mobile viewport rendering (window stayed desktop-width), any authenticated feature (no account created — signup is out of scope for automated QA), contact/reviews submission, Stripe checkout, and SEO landing/attractions/articles pages."
+      "notes": "FOUND 2026-07-18 during WEB-QA-007 mobile verification (claude/web-qa-p1-fixes). SEVERITY: LOW-MED. Measured at 375x667 with isMobile/hasTouch: 9-22 sub-44px interactive elements per page (/ 11, /events 22, /restaurants 21, /pricing 9, /auth 11). NOTE ON STANDARD: WCAG 2.1 AA (2.5.8) requires only 24x24, which these mostly meet, so this is NOT an AA failure - 44x44 is WCAG AAA (2.5.5) and the Apple/Google platform guidance. CLAUDE.md states a mobile-first, touch-targets-first standard, which is why this is filed. A repo .touch-target utility (min-h-[44px] min-w-[44px]) already exists and is the intended fix. Mobile nav verified working: bottom nav present on all sampled routes and a labelled hamburger present everywhere except /auth, which appears intentional."
+    },
+    {
+      "id": "WEB-QA-010",
+      "title": "Favorites write path and read path target different tables, so restaurant/attraction favorites never appear",
+      "description": "As a signed-in user, I need my saved favorites to show up in My Favorites, because the button that saves them writes to a different table than the view that lists them.",
+      "acceptanceCriteria": [
+        "Identify the canonical favorites table (content_favorites appears to be the intended destination) and migrate reads and writes onto it",
+        "useFavorites (used by every FavoriteButton) currently writes ONLY to user_event_interactions",
+        "FavoritesView reads user_restaurant_interactions and user_attraction_interactions; the latter does not exist in the schema at all",
+        "Restaurant and attraction favorites round-trip end to end after the fix",
+        "Backward-compat per CLAUDE.md: additive-only DB changes, dual-write across releases if the storage table changes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 during WEB-DB-003 types regeneration (claude/web-qa-p1-fixes). SEVERITY: MED - a shipped feature that silently does nothing for two of three content types. Evidence: src/hooks/useFavorites.ts queries only user_event_interactions (lines 23, 42, 86). src/components/FavoritesView.tsx reads user_restaurant_interactions (line ~55) and user_attraction_interactions (line ~82). The regenerated types.ts confirms user_attraction_interactions does not exist, so that query always errors; the code swallows it via a debug log and returns [], which is why this never surfaced as a visible error. A generic content_favorites table exists and looks like the intended destination. The one remaining .from(... as any) cast in the codebase is on this line and is deliberately retained with an explanatory comment - do not remove it without fixing the write path first."
+    },
+    {
+      "id": "WEB-QA-011",
+      "title": "get_rotated_restaurants returns a total_count that changes with limit_count",
+      "description": "As a visitor, I need the restaurants result count to be trustworthy, because the RPC backing the default sort reports a different total depending on the page size requested.",
+      "acceptanceCriteria": [
+        "get_rotated_restaurants returns a total_count representing all matching rows, independent of limit_count/offset_count",
+        "Reproduce: same filters with limit_count 8 returns total_count 480, while limit_count 1000 returns 434 rows and total_count 434",
+        "Reconcile against the direct query count (480 non-merged restaurants) and determine which filter accounts for the 46-row difference",
+        "Backward-compat per CLAUDE.md: the RPC is called by shipped clients - behavioural fix only, no signature change"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 during WEB-QA-004 (claude/web-qa-p1-fixes). SEVERITY: LOW - the number currently rendered (434) does match the rows actually returned, so the UI is self-consistent; the defect is that total_count is entangled with the limit and so cannot be trusted as a real total. Fixing it needs a migration to the RPC, which is why it was not folded into WEB-QA-004."
+    },
+    {
+      "id": "WEB-QA-012",
+      "title": "Homepage logs 42703: column search_analytics.query does not exist",
+      "description": "As the platform owner, I need the homepage free of database errors, because a search-analytics query references a column that does not exist and errors on every load.",
+      "acceptanceCriteria": [
+        "Identify the caller issuing the search_analytics query and reconcile it with the actual table columns",
+        "Homepage loads with no 42703 error from search_analytics",
+        "Same bug class as WEB-QA-003 (a projection naming a nonexistent column) - check sibling analytics queries for the same drift",
+        "npm run validate passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 while verifying WEB-QA-003 (claude/web-qa-p1-fixes). SEVERITY: LOW - degrades silently, no visible breakage. Evidence: browser console on / logs \"Error fetching search data: {code: 42703, message: column search_analytics.query does not exist}\". This is the same defect class as the archived_at bug fixed in WEB-QA-003: a query naming a column the table does not have, which PostgREST rejects wholesale. Now that types.ts is regenerated (WEB-DB-003), the real column set is available to check against."
+    },
+    {
+      "id": "WEB-SEC-020",
+      "title": "Resolve the three unmapped resource types in the security ownership map before wiring it up",
+      "description": "As the platform owner, I need every ownable resource type to resolve to a real table, because three of them currently map to null and their ownership checks can only deny.",
+      "acceptanceCriteria": [
+        "advertisement, trip_plan and event_alert map to real tables carrying the owner column OWNERSHIP_COLUMNS expects, or the resource types are removed from OwnableResource",
+        "Verify the chosen owner column identifies the same principal the check assumes - a table whose user_id refers to a different entity would make the check fail OPEN",
+        "useResourceOwnership currently has zero consumers; resolve this BEFORE wiring the module into any surface",
+        "type-check passes with the map still typed against keyof Database public Tables"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 during WEB-QUAL-004 (claude/web-qa-p1-fixes). SEVERITY: MED (latent). Retyping getTableName from Record<OwnableResource, string> to the generated table-name union made the compiler reveal six entries pointing at nonexistent tables. Three were renames and are now fixed after verifying each carries user_id: review -> event_reviews, rating -> user_ratings, favorite -> content_favorites. The remaining three (advertisement, whose owner column is campaign_id; trip_plan; event_alert) have no identified equivalent - curated_itineraries and advertising_packages exist but are editorial/pricing tables, not per-user records - so they are mapped to null deliberately rather than guessed. null makes isResourceOwner log an explicit error and deny (fails closed, safe). Guessing a wrong table is the dangerous direction and could fail OPEN. The module is dead code today, which is the only reason this is not urgent."
     }
   ]
 }

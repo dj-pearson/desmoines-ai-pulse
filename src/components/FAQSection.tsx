@@ -70,12 +70,19 @@ export function FAQSection({
         <CardContent className="space-y-4">
           {faqs.map((faq, index) => (
             <div key={index} className="border border-border rounded-lg">
+              {/* `whitespace-normal` overrides the Button base style, which sets
+                  `whitespace-nowrap` (see components/ui/button.tsx). Without it a
+                  long FAQ question cannot wrap, so it ran past the viewport and
+                  gave the whole page horizontal scroll on phones — up to 215px of
+                  overflow at 320px wide. `min-w-0` lets the span shrink below its
+                  content size, which a flex child does not do by default.
+                  (WEB-QA-008) */}
               <Button
                 variant="ghost"
-                className="w-full justify-between p-4 h-auto text-left"
+                className="w-full justify-between p-4 h-auto text-left whitespace-normal"
                 onClick={() => toggleItem(index)}
               >
-                <span className="font-semibold pr-4">{faq.question}</span>
+                <span className="font-semibold pr-4 min-w-0 break-words">{faq.question}</span>
                 {openItems.has(index) ? (
                   <ChevronUp className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                 ) : (
