@@ -40,7 +40,25 @@ export default function SEOHead({
   breadcrumbs,
 }: SEOHeadProps) {
   const baseUrl = BRAND.baseUrl;
-  const fullUrl = url ? getCanonicalUrl(url) : (typeof window !== 'undefined' ? window.location.href : baseUrl);
+
+  // Canonical and og:url must ALWAYS be built on the production origin, never
+  // on whatever host happens to be serving. The old fallback was
+  // `window.location.href`, which is correct in a browser but wrong everywhere
+  // else that runs this code — and the prerenderer runs it against a local
+  // static server, so five routes shipped with
+  // `<link rel="canonical" href="http://127.0.0.1:4178/...">` baked into
+  // production HTML. A canonical pointing at an unreachable host is worse than
+  // none: it tells crawlers the real URL is a duplicate of somewhere they
+  // cannot fetch.
+  //
+  // Deriving from pathname (not href) also drops the query string, which is
+  // what a canonical wants — otherwise every filtered/search permutation
+  // declares itself a separate canonical URL.
+  const fullUrl = url
+    ? getCanonicalUrl(url)
+    : typeof window !== 'undefined'
+      ? getCanonicalUrl(window.location.pathname)
+      : baseUrl;
   const defaultImage = `${baseUrl}${BRAND.ogImage}`;
   const image = imageUrl || defaultImage;
 
