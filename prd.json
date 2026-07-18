@@ -5992,6 +5992,35 @@
       "priority": 3,
       "passes": false,
       "notes": "FOUND 2026-07-18 (claude/prd-loop-schema-gaps) by scanning for the mechanism common to most of this session findings. Counts: 438 call sites across 182 files matching `const { data } = await supabase|client|db()` with no error in the destructure — 335 in supabase/functions/, 103 in src/. Top offenders: agent-ops-digest (9), agent-subscription-nurture (9), _shared/agents/subscription-nurture (9), useAdminCampaigns (8), moderate-content (7), social-media-manager (7). WHY THIS MATTERS MORE THAN THE RAW COUNT: this is the enabling mechanism behind WEB-QA-018, WEB-BE-030, WEB-BE-031 and WEB-SEO-003. A query against a table that does not exist returns an error and no data. If the error is dropped, the caller sees an empty result and takes the empty branch — so an entire missing subsystem presents as \"nothing to show\" rather than as a failure. Every silent feature found in this audit went undetected through exactly this path. DELIBERATELY SEVERITY 3 AND NOT A BUG COUNT: many of these are legitimately best-effort and ignoring the error is the right call. Filing all 438 as defects would be noise and would bury the ones that matter. The valuable subset is the control-decision sites, and the concrete example is the one already fixed: play-rtdn-webhook used a swallowed error as an idempotency guard, so the guard could never fire. SUGGESTED ORDER: (1) grep the edge functions for swallowed errors whose result feeds an if/guard, (2) fix those, (3) add the lint rule to stop the bleeding, (4) leave the best-effort ones alone with a comment. | TRIAGED 2026-07-18. Narrowed the 438 raw sites to the 323 where the result drives a control decision (262 edge functions, 61 src). Most of those are optional-chaining on best-effort enrichment, where ignoring the error is the right call — so the raw count still overstates the problem. THE CLASS THAT MATTERS is idempotency guards on at-least-once webhooks, and all three are now accounted for: appstore-server-notifications-v2 already captured its error (correct); play-rtdn-webhook swallowed it AND its log table does not exist, so the guard was permanently dead (fixed 6d83937d); stripe-webhook swallowed it but stripe_webhook_events DOES exist — verified against live production — so that guard works today and was hardened defensively rather than as a live bug fix (c329d56f). REMAINING WORK on this story is the long tail plus the lint rule; the high-severity subset is done. NOTE FOR WHOEVER PICKS THIS UP: do not mass-apply error capture. The value is entirely in sites where the swallowed error changes a branch, and a blanket refactor would add noise to hundreds of best-effort calls while making the real ones harder to spot."
+    },
+    {
+      "id": "WEB-PERF-023",
+      "title": "Three prerendered routes ship 5,000-6,600 DOM elements, far past the Lighthouse threshold",
+      "description": "As a mobile visitor, I need list pages to render a bounded amount of DOM, because the prerenderer serializes every loaded item and three routes ship several thousand elements before any interaction.",
+      "acceptanceCriteria": [
+        "Bound what the prerenderer captures on list-heavy routes, or paginate/virtualize those lists so the initial DOM is capped",
+        "Element counts in #root: /map 6,564, /events/date-night 6,052, /restaurants/dietary 4,981, against a median route of 481. Lighthouse warns above ~800 and flags above 1,500",
+        "Re-measure hydration cost on /map specifically — 6,564 elements is the DOM React must reconcile on boot",
+        "Verify against a mid-tier mobile CPU, not a desktop; this is a main-thread cost, not a transfer cost"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "MEASURED 2026-07-18 (claude/prd-loop-schema-gaps) from the production build. Raw HTML: /map 984KB, /restaurants/dietary 842KB, /events/date-night 772KB, against a 94KB median. DELIBERATELY NOT FRAMED AS A BANDWIDTH PROBLEM. Gzipped those same documents are 56KB, 39KB and 37KB — repetitive DOM compresses extremely well, so transfer is fine and reporting \"984KB page\" would be misleading. The real costs are HTML parse time, DOM memory, and React hydration over several thousand nodes, all of which land on the main thread of whatever device the user has. ROOT CAUSE is the same prerender behaviour behind three earlier fixes: the prerenderer captures the DOM after the app has fetched and rendered its data, so every loaded list item is baked into the shipped HTML. On /map that is 517 map entities with their popups (300+ h3 elements). This is arguably WORKING AS INTENDED for SEO — the content is crawlable — so the fix is a bound, not a removal. SEVERITY 3: no measurement here shows a user-visible regression, and prerendered content is genuinely good for indexing. Raising this above 3 requires an actual hydration measurement on a real device, which I could not do from this machine."
+    },
+    {
+      "id": "WEB-SEO-004",
+      "title": "/business is prerendered as a sign-in wall, so that is what crawlers index",
+      "description": "As the platform owner, I need /business to present indexable content, because the prerendered page contains only a sign-in prompt rather than the Business Hub marketing copy.",
+      "acceptanceCriteria": [
+        "Decide the intent: if /business is a dashboard, it probably should not be in the prerender route list or the sitemap at all",
+        "If it is meant to attract businesses, render the marketing content to signed-out visitors and gate only the dashboard widgets",
+        "Either way /business currently has NO h1 in the shipped HTML — the h1 \"Business Hub\" exists only in the signed-in branch",
+        "/map also has no h1; it needs one (an sr-only heading is acceptable for a map-first UI)",
+        "Both are WCAG 1.3.1 heading-hierarchy failures as well as SEO gaps"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 while auditing heading structure across prerendered routes. 29 of 31 routes have exactly one h1, which is correct; the two exceptions are /business and /map, and they fail for different reasons. /business: the prerendered visible text is \"Business Hub — Sign in to access your business dashboard — Join Des Moines Insider to grow your business with powerful tools\". The h1 at BusinessHub.tsx:128 sits in the authenticated branch, so an unauthenticated crawler never reaches it. Google is indexing a login wall on a route that is in the sitemap. /map: genuinely has no h1 anywhere — 300+ h3 elements for map markers and no top-level heading. SEVERITY 3 for both: neither is a broken feature, and a gated dashboard being gated is defensible. The decision worth making is whether /business belongs in the prerender/sitemap set at all."
     }
   ]
 }
