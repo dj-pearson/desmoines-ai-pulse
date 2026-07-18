@@ -36,6 +36,16 @@ interface SocialEventCardProps {
   onViewSocial?: (eventId: string) => void;
   showSocialPreview?: boolean;
   socialData?: BatchEventSocialData;
+  /**
+   * True while the parent's batch social query is still in flight. Without it
+   * this card cannot tell "the batch has not arrived yet" from "the batch has
+   * nothing for this event", so on first render it falls back to its own
+   * per-event fetch — and every card in the list does the same. Measured on
+   * /events: 40 cards produced 113 REST requests (34 each to event_attendees,
+   * event_discussions and event_live_stats) despite the batch hook being
+   * wired up correctly (WEB-PERF-024).
+   */
+  socialDataPending?: boolean;
   featured?: boolean;
 }
 
@@ -45,9 +55,12 @@ function SocialEventCardComponent({
   onViewSocial,
   showSocialPreview = true,
   socialData,
+  socialDataPending = false,
   featured = false,
 }: SocialEventCardProps) {
-  const individualFetch = useEventSocial(socialData ? '' : event.id);
+  // Passing '' disables the hook (it early-returns on a falsy id). Skip the
+  // individual fetch both when batch data has arrived AND while it is pending.
+  const individualFetch = useEventSocial(socialData || socialDataPending ? '' : event.id);
 
   const liveStats = socialData?.liveStats ?? individualFetch.liveStats;
   const attendees = socialData?.attendees ?? individualFetch.attendees;

@@ -443,7 +443,11 @@ export default function EventsPage() {
   });
 
   const eventIds = events?.map(e => e.id) || [];
-  const { data: batchSocialData } = useBatchEventSocial(eventIds);
+  // isPending is forwarded to the cards so they can tell "batch hasn't arrived
+  // yet" from "batch has nothing for this event". Without it every card falls
+  // back to its own per-event fetch on first render and the batching is
+  // defeated — measured at 113 REST requests for 40 cards (WEB-PERF-024).
+  const { data: batchSocialData, isPending: batchSocialPending } = useBatchEventSocial(eventIds);
 
   const handleNearMe = () => {
     if (isNearMeActive) {
@@ -916,6 +920,7 @@ export default function EventsPage() {
                     key={`featured-${event.id}`}
                     event={event}
                     socialData={batchSocialData?.[event.id]}
+                    socialDataPending={batchSocialPending}
                     featured
                     onViewDetails={handleViewEventDetails}
                   />
@@ -938,6 +943,7 @@ export default function EventsPage() {
                   key={event.id}
                   event={event}
                   socialData={batchSocialData?.[event.id]}
+                    socialDataPending={batchSocialPending}
                   featured={index === 0 && !searchQuery && selectedCategory === "all" && events.length > 6}
                   onViewDetails={handleViewEventDetails}
                 />

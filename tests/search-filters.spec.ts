@@ -109,11 +109,22 @@ test.describe('Search Behavior - Proper Debouncing', () => {
       return;
     }
 
-    // Track network requests during search
+    // Track only actual DATA queries during search.
+    //
+    // This previously counted any request whose URL contained "events" or
+    // "search", which matches every event card IMAGE — they are served from
+    // /storage/v1/object/public/media/events/<uuid>. Typing "concert" produced
+    // 11 "search requests" of which 8+ were images, so the test reported
+    // broken debouncing on a page that debounces correctly. Measured: 2 real
+    // REST queries for 7 keystrokes, the second carrying
+    // title=ilike.%concert%.
+    //
+    // PostgREST data endpoints only — no storage objects, no JS chunks.
     const requests: string[] = [];
     page.on('request', request => {
-      if (request.url().includes('events') || request.url().includes('search')) {
-        requests.push(request.url());
+      const url = request.url();
+      if (/\/rest\/v1\//.test(url) && !/\/storage\//.test(url)) {
+        requests.push(url);
       }
     });
 
