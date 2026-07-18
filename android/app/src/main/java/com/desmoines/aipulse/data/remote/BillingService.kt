@@ -25,6 +25,7 @@ import io.github.jan.supabase.functions.functions
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Columns
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.isSuccess
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -35,6 +36,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import javax.inject.Inject
@@ -63,6 +65,15 @@ class BillingService @Inject constructor(
 
     private val _purchasedProductIDs = MutableStateFlow<Set<String>>(emptySet())
     val purchasedProductIDs: StateFlow<Set<String>> = _purchasedProductIDs.asStateFlow()
+
+    /**
+     * Products the backend has definitively rejected (refunded / revoked /
+     * tampered). Google Play keeps reporting these locally, so they must be
+     * subtracted from the local entitlement — mirrors iOS's
+     * `serverRevokedProductIDs` (StoreKitService.swift, IOS-AUDIT-SEC-011).
+     */
+    private val _serverRevokedProductIDs = MutableStateFlow<Set<String>>(emptySet())
+    val serverRevokedProductIDs: StateFlow<Set<String>> = _serverRevokedProductIDs.asStateFlow()
 
     private val _currentTier = MutableStateFlow(SubscriptionTier.FREE)
     val currentTier: StateFlow<SubscriptionTier> = _currentTier.asStateFlow()
@@ -319,8 +330,14 @@ class BillingService @Inject constructor(
         }
     }
 
-    /** Tier resolved from local Google Play entitlements only. */
-    private fun localTier(): SubscriptionTier = resolveTier(_purchasedProductIDs.value)
+    /**
+     * Tier resolved from local Google Play entitlements only, minus anything the
+     * server has definitively rejected. Without the subtraction a refunded,
+     * revoked, or tampered purchase keeps premium unlocked on-device
+     * indefinitely, because Google Play still reports it locally (XPLAT-002).
+     */
+    private fun localTier(): SubscriptionTier =
+        resolveTier(_purchasedProductIDs.value - _serverRevokedProductIDs.value)
 
     private fun resolveTier(purchasedIds: Set<String>): SubscriptionTier {
         // Check VIP first (higher tier)
@@ -354,6 +371,15 @@ class BillingService @Inject constructor(
     // endregion
 
     // region Backend Sync
+
+    /**
+     * Lenient by design: `ignoreUnknownKeys` means the backend can ADD response
+     * fields without breaking shipped binaries, which CLAUDE.md treats as an
+     * always-safe change. The substring check this replaced inverted that
+     * guarantee — a purely additive response edit, or a change in whitespace or
+     * key order, silently flipped every validation to the invalid path.
+     */
+    private val validationJson = Json { ignoreUnknownKeys = true }
 
     private companion object {
         const val MAX_RETRIES = 3
@@ -415,15 +441,40 @@ class BillingService @Inject constructor(
         for (attempt in 0 until MAX_RETRIES) {
             try {
                 val response = client.functions("validate-android-receipt", body = payload)
-
                 val bodyString = response.bodyAsText()
 
-                if (bodyString.contains("\"valid\":true") || bodyString.contains("\"valid\": true")) {
+                // A non-2xx is NOT a verdict on the receipt. The edge function
+                // returns `valid:false` for auth failures, bad input, and
+                // "Server configuration error" alongside genuine rejections, so
+                // treating every `valid:false` as definitive would revoke every
+                // paying user's entitlement during a backend outage or a
+                // misconfigured deploy. Only a 2xx body is a verdict; anything
+                // else falls through to the retry/grace path below.
+                if (!response.status.isSuccess()) {
+                    throw IllegalStateException(
+                        "validate-android-receipt returned ${response.status.value}: $bodyString"
+                    )
+                }
+
+                val decoded = validationJson.decodeFromString<ValidationResponse>(bodyString)
+
+                if (decoded.valid) {
                     Log.i(TAG, "Server validation succeeded for product=$productId")
+                    // Clear any prior revocation — e.g. the user re-subscribed
+                    // after a refund.
+                    _serverRevokedProductIDs.value -= productId
+                    recomputeCurrentTier()
                     return
                 } else {
-                    // Server explicitly said invalid — log but do NOT revoke (grace period)
-                    Log.w(TAG, "Server validation returned invalid (grace period): product=$productId, user=$userId, response=$bodyString")
+                    // Server definitively rejected the receipt. Revoke rather
+                    // than granting an indefinite grace period (XPLAT-002).
+                    Log.w(
+                        TAG,
+                        "Server validation returned invalid; revoking local entitlement for " +
+                            "product=$productId, user=$userId, reason=${decoded.reason ?: "unknown"}"
+                    )
+                    _serverRevokedProductIDs.value += productId
+                    recomputeCurrentTier()
                     return
                 }
             } catch (e: Exception) {
@@ -592,4 +643,26 @@ class BillingService @Inject constructor(
     }
 
     // endregion
+}
+
+/**
+ * Response contract for the `validate-android-receipt` edge function:
+ *   { valid: true,  entitlement: { tier, expiresAt } }
+ *   { valid: false, reason: string }
+ *
+ * File-scope (not nested) so the decode is contract-locked by a unit test and
+ * cannot silently drift — mirrors iOS's `ValidationResponse` in
+ * StoreKitService.swift, which is locked the same way.
+ */
+@Serializable
+data class ValidationResponse(
+    val valid: Boolean,
+    val reason: String? = null,
+    val entitlement: Entitlement? = null,
+) {
+    @Serializable
+    data class Entitlement(
+        val tier: String? = null,
+        val expiresAt: String? = null,
+    )
 }
