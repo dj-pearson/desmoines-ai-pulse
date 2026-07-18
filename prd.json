@@ -5977,6 +5977,21 @@
       "priority": 3,
       "passes": false,
       "notes": "FOUND 2026-07-18 alongside WEB-BE-030. Confirmed absent from live production (seo_settings, seo_alerts probed directly, both 404). Same shape as WEB-QA-018 on the front end: a complete feature written against a schema that was never deployed, failing silently because it is server-side and nobody reads the function logs. SEVERITY 3 because this is an internal ops surface with no user-facing path, unlike the billing webhooks. But it is worth resolving one way or the other — every one of these functions burns invocations and logs errors on whatever schedule triggers it, and a monitoring subsystem that cannot record anything is worse than none, because its silence reads as \"no problems found\"."
+    },
+    {
+      "id": "WEB-BE-032",
+      "title": "438 Supabase call sites discard the error, which is why schema breakage is invisible",
+      "description": "As a maintainer, I need failing queries to be distinguishable from empty results, because 438 call sites destructure only { data } and drop the error, so a missing table reads as \"no rows\" everywhere.",
+      "acceptanceCriteria": [
+        "Triage the 335 edge-function sites first — server-side has no UI and no browser console, so a swallowed error there produces no signal at all",
+        "Anywhere the result drives a CONTROL DECISION (idempotency guards, entitlement checks, authorization, dedupe) must capture and act on the error. play-rtdn-webhook was one of these and is fixed in 6d83937d",
+        "Anywhere genuinely best-effort (analytics, optional enrichment) may keep ignoring it, but should say so in a comment so the next reader can tell the two apart",
+        "Consider an ESLint rule for src/ that flags `const { data } = await supabase` without `error`, so new instances cannot be added silently",
+        "This story is a CLEANUP PATTERN, not a bug list — do not treat all 438 as defects"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 (claude/prd-loop-schema-gaps) by scanning for the mechanism common to most of this session findings. Counts: 438 call sites across 182 files matching `const { data } = await supabase|client|db()` with no error in the destructure — 335 in supabase/functions/, 103 in src/. Top offenders: agent-ops-digest (9), agent-subscription-nurture (9), _shared/agents/subscription-nurture (9), useAdminCampaigns (8), moderate-content (7), social-media-manager (7). WHY THIS MATTERS MORE THAN THE RAW COUNT: this is the enabling mechanism behind WEB-QA-018, WEB-BE-030, WEB-BE-031 and WEB-SEO-003. A query against a table that does not exist returns an error and no data. If the error is dropped, the caller sees an empty result and takes the empty branch — so an entire missing subsystem presents as \"nothing to show\" rather than as a failure. Every silent feature found in this audit went undetected through exactly this path. DELIBERATELY SEVERITY 3 AND NOT A BUG COUNT: many of these are legitimately best-effort and ignoring the error is the right call. Filing all 438 as defects would be noise and would bury the ones that matter. The valuable subset is the control-decision sites, and the concrete example is the one already fixed: play-rtdn-webhook used a swallowed error as an idempotency guard, so the guard could never fire. SUGGESTED ORDER: (1) grep the edge functions for swallowed errors whose result feeds an if/guard, (2) fix those, (3) add the lint rule to stop the bleeding, (4) leave the best-effort ones alone with a comment."
     }
   ]
 }
