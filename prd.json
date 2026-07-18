@@ -5845,6 +5845,36 @@
       "priority": 2,
       "passes": false,
       "notes": "FOUND 2026-07-18 (claude/prd-loop-schema-gaps). Measured from a real production build: summed the gzipped size of every JS chunk referenced by dist/index.html. Total JS across all 119 chunks is 1,996KB gzipped; the FIRST-PAINT subset was 1,043KB across 30 chunks. PARTIALLY FIXED in commit c29ec4f6: 1043KB -> 610KB (-433KB, -41%) by stopping the prerender step from baking runtime-injected modulepreload links into the shipped HTML. Full root cause in that commit message — briefly, a removeLazyPreloads() plugin existed and looked correct, but (a) it hooked transformIndexHtml, which ALWAYS runs before Vite injects preloads in generateBundle, so it could never have matched, and (b) even once fixed, the prerenderer re-added them by serializing a live DOM in which Vite’s runtime __vitePreload helper had injected them. Both stages now strip, sharing one pattern list, and the build reports the count so a silent regression is visible. REMAINING 610KB, roughly: index entry 160KB, vendor-icons 131KB, vendor-react 88KB, vendor-ui 45KB, vendor-supabase 44KB, plus small route chunks. vendor-icons at 131KB gzipped for an icon library is the most suspicious single line item. NOT ATTEMPTED: chasing the entry chunk or icon tree-shaking, because both change what is statically reachable and need a real LCP measurement to confirm they help rather than just move weight around. Verified no functional regression: smoke suite 7 passed; the 1 failure is the pre-existing get_active_ads PGRST203 (WEB-QA-020), not this change."
+    },
+    {
+      "id": "WEB-CI-020",
+      "title": "The blocking unit-test lane is red on main and has been since the tests were added",
+      "description": "As a maintainer, I need the vitest lane green, because pr-checks.yml runs it as a blocking step and 5 tests fail, so either PRs are merging over a red required check or the check is not actually enforced.",
+      "acceptanceCriteria": [
+        "npm run test:unit passes",
+        "Determine why a blocking check has been failing without anyone acting on it — if the workflow is not actually required on the branch ruleset, make it required",
+        "src/contexts/__tests__/AuthContext.test.tsx imports useAuthStatus, which AuthContext does not export. The context exports useAuthState / useAuthFlags / useAuthActions / useAuth — point the test at whichever is the real successor rather than deleting the test",
+        "src/components/__tests__/OptimizedImage.test.ts imports canTransform and getTransformedUrl. getTransformedUrl exists but is not exported; canTransform no longer exists at all. See WEB-PERF-021 before making these pass — the assertions encode behaviour the implementation no longer has, so exporting to go green would cement a regression",
+        "Extend scripts/check-import-exports.mjs to cover __tests__ directories, which it currently skips — that skip is why this class of breakage is invisible to npm run validate"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 (claude/prd-loop-schema-gaps) while verifying an unrelated dependency bump. 5 failures, all TypeError \"X is not a function\" — the WEB-QA-001 named-import-with-no-matching-export class, in test files. HISTORY CHECKED: at commit 7e117d85, which introduced OptimizedImage.test.ts, canTransform was already declared as a bare `function canTransform` with no export keyword. So these tests have NEVER passed — they were not broken later, they were merged red. Same shape for AuthContext.test.tsx from 69079b80. WHY IT STAYED INVISIBLE: pr-checks.yml:77 runs `npm run test:unit -- --coverage` and the parity audit recorded that lane as blocking, so a required check has been failing for the life of these files. Worth confirming whether the workflow is actually required in the branch ruleset, because the evidence suggests it is not being enforced. ALSO: scripts/check-import-exports.mjs — the guard written for exactly this bug class — explicitly skips __tests__ directories, so `npm run validate` cannot catch it. That skip was reasonable when written; it is now the blind spot."
+    },
+    {
+      "id": "WEB-PERF-021",
+      "title": "External images are proxied through image-transform, which does not resize them",
+      "description": "As a visitor, I need external images to load directly, because they are currently routed through an edge function that adds a network hop without reducing bytes.",
+      "acceptanceCriteria": [
+        "Decide the intended behaviour. The WEB-PERF-004 test asserts external URLs serve unchanged, with the stated reason that image-transform does not resize, so proxying adds a hop for zero byte savings",
+        "If that reasoning still holds, make getTransformedUrl return external URLs untouched and restore the guard the test was written to provide",
+        "If image-transform HAS gained resizing since, update the test and its comment instead, and say so explicitly",
+        "Note the load implication: image-transform is one of the public verify_jwt=false endpoints (rate-limited). Routing every external image through it puts real traffic on a public function",
+        "Whichever way it goes, the assertions must actually run — see WEB-CI-020"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FOUND 2026-07-18. src/components/OptimizedImage.tsx getTransformedUrl sends any non-Supabase-Storage URL to /functions/v1/image-transform with width/format/quality params. The test at src/components/__tests__/OptimizedImage.test.ts asserts the opposite (\"returns external URLs unchanged (no transform applied)\") and documents the reason inline as WEB-PERF-004. This is NOT simply a stale test. The test encodes a deliberate performance decision; the implementation does the thing that decision rejected. Because the test never ran green (see WEB-CI-020), nothing ever flagged the divergence. SEVERITY kept at 3 deliberately: I did not measure how many external images a real page actually loads, so the impact is unquantified. Measure before prioritising — if most images are Supabase Storage URLs, the proxy path is rarely taken and this is minor. NOT FIXED HERE: changing image routing alters what every page requests, and the right answer depends on whether image-transform has gained resizing since WEB-PERF-004. That is a product/infra fact I could not establish from the code alone."
     }
   ]
 }
