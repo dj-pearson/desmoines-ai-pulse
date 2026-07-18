@@ -304,7 +304,11 @@ Define and maintain a `MIN_SUPPORTED_APP_VERSION` constant per platform (recomme
 - Adding a required request field older binaries don't send
 - Changing the auth/session shape (`profiles` table, `subscription_tier` enum, JWT claims) without a dual-shape transition
 
-**Force-update flow:** when you genuinely need to retire a binary, bump `MIN_SUPPORTED_APP_VERSION` in a release ≥ 2 weeks before the destructive change. The `version-check` endpoint should return a force-upgrade payload that older binaries display as a blocking screen. (Not yet implemented — see follow-up at the bottom of this file.)
+**Force-update flow:** when you genuinely need to retire a binary, bump `MIN_SUPPORTED_APP_VERSION` in a release ≥ 2 weeks before the destructive change. The `version-check` endpoint returns a force-upgrade payload that older binaries display as a blocking screen.
+
+**This is implemented** — `supabase/functions/_shared/minSupportedVersions.ts` (`MIN_SUPPORTED_APP_VERSION`, `LATEST_APP_VERSION`, `compareVersions`/`isBelowMinimum`/`isUpdateAvailable`) and `supabase/functions/version-check/index.ts`. iOS gates in `App/DesMoinesInsiderApp.swift` via `VersionCheckService` → `ForceUpdateView`; Android in `MainActivity.kt` → `ForceUpdateScreen`. Both fail open on error, which is deliberate — a version-check outage must not brick the apps. Covered in CI by `subscription-sync-tests.yml` (Deno) and `VersionCheckTests.swift`.
+
+Two known gaps: the iOS App Store URL in `version-check/index.ts` is still the `id0000000000` placeholder, so the escape button on a force-upgrade screen currently goes nowhere; and `LATEST_APP_VERSION` is hand-maintained with no release hook, so it drifts silently (drift only produces false "update available" banners, which is why nobody notices).
 
 ### 4. On-disk / client-stored state
 
