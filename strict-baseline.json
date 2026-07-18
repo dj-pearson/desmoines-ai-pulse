@@ -1,5 +1,5 @@
 {
-  "total": 61,
+  "total": 52,
   "files": {
     "src/components/Header.tsx": 6,
     "src/components/PlaygroundsMap.tsx": 1,
@@ -10,12 +10,11 @@
     "src/hooks/useAttractions.ts": 1,
     "src/hooks/useBatchEventSocial.ts": 3,
     "src/hooks/useEvents.ts": 1,
-    "src/hooks/useEventSocial.ts": 6,
+    "src/hooks/useEventSocial.ts": 4,
     "src/hooks/useProfile.ts": 3,
     "src/hooks/useProximitySearch.ts": 2,
     "src/hooks/useRestaurants.ts": 1,
     "src/hooks/useSupabase.ts": 1,
-    "src/hooks/useUserPreferences.ts": 7,
     "src/lib/consentLog.ts": 1,
     "src/lib/contentValidation.ts": 3,
     "src/lib/conversionTracking.ts": 1,
