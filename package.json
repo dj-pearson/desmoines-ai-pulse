@@ -20,6 +20,8 @@
     "type-check": "tsc --noEmit",
     "type-check:app": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit",
     "type-check:strict": "tsc --project tsconfig.strict.json --noEmit",
+    "type-check:strict:ratchet": "node scripts/strict-ratchet.mjs",
+    "type-check:strict:update": "node scripts/strict-ratchet.mjs --update",
     "preview": "vite preview",
     "migrate": "tsx scripts/run-migration.ts",
     "db:backup": "tsx scripts/supabase-backup.ts",
