@@ -92,7 +92,7 @@ export default function Header() {
           {/* Logo */}
           <Link
             to="/"
-            className="flex items-center smooth-transition hover:opacity-80 flex-shrink-0"
+            className="tap-area-44 flex items-center smooth-transition hover:opacity-80 flex-shrink-0"
             aria-label="Des Moines Insider Home"
           >
             <OptimizedLogo

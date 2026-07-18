@@ -195,7 +195,7 @@ export function CookieConsentBanner() {
               type="button"
               onClick={rejectNonEssential}
               aria-label="Reject non-essential cookies and close banner"
-              className="text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary rounded-sm p-1"
+              className="tap-area-44 text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary rounded-sm p-1"
             >
               <X className="h-4 w-4" aria-hidden="true" />
             </button>

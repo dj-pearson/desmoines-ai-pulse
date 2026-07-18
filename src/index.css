@@ -224,6 +224,49 @@ All colors MUST be HSL. Touch targets minimum 44px.
     @apply min-h-[44px] min-w-[44px];
   }
 
+  /*
+   * Expand a control's TAP AREA to 44x44 without changing how it looks
+   * (WEB-QA-009).
+   *
+   * `.touch-target` above works by growing the element itself, which is wrong
+   * for icon-sized controls — a 24px close button or a 36px social icon would
+   * visibly change size and reflow the layout around it. This instead overlays a
+   * centred, invisible 44x44 hit area via a pseudo-element, so the rendered
+   * control is untouched while the tappable region meets the platform minimum.
+   *
+   * Requires the element to establish a positioning context; `relative` is
+   * included so callers only need the one class.
+   *
+   * Do NOT use this on inline links inside running text. WCAG 2.5.8 explicitly
+   * exempts inline links, and an overlay there would collide with neighbouring
+   * text and steal its clicks.
+   */
+  .tap-area-44 {
+    position: relative;
+  }
+
+  .tap-area-44::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100%;
+    height: 100%;
+    min-width: 44px;
+    min-height: 44px;
+    /* Purely a hit target — never paints, never blocks the element's own cursor. */
+    pointer-events: auto;
+  }
+
+  /* Coarse pointers only: a mouse does not need the expanded region, and on
+     desktop the overlay could otherwise overlap adjacent controls. */
+  @media (pointer: fine) {
+    .tap-area-44::after {
+      display: none;
+    }
+  }
+
   /* Mobile-optimized spacing */
   .mobile-padding {
     @apply px-4 py-3;
