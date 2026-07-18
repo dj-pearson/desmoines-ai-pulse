@@ -5934,6 +5934,20 @@
       "priority": 2,
       "passes": false,
       "notes": "FOUND 2026-07-18 (claude/prd-loop-schema-gaps) by auditing the actual prerendered output rather than the source, across all 31 dist/**/index.html files with HTML comments stripped. EXPOSED BY, NOT CAUSED BY, commit 6d1bf574. These 12 routes never rendered SEOHead; they were silently inheriting the hardcoded homepage canonical from index.html. That inherited tag was actively harmful — it told crawlers each route was a duplicate of the homepage — so removing it is a net improvement, since Google self-canonicalizes to the page URL when no tag is present. The underlying gap is that these pages have no SEO identity of their own. STATE AFTER THE FIX: 31 routes, 0 missing title, 0 missing description, 12 missing canonical, 5 missing h1, 0 duplicate canonical groups, 2 duplicate title groups, and all 31 sharing one description. CONTEXT WORTH KEEPING: the prerender step exists specifically to fix soft-404 and \"discovered, not indexed\" (PROD-SEO-001). Before this fix it emitted 31 pages that each declared the homepage as their canonical — it was actively instructing Google not to index the very routes it was built to get indexed. That is a plausible cause of the original symptom, so re-check Search Console once this deploys."
+    },
+    {
+      "id": "WEB-SEO-003",
+      "title": "sitemap-guides.xml is a stale committed artifact; its generator queries a table that does not exist",
+      "description": "As the platform owner, I need the guides sitemap to reflect reality, because the generator fails on every run and the committed file has not been regenerated since it was first added.",
+      "acceptanceCriteria": [
+        "generateGuidesSitemap queries public.guides, which does not exist (42P01). Decide whether guides live in seasonal_guides (which DOES exist) or are static routes, and point the generator at the real source",
+        "On failure the function returns null WITHOUT writing the file, so the stale public/sitemap-guides.xml silently survives. Make a generator failure either fail the build or write an empty-but-valid sitemap — silently shipping stale data is the worst of the three options",
+        "Verify the 11 URLs currently in the file still resolve. /guides and /guides/:slug are real routes (App.tsx:431, 471), so they are probably valid, but nothing has checked since the file was committed",
+        "Extend scripts/check-schema-usage.mjs to cover scripts/ as well as src/ — this exact bug class is what that guard exists to catch, and it is currently blind to build scripts"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 (claude/prd-loop-schema-gaps) while auditing sitemap contents. Every `npm run generate-sitemaps` run prints \"Error fetching guides: relation public.guides does not exist\" (42P01) and continues. Because the generator returns null before writing, public/sitemap-guides.xml is whatever was committed in 851158c4 and has never been regenerated. It is referenced from sitemap-index.xml, so Google is being handed a hand-frozen file. SEVERITY 3: the 11 URLs are plausibly still valid (both /guides and /guides/:slug are live routes), so this is probably stale-but-harmless today rather than broken. The real risk is the silent-failure pattern — a generator that errors, keeps going, and ships last-known-good data looks identical to one that works. RELATED: this is the same missing-table class as WEB-QA-018, and it is invisible to scripts/check-schema-usage.mjs because that guard only scans src/. The sitemap generator is exactly the kind of build-time code where a silent schema mismatch does damage without anyone seeing a stack trace. Note there IS a seasonal_guides table in the schema, and the route component is SeasonalGuide, so the intended source may simply be a rename that the script never followed."
     }
   ]
 }
