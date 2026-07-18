@@ -4741,8 +4741,8 @@
         "npm run validate passes with no new errors"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: types.ts (9457 lines) missing agent_registry/crm_*/support_*/error_events; SearchTrafficDashboard.tsx uses .from('gsc_*' as any)."
+      "passes": true,
+      "notes": "FROM WEB CODE REVIEW 2026-07-11. Evidence: types.ts (9457 lines) missing agent_registry/crm_*/support_*/error_events; SearchTrafficDashboard.tsx uses .from('gsc_*' as any). | RESOLVED 2026-07-18 (claude/web-qa-p1-fixes). Regenerated from the linked project (supabase gen types typescript --project-id wtkhfqpmcegzcbngroui): 9457 -> 15043 lines. All previously-missing tables now typed (agent_registry, crm_leads, crm_opportunities, support_tickets, error_events, gsc_*, oauth_providers, site_health_metrics, user_journeys, user_preference_profiles, ...). Removed 18 of 19 `.from(\"table\" as any)` workaround casts across 9 files; type-check and production build both clean afterwards, confirming the generated types match actual usage. NOTE the regenerated events Row independently corroborates WEB-QA-003: it now carries popularity_score/is_sponsored/is_hidden/is_merged and has NO archived_at — the stale types were exactly what let that bad column projection ship unnoticed. TWO FINDINGS WORTH THEIR OWN STORIES: (1) `user_attraction_interactions` does not exist in the database at all, so the one remaining cast is legitimate and must stay — FavoritesView queries it, always errors, and silently returns [], meaning favorited attractions never render; (2) more seriously, useFavorites (called by every FavoriteButton) writes ONLY to user_event_interactions, while FavoritesView reads from user_restaurant_interactions and user_attraction_interactions — so the favorites write path and read path cannot agree for restaurants or attractions. A newer generic `content_favorites` table exists and looks like the intended destination. Reconciling those three tables is unresolved."
     },
     {
       "id": "WEB-DB-004",

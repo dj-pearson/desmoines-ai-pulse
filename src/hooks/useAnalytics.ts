@@ -135,7 +135,7 @@ export function useAnalytics() {
 
       // Try to insert to enhanced analytics table (graceful fallback if table doesn't exist yet)
       try {
-        await supabase.from('user_interactions_enhanced' as any).insert(eventsToFlush);
+        await supabase.from('user_interactions_enhanced').insert(eventsToFlush);
         log.debug('flushEventQueue', `Flushed ${eventsToFlush.length} enhanced analytics events`);
       } catch (enhancedError) {
         log.debug('flushEventQueue', 'Enhanced analytics table not available yet, using fallback');
@@ -243,7 +243,7 @@ export function useAnalytics() {
     try {
       // Try to use enhanced preference profiles table
       try {
-        await supabase.from('user_preference_profiles' as any).upsert({
+        await supabase.from('user_preference_profiles').upsert({
           user_id: userId,
           session_id: userId ? null : sessionId,
           [`preferred_${category}s`]: [value],
@@ -273,7 +273,7 @@ export function useAnalytics() {
     try {
       // Try to update user journey with conversion
       try {
-        await supabase.from('user_journeys' as any).upsert({
+        await supabase.from('user_journeys').upsert({
           session_id: sessionId,
           user_id: userId,
           converted: true,

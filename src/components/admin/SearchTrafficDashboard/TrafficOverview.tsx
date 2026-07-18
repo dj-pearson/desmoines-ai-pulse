@@ -80,7 +80,7 @@ export function TrafficOverview({ dateRange, propertyId, connectedProviders }: T
 
       const buildQuery = (from: string, to: string) => {
         let q = supabase
-          .from("gsc_page_performance" as any)
+          .from("gsc_page_performance")
           .select("date, impressions, clicks, ctr, position, impressions_mobile, impressions_desktop, impressions_tablet")
           .gte("date", from)
           .lte("date", to);

@@ -52,7 +52,7 @@ export function FavoritesView() {
 
       try {
         const { data, error } = await supabase
-          .from("user_restaurant_interactions" as any)
+          .from("user_restaurant_interactions")
           .select("restaurant_id, restaurants(*)")
           .eq("user_id", user.id)
           .eq("interaction_type", "favorite");
@@ -78,6 +78,19 @@ export function FavoritesView() {
       if (!user) return [];
 
       try {
+        // KEEP THIS CAST. Unlike the other `as any` table casts (removed in
+        // WEB-DB-003 once types.ts was regenerated), `user_attraction_interactions`
+        // does not exist in the database at all — there is only
+        // user_event_interactions and user_restaurant_interactions. The query
+        // therefore always errors and this block always returns [], so favorited
+        // attractions never render.
+        //
+        // The deeper problem: useFavorites (which every FavoriteButton calls)
+        // writes ONLY to user_event_interactions, so neither the restaurant nor
+        // the attraction read path here can ever match what the button wrote.
+        // There is also a newer generic `content_favorites` table that looks like
+        // the intended destination. Reconciling these three is its own story —
+        // do not "clean up" this cast without fixing the write path first.
         const { data, error } = await supabase
           .from("user_attraction_interactions" as any)
           .select("attraction_id, attractions(*)")

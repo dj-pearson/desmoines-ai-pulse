@@ -79,7 +79,7 @@ export function SearchTrafficDashboard() {
 
       // Load GSC properties (split into two queries to avoid PostgREST join 400 errors)
       const { data: properties, error } = await supabase
-        .from("gsc_properties" as any)
+        .from("gsc_properties")
         .select("id, property_url, property_type, status, last_sync_at, created_at, oauth_credential_id")
         .order("created_at", { ascending: false });
 
@@ -95,7 +95,7 @@ export function SearchTrafficDashboard() {
 
       if (credIds.length > 0) {
         const { data: creds } = await supabase
-          .from("gsc_oauth_credentials" as any)
+          .from("gsc_oauth_credentials")
           .select("id, is_active, expires_at")
           .in("id", credIds);
 
@@ -134,7 +134,7 @@ export function SearchTrafficDashboard() {
       // can click Sync Data to pull their properties.
       if (providers.length === 0) {
         const { data: activeCreds } = await supabase
-          .from("gsc_oauth_credentials" as any)
+          .from("gsc_oauth_credentials")
           .select("id, is_active, expires_at, created_at")
           .eq("is_active", true)
           .order("created_at", { ascending: false })
@@ -315,7 +315,7 @@ export function SearchTrafficDashboard() {
       if (!user) return;
 
       const { data: creds } = await supabase
-        .from("gsc_oauth_credentials" as any)
+        .from("gsc_oauth_credentials")
         .select("id")
         .eq("user_id", user.id);
 
@@ -323,12 +323,12 @@ export function SearchTrafficDashboard() {
 
       if (credIds.length > 0) {
         await supabase
-          .from("gsc_properties" as any)
+          .from("gsc_properties")
           .delete()
           .in("oauth_credential_id", credIds);
 
         await supabase
-          .from("gsc_oauth_credentials" as any)
+          .from("gsc_oauth_credentials")
           .update({ is_active: false })
           .in("id", credIds);
       }
@@ -417,7 +417,7 @@ export function SearchTrafficDashboard() {
 
       // Fetch all properties, then delete those that don't match the domain
       const { data: allProps } = await supabase
-        .from("gsc_properties" as any)
+        .from("gsc_properties")
         .select("id, property_url");
 
       const toDelete = ((allProps || []) as any[])
@@ -431,7 +431,7 @@ export function SearchTrafficDashboard() {
       }
 
       const { error } = await supabase
-        .from("gsc_properties" as any)
+        .from("gsc_properties")
         .delete()
         .in("id", toDelete);
 
