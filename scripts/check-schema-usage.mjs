@@ -49,16 +49,33 @@
  * Exits 1 if any un-baselined reference is found.
  */
 
-import { readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join, dirname, resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 const SRC = join(ROOT, 'src');
+
+/**
+ * Roots to scan. `src/` was the original scope, but limiting it there let a
+ * real bug through: scripts/generate-dynamic-sitemaps.ts queries public.guides,
+ * a table that does not exist, and has been failing on every build. Because the
+ * generator logs the error and continues, the stale sitemap it failed to
+ * rewrite kept shipping — no stack trace, no red build (WEB-SEO-003).
+ *
+ * Build scripts and edge functions are exactly where a schema mismatch does
+ * damage quietly: nobody is watching a browser console, and the failure path is
+ * usually a log line next to a `continue`.
+ */
+const SCAN_ROOTS = [
+  SRC,
+  join(ROOT, 'scripts'),
+  join(ROOT, 'supabase', 'functions'),
+];
 const TYPES = join(SRC, 'integrations', 'supabase', 'types.ts');
 const BASELINE = join(ROOT, 'schema-baseline.json');
-const EXTENSIONS = ['.ts', '.tsx'];
+const EXTENSIONS = ['.ts', '.tsx', '.mjs'];
 
 /**
  * References that are correct in code but await an unapplied migration.
@@ -320,7 +337,10 @@ function main() {
   }
 
   const all = [];
-  for (const file of walk(SRC)) scanFile(file, schema, all);
+  for (const root of SCAN_ROOTS) {
+    if (!existsSync(root)) continue;
+    for (const file of walk(root)) scanFile(file, schema, all);
+  }
 
   if (update) {
     const fingerprints = [...new Set(all.map(fingerprint))].sort();
