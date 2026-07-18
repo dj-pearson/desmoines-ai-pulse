@@ -6021,6 +6021,19 @@
       "priority": 3,
       "passes": false,
       "notes": "FOUND 2026-07-18 while auditing heading structure across prerendered routes. 29 of 31 routes have exactly one h1, which is correct; the two exceptions are /business and /map, and they fail for different reasons. /business: the prerendered visible text is \"Business Hub — Sign in to access your business dashboard — Join Des Moines Insider to grow your business with powerful tools\". The h1 at BusinessHub.tsx:128 sits in the authenticated branch, so an unauthenticated crawler never reaches it. Google is indexing a login wall on a route that is in the sitemap. /map: genuinely has no h1 anywhere — 300+ h3 elements for map markers and no top-level heading. SEVERITY 3 for both: neither is a broken feature, and a gated dashboard being gated is defensible. The decision worth making is whether /business belongs in the prerender/sitemap set at all."
+    },
+    {
+      "id": "WEB-UX-031",
+      "title": "/attractions scrolls horizontally by 1px at 320px width",
+      "description": "As a visitor on a small phone, I should not be able to scroll the attractions page sideways, because a 1px overflow makes the page feel loose and can shift tap targets.",
+      "acceptanceCriteria": [
+        "documentElement.scrollWidth equals clientWidth on /attractions at 320x568",
+        "The mobile-responsive suite goes fully green — this is the last remaining failure",
+        "Check the view-mode toggle group in the attractions header. The probe surfaced a rounded bg-white/20 flex container holding two 44px buttons, but they sit inside a clipped ancestor, so the true culprit needs devtools rather than a guess"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "MEASURED 2026-07-18 (claude/prd-loop-schema-gaps) on the production build. /attractions at 320x568 reports scrollWidth=321 against clientWidth=320 — exactly 1px. Every other audited route and viewport is clean. SEVERITY 3 and deliberately NOT fixed: 1px is not user-visible, and the elements the probe surfaced report right edges of 328-374 while the document overflows by only 1px. That means they sit inside a clipped or scrollable ancestor and are not necessarily the cause. Guessing at a 1px fix from that evidence is how a working layout gets broken. Needs a devtools session at a 320px viewport. CONTEXT: this was the ONLY genuine failure among 105 mobile-responsive tests. The other three were false positives in the content-fits-viewport test, which counted horizontal-carousel children as overflow — at 375px it reported 24 overflowing elements on /, 64 on /events and 67 on /restaurants, while documentElement.scrollWidth was exactly 375 on all three. That test was rewritten in ca03f45d and the suite now sits at 104 passed / 1 failed."
     }
   ]
 }
