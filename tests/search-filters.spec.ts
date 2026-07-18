@@ -36,12 +36,36 @@ async function findSearchInputs(page: Page): Promise<any[]> {
 }
 
 async function findFilters(page: Page): Promise<any[]> {
+  // This app filters with shadcn/Radix primitives and chip buttons, none of
+  // which render a native <select> or <input type="checkbox">. The previous
+  // selector looked only for native controls and therefore found ZERO filters
+  // on every page, failing five tests against pages that are full of them.
+  //
+  // Measured on the production build: /events 2 comboboxes + 41 chips,
+  // /restaurants 2 + 41, /attractions 5 + 22 — while the old selector matched
+  // 0 on all three.
+  //
+  // Matches on ARIA roles, which is what a screen reader and a user both
+  // actually perceive, plus the chip/toggle patterns used here.
   return await page.$$eval(
-    'select, input[type="checkbox"], input[type="radio"], button[role="button"][aria-label*="filter" i]',
+    [
+      'select',
+      'input[type="checkbox"]',
+      'input[type="radio"]',
+      '[role="combobox"]',
+      '[role="listbox"]',
+      '[role="checkbox"]',
+      '[role="radio"]',
+      '[role="tab"]',
+      'button[aria-pressed]',
+      '[data-filter-chip]',
+      '[aria-label*="filter" i]',
+    ].join(', '),
     elements =>
       elements.map((el, index) => ({
         index,
         type: el.tagName,
+        role: el.getAttribute('role'),
         name: el.getAttribute('name'),
         ariaLabel: el.getAttribute('aria-label'),
       }))
