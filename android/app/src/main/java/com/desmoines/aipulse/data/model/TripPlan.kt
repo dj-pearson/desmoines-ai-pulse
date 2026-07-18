@@ -63,3 +63,30 @@ val TRIP_INTERESTS: List<String> = listOf(
     "music", "food", "outdoors", "arts", "sports",
     "nightlife", "shopping", "history", "family", "wellness",
 )
+
+/**
+ * Accessibility requirements passed to generate-itinerary so the model can
+ * filter venues. Android could not express these at all before XPLAT-010,
+ * which made the feature unusable for anyone with an access need.
+ */
+val TRIP_ACCESSIBILITY_NEEDS: List<String> = listOf(
+    "wheelchair accessible",
+    "step-free entry",
+    "accessible restroom",
+    "accessible parking",
+    "low sensory",
+    "seating available",
+    "service animal friendly",
+)
+
+/** Dietary requirements passed to generate-itinerary for restaurant selection. */
+val TRIP_DIETARY_RESTRICTIONS: List<String> = listOf(
+    "vegetarian",
+    "vegan",
+    "gluten-free",
+    "dairy-free",
+    "nut allergy",
+    "halal",
+    "kosher",
+    "shellfish allergy",
+)

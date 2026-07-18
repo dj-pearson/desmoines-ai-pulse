@@ -33,7 +33,10 @@ function useMapEntities() {
       const [eventsRes, restaurantsRes, attractionsRes] = await Promise.all([
         supabase
           .from('events')
-          .select('id, title, latitude, longitude, description, category, date')
+          // public.events has no `description` — it carries enhanced_description
+          // and original_description. Selecting `description` failed the whole
+          // query with 42703, so the map showed no events at all.
+          .select('id, title, latitude, longitude, enhanced_description, original_description, category, date')
           .not('latitude', 'is', null)
           .not('longitude', 'is', null)
           .gte('date', new Date().toISOString())
@@ -46,7 +49,8 @@ function useMapEntities() {
           .limit(300),
         supabase
           .from('attractions')
-          .select('id, name, latitude, longitude, description, category')
+          // public.attractions classifies with `type`, not `category`.
+          .select('id, name, latitude, longitude, description, type')
           .not('latitude', 'is', null)
           .not('longitude', 'is', null)
           .limit(200),
@@ -57,7 +61,8 @@ function useMapEntities() {
           results.push({
             id: e.id, name: e.title, type: 'event',
             latitude: Number(e.latitude), longitude: Number(e.longitude),
-            description: e.description?.slice(0, 120), category: e.category, date: e.date,
+            description: (e.enhanced_description ?? e.original_description)?.slice(0, 120),
+            category: e.category, date: e.date,
           });
         }
       }
@@ -76,7 +81,7 @@ function useMapEntities() {
           results.push({
             id: a.id, name: a.name, type: 'attraction',
             latitude: Number(a.latitude), longitude: Number(a.longitude),
-            description: a.description?.slice(0, 120), category: a.category,
+            description: a.description?.slice(0, 120), category: a.type,
           });
         }
       }

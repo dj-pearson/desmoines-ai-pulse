@@ -86,6 +86,65 @@ test.describe('Homepage data fetches succeed (WEB-QA-003)', () => {
   });
 });
 
+test.describe('Content routes survive their schema projections (WEB-QA-017)', () => {
+  /**
+   * Each of these routes named a column that does not exist on public.events or
+   * public.attractions. PostgREST rejects the WHOLE projection with 42703 when
+   * any single column is unknown, so the page rendered zero rows — silently,
+   * because the hook catches the error and falls into its empty state. Nothing
+   * in the UI distinguishes "no results" from "the query was rejected", which is
+   * why these sat broken.
+   *
+   * The static guard (scripts/check-schema-usage.mjs) catches the reintroduction
+   * of a bad column name at CI time. These assert the runtime consequence, since
+   * the guard can only see literal select strings.
+   */
+  const routes = [
+    { path: '/events/west-des-moines', was: 'selected events.time and events.status' },
+    { path: '/events/july-2026', was: 'ordered by events.time' },
+    { path: '/map', was: 'selected events.description and attractions.category' },
+  ];
+
+  for (const { path, was } of routes) {
+    test(`${path} issues no rejected PostgREST queries (${was})`, async ({ page }) => {
+      const consoleErrors = captureConsoleErrors(page);
+      const rejected: string[] = [];
+
+      page.on('response', (res) => {
+        // Scoped to the CONTENT tables these routes project from. A blanket
+        // "no 4xx on /rest/v1" would also fail on user_analytics, which 400s
+        // on every page load for an unrelated reason: usePageTracking writes a
+        // pathname into a NOT NULL uuid column (WEB-QA-013). Migration
+        // 20260718000002 fixes that and is not yet applied, so asserting on it
+        // here would couple this test to a deploy and hide the regression it
+        // actually guards. Widen this pattern once that ships.
+        if (/\/rest\/v1\/(events|attractions|restaurants)\b/.test(res.url()) && res.status() >= 400) {
+          rejected.push(`${res.status()} ${res.url()}`);
+        }
+      });
+
+      const response = await page.goto(path);
+      expect(response?.status()).toBeLessThan(400);
+      await page.waitForLoadState('networkidle');
+
+      await expectNoErrorBoundary(page);
+
+      expect(
+        rejected,
+        `${path} made REST request(s) the database rejected:\n${rejected.join('\n')}`
+      ).toHaveLength(0);
+
+      // 42703 is the specific failure these routes regressed on; PGRST covers
+      // the schema-cache errors (PGRST202/203/204) in the same family. Filtered
+      // to the content tables for the WEB-QA-013 reason described above.
+      const schemaErrors = consoleErrors.filter(
+        (e) => /42703|PGRST\d{3}|does not exist/i.test(e) && !/user_analytics/i.test(e)
+      );
+      expect(schemaErrors, `schema errors on ${path}: ${schemaErrors.join('\n')}`).toHaveLength(0);
+    });
+  }
+});
+
 test.describe('Listed events resolve to a detail page (WEB-QA-002)', () => {
   test('a sample of event cards from the listing all render a detail page', async ({ page }) => {
     await page.goto('/events');

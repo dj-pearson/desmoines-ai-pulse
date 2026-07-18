@@ -108,18 +108,54 @@ ${urls.map(url => `  <url>
 async function generateEventsSitemap(): Promise<number | null> {
   console.log('📅 Generating events sitemap...');
 
-  const { data: events, error } = await supabase
-    .from('events')
-    .select('title, date, event_start_utc, updated_at')
-    .order('date', { ascending: false })
-    .limit(5000);
+  // Only submit events a searcher can still act on.
+  //
+  // This query previously had NO date filter, so the sitemap advertised every
+  // event ever ingested: 744 of 1000 URLs (74%) were for events that had
+  // already happened. Submitting expired pages burns crawl budget on content
+  // that cannot rank and is a well-known contributor to the "discovered,
+  // currently not indexed" state this project is trying to fix (PROD-SEO-001).
+  //
+  // The grace window keeps very recently finished events, which still get
+  // searched for ("was X any good") and may hold fresh links, without
+  // advertising a two-year backlog.
+  const GRACE_DAYS = 7;
+  const cutoff = new Date(Date.now() - GRACE_DAYS * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .split('T')[0];
 
-  if (error) {
-    console.error('❌ Error fetching events:', error);
-    return null;
+  // PostgREST caps a single response at max-rows (1000 by default), so the old
+  // `.limit(5000)` was silently truncated — the generator quietly dropped rows
+  // and reported success. Page explicitly so the cap cannot hide data again.
+  const PAGE = 1000;
+  const eventList: Array<{ title: string; date: string | null; event_start_utc: string | null; updated_at: string | null }> = [];
+
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from('events')
+      .select('title, date, event_start_utc, updated_at')
+      .gte('date', cutoff)
+      .order('date', { ascending: false })
+      .range(from, from + PAGE - 1);
+
+    if (error) {
+      console.error('❌ Error fetching events:', error);
+      return null;
+    }
+
+    const batch = data ?? [];
+    eventList.push(...batch);
+    if (batch.length < PAGE) break;
+
+    // Sitemaps cap at 50,000 URLs; stop well short rather than emit an invalid file.
+    if (eventList.length >= 45000) {
+      console.warn(`⚠️ Event sitemap hit the 45,000 URL guard — output is truncated.`);
+      break;
+    }
   }
 
-  const eventList = events ?? [];
+  console.log(`   ${eventList.length} event(s) dated on or after ${cutoff} (grace: ${GRACE_DAYS}d)`);
+
   if (eventList.length === 0) {
     console.warn('⚠️ No events found in database - check RLS policies or add events');
   }

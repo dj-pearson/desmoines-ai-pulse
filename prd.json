@@ -1,7 +1,7 @@
 {
   "project": "Des Moines AI Pulse — Web Platform Autonomy & Core Uplift",
   "branchName": "claude/web-platform-autonomy",
-  "description": "Deep uplift of the WEB platform across Security, Autonomy, Performance, UX, and Features. The governing theme: the site should run itself — content ingestion, data quality, moderation, publishing, marketing, and ops must not require manual admin touches; humans only handle escalated exceptions. Clusters in priority order: (1) WEB-SEC: close the publicly-callable/cost-abusable edge function holes and harden authz before adding more automation on top of them; (2) WEB-AUTO: build the autonomy control plane (job observability) then convert every manual admin queue (event submissions, data backfills, broken links, dedupe, stale content, articles, newsletters, moderation, creative approval, sitemaps, social, subscription lifecycle) into a self-running pipeline with AI scoring + human-exception escalation; (3) WEB-PERF: query payload + bundle + re-render fixes toward the <500KB / LCP<2.5s budgets; (4) WEB-UX: list-page state, loading/error consistency, a11y; (5) WEB-FEAT: web parity with shipped iOS monetization (contextual paywalls, annual+trial, ads/sponsored) plus engagement loops (saved searches+alerts, guest favorites, personalization). CONSTRAINTS THAT BIND EVERY STORY: follow CLAUDE.md backward-compatibility rules — live iOS/Android binaries call edge functions (get_active_ads, discover-chat, generate-itinerary, image-transform, validate-*-receipt, etc.), so NEVER tighten validation, rename/remove endpoints or fields, or lower rate limits below what shipped clients retry against in a single release; DB changes additive-only per the deprecation flow; console logs wrapped in import.meta.env.DEV; storage via @/lib/safeStorage; errors via @/lib/errorHandler. Ralph picks the highest-priority story with passes:false. ADDED 2026-07-11 (WEB CODE REVIEW BATCH, passes:false): a fresh security/performance/correctness/backend/CI review appended clusters WEB-SEC-011+, WEB-DB-*, WEB-PERF-009+, WEB-QUAL-*, WEB-BE-*, WEB-CI-*, WEB-OPS-* — same backward-compat constraints apply; Ralph picks the highest-priority passes:false story.",
+  "description": "Deep uplift of the WEB platform across Security, Autonomy, Performance, UX, and Features. The governing theme: the site should run itself — content ingestion, data quality, moderation, publishing, marketing, and ops must not require manual admin touches; humans only handle escalated exceptions. Clusters in priority order: (1) WEB-SEC: close the publicly-callable/cost-abusable edge function holes and harden authz before adding more automation on top of them; (2) WEB-AUTO: build the autonomy control plane (job observability) then convert every manual admin queue (event submissions, data backfills, broken links, dedupe, stale content, articles, newsletters, moderation, creative approval, sitemaps, social, subscription lifecycle) into a self-running pipeline with AI scoring + human-exception escalation; (3) WEB-PERF: query payload + bundle + re-render fixes toward the <500KB / LCP<2.5s budgets; (4) WEB-UX: list-page state, loading/error consistency, a11y; (5) WEB-FEAT: web parity with shipped iOS monetization (contextual paywalls, annual+trial, ads/sponsored) plus engagement loops (saved searches+alerts, guest favorites, personalization). CONSTRAINTS THAT BIND EVERY STORY: follow CLAUDE.md backward-compatibility rules — live iOS/Android binaries call edge functions (get_active_ads, discover-chat, generate-itinerary, image-transform, validate-*-receipt, etc.), so NEVER tighten validation, rename/remove endpoints or fields, or lower rate limits below what shipped clients retry against in a single release; DB changes additive-only per the deprecation flow; console logs wrapped in import.meta.env.DEV; storage via @/lib/safeStorage; errors via @/lib/errorHandler. Ralph picks the highest-priority story with passes:false. ADDED 2026-07-11 (WEB CODE REVIEW BATCH, passes:false): a fresh security/performance/correctness/backend/CI review appended clusters WEB-SEC-011+, WEB-DB-*, WEB-PERF-009+, WEB-QUAL-*, WEB-BE-*, WEB-CI-*, WEB-OPS-* — same backward-compat constraints apply; Ralph picks the highest-priority passes:false story. ADDED 2026-07-18 (SCHEMA + CROSS-PLATFORM AUDIT, passes:false): WEB-QA-017..020 record a systemic bug class — Supabase queries naming tables/columns/RPCs that do not exist, which are not TypeScript errors and fail silently at runtime (29 missing tables, 25 missing RPCs, verified against the LIVE production database, not just the generated types). A CI ratchet (scripts/check-schema-usage.mjs, npm run check-schema) now blocks new instances. NEW PREFIX XPLAT-*: cross-surface parity defects spanning web/iOS/Android that belong to no single platform prefix — start with XPLAT-001, account deletion broken on both mobile clients, an App Store 5.1.1(v) blocker that is live now. Ralph: WEB-QA-018 and XPLAT-001 are DECISION-REQUIRED, not implementation tasks; do not guess at missing table schemas or at account-deletion semantics.",
   "userStories": [
     {
       "id": "WEB-SEC-001",
@@ -5543,6 +5543,553 @@
       "priority": 2,
       "passes": false,
       "notes": "FOUND 2026-07-18 (claude/web-qa-p1-fixes), migration written, BLOCKED ON DEPLOY. SEVERITY: MED — a shipped, user-facing feature that silently does nothing, and it wastes storage on every attempt. EventPhotoUpload uploads the file to storage and then inserts { message_type: \"photo\", media_url } into event_discussions, which fails with PGRST204 \"Could not find the media_url column\" — verified against the live database. The file is already uploaded by that point, so each failed attempt orphans an object in the bucket. On the read side the select is `*`, so both fields simply came back undefined and every consumer took the empty branch without erroring: EventPhotoGallery filters `message_type === \"photo\" && media_url` (always empty), EventSocialHub renders \"Photos (N)\" (always 0) and branches on `message_type !== \"comment\"` (never true). That asymmetry — a loud write failure inside a try/catch that reports a generic upload error, and a completely silent read — is why this was never noticed. Migration 20260718000003 adds both columns, additive and safe. WORTH RECORDING: a CHECK constraint on message_type was written and then deliberately removed — scripts/check-migration-safety.mjs correctly flagged it as a tightening that could reject values a future client sends, and overriding the linter would have been the wrong trade. The allowed union stays enforced in TypeScript until the full set of writers is known."
+    },
+    {
+      "id": "WEB-QA-017",
+      "title": "Burn down the schema-usage baseline (84 remaining silently-dead queries)",
+      "description": "As the platform owner, I need every Supabase query in src/ to name a table, column, and RPC that actually exists, because a query naming something absent is not a TypeScript error — it 400s at runtime, the hook catches it, and the UI renders its empty state, so the feature silently does nothing and nothing reports it.",
+      "acceptanceCriteria": [
+        "scripts/check-schema-usage.mjs reports zero findings with --all (baseline file removed entirely)",
+        "Each burn-down commit re-runs `npm run check-schema:update` so schema-baseline.json only ever shrinks",
+        "Any finding that cannot be fixed without a product decision is split into its own story rather than left silently baselined",
+        "npm run validate passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 (claude/prd-loop-schema-gaps). Every claim below was verified against the LIVE production database via the REST API, not inferred from src/integrations/supabase/types.ts — generated types can be stale, so absence there was treated as a hypothesis and confirmed by probing prod. | GUARD SHIPPED, BURN-DOWN INCOMPLETE. scripts/check-schema-usage.mjs parses the generated types (266 tables/views, 329 functions) and validates every .from()/.select()/.rpc()/filter/order call in src/. Wired into `npm run validate` and pr-checks.yml. Runs as a RATCHET matching the strictNullChecks convention already in this repo: known findings frozen in schema-baseline.json, only NEW ones fail the build. Regression-tested in both directions (planted a bad column, confirmed exit 1 and correct line number). Three false-positive classes were found and fixed during development: embedded resources (`author:profiles(name)`) parsed as columns once splitSelect consumed the parens; comment-stripping that deleted newlines and shifted every reported line number (pointing reviewers at interface declarations ~60 lines from the real query); and PostgREST aggregates (`select=count`, which is valid and returns a row count). Baseline went 93 -> 84 via the fixes in WEB-QA-018-adjacent work (four content routes, campaign notifications). THE REMAINING 84 ARE ALMOST ENTIRELY WEB-QA-018 AND WEB-QA-019 — they are blocked on a product decision, not on effort."
+    },
+    {
+      "id": "WEB-QA-018",
+      "title": "DECISION REQUIRED: 29 tables the web app queries do not exist — build them or delete the dead UI",
+      "description": "As the platform owner, I need to decide whether the missing backing tables were intentionally descoped or whether their migrations were lost, because entire admin modules render UI, accept input, report success, and persist nothing.",
+      "acceptanceCriteria": [
+        "Decide per module: write the additive migration, or delete the dead UI and its hooks",
+        "CRM module (11 tables): crm_contacts, crm_deals, crm_tasks, crm_notes, crm_segments, crm_communications, crm_contact_segments, crm_pipeline_stages, crm_lead_score_rules, crm_lead_score_history, crm_deal_stage_history",
+        "Billing (3): payments, invoices, usage_events",
+        "Auth/security (3): user_sessions, api_keys, api_key_usage",
+        "CMS (4): author_profiles, article_categories, article_tags, content_queue_comments",
+        "Trip planner (2): trip_plans, trip_plan_items — note this is the flagship marketed AI feature and it cannot persist an itinerary",
+        "Push (1): device_tokens — ties directly to IOS-AUDIT-FEAT-029 (push hard-disabled); the backing table was never there",
+        "View tracking (2): event_analytics, restaurant_analytics",
+        "Any new table is additive-only per CLAUDE.md and ships with RLS policies matching the public-read/authenticated-write pattern",
+        "schema-baseline.json shrinks by the corresponding entries"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 (claude/prd-loop-schema-gaps). Every claim below was verified against the LIVE production database via the REST API, not inferred from src/integrations/supabase/types.ts — generated types can be stale, so absence there was treated as a hypothesis and confirmed by probing prod. | SEVERITY: HIGH — but this is a DECISION, not a defect to fix blind. Confirmed 42P01 \"relation does not exist\" from the live REST API for all 14 probed directly (crm_contacts, crm_deals, crm_tasks, crm_notes, user_sessions, api_keys, payments, invoices, usage_events, device_tokens, author_profiles, article_categories, trip_plans, event_analytics); the remaining 15 are absent from the generated schema by the same check. BLAST RADIUS: seven CRM hooks with ~60 call sites (useCrmContacts/Deals/Tasks/Notes/Segments/Communications/Dashboard) are 100% non-functional; AdminRefunds.tsx cannot work; SessionManagementDashboard and API-key issuance are dead UI. SHARPEST CASE — useUserSubmittedEvents.ts:220 inserts description/start_time/end_time/address into public.events. None of those four columns exist, so the insert fails with PGRST204 and the error is only console.error'd. ADMINS BELIEVE THEY ARE PUBLISHING USER-SUBMITTED EVENTS. NOTHING PUBLISHES. Deliberately NOT fixed autonomously: inventing eleven CRM table schemas on a guess is worse than leaving the finding recorded."
+    },
+    {
+      "id": "WEB-QA-019",
+      "title": "25 RPC functions the web app calls do not exist (PGRST202)",
+      "description": "As the platform owner, I need every .rpc() call to resolve, because a missing function returns PGRST202 and the calling hook falls back silently — so view counts, fuzzy search, and the session/password-policy suite have never worked.",
+      "acceptanceCriteria": [
+        "Decide per function: implement it, or remove the call and its fallback path",
+        "View tracking: increment_event_view, increment_restaurant_view, batch_increment_views — ALL view counting is silently dead",
+        "Search: fuzzy_search_events, fuzzy_search_restaurants — both fall back silently, so search quality is degraded with no signal",
+        "Session/security: get_user_session_policy, update_session_with_timeout, revoke_session, revoke_all_other_sessions, get_user_login_activity, log_login_activity, get_active_password_policy, validate_password_policy",
+        "CRM (blocked on WEB-QA-018): add_crm_activity, evaluate_segment_rules, update_lead_score",
+        "Billing: get_user_payment_summary, get_current_usage, record_usage_event, create_api_key, revoke_api_key, calculate_campaign_pricing, increment_deal_redemption",
+        "Trip planner: get_trip_itinerary",
+        "Any new function is additive per CLAUDE.md (adds optional params / returned columns only)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 (claude/prd-loop-schema-gaps). Every claim below was verified against the LIVE production database via the REST API, not inferred from src/integrations/supabase/types.ts — generated types can be stale, so absence there was treated as a hypothesis and confirmed by probing prod. | Confirmed PGRST202 against live prod for a sample (fuzzy_search_events, increment_event_view, batch_increment_views, add_crm_activity, get_user_login_activity, get_current_usage, revoke_session); the rest are absent from the generated Functions list by the same check. NUANCE WORTH KEEPING: PGRST202's detail reads \"Searched for the function public.X without parameters\" — in isolation that can also mean a signature mismatch rather than absence. Absence is the right read here because the generated types enumerate every overload and these appear in none of them, but if any one of these is later found to exist under a different signature, that is the likely explanation."
+    },
+    {
+      "id": "WEB-QA-020",
+      "title": "DEPLOY BLOCKER: 8 migrations merged to main have never been applied to production",
+      "description": "As the platform owner, I need the merged migrations applied, because three shipped stories are code-complete but inert without them, and one of them is breaking ads for every shipped mobile binary right now.",
+      "acceptanceCriteria": [
+        "Run `supabase db push` (or the equivalent reviewed deploy path) and confirm via `supabase migration list` that all 8 show as applied",
+        "20260718000001 — resolves the get_active_ads overload ambiguity (PGRST203). Until applied, EVERY single-arg call fails on web AND on every shipped iOS/Android binary; ads have been failing open to the house-ad fallback the entire time",
+        "20260718000002 — drops NOT NULL on user_analytics.content_id, unblocking WEB-QA-013 (page views have never been recorded)",
+        "20260718000003 — adds event_discussions.message_type + media_url, unblocking WEB-QA-016 (event photo sharing)",
+        "Also pending: 20260710000000, 20260711000000, 20260711000001, 20260711000002, 20260711000003, 20260711000011, 20260711000030",
+        "Regenerate src/integrations/supabase/types.ts afterwards (WEB-QA-016 has 4 strict errors downstream of the missing columns)",
+        "Remove the PENDING_MIGRATIONS allowlist entries in scripts/check-schema-usage.mjs once applied",
+        "Widen the user_analytics exclusion in tests/route-smoke.spec.ts once 20260718000002 is applied"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 (claude/prd-loop-schema-gaps). Every claim below was verified against the LIVE production database via the REST API, not inferred from src/integrations/supabase/types.ts — generated types can be stale, so absence there was treated as a hypothesis and confirmed by probing prod. | Confirmed via `supabase migration list` against the linked project: 8 local migrations have no remote counterpart. The CLI is linked and authenticated on the dev machine. NOT RUN AUTONOMOUSLY — this mutates production data and per CLAUDE.md migrations go through a reviewed deploy path; it needs an explicit human go-ahead. INDEPENDENTLY REPRODUCED: while adding route-smoke coverage, all three new tests initially failed on /rest/v1/user_analytics returning 400 on every page load — a live confirmation of WEB-QA-013 from a completely different direction. The test assertion was scoped to content tables with a comment naming the exact condition for widening it, so the pending migration does not mask the regression the test exists to catch. | RE-CONFIRMED LIVE 2026-07-18, DIRECTLY: called get_active_ads against production for all five placements (top_banner, featured_spot, below_fold, sponsored_listing, sidebar). EVERY ONE returns PGRST203 \"could not choose the best candidate function\". Not a subset, not intermittent — the single-arg signature that web (useActiveAds.ts:44, p_placement_type) and every shipped iOS/Android binary use is 100% broken right now on all three surfaces. Ads are failing open to the house-ad fallback for every impression on every platform, and have been since the duplicate overload was introduced. Could NOT quantify affected advertiser campaigns: RLS correctly blocks anon reads of campaigns/advertisements, so the count of live paid campaigns during this window is UNKNOWN from here and needs a service-role query. This is the single highest-impact item unblocked by one command (supabase db push)."
+    },
+    {
+      "id": "XPLAT-001",
+      "title": "SEV-1: Account deletion is broken on BOTH iOS and Android (App Store 5.1.1(v) blocker)",
+      "description": "As a mobile user, I need to be able to delete my account, because the delete-user-account edge function requires a two-step action payload and both mobile clients send no body at all, so every deletion attempt 400s and the account is never deleted.",
+      "acceptanceCriteria": [
+        "DECISION REQUIRED — two viable paths, with a real security tradeoff",
+        "Path A (ships today, no store release): restore the legacy no-body branch server-side. Fixes every shipped binary immediately. Cost: a bare authenticated POST irreversibly deletes an account with no server-side confirmation step, which is precisely what the two-step token flow exists to prevent",
+        "Path B (correct, slower): fix both clients to send {action:\"request\"} then {action:\"confirm\",confirmation_token}. Shipped binaries stay broken until users update",
+        "Recommended: BOTH — Path A to unblock now, migrate clients to the two-step flow, then bump MIN_SUPPORTED_APP_VERSION and drop the legacy branch. That is exactly the CLAUDE.md deprecation flow",
+        "Fix the docstring at delete-user-account/index.ts:15-16, which documents a legacy branch that does not exist in the code",
+        "Add a client-contract test so this specific drift cannot recur (see XPLAT-011)"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 (claude/prd-loop-schema-gaps). Every claim below was verified against the LIVE production database via the REST API, not inferred from src/integrations/supabase/types.ts — generated types can be stale, so absence there was treated as a hypothesis and confirmed by probing prod. | SEVERITY: SEV-1, App Store 5.1.1(v) blocker, LIVE RIGHT NOW. Verified by reading all three call sites plus the function. Contract: delete-user-account/index.ts:86 destructures {action, confirmation_token}; :89 handles \"request\"; :139 handles \"confirm\"; :256-264 returns HTTP 400 when action is absent. Web is CORRECT (src/components/PrivacyControls.tsx:148-153 sends {action:\"request\"}, reads confirmation_token, then confirms). iOS is BROKEN (ViewModels/ProfileViewModel.swift:80-83 and Views/Profile/SettingsView.swift:374-377 invoke with method:.post and NO body). Android is BROKEN (ui/screens/profile/ProfileViewModel.kt:228 invokes with no body). AGGRAVATING: the function's own docstring at :15-16 states \"Legacy: POST without action field treated as direct deletion (backwards compat)\". THAT BRANCH DOES NOT EXIST IN THE CODE — control falls through to the 400. This is the CLAUDE.md violation at \"Removing a feature an older binary tries to call\": the no-body shape that shipped binaries use was retired without a MIN_SUPPORTED_APP_VERSION bump. Backward-compat hazard: yes, and already realized. Neither client signs the user out, because deletion never happens. iOS surfaces the error; Android shows e.message."
+    },
+    {
+      "id": "XPLAT-002",
+      "title": "Android never revokes a server-rejected subscription, and parses receipts by substring matching",
+      "description": "As the platform owner, I need Android to drop entitlement when the server rejects a purchase, because a refunded, revoked, or tampered Google Play purchase currently keeps premium unlocked on-device indefinitely.",
+      "acceptanceCriteria": [
+        "On a clean valid:false response, Android revokes the local entitlement, mirroring iOS StoreKitService.swift:515-525 (serverRevokedProductIDs)",
+        "Replace the raw-text substring check with a typed decode mirroring iOS's Decodable ValidationResponse",
+        "Add a test asserting an invalid receipt revokes entitlement",
+        "No change to the validate-android-receipt request/response shape (CLAUDE.md backward-compat)"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 (claude/prd-loop-schema-gaps). Every claim below was verified against the LIVE production database via the REST API, not inferred from src/integrations/supabase/types.ts — generated types can be stale, so absence there was treated as a hypothesis and confirmed by probing prod. | Two defects in one file. (1) REVOCATION: data/remote/BillingService.kt:424-428 logs a warning and returns on invalid, with the comment \"do NOT revoke (grace period)\". iOS does revoke (StoreKitService.swift:515-525, annotated IOS-AUDIT-SEC-011). Revenue + entitlement-integrity gap. (2) PARSING: BillingService.kt:421 decides validity with bodyString.contains(\"\\\"valid\\\":true\") || bodyString.contains(\"\\\"valid\\\": true\"). Any whitespace or key-ordering change from the edge function silently flips this to the invalid path. iOS uses a typed Decodable. This is a latent backward-compat hazard of an unusual shape: an ADDITIVE, normally-safe response change could break shipped Android binaries, which inverts the usual assumption that additive changes are free. | IMPLEMENTED AND VERIFIED LOCALLY 2026-07-18 (claude/prd-loop-schema-gaps, commit 00f54838). passes STAYS false pending CI + a real refund/revocation test against Google Play. Both halves done: _serverRevokedProductIDs subtracted in localTier() (cleared on a later valid:true so re-subscribing after a refund restores access), and a typed @Serializable ValidationResponse with ignoreUnknownKeys replacing the substring check. DELIBERATE DIVERGENCE FROM iOS: revocation is gated on a 2xx status first, because the edge function returns valid:false for auth failures, bad input, and \"Server configuration error\" alongside genuine rejections — a straight port of iOS behaviour would revoke every paying user during a backend outage or misconfigured deploy. Non-2xx falls through to the existing retry/grace path. iOS may warrant the same hardening; worth checking whether supabase-swift throws before the decode on non-2xx (UNVERIFIED). Toolchain note: the Android build DOES work on the Windows dev machine (JDK 17 + SDK present, ANDROID_HOME just unset) — but ./gradlew fails at settings.gradle.kts with \"Unresolved reference: plugins\" while the system gradle 9.6.1 succeeds, so the wrapper (9.3.1) appears broken locally. CI uses gradle/actions/setup-gradle@v4 and is unaffected. Verified: compileDebugKotlin clean, ValidationResponseTest 6/6, full suite 273 tests 0 failures."
+    },
+    {
+      "id": "XPLAT-003",
+      "title": "iOS has no Google Sign-In, so Google-created accounts are unreachable on iOS",
+      "description": "As a user who signed up with Google on web or Android, I need to sign in on iOS, because Google OAuth accounts have no password and iOS offers only Apple and email/password.",
+      "acceptanceCriteria": [
+        "iOS offers Google Sign-In alongside Apple, matching web (src/contexts/AuthContext.tsx:539-540)",
+        "A Google-created account can sign in on iOS and resolves to the same profiles row",
+        "No change to the auth/session shape (CLAUDE.md: profiles, subscription_tier, JWT claims)",
+        "Correct the false claim at android AuthRemoteDataSource.kt:25 that it \"Mirrors iOS AuthService.swift ... and Google Sign-In\" — the mirror claim is false in both directions"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 (claude/prd-loop-schema-gaps). Every claim below was verified against the LIVE production database via the REST API, not inferred from src/integrations/supabase/types.ts — generated types can be stale, so absence there was treated as a hypothesis and confirmed by probing prod. | Web has both providers (AuthContext.tsx:539-540 google, :572-573 apple). iOS is Apple-only: AuthService.swift:250-251 signInWithIdToken(provider:.apple), and grep for \"google\" across AuthService.swift and Views/Auth/*.swift returns ZERO hits. Android is Google-only (AuthRemoteDataSource.kt:100-103), which is acceptable on that platform. An account created via Google OAuth has no password, so on iOS it is simply unreachable — not a degraded experience, a lockout."
+    },
+    {
+      "id": "XPLAT-004",
+      "title": "Neither mobile app has production crash or analytics visibility",
+      "description": "As the platform owner, I need mobile crash and analytics data to reach a backend, because both mobile surfaces queue this data locally and never upload it, so a mobile-only regression is invisible until a store review mentions it.",
+      "acceptanceCriteria": [
+        "Build the crash-report edge function both mobile CrashReportingServices were written to call (no such directory exists under supabase/functions/)",
+        "Decide the analytics strategy: un-comment iOS Firebase, or route both mobile surfaces through log-error to unify with web's Sentry",
+        "iOS AnalyticsService stops being a no-op (Services/AnalyticsService.swift:25-26, 33-34 — every Firebase call is commented out)",
+        "Paywall conversion analytics specifically must emit on iOS (ties to IOS-AUDIT-FEAT-030)",
+        "Correct the claim at Android AnalyticsService.kt:36 that \"Event names mirror iOS verbatim\" — true for names, but iOS emits nothing, so cross-platform funnel comparison is invalid"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 (claude/prd-loop-schema-gaps). Every claim below was verified against the LIVE production database via the REST API, not inferred from src/integrations/supabase/types.ts — generated types can be stale, so absence there was treated as a hypothesis and confirmed by probing prod. | Three different telemetry realities. WEB: Sentry (src/lib/sentry.ts:7-19, DSN-gated, enabled in PROD) + log-error edge function. ANDROID: real Firebase Analytics (util/AnalyticsService.kt:17-29, deps at build.gradle.kts:201-205), but crash reports go to a local file queue that is never uploaded (util/CrashReportingService.kt). IOS: analytics is a pure no-op — AnalyticsService.swift:8 states \"When Firebase is integrated, calls Analytics.logEvent(). Until then, logs locally\" — and crash reports are likewise a local queue that never uploads. Both mobile crash services carry an explicit unfinished-work note (CrashReportingService.swift:26-28, CrashReportingService.kt:24-26) referencing a crash-report edge function that was planned and never built. THIS IS WHY XPLAT-001 WENT UNNOTICED: account deletion throws on every mobile attempt and nothing anywhere reports it."
+    },
+    {
+      "id": "XPLAT-005",
+      "title": "Web cannot serve sponsored_listing, so that placement renders on mobile only",
+      "description": "As an advertiser buying a sponsored-listing placement, I need it to render on web, because web excludes the placement that both mobile clients serve and the database enum supports.",
+      "acceptanceCriteria": [
+        "Add sponsored_listing to SERVABLE_PLACEMENTS in src/hooks/useActiveAds.ts:23",
+        "Align the three surfaces' response handling: Android filters firstOrNull { isRenderable }, iOS takes rows.first requiring only non-nil ids, web takes data?.[0] unconditionally — so iOS and web can render a creative with a null image/title that Android correctly skips",
+        "Resolve the sidebar placement: it is a front-end-only name never added to the placement_type enum (useActiveAds currently short-circuits it)",
+        "No tightening of get_active_ads shapes that shipped binaries read (CLAUDE.md)"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 (claude/prd-loop-schema-gaps). Every claim below was verified against the LIVE production database via the REST API, not inferred from src/integrations/supabase/types.ts — generated types can be stale, so absence there was treated as a hypothesis and confirmed by probing prod. | Web SERVABLE_PLACEMENTS (useActiveAds.ts:23) is [top_banner, featured_spot, below_fold] — excludes sponsored_listing. iOS (Services/CampaignAdService.swift:20-25) and Android (data/remote/CampaignAdService.kt:66-69) both carry four placements including sponsored_listing, and Android's comment claims \"parity with the web/iOS placements\". sponsored_listing IS a valid enum member (migration 20260303000001_add_sponsored_listings.sql:6), so MOBILE IS RIGHT AND WEB IS BEHIND. Tier gating is consistent across all three — no gap there. Blocked-adjacent: see WEB-QA-020, since get_active_ads is currently ambiguous (PGRST203) on every surface until 20260718000001 is applied. | VERIFIED BLOCKED 2026-07-18, NOT ATTEMPTED. Adding sponsored_listing to SERVABLE_PLACEMENTS is a one-line change, but it cannot be verified end-to-end while get_active_ads returns PGRST203 for EVERY placement (re-confirmed live today — see WEB-QA-020). Shipping the placement change now would be unverifiable code that looks fixed and is not. Do this immediately AFTER 20260718000001 is applied, then re-run the five-placement probe to confirm all four servable placements return 200."
+    },
+    {
+      "id": "XPLAT-006",
+      "title": "Web bypasses register-device-token and writes device_tokens directly",
+      "description": "As the platform owner, I need one validated write path for push tokens, because web writes the table directly and so never passes the server-side platform validation both mobile clients go through.",
+      "acceptanceCriteria": [
+        "Web registers push tokens via the register-device-token edge function, matching iOS and Android",
+        "getPlatform() output is validated against the server VALID_PLATFORMS list",
+        "Note the dependency: device_tokens does not currently exist (see WEB-QA-018), so this is blocked until that decision lands"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 (claude/prd-loop-schema-gaps). Every claim below was verified against the LIVE production database via the REST API, not inferred from src/integrations/supabase/types.ts — generated types can be stale, so absence there was treated as a hypothesis and confirmed by probing prod. | iOS (Services/PushNotificationService.swift:69-75) and Android (util/PushNotificationService.kt:233-236) both invoke register-device-token with {deviceToken, platform}. Web (src/hooks/usePushNotifications.ts:39-43) upserts into device_tokens directly, skipping the VALID_PLATFORMS check at register-device-token/index.ts:65-71. Two write paths into one table with only one validated. Mobile request shapes are otherwise identical. COMPOUNDING: device_tokens does not exist in prod at all (42P01 confirmed), so the web path fails outright today and the mobile path writes nowhere."
+    },
+    {
+      "id": "XPLAT-007",
+      "title": "Data export (CCPA/GDPR right-to-access) exists only on web",
+      "description": "As a mobile-only user, I need an in-app path to export my data, because the export is implemented on web only and mobile users have no way to exercise the right.",
+      "acceptanceCriteria": [
+        "iOS and Android expose a data-export path equivalent to src/components/PrivacyControls.tsx:19",
+        "Pairs with XPLAT-001 — both privacy rights (deletion and access) are currently unavailable on mobile"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 (claude/prd-loop-schema-gaps). Every claim below was verified against the LIVE production database via the REST API, not inferred from src/integrations/supabase/types.ts — generated types can be stale, so absence there was treated as a hypothesis and confirmed by probing prod. | grep for exportData / dataExport / export-analytics-data across ios/ and android/app/src/main/ returns nothing. Backend support exists (IOS-AUDIT-REL-010 notes account-deletion, data-export, and social-account functions exist but only deletion is wired). Compliance exposure, and it compounds XPLAT-001: a mobile-only user can currently neither delete nor export their data."
+    },
+    {
+      "id": "XPLAT-008",
+      "title": "Web calls three edge functions that do not exist",
+      "description": "As an admin, I need admin tooling actions to work, because three invoked edge functions have no implementation and return 404 at runtime.",
+      "acceptanceCriteria": [
+        "Resolve test-article-webhook, test-ai-model, clear-system-cache — implement or remove the call sites",
+        "Separately decide on verify-apple-receipt and personalized-recommendations, which have zero callers on any surface",
+        "Do NOT delete verify-apple-receipt yet: it is a superseded duplicate of validate-ios-receipt, but with MIN_SUPPORTED_APP_VERSION at 1.0.0 you cannot prove no shipped binary calls it, so per CLAUDE.md it is still load-bearing"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 (claude/prd-loop-schema-gaps). Every claim below was verified against the LIVE production database via the REST API, not inferred from src/integrations/supabase/types.ts — generated types can be stale, so absence there was treated as a hypothesis and confirmed by probing prod. | Confirmed absent from supabase/functions/: test-article-webhook, test-ai-model, clear-system-cache. All three appear only in web functions.invoke() call sites. Admin-surface only, which caps blast radius, but they are guaranteed runtime 404s. Inverse finding: personalized-recommendations and verify-apple-receipt have zero callers on any of the three surfaces."
+    },
+    {
+      "id": "XPLAT-009",
+      "title": "Ask Pulse (discover-chat) is missing on web entirely; Android shows no quota",
+      "description": "As a web visitor, I need the conversational AI the product is marketed on, because discover-chat is implemented on both mobile surfaces and has zero references in src/.",
+      "acceptanceCriteria": [
+        "Decide whether Ask Pulse comes to web (it is the single largest feature web is missing)",
+        "Android surfaces remaining quota before the 429, matching iOS (AskPulseService.swift:33-61 decodes usage:{remaining:int|\"unlimited\", tier})",
+        "Android DiscoverChatResponse stops silently dropping the usage field (AskPulseRepository.kt:34-38)",
+        "Reconcile with WEB-QA-005: the homepage markets a \"24/7 AI Assistant\" that web does not implement"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 (claude/prd-loop-schema-gaps). Every claim below was verified against the LIVE production database via the REST API, not inferred from src/integrations/supabase/types.ts — generated types can be stale, so absence there was treated as a hypothesis and confirmed by probing prod. | Both mobile clients send an identical request (messages[] + optional userLocation), matching discover-chat/index.ts:11-12. iOS decodes the usage block including the int-or-string union and shows remaining quota; Android declares only picks + followUpSuggestions with the comment \"Unknown keys (e.g. usage) are ignored\", so Android users get no quota visibility before hitting 429. Both handle 429 -> upsell correctly. WEB HAS NO ASK PULSE AT ALL (zero hits for discover-chat / AskPulse in src/). This directly compounds WEB-QA-005, which flags the homepage marketing AI capabilities that the web funnel does not deliver."
+    },
+    {
+      "id": "XPLAT-010",
+      "title": "Android trip planner cannot express accessibility or dietary needs",
+      "description": "As an Android user with accessibility or dietary requirements, I need to pass them to the itinerary generator, because Android sends only 5 of the 10 preference fields the edge function accepts.",
+      "acceptanceCriteria": [
+        "Android TripPreferences carries all 10 fields: adds childAges, accessibilityNeeds, dietaryRestrictions, mustSee, avoidCategories",
+        "Android checks HTTP status and unpacks the structured {error, code} body for 403 upgrade_required / 429 quota_exceeded, matching web (src/hooks/useTripPlanner.ts:175-185)",
+        "Decide the fate of existingTripId — no surface sends it, so the edge function update/enhance path is dead code across all clients",
+        "No tightening of generate-itinerary quota/shape below what shipped binaries rely on (CLAUDE.md)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 (claude/prd-loop-schema-gaps). Every claim below was verified against the LIVE production database via the REST API, not inferred from src/integrations/supabase/types.ts — generated types can be stale, so absence there was treated as a hypothesis and confirmed by probing prod. | Contract (generate-itinerary/index.ts:35-52) accepts interests, budget, pace, groupSize, hasChildren, childAges, accessibilityNeeds, dietaryRestrictions, mustSee, avoidCategories, existingTripId. Android TripPreferences (data/remote/TripPlannerRemoteDataSource.kt:29-35) carries only 5. Accessibility and dietary restrictions being unreachable on Android is a genuine user-facing regression, not a nicety. Error handling: Android decodes the body with no status check (TripPlannerRemoteDataSource.kt:66-67); whether supabase-kt throws before the decode on a 403 is UNVERIFIED — if it does, the quota upsell never fires. The response metadata block (index.ts:504-511) is read by nobody. Request shape (startDate/endDate/preferences) is identical across all three. | PARTIALLY IMPLEMENTED AND VERIFIED LOCALLY 2026-07-18 (commit e6195694). passes STAYS false. DONE: all five absent fields plumbed through TripPreferences and the payload builder; UI added for accessibilityNeeds and dietaryRestrictions (chip sections mirroring the existing interests pattern, options in TRIP_ACCESSIBILITY_NEEDS / TRIP_DIETARY_RESTRICTIONS). Empty optional fields are OMITTED rather than sent as empty arrays, so an unused request is byte-identical to the previous payload — asserted explicitly by TripPreferencesPayloadTest. Verified: compileDebugKotlin clean, lint clean, 4/4 new tests, full suite 277 tests 0 failures. STILL OPEN: (a) mustSee / avoidCategories / childAges are expressible by the data layer but have NO UI — they need free-text and numeric input rather than a fixed chip set; (b) the AC about checking HTTP status and unpacking the structured {error, code} body for 403 upgrade_required / 429 quota_exceeded is UNTOUCHED — TripPlannerRemoteDataSource still decodes the body with no status check, and whether supabase-kt throws before the decode on a 403 remains UNVERIFIED, so the quota upsell may never fire; (c) existingTripId still unsent by every surface, so the edge function update/enhance path remains dead code."
+    },
+    {
+      "id": "XPLAT-011",
+      "title": "Add client-to-edge-function contract tests (the control that would have caught XPLAT-001)",
+      "description": "As a maintainer, I need automated proof that each client calls each edge function with the shape that function actually implements, because the deletion break was exactly this drift and no CI lane saw it.",
+      "acceptanceCriteria": [
+        "For each edge function with more than one client caller, a test asserts the documented request contract matches the implemented branches",
+        "A test specifically asserts delete-user-account rejects or accepts a bodyless POST per whatever XPLAT-001 decides — so the docstring and the code can never disagree again",
+        "Extend supabase/functions/_tests/ rather than adding a parallel harness",
+        "Runs in the broadened Edge Function & Cross-Platform Contract Tests workflow"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 (claude/prd-loop-schema-gaps). Every claim below was verified against the LIVE production database via the REST API, not inferred from src/integrations/supabase/types.ts — generated types can be stale, so absence there was treated as a hypothesis and confirmed by probing prod. | PARTIALLY ADDRESSED 2026-07-18: the TRIGGER gap is fixed — .github/workflows/subscription-sync-tests.yml previously fired only on four billing functions plus _tests/, leaving ~69 of 73 edge functions with no CI execution on change. Broadened to supabase/functions/** and supabase/migrations/** and renamed (commit b14316f6). THE TESTS THEMSELVES ARE STILL MISSING. The workflow now runs on any function change, but only executes cross-platform-sync.test.ts and version-check.test.ts. A contract test asserting docstring-vs-implementation agreement is what would actually have caught XPLAT-001, and it does not exist yet. Note that writing it today would fail CI, because delete-user-account's docstring and code genuinely disagree — that failure is the point, but it should land together with the XPLAT-001 decision rather than before it."
+    },
+    {
+      "id": "WEB-SEC-021",
+      "title": "Anonymous users can read internal config, the full RBAC model, and the anti-abuse blocklist",
+      "description": "As the platform owner, I need internal operational tables closed to anonymous reads, because an unauthenticated visitor using the public anon key can currently enumerate the complete permission model, the email-domain blocklist, ad pricing rules, and feature flags.",
+      "acceptanceCriteria": [
+        "blocked_email_domains: revoke anon SELECT. Publishing an anti-abuse blocklist defeats it — an abuser reads the 5,361 blocked domains and picks one that is not listed. Nothing in the client needs this table; signup validation belongs server-side.",
+        "permission_definitions / role_permissions / role_definitions: revoke anon SELECT. 58 permission definitions and 166 role-permission mappings are enumerable, which is a complete map of the authorization model — every resource, action, scope, and which role holds it.",
+        "pricing_rules: revoke anon SELECT. base_price plus traffic_multiplier / demand_multiplier / min_price / max_price is the internal ad pricing algorithm, so advertisers can reverse-engineer quotes. NOTE: ad_rate_card and advertising_packages are probably intentionally public for the Advertise page — confirm before closing those two.",
+        "feature_flags: restrict anon SELECT to flags the client must evaluate, or move evaluation server-side. Currently exposes unreleased work and admin-only gating (ai_trip_planner_v2 disabled; ai_article_pipeline_enabled and search_traffic_dashboard target admin).",
+        "ai_environment_config: revoke anon SELECT. default_value holds no secrets today (verified), but it publishes the NAME of every AI secret and its Coolify variable, and one careless UPDATE turns it into a live credential leak.",
+        "content_metrics (14,432 rows), image_optimization_queue (1,370), media_assets (1,381): confirm whether anon read is intended; these look like internal ops/analytics surfaces.",
+        "Extend .github/workflows/rls-config-audit.yml so a table added without an explicit RLS policy cannot ship anon-readable.",
+        "Re-run the anon probe after the change and confirm these tables no longer return rows."
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 (claude/prd-loop-schema-gaps). METHOD: enumerated all 248 public tables from the generated types and issued an anon-key SELECT against LIVE PRODUCTION for each — exactly what any visitor can do, since the anon key ships in the client bundle. Result: 40 tables returned real rows, 198 returned empty, 9 errored. MOST of the 40 are correctly public content (events, restaurants, attractions, playgrounds, articles, hotels, trails, venues, guides, pseo_pages, badges, subscription_plans). The concerns are the internal ones listed in the acceptance criteria. SEVERITY: MODERATE, and deliberately not overstated. NO PII and NO credentials were exposed. Every ai_environment_config default_value was checked for secret-shaped strings (sk-, eyJ, ghp_, AIza, xox) and none were found; the CLAUDE_API_KEY and OPENAI_API_KEY rows have null defaults. restaurant_blacklist reasons are benign operational notes such as not-a-restaurant and gas-station, not defamatory. This is reconnaissance and control-defeat, not a breach. SHARPEST ITEM: blocked_email_domains at 5,361 rows. It is a security control whose effectiveness depends entirely on not being public, and it is public. TWO LIMITS ON THIS AUDIT, both important. (1) The 198 EMPTY results are AMBIGUOUS — an RLS-filtered table and a genuinely empty table are indistinguishable from anon, so this audit proves what IS exposed but CANNOT certify the rest is protected; a service-role row-count comparison is needed to separate them. (2) Only SELECT was tested. Anon INSERT/UPDATE/DELETE posture is UNVERIFIED and was deliberately not probed, because a write test against production could mutate real data. Close that gap against a staging database, not this one."
+    },
+    {
+      "id": "WEB-SEC-022",
+      "title": "log-content-metrics is the one public edge function with no rate limit, and writes with the service-role key",
+      "description": "As the platform owner, I need the anonymous metrics endpoint throttled and bounded, because it accepts unauthenticated requests, applies no rate limit, caps neither the batch size nor the metric value, and upserts with the service-role key.",
+      "acceptanceCriteria": [
+        "Add checkRateLimit to log-content-metrics, matching the other verify_jwt=false functions (geocode-location, image-transform, og-image and version-check are all rate-limited; this one is not)",
+        "Cap the events array length per request — it is currently unbounded, so one request can drive an arbitrary number of service-role upserts",
+        "Clamp metric_value to a sane range; it is attacker-controlled and accepted as any number",
+        "Keep the endpoint unauthenticated: that part is correct and intentional (it must accept metrics from anonymous visitors), so do NOT add an auth guard and break page-view tracking",
+        "Backward-compat per CLAUDE.md: the rate limit must sit above what shipped mobile binaries retry against, and the batch cap must exceed the largest batch any current client sends",
+        "Confirm whether anon SELECT on content_metrics is intended (see WEB-SEC-021) — the table is currently both publicly writable through this function and publicly readable"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 (claude/prd-loop-schema-gaps). METHOD: cross-referenced supabase/config.toml against every function body. 71 of 74 edge functions run verify_jwt=false, which is only safe when the function guards itself. 66 of the 71 do (requireApiKey / requireAdmin / requireAuth / requirePermission / withSecurity / secret comparison). THAT IS A GOOD RESULT and worth recording explicitly: WEB-SEC-001 largely worked. The five without an auth guard are geocode-location, image-transform, og-image, version-check and log-content-metrics — the first four are public by design AND rate-limited. log-content-metrics is the only one that is public by design and NOT rate-limited. SEVERITY: LOW-MODERATE, deliberately not inflated. Input validation is actually reasonable — content_type and metric_type are allowlisted and content_id must look like a UUID, so an attacker cannot write arbitrary shapes. The real gaps are the missing throttle, the uncapped events array, and the attacker-controlled metric_value. IMPACT IS BOUNDED BY WHAT CONSUMES THIS DATA: I traced every reader and found content_metrics feeds AdminAnalyticsDashboard.tsx and useContentTracking.ts. I found NO evidence it feeds trending_score, popularity_score, or any public ranking — so this is admin-analytics poisoning plus an unthrottled service-role write path, NOT ranking manipulation. If a future feature does wire content_metrics into ranking, re-rate this as HIGH before shipping it. CORRECTION WORTH KEEPING: an earlier pass of this audit flagged generate-seo-content as unguarded. That was a false positive in my own grep — it guards with requireApiKey (SEC-029) and rate-limits AI calls at max:10. The guard-name list had to be rebuilt from the actual _shared exports before the audit was trustworthy. | FIXED AND VERIFIED LOCALLY 2026-07-18. checkRateLimit added at 600/15min (deliberately loose: IP-keyed with no user identity, and the caller flushes every 10s = ~90 req/window PER TAB, so shared NAT would make a tight limit silently delete analytics for the busiest real traffic). Batch capped at 100 (excess sliced, not rejected — failing a whole batch would lose good data over one bad client). metric_value clamped to 0..1000. Endpoint stays unauthenticated, which is correct. Verified: deno check clean, tsc clean, clamp/cap logic exercised directly with 10 cases including Infinity/NaN/negatives plus a 50,000-event flood truncated to 100. ALSO FIXED a pre-existing deno check failure in the same file (declared union omitted the bare-array request shape) — confirmed pre-existing by checking the original before editing. passes stays false pending deploy + a post-deploy check that legitimate analytics still flow (watch for 429s from real traffic behind corporate NAT)."
+    },
+    {
+      "id": "WEB-QA-021",
+      "title": "useAnalytics flush error path duplicated the queue instead of re-queueing failed events",
+      "description": "As the platform owner, I need the analytics queue to survive a failed flush without growing without bound, because the error path duplicated the wrong events and doubled the queue on every failure.",
+      "acceptanceCriteria": [
+        "Failed events are re-queued; events enqueued during the flush are preserved once, not duplicated",
+        "The queue is bounded so a sustained backend outage cannot grow it without limit",
+        "npm run validate passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "FOUND AND FIXED 2026-07-18 while sizing rate limits for WEB-SEC-022. The catch block read [...eventQueue.current, ...eventQueue.current] under a comment saying it kept events for the next attempt. It did the opposite: eventsToFlush had already been cleared from the queue at the top of the try and was out of scope in the catch, so the events that actually failed were LOST, while anything enqueued during the in-flight flush was DUPLICATED — and duplicated again on each subsequent failure, doubling the queue each time. A backend outage therefore caused exponential memory growth in long-lived tabs plus inflated metric counts for whichever events survived. Fixed by hoisting eventsToFlush above the try so the catch can see it, re-queueing [...eventsToFlush, ...eventQueue.current], and bounding to MAX_QUEUED_EVENTS=500 (oldest dropped first — stale analytics matter less than a responsive page). Verified with tsc + eslint; the remaining eslint warnings in this file are pre-existing."
+    },
+    {
+      "id": "WEB-QA-022",
+      "title": "DECIDE BEFORE DEPLOY: event photos have two competing implementations, and the pending migration entrenches the weaker one",
+      "description": "As the platform owner, I need one event-photo implementation, because two exist, neither works, they do not share storage, and migration 20260718000003 is about to commit the codebase to the one with the weaker schema.",
+      "acceptanceCriteria": [
+        "Decide which table owns event photos BEFORE applying 20260718000003, because that migration is the commitment point",
+        "Option A — keep event_discussions (what the migration does): photos become discussion rows with message_type=photo and media_url. Wins: one feed, comments and photos already interleave, migration is written and additive. Costs: no caption field distinct from message, no is_featured, and every photo query filters a general discussions table",
+        "Option B — adopt event_photos (already exists, purpose-built: caption, photo_url, is_featured, likes_count, event_id, user_id, and NOT NULL-clean): rewrite EventPhotoUpload/EventPhotoGallery/EventSocialHub against it and drop the migration. Wins: better-shaped schema, no overloading. Costs: rewrite of the live components, and the photo count in the social hub needs a second query",
+        "Whichever wins, DELETE the losing path rather than leaving it dormant — the dead path is what produced this ambiguity",
+        "Fix src/lib/security/ownership.ts:349, which maps resource type photo -> event_photos. If Option A wins, that mapping points at a table that will never hold a photo",
+        "Remove or repair useCommunityFeatures.getEventPhotos, which filters on event_photos.is_approved — a column that does not exist, so the query fails with 42703 on every call",
+        "schema-baseline.json shrinks by the event_photos.is_approved entry"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 (claude/prd-loop-schema-gaps) while separating the fixable schema-baseline entries from the blocked ones. Of 84 baseline findings only 10 sit on tables that exist; 8 of those are crm_activities and are blocked behind WEB-QA-018 anyway. Chasing the last two is what surfaced this. THE TWO PATHS. Path A (LIVE): EventPhotoUpload -> event_discussions {message_type, media_url}, read by EventPhotoGallery, counted by EventSocialHub, mounted from EventDetails. Write currently fails with PGRST204 until 20260718000003 is applied (WEB-QA-016). Path B (DEAD): useCommunityFeatures.uploadEventPhoto/getEventPhotos -> event_photos. VERIFIED DEAD: zero callers anywhere in src/ (only the hook itself references it), and the live table holds ZERO rows. Its upload function is actually CORRECT — every column it inserts exists. Its read function is broken, filtering on is_approved, which is not a column on event_photos. So the dead path has a working writer and a broken reader, and nothing calls either. WHY THIS IS A DECISION AND NOT A CLEANUP: event_photos is arguably the BETTER schema. It is purpose-built (caption separate from message, is_featured, likes_count) while Option A overloads a general discussions table with a media_url and a type discriminator. The pending migration is not wrong, but it is a commitment, and it is easier to make that call now than after photos start accumulating in event_discussions. LATENT TRAP: src/lib/security/ownership.ts:349 maps photo -> event_photos. No caller currently passes photo as an ownership resourceType, so this is inert today (severity LOW, not a live hole). But the moment anyone wires up delete-my-photo under Option A, the ownership check will look in a table that holds no photos and fail closed — users unable to manage their own content, with nothing obviously wrong in the code. NOTHING WAS DELETED. Removing an entire feature path is a product call, and the dormant path is plausibly the one worth keeping."
+    },
+    {
+      "id": "WEB-PERF-020",
+      "title": "Critical-path JS is 610KB gzipped against a 200KB budget (was 1043KB)",
+      "description": "As a mobile visitor, I need the homepage to load within the stated Core Web Vitals budget, because the first-paint payload is over three times the documented critical-path limit.",
+      "acceptanceCriteria": [
+        "Critical-path gzipped JS reaches the CLAUDE.md budget of 200KB (currently 610KB)",
+        "vendor-icons is 131KB gzipped eagerly — investigate tree-shaking; a full icon set is almost certainly being pulled in by a barrel import",
+        "The 160KB entry chunk (index-*.js) is the other half — audit what is statically reachable from it that could be lazy",
+        "Add a CI budget check that fails when critical-path gzipped JS regresses, so this cannot drift silently again",
+        "Re-measure LCP against the <2.5s target after the above"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 (claude/prd-loop-schema-gaps). Measured from a real production build: summed the gzipped size of every JS chunk referenced by dist/index.html. Total JS across all 119 chunks is 1,996KB gzipped; the FIRST-PAINT subset was 1,043KB across 30 chunks. PARTIALLY FIXED in commit c29ec4f6: 1043KB -> 610KB (-433KB, -41%) by stopping the prerender step from baking runtime-injected modulepreload links into the shipped HTML. Full root cause in that commit message — briefly, a removeLazyPreloads() plugin existed and looked correct, but (a) it hooked transformIndexHtml, which ALWAYS runs before Vite injects preloads in generateBundle, so it could never have matched, and (b) even once fixed, the prerenderer re-added them by serializing a live DOM in which Vite’s runtime __vitePreload helper had injected them. Both stages now strip, sharing one pattern list, and the build reports the count so a silent regression is visible. REMAINING 610KB, roughly: index entry 160KB, vendor-icons 131KB, vendor-react 88KB, vendor-ui 45KB, vendor-supabase 44KB, plus small route chunks. vendor-icons at 131KB gzipped for an icon library is the most suspicious single line item. NOT ATTEMPTED: chasing the entry chunk or icon tree-shaking, because both change what is statically reachable and need a real LCP measurement to confirm they help rather than just move weight around. Verified no functional regression: smoke suite 7 passed; the 1 failure is the pre-existing get_active_ads PGRST203 (WEB-QA-020), not this change. | CORE WEB VITALS MEASURED 2026-07-18 against a PRODUCTION build (vite preview), each page in a FRESH browser context so every number is a genuine cold load rather than a warm in-app SPA navigation — an earlier pass measured warm navigations and made /events look 5x faster than it is, so the distinction matters. RESULTS: / LCP=2192ms FCP=1648ms CLS=0 transfer=1229KB | /events LCP=348ms FCP=348ms CLS=0.004 transfer=1262KB | /restaurants LCP=460ms FCP=428ms CLS=0 transfer=1462KB. THE HOMEPAGE IS THE OUTLIER — 5x the LCP of other pages at comparable transfer size, so this is not a bytes problem, it is a homepage-specific render problem. CRITICAL CAVEAT ON THE 2192ms: TTFB was 10ms because this is localhost. Effectively all of that 2.2s is client-side work. Real users add TTFB, slower bandwidth and slower CPUs on top, so the <2.5s LCP target in CLAUDE.md is almost certainly ALREADY MISSED in production even though the local number squeaks under it. Do not read this as passing. LCP ELEMENT IDENTIFIED: the hero H1 (\"Good Afternoon! Find things to do in Des Moines, right now\") paints at 2328ms. It is TEXT, not an image, so LCP is gated on JS execution and hydration, not on downloading a hero asset — which is why the 433KB preload reduction did not move it much. Note the page IS prerendered, yet the largest paint still lands after hydration; worth understanding why the prerendered hero does not count. Secondary candidate at 1652ms is the COOKIE CONSENT BANNER paragraph, which is briefly the largest element on screen. SLOWEST RESOURCES ARE ALL DATA, NOT ASSETS: the six slowest requests are Supabase REST queries (848, 785, 782, 727, 720, 692ms). See WEB-PERF-022 for the duplicate/unbounded events query among them. CHECKED AND RULED OUT: usePlaygrounds uses select(\"*\"), which looked like a WEB-PERF-001 miss, but playgrounds has only 20 columns and NO seo_/geo_/search_vector/geom fields, so there is nothing heavy to project away. Changing it would have been a cosmetic no-op. | ROOT CAUSE FOUND AND FIXED 2026-07-18 (commit 94dd972b). The homepage LCP was NOT a bundle-size problem, which is why the earlier 433KB preload reduction barely moved it. First paint on every route was render-blocked on fonts.googleapis.com. index.html ships the correct async pattern (rel=preload + onload flip + noscript fallback), but the prerenderer executes the page in Chromium, the onload handler fires and rewrites rel to \"stylesheet\" in the live DOM, and page.content() serializes that mutation as the shipped HTML. Measured before: local CSS 10-17ms, font CSS 3035ms, FCP 3204ms — FCP tracked the font request exactly. After: FCP 152ms while the font CSS was still in flight at 227ms, i.e. structurally decoupled. Three post-fix cold runs: FCP 1664/152/212ms, LCP 2208/860/1036ms (run 1 = cold browser, no warm DNS). SAME ROOT CAUSE as the modulepreload bug in c29ec4f6 — prerendering bakes runtime DOM mutations into initial HTML. REMAINING WORK ON THIS STORY IS UNCHANGED: critical-path JS is still 610KB gzipped against a 200KB budget (vendor-icons 131KB, entry chunk 160KB), and that still wants a CI budget check. But the LCP emergency is resolved, so re-prioritise accordingly. ALSO WORTH A THIRD LOOK: the prerenderer has now produced two separate production performance regressions by serializing post-JS DOM state. Consider auditing what ELSE it mutates rather than waiting for the next one to be found by measurement."
+    },
+    {
+      "id": "WEB-CI-020",
+      "title": "The blocking unit-test lane is red on main and has been since the tests were added",
+      "description": "As a maintainer, I need the vitest lane green, because pr-checks.yml runs it as a blocking step and 5 tests fail, so either PRs are merging over a red required check or the check is not actually enforced.",
+      "acceptanceCriteria": [
+        "npm run test:unit passes",
+        "Determine why a blocking check has been failing without anyone acting on it — if the workflow is not actually required on the branch ruleset, make it required",
+        "src/contexts/__tests__/AuthContext.test.tsx imports useAuthStatus, which AuthContext does not export. The context exports useAuthState / useAuthFlags / useAuthActions / useAuth — point the test at whichever is the real successor rather than deleting the test",
+        "src/components/__tests__/OptimizedImage.test.ts imports canTransform and getTransformedUrl. getTransformedUrl exists but is not exported; canTransform no longer exists at all. See WEB-PERF-021 before making these pass — the assertions encode behaviour the implementation no longer has, so exporting to go green would cement a regression",
+        "Extend scripts/check-import-exports.mjs to cover __tests__ directories, which it currently skips — that skip is why this class of breakage is invisible to npm run validate"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 (claude/prd-loop-schema-gaps) while verifying an unrelated dependency bump. 5 failures, all TypeError \"X is not a function\" — the WEB-QA-001 named-import-with-no-matching-export class, in test files. HISTORY CHECKED: at commit 7e117d85, which introduced OptimizedImage.test.ts, canTransform was already declared as a bare `function canTransform` with no export keyword. So these tests have NEVER passed — they were not broken later, they were merged red. Same shape for AuthContext.test.tsx from 69079b80. WHY IT STAYED INVISIBLE: pr-checks.yml:77 runs `npm run test:unit -- --coverage` and the parity audit recorded that lane as blocking, so a required check has been failing for the life of these files. Worth confirming whether the workflow is actually required in the branch ruleset, because the evidence suggests it is not being enforced. ALSO: scripts/check-import-exports.mjs — the guard written for exactly this bug class — explicitly skips __tests__ directories, so `npm run validate` cannot catch it. That skip was reasonable when written; it is now the blind spot."
+    },
+    {
+      "id": "WEB-PERF-021",
+      "title": "External images are proxied through image-transform, which does not resize them",
+      "description": "As a visitor, I need external images to load directly, because they are currently routed through an edge function that adds a network hop without reducing bytes.",
+      "acceptanceCriteria": [
+        "Decide the intended behaviour. The WEB-PERF-004 test asserts external URLs serve unchanged, with the stated reason that image-transform does not resize, so proxying adds a hop for zero byte savings",
+        "If that reasoning still holds, make getTransformedUrl return external URLs untouched and restore the guard the test was written to provide",
+        "If image-transform HAS gained resizing since, update the test and its comment instead, and say so explicitly",
+        "Note the load implication: image-transform is one of the public verify_jwt=false endpoints (rate-limited). Routing every external image through it puts real traffic on a public function",
+        "Whichever way it goes, the assertions must actually run — see WEB-CI-020"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FOUND 2026-07-18. src/components/OptimizedImage.tsx getTransformedUrl sends any non-Supabase-Storage URL to /functions/v1/image-transform with width/format/quality params. The test at src/components/__tests__/OptimizedImage.test.ts asserts the opposite (\"returns external URLs unchanged (no transform applied)\") and documents the reason inline as WEB-PERF-004. This is NOT simply a stale test. The test encodes a deliberate performance decision; the implementation does the thing that decision rejected. Because the test never ran green (see WEB-CI-020), nothing ever flagged the divergence. SEVERITY kept at 3 deliberately: I did not measure how many external images a real page actually loads, so the impact is unquantified. Measure before prioritising — if most images are Supabase Storage URLs, the proxy path is rarely taken and this is minor. NOT FIXED HERE: changing image routing alters what every page requests, and the right answer depends on whether image-transform has gained resizing since WEB-PERF-004. That is a product/infra fact I could not establish from the code alone."
+    },
+    {
+      "id": "WEB-UX-030",
+      "title": "Color contrast fails WCAG AA across the site (71 nodes on /events alone)",
+      "description": "As a low-vision visitor, I need text to meet the 4.5:1 contrast ratio CLAUDE.md commits to, because axe reports serious color-contrast violations on every measured public page except /auth.",
+      "acceptanceCriteria": [
+        "Identify the offending token(s) in the Tailwind theme — the volume (71 nodes on one page) points at a small number of shared colours, most likely muted-foreground on a light surface, not 71 separate mistakes",
+        "Raise the failing token(s) to 4.5:1 for body text and 3:1 for large text, and re-run the axe probe on / /events /restaurants /pricing",
+        "Fix at the token level, not per-component — a per-instance fix will drift straight back",
+        "Verify in dark mode as well; the probe only covered the default theme",
+        "Once clean, remove continue-on-error from the accessibility job in e2e.yml so this cannot regress silently (see WEB-CI-021)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "MEASURED 2026-07-18 (claude/prd-loop-schema-gaps) with @axe-core/playwright against a running app, tags wcag2a+wcag2aa+wcag21a+wcag21aa. Per-page violation counts: / = critical/button-name(1) + serious/color-contrast(10); /events = serious/color-contrast(71); /restaurants = critical/button-name(1) + serious/color-contrast(30); /pricing = serious/color-contrast(6); /auth = CLEAN (0). The button-name half is FIXED in commit 6ad76efd (NLPSearchBar icon buttons). Everything remaining is colour contrast. NOT ATTEMPTED, deliberately: contrast is fixed by changing theme tokens, which is a brand/design decision with site-wide visual consequences. Guessing at replacement colours would be worse than reporting the measurement. The concentration (71 nodes on one page) strongly suggests one or two shared tokens rather than scattered one-offs, so the real fix is probably small once someone picks the values. CONTEXT: CLAUDE.md Quality Standards claims \"A11y: WCAG 2.1 AA, keyboard nav, ARIA labels, 4.5:1 contrast\". The full suite result was 66 passed / 24 failed, so that claim is currently aspirational rather than met."
+    },
+    {
+      "id": "WEB-CI-021",
+      "title": "The accessibility suite runs in CI but cannot fail the build",
+      "description": "As a maintainer, I need a11y regressions to block, because e2e.yml runs the accessibility suite with continue-on-error: true, so 24 failing tests have never surfaced as a red build.",
+      "acceptanceCriteria": [
+        "Once WEB-UX-030 is fixed, remove continue-on-error from the \"Run critical E2E suites\" step in .github/workflows/e2e.yml, or split accessibility into its own blocking job",
+        "If the suite is too flaky to block on wholesale, gate on the axe checks only (they are deterministic) and leave the keyboard/focus tests advisory — partial enforcement beats none",
+        "Record the current failure list as a baseline if a ratchet is preferred, matching the strict-baseline and schema-baseline convention already used here"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FOUND 2026-07-18. .github/workflows/e2e.yml runs tests/accessibility.spec.ts (plus links-and-buttons, forms, mobile-responsive) under `continue-on-error: true`. The suite is genuinely strict — it asserts zero axe violations against wcag2a/2aa/21a/21aa — but nothing acts on the result. Ran it locally: 66 passed, 24 failed, 11.5 minutes. Failures span axe violations, keyboard navigation, focus visibility, skip links, heading hierarchy (h1 count and level skips), icon-button labels, touch targets, and document titles. This is the same shape as WEB-CI-020 (the unit lane failing under a supposedly blocking check): a quality gate that exists, runs, and cannot fail. Worth treating the two together — the pattern is guards that are present but inert."
+    },
+    {
+      "id": "WEB-PERF-022",
+      "title": "Homepage fires two overlapping events queries, one of them unbounded",
+      "description": "As a visitor, I need the homepage to fetch events once and with a bound, because it currently issues two near-identical queries and one has no limit, making it the slowest request on the page.",
+      "acceptanceCriteria": [
+        "SmartEventNavigation calls useEvents() with no arguments, so no limit is applied and the query returns every future event (260 today) with the full 24-column projection. Give it the limit it actually renders",
+        "Reconcile with AllInclusiveDashboard, which issues its own useEvents call with different filters — different filters mean different react-query keys, so both fetch independently rather than sharing a cache entry",
+        "Confirm whether both components need distinct result sets at all, or whether one query can serve both via a shared key",
+        "Re-measure: the unbounded query took 848ms and the limited one 785ms, together the two slowest requests on the homepage",
+        "No change to the events response shape that shipped mobile binaries read (CLAUDE.md)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 while measuring Core Web Vitals on a production build (see WEB-PERF-020). Resource timing on a cold homepage load shows two events requests with the same EVENT_LIST_COLUMNS projection and the same date/is_merged/is_hidden filters, differing only in that one carries limit=100 and the other carries no limit at all. Both AllInclusiveDashboard and SmartEventNavigation are mounted on the homepage and each calls useEvents with different filter objects, which produces different query keys, so react-query cannot dedupe them. SEVERITY 3 deliberately: these are parallel XHRs after first paint, so they do not block LCP directly (LCP is the hero H1 at 2328ms, gated on hydration). The cost is server load, bandwidth, and interaction latency once the lists populate — not the headline metric. NOT FIXED HERE: adding a limit changes what SmartEventNavigation renders, and I could not establish from the code how many events it is meant to show. A wrong limit silently truncates a homepage module, which is worse than a slow query. | RAISED 3 -> 2 ON MEASUREMENT (2026-07-18). Captured actual response sizes on the homepage against production: the unbounded query returns 238,593 BYTES, making it by far the largest single request the homepage issues — bigger than the entire critical-path JS payload after compression, and roughly 7x the next event query. The limited companion returns 90,871B. Total events payload on one homepage load is ~341KB uncompressed. This was filed at severity 3 when the only evidence was \"two overlapping queries, one unbounded\"; the size changes the picture. It is now the single biggest data-transfer item on the homepage and should be treated as the next performance task after WEB-PERF-020. The fix is still blocked on the same question as before: SmartEventNavigation calls useEvents() with no arguments, and I could not establish from the code how many events it is meant to render, so a guessed limit risks silently truncating a homepage module. Someone who knows the intended design can close this in minutes."
+    },
+    {
+      "id": "WEB-SEO-002",
+      "title": "12 prerendered routes render no SEOHead, so they ship with no canonical and the site-wide default description",
+      "description": "As the platform owner, I need every indexable route to declare its own SEO metadata, because a dozen routes ship with no canonical of their own and all 31 share a single meta description.",
+      "acceptanceCriteria": [
+        "Add SEOHead (with an explicit url prop) to: /advertise, /business, /calendar, /deals, /itineraries, /map, /pricing, and the five /events/<city> pages",
+        "/business and /map additionally render no h1 at all — add one",
+        "Give the five /events/<city> pages distinct titles. They currently all share the same \"Events by Location\" title, which reads as duplicate content across Altoona, Ankeny, Clive, Johnston and Urbandale",
+        "/calendar duplicates the homepage title verbatim",
+        "All 31 routes currently share ONE meta description (the static default in index.html). Give at least the top landing routes their own",
+        "Re-run the audit and expect: 31 routes, 0 missing canonical, 0 duplicate title groups, 0 duplicate canonical groups"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 (claude/prd-loop-schema-gaps) by auditing the actual prerendered output rather than the source, across all 31 dist/**/index.html files with HTML comments stripped. EXPOSED BY, NOT CAUSED BY, commit 6d1bf574. These 12 routes never rendered SEOHead; they were silently inheriting the hardcoded homepage canonical from index.html. That inherited tag was actively harmful — it told crawlers each route was a duplicate of the homepage — so removing it is a net improvement, since Google self-canonicalizes to the page URL when no tag is present. The underlying gap is that these pages have no SEO identity of their own. STATE AFTER THE FIX: 31 routes, 0 missing title, 0 missing description, 12 missing canonical, 5 missing h1, 0 duplicate canonical groups, 2 duplicate title groups, and all 31 sharing one description. CONTEXT WORTH KEEPING: the prerender step exists specifically to fix soft-404 and \"discovered, not indexed\" (PROD-SEO-001). Before this fix it emitted 31 pages that each declared the homepage as their canonical — it was actively instructing Google not to index the very routes it was built to get indexed. That is a plausible cause of the original symptom, so re-check Search Console once this deploys."
+    },
+    {
+      "id": "WEB-SEO-003",
+      "title": "sitemap-guides.xml is a stale committed artifact; its generator queries a table that does not exist",
+      "description": "As the platform owner, I need the guides sitemap to reflect reality, because the generator fails on every run and the committed file has not been regenerated since it was first added.",
+      "acceptanceCriteria": [
+        "generateGuidesSitemap queries public.guides, which does not exist (42P01). Decide whether guides live in seasonal_guides (which DOES exist) or are static routes, and point the generator at the real source",
+        "On failure the function returns null WITHOUT writing the file, so the stale public/sitemap-guides.xml silently survives. Make a generator failure either fail the build or write an empty-but-valid sitemap — silently shipping stale data is the worst of the three options",
+        "Verify the 11 URLs currently in the file still resolve. /guides and /guides/:slug are real routes (App.tsx:431, 471), so they are probably valid, but nothing has checked since the file was committed",
+        "Extend scripts/check-schema-usage.mjs to cover scripts/ as well as src/ — this exact bug class is what that guard exists to catch, and it is currently blind to build scripts"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 (claude/prd-loop-schema-gaps) while auditing sitemap contents. Every `npm run generate-sitemaps` run prints \"Error fetching guides: relation public.guides does not exist\" (42P01) and continues. Because the generator returns null before writing, public/sitemap-guides.xml is whatever was committed in 851158c4 and has never been regenerated. It is referenced from sitemap-index.xml, so Google is being handed a hand-frozen file. SEVERITY 3: the 11 URLs are plausibly still valid (both /guides and /guides/:slug are live routes), so this is probably stale-but-harmless today rather than broken. The real risk is the silent-failure pattern — a generator that errors, keeps going, and ships last-known-good data looks identical to one that works. RELATED: this is the same missing-table class as WEB-QA-018, and it is invisible to scripts/check-schema-usage.mjs because that guard only scans src/. The sitemap generator is exactly the kind of build-time code where a silent schema mismatch does damage without anyone seeing a stack trace. Note there IS a seasonal_guides table in the schema, and the route component is SeasonalGuide, so the intended source may simply be a rename that the script never followed."
+    },
+    {
+      "id": "WEB-BE-030",
+      "title": "Both billing webhooks have non-functional idempotency and no audit trail (log tables do not exist)",
+      "description": "As the platform owner, I need the Apple and Google subscription webhooks to deduplicate retries and record what they processed, because both log tables are missing so the duplicate check always passes and nothing is recorded.",
+      "acceptanceCriteria": [
+        "Create apple_notification_log (notification_uuid, notification_type, subtype, processed_at, status) and play_rtdn_log (message_id, notification_type, processed_at, status), or repoint both functions at whatever table was intended",
+        "play-rtdn-webhook/index.ts:539 destructures only { data } from the idempotency lookup, so a missing-table error is invisible. Capture and check error there — appstore-server-notifications-v2 already does this at :405 and is the better pattern",
+        "Decide the failure policy explicitly: if the log table is unreachable, should the webhook still process the event (current behaviour, favours availability) or refuse and let the provider retry (favours correctness)? Right now it proceeds by accident, not by decision",
+        "Add a test asserting a repeated notification_uuid / message_id is skipped the second time — the guard is currently untested as well as non-functional",
+        "No change to the HTTP status codes either provider branches on (CLAUDE.md backward-compat)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 (claude/prd-loop-schema-gaps) after extending the schema guard to supabase/functions/. Both tables confirmed absent from LIVE production (42P01 / 404), not merely from the generated types. MECHANISM: both webhooks look up a prior log row to short-circuit duplicates. The lookup errors because the relation does not exist, the code treats the empty result as \"not seen before\", and processing continues. So the idempotency guard is not merely untested — it can never fire. Both providers use AT-LEAST-ONCE delivery (App Store Server Notifications V2 and Play RTDN both retry), so duplicate notifications are being fully reprocessed. Both functions then return 200, so neither provider ever signals a problem. SEVERITY 2, NOT 1, and I want to be precise about why: the main subscription state update still runs, and writing the same entitlement state twice is largely idempotent in effect, so this is probably not corrupting subscriptions today. The concrete losses are (a) no audit trail of any subscription lifecycle event, which matters for billing disputes and for debugging XPLAT-002, and (b) any non-idempotent side effect in the handler runs more than once. Rate as HIGH if a handler ever gains an email, a credit, or a counter. DIFFERENCE WORTH KEEPING: Apple captures logLookupError and console.errors it, so the failure is at least visible in function logs. Play discards it entirely by destructuring only { data }. Same outcome, but Play is silent about it."
+    },
+    {
+      "id": "WEB-BE-031",
+      "title": "An entire seo_* monitoring subsystem is written against 10 tables that do not exist",
+      "description": "As the platform owner, I need to know whether the SEO monitoring feature is real, because its edge functions reference ten tables that are absent from production.",
+      "acceptanceCriteria": [
+        "Decide per the WEB-QA-018 pattern: build the tables, or delete the dead functions",
+        "Tables referenced but missing: seo_settings, seo_alerts, seo_alert_rules, seo_monitoring_log, seo_monitoring_schedules, seo_notification_preferences, seo_audit_history, seo_crawl_results, seo_core_web_vitals, seo_image_analysis",
+        "If deleting, check for scheduled invocations (cron/pg_cron/GitHub Actions) that call these functions, so nothing is left calling a removed endpoint",
+        "If building, note that CLAUDE.md forbids removing an endpoint older binaries call — these appear to be admin/ops only, so confirm no mobile caller before either path"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 alongside WEB-BE-030. Confirmed absent from live production (seo_settings, seo_alerts probed directly, both 404). Same shape as WEB-QA-018 on the front end: a complete feature written against a schema that was never deployed, failing silently because it is server-side and nobody reads the function logs. SEVERITY 3 because this is an internal ops surface with no user-facing path, unlike the billing webhooks. But it is worth resolving one way or the other — every one of these functions burns invocations and logs errors on whatever schedule triggers it, and a monitoring subsystem that cannot record anything is worse than none, because its silence reads as \"no problems found\"."
+    },
+    {
+      "id": "WEB-BE-032",
+      "title": "438 Supabase call sites discard the error, which is why schema breakage is invisible",
+      "description": "As a maintainer, I need failing queries to be distinguishable from empty results, because 438 call sites destructure only { data } and drop the error, so a missing table reads as \"no rows\" everywhere.",
+      "acceptanceCriteria": [
+        "Triage the 335 edge-function sites first — server-side has no UI and no browser console, so a swallowed error there produces no signal at all",
+        "Anywhere the result drives a CONTROL DECISION (idempotency guards, entitlement checks, authorization, dedupe) must capture and act on the error. play-rtdn-webhook was one of these and is fixed in 6d83937d",
+        "Anywhere genuinely best-effort (analytics, optional enrichment) may keep ignoring it, but should say so in a comment so the next reader can tell the two apart",
+        "Consider an ESLint rule for src/ that flags `const { data } = await supabase` without `error`, so new instances cannot be added silently",
+        "This story is a CLEANUP PATTERN, not a bug list — do not treat all 438 as defects"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 (claude/prd-loop-schema-gaps) by scanning for the mechanism common to most of this session findings. Counts: 438 call sites across 182 files matching `const { data } = await supabase|client|db()` with no error in the destructure — 335 in supabase/functions/, 103 in src/. Top offenders: agent-ops-digest (9), agent-subscription-nurture (9), _shared/agents/subscription-nurture (9), useAdminCampaigns (8), moderate-content (7), social-media-manager (7). WHY THIS MATTERS MORE THAN THE RAW COUNT: this is the enabling mechanism behind WEB-QA-018, WEB-BE-030, WEB-BE-031 and WEB-SEO-003. A query against a table that does not exist returns an error and no data. If the error is dropped, the caller sees an empty result and takes the empty branch — so an entire missing subsystem presents as \"nothing to show\" rather than as a failure. Every silent feature found in this audit went undetected through exactly this path. DELIBERATELY SEVERITY 3 AND NOT A BUG COUNT: many of these are legitimately best-effort and ignoring the error is the right call. Filing all 438 as defects would be noise and would bury the ones that matter. The valuable subset is the control-decision sites, and the concrete example is the one already fixed: play-rtdn-webhook used a swallowed error as an idempotency guard, so the guard could never fire. SUGGESTED ORDER: (1) grep the edge functions for swallowed errors whose result feeds an if/guard, (2) fix those, (3) add the lint rule to stop the bleeding, (4) leave the best-effort ones alone with a comment. | TRIAGED 2026-07-18. Narrowed the 438 raw sites to the 323 where the result drives a control decision (262 edge functions, 61 src). Most of those are optional-chaining on best-effort enrichment, where ignoring the error is the right call — so the raw count still overstates the problem. THE CLASS THAT MATTERS is idempotency guards on at-least-once webhooks, and all three are now accounted for: appstore-server-notifications-v2 already captured its error (correct); play-rtdn-webhook swallowed it AND its log table does not exist, so the guard was permanently dead (fixed 6d83937d); stripe-webhook swallowed it but stripe_webhook_events DOES exist — verified against live production — so that guard works today and was hardened defensively rather than as a live bug fix (c329d56f). REMAINING WORK on this story is the long tail plus the lint rule; the high-severity subset is done. NOTE FOR WHOEVER PICKS THIS UP: do not mass-apply error capture. The value is entirely in sites where the swallowed error changes a branch, and a blanket refactor would add noise to hundreds of best-effort calls while making the real ones harder to spot."
+    },
+    {
+      "id": "WEB-PERF-023",
+      "title": "Three prerendered routes ship 5,000-6,600 DOM elements, far past the Lighthouse threshold",
+      "description": "As a mobile visitor, I need list pages to render a bounded amount of DOM, because the prerenderer serializes every loaded item and three routes ship several thousand elements before any interaction.",
+      "acceptanceCriteria": [
+        "Bound what the prerenderer captures on list-heavy routes, or paginate/virtualize those lists so the initial DOM is capped",
+        "Element counts in #root: /map 6,564, /events/date-night 6,052, /restaurants/dietary 4,981, against a median route of 481. Lighthouse warns above ~800 and flags above 1,500",
+        "Re-measure hydration cost on /map specifically — 6,564 elements is the DOM React must reconcile on boot",
+        "Verify against a mid-tier mobile CPU, not a desktop; this is a main-thread cost, not a transfer cost"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "MEASURED 2026-07-18 (claude/prd-loop-schema-gaps) from the production build. Raw HTML: /map 984KB, /restaurants/dietary 842KB, /events/date-night 772KB, against a 94KB median. DELIBERATELY NOT FRAMED AS A BANDWIDTH PROBLEM. Gzipped those same documents are 56KB, 39KB and 37KB — repetitive DOM compresses extremely well, so transfer is fine and reporting \"984KB page\" would be misleading. The real costs are HTML parse time, DOM memory, and React hydration over several thousand nodes, all of which land on the main thread of whatever device the user has. ROOT CAUSE is the same prerender behaviour behind three earlier fixes: the prerenderer captures the DOM after the app has fetched and rendered its data, so every loaded list item is baked into the shipped HTML. On /map that is 517 map entities with their popups (300+ h3 elements). This is arguably WORKING AS INTENDED for SEO — the content is crawlable — so the fix is a bound, not a removal. SEVERITY 3: no measurement here shows a user-visible regression, and prerendered content is genuinely good for indexing. Raising this above 3 requires an actual hydration measurement on a real device, which I could not do from this machine."
+    },
+    {
+      "id": "WEB-SEO-004",
+      "title": "/business is prerendered as a sign-in wall, so that is what crawlers index",
+      "description": "As the platform owner, I need /business to present indexable content, because the prerendered page contains only a sign-in prompt rather than the Business Hub marketing copy.",
+      "acceptanceCriteria": [
+        "Decide the intent: if /business is a dashboard, it probably should not be in the prerender route list or the sitemap at all",
+        "If it is meant to attract businesses, render the marketing content to signed-out visitors and gate only the dashboard widgets",
+        "Either way /business currently has NO h1 in the shipped HTML — the h1 \"Business Hub\" exists only in the signed-in branch",
+        "/map also has no h1; it needs one (an sr-only heading is acceptable for a map-first UI)",
+        "Both are WCAG 1.3.1 heading-hierarchy failures as well as SEO gaps"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 while auditing heading structure across prerendered routes. 29 of 31 routes have exactly one h1, which is correct; the two exceptions are /business and /map, and they fail for different reasons. /business: the prerendered visible text is \"Business Hub — Sign in to access your business dashboard — Join Des Moines Insider to grow your business with powerful tools\". The h1 at BusinessHub.tsx:128 sits in the authenticated branch, so an unauthenticated crawler never reaches it. Google is indexing a login wall on a route that is in the sitemap. /map: genuinely has no h1 anywhere — 300+ h3 elements for map markers and no top-level heading. SEVERITY 3 for both: neither is a broken feature, and a gated dashboard being gated is defensible. The decision worth making is whether /business belongs in the prerender/sitemap set at all."
+    },
+    {
+      "id": "WEB-UX-031",
+      "title": "/attractions scrolls horizontally by 1px at 320px width",
+      "description": "As a visitor on a small phone, I should not be able to scroll the attractions page sideways, because a 1px overflow makes the page feel loose and can shift tap targets.",
+      "acceptanceCriteria": [
+        "documentElement.scrollWidth equals clientWidth on /attractions at 320x568",
+        "The mobile-responsive suite goes fully green — this is the last remaining failure",
+        "Check the view-mode toggle group in the attractions header. The probe surfaced a rounded bg-white/20 flex container holding two 44px buttons, but they sit inside a clipped ancestor, so the true culprit needs devtools rather than a guess"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "MEASURED 2026-07-18 (claude/prd-loop-schema-gaps) on the production build. /attractions at 320x568 reports scrollWidth=321 against clientWidth=320 — exactly 1px. Every other audited route and viewport is clean. SEVERITY 3 and deliberately NOT fixed: 1px is not user-visible, and the elements the probe surfaced report right edges of 328-374 while the document overflows by only 1px. That means they sit inside a clipped or scrollable ancestor and are not necessarily the cause. Guessing at a 1px fix from that evidence is how a working layout gets broken. Needs a devtools session at a 320px viewport. CONTEXT: this was the ONLY genuine failure among 105 mobile-responsive tests. The other three were false positives in the content-fits-viewport test, which counted horizontal-carousel children as overflow — at 375px it reported 24 overflowing elements on /, 64 on /events and 67 on /restaurants, while documentElement.scrollWidth was exactly 375 on all three. That test was rewritten in ca03f45d and the suite now sits at 104 passed / 1 failed."
+    },
+    {
+      "id": "WEB-UX-032",
+      "title": "Shared Checkbox renders a 20x20px hit area, below every touch-target guideline",
+      "description": "As a touch user, I need checkboxes big enough to tap reliably, because the shared component renders a 20x20px target and 46% of buttons on /advertise fall below the 44x44 recommendation as a result.",
+      "acceptanceCriteria": [
+        "Decide the target: WCAG 2.2 AA (2.5.8) requires 24x24 minimum; 44x44 is the Apple/Android and WCAG AAA recommendation this suite checks against",
+        "Enlarge the hit area in src/components/ui/checkbox.tsx — padding or a wrapper can expand the target WITHOUT changing the visual box size, which avoids a site-wide visual change",
+        "Audit other small controls at the same time (radio, switch, icon-only buttons) rather than fixing checkbox alone",
+        "links-and-buttons touch-target test on /advertise goes green — it is the last remaining failure in that suite"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "MEASURED 2026-07-18 (claude/prd-loop-schema-gaps). The five ad-placement checkboxes on /advertise render at 20x20px (Tailwind h-4 w-4 plus border). The links-and-buttons touch-target test allows 20% of buttons under 44x44 and measured 46%. NOT FIXED HERE, deliberately: these are instances of the shared shadcn ui/checkbox, so resizing changes every checkbox in the product. That is a design-system decision with visual consequences across admin forms, filters and settings — not something to change from a test failure. The low-risk path is expanding the HIT AREA via padding while keeping the drawn box at 16px, which satisfies the guideline without a visual redesign. RELATED AND ALREADY FIXED (e4b65fcc): the same five checkboxes had no accessible name at all — no id, aria-label, aria-labelledby or associated label — so a screen reader announced them as bare \"checkbox\". They are now associated with their visible h3 via aria-labelledby. Size is the remaining half of the problem. | SCOPE WIDER THAN CHECKBOX (2026-07-18): the forms suite independently measures 76.9% of form controls on /auth below the 44px touch-target height, against a 30% threshold. So this is not one component — inputs, selects and buttons in the shared ui/ set are all built at default shadcn sizing (h-9/h-10 = 36-40px), which is under 44 and, for the 20x20 checkbox, under even the WCAG 2.2 AA minimum of 24x24. Treat this as a single design-system pass over ui/input, ui/select, ui/button, ui/checkbox, ui/radio and ui/switch rather than per-page patches, and re-run both tests/forms.spec.ts and tests/links-and-buttons.spec.ts as the check. It is now the ONLY remaining failure in each of those suites."
+    },
+    {
+      "id": "WEB-OPS-020",
+      "title": "A failed prerender exits 0, so a deploy can silently ship zero prerendered routes",
+      "description": "As the platform owner, I need a prerender failure to be visible, because the step catches every error and exits 0 — a build that prerenders none of its 31 routes reports success and deploys.",
+      "acceptanceCriteria": [
+        "Decide the failure policy. The current never-fail behaviour is documented and deliberate (\"worst case is same as before\"), but it means the entire SEO mechanism can vanish without a signal",
+        "At minimum: if fewer than N routes are written, exit non-zero or fail the deploy. Shipping 1 of 31 should not look identical to shipping 31 of 31",
+        "The internal static server binds a fixed port (4178). Bind port 0 and read back the assigned port, so a leftover process cannot take the build down",
+        "Have the build assert the expected route count against the ROUTES list rather than trusting the log line",
+        "Consider surfacing the count in CI output so a drop is visible in the deploy log"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 (claude/prd-loop-schema-gaps) by accident, which is the point. A leftover process from an earlier run still held port 4178, so the prerenderer failed with EADDRINUSE. It logged, exited 0, and `npm run build` reported success — while writing ONE index.html instead of 31. Every prerendered landing page, all the JSON-LD, and the SEO fixes from WEB-SEO-002/003 were simply absent from the output, and nothing said so. I only noticed because a test failure did not match a probe, and chasing that discrepancy led to dist/events/index.html not existing. Had I not been comparing two measurements, I would have drawn conclusions from a silently broken build — and in fact briefly did. THE FAILURE MODE IS NOT HYPOTHETICAL IN CI: Chromium unavailable on the runner, a port already bound, an OOM on a large route, or a route timing out all take the same path. scripts/prerender.mjs:11-14 states plainly \"SAFETY: this NEVER fails the build. Any error is logged and we exit 0\". That was a reasonable choice when prerendering was a bonus; it is the wrong default now that PROD-SEO-001 depends on it and canonical/JSON-LD correctness lives there. SAME PATTERN as the rest of this audit: a step that errors, continues, and reports success. See WEB-SEO-003 (sitemap generator ships stale data on failure), WEB-CI-020 (red unit lane), WEB-CI-021 (a11y suite under continue-on-error), WEB-BE-030 (idempotency guard that cannot fire). This one is arguably the most consequential because it silently removes an entire subsystem from the deploy artifact."
+    },
+    {
+      "id": "WEB-PERF-024",
+      "title": "Events list made 113 REST requests for 40 cards; batch query was defeated by a first-render race",
+      "description": "As a visitor, I need the events list to fetch social data once rather than per card, because a race between the batch query and first render made every card issue its own three requests.",
+      "acceptanceCriteria": [
+        "FIXED in commit 917e7861: forward the batch query isPending into SocialEventCard so it can distinguish batch-not-yet-arrived from batch-has-nothing, and skip the individual fetch while pending",
+        "Verify on a production build: /events should issue ~14 REST requests for 40 cards, not 113",
+        "Audit the same shape elsewhere — any list that pairs a batch hook with a per-item fallback keyed only on data presence has this race",
+        "Consider whether event_attendees / event_discussions should be queried at all while both tables are empty in production"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "MEASURED 2026-07-18 (claude/prd-loop-schema-gaps) on the production build with no user interaction. /events: 40 cards, 113 REST requests — event_attendees=34, event_discussions=34, event_live_stats=34, i.e. three per card. /restaurants for comparison: 42 cards, 11 requests total. EVERY PIECE LOOKED CORRECT, which is why this survived. EventsPage already called useBatchEventSocial(eventIds); SocialEventCard already disabled its per-event fetch with useEventSocial(socialData ? \"\" : event.id); useEventSocial already early-returns on a falsy id. The batching was implemented and wired. The defect is purely timing: batchSocialData comes from useQuery and is undefined until it resolves, so on FIRST RENDER every card sees no batch data and takes the fallback. By the time the batch lands, 100+ requests are already in flight. AFTER THE FIX: 14 requests for the same 40 cards, one each to the three social tables. WORTH KNOWING: event_attendees and event_discussions are both EMPTY in production (0 rows), so those 102 extra round trips were retrieving nothing. That made the fix risk-free — no social affordance could render either way — but it also means the events list has been paying a per-card network cost for a feature with no data behind it. See WEB-QA-022 for the related question of which event-social implementation is real. HOW IT WAS FOUND: chasing a failing debounce test. The test was a false positive (it counted event card IMAGES as search requests), but classifying the real traffic to disprove it is what exposed the fan-out. passes stays false pending a production re-measure after deploy."
+    },
+    {
+      "id": "WEB-PERF-025",
+      "title": "get_active_ads fails on every page load and is retried 3x per placement",
+      "description": "As the platform owner, I need ad serving to make one working call per placement, because every page issues six get_active_ads requests and all six currently return HTTP 300.",
+      "acceptanceCriteria": [
+        "Apply migration 20260718000001 so the RPC stops returning PGRST203 (see WEB-QA-020). That alone takes the homepage from 6 failing calls to 2 succeeding ones",
+        "Consider treating 3xx as non-retryable in shouldRetry (src/lib/queryConfig.ts). A PostgREST 300 means \"could not choose the best candidate function\" — a permanent schema condition that will never resolve by waiting, yet the current policy retries it because the guard only excludes 4xx",
+        "Re-measure after the migration: expect 2 calls returning 200 on the homepage, not 6 returning 300"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "MEASURED 2026-07-18 (claude/prd-loop-schema-gaps) on a production build. Every list page and the homepage issue exactly 6 get_active_ads calls, and every response status was 300 (PGRST203, the ambiguous overload). Confirmed on /events, /restaurants, /attractions and /. So this is two problems stacked: the RPC is broken for everyone (WEB-QA-020, one command to fix), AND it is being called twice as many times as there are placements. The second is worth fixing regardless — once the migration lands, six working calls per page view is six round trips where three would do, on every page, for every visitor. Severity 3 because the failing calls degrade gracefully to the house-ad fallback and cost only latency today. It becomes a real revenue-path concern the moment ads work again. | DIAGNOSIS CORRECTED 2026-07-19. I originally wrote that six calls meant each placement was being requested twice and recommended deduplication. THAT WAS WRONG, and inspecting the request payloads disproved it. There are only TWO distinct placements on the homepage (top_banner, below_fold) and each is requested exactly THREE times. React-query deduplicates by queryKey, so identical keys cannot produce parallel requests — three attempts per key is RETRY behaviour. Root cause: src/lib/queryConfig.ts shouldRetry() declines to retry 4xx (except 408/429) but PGRST203 surfaces as HTTP 300, which is not >= 400, so it falls through to the retryable branch and burns MAX_RETRIES on a permanent condition. CONSEQUENCE FOR THE FIX: there is no dedup work to do. Applying 20260718000001 takes this from 6 failing calls to 2 succeeding ones by itself. The only optional hardening is excluding 3xx from retry, which matters mainly for how loudly the next such failure fails. I am recording the error rather than quietly editing it because the original wording would have sent someone hunting for a duplicate-render bug that does not exist. | RETRY HALF FIXED 2026-07-19 (commit 8ae1a8ab), MEASURED. Root cause was NOT the 3xx status range — that was my second wrong guess. Supabase Postgrest errors carry NO http status at all; they arrive as { code, message, details, hint }, so a status-based guard could never match them however the ranges were tuned. I only found this because widening the guard to 3xx passed its unit tests and then changed nothing in a real page load. Added isPermanentDataError (PGRST* codes and Postgres class-42 SQLSTATEs), checked before status, deliberately excluding connection classes 08xxx/53xxx which do resolve by waiting. Measured before -> after: / 6->2 ad calls and 31->25 total REST, /events 6->2 and 14->10, /restaurants 6->2 and 11->7. The extra drop beyond ads is other schema-error retries disappearing for the same reason. REMAINING: the calls still FAIL (2 per page instead of 6) until migration 20260718000001 is applied — this change only stops multiplying the failure. passes stays false until then."
     }
   ]
 }

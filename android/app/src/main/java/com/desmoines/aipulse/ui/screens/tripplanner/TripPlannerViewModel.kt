@@ -31,6 +31,8 @@ data class TripPlannerUiState(
     val interests: Set<String> = emptySet(),
     val groupSize: Int = 2,
     val hasChildren: Boolean = false,
+    val accessibilityNeeds: Set<String> = emptySet(),
+    val dietaryRestrictions: Set<String> = emptySet(),
     val budget: TripBudget = TripBudget.ANY,
     val pace: TripPace = TripPace.MODERATE,
     val isGenerating: Boolean = false,
@@ -74,6 +76,8 @@ class TripPlannerViewModel @Inject constructor(
     val uiState: StateFlow<TripPlannerUiState> = _uiState.asStateFlow()
 
     val allInterests = com.desmoines.aipulse.data.model.TRIP_INTERESTS
+    val allAccessibilityNeeds = com.desmoines.aipulse.data.model.TRIP_ACCESSIBILITY_NEEDS
+    val allDietaryRestrictions = com.desmoines.aipulse.data.model.TRIP_DIETARY_RESTRICTIONS
 
     init {
         recomputeDates()
@@ -99,6 +103,28 @@ class TripPlannerViewModel @Inject constructor(
         _uiState.update {
             val next = if (interest in it.interests) it.interests - interest else it.interests + interest
             it.copy(interests = next)
+        }
+    }
+
+    fun toggleAccessibilityNeed(need: String) {
+        _uiState.update {
+            val next = if (need in it.accessibilityNeeds) {
+                it.accessibilityNeeds - need
+            } else {
+                it.accessibilityNeeds + need
+            }
+            it.copy(accessibilityNeeds = next)
+        }
+    }
+
+    fun toggleDietaryRestriction(restriction: String) {
+        _uiState.update {
+            val next = if (restriction in it.dietaryRestrictions) {
+                it.dietaryRestrictions - restriction
+            } else {
+                it.dietaryRestrictions + restriction
+            }
+            it.copy(dietaryRestrictions = next)
         }
     }
 
@@ -149,6 +175,8 @@ class TripPlannerViewModel @Inject constructor(
                 pace = state.pace.value,
                 groupSize = state.groupSize,
                 hasChildren = state.hasChildren,
+                accessibilityNeeds = state.accessibilityNeeds.toList(),
+                dietaryRestrictions = state.dietaryRestrictions.toList(),
             )
             repository.generate(state.startDate, state.endDate, prefs)
                 .onSuccess { plan ->

@@ -18,6 +18,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import { stripInjectedPreloads, restoreAsyncFontLinks } from './lazy-preload-patterns.mjs';
 import process from 'node:process';
 
 const DIST = path.resolve('dist');
@@ -97,6 +98,10 @@ async function main() {
   // Cache the original SPA shell ONCE so per-route writes can't affect the
   // fallback we serve while rendering other routes.
   const indexHtml = fs.readFileSync(indexPath);
+  // Vite-built HTML, captured before any prerender write. The set of
+  // modulepreload links IN here is the ground truth for what should be
+  // preloaded; anything the browser adds on top is a lazy chunk.
+  const buildHtml = indexHtml.toString("utf8");
 
   let puppeteer;
   try {
@@ -146,6 +151,8 @@ async function main() {
 
   let ok = 0;
   let failed = 0;
+  let strippedTotal = 0;
+  let restoredFontsTotal = 0;
   for (const route of ROUTES) {
     const page = await browser.newPage();
     try {
@@ -168,7 +175,24 @@ async function main() {
       // Let Helmet flush the <head> and any remaining render settle.
       await new Promise((r) => setTimeout(r, 600));
 
-      const html = await page.content();
+      const captured = await page.content();
+
+      // Chromium ran the app, so Vite's runtime __vitePreload helper injected
+      // modulepreload links for every lazy chunk that rendered. Serializing the
+      // DOM bakes those into the shipped HTML, turning lazy chunks back into
+      // eager first-paint downloads (~440KB gzipped of 3D engine, editor,
+      // Recharts and D3 on the homepage). Strip them back out — the build
+      // plugin already removed the build-time copies, and this removes the
+      // runtime-injected ones. See scripts/lazy-preload-patterns.mjs.
+      const [dePreloaded, strippedPreloads] = stripInjectedPreloads(captured, buildHtml);
+      // Chromium already fired the font link's onload, flipping rel to
+      // "stylesheet" in the live DOM. Serializing that makes the shipped HTML
+      // render-block on fonts.googleapis.com. Put it back to preload.
+      const [html, restoredFonts] = restoreAsyncFontLinks(dePreloaded);
+      if (restoredFonts > 0) restoredFontsTotal += restoredFonts;
+      if (strippedPreloads > 0) {
+        strippedTotal += strippedPreloads;
+      }
       // Sanity: only write if we captured a real document with our root.
       if (!html || !html.includes('<div id="root"')) {
         throw new Error('captured HTML missing #root');
@@ -188,7 +212,7 @@ async function main() {
 
   await browser.close().catch(() => {});
   server.close();
-  console.log(`[prerender] done: ${ok} prerendered, ${failed} skipped, of ${ROUTES.length} routes`);
+  console.log(`[prerender] done: ${ok} prerendered, ${failed} skipped, of ${ROUTES.length} routes; stripped ${strippedTotal} runtime-injected modulepreload link(s); restored ${restoredFontsTotal} async font link(s)`);
 }
 
 main()

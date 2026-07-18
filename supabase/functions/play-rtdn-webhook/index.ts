@@ -536,11 +536,27 @@ serve(async (req) => {
   // -------------------------------------------------------------------------
   // 3. Idempotency — short-circuit if we've already processed this messageId
   // -------------------------------------------------------------------------
-  const { data: existingLog } = await supabase
+  // The error is captured, not discarded. Destructuring only `{ data }` here
+  // made a failing lookup indistinguishable from "no prior row", so the
+  // duplicate check silently passed and every retry was reprocessed. Play uses
+  // at-least-once delivery, so that path is exercised in normal operation, not
+  // only in incidents. Mirrors appstore-server-notifications-v2, which already
+  // captures and logs its lookup error (WEB-BE-030).
+  const { data: existingLog, error: logLookupError } = await supabase
     .from('play_rtdn_log')
     .select('id, processed_at')
     .eq('message_id', messageId)
     .maybeSingle();
+
+  if (logLookupError) {
+    // Deliberately NOT fatal: the subscription state update below is the part
+    // that matters, and refusing the notification would make Play retry it
+    // forever. But it must be loud — a permanently broken idempotency guard
+    // that logs nothing looks exactly like one that is working.
+    console.error(
+      `play_rtdn_log lookup failed (idempotency DISABLED for message_id=${messageId}): ${logLookupError.message}`,
+    );
+  }
 
   if (existingLog) {
     console.log(`Duplicate Pub/Sub message_id=${messageId}, already processed at ${existingLog.processed_at}`);

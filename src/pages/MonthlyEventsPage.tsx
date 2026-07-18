@@ -50,7 +50,10 @@ export default function MonthlyEventsPage() {
         .gte("date", format(monthStart, "yyyy-MM-dd"))
         .lte("date", format(monthEnd, "yyyy-MM-dd"))
         .order("date", { ascending: true })
-        .order("time", { ascending: true });
+        // `time` is not a column on public.events; ordering by it made PostgREST
+        // reject the query with 42703 and the month grid rendered empty.
+        // event_start_local is the intended intra-day ordering key.
+        .order("event_start_local", { ascending: true, nullsFirst: false });
 
       if (error) throw error;
       return data || [];

@@ -5,6 +5,14 @@ import { createLogger } from '@/lib/logger';
 const log = createLogger('useAnalytics');
 const ENABLE_DIRECT_CONTENT_METRICS = false;
 
+/**
+ * Ceiling on the in-memory analytics queue when flushes are failing. Prevents a
+ * backend outage from growing the queue unboundedly in a long-lived tab; the
+ * oldest events are dropped first, since stale analytics matter less than the
+ * page staying responsive.
+ */
+const MAX_QUEUED_EVENTS = 500;
+
 interface AnalyticsData {
   sessionId: string;
   userId?: string;
@@ -129,8 +137,11 @@ export function useAnalytics() {
   const flushEventQueue = useCallback(async () => {
     if (eventQueue.current.length === 0) return;
 
+    // Hoisted out of the try so the catch can actually re-queue what failed.
+    // While it was scoped inside, the error path could not see it (see below).
+    const eventsToFlush = [...eventQueue.current];
+
     try {
-      const eventsToFlush = [...eventQueue.current];
       eventQueue.current = []; // Clear queue
 
       // Try to insert to enhanced analytics table (graceful fallback if table doesn't exist yet)
@@ -185,8 +196,22 @@ export function useAnalytics() {
       }
     } catch (error) {
       log.error('flushEventQueue', 'Error flushing analytics queue', { error });
-      // If flush fails, keep events in queue for next attempt
-      eventQueue.current = [...eventQueue.current, ...eventQueue.current];
+      // Re-queue the events that actually failed, ahead of anything enqueued
+      // while the flush was in flight.
+      //
+      // This previously read `[...eventQueue.current, ...eventQueue.current]`,
+      // which did the opposite of its comment: eventsToFlush had already been
+      // cleared from the queue and was out of scope here, so the failed events
+      // were LOST while whatever arrived during the flush was DUPLICATED — and
+      // duplicated again on every subsequent failure, doubling the queue each
+      // time. A backend outage therefore produced exponential memory growth and
+      // inflated counts for the events that survived.
+      //
+      // Bounded so a persistent outage cannot grow the queue without limit;
+      // dropping the oldest analytics events is strictly better than pinning
+      // the tab's memory.
+      const requeued = [...eventsToFlush, ...eventQueue.current];
+      eventQueue.current = requeued.slice(-MAX_QUEUED_EVENTS);
     }
   }, []);
 

@@ -105,25 +105,35 @@ test.describe('Button Testing - Functionality and Feedback', () => {
     test(`should have clickable buttons with proper feedback on ${path}`, async ({ page }) => {
       await page.goto(path, { waitUntil: 'networkidle' });
 
-      const buttons = await getAllButtons(page);
+      // Evaluate in the page so each button is checked directly, rather than
+      // reconstructing a selector from an index.
+      //
+      // The previous version built `button:nth-of-type(N)` from the button's
+      // position in a flat list. nth-of-type counts position WITHIN A PARENT,
+      // not within the document, so that selector did not address the intended
+      // button at all — it matched some other element (usually one with no
+      // text, hence failures reading `Button "" should have cursor pointer`).
+      // 16 of this suite's tests failed that way. Auditing the real buttons on
+      // the same pages: /advertise 11 visible, /articles 28, /guides 17, and
+      // ZERO of them lacked cursor:pointer. Every one of those failures was a
+      // false positive against correct markup.
+      const offenders = await page.evaluate(() => {
+        const all = [...document.querySelectorAll('button, [role="button"], a.button, .btn')] as HTMLElement[];
+        return all
+          .filter((el) => el.offsetParent !== null) // visible
+          .filter((el) => !(el as HTMLButtonElement).disabled && el.getAttribute('aria-disabled') !== 'true')
+          .slice(0, 10)
+          .filter((el) => {
+            const styles = window.getComputedStyle(el);
+            return styles.cursor !== 'pointer' && !el.classList.toString().includes('cursor-pointer');
+          })
+          .map((el) => `"${(el.textContent || '').trim().slice(0, 30)}" (${el.tagName}.${el.className.slice(0, 40)})`);
+      });
 
-      for (const button of buttons.slice(0, 10)) { // Test first 10 buttons per page
-        if (button.disabled) continue;
-
-        const selector = `button:nth-of-type(${button.index + 1}), [role="button"]:nth-of-type(${button.index + 1})`;
-
-        // Check if button is clickable
-        const element = page.locator(selector).first();
-        await expect(element).toBeVisible({ timeout: 5000 }).catch(() => {});
-
-        // Check for visual feedback styles
-        const hasHoverState = await element.evaluate((el) => {
-          const styles = window.getComputedStyle(el);
-          return styles.cursor === 'pointer' || el.classList.toString().includes('cursor-pointer');
-        }).catch(() => false);
-
-        expect(hasHoverState, `Button "${button.text}" should have cursor pointer`).toBeTruthy();
-      }
+      expect(
+        offenders,
+        `Buttons without cursor:pointer on ${path}:\n  ${offenders.join('\n  ')}`
+      ).toEqual([]);
     });
 
     test(`should have properly sized buttons for touch targets on ${path}`, async ({ page }) => {

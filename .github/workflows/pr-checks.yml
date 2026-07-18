@@ -55,6 +55,16 @@ jobs:
       - name: Check import/export integrity
         run: npm run check-imports
 
+      # Supabase schema-usage ratchet (WEB-QA-017). A query naming a table,
+      # column, or RPC that does not exist is not a type error — it 400s at
+      # runtime, the hook catches, and the UI renders an empty state, so the
+      # feature silently does nothing. A single stale column took the homepage
+      # events feed to zero rows in production. Known findings are frozen in
+      # schema-baseline.json; this fails only on NEW ones. The baseline must
+      # only ever shrink.
+      - name: Check Supabase schema usage
+        run: npm run check-schema
+
       # strictNullChecks migration ratchet (WEB-CI-007). The strict project
       # cannot pass yet (~88 real errors), so this does not gate on zero — it
       # fails only if a file gets WORSE or a new file starts erroring. Baseline
