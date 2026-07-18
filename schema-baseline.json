@@ -1,6 +1,6 @@
 {
   "$comment": "Known unresolvable Supabase references, frozen by scripts/check-schema-usage.mjs --update. This list must only ever SHRINK. Each entry is a feature that silently does nothing in production.",
-  "generated": 175,
+  "generated": 169,
   "findings": [
     "column|src/components/cms/ContentQueue.tsx|content_queue.priority",
     "column|src/hooks/useAdminCampaigns.ts|profiles.full_name",
@@ -15,12 +15,6 @@
     "column|src/hooks/useCrmActivities.ts|crm_activities.performed_by",
     "column|src/hooks/useCrmContacts.ts|crm_activities.contact_id",
     "column|src/hooks/useCrmDashboard.ts|crm_activities.performed_at",
-    "column|src/pages/DiscoverMap.tsx|attractions.category",
-    "column|src/pages/DiscoverMap.tsx|events.description",
-    "column|src/pages/EventsByLocation.tsx|events.status",
-    "column|src/pages/EventsByLocation.tsx|events.time",
-    "column|src/pages/MonthlyEventsPage.tsx|events.time",
-    "column|src/pseo/components/sections/PseoLiveListings.tsx|events.description",
     "rpc|src/components/auth/SessionManagementDashboard.tsx|revoke_all_other_sessions",
     "rpc|src/components/auth/SessionManagementDashboard.tsx|revoke_session",
     "rpc|src/hooks/useActiveAds.ts|get_active_ads",

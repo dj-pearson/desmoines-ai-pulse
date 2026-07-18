@@ -170,7 +170,10 @@ async function fetchListings(
   if (entityType === 'events') {
     let query = supabase
       .from('events')
-      .select('id, title, description, location, date, price, category, image_url')
+      // public.events has no `description` (enhanced_description /
+      // original_description instead). Selecting it failed the whole query with
+      // 42703, so every pSEO event landing page rendered an empty listing block.
+      .select('id, title, enhanced_description, original_description, location, date, price, category, image_url')
       .gte('date', new Date().toISOString())
       .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
       .order('date', { ascending: true })
@@ -187,7 +190,7 @@ async function fetchListings(
     return (data ?? []).map((e) => ({
       id: e.id,
       name: e.title,
-      description: e.description ?? undefined,
+      description: e.enhanced_description ?? e.original_description ?? undefined,
       location: e.location ?? undefined,
       date: e.date ?? undefined,
       price: e.price ?? undefined,

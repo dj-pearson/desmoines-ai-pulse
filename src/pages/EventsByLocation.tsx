@@ -108,7 +108,11 @@ export default function EventsByLocation() {
         
         const { data, error } = await supabase
           .from("events")
-          .select("id, title, date, time, location, venue, price, category, enhanced_description, original_description, image_url, event_start_utc, status, city")
+          // NOTE: `time` and `status` are not columns on public.events (see the
+          // warning on EVENT_LIST_COLUMNS in src/lib/listColumns.ts). Naming them
+          // made PostgREST reject the whole projection with 42703, so this page
+          // rendered zero events on every load. Neither field was read downstream.
+          .select("id, title, date, location, venue, price, category, enhanced_description, original_description, image_url, event_start_utc, city")
           .gte("date", today)
           .order("date", { ascending: true });
         
