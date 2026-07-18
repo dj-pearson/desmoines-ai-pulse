@@ -18,7 +18,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
-import { stripLazyPreloads, restoreAsyncFontLinks } from './lazy-preload-patterns.mjs';
+import { stripInjectedPreloads, restoreAsyncFontLinks } from './lazy-preload-patterns.mjs';
 import process from 'node:process';
 
 const DIST = path.resolve('dist');
@@ -98,6 +98,10 @@ async function main() {
   // Cache the original SPA shell ONCE so per-route writes can't affect the
   // fallback we serve while rendering other routes.
   const indexHtml = fs.readFileSync(indexPath);
+  // Vite-built HTML, captured before any prerender write. The set of
+  // modulepreload links IN here is the ground truth for what should be
+  // preloaded; anything the browser adds on top is a lazy chunk.
+  const buildHtml = indexHtml.toString("utf8");
 
   let puppeteer;
   try {
@@ -180,7 +184,7 @@ async function main() {
       // Recharts and D3 on the homepage). Strip them back out — the build
       // plugin already removed the build-time copies, and this removes the
       // runtime-injected ones. See scripts/lazy-preload-patterns.mjs.
-      const [dePreloaded, strippedPreloads] = stripLazyPreloads(captured);
+      const [dePreloaded, strippedPreloads] = stripInjectedPreloads(captured, buildHtml);
       // Chromium already fired the font link's onload, flipping rel to
       // "stylesheet" in the live DOM. Serializing that makes the shipped HTML
       // render-block on fonts.googleapis.com. Put it back to preload.

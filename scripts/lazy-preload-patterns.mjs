@@ -52,6 +52,44 @@ export function stripLazyPreloads(html) {
 }
 
 /**
+ * Strip EVERY modulepreload the prerenderer added that Vite did not emit.
+ *
+ * This supersedes the named-chunk allowlist above for the general case. That
+ * list was written for the handful of heavy vendor chunks somebody noticed;
+ * diffing the Vite-built HTML against the prerendered HTML showed ~30 MORE
+ * runtime-injected preloads (route chunks, admin dashboards, search, calendar)
+ * that the allowlist never covered. Maintaining a name list means re-finding
+ * this bug every time a chunk is added.
+ *
+ * The invariant is simple and does not need maintenance: Vite emits preloads
+ * for the entry's static import graph at build time. Anything appearing ONLY
+ * after Chromium ran the page was injected by the __vitePreload runtime helper
+ * for a chunk that is, by definition, lazily loaded. Preloading it in the
+ * initial HTML is exactly backwards.
+ *
+ * @param html      serialized DOM from the prerenderer
+ * @param buildHtml the Vite-built index.html, before prerendering
+ */
+export function stripInjectedPreloads(html, buildHtml) {
+  const hrefsIn = (src) =>
+    new Set(
+      [...src.matchAll(/<link[^>]*rel="modulepreload"[^>]*href="([^"]+)"[^>]*>/g)].map((m) => m[1]),
+    );
+
+  const emitted = hrefsIn(buildHtml);
+  let count = 0;
+
+  const out = html.replace(/<link[^>]*rel="modulepreload"[^>]*>\s*/g, (tag) => {
+    const href = tag.match(/href="([^"]+)"/)?.[1];
+    if (href && emitted.has(href)) return tag; // Vite put it there; keep it.
+    count++;
+    return '';
+  });
+
+  return [out, count];
+}
+
+/**
  * Undo the font stylesheet's own onload mutation.
  *
  * index.html ships the correct async-CSS pattern:
