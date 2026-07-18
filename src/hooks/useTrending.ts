@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { STALE_TIME, GC_TIME, shouldRetry } from '@/lib/queryConfig';
 import { supabase } from '@/integrations/supabase/client';
 import { EVENT_LIST_COLUMNS, RESTAURANT_LIST_COLUMNS, ATTRACTION_LIST_COLUMNS } from '@/lib/listColumns';
 
@@ -27,25 +28,25 @@ interface FallbackConfig {
   fallbackSeed: number; // For consistent "fake" trending
 }
 
+const EMPTY_TRENDING: TrendingData = {
+  events: [],
+  restaurants: [],
+  attractions: [],
+  playgrounds: []
+};
+
+/** What the trending query resolves to. */
+interface TrendingQueryResult {
+  trending: TrendingData;
+  hasRealData: boolean;
+}
+
 export function useTrending(config: FallbackConfig = { useRealData: true, minItemsRequired: 3, fallbackSeed: 42 }) {
-  const [trending, setTrending] = useState<TrendingData>({
-    events: [],
-    restaurants: [],
-    attractions: [],
-    playgrounds: []
-  });
-  const [isLoading, setIsLoading] = useState(true);
-  const [hasRealData, setHasRealData] = useState(false);
-
-  useEffect(() => {
-    fetchTrendingData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const fetchTrendingData = async () => {
+  // queryFn stays an inline closure because the helpers below (enrich/fallback/
+  // group) are defined in hook scope; hoisting them out would be a much larger
+  // change for no behavioural gain (WEB-PERF-013).
+  const fetchTrendingData = async (): Promise<TrendingQueryResult> => {
     try {
-      setIsLoading(true);
-
       if (config.useRealData) {
         // Fetch real trending data
         const { data: trendingScores } = await supabase
@@ -65,27 +66,20 @@ export function useTrending(config: FallbackConfig = { useRealData: true, minIte
           const totalItems = Object.values(groupedTrending).reduce((sum, items) => sum + items.length, 0);
           
           if (totalItems >= config.minItemsRequired) {
-            setTrending(groupedTrending);
-            setHasRealData(true);
-            setIsLoading(false);
-            return;
+            return { trending: groupedTrending, hasRealData: true };
           }
         }
       }
 
       // Fallback: Generate smart trending based on featured/recent content
-      const fallbackTrending = await generateFallbackTrending();
-      setTrending(fallbackTrending);
-      setHasRealData(false);
-      
+      return { trending: await generateFallbackTrending(), hasRealData: false };
     } catch (error) {
-      console.error('Error fetching trending data:', error);
-      // Generate fallback trending on error
-      const fallbackTrending = await generateFallbackTrending();
-      setTrending(fallbackTrending);
-      setHasRealData(false);
-    } finally {
-      setIsLoading(false);
+      // Trending is a nice-to-have surface: fall back rather than surfacing an
+      // error state, but keep the reason visible in dev.
+      if (import.meta.env.DEV) {
+        console.error('Error fetching trending data:', error);
+      }
+      return { trending: await generateFallbackTrending(), hasRealData: false };
     }
   };
 
@@ -290,10 +284,20 @@ export function useTrending(config: FallbackConfig = { useRealData: true, minIte
     } as TrendingData);
   };
 
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['trending', config.useRealData, config.minItemsRequired, config.fallbackSeed],
+    queryFn: fetchTrendingData,
+    // Trending is a fast-moving signal, but not per-request fresh.
+    staleTime: STALE_TIME.SHORT,
+    gcTime: GC_TIME,
+    retry: shouldRetry,
+  });
+
+  // Public shape preserved exactly for existing consumers.
   return {
-    trending,
+    trending: data?.trending ?? EMPTY_TRENDING,
     isLoading,
-    hasRealData,
-    refetch: fetchTrendingData
+    hasRealData: data?.hasRealData ?? false,
+    refetch
   };
 }
