@@ -137,10 +137,18 @@ Deno.test('split_legacy_mixed_platform_subs migration is idempotent', async () =
       import.meta.url,
     ),
   );
-  // The INSERT must guard against re-creating the web row
+  // The INSERT must guard against re-creating the web row.
+  //
+  // Matches WHERE or AND before NOT EXISTS. The migration expresses the guard
+  // as `AND NOT EXISTS (...)` inside a compound WHERE clause, which is exactly
+  // as idempotent as a bare `WHERE NOT EXISTS`, but the previous regex demanded
+  // the literal "WHERE NOT EXISTS" and so failed on correct SQL. That made this
+  // suite — the only edge-function suite wired into CI — permanently red on a
+  // false positive, which is worse than a real failure: it teaches everyone to
+  // ignore the lane.
   assert(
-    /WHERE NOT EXISTS \(\s*SELECT 1[\s\S]*platform = 'web'\s*\)/.test(source),
-    'split migration must guard the web-row INSERT with WHERE NOT EXISTS',
+    /\b(?:WHERE|AND)\s+NOT\s+EXISTS\s*\(\s*SELECT\s+1[\s\S]*?platform\s*=\s*'web'/i.test(source),
+    'split migration must guard the web-row INSERT with a NOT EXISTS subquery',
   );
   // The audit insert must use ON CONFLICT DO NOTHING
   assert(
