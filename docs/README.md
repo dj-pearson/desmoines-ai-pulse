@@ -113,6 +113,7 @@ Everything below was consolidated from the repo root into topic folders (see WEB
 - [HOW_TO_RUN_TESTS.md](./testing/HOW_TO_RUN_TESTS.md)
 - [QUICK_TEST_COMMANDS.md](./testing/QUICK_TEST_COMMANDS.md)
 - [TESTING_QUICK_START.md](./testing/TESTING_QUICK_START.md)
+- [E2E_TRIAGE.md](./E2E_TRIAGE.md) — the two-lane CI model (required smoke vs. quarantined broad suites), current pass rates, and what is still failing
 - [TEST_FAILURES_REPORT.md](./testing/TEST_FAILURES_REPORT.md)
 - [TEST_FIXES_PROGRESS.md](./testing/TEST_FIXES_PROGRESS.md)
 - [TEST_FIXES_SUMMARY.md](./testing/TEST_FIXES_SUMMARY.md)
