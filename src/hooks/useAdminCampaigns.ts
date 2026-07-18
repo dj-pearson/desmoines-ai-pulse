@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "./use-toast";
 import { Campaign, CampaignCreative } from "./useCampaigns";
 import { createLogger } from '@/lib/logger';
-import { notifyAdmins, notifyAdvertiser } from "./useCampaignNotifications";
+import { notifyAdvertiser } from "./useCampaignNotifications";
 
 const log = createLogger('useAdminCampaigns');
 
@@ -17,6 +17,18 @@ export interface AdminCampaignFilters {
 export interface CampaignWithUser extends Campaign {
   user_email?: string;
   user_name?: string;
+}
+
+/**
+ * Compose a display name from the profile's separate name columns.
+ * Returns undefined rather than an empty string when neither is set, so
+ * callers can fall back to the email instead of rendering a blank owner.
+ */
+function formatProfileName(
+  profile: { first_name?: string | null; last_name?: string | null } | null | undefined
+): string | undefined {
+  const name = [profile?.first_name, profile?.last_name].filter(Boolean).join(" ").trim();
+  return name || undefined;
 }
 
 export function useAdminCampaigns() {
@@ -65,16 +77,19 @@ export function useAdminCampaigns() {
       // Fetch user emails for each campaign
       const campaignsWithUsers = await Promise.all(
         (data || []).map(async (campaign) => {
+          // `profiles` has no `full_name`; it stores first_name/last_name.
+          // Selecting it failed with 42703, so no campaign ever resolved an
+          // owner email or name in the admin list.
           const { data: userData } = await supabase
             .from("profiles")
-            .select("email, full_name")
+            .select("email, first_name, last_name")
             .eq("id", campaign.user_id)
             .single();
 
           return {
             ...campaign,
             user_email: userData?.email,
-            user_name: userData?.full_name,
+            user_name: formatProfileName(userData),
           };
         })
       );
@@ -106,14 +121,14 @@ export function useAdminCampaigns() {
       // Fetch user info
       const { data: userData } = await supabase
         .from("profiles")
-        .select("email, full_name")
+        .select("email, first_name, last_name")
         .eq("id", data.user_id)
         .single();
 
       return {
         ...data,
         user_email: userData?.email,
-        user_name: userData?.full_name,
+        user_name: formatProfileName(userData),
       };
     } catch (err) {
       log.error('getCampaignById', 'Error fetching campaign', { error: err });
