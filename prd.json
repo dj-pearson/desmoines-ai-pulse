@@ -5948,6 +5948,35 @@
       "priority": 3,
       "passes": false,
       "notes": "FOUND 2026-07-18 (claude/prd-loop-schema-gaps) while auditing sitemap contents. Every `npm run generate-sitemaps` run prints \"Error fetching guides: relation public.guides does not exist\" (42P01) and continues. Because the generator returns null before writing, public/sitemap-guides.xml is whatever was committed in 851158c4 and has never been regenerated. It is referenced from sitemap-index.xml, so Google is being handed a hand-frozen file. SEVERITY 3: the 11 URLs are plausibly still valid (both /guides and /guides/:slug are live routes), so this is probably stale-but-harmless today rather than broken. The real risk is the silent-failure pattern — a generator that errors, keeps going, and ships last-known-good data looks identical to one that works. RELATED: this is the same missing-table class as WEB-QA-018, and it is invisible to scripts/check-schema-usage.mjs because that guard only scans src/. The sitemap generator is exactly the kind of build-time code where a silent schema mismatch does damage without anyone seeing a stack trace. Note there IS a seasonal_guides table in the schema, and the route component is SeasonalGuide, so the intended source may simply be a rename that the script never followed."
+    },
+    {
+      "id": "WEB-BE-030",
+      "title": "Both billing webhooks have non-functional idempotency and no audit trail (log tables do not exist)",
+      "description": "As the platform owner, I need the Apple and Google subscription webhooks to deduplicate retries and record what they processed, because both log tables are missing so the duplicate check always passes and nothing is recorded.",
+      "acceptanceCriteria": [
+        "Create apple_notification_log (notification_uuid, notification_type, subtype, processed_at, status) and play_rtdn_log (message_id, notification_type, processed_at, status), or repoint both functions at whatever table was intended",
+        "play-rtdn-webhook/index.ts:539 destructures only { data } from the idempotency lookup, so a missing-table error is invisible. Capture and check error there — appstore-server-notifications-v2 already does this at :405 and is the better pattern",
+        "Decide the failure policy explicitly: if the log table is unreachable, should the webhook still process the event (current behaviour, favours availability) or refuse and let the provider retry (favours correctness)? Right now it proceeds by accident, not by decision",
+        "Add a test asserting a repeated notification_uuid / message_id is skipped the second time — the guard is currently untested as well as non-functional",
+        "No change to the HTTP status codes either provider branches on (CLAUDE.md backward-compat)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 (claude/prd-loop-schema-gaps) after extending the schema guard to supabase/functions/. Both tables confirmed absent from LIVE production (42P01 / 404), not merely from the generated types. MECHANISM: both webhooks look up a prior log row to short-circuit duplicates. The lookup errors because the relation does not exist, the code treats the empty result as \"not seen before\", and processing continues. So the idempotency guard is not merely untested — it can never fire. Both providers use AT-LEAST-ONCE delivery (App Store Server Notifications V2 and Play RTDN both retry), so duplicate notifications are being fully reprocessed. Both functions then return 200, so neither provider ever signals a problem. SEVERITY 2, NOT 1, and I want to be precise about why: the main subscription state update still runs, and writing the same entitlement state twice is largely idempotent in effect, so this is probably not corrupting subscriptions today. The concrete losses are (a) no audit trail of any subscription lifecycle event, which matters for billing disputes and for debugging XPLAT-002, and (b) any non-idempotent side effect in the handler runs more than once. Rate as HIGH if a handler ever gains an email, a credit, or a counter. DIFFERENCE WORTH KEEPING: Apple captures logLookupError and console.errors it, so the failure is at least visible in function logs. Play discards it entirely by destructuring only { data }. Same outcome, but Play is silent about it."
+    },
+    {
+      "id": "WEB-BE-031",
+      "title": "An entire seo_* monitoring subsystem is written against 10 tables that do not exist",
+      "description": "As the platform owner, I need to know whether the SEO monitoring feature is real, because its edge functions reference ten tables that are absent from production.",
+      "acceptanceCriteria": [
+        "Decide per the WEB-QA-018 pattern: build the tables, or delete the dead functions",
+        "Tables referenced but missing: seo_settings, seo_alerts, seo_alert_rules, seo_monitoring_log, seo_monitoring_schedules, seo_notification_preferences, seo_audit_history, seo_crawl_results, seo_core_web_vitals, seo_image_analysis",
+        "If deleting, check for scheduled invocations (cron/pg_cron/GitHub Actions) that call these functions, so nothing is left calling a removed endpoint",
+        "If building, note that CLAUDE.md forbids removing an endpoint older binaries call — these appear to be admin/ops only, so confirm no mobile caller before either path"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FOUND 2026-07-18 alongside WEB-BE-030. Confirmed absent from live production (seo_settings, seo_alerts probed directly, both 404). Same shape as WEB-QA-018 on the front end: a complete feature written against a schema that was never deployed, failing silently because it is server-side and nobody reads the function logs. SEVERITY 3 because this is an internal ops surface with no user-facing path, unlike the billing webhooks. But it is worth resolving one way or the other — every one of these functions burns invocations and logs errors on whatever schedule triggers it, and a monitoring subsystem that cannot record anything is worse than none, because its silence reads as \"no problems found\"."
     }
   ]
 }
