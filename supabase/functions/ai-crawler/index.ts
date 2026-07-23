@@ -21,6 +21,7 @@ import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey }
 import { scrapeUrl, scrapeUrls } from "../_shared/scraper.ts";
 import { fetchAndStoreImage as _fetchAndStoreImageShared } from "../_shared/imageStorage.ts";
 import { tryDomainAdapter } from "../_shared/domain-adapters/index.ts";
+import { extractEventsFromJsonLd } from "../_shared/jsonLdEvents.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { isHostAllowed } from "../_shared/fetchGuard.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
@@ -485,16 +486,30 @@ async function extractContentWithAI(
 ): Promise<any[]> {
   const relevantContent = extractRelevantContent(html, url);
 
+  // Live current date in Central Time. Previously frozen at "July 26/30, 2025",
+  // which caused Claude to stamp bare month/day dates in the past so the
+  // downstream future-filter dropped them. See firecrawl-scraper for the same fix.
+  const nowCentralStr = new Date().toLocaleDateString("en-US", {
+    timeZone: "America/Chicago",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+  const currentYearStr = new Date().toLocaleDateString("en-US", {
+    timeZone: "America/Chicago",
+    year: "numeric",
+  });
+
   const prompts = {
     events: isSportsScheduleDomain(url)
       ? getSportsSchedulePrompt(url, relevantContent)
-      : `You are an expert at extracting event information from websites, especially from CatchDesMoines.com. Your task is to find EVERY SINGLE EVENT mentioned in this content from ${url}.
+      : `You are an expert at extracting event information from Des Moines area event websites (event calendars, venue sites, festival pages, ticketing sites, and community listings). Your task is to find EVERY SINGLE EVENT mentioned in this content from ${url}.
 
-CURRENT DATE: July 26, 2025
+CURRENT DATE: ${nowCentralStr}
 WEBSITE CONTENT:
 ${relevantContent}
 
-CRITICAL PARSING INSTRUCTIONS FOR CATCHDESMOINES.COM:
+CRITICAL PARSING INSTRUCTIONS:
 
 🎯 WHAT TO LOOK FOR:
 - ANY text that mentions specific event names or titles
@@ -522,17 +537,20 @@ CRITICAL PARSING INSTRUCTIONS FOR CATCHDESMOINES.COM:
 📅 DATE CONVERSION (CRITICAL TIMEZONE HANDLING):
 - All events are in Des Moines, Iowa (Central Time Zone)
 - Convert ALL times to Central Time (CDT in summer -5 UTC, CST in winter -6 UTC)
-- Current date reference: July 30, 2025
+- Current date reference: ${nowCentralStr}
+- YEAR INFERENCE: When a date has no explicit year, choose the NEXT upcoming
+  occurrence relative to the current date. If the month/day is still ahead this
+  year, use ${currentYearStr}; if it has already passed this year, use the
+  following year. NEVER default to a past year.
 
-EXAMPLES:
-- "Jul 30th" → "2025-07-30 19:00:00" (7:00 PM Central Time default)
-- "August 1st" → "2025-08-01 19:00:00" 
-- "7:30 PM" → "2025-MM-DD 19:30:00" (keep Central Time)
-- "8 AM" → "2025-MM-DD 08:00:00" (morning events)
-- "Through July 28" → create events until that date
+EXAMPLES (current year is ${currentYearStr}):
+- "Aug 15th" → "${currentYearStr}-08-15 19:00:00" (7:00 PM Central Time default, if still upcoming)
+- "7:30 PM" → "${currentYearStr}-MM-DD 19:30:00" (keep Central Time)
+- "8 AM" → "${currentYearStr}-MM-DD 08:00:00" (morning events)
+- "Through Aug 28" → create events until that date
 - No specific time? → default to 7:00 PM Central (19:00:00)
 - All-day events → use 12:00 PM Central (12:00:00)
-- Past dates (before July 30, 2025) → SKIP these events
+- Past dates (before ${nowCentralStr}) → SKIP these events
 
 ⚠️ TIMEZONE CRITICAL: Store times in Central Time format (not UTC). The system will handle UTC conversion automatically.
 
@@ -1578,20 +1596,40 @@ Deno.serve(async (req) => {
       );
       extractedItems = adapterResult.items;
     } else {
-    // For sports schedule domains: use ONLY the provided URL (never CatchDesMoines)
-    // For other events: try multiple strategies including CatchDesMoines
+    // Build the candidate URL list. CRITICAL: for a general events request we
+    // only ever try pages on the TARGET's OWN domain (the URL itself plus its
+    // conventional /events/ and /calendar/ paths). We used to append
+    // catchdesmoines.com URLs here and then keep the highest-"scoring" page —
+    // but a dense catchdesmoines listing reliably out-scored a smaller local
+    // site, so the target site's content was discarded and it looked like the
+    // site "had no events." Never substitute a different domain for the one the
+    // caller asked to scrape.
+    const sameDomainEventUrls = (base: string): string[] => {
+      const urls = [base];
+      try {
+        const u = new URL(base);
+        // Only add path variants when the caller pointed at the site root /
+        // a shallow path — don't mangle an already-specific event/calendar URL.
+        const path = u.pathname.replace(/\/$/, "");
+        const isShallow = path === "" || path.split("/").filter(Boolean).length <= 1;
+        if (isShallow) {
+          const root = `${u.protocol}//${u.host}`;
+          for (const p of ["/events/", "/calendar/", "/events/list/"]) {
+            const candidate = root + p;
+            if (!urls.includes(candidate)) urls.push(candidate);
+          }
+        }
+      } catch {
+        // Malformed URL — just try it as-is.
+      }
+      return urls;
+    };
+
     const urlsToTry =
       category === "events" && isSportsScheduleDomain(url)
         ? getSportsScheduleUrls(url)
         : category === "events"
-          ? [
-              url,
-              url.replace(/\/$/, "") + "/events/",
-              url.replace(/\/$/, "") + "/calendar/",
-              "https://www.catchdesmoines.com/events/",
-              "https://www.catchdesmoines.com/events/search/",
-              "https://www.catchdesmoines.com/calendar/",
-            ]
+          ? sameDomainEventUrls(url)
           : findBestEventUrl(url);
 
     console.log(`🔍 Will try these URLs: ${urlsToTry.join(", ")}`);
@@ -1641,6 +1679,12 @@ Deno.serve(async (req) => {
             /2025|2026|july|august|september|october|november|december|january|february|march|april|may|june|\d{1,2}\/\d{1,2}|mon|tue|wed|thu|fri|sat|sun/gi
           ) || []
         ).length;
+        // Signals that a page is an event LISTING rather than a homepage. For
+        // sports we look for schedule/ticket language; for general sites we look
+        // for structured-data and calendar markup that generalizes across
+        // platforms (WordPress "The Events Calendar", Squarespace, Eventbrite,
+        // etc.) — NOT hardcoded catchdesmoines event names, which biased the
+        // scorer toward that one site.
         const titleKeywords = isSports
           ? (
               html.match(
@@ -1649,7 +1693,7 @@ Deno.serve(async (req) => {
             ).length
           : (
               html.match(
-                /warren|anastasia|senior games|painting|sale-a-bration|waitress|iowa artists|horse racing|biergarten/gi
+                /"@type"\s*:\s*"[a-z]*event"|tribe-events|tribe_events|event-card|eventitem|event-item|event-list|events-list|fc-event|calendar-event|data-event|itemtype="[^"]*schema.org\/[a-z]*event"|buy tickets|get tickets|add to calendar/gi
               ) || []
             ).length;
 
@@ -1697,6 +1741,25 @@ Deno.serve(async (req) => {
       bestUrl,
       claudeApiKey
     );
+
+    // Structured-data pre-pass: merge in any schema.org/Event JSON-LD embedded in
+    // the page. This is the most reliable, site-agnostic event signal and covers
+    // sites the free-text LLM pass under-extracts (Eventbrite, "The Events
+    // Calendar", Squarespace, etc.). Items share the AI item shape, so the
+    // downstream filter/dedupe/insert pipeline handles them unchanged.
+    if (category === "events") {
+      try {
+        const jsonLdEvents = extractEventsFromJsonLd(bestHtml, bestUrl);
+        if (jsonLdEvents.length > 0) {
+          console.log(
+            `🧩 JSON-LD structured data yielded ${jsonLdEvents.length} events from ${bestUrl}`
+          );
+          extractedItems = [...extractedItems, ...jsonLdEvents];
+        }
+      } catch (jsonLdError) {
+        console.error(`⚠️ JSON-LD extraction failed for ${bestUrl}:`, jsonLdError);
+      }
+    }
     } // end of else branch for non-adapter path
 
     // Filter out past events for events category

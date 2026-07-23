@@ -15,6 +15,7 @@ import { getAIConfig, buildClaudeRequest, buildLightweightClaudeRequest, getClau
 import { validateURLForSSRF } from "../_shared/validation.ts";
 import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
 import { tryDomainAdapter } from "../_shared/domain-adapters/index.ts";
+import { extractEventsFromJsonLd } from "../_shared/jsonLdEvents.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { fetchAndStoreImage, CONTENT_TYPE_MAP } from "../_shared/imageStorage.ts";
 
@@ -537,6 +538,25 @@ serve(async (req) => {
         continue;
       }
 
+      // Structured-data pre-pass: pull schema.org/Event JSON-LD straight from the
+      // page HTML. This is the most reliable, site-agnostic event signal (used by
+      // Eventbrite, "The Events Calendar", Squarespace, Ticketmaster, etc.) and
+      // was previously ignored, which is a big reason non-catchdesmoines sites
+      // returned nothing. These items carry exact ISO dates and canonical URLs, so
+      // they need no LLM guessing. They flow into the SAME dedupe/insert pipeline
+      // as the Claude items; duplicates collapse on (title, venue) downstream.
+      if (category === 'events' && result.html) {
+        try {
+          const jsonLdEvents = extractEventsFromJsonLd(result.html, currentUrl);
+          if (jsonLdEvents.length > 0) {
+            console.log(`🧩 JSON-LD structured data yielded ${jsonLdEvents.length} events from ${currentUrl}`);
+            allExtractedItems.push(...jsonLdEvents);
+          }
+        } catch (jsonLdError) {
+          console.error(`⚠️ JSON-LD extraction failed for ${currentUrl}:`, jsonLdError);
+        }
+      }
+
       // Extract events using Claude AI for this page
       const claudeApiKey = getAnthropicApiKey();
       
@@ -545,14 +565,30 @@ serve(async (req) => {
         break; // Exit loop if no API key
       }
 
+      // Current date, resolved live in Central Time. Previously this prompt
+      // hardcoded "July 30, 2025", which made Claude stamp any bare month/day
+      // ("August 15") with the year 2025 — after which the real-time future
+      // filter below silently dropped it as a past event. That single bug is a
+      // large part of why non-catchdesmoines sites returned "no events."
+      const nowCentralStr = new Date().toLocaleDateString("en-US", {
+        timeZone: "America/Chicago",
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      });
+      const currentYearStr = new Date().toLocaleDateString("en-US", {
+        timeZone: "America/Chicago",
+        year: "numeric",
+      });
+
       // Generate category-specific prompts
       // Use sports schedule prompt for Iowa Cubs, Iowa Wild, Iowa Barnstormers, Iowa Wolves
       const prompts = {
         events: isSportsScheduleDomain(currentUrl)
           ? getSportsSchedulePrompt(currentUrl, content)
-          : `You are an expert at extracting event information from websites, especially from CatchDesMoines.com and other Des Moines area event sites. Your task is to find EVERY SINGLE EVENT mentioned in this content from ${currentUrl}.
+          : `You are an expert at extracting event information from Des Moines area event websites (event calendars, venue sites, festival pages, ticketing sites, and community listings). Your task is to find EVERY SINGLE EVENT mentioned in this content from ${currentUrl}.
 
-CURRENT DATE: July 30, 2025
+CURRENT DATE: ${nowCentralStr}
 WEBSITE CONTENT:
 ${content.substring(0, 15000)}
 
@@ -580,19 +616,23 @@ CRITICAL PARSING INSTRUCTIONS:
 - "Live Horse Racing" → title: "Live Horse Racing"
 
 📅 DATE CONVERSION (CRITICAL TIMEZONE HANDLING):
-- All events are in Des Moines, Iowa (Central Time Zone) 
+- All events are in Des Moines, Iowa (Central Time Zone)
 - Convert ALL times to Central Time (CDT in summer -5 UTC, CST in winter -6 UTC)
-- Current date reference: July 30, 2025
+- Current date reference: ${nowCentralStr}
+- YEAR INFERENCE: When a date has no explicit year, choose the NEXT upcoming
+  occurrence relative to the current date. If the month/day is still ahead this
+  year, use ${currentYearStr}; if it has already passed this year, use the
+  following year. NEVER default to a past year.
 
-EXAMPLES:
-- "Jul 30th" → "2025-07-30 19:00:00" (7:00 PM Central Time default)
-- "August 1st" → "2025-08-01 19:00:00" 
-- "7:30 PM" → "2025-MM-DD 19:30:00" (keep Central Time)
-- "8 AM" → "2025-MM-DD 08:00:00" (morning events)
-- "Through July 28" → create events until that date
+EXAMPLES (current year is ${currentYearStr}):
+- "Aug 15th" → "${currentYearStr}-08-15 19:00:00" (7:00 PM Central Time default, if still upcoming)
+- "January 5" when today is in July → next year's January (month already implies the next occurrence)
+- "7:30 PM" → "${currentYearStr}-MM-DD 19:30:00" (keep Central Time)
+- "8 AM" → "${currentYearStr}-MM-DD 08:00:00" (morning events)
+- "Through Aug 28" → create events until that date
 - No specific time? → default to 7:00 PM Central (19:00:00)
 - All-day events → use 12:00 PM Central (12:00:00)
-- Past dates (before July 30, 2025) → SKIP these events
+- Past dates (before ${nowCentralStr}) → SKIP these events
 
 ⚠️ TIMEZONE CRITICAL: Store times in Central Time format (not UTC). The system will handle UTC conversion automatically.
 
