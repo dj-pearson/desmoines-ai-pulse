@@ -46,6 +46,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { reopenConsentBanner } from "@/components/CookieConsentBanner";
 import {
   Shield,
   Download,
@@ -80,6 +81,7 @@ export function PrivacyControls() {
         "ratings",
         "reviews",
         "user_subscriptions",
+        "user_analytics",
       ];
 
       const exported: Record<string, unknown> = {
@@ -231,8 +233,8 @@ export function PrivacyControls() {
               </h3>
               <p className="text-sm text-muted-foreground">
                 Get a machine-readable JSON copy of the profile, preferences,
-                favorites, reviews, and subscription records we hold about your
-                account.
+                favorites, reviews, subscription, and usage-analytics records we
+                hold about your account.
               </p>
             </div>
           </div>
@@ -278,8 +280,8 @@ export function PrivacyControls() {
               </p>
             </div>
           </div>
-          <Button asChild variant="outline">
-            <Link to="/cookie-policy">Manage cookie preferences</Link>
+          <Button variant="outline" onClick={reopenConsentBanner}>
+            Manage cookie preferences
           </Button>
         </div>
 

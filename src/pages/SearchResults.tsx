@@ -214,7 +214,10 @@ export default function SearchResults() {
       />
       <div className="flex min-h-screen flex-col">
         <Header />
-        <main id="main-content" className="container mx-auto flex-1 px-4 py-8">
+        {/* Plain <div>, not <main>: App.tsx already provides the single
+            top-level <main id="main-content"> landmark, so a nested main here
+            produced a duplicate landmark + duplicate id (WCAG 1.3.1 / 4.1.1). */}
+        <div className="container mx-auto flex-1 px-4 py-8">
           {/* Search input (primary, natural-language) */}
           <div className="mx-auto max-w-3xl">
             <h1 className="mb-2 flex items-center gap-2 text-2xl font-bold sm:text-3xl">
@@ -340,7 +343,7 @@ export default function SearchResults() {
               )}
             </div>
           )}
-        </main>
+        </div>
         <Footer />
       </div>
     </>

@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { sessionStore } from '@/lib/safeStorage';
 import { handleError } from '@/lib/errorHandler';
+import { hasConsent } from '@/components/CookieConsentBanner';
 
 /**
  * Generates or retrieves a persistent session ID for analytics tracking.
@@ -68,6 +69,8 @@ async function recordPageView(params: {
  *
  * - Sends real page view data to the `user_analytics` Supabase table
  * - Tracks session ID, device type, referrer, user agent, and authenticated user
+ * - Only records when the user has granted the "analytics" cookie category
+ *   (GDPR opt-in / CPRA opt-out); absence of consent is treated as denial
  * - Respects the browser's Do Not Track preference
  * - Debounces rapid route changes (e.g., redirects) with a 300ms delay
  * - Fire-and-forget: never blocks rendering or throws
@@ -90,6 +93,12 @@ export function usePageTracking(): void {
   useEffect(() => {
     // Respect Do Not Track
     if (navigator.doNotTrack === '1') return;
+
+    // Enforce cookie consent — analytics are non-essential, so we only record
+    // page views when the user has affirmatively granted the analytics category.
+    // hasConsent() returns false when no record exists (opt-out by default) and
+    // when GPC recorded a rejection, so this single check covers both.
+    if (!hasConsent('analytics')) return;
 
     // Debounce rapid route changes (redirects, auth callbacks)
     if (timerRef.current) {

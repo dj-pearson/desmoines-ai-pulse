@@ -16,7 +16,13 @@
  *   - Only allowed if the account_deletion_tokens table doesn't exist yet
  *
  * Permanently deletes from: user_event_interactions, user_restaurant_interactions,
- * user_subscriptions, profiles, and auth.users.
+ * favorites, ratings, reviews, user_subscriptions, user_analytics, profiles,
+ * newsletter_subscribers (by email), and auth.users.
+ *
+ * GDPR Art. 17 (right to erasure) — the delete set is kept aligned with every
+ * table that stores user-identifiable data. Records with an independent legal
+ * basis for retention (e.g. append-only consent_records kept as proof of
+ * consent, invoices kept for tax) are intentionally NOT purged here.
  *
  * Required by Apple App Store Review for apps that support account creation.
  */
@@ -191,7 +197,10 @@ serve(async (req) => {
         .delete()
         .eq("user_id", userId);
 
-      // Delete user data in order (respect foreign key constraints)
+      // Delete user data in order (respect foreign key constraints).
+      // Every table below is keyed by user_id. `user_analytics` holds
+      // behavioral rows (page_url, user_agent, session) that are identifiable
+      // once tied to user_id, so erasure must cover it too (GDPR Art. 17).
       const tables = [
         "user_event_interactions",
         "user_restaurant_interactions",
@@ -199,6 +208,7 @@ serve(async (req) => {
         "ratings",
         "reviews",
         "user_subscriptions",
+        "user_analytics",
         "profiles",
       ];
 
@@ -209,7 +219,24 @@ serve(async (req) => {
           .eq("user_id", userId);
 
         if (error) {
+          // A table may not exist in every environment — warn and continue so a
+          // single failure never leaves the erasure half-done.
           console.warn(`Warning deleting from ${table}:`, error.message);
+        }
+      }
+
+      // Newsletter subscriptions are keyed by email, not user_id. Remove any
+      // subscription tied to this account's email so marketing data is purged too.
+      if (user.email) {
+        const { error: newsletterError } = await supabase
+          .from("newsletter_subscribers")
+          .delete()
+          .eq("email", user.email.toLowerCase());
+        if (newsletterError) {
+          console.warn(
+            "Warning deleting from newsletter_subscribers:",
+            newsletterError.message,
+          );
         }
       }
 

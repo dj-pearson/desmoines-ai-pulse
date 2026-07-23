@@ -106,9 +106,30 @@ export function ImageViewer({ src, alt, children }: ImageViewerProps) {
 
   const opacity = Math.max(0, 1 - Math.abs(translateY) / 300);
 
+  // The opener only does anything in the Capacitor app. Expose it as a real
+  // keyboard-operable button there (WCAG 2.1.1); on web it's a passthrough
+  // wrapper with no interactive semantics, so it stays a plain <div>.
+  const interactive = isCapacitor();
+
   return (
     <>
-      <div onClick={handleOpen} className={isCapacitor() ? 'cursor-zoom-in' : ''}>
+      <div
+        onClick={handleOpen}
+        onKeyDown={
+          interactive
+            ? (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleOpen();
+                }
+              }
+            : undefined
+        }
+        role={interactive ? 'button' : undefined}
+        tabIndex={interactive ? 0 : undefined}
+        aria-label={interactive ? `View image: ${alt}` : undefined}
+        className={interactive ? 'cursor-zoom-in' : ''}
+      >
         {children}
       </div>
 
