@@ -2,7 +2,7 @@ import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
-import { resetConsentPrompt } from "@/components/CookieConsentBanner";
+import { reopenConsentBanner } from "@/components/CookieConsentBanner";
 
 export default function CookiePolicy() {
   useDocumentTitle("Cookie Policy");
@@ -124,7 +124,7 @@ export default function CookiePolicy() {
               </ul>
 
               <div className="mt-4">
-                <Button onClick={() => resetConsentPrompt()} variant="outline">
+                <Button onClick={() => reopenConsentBanner()} variant="outline">
                   Update my cookie preferences
                 </Button>
               </div>

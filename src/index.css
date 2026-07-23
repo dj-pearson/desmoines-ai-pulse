@@ -794,6 +794,20 @@ All colors MUST be HSL. Touch targets minimum 44px.
   outline-offset: var(--focus-ring-offset);
 }
 
+/*
+ * Global :focus-visible fallback (WCAG 2.4.7 Focus Visible).
+ * shadcn/Radix components ship their own `focus-visible:ring-*` (and
+ * `focus-visible:outline-none`) utilities, whose higher specificity wins — so
+ * this does not double their rings. It's a safety net so any raw or custom
+ * interactive element WITHOUT those utilities still shows a visible keyboard
+ * focus indicator. Mouse/touch focus stays unstyled (that's the point of
+ * :focus-visible, not :focus).
+ */
+:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
 /* High contrast mode support */
 @media (prefers-contrast: high) {
   :root {

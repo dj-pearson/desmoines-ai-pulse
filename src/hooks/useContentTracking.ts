@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { createLogger } from '@/lib/logger';
+import { hasConsent } from '@/components/CookieConsentBanner';
 
 const log = createLogger('useContentTracking');
 
@@ -13,6 +14,10 @@ type MetricType = 'view' | 'favorite' | 'share' | 'click';
  * Inserts rows into the `content_metrics` table so the admin
  * analytics dashboard has real engagement data.  Errors are
  * silently logged — tracking must never block the UI.
+ *
+ * Engagement tracking is non-essential, so it is gated on the user's
+ * "analytics" cookie consent (opt-out by default; GPC honored). Without
+ * consent, tracking is a no-op.
  */
 export function useContentTracking(contentId: string | undefined, contentType: ContentType) {
   const trackedViewRef = useRef(false);
@@ -20,6 +25,7 @@ export function useContentTracking(contentId: string | undefined, contentType: C
   const trackEvent = useCallback(
     (metricType: MetricType) => {
       if (!contentId) return;
+      if (!hasConsent('analytics')) return;
 
       const now = new Date();
 

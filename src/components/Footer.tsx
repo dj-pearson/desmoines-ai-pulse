@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { OptimizedLogo } from "@/components/OptimizedLogo";
 import { logConsent } from "@/lib/consentLog";
+import { reopenConsentBanner } from "@/components/CookieConsentBanner";
 
 export default function Footer() {
   const [email, setEmail] = useState("");
@@ -321,9 +322,27 @@ export default function Footer() {
                   </Link>
                 </li>
                 <li>
+                  <Link to="/support" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                    Help &amp; Support
+                  </Link>
+                </li>
+                <li>
                   <Link to="/affiliate-disclosure" className="text-neutral-400 hover:text-white transition-colors text-sm">
                     Affiliate Disclosure
                   </Link>
+                </li>
+                <li>
+                  {/* CPRA §1798.135 requires a clear, conspicuous "Do Not Sell or
+                      Share" / privacy-choices link. Reopens the consent panel
+                      (pre-filled) so the opt-out is functional site-wide, logged
+                      out or in — without wiping any existing choice. */}
+                  <button
+                    type="button"
+                    onClick={reopenConsentBanner}
+                    className="text-neutral-400 hover:text-white transition-colors text-sm text-left focus:outline-none focus:ring-2 focus:ring-primary rounded-sm"
+                  >
+                    Your Privacy Choices
+                  </button>
                 </li>
               </ul>
             </nav>
