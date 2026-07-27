@@ -22,11 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-supabase/.temp/gotrue-version
-supabase/.temp/pooler-url
-supabase/.temp/postgres-version
-supabase/.temp/project-ref
-supabase/.temp/rest-version
+supabase/.temp/
 supabase/.branches/_current_branch
 event-datetime-updates-2025-07-30T14-19-23.sql
 event-datetime-updates-2025-07-30T14-23-11.sql
