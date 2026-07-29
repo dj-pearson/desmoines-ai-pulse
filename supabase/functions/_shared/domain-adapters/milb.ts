@@ -8,6 +8,7 @@
  */
 
 import type { AdapterEvent, AdapterResult, DomainAdapter } from "./types.ts";
+import { centralWallClockFromUtc } from "../centralTime.ts";
 
 const IOWA_CUBS_TEAM_ID = 451;
 const TRIPLE_A_SPORT_ID = 11;
@@ -108,19 +109,9 @@ function extractSeasonYear(url: string): number | null {
   return year >= 2020 && year <= 2099 ? year : null;
 }
 
+// statsapi returns gameDate as a UTC instant; AdapterEvent.date is a Central
+// wall-clock string. Shared with the rest of the pipeline via centralTime.ts so
+// there is exactly one implementation of this conversion.
 function formatCentralTime(isoUtc: string): string {
-  const d = new Date(isoUtc);
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Chicago",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  }).formatToParts(d);
-  const get = (type: string) =>
-    parts.find((p) => p.type === type)?.value ?? "00";
-  return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}:${get("second")}`;
+  return centralWallClockFromUtc(isoUtc);
 }

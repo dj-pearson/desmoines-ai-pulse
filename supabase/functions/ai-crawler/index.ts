@@ -7,15 +7,21 @@
 /// <reference types="https://esm.sh/@supabase/functions-js/src/edge-runtime.d.ts" />
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+// Central Time conversion lives in _shared/centralTime.ts (Intl-based) rather
+// than date-fns-tz. The previous import pulled `fromZonedTime` from
+// date-fns-tz@2, which does not export it (that name arrived in v3) — so it was
+// silently `undefined`, which is why this file hand-rolled a DST guess instead.
+import { format as dateFnsFormat } from "https://esm.sh/date-fns@2.30.0";
 import {
-  fromZonedTime,
-  utcToZonedTime,
-  format,
-} from "https://esm.sh/date-fns-tz@2.0.0?deps=date-fns@2.30.0";
+  CENTRAL_TZ,
+  centralOffsetString,
+} from "../_shared/centralTime.ts";
+import { resolveListingUrls } from "../_shared/eventSourceProfiles.ts";
 import {
-  format as dateFnsFormat,
-  parseISO,
-} from "https://esm.sh/date-fns@2.30.0";
+  DEFAULT_CONTENT_BUDGET,
+  prepareContentForExtraction,
+  SPORTS_CONTENT_BUDGET,
+} from "../_shared/htmlContentWindow.ts";
 import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts";
 import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey } from "../_shared/aiConfig.ts";
 import { scrapeUrl, scrapeUrls } from "../_shared/scraper.ts";
@@ -103,9 +109,13 @@ function isSportsScheduleDomain(url: string): boolean {
   return SPORTS_SCHEDULE_DOMAINS.some((d) => lower.includes(d));
 }
 
-// Domain-specific URLs for sports schedules - ONLY use the provided URL, never CatchDesMoines
+// Domain-specific URLs for sports schedules - ONLY use the team's own domain,
+// never CatchDesMoines. resolveListingUrls() is host-scoped to the matched
+// profile, so it can only ever return URLs on the team's own site — and it
+// recovers the cases the raw seeded URL gets wrong, notably the Iowa Wolves
+// "?month=3" pin that limited the crawl to a single month of the season.
 function getSportsScheduleUrls(originalUrl: string): string[] {
-  return [originalUrl];
+  return resolveListingUrls(originalUrl);
 }
 
 // Preprocess URL to try to find better event-specific pages
@@ -369,26 +379,20 @@ async function extractCatchDesMoinesVisitWebsiteUrl(
   }
 }
 
-// Enhanced HTML content extraction with better patterns for CatchDesMoines
+/**
+ * Reduce a page to the chunk most likely to contain its event list.
+ *
+ * Delegates to _shared/htmlContentWindow.ts, which replaced the old
+ * `cleanHtml.substring(0, maxChars)` — that kept the FIRST 15k characters, i.e.
+ * <head>, the cookie banner, the nav and the hero, while the event list started
+ * past them. See that module's header for the full rationale.
+ */
 function extractRelevantContent(html: string, url?: string): string {
-  console.log(
-    `🔍 Starting content extraction from ${html.length} character HTML`
-  );
-
-  // Simple approach: just clean HTML and limit size to avoid CPU timeout
-  const cleanHtml = html
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
-    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
-    .replace(/<!--[\s\S]*?-->/g, "");
-
-  // Sports schedules may need more content (many games, dynamic structure)
-  const maxChars = url && isSportsScheduleDomain(url) ? 25000 : 15000;
-  const finalContent = cleanHtml.substring(0, maxChars);
-
-  console.log(
-    `📏 Final content length: ${finalContent.length} characters (reduced from ${html.length}, max ${maxChars})`
-  );
-  return finalContent;
+  // Sports schedules list many short rows, so they get the larger budget.
+  const budget = url && isSportsScheduleDomain(url)
+    ? SPORTS_CONTENT_BUDGET
+    : DEFAULT_CONTENT_BUDGET;
+  return prepareContentForExtraction(html, { budget, label: url });
 }
 
 // Sports schedule AI prompt - for Iowa Cubs, Iowa Wild, Iowa Barnstormers, Iowa Wolves
@@ -477,6 +481,73 @@ FORMAT AS JSON ARRAY:
 🚨 Extract EVERY home game. Return [] ONLY if no games found. Include source_url (ticket link) for each event.`;
 }
 
+/**
+ * If the page's scripts reference an event JSON endpoint, fetch it and prepend
+ * the payload to the content Claude sees. Raw JSON is far easier to extract from
+ * than rendered markup, so this is worth the extra request when it works.
+ *
+ * Only same-origin endpoints are followed, and only endpoints on an allowlisted
+ * host: `findApiEndpoints` scrapes URLs out of arbitrary page JavaScript, so
+ * fetching them unchecked would let a target page steer the function at any host
+ * it likes — the exact SSRF the isHostAllowed gate on the entry point exists to
+ * prevent.
+ */
+async function augmentWithApiData(
+  html: string,
+  url: string,
+  relevantContent: string
+): Promise<string> {
+  const apiEndpoints = await findApiEndpoints(html, url);
+  if (apiEndpoints.length === 0) return relevantContent;
+
+  let pageHost: string;
+  try {
+    pageHost = new URL(url).hostname.toLowerCase();
+  } catch {
+    return relevantContent;
+  }
+
+  const sameOrigin = apiEndpoints.filter((endpoint) => {
+    try {
+      const host = new URL(endpoint).hostname.toLowerCase();
+      return host === pageHost && isHostAllowed(endpoint).allowed;
+    } catch {
+      return false;
+    }
+  });
+
+  if (sameOrigin.length === 0) return relevantContent;
+  console.log(`🔍 Found candidate event API endpoint(s): ${sameOrigin.join(", ")}`);
+
+  for (const endpoint of sameOrigin.slice(0, 3)) {
+    try {
+      const apiResponse = await fetchWithTimeout(endpoint, {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          Accept: "application/json, text/javascript, */*",
+        },
+      });
+
+      if (!apiResponse.ok) continue;
+      const apiData = await apiResponse.text();
+      if (apiData.length <= 100) continue;
+
+      console.log(`✅ Got API data from ${endpoint}: ${apiData.length} chars`);
+      // Cap the payload so a large feed can't crowd the HTML out of the budget.
+      return (
+        apiData.substring(0, 12000) +
+        "\n\n--- ORIGINAL HTML ---\n\n" +
+        relevantContent
+      );
+    } catch (error) {
+      console.log(`⚠️ API endpoint failed ${endpoint}:`, error.message);
+    }
+  }
+
+  return relevantContent;
+}
+
 // AI-powered content extraction using Claude
 async function extractContentWithAI(
   html: string,
@@ -484,7 +555,21 @@ async function extractContentWithAI(
   url: string,
   claudeApiKey: string
 ): Promise<any[]> {
-  const relevantContent = extractRelevantContent(html, url);
+  let relevantContent = extractRelevantContent(html, url);
+
+  // Prepend any JSON an in-page event API exposes.
+  //
+  // This block used to sit INSIDE the try below, after `prompts` had already
+  // been built — and it assigned to a `const`. Both halves were broken: the
+  // assignment threw a TypeError (ES modules are strict mode) which the outer
+  // catch swallowed into an empty result, so any page whose scripts referenced
+  // an /api/...events endpoint reported "no events found" no matter what was on
+  // it; and even without the throw, reassigning after the prompt string was
+  // interpolated could never have changed what Claude saw. Hoisting it here
+  // makes the augmentation actually reach the prompt.
+  if (category === "events") {
+    relevantContent = await augmentWithApiData(html, url, relevantContent);
+  }
 
   // Live current date in Central Time. Previously frozen at "July 26/30, 2025",
   // which caused Claude to stamp bare month/day dates in the past so the
@@ -856,44 +941,6 @@ Return empty array [] if no attractions found.`,
     );
     console.log(`📝 Content preview: ${relevantContent.substring(0, 500)}...`);
 
-    // Try to find API endpoints first
-    if (category === "events") {
-      const apiEndpoints = await findApiEndpoints(html, url);
-      if (apiEndpoints.length > 0) {
-        console.log(
-          `🔍 Found potential API endpoints: ${apiEndpoints.join(", ")}`
-        );
-
-        // Try to fetch from API endpoints
-        for (const endpoint of apiEndpoints.slice(0, 3)) {
-          // Try first 3 endpoints
-          try {
-            const apiResponse = await fetchWithTimeout(endpoint, {
-              headers: {
-                "User-Agent":
-                  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                Accept: "application/json, text/javascript, */*",
-              },
-            });
-
-            if (apiResponse.ok) {
-              const apiData = await apiResponse.text();
-              if (apiData.length > 100) {
-                console.log(
-                  `✅ Got API data from ${endpoint}: ${apiData.length} chars`
-                );
-                relevantContent =
-                  apiData + "\n\n--- ORIGINAL HTML ---\n\n" + relevantContent;
-                break;
-              }
-            }
-          } catch (error) {
-            console.log(`⚠️ API endpoint failed ${endpoint}:`, error.message);
-          }
-        }
-      }
-    }
-
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
       const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
       
@@ -1074,11 +1121,12 @@ interface ParsedDateTime {
   event_start_utc: Date;
 }
 
+
 // Enhanced time parsing for AI-extracted events
 function parseEventDateTime(dateStr: string): ParsedDateTime | null {
   if (!dateStr) return null;
 
-  const eventTimeZone = "America/Chicago"; // Default to Central Time
+  const eventTimeZone = CENTRAL_TZ; // Des Moines events are always Central
 
   try {
     console.log(`🕐 Parsing date string: "${dateStr}"`);
@@ -1118,20 +1166,18 @@ function parseEventDateTime(dateStr: string): ParsedDateTime | null {
     }
 
     // Create a proper date object representing this time in Central timezone
-    // We build the ISO string without timezone, then tell date-fns-tz to interpret it as Central
     const centralTimeString = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")} ${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-    
-    // CRITICAL FIX: Create a date in Central timezone, then convert to UTC
-    // First, we need to create a Date object that represents the correct instant in time
-    // For October 4th 7:30 PM Central, we need to get the UTC equivalent
-    
-    // Method: Build an ISO string with timezone offset for Central Time
-    // Determine DST offset (CDT = UTC-5, CST = UTC-6)
-    const testDate = new Date(year, month - 1, day, 12, 0, 0); // noon on that day
-    const isDST = testDate.getMonth() >= 2 && testDate.getMonth() <= 10; // rough DST check (Mar-Nov)
-    const offset = isDST ? -5 : -6; // CDT or CST
-    const offsetStr = offset >= 0 ? `+${String(Math.abs(offset)).padStart(2, '0')}:00` : `-${String(Math.abs(offset)).padStart(2, '0')}:00`;
-    
+
+    // Convert the Central wall-clock time to the correct UTC instant.
+    //
+    // This used to guess the offset with `month >= 2 && month <= 10` (i.e. treat
+    // all of March through all of November as CDT), which is wrong at both ends
+    // of DST: US DST starts the 2nd Sunday of March and ends the 1st Sunday of
+    // November, so early-March and most-of-November events were stamped an hour
+    // off — enough to show a 7:00 PM show as 8:00 PM. centralOffsetHours() asks
+    // the runtime's IANA tz database for the real offset on that date instead.
+    const offsetStr = centralOffsetString(year, month, day, hours, minutes);
+
     // Create ISO string with timezone
     const isoWithTimezone = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}${offsetStr}`;
     const utcDate = new Date(isoWithTimezone);
@@ -1156,7 +1202,20 @@ function parseEventDateTime(dateStr: string): ParsedDateTime | null {
 
 // Filter out past events with enhanced date handling
 function filterFutureEvents(events: any[]): any[] {
-  const nowInCentral = utcToZonedTime(new Date(), "America/Chicago");
+  // Compare against the true current instant. This used to compare an event's
+  // real UTC timestamp against `utcToZonedTime(new Date(), 'America/Chicago')`,
+  // which returns a Date SHIFTED back by the Central offset — so the cutoff sat
+  // 5-6 hours in the past and events that had already started were still
+  // ingested as "upcoming". event_start_utc is a genuine UTC instant, so the
+  // correct comparison is against Date.now().
+  //
+  // A small grace window is kept deliberately: an event that started within the
+  // last two hours is usually still worth showing (doors open early, a 3-hour
+  // festival day is still running), and the previous accidental 5-6 hour skew
+  // means dropping to an exact cutoff would silently remove rows the site has
+  // been surfacing.
+  const IN_PROGRESS_GRACE_MS = 2 * 60 * 60 * 1000;
+  const cutoff = Date.now() - IN_PROGRESS_GRACE_MS;
 
   return events.filter((event) => {
     if (!event.date) return true; // Keep events without dates
@@ -1164,8 +1223,7 @@ function filterFutureEvents(events: any[]): any[] {
     try {
       const parsed = parseEventDateTime(event.date);
       if (parsed && parsed.event_start_utc) {
-        // Compare the UTC timestamp of the event with the current UTC time
-        return parsed.event_start_utc.getTime() >= nowInCentral.getTime();
+        return parsed.event_start_utc.getTime() >= cutoff;
       }
       return true; // Keep if parsing fails
     } catch (error) {
@@ -1605,7 +1663,13 @@ Deno.serve(async (req) => {
     // site "had no events." Never substitute a different domain for the one the
     // caller asked to scrape.
     const sameDomainEventUrls = (base: string): string[] => {
-      const urls = [base];
+      // A profiled source declares exactly which listing URLs carry its
+      // calendar, so use those first. That matters most where the seeded URL
+      // sits ABOVE the calendar (Wooly's /first-fleet-venues/woolys) or
+      // narrows it (Iowa Wolves ?month=3) — the blind path-guessing below
+      // cannot recover either case.
+      const urls = resolveListingUrls(base);
+
       try {
         const u = new URL(base);
         // Only add path variants when the caller pointed at the site root /
@@ -1614,7 +1678,7 @@ Deno.serve(async (req) => {
         const isShallow = path === "" || path.split("/").filter(Boolean).length <= 1;
         if (isShallow) {
           const root = `${u.protocol}//${u.host}`;
-          for (const p of ["/events/", "/calendar/", "/events/list/"]) {
+          for (const p of ["/events/", "/calendar/", "/events/list/", "/shows/"]) {
             const candidate = root + p;
             if (!urls.includes(candidate)) urls.push(candidate);
           }

@@ -51,3 +51,12 @@ jobs:
       - run: deno test --allow-read supabase/functions/_tests/cross-platform-sync.test.ts
       - run: deno test --allow-none supabase/functions/_tests/version-check.test.ts
       - run: deno test --allow-none supabase/functions/_shared/jsonLdEvents.test.ts
+      # Event-source parsing invariants — see docs/scraping/EVENT_SOURCE_PLAYBOOK.md.
+      # All fixture-based; no network access needed.
+      - run: deno test --allow-none supabase/functions/_shared/centralTime.test.ts
+      - run: deno test --allow-none supabase/functions/_shared/eventSourceProfiles.test.ts
+      - run: deno test --allow-none supabase/functions/_shared/eventPageDiscovery.test.ts
+      - run: deno test --allow-none supabase/functions/_shared/htmlContentWindow.test.ts
+      - run: deno test --allow-none supabase/functions/_shared/domain-adapters/dispatch.test.ts
+      - run: deno test --allow-none supabase/functions/_shared/domain-adapters/tribeEvents.test.ts
+      - run: deno test --allow-none supabase/functions/_shared/domain-adapters/venueProfile.test.ts

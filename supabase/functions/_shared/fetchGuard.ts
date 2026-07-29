@@ -29,9 +29,19 @@ export const DEFAULT_CRAWL_ALLOWLIST: readonly string[] = [
   'iowaeventscenter.com',
   'wellsfargoarena.com',
   'desmoinesperformingarts.org',
+  // NOTE: hoytsherman.org (unhyphenated) is the REAL host. Only the hyphenated
+  // spelling was listed here, so every ai-crawler run against
+  // https://hoytsherman.org/events/ was rejected with 403 before any scrape —
+  // that source produced zero events for this reason alone. Both spellings are
+  // kept: the hyphenated one may still be seeded in existing job rows.
   'hoyt-sherman.org',
+  'hoytsherman.org',
   'valairdmoines.com',
+  'valairballroom.com',
   'wooly.us',
+  'woolysdm.com',
+  'firstfleetconcerts.com',
+  'xbklive.com',
   'eventbrite.com',
   'milb.com',
   'iowacubs.com',
@@ -41,6 +51,25 @@ export const DEFAULT_CRAWL_ALLOWLIST: readonly string[] = [
   'seatgeek.com',
   'ticketmaster.com',
   'axs.com',
+  // Seeded event sources that were missing entirely. vibrantmusichall.com is
+  // the sharpest case: a working adapter has existed for it, but ai-crawler
+  // 403'd on the host check before the adapter could ever run.
+  'vibrantmusichall.com',
+  'dmplayhouse.com',
+  'theaterdesmoines.com',
+  'des-moines-theater.com',
+  'dmsymphony.org',
+  'horizoneventscenter.com',
+  'middlebrookfarmdsm.com',
+  'bfrp.org',
+  // Hy-Vee Tix / AudienceView. Allowlisted so a residential-proxy retry does
+  // not also have to re-litigate the host check; the adapter itself stays
+  // disabled while PerimeterX blocks us (see domain-adapters/index.ts).
+  'evenue.net',
+  'hyveetix.com',
+  // Structured-data APIs the adapters call directly.
+  'statsapi.mlb.com',
+  'api.seatgeek.com',
 ];
 
 /** Max bytes to read from a single direct fetch (default 10 MB). */

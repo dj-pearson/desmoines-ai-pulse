@@ -83,9 +83,17 @@ async function scrapeWithBrowserless(
           timeout: 10000,
         },
       }),
-      // Try to wait for common event detail page elements
+      // Return the WHOLE document, not just <body>.
+      //
+      // This was `{ selector: 'body' }`, which returns the body subtree only —
+      // so every <script type="application/ld+json"> and <meta property="og:*">
+      // in <head> was discarded before it reached the callers. Both the
+      // schema.org/Event pre-pass and the og:image fallback read from <head>, so
+      // on any site that emits its structured data there (WordPress "The Events
+      // Calendar", Squarespace, Wix, most Next.js themes) they silently found
+      // nothing and the crawl fell back to fuzzy text extraction.
       elements: [
-        { selector: 'body' }
+        { selector: 'html' }
       ],
     };
 
