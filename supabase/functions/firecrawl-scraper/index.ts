@@ -18,6 +18,11 @@ import { tryDomainAdapter } from "../_shared/domain-adapters/index.ts";
 import { extractEventsFromJsonLd } from "../_shared/jsonLdEvents.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { fetchAndStoreImage, CONTENT_TYPE_MAP } from "../_shared/imageStorage.ts";
+import {
+  DEFAULT_CONTENT_BUDGET,
+  prepareContentForExtraction,
+  SPORTS_CONTENT_BUDGET,
+} from "../_shared/htmlContentWindow.ts";
 
 // Marker time for events without specific times (7:31:58 PM Central)
 const NO_TIME_MARKER = "19:31:58";
@@ -528,15 +533,30 @@ serve(async (req) => {
         continue;
       }
 
-      const content = result.markdown || result.text || result.html || '';
-      
-      console.log(`📄 ${result.backend} returned ${content.length} characters (took ${result.duration}ms)`);
-      totalContentLength += content.length;
+      const rawContent = result.markdown || result.text || result.html || '';
 
-      if (!content || content.length < 100) {
+      console.log(`📄 ${result.backend} returned ${rawContent.length} characters (took ${result.duration}ms)`);
+      totalContentLength += rawContent.length;
+
+      if (!rawContent || rawContent.length < 100) {
         console.error(`❌ No usable content returned from ${currentUrl}`);
         continue;
       }
+
+      // Every prompt below slices `content.substring(0, 15000)` — i.e. the FRONT
+      // of the page. On a long calendar the events sit past that, so the model
+      // was being handed nav and hero copy and reporting "no events". Window on
+      // the densest run of event signals instead. `isHtml` is only true when we
+      // fell back to raw HTML (markdown/text are already tag-free), so the
+      // HTML-specific chrome stripping is not applied to markdown.
+      const usedHtml = !result.markdown && !result.text && !!result.html;
+      const content = prepareContentForExtraction(rawContent, {
+        budget: isSportsScheduleDomain(currentUrl)
+          ? SPORTS_CONTENT_BUDGET
+          : DEFAULT_CONTENT_BUDGET,
+        isHtml: usedHtml,
+        label: currentUrl,
+      });
 
       // Structured-data pre-pass: pull schema.org/Event JSON-LD straight from the
       // page HTML. This is the most reliable, site-agnostic event signal (used by
