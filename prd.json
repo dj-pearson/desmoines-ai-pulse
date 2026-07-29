@@ -6090,6 +6090,182 @@
       "priority": 3,
       "passes": false,
       "notes": "MEASURED 2026-07-18 (claude/prd-loop-schema-gaps) on a production build. Every list page and the homepage issue exactly 6 get_active_ads calls, and every response status was 300 (PGRST203, the ambiguous overload). Confirmed on /events, /restaurants, /attractions and /. So this is two problems stacked: the RPC is broken for everyone (WEB-QA-020, one command to fix), AND it is being called twice as many times as there are placements. The second is worth fixing regardless — once the migration lands, six working calls per page view is six round trips where three would do, on every page, for every visitor. Severity 3 because the failing calls degrade gracefully to the house-ad fallback and cost only latency today. It becomes a real revenue-path concern the moment ads work again. | DIAGNOSIS CORRECTED 2026-07-19. I originally wrote that six calls meant each placement was being requested twice and recommended deduplication. THAT WAS WRONG, and inspecting the request payloads disproved it. There are only TWO distinct placements on the homepage (top_banner, below_fold) and each is requested exactly THREE times. React-query deduplicates by queryKey, so identical keys cannot produce parallel requests — three attempts per key is RETRY behaviour. Root cause: src/lib/queryConfig.ts shouldRetry() declines to retry 4xx (except 408/429) but PGRST203 surfaces as HTTP 300, which is not >= 400, so it falls through to the retryable branch and burns MAX_RETRIES on a permanent condition. CONSEQUENCE FOR THE FIX: there is no dedup work to do. Applying 20260718000001 takes this from 6 failing calls to 2 succeeding ones by itself. The only optional hardening is excluding 3xx from retry, which matters mainly for how loudly the next such failure fails. I am recording the error rather than quietly editing it because the original wording would have sent someone hunting for a duplicate-render bug that does not exist. | RETRY HALF FIXED 2026-07-19 (commit 8ae1a8ab), MEASURED. Root cause was NOT the 3xx status range — that was my second wrong guess. Supabase Postgrest errors carry NO http status at all; they arrive as { code, message, details, hint }, so a status-based guard could never match them however the ranges were tuned. I only found this because widening the guard to 3xx passed its unit tests and then changed nothing in a real page load. Added isPermanentDataError (PGRST* codes and Postgres class-42 SQLSTATEs), checked before status, deliberately excluding connection classes 08xxx/53xxx which do resolve by waiting. Measured before -> after: / 6->2 ad calls and 31->25 total REST, /events 6->2 and 14->10, /restaurants 6->2 and 11->7. The extra drop beyond ads is other schema-error retries disappearing for the same reason. REMAINING: the calls still FAIL (2 per page instead of 6) until migration 20260718000001 is applied — this change only stops multiplying the failure. passes stays false until then."
+    },
+    {
+      "id": "WEB-SEO-005",
+      "title": "The two highest-intent landing pages are excluded from prerendering while /pricing, /advertise and /search are included",
+      "description": "As the platform owner, I need the pages that match our money queries to ship as static HTML, because /events/this-weekend and /things-to-do are advertised in the sitemap but prerendered for nobody, while four commercial and utility routes consume the prerender budget instead.",
+      "acceptanceCriteria": [
+        "Add to the ROUTES array in scripts/prerender.mjs: /events/this-weekend, /things-to-do, /events/west-des-moines, /events/windsor-heights, /neighborhoods/downtown, /neighborhoods/east-village, /neighborhoods/beaverdale, /neighborhoods/highland-park. All eight are already in public/sitemap-static.xml, so we are advertising URLs we render for no non-JS client",
+        "Remove /search from ROUTES and add <meta name=\"robots\" content=\"noindex, follow\"> to src/pages/SearchResults.tsx. Internal search result pages are thin-content by construction and Google explicitly discourages indexing them; today the page has no robots directive at all",
+        "Remove /pricing, /advertise and /business from ROUTES. They are conversion pages with no organic query to win, and /business additionally prerenders as a sign-in wall (see WEB-SEO-004)",
+        "Do not remove /contact from consideration — it is in sitemap-static.xml but not in ROUTES. Either prerender it or drop it from the sitemap; the two must agree",
+        "Add a build-time guard: every <loc> in public/sitemap-static.xml must have a matching entry in prerender.mjs ROUTES, and vice versa. This drift is the actual bug class — the two lists were maintained independently and diverged",
+        "Verify after build: dist/events/this-weekend/index.html and dist/things-to-do/index.html exist and contain event/category text in the served HTML, not just the SPA shell"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "FOUND 2026-07-29 (claude/des-moines-seo-strategy-n54bjj) while auditing organic and AI-search position against catchdesmoines.com. scripts/prerender.mjs:31-62 lists 31 curated routes. Cross-referencing that list against public/sitemap-static.xml (36 URLs) shows eight sitemap'd routes are absent from ROUTES, and the two most commercially important are /events/this-weekend and /things-to-do — precisely the pages that map to \"what events are happening this weekend\" and \"things to do in Des Moines\". Meanwhile /pricing, /advertise, /business, /map and /search ARE prerendered. SEVERITY 1 BECAUSE OF WHO CANNOT READ THEM: Googlebot renders our SPA fine (brand searches surface /events/steve-martin-martin-short-2026-10-11, so the JS path demonstrably works), but public/robots.txt explicitly Allows GPTBot, OAI-SearchBot, ChatGPT-User, ClaudeBot, PerplexityBot, Applebot-Extended, YouBot and meta-externalagent — none of which execute JavaScript. We invite every AI search crawler and hand it an empty shell on our best pages. That is worse than blocking them: it teaches them the site has no content. This story is the cheapest half of that fix; WEB-SEO-006 is the expensive half."
+    },
+    {
+      "id": "WEB-SEO-006",
+      "title": "884 sitemapped entity URLs are client-render only, so no AI crawler can read any event, restaurant or venue page",
+      "description": "As the platform owner, I need entity detail pages to be readable without JavaScript, because the 884 event, restaurant, attraction, playground, article and guide URLs we submit to search engines are exactly the pages AI assistants cite, and none of them render for a crawler that does not run JS.",
+      "acceptanceCriteria": [
+        "Count of record: 284 events + 480 restaurants + 22 attractions + 69 playgrounds + 18 articles + 11 guides = 884 URLs across public/sitemap-*.xml. scripts/prerender.mjs:18-20 states detail pages are \"data-driven and intentionally out of scope\"",
+        "Pick an approach and record the decision in the story notes before building. Option A: enumerate entity URLs from Supabase in prerender.mjs and render them at build time. Option B: a Cloudflare Pages Function that serves a cached server-rendered snapshot to non-JS user agents — functions/_middleware.ts already exists as the hook point. Option A is simpler and cacheable; Option B keeps build time flat and stays fresh between deploys",
+        "If Option A: batch the renders, cap concurrency, and preserve the existing never-fail-the-build guarantee (prerender.mjs:11-14 and the exit-0 finally block). 884 sequential Chromium page loads at the current ~600ms settle will not fit a Pages build; measure before committing to it",
+        "Whichever approach: the shipped HTML for an event must contain title, date, start time, venue name, street address and price as readable text. Verify by fetching with curl and no JS, then grepping for the event title and venue",
+        "Regression test: extend tests/ with a check that a sample of entity URLs returns HTML containing the entity name to a plain HTTP GET",
+        "Re-verify the AI-crawler path specifically: request an event URL with a GPTBot user agent and confirm real content comes back"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "FOUND 2026-07-29 (claude/des-moines-seo-strategy-n54bjj). This is the single largest structural gap between our stated GEO ambition and reality, and it is the precondition for every other AI-search item — llms.txt, FAQ markup, Speakable, the openapi.yaml surface and the whole GEO field set on events/restaurants are all inert while the pages they describe are invisible to non-JS clients. Entity pages matter disproportionately for AI citation because assistants answer entity questions by name (\"is X open\", \"when is Y\", \"where is Z playing\") and cite the page that states the fact. Note the asymmetry with WEB-SEO-005: Google IS indexing these pages today, so this is not a Google-traffic emergency — it is an AI-visibility emergency, plus a resilience improvement for Google (rendered indexing is slower and less reliable at 884 URLs than static HTML). SEVERITY 1 for scope and blocking-ness, but sequence it AFTER WEB-SEO-005 and the Phase 0 correctness fixes, because those are hours of work and this is days."
+    },
+    {
+      "id": "WEB-SEO-007",
+      "title": "/weekend and /events/this-weekend compete for the same query, and the page with no canonical or schema is the prerendered one",
+      "description": "As the platform owner, I need one canonical weekend page, because two routes target the same intent with the same title concept and the crawlable one is the weaker of the two.",
+      "acceptanceCriteria": [
+        "Compare the two: src/pages/WeekendPage.tsx sets title \"This Weekend in Des Moines - AI-Curated Event Guide\" with no canonical prop, no faqData and no EventListJsonLd. src/pages/EventsThisWeekend.tsx sets an explicit canonical via getCanonicalUrl('/events/this-weekend'), passes faqData and breadcrumbs to EnhancedLocalSEO with isTimeSensitive, and emits EventListJsonLd",
+        "Keep /events/this-weekend as canonical. Add `/weekend  /events/this-weekend  301` to public/_redirects, following the existing WEB-UX-016 entry as the pattern",
+        "Per the Backward Compatibility rules in CLAUDE.md, /weekend is a public route referenced by the sitemap, so the 301 must stay in place for at least one release cycle before the route is removed",
+        "Remove /weekend from public/sitemap-static.xml and from prerender.mjs ROUTES in the same change, so we stop prerendering a page that now redirects",
+        "Decide the fate of src/components/WeekendGuide.tsx — it is the only thing WeekendPage renders. If it has content EventsThisWeekend lacks, port it across before deleting the route rather than losing it",
+        "Verify: curl -I https://desmoinesinsider.com/weekend returns 301 to /events/this-weekend, and only one URL in the sitemap targets weekend intent"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "FOUND 2026-07-29 (claude/des-moines-seo-strategy-n54bjj). The cannibalization itself is ordinary; what makes it severity 1 is the direction of it. /weekend is in prerender.mjs ROUTES and /events/this-weekend is not, so the version a crawler can read is the one with no canonical tag of its own, no FAQ content and no ItemList/Event schema, while the fully-marked-up version is JS-only. We are competing against ourselves and fielding the worse player. catchdesmoines.com ranks page one for \"things to do in Des Moines this weekend\" with a single /events/events-this-weekend/ page; we have two half-pages. Cheap fix, and it compounds with WEB-SEO-005 — doing 005 without 007 would leave two prerendered pages fighting each other, which is worse than today."
+    },
+    {
+      "id": "WEB-SEO-008",
+      "title": "Duplicate FAQPage on 8 page types is the 34-item GSC critical error",
+      "description": "As the platform owner, I need exactly one FAQPage per page, because FAQSection emits its own and every Enhanced*SEO component emits a second, and Google Search Console has been reporting the resulting duplicate as a critical error for six months.",
+      "acceptanceCriteria": [
+        "GSC/Critical issues.csv reports `Duplicate field \"FAQPage\"` with 34 items, Not Started. GSC/Chart.csv shows invalid items oscillating between 0 and 56 since 2025-12-15 with zero impressions recorded across the whole window",
+        "Root cause: src/components/FAQSection.tsx:42 builds and emits its own FAQPage via Helmet, and EnhancedEventSEO.tsx, EnhancedAttractionSEO.tsx, EnhancedLocalSEO.tsx and EnhancedPlaygroundSEO.tsx each emit another. These 8 pages render both: AttractionDetails.tsx, Attractions.tsx, FreeEvents.tsx, KidsEvents.tsx, Playgrounds.tsx, PlaygroundDetails.tsx, GuidesPage.tsx, MonthlyEventsPage.tsx",
+        "Pick one owner. Recommended: make FAQSection presentational only (default showSchema to false) and let the Enhanced*SEO component be the sole schema emitter, since it already receives faqData. RestaurantDetails.tsx:860 passes showSchema={true} explicitly and does not use an Enhanced*SEO wrapper, so it must keep emitting — audit each call site rather than flipping the default blind",
+        "While in here, upgrade the answers. EnhancedEventSEO.tsx:176-210 generates mad-libs (\"When is {title}?\" -> \"{title} takes place {date} at {venue}\") that restate the page title and add nothing a crawler could not already read. Substantive answers are the only reason to keep this markup — see the note below",
+        "Verify with the Rich Results Test on one URL of each of the 8 page types, then request validation in GSC and confirm the critical issue clears"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "FOUND 2026-07-29 (claude/des-moines-seo-strategy-n54bjj). Confirmed by grepping FAQPage emitters against page render trees, which reproduces the 8 page types; several are dynamic routes (attractions, playgrounds, monthly events), which is how 8 page types become 34 flagged URLs. STRATEGIC CONTEXT THAT SHOULD SHAPE THE FIX: Google deprecated FAQ rich results for non-government/non-health sites in August 2023, so the substantial FAQPage investment across this codebase produces zero Google rich results today and will not start. That is an argument for consolidating and improving it, NOT for deleting it — FAQPage is still one of the most reliably extracted formats for AI assistants, which is where our upside is. So: one emitter per page to clear the error, and real answers so the markup earns its keep in the channel that still rewards it. SEVERITY 1 because it is the only error Google is actively telling us about, it is cheap, and an uncleared critical enhancement error suppresses trust in the rest of our structured data."
+    },
+    {
+      "id": "WEB-SEO-009",
+      "title": "Concluded events are marked EventPostponed and stay index,follow forever",
+      "description": "As the platform owner, I need past events to describe themselves accurately, because every concluded event asserts schema.org/EventPostponed — which means \"moved to an unannounced future date\" — and none are ever de-indexed.",
+      "acceptanceCriteria": [
+        "src/components/EnhancedEventSEO.tsx:129 reads `\"eventStatus\": isUpcoming ? \"https://schema.org/EventScheduled\" : \"https://schema.org/EventPostponed\"`. A finished concert is not postponed. Past events should stay EventScheduled with a past endDate, which is how schema.org expresses \"this happened\"",
+        "Reserve EventPostponed for events actually flagged as postponed in the data, and EventCancelled for cancelled ones. If the events table has no status column to drive this, do not invent one for this story — just stop asserting the false value",
+        "EnhancedEventSEO.tsx:267 emits `index, follow` unconditionally. Add `noindex, follow` for events more than ~30 days past, so concluded listings drop out of the index instead of accumulating. Keep follow so the internal links still pass",
+        "Coordinate the threshold with scripts/generate-dynamic-sitemaps.ts:122, which uses GRACE_DAYS = 7 for sitemap inclusion. The sitemap window and the noindex window should be deliberate about the gap, not accidentally different",
+        "Check src/components/schema/EventSchema.tsx:53 as well — it fabricates an endDate of startDate + 3 hours when none is supplied. Fabricating a duration is defensible for a rich-result requirement, but it should be a documented decision, not a silent default",
+        "Verify: pick a concluded event URL, confirm eventStatus is EventScheduled with a past endDate and that robots is noindex,follow past the threshold"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FOUND 2026-07-29 (claude/des-moines-seo-strategy-n54bjj) while auditing Event markup quality. Two problems compound here. The false EventPostponed is the sharper one: it is a factual misstatement on what is likely hundreds of URLs, and Event markup accuracy is exactly what Google's structured-data spam guidance targets. Because the same component also keeps every past event index,follow, those false assertions accumulate in the index rather than aging out. It is plausible that this contributes to the invalid-item count in GSC/Chart.csv alongside the FAQPage duplication in WEB-SEO-008, though the GSC export we have only names the FAQPage issue explicitly, so treat that as a hypothesis to confirm after 008 clears rather than an established second cause. SEVERITY 2 not 1: it degrades trust in our Event markup and bloats the index, but unlike 005/007 it is not costing us a page we could otherwise rank."
+    },
+    {
+      "id": "WEB-SEO-010",
+      "title": "We name ourselves as organizer and performer on events we neither organize nor perform",
+      "description": "As the platform owner, I need organizer and performer omitted when unknown, because EventSchema defaults both to \"Des Moines Insider\", which asserts that we organize touring Broadway shows and perform at symphony concerts.",
+      "acceptanceCriteria": [
+        "src/components/schema/EventSchema.tsx:79-95 falls back to `{\"@type\": \"Organization\", name: \"Des Moines Insider\", url: \"https://desmoinesinsider.com\"}` for organizer when none is passed, and to the same value for performer when neither performer nor organizer is passed",
+        "Omit both fields when the underlying data is unknown. Neither is required by Google's Event structured data guidance, and an absent field is strictly better than a false one",
+        "Audit EnhancedEventSEO.tsx for the same pattern before closing — it builds its own Event object and shows 3 Organization nodes, so check whether it repeats this fallback",
+        "If a real organizer exists on the event record but is not being passed through, wire it up in the same change — that is the actual win here, not just removing the false value",
+        "Verify: an event with no known organizer emits no organizer and no performer key at all"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FOUND 2026-07-29 (claude/des-moines-seo-strategy-n54bjj). This is a small diff with a disproportionate risk profile. An aggregator that inserts its own name as the organizer and performer of third-party events is a recognisable spam pattern — it is how scraped-event doorway sites present themselves — and we do it by default on every event lacking organizer data, which given crawled sources is most of them. There is no upside being captured: neither field drives a rich result for us. SEVERITY 2 rather than 1 only because the blast radius is reputational/algorithmic rather than a measurable ranking loss we can point at today. Fix it alongside WEB-SEO-009; they are the same file family and the same review."
+    },
+    {
+      "id": "WEB-SEO-011",
+      "title": "The daily event crawl never reaches a sitemap, the prerendered HTML, or any indexing endpoint",
+      "description": "As the platform owner, I need freshness to actually ship, because the crawler ingests events every day and nothing downstream regenerates sitemaps, rebuilds prerendered pages, or notifies a search engine until a human happens to deploy.",
+      "acceptanceCriteria": [
+        ".github/workflows/event-crawler.yml runs on `cron: 0 12 * * *`. After it writes to the database, no step regenerates sitemaps, triggers a rebuild, or pings any indexing endpoint",
+        "Sitemaps are only produced by `npm run generate-sitemaps`, which package.json wires into `npm run build`, which Cloudflare Pages only runs on push to main. A week with no deploy is a week of stale sitemaps on an events site",
+        "The prerendered hub HTML has the same problem and it is worse: dist/events/today/index.html is frozen at last deploy, so a crawler fetching /events/today gets whatever \"today\" meant when we last shipped",
+        "Add post-crawl steps to event-crawler.yml: invoke the existing regenerate-sitemaps edge function, then trigger a Cloudflare Pages deploy hook so prerendered output is rebuilt with the day's data",
+        "Schedule submission of new and changed URLs. Note the constraint: the Google Indexing API officially supports only JobPosting and BroadcastEvent, so do not build the whole plan on the existing google-indexing-api function. Implement IndexNow for Bing/Yandex, and rely on accurate sitemap lastmod plus a fast rebuild for Google",
+        "Both regenerate-sitemaps and google-indexing-api exist as edge functions and are on no schedule at all — check supabase/migrations for seo_monitoring_schedules rows before adding a parallel mechanism",
+        "Measure the outcome: median days from event ingest to indexed URL. Target under 3. This is the number the whole story exists to move"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "FOUND 2026-07-29 (claude/des-moines-seo-strategy-n54bjj). Strategically this is the most damaging finding in the set, because freshness and coverage are the ONLY structural advantages we have over catchdesmoines.com. They are a DMO with the backlink profile of every hotel and chamber in Polk County; we will not out-authority them. What we can beat them on is that their calendar is submission-based and curated while ours is crawled daily — and we currently throw that advantage away between the database write and anything a crawler can see. The infrastructure to fix it already exists (regenerate-sitemaps, google-indexing-api, seo_monitoring_schedules); nothing is scheduled to call it. SEVERITY 1. Sequence note: this compounds with WEB-SEO-006 — if entity prerendering moves to build time, a daily rebuild becomes a daily 884-page render, so decide 006's approach before wiring the daily trigger here."
+    },
+    {
+      "id": "WEB-SEO-012",
+      "title": "The homepage targets our own architecture instead of any query a person searches for",
+      "description": "As the platform owner, I need the homepage to answer \"what is there to do in Des Moines\", because our highest-authority page currently sells the product to itself and its on-page FAQ explains our AI stack.",
+      "acceptanceCriteria": [
+        "src/pages/Index.tsx title is `${BRAND.name} - Conversational City Guide | AI-Powered Event & Restaurant Discovery`. \"Conversational City Guide\" and \"AI-Powered Discovery\" have no search volume; nobody searches for how we are built",
+        "The on-page FAQ is titled \"Frequently Asked Questions About Des Moines AI Pulse\" with description \"Learn how our conversational AI technology transforms the way you discover and experience Des Moines.\" Replace with questions real visitors ask: what is there to do in Des Moines this weekend, what is free, where should I eat, what is on tonight",
+        "Rewrite the title around the actual head term. Keep the brand suffix — getPageTitle in src/lib/brandConfig.ts already handles that convention",
+        "BRAND.description in src/lib/brandConfig.ts:32 is the site-wide default meta description and leads with \"Discover events, restaurants, and attractions in Des Moines, Iowa. AI-powered local guide with real-time updates...\" — front-load the query, drop the self-description",
+        "Note the interaction with WEB-SEO-002: all 31 prerendered routes currently share the single static meta description from index.html, so changing BRAND.description moves more than the homepage. Sequence after 002 or accept the coupling knowingly",
+        "Do not over-rotate: the homepage should support the head term, but /things-to-do is the page built to win it. Keep them differentiated rather than making two pages chase one phrase — that is the mistake WEB-SEO-007 documents"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FOUND 2026-07-29 (claude/des-moines-seo-strategy-n54bjj). Classic and very common failure: the site is optimized to describe itself rather than to answer the query, on the one page with the most accumulated authority to spend. Evidence that the head term is winnable without DMO authority: desmoinesparent.com — a small local parenting blog with no comparable backlink profile — currently outranks catchdesmoines.com for \"free things to do in Des Moines\" and for Des Moines event-calendar queries. Topical depth and freshness beat authority on these terms, which is the whole thesis of docs/SEO_GEO_COMPETITIVE_STRATEGY.md. SEVERITY 2: real upside, but the homepage is not where the near-term wins are, and it should not jump the prerendering and freshness work."
+    },
+    {
+      "id": "WEB-SEO-013",
+      "title": "The ~950-page pSEO system is built, routed, and absent from every sitemap",
+      "description": "As the platform owner, I need generated pSEO pages to be discoverable, because src/pseo contains a complete programmatic SEO system with live routes and no sitemap references any of its output.",
+      "acceptanceCriteria": [
+        "scripts/generate-dynamic-sitemaps.ts generates events, restaurants, attractions, playgrounds, articles and guides. It never queries pseo_pages, so no generated page appears in any sitemap",
+        "Add a sitemap-pseo.xml generator sourced from pseo_pages (published rows only) and register it in the sitemap index and public/robots.txt",
+        "Routes already exist at /things-to-do/:seg1 and /things-to-do/:seg1/:seg2 in src/App.tsx:483-484, and the system has generate-pseo-page plus pseo-batch-worker edge functions and a 1,169-line taxonomy — so this is a distribution gap, not a build gap",
+        "Cap the initial release at ~300 pages, not the ~950 in src/pseo/roadmap.ts. That file already warns that sudden page-count spikes read as suspicious; 950 new URLs on a site with our current authority is that spike",
+        "Enforce an inventory gate before publishing any page: at least 8 distinct qualifying events (or 6 restaurants) in the current window, else 301 to the parent. Re-evaluate on each regeneration so a page that falls below the gate folds back up instead of going thin. This is the single control that separates this from doorway pages",
+        "Release in batches of ~50/week and check the GSC indexation ratio after each. Pause if \"Crawled – not indexed\" exceeds 20% of the batch",
+        "Note the existing precedent in public/_redirects: /things-to-do/tourists was 301'd to /visitors-guide under WEB-UX-016 because the generated page duplicated a hand-built one. Audit the taxonomy for other collisions with real routes before generating"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FOUND 2026-07-29 (claude/des-moines-seo-strategy-n54bjj). Largest built-but-unshipped asset found in the repo: full taxonomy, 10 page types, generation pipeline, six-week rollout roadmap, two edge functions, live routes — and zero sitemap coverage, so the pages are unreachable except by typing the URL. SEVERITY 2 DELIBERATELY, despite the size of the opportunity: publishing a few hundred generated pages on a site whose money pages are not yet prerendered (WEB-SEO-005/006) and whose freshness pipeline does not reach crawlers (WEB-SEO-011) would be scaling a thin-content footprint on a weak foundation. The inventory gate and the batch cadence are not optional garnish here — an aggregator publishing hundreds of templated location/category permutations is the exact shape Google's doorway-page guidance describes, and the only thing distinguishing us is that our pages have real inventory behind them. Do 005, 007, 008 and 011 first."
+    },
+    {
+      "id": "WEB-SEO-014",
+      "title": "Google Search Console is wired up but never synced, so keyword strategy is running on guesses",
+      "description": "As the platform owner, I need our own impression and query data, because the full GSC integration exists and no keyword decision to date has been informed by a single row of it.",
+      "acceptanceCriteria": [
+        "gsc_properties, gsc_keyword_performance, gsc_page_performance and gsc_oauth_credentials all exist (supabase/migrations/20260331000001_create_gsc_tables.sql, recreated in 20260331000002), with gsc-oauth, gsc-fetch-properties and gsc-sync-data edge functions and an AdminGscCallback.tsx page",
+        "Complete the OAuth connection and run a backfill of the full available window (GSC retains 16 months)",
+        "Put gsc-sync-data on a schedule so the data does not go stale again",
+        "Re-derive the keyword matrix in docs/SEO_GEO_COMPETITIVE_STRATEGY.md section 5 from actual queries before any Tier 2 or Tier 3 page is built. That section is currently built from SERP observation, not from our own impression data, and is explicitly labelled as such",
+        "Specific questions to answer from the data: which queries already return us on page 2-3 (fastest wins), which pages get impressions but near-zero clicks (title/description problems), and whether any non-brand query has meaningful impressions at all today",
+        "Surface it in the existing SEODashboard.tsx rather than building a new admin view"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FOUND 2026-07-29 (claude/des-moines-seo-strategy-n54bjj). Called out here as a story rather than left as a caveat in the strategy doc because it gates the quality of every content decision downstream. The competitive and keyword analysis in docs/SEO_GEO_COMPETITIVE_STRATEGY.md was assembled from live SERP observation across the target query clusters plus a full codebase audit — it is directionally sound and the technical findings in WEB-SEO-005 through 013 stand on their own evidence, but the query prioritisation in section 5 is inference. We are sitting on 16 months of retained first-party data behind a finished integration. SEVERITY 2 by dependency, not by effort: this is close to free and it should be done in week one, before Tier 2/Tier 3 content work commits to targets."
+    },
+    {
+      "id": "WEB-SEO-015",
+      "title": "Unverifiable performance statistics are published site-wide and AI assistants now repeat them as fact",
+      "description": "As the platform owner, I need published statistics to be defensible, because claims like \"98% of public events\" and \"50,000 monthly users\" appear on the site and are already being restated by AI search as attributed fact.",
+      "acceptanceCriteria": [
+        "Locate every instance. Known claims in circulation: \"captures 98% of public events in the Des Moines metro\", \"50,000 monthly users\", \"95% accuracy in event listings\", and the counts in public/llms.txt (\"500+ monthly events\", \"200+ restaurants\", \"50+ attractions\", \"100+ playgrounds\")",
+        "For each: substantiate with a stated methodology and date, soften to something defensible, or remove",
+        "The count claims are the easy case — they are checkable against the database and should be generated from it rather than hardcoded. public/llms.txt says \"200+ restaurants\" while sitemap-restaurants.xml has 480 URLs, so the hardcoded figures are already drifting from reality in both directions",
+        "The 98% / 50,000 / 95% claims are the hard case. A coverage percentage requires a denominator — if we cannot define how \"all public events in the metro\" was counted, the number cannot be defended and should go",
+        "Note that llms.txt also asserts freshness (\"Events: Updated daily\") which is true of ingestion but false of what a crawler can see — see WEB-SEO-011. Fix the pipeline or soften the claim; do not leave a stated freshness guarantee we do not meet",
+        "Re-check after: search for the claims and confirm AI summaries are no longer attributing unverifiable figures to us"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "FOUND 2026-07-29 (claude/des-moines-seo-strategy-n54bjj). Surfaced indirectly and that is what makes it notable: querying for the brand returned an AI summary that stated \"According to their internal analytics, Des Moines Insider captures 98% of public events in the Des Moines metro area, making it the most comprehensive event discovery platform in Iowa\", plus the 50,000-user and 95%-accuracy figures, presented as fact and attributed to us. The GEO work in this epic is designed to make assistants cite us more; that means every unsupported number on the site becomes something we are quoted as asserting. On a product whose entire pitch is accuracy and real-time correctness, that is an E-E-A-T liability rather than marketing upside. SEVERITY 3 because there is no evidence of ranking harm and the fix is editorial, but it gets strictly more expensive as the AI-citation work succeeds — which is the point of this epic."
     }
   ]
 }
