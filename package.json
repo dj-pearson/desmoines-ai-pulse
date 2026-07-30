@@ -70,7 +70,8 @@
     "ralph:android": "node scripts/ralph/ralph.mjs --tool claude --prd prd-android.json --instructions scripts/ralph/CLAUDE-android.md",
     "ralph:android:resume": "node scripts/ralph/ralph.mjs --tool claude --prd prd-android.json --instructions scripts/ralph/CLAUDE-android.md --resume",
     "check-seo-routes": "node scripts/check-seo-route-parity.mjs",
-    "check-schema-dupes": "node scripts/check-duplicate-schema.mjs"
+    "check-schema-dupes": "node scripts/check-duplicate-schema.mjs",
+    "audit:seo-head": "node scripts/audit-prerendered-seo.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

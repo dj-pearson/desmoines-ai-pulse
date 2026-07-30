@@ -176,6 +176,28 @@ async function main() {
   // Cache the original SPA shell ONCE so per-route writes can't affect the
   // fallback we serve while rendering other routes.
   const indexHtml = fs.readFileSync(indexPath);
+
+  // ...but caching it is only safe if it IS the pristine vite shell. Route '/'
+  // writes back to this same file, so a SECOND prerender run against the same
+  // dist/ picks up the previously RENDERED homepage and serves that as the SPA
+  // fallback for every unresolved path. React then boots on top of a fully
+  // rendered DOM, and the resulting hydration mismatch silently breaks Helmet:
+  // the body renders fine while <title>, <link rel=canonical> and the JSON-LD
+  // blocks stay at whatever the stale file had — with the run still reporting
+  // success.
+  //
+  // Cost me an hour chasing a phantom "concurrency broke Helmet" theory, which
+  // a controlled A/B disproved. CI is unaffected because it always builds into
+  // a fresh dist/, so this only bites re-runs — which is precisely when it is
+  // least expected. react-helmet-async marks every tag it manages with
+  // data-rh, so its presence is a reliable tell.
+  if (/\sdata-rh=/.test(indexHtml.toString('utf8'))) {
+    warn(
+      'dist/index.html is ALREADY PRERENDERED (found data-rh attributes). Using it as the SPA ' +
+        'fallback can corrupt every route\'s <head> via hydration mismatch. Re-run `vite build` ' +
+        'for a clean dist/ before prerendering; results from this run are not trustworthy.',
+    );
+  }
   // Vite-built HTML, captured before any prerender write. The set of
   // modulepreload links IN here is the ground truth for what should be
   // preloaded; anything the browser adds on top is a lazy chunk.
@@ -215,14 +237,40 @@ async function main() {
 
   await new Promise((resolve) => server.listen(PORT, resolve));
 
-  let browser;
+  // ONE BROWSER PER WORKER, not one browser with N tabs (WEB-SEO-002).
+  //
+  // With N pages open in a single Chromium, only one is the active tab and the
+  // rest never get their rAF callbacks serviced. react-helmet-async commits
+  // <head> from a rAF, so on the backgrounded tabs it simply never runs: the
+  // body renders completely — correct content, correct h1 — while <title>,
+  // <link rel=canonical> and every JSON-LD block stay at the build shell's
+  // values, and the run reports success.
+  //
+  // Measured on a pristine dist/, varying only concurrency: at 1 and 2 the
+  // homepage shipped its real title and canonical; at 3, 4 and 6 it shipped
+  // data-rh=0, no canonical, and the shell title. The heaviest page loses
+  // first, which here is the homepage — the single most valuable URL on the
+  // site. Separate browser processes each have their own foreground page and
+  // fix it outright: data-rh=35 and the correct canonical at concurrency 6.
+  //
+  // --disable-renderer-backgrounding and friends do NOT help; that was tried
+  // and A/B'd on a pristine shell, and made no difference. Do not "simplify"
+  // this back to a shared browser.
+  //
+  // Cost is N Chromium processes instead of one. At the concurrency levels here
+  // (2-6) that is a few hundred MB, which is the right trade for output that is
+  // actually correct.
+  const LAUNCH_ARGS = ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'];
+  let browsers = [];
   try {
-    browser = await puppeteer.launch({
-      headless: 'new',
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-    });
+    browsers = await Promise.all(
+      Array.from({ length: CONCURRENCY }, () =>
+        puppeteer.launch({ headless: 'new', args: LAUNCH_ARGS }),
+      ),
+    );
   } catch (e) {
     warn(`could not launch Chromium (${e.message}) — skipping prerender`);
+    await Promise.all(browsers.map((b) => b.close().catch(() => {})));
     server.close();
     return;
   }
@@ -242,7 +290,7 @@ async function main() {
    * `strict` (entity pass) additionally requires positive proof the page
    * rendered as ITSELF rather than as the SPA shell.
    */
-  async function renderRoute(route, strict = false) {
+  async function renderRoute(route, strict = false, browser = browsers[0]) {
     const page = await browser.newPage();
     try {
       await page.goto(`http://127.0.0.1:${PORT}${route}`, {
@@ -261,8 +309,20 @@ async function main() {
           { timeout: 15000 },
         )
         .catch(() => {});
-      // Let Helmet flush the <head> and any remaining render settle.
-      await new Promise((r) => setTimeout(r, 600));
+
+      // Then wait for Helmet to have actually committed the <head>, rather than
+      // sleeping a fixed 600ms and hoping. react-helmet-async stamps data-rh on
+      // every tag it manages, so its presence is a precise "Helmet has run"
+      // signal. See the browser-per-worker note at launch for why this matters.
+      //
+      // A route that renders no SEO component at all emits no data-rh and just
+      // hits the timeout, same as the old sleep. Twelve hub routes are in that
+      // state today (WEB-SEO-002), so keep the timeout short enough that they
+      // do not dominate the run.
+      await page
+        .waitForFunction(() => !!document.head.querySelector('[data-rh]'), { timeout: 5000 })
+        .catch(() => {});
+      await new Promise((r) => setTimeout(r, 250));
 
       const captured = await page.content();
 
@@ -365,7 +425,7 @@ async function main() {
   async function renderPool(routes, concurrency, deadline, strict = false) {
     const queue = [...routes];
     const unrendered = [];
-    const worker = async () => {
+    const worker = async (browser) => {
       for (;;) {
         if (deadline && Date.now() > deadline) {
           unrendered.push(...queue.splice(0));
@@ -374,7 +434,7 @@ async function main() {
         const route = queue.shift();
         if (route === undefined) return;
         try {
-          await renderRoute(route, strict);
+          await renderRoute(route, strict, browser);
           ok++;
         } catch (e) {
           failed++;
@@ -382,7 +442,7 @@ async function main() {
         }
       }
     };
-    await Promise.all(Array.from({ length: concurrency }, worker));
+    await Promise.all(Array.from({ length: concurrency }, (_, i) => worker(browsers[i % browsers.length])));
     return unrendered;
   }
 
@@ -426,7 +486,7 @@ async function main() {
     }
   }
 
-  await browser.close().catch(() => {});
+  await Promise.all(browsers.map((b) => b.close().catch(() => {})));
   server.close();
   const totalSeconds = Math.round((Date.now() - startedAt) / 1000);
   const scope = PRERENDER_ENTITIES ? `${ROUTES.length} hub + ${entityTotal} entity` : `${ROUTES.length} hub`;
