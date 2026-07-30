@@ -257,7 +257,18 @@ export default function Hotels() {
           content="Find the best hotels in Des Moines, Iowa. Browse downtown hotels, West Des Moines accommodations, and hotels near popular event venues. Book your stay today."
         />
         <meta name="keywords" content="Des Moines hotels, where to stay Des Moines, hotels downtown Des Moines, West Des Moines hotels, Iowa hotels" />
-        <link rel="canonical" href="/stay" />
+        {/* WEB-SEO-002: was a RELATIVE canonical (href="/stay"). Valid, but an
+            absolute URL is unambiguous for crawlers and matches every other page. */}
+        <link rel="canonical" href={getCanonicalUrl('/stay')} />
+        {/* WEB-SEO-002: these pages set only title/description, so index.html's
+            static og: and twitter: tags were the only ones shipping — pinned to the
+            homepage on every route. Emitting them here lets the static copies be
+            marked data-rh and replaced rather than duplicated. */}
+        <meta property="og:title" content="Stay in Des Moines - Hotels & Accommodations | Des Moines Insider" />
+        <meta property="og:description" content="Find the best hotels in Des Moines, Iowa. Browse downtown hotels, West Des Moines accommodations, and hotels near popular event venues. Book your stay today." />
+        <meta property="og:url" content={getCanonicalUrl('/stay')} />
+        <meta name="twitter:title" content="Stay in Des Moines - Hotels & Accommodations | Des Moines Insider" />
+        <meta name="twitter:description" content="Find the best hotels in Des Moines, Iowa. Browse downtown hotels, West Des Moines accommodations, and hotels near popular event venues. Book your stay today." />
       </Helmet>
 
       <div className="min-h-screen bg-background pb-24">

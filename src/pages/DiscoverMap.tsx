@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { STALE_TIME } from '@/lib/queryConfig';
 import type { MapBounds, MapEntity } from '@/components/map/DiscoverMapCanvas';
+import { getCanonicalUrl } from '@/lib/brandConfig';
 
 // react-leaflet stays off the initial bundle (WEB-PERF-003) — the whole canvas
 // (incl. leaflet) loads lazily when the map renders.
@@ -221,7 +222,23 @@ export default function DiscoverMap() {
       <Helmet>
         <title>Discover Map — Explore Des Moines | Des Moines Insider</title>
         <meta name="description" content="Explore Des Moines on an interactive map. Pan to search an area and browse events, restaurants, and attractions in view." />
+        {/* WEB-SEO-002: sitemapped and prerendered, but had no canonical. */}
+        <link rel="canonical" href={getCanonicalUrl('/map')} />
+        {/* WEB-SEO-002: these pages set only title/description, so index.html's
+            static og: and twitter: tags were the only ones shipping — pinned to the
+            homepage on every route. Emitting them here lets the static copies be
+            marked data-rh and replaced rather than duplicated. */}
+        <meta property="og:title" content="Discover Map — Explore Des Moines | Des Moines Insider" />
+        <meta property="og:description" content="Explore Des Moines on an interactive map. Pan to search an area and browse events, restaurants, and attractions in view." />
+        <meta property="og:url" content={getCanonicalUrl('/map')} />
+        <meta name="twitter:title" content="Discover Map — Explore Des Moines | Des Moines Insider" />
+        <meta name="twitter:description" content="Explore Des Moines on an interactive map. Pan to search an area and browse events, restaurants, and attractions in view." />
       </Helmet>
+      {/* WEB-SEO-004 / WEB-SEO-002: this page had no heading of any level, which
+          is both an SEO gap and a WCAG 1.3.1 heading-hierarchy failure. The UI is
+          map-first with no natural place for a visible title, so the h1 is
+          screen-reader only — an accepted pattern for map-led layouts. */}
+      <h1 className="sr-only">Explore Des Moines on a Map — Events, Restaurants and Attractions</h1>
       <div className="min-h-screen bg-background flex flex-col">
         <Header />
 

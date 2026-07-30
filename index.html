@@ -19,16 +19,26 @@
     <!-- The warning about frame-ancestors being ignored in meta tags is expected -->
 
     <!-- Open Graph -->
-    <meta
-      property="og:title"
+    <meta data-rh="true" property="og:title"
       content="Des Moines Insider: Events, Restaurants & Attractions"
     />
-    <meta
-      property="og:description"
+    <meta data-rh="true" property="og:description"
       content="Beyond search. Beyond directories. Des Moines Insider is the first truly conversational city guide. Access via web, SMS, voice, or ChatGPT. Context-aware intelligence that learns your preferences and proactively assists you."
     />
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://desmoinesinsider.com" />
+    <!--
+      NO STATIC og:url HERE ON PURPOSE (WEB-SEO-002) — same reasoning as the
+      canonical note below.
+
+      This file is the shell for every route, so a hardcoded og:url claimed the
+      HOMEPAGE as the share URL of all 35 prerendered routes. Helmet APPENDS its
+      correct per-route og:url rather than replacing an unmanaged tag, so both
+      shipped and the wrong one came first, which is the one a scraper reading
+      the first match takes.
+
+      Helmet supplies og:url on every route that renders an SEO component.
+    -->
+
     <meta
       property="og:image"
       content="https://desmoinesinsider.com/DMI-Logo.png"
@@ -400,8 +410,27 @@
 
       Collapsing the duplicate description tags (and giving the routes that
       still have no description of their own a real one) is WEB-SEO-002.
+
+      RESOLVED: data-rh="true" below hands this tag to react-helmet-async.
+      Helmet does not replace unmanaged meta tags, it appends alongside them, so
+      without the marker every prerendered route shipped TWO descriptions — this
+      generic fallback FIRST and the page's own second. The first is the one a
+      crawler is most likely to use, so 33 routes were effectively describing
+      themselves with the site-wide default. With the marker Helmet treats it as
+      its own on mount and swaps in the page's description instead.
+
+      Verified safe: all 33 successfully prerendered routes emit their own
+      description, so none is left without one. A route served the raw shell
+      (not prerendered, or JS off) still shows this text — that is the point of
+      keeping it rather than deleting it.
+
+      Do NOT add data-rh to the viewport, theme-color, format-detection or
+      site-verification tags. Helmet removes every data-rh tag it does not
+      re-emit, and those are functional rather than SEO — losing viewport would
+      break mobile layout outright.
     -->
     <meta
+      data-rh="true"
       name="description"
       content="Events, restaurants, and things to do in Des Moines, Iowa. Find what's happening today and this weekend across Des Moines, West Des Moines, Ankeny, Urbandale and the metro — updated daily."
     />
@@ -450,12 +479,10 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@desmoinessider" />
     <meta name="twitter:creator" content="@desmoinessider" />
-    <meta
-      name="twitter:title"
+    <meta data-rh="true" name="twitter:title"
       content="Des Moines Insider: Events, Restaurants & Attractions"
     />
-    <meta
-      name="twitter:description"
+    <meta data-rh="true" name="twitter:description"
       content="Beyond directories. Get AI-powered recommendations via web, SMS, voice, or ChatGPT. Context-aware, learns from behavior, proactively assists. Des Moines redefined."
     />
     <meta

@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MapPin, Clock, Heart, Users, Palette, Dumbbell, Utensils, Compass } from 'lucide-react';
+import { getCanonicalUrl } from '@/lib/brandConfig';
 
 const THEME_ICONS: Record<string, typeof Heart> = {
   romance: Heart,
@@ -38,6 +39,17 @@ export default function Itineraries() {
       <Helmet>
         <title>Curated Itineraries — Des Moines Trip Plans | Des Moines Insider</title>
         <meta name="description" content="Browse curated Des Moines itineraries for weekends, date days, family fun, food tours, and art walks. Printable checklists included." />
+        {/* WEB-SEO-002: sitemapped and prerendered, but had no canonical. */}
+        <link rel="canonical" href={getCanonicalUrl('/itineraries')} />
+        {/* WEB-SEO-002: these pages set only title/description, so index.html's
+            static og: and twitter: tags were the only ones shipping — pinned to the
+            homepage on every route. Emitting them here lets the static copies be
+            marked data-rh and replaced rather than duplicated. */}
+        <meta property="og:title" content="Curated Itineraries — Des Moines Trip Plans | Des Moines Insider" />
+        <meta property="og:description" content="Browse curated Des Moines itineraries for weekends, date days, family fun, food tours, and art walks. Printable checklists included." />
+        <meta property="og:url" content={getCanonicalUrl('/itineraries')} />
+        <meta name="twitter:title" content="Curated Itineraries — Des Moines Trip Plans | Des Moines Insider" />
+        <meta name="twitter:description" content="Browse curated Des Moines itineraries for weekends, date days, family fun, food tours, and art walks. Printable checklists included." />
       </Helmet>
       <div className="min-h-screen bg-background">
         <Header />
