@@ -6,13 +6,16 @@ import { ogImageUrl } from "@/lib/ogImage";
 
 interface EnhancedEventSEOProps {
   event: Event;
-  isUpcoming?: boolean;
+  // `isUpcoming` was removed in WEB-SEO-009. It only ever drove the
+  // EventScheduled/EventPostponed switch, which was itself the bug — a
+  // concluded event is not postponed. Staleness for the robots directive is
+  // now derived from the event's own start date below, so the component no
+  // longer depends on the caller computing it correctly.
   viewMode?: "list" | "detail";
 }
 
 export default function EnhancedEventSEO({
   event,
-  isUpcoming = true,
   viewMode = "detail"
 }: EnhancedEventSEOProps) {
 
