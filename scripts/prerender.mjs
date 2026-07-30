@@ -347,6 +347,34 @@ async function main() {
         throw new Error('captured HTML missing #root');
       }
 
+      // Never freeze a transient failure state into static HTML.
+      //
+      // The prerenderer captures whatever the page happens to be showing. If a
+      // data fetch is slow or the database is briefly unreachable during the
+      // build, that is a loading skeleton or an error screen — and it gets
+      // written to dist/ and served to crawlers as the page's final content.
+      // Observed here with unreachable credentials: /events captured "Loading
+      // events page…" and /articles captured "You're offline — Check your
+      // internet connection", both reported as successful prerenders.
+      //
+      // Throwing leaves no file for the route, so Cloudflare serves the SPA
+      // shell and Googlebot renders it client-side — exactly the behaviour
+      // before this route was prerendered. Strictly better than publishing an
+      // error page.
+      const failureMarker = [
+        "You're offline",
+        'Check your internet connection',
+        'Unable to Load',
+        'Loading events page',
+        'Something went wrong',
+      ].find((marker) => html.includes(marker));
+      if (failureMarker) {
+        throw new Error(
+          `captured a transient failure/loading state ("${failureMarker}") — refusing to publish it ` +
+            `as static HTML; the route keeps its SPA shell`,
+        );
+      }
+
       // WEB-SEO-006 quality gate: refuse to write a page that self-identifies as
       // a DIFFERENT url.
       //
