@@ -76,6 +76,10 @@ const ENTITY_BUDGET_SECONDS = Number(process.env.PRERENDER_ENTITY_BUDGET_SECONDS
 // least damaged by shipping a day late.
 const ENTITY_SITEMAPS = [
   'sitemap-events.xml',
+  // WEB-SEO-013: generated pSEO pages are pure SPA routes with no static
+  // fallback, so they need prerendering more than most — but they sit after
+  // events here because they are evergreen and events are not.
+  'sitemap-pseo.xml',
   'sitemap-restaurants.xml',
   'sitemap-attractions.xml',
   'sitemap-playgrounds.xml',
