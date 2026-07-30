@@ -14,7 +14,7 @@ import { FAQSection } from "@/components/FAQSection";
 import { Card, CardContent } from "@/components/ui/card";
 import { DollarSign, MapPin, Calendar, Gift } from "lucide-react";
 import { format } from "date-fns";
-import { getCanonicalUrl } from "@/lib/brandConfig";
+import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 
@@ -75,7 +75,8 @@ export default function FreeEvents() {
     return acc;
   }, {});
 
-  const pageTitle = "Free Events in Des Moines - No-Cost Activities & Entertainment | Des Moines AI Pulse";
+  // WEB-SEO-002: was 84 chars and used the retired "Des Moines AI Pulse" brand.
+  const pageTitle = `Free Events in Des Moines - Free Things to Do | ${BRAND.name}`;
   const pageDescription = `Discover ${freeEvents.length}+ free events in Des Moines and surrounding areas. From family activities to concerts, find no-cost entertainment happening now. Updated daily with verified free admission events.`;
 
   const breadcrumbs = [

@@ -1,8 +1,64 @@
-import { defineConfig, Plugin } from "vite";
+import { defineConfig, loadEnv, Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
+import fs from "node:fs";
 import { componentTagger } from "lovable-tagger";
 import { visualizer } from "rollup-plugin-visualizer";
+
+/**
+ * Fail the build with a usable message when index.html's %VAR% placeholders
+ * have nothing to interpolate (WEB-CI-022).
+ *
+ * index.html contains `<link rel="preconnect" href="%VITE_SUPABASE_URL%">`.
+ * Vite substitutes %VAR% placeholders from env; with the var unset the literal
+ * survives into the HTML, vite's own build-html plugin calls decodeURI() on the
+ * attribute, and "%VI" is an invalid percent-escape — so the build dies with:
+ *
+ *     [vite:build-html] URI malformed
+ *
+ * and a stack inside a vite chunk. Nothing in that output mentions an
+ * environment variable, so the natural first guesses are a corrupt dependency
+ * tree or a Node version mismatch. CI and Cloudflare Pages inject the vars, so
+ * this only ever bites a fresh clone or automation without the full env —
+ * exactly the people least equipped to recognise it.
+ *
+ * Checked against index.html rather than a hardcoded list so a new placeholder
+ * is covered automatically.
+ */
+function assertHtmlEnvPlaceholders(loadedEnv: Record<string, string>): Plugin {
+  return {
+    name: "assert-html-env-placeholders",
+    enforce: "pre",
+    // buildStart, NOT transformIndexHtml: vite:build-html parses index.html
+    // (and throws on the bad escape) before the pre-transform pipeline runs, so
+    // a transformIndexHtml hook here never got the chance to fire. Reading the
+    // file directly at buildStart is guaranteed to run first.
+    buildStart() {
+      const htmlPath = path.resolve(__dirname, "index.html");
+      if (!fs.existsSync(htmlPath)) return;
+      const html = fs.readFileSync(htmlPath, "utf8");
+
+      const placeholders = [...html.matchAll(/%([A-Z][A-Z0-9_]*)%/g)]
+        .map((m) => m[1])
+        // Vite's own build-time token, replaced by injectBuildTimestamp below.
+        .filter((name) => name !== "BUILD_TIMESTAMP");
+
+      const missing = [...new Set(placeholders)].filter(
+        (name) => !process.env[name] && !loadedEnv[name],
+      );
+
+      if (missing.length > 0) {
+        this.error(
+          `\n\nMissing required environment variable(s): ${missing.join(", ")}\n\n` +
+            `index.html interpolates them as %VAR% placeholders. Without a value the\n` +
+            `literal "%${missing[0]}%" reaches vite's HTML parser, which calls decodeURI()\n` +
+            `on it and fails with the unhelpful "[vite:build-html] URI malformed".\n\n` +
+            `Set them in .env (see .env.example) or export them before building.\n`,
+        );
+      }
+    },
+  };
+}
 
 // Custom plugin to inject build timestamp for cache busting
 function injectBuildTimestamp(): Plugin {
@@ -70,13 +126,18 @@ function removeLazyPreloads(): Plugin {
 
 // https://vitejs.dev/config/
 // Force rebuild: 2025-01-18
-export default defineConfig(({ command, mode }) => ({
+export default defineConfig(({ command, mode }) => {
+  // Vite only exposes .env values on `import.meta.env` inside app code, so the
+  // config has to load them itself to validate index.html placeholders.
+  const loadedEnv = loadEnv(mode, process.cwd(), "");
+  return {
   base: "/",
   server: {
     host: "::",
     port: 8080,
   },
   plugins: [
+    assertHtmlEnvPlaceholders(loadedEnv), // Fail clearly on missing %VAR% (WEB-CI-022)
     injectBuildTimestamp(), // Add timestamp to prevent HTML caching
     removeLazyPreloads(), // Remove vendor-maps/vendor-three from preload list
     react({
@@ -254,4 +315,5 @@ export default defineConfig(({ command, mode }) => ({
     // Force React to be bundled first
     force: true,
   },
-}));
+};
+});

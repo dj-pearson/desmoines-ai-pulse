@@ -7,15 +7,32 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MapPin, Calendar, Star, Utensils, Car, Bed } from "lucide-react";
 
+/**
+ * Iowa State Fair dates. Confirmed by the site owner: 13-23 August.
+ *
+ * WEB-SEO-002/015: title, description, h1, body copy, keywords, the FAQ answer
+ * and the Event schema each hardcoded "2024" and "August 8-18" independently,
+ * so in 2026 the page advertised a fair two years gone and shipped a
+ * startDate of 2024-08-08 in its Event markup. They are derived from one
+ * object now, so next year is a single edit and the schema cannot drift out of
+ * step with the copy.
+ */
+const FAIR = {
+  year: 2026,
+  startISO: "2026-08-13",
+  endISO: "2026-08-23",
+  rangeLabel: "August 13-23, 2026",
+} as const;
+
 export default function IowaStateFairPage() {
   
   const stateFairSchema = {
     "@context": "https://schema.org",
     "@type": "Event",
-    "name": "Iowa State Fair 2024",
+    "name": `Iowa State Fair ${FAIR.year}`,
     "description": "Iowa's premier annual event featuring agriculture, entertainment, food, and attractions at the Iowa State Fairgrounds in Des Moines",
-    "startDate": "2024-08-08",
-    "endDate": "2024-08-18", 
+    "startDate": FAIR.startISO,
+    "endDate": FAIR.endISO,
     "location": {
       "@type": "Place",
       "name": "Iowa State Fairgrounds",
@@ -96,8 +113,8 @@ export default function IowaStateFairPage() {
   return (
     <div className="min-h-screen bg-background">
       <SEOHead 
-        title="Iowa State Fair 2024: Complete Des Moines Business & Dining Guide"
-        description="Complete guide to Iowa State Fair 2024 including restaurants near fairgrounds, parking, hotels, and local services. Discover dining options beyond fair food stands in Des Moines."
+        title={`Iowa State Fair ${FAIR.year}: Dining, Parking & Hotels`}
+        description={`Complete guide to the Iowa State Fair ${FAIR.year}, ${FAIR.rangeLabel}: restaurants near the fairgrounds, parking, hotels and local services. Dining beyond the fair food stands in Des Moines.`}
         keywords={[
           "Iowa State Fair",
           "Iowa State Fair restaurants", 
@@ -106,7 +123,7 @@ export default function IowaStateFairPage() {
           "Iowa State Fair parking",
           "Iowa State Fair hotels",
           "Des Moines Iowa State Fair",
-          "Iowa State Fair 2024",
+          `Iowa State Fair ${FAIR.year}`,
           "Iowa State Fair services"
         ]}
         structuredData={[stateFairSchema, businessDirectorySchema]}
@@ -125,7 +142,7 @@ export default function IowaStateFairPage() {
             </Badge>
           </div>
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-4 tracking-tight">
-            Iowa State Fair 2024
+            Iowa State Fair {FAIR.year}
           </h1>
           <p className="text-xl md:text-2xl text-white/90 mb-8 max-w-3xl mx-auto">
             Complete business guide to Iowa's premier event - restaurants, parking, hotels, and local services
@@ -134,7 +151,7 @@ export default function IowaStateFairPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-2xl mx-auto text-white">
             <div className="flex items-center gap-2 justify-center">
               <Calendar className="h-5 w-5" />
-              <span>August 8-18, 2024</span>
+              <span>{FAIR.rangeLabel}</span>
             </div>
             <div className="flex items-center gap-2 justify-center">
               <MapPin className="h-5 w-5" />
@@ -153,9 +170,9 @@ export default function IowaStateFairPage() {
         {/* TL;DR Section for AI Search Optimization */}
         <Card className="mb-8 bg-blue-50">
           <CardContent className="p-6">
-            <h2 className="text-2xl font-bold mb-4">TL;DR: Iowa State Fair 2024 Business Guide</h2>
+            <h2 className="text-2xl font-bold mb-4">TL;DR: Iowa State Fair {FAIR.year} Business Guide</h2>
             <p className="text-lg leading-relaxed">
-              The Iowa State Fair runs August 8-18, 2024, at the Iowa State Fairgrounds in Des Moines, 
+              The Iowa State Fair runs {FAIR.rangeLabel}, at the Iowa State Fairgrounds in Des Moines, 
               attracting 1+ million visitors. Beyond 250+ fair food vendors, Des Moines area restaurants, 
               hotels, and parking services experience peak demand. This guide helps visitors find 
               dining options beyond food stands, convenient parking, nearby accommodations, and local services 
@@ -364,7 +381,7 @@ export default function IowaStateFairPage() {
             faqs={[
               {
                 question: "When is the Iowa State Fair?",
-                answer: "The Iowa State Fair runs for 11 days in August, typically starting the second Thursday and ending the Sunday before Labor Day. The 2024 dates are August 8-18. The fair attracts over 1 million visitors annually, making it one of the largest and oldest state fairs in America, celebrating Iowa's agricultural heritage since 1854. Hours are typically 8 AM to midnight daily, with varying attraction schedules. Purchase tickets online in advance for discounts and to skip lines during peak attendance times, especially weekends."
+                answer: `The Iowa State Fair runs for 11 days in August at the Iowa State Fairgrounds in Des Moines. The ${FAIR.year} dates are ${FAIR.rangeLabel}. The fair attracts over 1 million visitors annually, making it one of the largest and oldest state fairs in America, celebrating Iowa's agricultural heritage since 1854. Hours are typically 8 AM to midnight daily, with varying attraction schedules. Purchase tickets online in advance for discounts and to skip lines during peak attendance times, especially weekends.`
               },
               {
                 question: "How much does Iowa State Fair admission cost?",

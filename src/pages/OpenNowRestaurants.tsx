@@ -13,7 +13,7 @@ import RelatedContent from "@/components/RelatedContent";
 import { Card, CardContent } from "@/components/ui/card";
 import { Clock, MapPin, Calendar, Utensils } from "lucide-react";
 import { format } from "date-fns";
-import { getCanonicalUrl } from "@/lib/brandConfig";
+import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
@@ -86,7 +86,8 @@ export default function OpenNowRestaurants() {
   const currentHour = currentTime.getHours();
   const isLateNight = currentHour >= 21 || currentHour < 6;
 
-  const pageTitle = "Restaurants Open Now in Des Moines - Real-Time Hours | Des Moines AI Pulse";
+  // WEB-SEO-002: was 74 chars and used the retired "Des Moines AI Pulse" brand.
+  const pageTitle = `Restaurants Open Now in Des Moines | ${BRAND.name}`;
   const pageDescription = `Find ${openRestaurants.length}+ restaurants open right now in Des Moines. Real-time operating hours updated continuously. ${isLateNight ? 'Late-night dining options available.' : 'Current lunch and dinner options.'} Order now for pickup or delivery.`;
 
   const breadcrumbs = [

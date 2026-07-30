@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
+import NoIndexMeta from "@/components/schema/NoIndexMeta";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -212,6 +213,12 @@ export default function SearchResults() {
         description="Search events, restaurants, and attractions in Des Moines using natural language — just describe what you're looking for."
         keywords={["Des Moines search", "natural language search", "events", "restaurants", "attractions"]}
       />
+      {/* WEB-SEO-005: internal search results are thin content by construction —
+          every ?q= permutation is a near-duplicate assembled from pages that are
+          already indexed on their own. Google explicitly discourages indexing
+          them. noindex,follow so the outbound links still pass. /search was also
+          removed from the prerender route list for the same reason. */}
+      <NoIndexMeta />
       <div className="flex min-h-screen flex-col">
         <Header />
         {/* Plain <div>, not <main>: App.tsx already provides the single

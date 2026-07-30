@@ -23,7 +23,9 @@ export default function SeasonalContent() {
     6: {
       title: "Iowa State Fair Business Guide",
       description: "Complete guide to cyclist-friendly services and businesses during Iowa's premier event",
-      dates: "August 8-18, 2024",
+      // WEB-SEO-015: was "August 8-18, 2024" — two years stale. Owner-confirmed
+      // dates. Keep in step with FAIR in src/pages/IowaStateFairPage.tsx.
+      dates: "August 13-23, 2026",
       location: "Iowa State Fairgrounds, Des Moines",
       category: "Major Events",
       searchVolume: "10,000+ monthly searches",

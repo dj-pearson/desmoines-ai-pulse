@@ -10,6 +10,7 @@ import { ErrorState } from '@/components/ui/error-state';
 import { Button } from '@/components/ui/button';
 import { Tag } from 'lucide-react';
 import AffiliateDisclosureBanner from '@/components/AffiliateDisclosureBanner';
+import { getCanonicalUrl } from '@/lib/brandConfig';
 
 const CATEGORIES = [
   { value: 'all', label: 'All Deals' },
@@ -30,6 +31,19 @@ export default function Deals() {
       <Helmet>
         <title>Deals & Coupons — Des Moines Discounts | Des Moines Insider</title>
         <meta name="description" content="Find the best deals, coupons, and special offers for Des Moines restaurants, attractions, hotels, and activities." />
+        {/* WEB-SEO-002: this route is in the sitemap and prerendered but had no
+            canonical of its own. Without one, any ?category= permutation
+            declares itself a separate URL. */}
+        <link rel="canonical" href={getCanonicalUrl('/deals')} />
+        {/* WEB-SEO-002: these pages set only title/description, so index.html's
+            static og: and twitter: tags were the only ones shipping — pinned to the
+            homepage on every route. Emitting them here lets the static copies be
+            marked data-rh and replaced rather than duplicated. */}
+        <meta property="og:title" content="Deals & Coupons — Des Moines Discounts | Des Moines Insider" />
+        <meta property="og:description" content="Find the best deals, coupons, and special offers for Des Moines restaurants, attractions, hotels, and activities." />
+        <meta property="og:url" content={getCanonicalUrl('/deals')} />
+        <meta name="twitter:title" content="Deals & Coupons — Des Moines Discounts | Des Moines Insider" />
+        <meta name="twitter:description" content="Find the best deals, coupons, and special offers for Des Moines restaurants, attractions, hotels, and activities." />
       </Helmet>
       <div className="min-h-screen bg-background">
         <Header />

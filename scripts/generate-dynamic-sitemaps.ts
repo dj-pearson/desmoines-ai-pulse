@@ -321,20 +321,120 @@ async function generateArticlesSitemap(): Promise<number | null> {
   return urls.length;
 }
 
+/**
+ * pSEO pages (WEB-SEO-013).
+ *
+ * src/pseo/ contains a complete programmatic-SEO system — taxonomy, ten page
+ * types, a generation pipeline, two edge functions and live routes — and until
+ * now no sitemap referenced a single page it produced, so nothing it generated
+ * was discoverable except by typing the URL.
+ *
+ * `slug` in pseo_pages is the FULL pathname with a leading slash (see
+ * fetchPseoPage in src/pseo/hooks/usePseoPage.ts), which is why it is
+ * concatenated directly rather than prefixed with a route.
+ */
+async function generatePseoSitemap(): Promise<number | null> {
+  console.log('🧩 Generating pSEO sitemap...');
+
+  // Deliberate cap. src/pseo/roadmap.ts targets ~950 pages and itself warns
+  // that a sudden page-count spike reads as suspicious; on a site with this
+  // authority profile, 950 new URLs at once IS that spike. Release in batches
+  // and raise this as GSC indexation holds up.
+  const PSEO_URL_CAP = 300;
+
+  // Quality floor. PseoAdmin treats >= 0.8 as good and >= 0.6 as borderline, so
+  // 0.6 is the existing notion of "not obviously thin".
+  //
+  // NOTE this is NOT the inventory gate the story asks for (>= 8 qualifying
+  // events, else fold the page back up). That has to be enforced where pages
+  // are generated and published — the sitemap step cannot re-count live
+  // inventory per page without N queries, and a page already published thin is
+  // already indexable. This floor is the backstop, not the gate.
+  const MIN_QUALITY_SCORE = 0.6;
+
+  const { data: pages, error } = await supabase
+    .from('pseo_pages')
+    .select('slug, updated_at, published_at, quality_score')
+    .eq('is_published', true)
+    .order('quality_score', { ascending: false, nullsFirst: false });
+
+  if (error) {
+    console.error('❌ Error fetching pSEO pages:', error);
+    // Same reasoning as the guides generator: never leave a stale file behind,
+    // because that looks like success. Write nothing-but-valid instead.
+    writeFileSync(
+      join(process.cwd(), 'public', 'sitemap-pseo.xml'),
+      generateSitemapXML([{ loc: `${baseUrl}/things-to-do`, lastmod: currentDate, changefreq: 'weekly', priority: '0.6' }])
+    );
+    console.warn('⚠️ pSEO sitemap fell back to the hub URL only.');
+    return null;
+  }
+
+  const published = pages ?? [];
+  const aboveFloor = published.filter(
+    (p) => p.quality_score == null || p.quality_score >= MIN_QUALITY_SCORE
+  );
+  const belowFloor = published.length - aboveFloor.length;
+  const selected = aboveFloor.slice(0, PSEO_URL_CAP);
+  const overCap = aboveFloor.length - selected.length;
+
+  // Never truncate silently — a capped sitemap that reports only its own size
+  // reads as full coverage.
+  if (belowFloor > 0) {
+    console.warn(`⚠️ ${belowFloor} published pSEO page(s) excluded: quality_score below ${MIN_QUALITY_SCORE}.`);
+  }
+  if (overCap > 0) {
+    console.warn(`⚠️ ${overCap} published pSEO page(s) excluded by the ${PSEO_URL_CAP}-URL cap. Raise PSEO_URL_CAP once GSC indexation holds.`);
+  }
+
+  const urls = selected.map(page => ({
+    loc: `${baseUrl}${page.slug.startsWith('/') ? page.slug : `/${page.slug}`}`,
+    lastmod: (page.updated_at || page.published_at || currentDate).split('T')[0],
+    changefreq: 'weekly',
+    priority: '0.6'
+  }));
+
+  if (urls.length === 0) {
+    urls.push({ loc: `${baseUrl}/things-to-do`, lastmod: currentDate, changefreq: 'weekly', priority: '0.6' });
+  }
+
+  writeFileSync(join(process.cwd(), 'public', 'sitemap-pseo.xml'), generateSitemapXML(urls));
+  console.log(`✅ pSEO sitemap generated: ${urls.length} URLs (of ${published.length} published)`);
+  return urls.length;
+}
+
 async function generateGuidesSitemap(): Promise<number | null> {
   console.log('📖 Generating guides sitemap...');
 
+  // WEB-SEO-003: this queried `public.guides`, which does not exist (42P01).
+  // Every run logged the error and returned null BEFORE writing, so the
+  // committed public/sitemap-guides.xml survived untouched from the day it was
+  // added and has been handed to Google ever since as if it were current.
+  //
+  // The real table is `seasonal_guides`, which is what /guides/:slug reads via
+  // useSeasonalGuide (App.tsx:471 -> SeasonalGuide.tsx). Only published rows
+  // belong in a sitemap.
   const { data: guides, error } = await supabase
-    .from('guides')
-    .select('id, slug, title, updated_at')
+    .from('seasonal_guides')
+    .select('id, slug, title, updated_at, is_published')
+    .eq('is_published', true)
     .order('title');
 
   if (error) {
     console.error('❌ Error fetching guides:', error);
+    // Do NOT return early. Returning before the write is what let a stale file
+    // ship silently for months — the worst of the available options, because it
+    // looks like success. Write a valid sitemap containing just the hub so the
+    // output always reflects this run.
+    const fallback = generateSitemapXML([
+      { loc: `${baseUrl}/guides`, lastmod: currentDate, changefreq: 'monthly', priority: '0.7' },
+    ]);
+    writeFileSync(join(process.cwd(), 'public', 'sitemap-guides.xml'), fallback);
+    console.warn('⚠️ Guides sitemap fell back to the hub URL only — stale entries have been cleared.');
     return null;
   }
 
-  const urls = guides.map(guide => ({
+  const urls = (guides ?? []).map(guide => ({
     loc: `${baseUrl}/guides/${guide.slug || guide.id}`,
     lastmod: guide.updated_at ? guide.updated_at.split('T')[0] : currentDate,
     changefreq: 'monthly',
@@ -363,7 +463,8 @@ async function main(): Promise<void> {
       generateAttractionsSitemap(),
       generatePlaygroundsSitemap(),
       generateArticlesSitemap(),
-      generateGuidesSitemap()
+      generateGuidesSitemap(),
+      generatePseoSitemap()
     ]);
 
     const totalUrls = results.filter((r): r is number => r !== null).reduce((sum, count) => sum + count, 0);
@@ -398,6 +499,10 @@ async function main(): Promise<void> {
   </sitemap>
   <sitemap>
     <loc>${baseUrl}/sitemap-guides.xml</loc>
+    <lastmod>${currentDate}</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>${baseUrl}/sitemap-pseo.xml</loc>
     <lastmod>${currentDate}</lastmod>
   </sitemap>
 </sitemapindex>`;

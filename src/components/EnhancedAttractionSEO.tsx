@@ -92,15 +92,10 @@ export default function EnhancedAttractionSEO({
       latitude: attraction.latitude || 41.5868,
       longitude: attraction.longitude || -93.625,
     },
-    aggregateRating: attraction.rating
-      ? {
-          "@type": "AggregateRating",
-          ratingValue: attraction.rating.toFixed(1),
-          ratingCount: attraction.rating >= 4.5 ? 120 : attraction.rating >= 4.0 ? 80 : 40,
-          bestRating: "5",
-          worstRating: "1",
-        }
-      : undefined,
+    // WEB-SEO-016: aggregateRating removed. The ratingValue was real but
+    // ratingCount was invented from it (attraction.rating >= 4.5 ? ... ), and
+    // Google requires the count to reflect actual reviews. No reviews table
+    // exists, so there is no honest count to emit.
     isAccessibleForFree: true,
     publicAccess: true,
     touristType: ["Family", "Couples", "Solo travelers", "Groups"],

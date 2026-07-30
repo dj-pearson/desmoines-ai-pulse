@@ -54,7 +54,18 @@ export default function BusinessHub() {
           <div className="flex items-center justify-center">
             <Card className="max-w-md text-center">
               <CardHeader>
-                <CardTitle className="text-2xl">Business Hub</CardTitle>
+                {/* WEB-SEO-004: the only h1 on this page lived in the
+                    AUTHENTICATED branch, so a signed-out visitor — and, while
+                    /business was still prerendered, every crawler — got a page
+                    with no h1 at all. That is a WCAG 1.3.1 heading-hierarchy
+                    failure independent of indexing, so it still needs fixing
+                    now that the route is out of the sitemap and prerender list.
+                    Plain <h1> rather than <CardTitle>, which renders an h3 and
+                    has no asChild escape hatch; classes copied from it so the
+                    visual result is identical. */}
+                <h1 className="text-2xl font-semibold leading-none tracking-tight">
+                  Business Hub
+                </h1>
                 <CardDescription>Sign in to access your business dashboard</CardDescription>
               </CardHeader>
               <CardContent>

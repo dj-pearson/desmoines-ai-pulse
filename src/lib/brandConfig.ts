@@ -44,7 +44,24 @@ export const BRAND = {
 } as const;
 
 // Helper functions for common SEO patterns
+/**
+ * Absolute URL for a site path. Idempotent: passing a URL that is already
+ * absolute returns it unchanged.
+ *
+ * WEB-SEO-002: it used to unconditionally prepend BRAND.baseUrl, so an absolute
+ * input produced `https://desmoinesinsider.com/https://desmoinesinsider.com/things-to-do`.
+ * At least five call sites do exactly that — SEOHead re-derives og:url through
+ * this helper from a `url` prop that pages already build with getCanonicalUrl
+ * or `${BRAND.baseUrl}/...` (ThingsToDoHub, Index, EventsPage, ArticleDetails,
+ * RestaurantDetails). The canonical link was unaffected because it uses the
+ * canonicalUrl prop directly, which is why this survived: only og:url was
+ * mangled, and nothing renders og:url visibly.
+ *
+ * Guarding here rather than at each call site fixes every current and future
+ * caller, and passing an absolute URL is a reasonable thing to expect to work.
+ */
 export function getCanonicalUrl(path: string): string {
+  if (/^https?:\/\//i.test(path)) return path;
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
   return `${BRAND.baseUrl}${cleanPath}`;
 }

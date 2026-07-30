@@ -1,5 +1,5 @@
 import { Suspense, lazy, useState, useEffect } from "react";
-import { Brain, MessageSquare, Mic, Sparkles, Users, Star, TrendingUp } from "lucide-react";
+import { Brain, MessageSquare, Mic, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 import { QuickActions, QuickActionsMobile } from "./QuickActions";
 import { useMediaQuery } from "@/hooks/use-media-query";
@@ -148,21 +148,13 @@ export function EnhancedHero({
             {subheading}
           </p>
 
-          {/* Social Proof & Value Proposition */}
-          <div className="flex flex-wrap items-center justify-center gap-4 md:gap-6 mb-2">
-            <div className="flex items-center gap-1.5 text-white/80 text-sm">
-              <Users className="h-4 w-4 text-[#FFD700]" aria-hidden="true" />
-              <span><strong className="text-white">15,000+</strong> locals trust us</span>
-            </div>
-            <div className="flex items-center gap-1.5 text-white/80 text-sm">
-              <Star className="h-4 w-4 text-[#FFD700] fill-[#FFD700]" aria-hidden="true" />
-              <span><strong className="text-white">4.8/5</strong> user rating</span>
-            </div>
-            <div className="flex items-center gap-1.5 text-white/80 text-sm">
-              <TrendingUp className="h-4 w-4 text-[#FFD700]" aria-hidden="true" />
-              <span><strong className="text-white">500+</strong> events weekly</span>
-            </div>
-          </div>
+          {/* WEB-SEO-016: a trust bar sat here claiming "15,000+ locals trust
+              us", "4.8/5 user rating" and "500+ events weekly". Removed at the
+              owner's request — there is no review system to produce a rating,
+              nothing measures the user count, and the events figure was false
+              rather than merely unverifiable (284 upcoming events in total).
+              The database-driven tiles immediately below already carry real
+              numbers, so nothing of substance is lost. */}
         </div>
 
         {/* Live Stats - Database-driven

@@ -201,7 +201,6 @@ export default function EventDetails() {
     <>
       <EnhancedEventSEO
         event={event}
-        isUpcoming={isUpcoming}
         viewMode="detail"
       />
 

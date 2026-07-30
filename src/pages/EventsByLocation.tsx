@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useLocation as useRouterLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { createLogger } from '@/lib/logger';
 import { supabase } from "@/integrations/supabase/client";
@@ -72,11 +72,25 @@ const SUBURBS = {
 };
 
 export default function EventsByLocation() {
-  const { location } = useParams<{ location: string }>();
+  // WEB-SEO-002: this read `useParams().location`, but App.tsx mounts this
+  // component on SEVEN LITERAL paths (/events/ankeny, /events/urbandale, ...)
+  // rather than on /events/:location — a param route there would collide with
+  // the /events/:slug event-detail handler that follows it. With no matching
+  // param, `location` was always undefined, so suburbInfo was always null and
+  // every one of the seven pages rendered the "Location Not Found" branch.
+  //
+  // They are all in sitemap-static.xml and all prerendered, so we were serving
+  // crawlers a not-found page, under one shared title, for the seven
+  // "<suburb> events" queries — some of the most winnable terms we have.
+  // Found by auditing the shipped HTML; the source reads perfectly well.
+  //
+  // Derive the slug from the pathname, keeping the param as the preferred
+  // source so a future /events/:location route would still work.
+  const { location: locationParam } = useParams<{ location: string }>();
+  const { pathname } = useRouterLocation();
+  const slug = locationParam ?? pathname.split('/').filter(Boolean).pop() ?? null;
 
-  const suburbInfo = location
-    ? SUBURBS[location as keyof typeof SUBURBS]
-    : null;
+  const suburbInfo = slug ? SUBURBS[slug as keyof typeof SUBURBS] : null;
 
   useDocumentTitle(suburbInfo?.name ? `Events in ${suburbInfo.name}` : "Events by Location");
 
@@ -147,7 +161,7 @@ export default function EventsByLocation() {
   }, [suburbInfo]);
 
   const { data: restaurants } = useQuery({
-    queryKey: ["restaurants-by-location", location],
+    queryKey: ["restaurants-by-location", slug],
     queryFn: async () => {
       if (!suburbInfo) return [];
 
@@ -210,7 +224,7 @@ export default function EventsByLocation() {
 
   const breadcrumbs = [
     { name: "Events", url: "/events" },
-    { name: suburbInfo.name, url: `/events/${location}` },
+    { name: suburbInfo.name, url: `/events/${slug}` },
   ];
 
   const faqData = [
@@ -233,7 +247,7 @@ export default function EventsByLocation() {
       <EnhancedLocalSEO
         pageTitle={pageTitle}
         pageDescription={pageDescription}
-        canonicalUrl={`${BRAND.baseUrl}/events/${location}`}
+        canonicalUrl={`${BRAND.baseUrl}/events/${slug}`}
         pageType="website"
         breadcrumbs={breadcrumbs}
         faqData={faqData}
@@ -243,7 +257,7 @@ export default function EventsByLocation() {
         events={upcomingEvents || []}
         listName={`Events in ${suburbInfo.name}, Iowa`}
         listDescription={pageDescription}
-        listUrl={`${BRAND.baseUrl}/events/${location}`}
+        listUrl={`${BRAND.baseUrl}/events/${slug}`}
       />
 
       <Header />

@@ -12,7 +12,10 @@ import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { formatCount } from "@/lib/pluralize";
 
 export default function NeighborhoodsPage() {
-  useDocumentTitle("Neighborhoods");
+  // WEB-SEO-002: useDocumentTitle runs after LocalSEO's Helmet and was winning,
+  // so the shipped title was the bare word "Neighborhoods" rather than the
+  // keyword-bearing pageTitle passed to LocalSEO below. Keep the two in sync.
+  useDocumentTitle("Des Moines Neighborhoods Guide");
 
   const neighborhoods = [
     {
@@ -104,7 +107,7 @@ export default function NeighborhoodsPage() {
   return (
     <div className="min-h-screen bg-background">
       <LocalSEO 
-        pageTitle="Des Moines Neighborhoods Guide - Local Events & Dining"
+        pageTitle="Des Moines Neighborhoods Guide"
         pageDescription="Explore Des Moines neighborhoods including East Village, West Des Moines, Ankeny, and more. Find local events, restaurants, and attractions in each Des Moines area community."
         breadcrumbs={[
           { name: "Home", url: "/" },
