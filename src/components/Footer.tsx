@@ -105,7 +105,8 @@ export default function Footer() {
               />
               <p className="text-neutral-400 mb-4 text-sm">
                 Your AI-powered guide to discovering the best events, dining, and attractions
-                in Des Moines. Join 15,000+ locals who trust us for their weekend plans.
+                in Des Moines. {/* WEB-SEO-016: "Join 15,000+ locals" removed — nothing
+                measures it. */}
               </p>
 
               {/* Newsletter Benefit Line */}
@@ -137,7 +138,7 @@ export default function Footer() {
                   affirmative opt-in; we log it to consent_records. */}
               <p className="text-neutral-500 text-xs mb-1 flex items-center gap-1">
                 <Users className="h-3 w-3" aria-hidden="true" />
-                Join 15,000+ Des Moines locals. Free forever, unsubscribe anytime.
+                Free forever, unsubscribe anytime.
               </p>
               <p className="text-neutral-500 text-[11px] mb-4 leading-snug">
                 By subscribing you agree to receive marketing emails from Des Moines Insider and acknowledge our{" "}

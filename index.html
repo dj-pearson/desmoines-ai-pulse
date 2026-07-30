@@ -19,25 +19,19 @@
     <!-- The warning about frame-ancestors being ignored in meta tags is expected -->
 
     <!-- Open Graph -->
+    <!-- Fallback og tags for routes served the raw shell. data-rh hands them to
+         Helmet so per-page values replace rather than duplicate (WEB-SEO-002).
+         Kept query-led rather than product-led, same as the description. -->
     <meta data-rh="true" property="og:title"
-      content="Des Moines Insider: Events, Restaurants & Attractions"
+      content="Things to Do in Des Moines | Events, Restaurants & Attractions"
     />
     <meta data-rh="true" property="og:description"
-      content="Beyond search. Beyond directories. Des Moines Insider is the first truly conversational city guide. Access via web, SMS, voice, or ChatGPT. Context-aware intelligence that learns your preferences and proactively assists you."
+      content="Find what's happening in Des Moines, Iowa today and this weekend — events, concerts, festivals, family activities, and restaurants open right now across the metro."
     />
     <meta property="og:type" content="website" />
-    <!--
-      NO STATIC og:url HERE ON PURPOSE (WEB-SEO-002) — same reasoning as the
-      canonical note below.
-
-      This file is the shell for every route, so a hardcoded og:url claimed the
-      HOMEPAGE as the share URL of all 35 prerendered routes. Helmet APPENDS its
-      correct per-route og:url rather than replacing an unmanaged tag, so both
-      shipped and the wrong one came first, which is the one a scraper reading
-      the first match takes.
-
-      Helmet supplies og:url on every route that renders an SEO component.
-    -->
+    <!-- No static og:url on purpose (WEB-SEO-002): this shell serves every route,
+         so a hardcoded one claimed the homepage as every page's share URL, and
+         Helmet appends rather than replaces. Helmet supplies the real one. -->
 
     <meta
       property="og:image"
@@ -395,40 +389,10 @@
     </script>
 
     <title>Des Moines Insider: Events, Restaurants & Attractions</title>
-    <!--
-      SITE-WIDE FALLBACK DESCRIPTION ONLY (WEB-SEO-012).
-
-      This file is the shell for every route. Helmet APPENDS meta tags rather
-      than replacing unmanaged ones, so on a prerendered route this tag survives
-      alongside the page's own description and appears FIRST in the document —
-      which is the copy a crawler is most likely to use. It therefore has to be
-      a sensible default for any page, not a product pitch.
-
-      It used to read "First truly conversational AI city guide ... via web,
-      SMS, voice assistant, or ChatGPT", which described our architecture rather
-      than Des Moines and was inherited by all 31 prerendered routes.
-
-      Collapsing the duplicate description tags (and giving the routes that
-      still have no description of their own a real one) is WEB-SEO-002.
-
-      RESOLVED: data-rh="true" below hands this tag to react-helmet-async.
-      Helmet does not replace unmanaged meta tags, it appends alongside them, so
-      without the marker every prerendered route shipped TWO descriptions — this
-      generic fallback FIRST and the page's own second. The first is the one a
-      crawler is most likely to use, so 33 routes were effectively describing
-      themselves with the site-wide default. With the marker Helmet treats it as
-      its own on mount and swaps in the page's description instead.
-
-      Verified safe: all 33 successfully prerendered routes emit their own
-      description, so none is left without one. A route served the raw shell
-      (not prerendered, or JS off) still shows this text — that is the point of
-      keeping it rather than deleting it.
-
-      Do NOT add data-rh to the viewport, theme-color, format-detection or
-      site-verification tags. Helmet removes every data-rh tag it does not
-      re-emit, and those are functional rather than SEO — losing viewport would
-      break mobile layout outright.
-    -->
+    <!-- Site-wide fallback description (WEB-SEO-002/012). data-rh hands it to
+         Helmet so per-page descriptions REPLACE it instead of duplicating.
+         Do not add data-rh to viewport/theme-color/verification tags — Helmet
+         deletes any data-rh tag it does not re-emit. -->
     <meta
       data-rh="true"
       name="description"
@@ -461,8 +425,9 @@
     <!-- Enhanced meta tags for AI optimization -->
     <meta name="article:publisher" content="Des Moines Insider" />
     <meta name="article:author" content="Des Moines Insider Team" />
-    <meta name="article:published_time" content="2024-01-01T00:00:00Z" />
-    <meta name="article:modified_time" content="2025-11-27T00:00:00Z" />
+    <!-- No static article:published_time/modified_time (WEB-SEO-015): this shell
+         serves every route, so they dated all content alike and shipped a stale
+         freshness signal. Real articles get accurate values from SEOHead. -->
     <meta name="article:section" content="Local Guide" />
     <meta
       name="article:tag"

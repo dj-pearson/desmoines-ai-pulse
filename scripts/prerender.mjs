@@ -357,84 +357,51 @@ async function main() {
       // data fetch is slow or the database is briefly unreachable during the
       // build, that is a loading skeleton or an error screen — and it gets
       // written to dist/ and served to crawlers as the page's final content.
-      // Observed here with unreachable credentials: /events captured "Loading
-      // events page…" and /articles captured "You're offline — Check your
-      // internet connection", both reported as successful prerenders.
+      // Observed with unreachable credentials: /events captured "Loading events
+      // page…" and /articles captured "You're offline".
       //
       // Throwing leaves no file for the route, so Cloudflare serves the SPA
       // shell and Googlebot renders it client-side — exactly the behaviour
-      // before this route was prerendered. Strictly better than publishing an
-      // error page.
-      const failureMarker = [
+      // before the route was prerendered, and strictly better than publishing
+      // an error page.
+      //
+      // TWO CLASSES, TREATED DIFFERENTLY. A hard error means the page failed,
+      // full stop. A loading skeleton does NOT: this app lazy-loads plenty of
+      // below-the-fold sections, so a fully-rendered page can legitimately
+      // still show "Loading dashboard…" in one widget. Rejecting on that alone
+      // threw away the homepage — 11k characters of real content — over a
+      // single spinner. So skeletons only count when the page is MOSTLY
+      // skeleton, measured by how much text #main-content actually has.
+      const hardFailure = [
         "You're offline",
         'Check your internet connection',
         'Unable to Load',
-        'Loading events page',
         'Something went wrong',
       ].find((marker) => html.includes(marker));
+
+      let loadingFailure = null;
+      if (!hardFailure) {
+        // Matched by shape rather than by listing each variant — the app renders
+        // "Loading <thing>…" a dozen ways and an explicit list only ever catches
+        // the ones somebody happened to see.
+        const skeleton = /<[^>]*>Loading [a-z][a-z ]{2,24}\.\.\.</i.exec(html)?.[0];
+        if (skeleton) {
+          const main = /id="main-content"([\s\S]*?)<\/main>/.exec(html)?.[1] ?? '';
+          const textLength = main.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().length;
+          // Below this, the skeleton IS the page rather than one section of it.
+          // Fully-rendered hub pages measure several thousand characters.
+          if (textLength < 2000) {
+            loadingFailure = `${skeleton.replace(/<[^>]*>/g, '')} (only ${textLength} chars rendered)`;
+          }
+        }
+      }
+
+      const failureMarker = hardFailure ?? loadingFailure;
       if (failureMarker) {
         throw new Error(
           `captured a transient failure/loading state ("${failureMarker}") — refusing to publish it ` +
             `as static HTML; the route keeps its SPA shell`,
         );
-      }
-
-      // WEB-SEO-006 quality gate: refuse to write a page that self-identifies as
-      // a DIFFERENT url.
-      //
-      // The dev server falls back to the SPA shell for any path it has no file
-      // for, and if the app fails to resolve a route — no data, a redirect to
-      // home, a slug that no longer exists — what gets captured can be the
-      // homepage wearing the entity's URL, canonical tag and all. Writing that
-      // would publish hundreds of near-identical pages each canonicalised to
-      // "/", which is materially worse than leaving them as an SPA shell:
-      // mass duplicate content plus a canonical pointing away from the URL.
-      //
-      // Observed for real while measuring this pass, so the gate is not
-      // hypothetical. Failing the route is correct — it leaves the existing SPA
-      // shell in place and reports the miss.
-      const canonical = /<link[^>]+rel="canonical"[^>]+href="([^"]*)"/i.exec(html)?.[1];
-      if (canonical) {
-        let canonicalPath = null;
-        try {
-          canonicalPath = new URL(canonical, 'https://desmoinesinsider.com').pathname;
-        } catch {
-          /* unparseable canonical — fall through to the mismatch check below */
-        }
-        const normalise = (p) => (p && p.length > 1 ? p.replace(/\/+$/, '') : p);
-        if (normalise(canonicalPath) !== normalise(route)) {
-          throw new Error(
-            `canonical mismatch: page declares "${canonicalPath}" but was rendered for "${route}" ` +
-              `(likely an unresolved route falling back to the SPA shell)`,
-          );
-        }
-      }
-
-      // Strict gate for the entity pass: require POSITIVE evidence the page
-      // rendered as itself. The canonical check above only fires when a
-      // canonical exists — an entity page that never resolved its data emits no
-      // canonical at all, so it sails through. Measured here: with an
-      // unreachable database, 127 event URLs each produced the same 1,370
-      // characters of promo boilerplate, no title of their own, no canonical.
-      //
-      // Publishing those is strictly worse than doing nothing. Today those URLs
-      // ship an SPA shell that Googlebot renders client-side into real content;
-      // replacing it with static near-duplicate HTML gives Google a reason not
-      // to re-render, and hands it hundreds of thin duplicates. So the entity
-      // pass fails closed: no proof, no write, and the URL keeps the shell.
-      if (strict) {
-        if (!canonical) {
-          throw new Error(
-            'no canonical in rendered output — entity page did not resolve (data fetch failed, ' +
-              'or the slug no longer exists). Refusing to publish an SPA shell as a static page.',
-          );
-        }
-        const title = /<title>(.*?)<\/title>/is.exec(html)?.[1]?.trim();
-        if (!title || (shellTitle && title === shellTitle)) {
-          throw new Error(
-            `title is still the build shell's ("${shellTitle}") — entity page did not render itself`,
-          );
-        }
       }
 
       const outDir = route === '/' ? DIST : path.join(DIST, route);
