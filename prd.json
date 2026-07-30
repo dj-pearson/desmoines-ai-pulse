@@ -6300,6 +6300,22 @@
       "priority": 1,
       "passes": true,
       "notes": "FOUND AND FIXED 2026-07-30 (claude/des-moines-seo-strategy-n54bjj) while working WEB-SEO-015. Split out because it is a materially different and more serious problem than unverifiable marketing copy: this was fabricated data inside schema.org markup, which Google's review-snippet policy treats as spam and which is a common trigger for a manual action. Scale is roughly 570 URLs — the homepage twice over (a static block in index.html plus the LocalBusiness object in Index.tsx), 480 restaurants, 69 playgrounds and 22 attractions. The restaurant case is the clearest illustration of intent: a function named getEstimatedReviewCount turning a rating and a popularity score into a plausible-looking review tally. Ratings themselves may be real; the COUNTS never were, and Google requires the count to reflect actual reviews. Removed rather than corrected because there is nothing to correct to. STILL OPEN, FLAGGED FOR A HUMAN DECISION: the visible marketing copy still shows a 4.8/5 rating in SocialProof.tsx and EnhancedHero.tsx, and a 15,000+ locals figure in Footer, EnhancedHero, SocialProof and Newsletter. Those are outside structured data so they carry no Google policy risk, but a displayed star rating with no review system behind it is an FTC endorsement-guidelines problem — and this repo already takes 16 CFR 255 seriously enough to ship an AffiliateDisclosureBanner. Left them alone deliberately: deleting visible social proof changes the product's presentation and is the owner's call, not a correctness fix."
+    },
+    {
+      "id": "WEB-CI-023",
+      "title": "npm run type-check compiles zero files, so validate has no type gate at all",
+      "description": "As a developer, I need type-check to actually check types, because the root tsconfig compiles nothing and the script passes unconditionally inside npm run validate.",
+      "acceptanceCriteria": [
+        "Proof: `npx tsc --noEmit --listFiles | wc -l` returns 0. The root tsconfig.json sets \"files\": [] and declares only project references to tsconfig.app.json and tsconfig.node.json — and plain `tsc` does not build references, only `tsc --build` does",
+        "package.json wires `type-check` into `validate`, so every validate run has reported a passing type gate while checking nothing",
+        "Demonstrated concretely: removing the BRAND import from src/pages/FreeEvents.tsx while still referencing BRAND.name produced no error from `tsc --noEmit`. That is a runtime ReferenceError the gate should catch, and vite/esbuild will not catch it either since neither type-checks",
+        "Fix by pointing `type-check` at the real projects — `tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit`, which is exactly what the existing `type-check:app` script does — or by switching to `tsc --build`",
+        "BEFORE SWITCHING, confirm tsconfig.app.json currently passes. If it does not, validate breaks for everyone the moment this is fixed, so any pre-existing errors need clearing (or ratcheting, as strict-baseline.json already does for the strict config) in the same change",
+        "Consider whether tsconfig.strict.json / strict-ratchet.mjs should be the long-term gate instead"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "FOUND 2026-07-30 (claude/des-moines-seo-strategy-n54bjj) by accident, which is the point — a no-op gate cannot announce itself. I added a BRAND.name reference to FreeEvents.tsx without importing BRAND, ran the project's own type-check, and it passed. Investigating showed the root config compiles zero files. NOT FIXED HERE, DELIBERATELY: the fix is a one-line package.json change, but `npx tsc -p tsconfig.app.json --noEmit` did not finish within 500s in this environment, so whether the app config currently passes is UNKNOWN. Switching validate over to a config that turns out to have pre-existing errors would break the build gate for everyone, which is worse than the current state. Someone on a machine that can run it to completion should check first, then make the switch. WORTH NOTING FOR ANY WORK DONE IN THIS BRANCH: `npx tsc --noEmit` was used as the verification step throughout, and it was weaker than assumed. eslint (which does catch undefined identifiers via no-undef) and real vite builds were also run against every change, and the prerender transient-failure guard would surface a page that threw, so the changes here are not unverified — but the type gate specifically contributed nothing."
     }
   ]
 }

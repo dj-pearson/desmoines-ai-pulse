@@ -102,7 +102,7 @@ const DashboardSkeleton = () => (
 
 // WEB-SEO-012: shared by the two head managers this page renders
 // (SEOEnhancedHead and SEOStructure) so they cannot disagree.
-const HOME_TITLE = 'Things to Do in Des Moines This Weekend | Events, Restaurants & Attractions';
+const HOME_TITLE = 'Things to Do in Des Moines This Weekend | Des Moines Insider';
 const HOME_DESCRIPTION =
   "Find what's happening in Des Moines, Iowa today and this weekend — live events, concerts, festivals, family activities, and the restaurants open right now. Updated daily across Des Moines, West Des Moines, Ankeny, Urbandale and the metro.";
 

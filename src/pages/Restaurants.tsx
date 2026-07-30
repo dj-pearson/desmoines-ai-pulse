@@ -336,7 +336,7 @@ export default function Restaurants() {
   return (
     <>
       <SEOHead
-        title="Best Restaurants in Des Moines, Iowa - Complete Dining Guide 2026"
+        title="Best Restaurants in Des Moines, Iowa"
         description="Find the best restaurants in Des Moines, Iowa. Browse 200+ local restaurants with ratings, reviews, photos, and real-time open/closed status. Filter by cuisine, price, and neighborhood."
         type="website"
         keywords={restaurantsKeywords}
