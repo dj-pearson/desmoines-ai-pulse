@@ -60,3 +60,12 @@ jobs:
       - run: deno test --allow-none supabase/functions/_shared/domain-adapters/dispatch.test.ts
       - run: deno test --allow-none supabase/functions/_shared/domain-adapters/tribeEvents.test.ts
       - run: deno test --allow-none supabase/functions/_shared/domain-adapters/venueProfile.test.ts
+      # Menu-scraping invariants — see docs/scraping/MENU_SCRAPER.md.
+      # All fixture-based; no network access needed.
+      - run: deno test --allow-none supabase/functions/_shared/menu/menuNormalize.test.ts
+      - run: deno test --allow-none supabase/functions/_shared/menu/menuContent.test.ts
+      - run: deno test --allow-none supabase/functions/_shared/menu/menuJsonLd.test.ts
+      - run: deno test --allow-none supabase/functions/_shared/menu/menuPlatforms.test.ts
+      - run: deno test --allow-none supabase/functions/_shared/menu/menuDiscovery.test.ts
+      - run: deno test --allow-none supabase/functions/_shared/menu/menuJson.test.ts
+      - run: deno test --allow-none supabase/functions/_shared/menu/menuUrls.test.ts

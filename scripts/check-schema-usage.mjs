@@ -82,14 +82,22 @@ const EXTENSIONS = ['.ts', '.tsx', '.mjs'];
  * Each entry MUST cite the migration that resolves it. Remove the entry once
  * that migration is applied to production — a stale allowlist silently
  * re-opens the exact bug class this script exists to catch.
+ *
+ * Omit `column` to allowlist a whole table that the migration creates.
  */
 const PENDING_MIGRATIONS = [
   { table: 'event_discussions', column: 'message_type', migration: '20260718000003' },
   { table: 'event_discussions', column: 'media_url', migration: '20260718000003' },
+  // Menu scraper diagnostics. The scraper writes this best-effort inside a
+  // try/catch, so a missing table degrades logging only — but the reference is
+  // still real and must not be baselined as a permanent violation.
+  { table: 'menu_scrape_attempts', migration: '20260730000001' },
 ];
 
 const isPending = (table, column) =>
-  PENDING_MIGRATIONS.some((p) => p.table === table && p.column === column);
+  PENDING_MIGRATIONS.some(
+    (p) => p.table === table && (p.column === undefined || p.column === column),
+  );
 
 // ---------------------------------------------------------------------------
 // Schema extraction
@@ -266,6 +274,7 @@ function scanFile(file, schema, findings) {
     if (/\.storage\b/.test(lineText)) continue;
 
     if (!schema.tables.has(table)) {
+      if (isPending(table)) continue;
       findings.push({
         kind: 'table', file: rel, line,
         name: table, error: '42P01 / PGRST205 (relation does not exist)',
