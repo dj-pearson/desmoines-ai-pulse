@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HelmetProvider } from "react-helmet-async";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import { initSentry, Sentry } from "@/lib/sentry";
+import { initSentry, getSentryDsn, Sentry } from "@/lib/sentry";
 import { initErrorTracking } from "@/lib/errorHandler";
 import '@/lib/env'; // Validate environment variables at startup
 
@@ -15,8 +15,9 @@ import { GC_TIME, STALE_TIME, shouldRetry, retryDelay } from "@/lib/queryConfig"
 // Initialize Sentry before anything else (only when DSN is configured)
 initSentry();
 
-// Wire Sentry into the centralized error handler
-if (import.meta.env.VITE_SENTRY_DSN) {
+// Wire Sentry into the centralized error handler (matches initSentry's DSN
+// resolution so the bridge activates whenever Sentry itself does).
+if (getSentryDsn()) {
   initErrorTracking({
     captureException(error, context) {
       Sentry.captureException(error, {

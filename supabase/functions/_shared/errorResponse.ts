@@ -7,6 +7,8 @@
  * status keep working (backward compat).
  */
 
+import { captureEdgeException } from './sentry.ts';
+
 export interface ErrorResponseOptions {
   /** HTTP status to return (default 500). */
   status?: number;
@@ -40,6 +42,14 @@ export function errorResponse(error: unknown, options: ErrorResponseOptions = {}
   // Full detail to server logs only.
   const detail = error instanceof Error ? `${error.message}\n${error.stack ?? ''}` : String(error);
   console.error(`[${logContext}] ${detail}`);
+
+  // Route genuine server errors (5xx) to Sentry. Expected client errors (4xx)
+  // are noise and stay out. Fire-and-forget — never delays the response.
+  if (status >= 500) {
+    const tags: Record<string, string> = { context: logContext };
+    if (code) tags.code = code;
+    void captureEdgeException(error, tags);
+  }
 
   const body: Record<string, unknown> = { error: clientMessage };
   if (code) body.code = code;

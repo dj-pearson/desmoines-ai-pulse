@@ -14,6 +14,7 @@
  * functions to cap write amplification.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { captureEdgeException } from "./sentry.ts";
 
 export type EdgeHandler = (req: Request) => Promise<Response> | Response;
 
@@ -70,6 +71,8 @@ export function instrument(functionName: string, handler: EdgeHandler): EdgeHand
       return res;
     } catch (err) {
       void record(functionName, req.method, 500, Date.now() - started);
+      // Route the uncaught error to Sentry (best-effort; never masks the throw).
+      await captureEdgeException(err, { function: functionName, method: req.method });
       throw err;
     }
   };
