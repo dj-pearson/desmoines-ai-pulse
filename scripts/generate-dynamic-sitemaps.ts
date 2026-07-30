@@ -324,17 +324,35 @@ async function generateArticlesSitemap(): Promise<number | null> {
 async function generateGuidesSitemap(): Promise<number | null> {
   console.log('📖 Generating guides sitemap...');
 
+  // WEB-SEO-003: this queried `public.guides`, which does not exist (42P01).
+  // Every run logged the error and returned null BEFORE writing, so the
+  // committed public/sitemap-guides.xml survived untouched from the day it was
+  // added and has been handed to Google ever since as if it were current.
+  //
+  // The real table is `seasonal_guides`, which is what /guides/:slug reads via
+  // useSeasonalGuide (App.tsx:471 -> SeasonalGuide.tsx). Only published rows
+  // belong in a sitemap.
   const { data: guides, error } = await supabase
-    .from('guides')
-    .select('id, slug, title, updated_at')
+    .from('seasonal_guides')
+    .select('id, slug, title, updated_at, is_published')
+    .eq('is_published', true)
     .order('title');
 
   if (error) {
     console.error('❌ Error fetching guides:', error);
+    // Do NOT return early. Returning before the write is what let a stale file
+    // ship silently for months — the worst of the available options, because it
+    // looks like success. Write a valid sitemap containing just the hub so the
+    // output always reflects this run.
+    const fallback = generateSitemapXML([
+      { loc: `${baseUrl}/guides`, lastmod: currentDate, changefreq: 'monthly', priority: '0.7' },
+    ]);
+    writeFileSync(join(process.cwd(), 'public', 'sitemap-guides.xml'), fallback);
+    console.warn('⚠️ Guides sitemap fell back to the hub URL only — stale entries have been cleared.');
     return null;
   }
 
-  const urls = guides.map(guide => ({
+  const urls = (guides ?? []).map(guide => ({
     loc: `${baseUrl}/guides/${guide.slug || guide.id}`,
     lastmod: guide.updated_at ? guide.updated_at.split('T')[0] : currentDate,
     changefreq: 'monthly',

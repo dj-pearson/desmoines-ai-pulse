@@ -97,7 +97,6 @@
     "rpc|supabase/functions/generate-invoice-pdf/index.ts|generate_invoice_number",
     "rpc|supabase/functions/generate-itinerary/index.ts|generate_trip_share_code",
     "rpc|supabase/functions/generate-itinerary/index.ts|get_trip_itinerary",
-    "table|scripts/generate-dynamic-sitemaps.ts|guides",
     "table|scripts/run-migration.ts|dummy",
     "table|src/components/admin/AttractionEditDialog.tsx|media",
     "table|src/components/admin/HotelEditDialog.tsx|media",
