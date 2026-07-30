@@ -5432,12 +5432,73 @@ export type Database = {
         }
         Relationships: []
       }
+      hotel_affiliate_programs: {
+        Row: {
+          account_id: string | null
+          ad_id: string | null
+          brand_parent: string
+          campaign_id: string | null
+          commission_notes: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          is_enabled: boolean
+          link_template: string | null
+          network: string
+          notes: string | null
+          signup_url: string | null
+          status: string
+          sub_id: string
+          tracking_domain: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_id?: string | null
+          ad_id?: string | null
+          brand_parent: string
+          campaign_id?: string | null
+          commission_notes?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          is_enabled?: boolean
+          link_template?: string | null
+          network?: string
+          notes?: string | null
+          signup_url?: string | null
+          status?: string
+          sub_id?: string
+          tracking_domain?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string | null
+          ad_id?: string | null
+          brand_parent?: string
+          campaign_id?: string | null
+          commission_notes?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          is_enabled?: boolean
+          link_template?: string | null
+          network?: string
+          notes?: string | null
+          signup_url?: string | null
+          status?: string
+          sub_id?: string
+          tracking_domain?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       hotels: {
         Row: {
           address: string
           affiliate_provider: string | null
           affiliate_url: string | null
           affiliate_url_updated_at: string | null
+          affiliate_url_managed: boolean
           amenities: string[] | null
           area: string | null
           avg_nightly_rate: number | null
@@ -5483,6 +5544,7 @@ export type Database = {
           affiliate_provider?: string | null
           affiliate_url?: string | null
           affiliate_url_updated_at?: string | null
+          affiliate_url_managed?: boolean
           amenities?: string[] | null
           area?: string | null
           avg_nightly_rate?: number | null
@@ -5528,6 +5590,7 @@ export type Database = {
           affiliate_provider?: string | null
           affiliate_url?: string | null
           affiliate_url_updated_at?: string | null
+          affiliate_url_managed?: boolean
           amenities?: string[] | null
           area?: string | null
           avg_nightly_rate?: number | null
@@ -12862,6 +12925,14 @@ export type Database = {
           rows_affected: number
           success: boolean
         }[]
+      }
+      build_hotel_affiliate_url: {
+        Args: {
+          p_brand_parent: string
+          p_destination: string
+          p_sub_id?: string
+        }
+        Returns: string
       }
       bump_newsletter_campaign_counter: {
         Args: { p_campaign_id: string; p_field: string }

@@ -10,16 +10,16 @@ const corsHeaders = {
 /**
  * Affiliate network configurations by hotel brand parent company.
  *
- * Networks:
- *   - Marriott: Partnerize (prf.hn)
- *   - Hilton: Awin (awin1.com)
- *   - IHG: CJ Affiliate (anrdoezrs.net)
- *   - Hyatt: Awin (awin1.com)
- *   - Choice: CJ Affiliate (anrdoezrs.net)
- *   - Wyndham: CJ Affiliate (anrdoezrs.net)
- *   - Best Western: CJ Affiliate (anrdoezrs.net)
+ * PRIMARY SOURCE: the `hotel_affiliate_programs` table (HOTEL-AFF-001).
+ * Brand credentials are edited in /admin/hotels -> Affiliate Programs and the
+ * link is built by the `build_hotel_affiliate_url` SQL function, so adding a
+ * brand no longer needs a code change or a secret rotation.
  *
- * Environment variables (set via `supabase secrets set`):
+ * The env-var map below is retained as a FALLBACK for any brand that has no
+ * enabled row in that table, so existing deployments keep working unchanged.
+ * Once every brand is configured in the table, these secrets can be retired.
+ *
+ * Fallback environment variables (set via `supabase secrets set`):
  *   MARRIOTT_PARTNERIZE_CAMREF   - Partnerize campaign reference
  *   HILTON_AWIN_AFF_ID           - Awin affiliate ID
  *   HILTON_AWIN_MID              - Hilton's Awin merchant ID
@@ -175,6 +175,27 @@ serve(async (req) => {
       );
     }
 
+    // Load the DB-backed brand programs once. These take precedence over the
+    // env-var fallback map. A failure here is non-fatal — we simply fall back.
+    const dbPrograms = new Map<string, { display_name: string | null; network: string }>();
+    const { data: programRows, error: programError } = await supabase
+      .from("hotel_affiliate_programs")
+      .select("brand_parent, display_name, network")
+      .eq("is_enabled", true);
+
+    if (programError) {
+      console.warn(
+        `hotel_affiliate_programs unavailable, falling back to env vars: ${programError.message}`
+      );
+    } else {
+      for (const row of programRows ?? []) {
+        dbPrograms.set(row.brand_parent, {
+          display_name: row.display_name,
+          network: row.network,
+        });
+      }
+    }
+
     let updated = 0;
     let skipped = 0;
     const results: Array<{
@@ -183,13 +204,36 @@ serve(async (req) => {
       brand_parent: string;
       affiliate_url: string | null;
       status: string;
+      /** Additive field: which config path produced the URL. */
+      source?: "database" | "env";
     }> = [];
 
     for (const hotel of hotels) {
-      const affiliateUrl = generateAffiliateUrl(
-        hotel.brand_parent,
-        hotel.website
+      // 1. Try the DB-backed builder (exact brand row, then the '*' fallback).
+      let affiliateUrl: string | null = null;
+      let source: "database" | "env" = "database";
+
+      const { data: builtUrl, error: buildError } = await supabase.rpc(
+        "build_hotel_affiliate_url",
+        {
+          p_brand_parent: hotel.brand_parent,
+          p_destination: hotel.website,
+        }
       );
+
+      if (buildError) {
+        console.warn(
+          `build_hotel_affiliate_url failed for ${hotel.name}: ${buildError.message}`
+        );
+      } else if (builtUrl) {
+        affiliateUrl = builtUrl as string;
+      }
+
+      // 2. Fall back to the legacy env-var map.
+      if (!affiliateUrl) {
+        affiliateUrl = generateAffiliateUrl(hotel.brand_parent, hotel.website);
+        source = "env";
+      }
 
       if (affiliateUrl) {
         // Determine the affiliate provider name
@@ -198,10 +242,19 @@ serve(async (req) => {
           partnerize: "Partnerize",
           awin: "Awin",
           cj: "Commission Junction",
+          impact: "impact.com",
+          sovrn: "Sovrn Commerce",
+          custom: hotel.brand_parent,
         };
-        const affiliateProvider = config
-          ? providerMap[config.network]
-          : hotel.brand_parent;
+
+        const dbProgram =
+          dbPrograms.get(hotel.brand_parent) ?? dbPrograms.get("*");
+        const affiliateProvider =
+          source === "database" && dbProgram
+            ? dbProgram.display_name ?? providerMap[dbProgram.network] ?? hotel.brand_parent
+            : config
+              ? providerMap[config.network]
+              : hotel.brand_parent;
 
         const { error: updateError } = await supabase
           .from("hotels")
@@ -230,6 +283,7 @@ serve(async (req) => {
             brand_parent: hotel.brand_parent,
             affiliate_url: affiliateUrl,
             status: "updated",
+            source,
           });
           updated++;
         }
@@ -252,14 +306,23 @@ serve(async (req) => {
         updated,
         skipped,
         results,
-        configured_brands: Object.keys(BRAND_CONFIGS).filter((brand) => {
-          const config = BRAND_CONFIGS[brand];
-          return !!Deno.env.get(config.envKeys.id);
-        }),
-        unconfigured_brands: Object.keys(BRAND_CONFIGS).filter((brand) => {
-          const config = BRAND_CONFIGS[brand];
-          return !Deno.env.get(config.envKeys.id);
-        }),
+        // Brands with credentials available from EITHER source. Kept as the
+        // same string[] shape older callers already read.
+        configured_brands: Array.from(
+          new Set([
+            ...Object.keys(BRAND_CONFIGS).filter((brand) =>
+              Boolean(Deno.env.get(BRAND_CONFIGS[brand].envKeys.id))
+            ),
+            ...dbPrograms.keys(),
+          ])
+        ),
+        unconfigured_brands: Object.keys(BRAND_CONFIGS).filter(
+          (brand) =>
+            !Deno.env.get(BRAND_CONFIGS[brand].envKeys.id) &&
+            !dbPrograms.has(brand)
+        ),
+        // Additive: brands configured in hotel_affiliate_programs.
+        database_brands: Array.from(dbPrograms.keys()),
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
