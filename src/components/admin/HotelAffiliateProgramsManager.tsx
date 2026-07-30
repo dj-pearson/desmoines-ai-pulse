@@ -83,6 +83,9 @@ function ProgramCard({
   const fields = NETWORK_FIELDS[network] ?? {};
   const complete = isProgramComplete(draft);
   const preview = buildAffiliateUrl(draft, PREVIEW_DESTINATION);
+  const adPreview = draft.ad_destination_url
+    ? buildAffiliateUrl(draft, draft.ad_destination_url)
+    : null;
   const dirty = JSON.stringify(draft) !== JSON.stringify(program);
 
   function set<K extends keyof HotelAffiliateProgram>(
@@ -110,6 +113,7 @@ function ProgramCard({
         tracking_domain: draft.tracking_domain,
         link_template: draft.link_template,
         sub_id: draft.sub_id,
+        ad_destination_url: draft.ad_destination_url,
         is_enabled: draft.is_enabled,
         status: draft.status,
         signup_url: draft.signup_url,
@@ -307,10 +311,38 @@ function ProgramCard({
           </div>
         )}
 
+        {!isFallback && (
+          <div className="space-y-1.5">
+            <Label htmlFor={`addest-${program.id}`}>
+              Display-banner destination
+            </Label>
+            <Input
+              id={`addest-${program.id}`}
+              value={draft.ad_destination_url ?? ""}
+              onChange={(e) =>
+                set("ad_destination_url", e.target.value || null)
+              }
+              placeholder="https://brand.example/search?city=Des+Moines"
+              className="font-mono text-xs"
+            />
+            <p className="text-xs text-muted-foreground">
+              Where this brand's ad banner sends people. Use the brand's Des
+              Moines <strong>search</strong> page — not the rewards signup page.
+              Verify the seeded URL still resolves before enabling. Leave blank
+              to keep the banner on its existing static link.
+            </p>
+            {adPreview && (
+              <code className="block break-all rounded-md bg-muted p-2 text-xs">
+                {adPreview}
+              </code>
+            )}
+          </div>
+        )}
+
         <div className="space-y-1.5">
           <Label className="flex items-center gap-1.5 text-xs">
             <Link2 className="h-3.5 w-3.5" />
-            Preview
+            Booking-link preview
           </Label>
           {preview ? (
             <code className="block break-all rounded-md bg-muted p-3 text-xs">

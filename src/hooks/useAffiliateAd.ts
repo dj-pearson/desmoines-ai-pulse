@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { storage } from '@/lib/safeStorage';
+import { useAffiliateAdLinks } from '@/hooks/useAffiliateAdLinks';
 import {
   getActiveAffiliatePartners,
   AFFILIATE_PLACEMENT_SIZE_MAP,
@@ -19,8 +20,16 @@ interface BrandSession {
  * Returns an affiliate ad for the given placement.
  * Uses round-robin brand selection with a 30-minute session window
  * so all ad slots on a page show the same brand.
+ *
+ * The click-through is the brand's deep link from `hotel_affiliate_programs`
+ * (HOTEL-AFF-002) when that brand's program is configured, so the banner lands
+ * on a bookable Des Moines search page. It falls back to the static link in
+ * affiliateAds.ts — the program's default creative, which goes to the loyalty
+ * enrolment page — for brands not yet set up.
  */
 export function useAffiliateAd(placement: AffiliatePlacement) {
+  const deepLinks = useAffiliateAdLinks();
+
   return useMemo(() => {
     const partners = getActiveAffiliatePartners();
     if (partners.length === 0) {
@@ -43,7 +52,8 @@ export function useAffiliateAd(placement: AffiliatePlacement) {
     const partner: AffiliatePartner = partners[index];
     const size = AFFILIATE_PLACEMENT_SIZE_MAP[placement];
     const imageUrl = partner.assets[size];
+    const affiliateUrl = deepLinks[partner.brandParent] ?? partner.affiliateUrl;
 
-    return { partner, imageUrl, affiliateUrl: partner.affiliateUrl };
-  }, [placement]);
+    return { partner, imageUrl, affiliateUrl };
+  }, [placement, deepLinks]);
 }

@@ -8,7 +8,22 @@ export type AffiliateAdSize = '728x90' | '300x250' | '160x600';
 export interface AffiliatePartner {
   id: string;
   name: string;
+  /**
+   * Fallback link, used only until the brand's program is configured.
+   *
+   * These are the programs' DEFAULT CREATIVE links, which land on the loyalty
+   * enrolment page rather than anything bookable. The real link is the deep
+   * link built from `hotel_affiliate_programs.ad_destination_url` and served by
+   * the `get_affiliate_ad_links` RPC — see `useAffiliateAdLinks`. Once a brand
+   * is enabled in Admin → Hotels → Affiliate Programs, that link wins and this
+   * one is never used.
+   */
   affiliateUrl: string;
+  /**
+   * Links this creative to a row in `hotel_affiliate_programs`, so the banner
+   * reuses the same credentials as the per-hotel booking links.
+   */
+  brandParent: string;
   assets: Record<AffiliateAdSize, string>;
   isActive: boolean;
 }
@@ -26,6 +41,7 @@ export const AFFILIATE_PLACEMENT_SIZE_MAP: Record<AffiliatePlacement, AffiliateA
 export const AFFILIATE_PARTNERS: AffiliatePartner[] = [
   {
     id: 'hyatt',
+    brandParent: 'Hyatt',
     name: 'Hyatt',
     affiliateUrl: 'https://hyatt.jewn.net/DWyqGG',
     assets: {
@@ -37,6 +53,7 @@ export const AFFILIATE_PARTNERS: AffiliatePartner[] = [
   },
   {
     id: 'ihg',
+    brandParent: 'IHG',
     name: 'IHG',
     affiliateUrl: 'https://ihg.hmxg.net/5kaEq9',
     assets: {
@@ -48,6 +65,7 @@ export const AFFILIATE_PARTNERS: AffiliatePartner[] = [
   },
   {
     id: 'marriott',
+    brandParent: 'Marriott',
     name: 'Marriott',
     affiliateUrl: 'https://marriott.pxf.io/en1QGZ',
     assets: {

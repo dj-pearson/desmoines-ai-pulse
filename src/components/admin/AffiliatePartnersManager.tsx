@@ -7,6 +7,7 @@ import { Switch } from '@/components/ui/switch';
 import { ExternalLink, ImageIcon, Hotel } from 'lucide-react';
 import { storage } from '@/lib/safeStorage';
 import { useToast } from '@/hooks/use-toast';
+import { useAffiliateAdLinks } from '@/hooks/useAffiliateAdLinks';
 
 const OVERRIDES_KEY = 'affiliate_partner_overrides';
 
@@ -18,6 +19,7 @@ const PLACEHOLDER_BRANDS = [
 
 export function AffiliatePartnersManager() {
   const { toast } = useToast();
+  const deepLinks = useAffiliateAdLinks();
   const [overrides, setOverrides] = useState<Record<string, boolean>>(() =>
     storage.get<Record<string, boolean>>(OVERRIDES_KEY, {}) ?? {}
   );
@@ -64,15 +66,35 @@ export function AffiliatePartnersManager() {
               <TableRow key={partner.id}>
                 <TableCell className="font-medium">{partner.name}</TableCell>
                 <TableCell>
-                  <a
-                    href={partner.affiliateUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm text-primary hover:underline inline-flex items-center gap-1"
-                  >
-                    {partner.affiliateUrl.replace(/^https?:\/\//, '').slice(0, 30)}
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
+                  {(() => {
+                    // The deep link from hotel_affiliate_programs wins when the
+                    // brand is configured; otherwise this still shows the static
+                    // loyalty-enrolment fallback that is actually being served.
+                    const deepLink = deepLinks[partner.brandParent];
+                    const url = deepLink ?? partner.affiliateUrl;
+                    return (
+                      <div className="space-y-1">
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-primary hover:underline inline-flex items-center gap-1"
+                        >
+                          {url.replace(/^https?:\/\//, '').slice(0, 30)}
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                        {deepLink ? (
+                          <Badge variant="outline" className="text-xs text-emerald-600 border-emerald-300">
+                            Deep linked
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">
+                            Loyalty signup — set a banner destination
+                          </Badge>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </TableCell>
                 <TableCell>
                   <div className="flex gap-1">

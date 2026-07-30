@@ -31,6 +31,10 @@ The fix is not a different program, it is **deep linking**: keep the same
 credentials, append the property's own booking URL as the destination. That is
 what `build_hotel_affiliate_url` does.
 
+The same three links were also the click-through for the **display banners**
+(`src/lib/affiliateAds.ts` → `AffiliateAdBanner`). Those are now deep linked as
+well — see §3.1.
+
 ### UTM parameters are not affiliate tracking
 
 Worth stating plainly, because the two get conflated: `utm_source` /
@@ -123,6 +127,44 @@ regen run required.
 4. Check the **Preview** line renders a sane URL.
 5. Toggle **Enabled**, hit **Save & apply**. Every hotel of that brand is
    rewritten in the same transaction.
+
+### 3.1 Display banners
+
+The banner ad units use the *same* brand credentials, but a banner is
+brand-level rather than property-level, so it needs its own destination:
+
+```
+hotel_affiliate_programs.ad_destination_url   ← brand's Des Moines search page
+        │  BEFORE trigger: sync_affiliate_ad_url()
+        ▼
+hotel_affiliate_programs.ad_url               ← wrapped in the brand's redirect
+        │  get_affiliate_ad_links()  (SECURITY DEFINER, granted to anon)
+        ▼
+useAffiliateAdLinks → useAffiliateAd → AffiliateAdBanner
+```
+
+`ad_url` is NULL while the program is disabled or has no destination, and the
+banner then falls back to the static link in `affiliateAds.ts`. So banners never
+go blank — they just stay on the old loyalty link until you configure the brand.
+
+The table is admin-only under RLS and stays that way. `get_affiliate_ad_links()`
+is a `SECURITY DEFINER` function returning only `brand_parent`, `display_name`
+and the finished `ad_url` — no credentials, no operator notes, and it takes no
+arguments, so it cannot be used to mint a link for an attacker-chosen
+destination. The `anon` grant is load-bearing: banners render for logged-out
+visitors on every public page.
+
+> **Seeded destinations are unverified.** Migration `20260730000002` fills in
+> best-effort Des Moines search URLs for the seven chain brands. Hotel groups
+> rewrite their search URL patterns often. **Open each one and confirm it loads a
+> Des Moines result list before enabling that brand** — a 404 destination
+> converts at zero, and some programs treat repeated dead-link traffic as a
+> compliance issue.
+
+Only Hyatt, IHG and Marriott have banner creative assets today. Adding a fourth
+brand means dropping 728x90 / 300x250 / 160x600 images into
+`public/ads/affiliates/<brand>/` and adding an entry to `AFFILIATE_PARTNERS`
+with its `brandParent` set to the matching `hotel_affiliate_programs` row.
 
 #### Reading impact.com IDs off an existing link
 

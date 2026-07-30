@@ -5435,7 +5435,9 @@ export type Database = {
       hotel_affiliate_programs: {
         Row: {
           account_id: string | null
+          ad_destination_url: string | null
           ad_id: string | null
+          ad_url: string | null
           brand_parent: string
           campaign_id: string | null
           commission_notes: string | null
@@ -5454,7 +5456,9 @@ export type Database = {
         }
         Insert: {
           account_id?: string | null
+          ad_destination_url?: string | null
           ad_id?: string | null
+          ad_url?: string | null
           brand_parent: string
           campaign_id?: string | null
           commission_notes?: string | null
@@ -5473,7 +5477,9 @@ export type Database = {
         }
         Update: {
           account_id?: string | null
+          ad_destination_url?: string | null
           ad_id?: string | null
+          ad_url?: string | null
           brand_parent?: string
           campaign_id?: string | null
           commission_notes?: string | null
@@ -12926,6 +12932,19 @@ export type Database = {
           success: boolean
         }[]
       }
+      build_affiliate_url_from_parts: {
+        Args: {
+          p_account_id: string
+          p_ad_id: string
+          p_campaign_id: string
+          p_destination: string
+          p_link_template: string
+          p_network: string
+          p_sub_id: string
+          p_tracking_domain: string
+        }
+        Returns: string
+      }
       build_hotel_affiliate_url: {
         Args: {
           p_brand_parent: string
@@ -13563,6 +13582,14 @@ export type Database = {
               title: string
             }[]
           }
+      get_affiliate_ad_links: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          ad_url: string
+          brand_parent: string
+          display_name: string
+        }[]
+      }
       get_activity_feed: {
         Args: { p_limit?: number; p_user_id?: string }
         Returns: {
