@@ -100,6 +100,12 @@ const DashboardSkeleton = () => (
   </div>
 );
 
+// WEB-SEO-012: shared by the two head managers this page renders
+// (SEOEnhancedHead and SEOStructure) so they cannot disagree.
+const HOME_TITLE = 'Things to Do in Des Moines This Weekend | Events, Restaurants & Attractions';
+const HOME_DESCRIPTION =
+  "Find what's happening in Des Moines, Iowa today and this weekend — live events, concerts, festivals, family activities, and the restaurants open right now. Updated daily across Des Moines, West Des Moines, Ankeny, Urbandale and the metro.";
+
 export default function Index() {
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [showEventDetails, setShowEventDetails] = useState(false);
@@ -369,9 +375,16 @@ export default function Index() {
 
   return (
     <div className="min-h-screen bg-background overflow-x-hidden">
+      {/* WEB-SEO-012: the homepage used to be titled "Conversational City Guide
+          | AI-Powered Event & Restaurant Discovery" and described with
+          BRAND.description. That sold the product to itself on our
+          highest-authority page — nobody searches for how we are built.
+          Title and description now lead with the query. BRAND.description is
+          deliberately left alone: it is the Organization/LocalBusiness
+          description in schema, where self-description is correct. */}
       <SEOEnhancedHead
-        title={`${BRAND.name} - Conversational City Guide | AI-Powered Event & Restaurant Discovery`}
-        description={BRAND.description}
+        title={HOME_TITLE}
+        description={HOME_DESCRIPTION}
         url={`${BRAND.baseUrl}/`}
         type="website"
         structuredData={structuredData}
@@ -399,7 +412,20 @@ export default function Index() {
       />
 
       {/* SEO and structured data for AI optimization */}
-      <SEOStructure canonicalUrl={`${BRAND.baseUrl}/`} />
+      {/* WEB-SEO-012: SEOStructure mounts AFTER SEOEnhancedHead above and its
+          Helmet also sets <title> and <meta name="description">. React Helmet
+          resolves last-mount-wins, so with only canonicalUrl passed here its
+          defaults silently overrode whatever SEOEnhancedHead set — which is why
+          editing the title above had no effect on the shipped HTML until this
+          was found by grepping dist/index.html rather than trusting the source.
+          Both components are given the same values so the winner is correct
+          whichever way the tree evolves. Collapsing the two head managers into
+          one is tracked separately (WEB-SEO-002). */}
+      <SEOStructure
+        title={HOME_TITLE}
+        description={HOME_DESCRIPTION}
+        canonicalUrl={`${BRAND.baseUrl}/`}
+      />
 
       {/* Main content wrapper with semantic HTML for AI parsing */}
       <div itemScope itemType="https://schema.org/WebPage">
@@ -686,57 +712,58 @@ export default function Index() {
         {/* FAQ Section for Featured Snippets - directly rendered for SEO */}
         <section className="py-16 bg-background">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            {/* WEB-SEO-012: these questions used to be about our own product —
+                "What makes Des Moines AI Pulse different from other event
+                directories?", "How does behavioral learning improve my
+                experience?". Eight of eleven described the software rather than
+                the city, on the page with the most authority to spend. They now
+                answer what visitors actually search for. Substantive answers
+                matter more than the markup here: Google retired FAQ rich
+                results for non-gov/health sites in 2023, so the value of this
+                block is on-page relevance plus extraction by AI assistants,
+                and both reward real answers over restated marketing. */}
             <FAQSection
-                title="Frequently Asked Questions About Des Moines AI Pulse"
-                description="Learn how our conversational AI technology transforms the way you discover and experience Des Moines."
+                title="Des Moines: Frequently Asked Questions"
+                description="Quick answers about events, dining, and things to do across the Des Moines metro."
                 faqs={[
                   {
-                    question: "What makes Des Moines AI Pulse different from other event directories?",
-                    answer: "Des Moines AI Pulse is the first truly conversational city guide powered by advanced AI. Unlike traditional directories that require manual searching, our platform understands natural language, learns from your behavior, and proactively recommends experiences across multiple channels (web, SMS, voice assistants, ChatGPT). We use semantic search to understand intent—ask 'romantic dinner with live music' and get context-aware results, not just keyword matches. Our behavioral intelligence and predictive analytics create a personalized experience that gets smarter the more you use it."
+                    question: "What is there to do in Des Moines this weekend?",
+                    answer: "Des Moines has live events every weekend across music, food, arts, sports and family activities. The Downtown Farmers' Market runs Saturday mornings May through October in the Historic Court District, touring Broadway shows play the Des Moines Civic Center, concerts run at Wells Fargo Arena and smaller venues like xBk Live, and the East Village and Historic Valley Junction host regular gallery and shopping events. See our full this-weekend listing for what is confirmed for the coming Saturday and Sunday, updated daily."
                   },
                   {
-                    question: "How can I access Des Moines AI Pulse recommendations?",
-                    answer: "Access recommendations your way: (1) Web - Browse our intelligent platform with semantic search, (2) SMS - Text your questions to our AI concierge for instant recommendations, (3) Voice - Ask Alexa or Google Assistant about Des Moines events and dining, (4) ChatGPT - Use our plugin for conversational planning. All channels sync your preferences and learn from your interactions to provide increasingly personalized suggestions. Your city guide follows you wherever you need it."
+                    question: "What free things are there to do in Des Moines?",
+                    answer: "Several of the best-known attractions in Des Moines are free year-round: the Des Moines Art Center, the John and Mary Pappajohn Sculpture Park, the State Historical Museum of Iowa in the East Village, the Iowa State Capitol grounds, and Lauridsen Skatepark — at 88,000 square feet, the largest skatepark in the United States. Free splash pads open across the metro in summer, and Saylorville Lake and the Neal Smith Trail are open for hiking and biking at no cost."
                   },
                   {
-                    question: "How does the AI understand what I'm looking for?",
-                    answer: "Our semantic search technology powered by advanced AI models understands the meaning and context of your queries, not just keywords. Ask naturally like 'romantic dinner with live jazz' or 'family activities for rainy Saturday,' and our AI analyzes intent, preferences, constraints, and real-time factors (weather, availability, time of day). The system learns from your interactions—the more you use it, the better it understands your unique preferences. We combine natural language processing, behavioral analytics, and predictive intelligence to deliver personalized, context-aware recommendations."
+                    question: "What events are happening in Des Moines today?",
+                    answer: "Our today listing shows events confirmed for the current date in Central Time across Des Moines and the surrounding suburbs, filterable by category. It is rebuilt daily from event sources across the metro rather than depending on venues submitting their listings to us."
                   },
                   {
-                    question: "What is the AI Trip Planner and how does it work?",
-                    answer: "The AI Trip Planner generates complete day-by-day itineraries in seconds based on your interests, dates, budget, and party size. Simply input your preferences (food, arts, music, family, outdoors), and our AI optimizes a schedule considering: travel times between locations, activity variety, optimal timing (morning/afternoon/evening appropriateness), budget constraints, and real-time availability. The planner includes restaurants near events, backup options for weather changes, and reservation links. Export to PDF or add activities directly to your calendar."
+                    question: "Where are the best restaurants in Des Moines?",
+                    answer: "Des Moines dining spans fine dining, chef-driven small plates and long-standing local institutions. Well-known names include Harbinger and Alba in the East Village, 801 Chophouse and Proudfoot & Bird downtown, Splash Seafood Bar and Grill, and Latin King — where you can order Steak de Burgo, the dish most associated with the city. Our restaurant directory covers the metro with cuisine, price range, neighborhood and current open/closed status."
                   },
                   {
-                    question: "How does behavioral learning improve my experience?",
-                    answer: "Our platform tracks your interactions (searches, favorites, bookings) to build an intelligent profile of your preferences—completely privacy-first and anonymized. Over time, the AI learns patterns: if you frequently search for outdoor events, we'll prioritize parks and festivals; if you favor Italian restaurants, similar venues appear higher in recommendations. The system also detects emerging preferences and proactively suggests new experiences you'll likely enjoy. Behavioral intelligence creates a progressively personalized experience unique to you."
+                    question: "What restaurants in Des Moines are open right now?",
+                    answer: "Our open-now listing checks current hours against the time in Central Time and shows only what is serving at this moment. For late-night specifically, Fong's Pizza serves until midnight with slices until 3 a.m. on weekends, and Zombie Burger and Jethro's run until around 11 p.m."
                   },
                   {
-                    question: "Where can I find the best restaurants in Des Moines?",
-                    answer: "Des Moines has over 300 documented restaurants across diverse cuisines. Top-rated areas include East Village for farm-to-table dining, Ingersoll for local favorites, Valley Junction for unique experiences, and Downtown for upscale options. Our restaurant directory includes real-time information on new openings (tracked within 48 hours), cuisine types, price ranges, and operating hours. We update restaurant data weekly with 95% accuracy to ensure current information."
+                    question: "What is there to do in Des Moines with kids?",
+                    answer: "The metro has strong family options, many of them free. Blank Park Zoo, the Science Center of Iowa and Adventureland in Altoona are the main paid attractions; the Des Moines Art Center, the State Historical Museum and the Pappajohn Sculpture Park are free and work well with children. We also map playgrounds across the metro with age suitability and accessibility details, and maintain a kids and family events listing."
                   },
                   {
-                    question: "What family-friendly attractions are available in Des Moines?",
-                    answer: "Des Moines offers 50+ family attractions including Blank Park Zoo (year-round animal exhibits), Science Center of Iowa (interactive STEM exhibits), Adventureland Park (amusement rides and water park), Living History Farms (interactive farm experience), and 100+ mapped playgrounds with safety and accessibility information. Popular indoor options include Prairie Meadows (family entertainment), and numerous museums. Our platform provides age appropriateness, accessibility details, and current hours for all attractions."
+                    question: "Which areas does Des Moines Insider cover?",
+                    answer: "Des Moines proper plus the Greater Des Moines metro: West Des Moines, Ankeny, Urbandale, Clive, Johnston, Waukee, Windsor Heights and Altoona. We also cover Des Moines neighborhoods individually, including Downtown, the East Village, Beaverdale, Highland Park, Historic Valley Junction and the Court Avenue District."
                   },
                   {
-                    question: "What are predictive insights and how do they help me?",
-                    answer: "Our predictive analytics engine analyzes historical data, current trends, and real-time signals to forecast demand and optimize your experience. See predictions like 'High demand—73% of similar events sold out' or 'Best time to visit: Tuesday 7pm (20% less busy).' For businesses, we provide demand forecasts, pricing recommendations, and optimal staffing insights. These data-driven predictions help you avoid crowds, secure tickets before events sell out, and discover hidden gems at ideal times."
+                    question: "When is the Iowa State Fair?",
+                    answer: "The Iowa State Fair runs for 11 days each August at the Iowa State Fairgrounds on the east side of Des Moines. It is the largest single event in the state and draws over a million visitors. Our Iowa State Fair guide covers dates, the grandstand concert lineup, parking, admission and food."
                   },
                   {
-                    question: "How does Des Moines AI Pulse stay current with events and venues?",
-                    answer: "Our AI-powered web scraping and data aggregation system monitors 50+ official sources 24/7, capturing 98% of public events in the Des Moines metro area. Updates occur in real-time with an average 24-hour refresh cycle. The AI automatically detects new restaurants (within 48 hours of opening), venue changes, pricing updates, and schedule modifications. We combine automated scraping with human verification, AI-enhanced descriptions, and community contributions to ensure accuracy and freshness across 1000+ events, 300+ restaurants, and 50+ attractions."
+                    question: "How often are the listings updated?",
+                    answer: "Event listings are refreshed daily. Restaurant details, including hours used for open-now status, are reviewed weekly, and attractions monthly. Event times are stored and displayed in Central Time to avoid the timezone drift common on aggregated calendars."
                   },
-                  {
-                    question: "What areas does Des Moines Insider cover?",
-                    answer: "We provide comprehensive coverage for the entire Des Moines metropolitan area including Des Moines (all neighborhoods), West Des Moines, Ankeny, Urbandale, Johnston, Clive, Waukee, and Windsor Heights. Our geographic radius extends 50 miles from downtown Des Moines (coordinates: 41.5868°N, 93.6250°W), covering 15+ suburban communities in Polk County and surrounding areas. Location-based filtering helps you find events and restaurants near your specific area."
-                  },
-                  {
-                    question: "How do I get started with personalized AI recommendations?",
-                    answer: "Create a free account to unlock the full power of our AI intelligence. Once registered, the system begins learning from your interactions—searches, favorites, bookings, and browsing patterns. Within days, you'll receive highly personalized recommendations tailored to your unique preferences. Enable notifications for proactive alerts about events you'll love, weather changes affecting saved plans, and last-minute availability. The AI continuously adapts, delivering 40% more relevant suggestions than generic searches. Access your personalized experience across all channels: web, SMS, voice, and ChatGPT."
-                  }
                 ]}
                 showSchema={true}
-                className="border-0 shadow-lg"
               />
           </div>
         </section>

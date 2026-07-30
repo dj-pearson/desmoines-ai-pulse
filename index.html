@@ -385,9 +385,25 @@
     </script>
 
     <title>Des Moines Insider: Events, Restaurants & Attractions</title>
+    <!--
+      SITE-WIDE FALLBACK DESCRIPTION ONLY (WEB-SEO-012).
+
+      This file is the shell for every route. Helmet APPENDS meta tags rather
+      than replacing unmanaged ones, so on a prerendered route this tag survives
+      alongside the page's own description and appears FIRST in the document —
+      which is the copy a crawler is most likely to use. It therefore has to be
+      a sensible default for any page, not a product pitch.
+
+      It used to read "First truly conversational AI city guide ... via web,
+      SMS, voice assistant, or ChatGPT", which described our architecture rather
+      than Des Moines and was inherited by all 31 prerendered routes.
+
+      Collapsing the duplicate description tags (and giving the routes that
+      still have no description of their own a real one) is WEB-SEO-002.
+    -->
     <meta
       name="description"
-      content="First truly conversational AI city guide for Des Moines, Iowa. Get personalized recommendations via web, SMS, voice assistant, or ChatGPT. Context-aware search that understands intent, learns preferences, and proactively assists you in discovering the best events, restaurants, and attractions across the Des Moines metro."
+      content="Events, restaurants, and things to do in Des Moines, Iowa. Find what's happening today and this weekend across Des Moines, West Des Moines, Ankeny, Urbandale and the metro — updated daily."
     />
     <meta name="author" content="Des Moines Insider" />
     <!--
