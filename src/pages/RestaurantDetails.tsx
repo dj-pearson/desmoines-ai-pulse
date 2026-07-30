@@ -246,15 +246,12 @@ export default function RestaurantDetails() {
     "Iowa restaurants",
   ].filter(Boolean);
 
-  // Estimated review count for schema
-  const getEstimatedReviewCount = (rating: number | null, popularityScore: number | null): number => {
-    if (!rating) return 0;
-    const baseCount = rating >= 4.5 ? 150 : rating >= 4.0 ? 100 : rating >= 3.5 ? 50 : 25;
-    const popularityMultiplier = popularityScore ? (popularityScore / 50) : 1;
-    return Math.round(baseCount * popularityMultiplier);
-  };
-
-  const estimatedReviewCount = getEstimatedReviewCount(restaurant.rating, restaurant.popularity_score);
+  // WEB-SEO-016: getEstimatedReviewCount() used to synthesise a review count
+  // from the rating and popularity score (rating >= 4.5 ? 150 : 100 : 50 : 25,
+  // scaled by popularity) and feed it to aggregateRating on all ~480 restaurant
+  // pages. Google requires ratingCount/reviewCount to reflect real reviews;
+  // inventing one is a review-snippet policy breach. There is no reviews table
+  // in the schema, so there is no real count to use and the block is gone.
 
   // Comprehensive Restaurant schema for AI search engines
   const restaurantSchema = {
@@ -275,16 +272,6 @@ export default function RestaurantDetails() {
     ...(restaurant.website && { url: restaurant.website }),
     priceRange: restaurant.price_range,
     ...(restaurant.image_url && { image: [restaurant.image_url] }),
-    aggregateRating: restaurant.rating
-      ? {
-          "@type": "AggregateRating",
-          ratingValue: restaurant.rating.toFixed(1),
-          ratingCount: estimatedReviewCount,
-          reviewCount: estimatedReviewCount,
-          bestRating: "5",
-          worstRating: "1",
-        }
-      : undefined,
     geo: {
       "@type": "GeoCoordinates",
       latitude: restaurant.latitude || 41.5868,

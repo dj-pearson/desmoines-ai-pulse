@@ -96,20 +96,10 @@ export default function EnhancedPlaygroundSEO({
       latitude: playground.latitude || 41.5868,
       longitude: playground.longitude || -93.625,
     },
-    aggregateRating: playground.rating
-      ? {
-          "@type": "AggregateRating",
-          ratingValue: playground.rating.toFixed(1),
-          ratingCount:
-            playground.rating >= 4.5
-              ? 80
-              : playground.rating >= 4.0
-                ? 50
-                : 25,
-          bestRating: "5",
-          worstRating: "1",
-        }
-      : undefined,
+    // WEB-SEO-016: aggregateRating removed. The ratingValue was real but
+    // ratingCount was invented from it (playground.rating >= 4.5 ? ... ), and
+    // Google requires the count to reflect actual reviews. No reviews table
+    // exists, so there is no honest count to emit.
     isAccessibleForFree: true,
     publicAccess: true,
     amenityFeature: (playground.amenities || []).map((amenity) => ({

@@ -308,13 +308,12 @@ export default function Index() {
       "description": `${BRAND.city}, West Des Moines, Ankeny, Urbandale, Johnston, Clive, Waukee, Windsor Heights, and surrounding Central ${BRAND.state} communities`
     },
     "hasMap": `https://www.google.com/maps/place/${BRAND.city.replace(' ', '+')},+${BRAND.stateAbbr}/@41.5868,-93.6250,12z`,
-    "aggregateRating": {
-      "@type": "AggregateRating",
-      "ratingValue": "4.8",
-      "reviewCount": "1247",
-      "bestRating": "5",
-      "worstRating": "1"
-    }
+    // WEB-SEO-016: an aggregateRating of 4.8 from 1,247 reviews used to sit
+    // here. Nothing produces those numbers — there is no reviews or ratings
+    // table in the schema at all. Publishing a fabricated rating for our own
+    // business is a direct breach of Google's review-snippet guidelines and is
+    // the kind of thing that draws a manual action. Removed rather than
+    // adjusted: there is no honest value to put in its place.
   };
 
   const handleSearch = (
