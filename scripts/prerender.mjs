@@ -19,45 +19,18 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { stripInjectedPreloads, restoreAsyncFontLinks } from './lazy-preload-patterns.mjs';
+import { PRERENDER_ROUTES } from './prerender-routes.mjs';
 import process from 'node:process';
 
 const DIST = path.resolve('dist');
 const PORT = 4178;
 
 // Curated public, static (non-param, non-auth, non-admin) routes worth indexing.
-const ROUTES = [
-  '/',
-  '/events',
-  '/events/today',
-  '/events/free',
-  '/events/kids',
-  '/events/date-night',
-  '/events/ankeny',
-  '/events/urbandale',
-  '/events/johnston',
-  '/events/altoona',
-  '/events/clive',
-  '/restaurants',
-  '/restaurants/open-now',
-  '/restaurants/dietary',
-  '/attractions',
-  '/playgrounds',
-  '/stay',
-  '/articles',
-  '/guides',
-  '/weekend',
-  '/neighborhoods',
-  '/iowa-state-fair',
-  '/calendar',
-  '/deals',
-  '/map',
-  '/trip-planner',
-  '/itineraries',
-  '/pricing',
-  '/business',
-  '/advertise',
-  '/search',
-];
+// Curated public, static (non-param, non-auth, non-admin) routes worth indexing.
+// Defined in scripts/prerender-routes.mjs so public/sitemap-static.xml can be
+// checked against the same list — see WEB-SEO-005 and
+// scripts/check-seo-route-parity.mjs.
+const ROUTES = PRERENDER_ROUTES;
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',

@@ -118,6 +118,25 @@ export default function EnhancedEventSEO({
     ? event.end_date
     : new Date(startMs + 3 * 60 * 60 * 1000).toISOString();
 
+  // WEB-SEO-009: retire long-past events from the index instead of accumulating
+  // them forever. Previously every event page emitted an unconditional
+  // "index, follow", so concluded listings never aged out.
+  //
+  // The 30-day threshold is deliberately LATER than the 7-day GRACE_DAYS in
+  // scripts/generate-dynamic-sitemaps.ts. Between day 7 and day 30 an event is
+  // still indexable but no longer submitted — it keeps ranking for
+  // "did X happen" style queries and for recurring-event research while it is
+  // still plausibly useful, then drops out. Keep "follow" throughout so the
+  // internal links on the page continue to pass.
+  const STALE_EVENT_NOINDEX_DAYS = 30;
+  const daysSinceEvent = Number.isFinite(startMs)
+    ? (Date.now() - startMs) / 86_400_000
+    : 0;
+  const isStaleEvent = daysSinceEvent > STALE_EVENT_NOINDEX_DAYS;
+  const robotsDirective = isStaleEvent
+    ? "noindex, follow"
+    : "index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1";
+
   const eventSchema = {
     "@context": "https://schema.org",
     "@type": "Event",
@@ -126,7 +145,16 @@ export default function EnhancedEventSEO({
     "description": schemaDescription,
     "startDate": startDateISO,
     "endDate": endDateISO,
-    "eventStatus": isUpcoming ? "https://schema.org/EventScheduled" : "https://schema.org/EventPostponed",
+    // WEB-SEO-009: this used to emit EventPostponed for anything not upcoming.
+    // EventPostponed means "moved to a date not yet announced" — a concluded
+    // event is not postponed, it happened. schema.org expresses "this is over"
+    // as EventScheduled with a past endDate, which is what we now do. Asserting
+    // a false status on every past event (hundreds of URLs, all left
+    // index,follow) undermines trust in all of our Event markup.
+    // Real postponements/cancellations should come from event data, not from
+    // whether the date has passed; there is no such field today, so we do not
+    // guess.
+    "eventStatus": "https://schema.org/EventScheduled",
     "eventAttendanceMode": "https://schema.org/OfflineEventAttendanceMode",
     "location": {
       "@type": "Place",
@@ -146,16 +174,23 @@ export default function EnhancedEventSEO({
         }
       }),
     },
-    "organizer": {
-      "@type": "Organization",
-      "@id": `${BRAND.baseUrl}/#organization`,
-      "name": BRAND.name,
-      "url": BRAND.baseUrl,
-      "logo": `${BRAND.baseUrl}${BRAND.logo}`,
-    },
-    "performer": event.venue
-      ? { "@type": "Organization", "name": event.venue }
-      : { "@type": "Organization", "name": BRAND.name, "url": BRAND.baseUrl },
+    // WEB-SEO-010: organizer and performer are deliberately omitted.
+    //
+    // This block used to hardcode Des Moines Insider as the organizer of every
+    // event and, when a venue was known, name the VENUE as the performer —
+    // so a touring Broadway show was published as organized by us and
+    // performed by the building it played in. Both are false. We are an
+    // aggregator: the `events` table has no organizer, performer, artist or
+    // promoter column, so there is no truthful value to emit here.
+    //
+    // Neither field is required by Google's Event structured data guidance,
+    // and omitting a field is strictly better than fabricating one — an
+    // aggregator inserting itself as organizer is a recognisable
+    // scraped-content spam signal. The venue is already correctly expressed as
+    // the Place in `location` above.
+    //
+    // If organizer/performer are ever captured during ingestion, add them back
+    // conditionally — never with a fallback.
     "image": event.image_url
       ? [event.image_url]
       : [`${BRAND.baseUrl}${BRAND.ogImage}`],
@@ -263,10 +298,12 @@ export default function EnhancedEventSEO({
       {event.image_url && <meta name="event:image" content={event.image_url} />}
       {event.price && <meta name="event:price" content={event.price} />}
 
-      {/* AI Search Engine Optimization Meta */}
-      <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
-      <meta name="googlebot" content="index, follow" />
-      <meta name="bingbot" content="index, follow" />
+      {/* AI Search Engine Optimization Meta.
+          robotsDirective flips to noindex,follow once the event is long past
+          (WEB-SEO-009). */}
+      <meta name="robots" content={robotsDirective} />
+      <meta name="googlebot" content={isStaleEvent ? "noindex, follow" : "index, follow"} />
+      <meta name="bingbot" content={isStaleEvent ? "noindex, follow" : "index, follow"} />
 
       {/* Open Graph for Social + AI */}
       <meta property="og:type" content="event" />

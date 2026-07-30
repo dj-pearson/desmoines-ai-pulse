@@ -21,7 +21,7 @@ Brand searches surface the site and individual event pages (`/events/steve-marti
 
 But across every non-brand query tested — *things to do in Des Moines this weekend*, *Des Moines events this weekend calendar*, *best restaurants in Des Moines*, *restaurants open now Des Moines*, *free things to do in Des Moines with kids* — **Des Moines Insider does not appear anywhere in results.** Not page one, not in the AI-generated summaries, not in the cited source set.
 
-### Google Search Console is reporting a real, fixable error
+### The only error Google told us about was fixed, and nobody knows
 
 `GSC/Critical issues.csv`:
 
@@ -30,7 +30,9 @@ Issue,Validation,Items
 "Duplicate field ""FAQPage""",Not Started,34
 ```
 
-Invalid items have been oscillating between 9 and 56 for six months (`GSC/Chart.csv`) with **zero impressions recorded** on the enhancement report the entire time. Root cause is identified in §4.
+Invalid items oscillate between 0 and 56 across the window in `GSC/Chart.csv`, with **zero impressions recorded** on the enhancement report throughout.
+
+That export is dated **2026-03-13**. The underlying duplication was fixed on **2026-06-26**. The report has simply never been refreshed — validation was never requested and the data was never re-synced. See §4(a) for the verification and Blocker 8 for why the data is four months old.
 
 ### The competitive set is not one competitor
 
@@ -127,15 +129,26 @@ Two pages, same intent, same title concept. The one with no canonical, no schema
 
 Three distinct problems:
 
-**(a) Duplicate `FAQPage` — this is the GSC critical error.**
-`FAQSection.tsx:42` emits its own `FAQPage`. The `Enhanced*SEO` components each emit a second one. Eight page types render both:
+**(a) Duplicate `FAQPage` — already fixed in code; the GSC error is stale.**
 
-```
-AttractionDetails.tsx   Attractions.tsx    FreeEvents.tsx      KidsEvents.tsx
-Playgrounds.tsx         PlaygroundDetails.tsx   GuidesPage.tsx  MonthlyEventsPage.tsx
-```
+> **Correction (2026-07-30).** An earlier revision of this document stated that eight page types still double-emit `FAQPage` and that this was a live defect. That was wrong. It came from counting `grep FAQPage` hits without checking whether the matches were code or comments — in `EnhancedAttractionSEO.tsx:127` and `EnhancedPlaygroundSEO.tsx:140` the only remaining match *is* a comment recording that the schema was removed.
 
-Several are dynamic routes, which is how 8 page types become 34 flagged URLs.
+Actual state, verified component by component:
+
+| Emitter | Behaviour | Duplicates today? |
+|---|---|---|
+| `FAQSection.tsx:42` | emits unless `showSchema={false}` | no |
+| `EnhancedEventSEO.tsx:179` | unconditional | no — no page renders it alongside `FAQSection` |
+| `EnhancedLocalSEO.tsx:282` | only when `faqData` is passed | no — no page passes it alongside `FAQSection` |
+| `FAQSchema.tsx:15` | unconditional | no — `ArticleDetails` only |
+| `EnhancedAttractionSEO` / `EnhancedPlaygroundSEO` | **removed** | no |
+| `PseoPage.tsx:177` | conditional on `faqs` | no — `PseoFaq` is presentational |
+
+The duplication was real and was fixed in `2c28084` (2026-06-26): `FAQPage` was stripped from the two entity wrappers, and `FreeEvents`/`KidsEvents` were given `showSchema={false}`.
+
+**The GSC export in this repo is from 2026-03-13 — four and a half months before that fix.** The 34-item critical error is a stale report awaiting revalidation, not an open bug. Nobody knows it cleared because nobody has synced GSC since March, which is Blocker 8.
+
+The remaining work is therefore: request validation in GSC, and prevent recurrence. The recurrence risk is real — the bug is invisible in review because each component is correct in isolation and the duplication exists only in the composition. `scripts/check-duplicate-schema.mjs` now enforces one `FAQPage` per page in `npm run validate`.
 
 **(b) Concluded events are marked `EventPostponed`.**
 `EnhancedEventSEO.tsx:129`:
@@ -249,7 +262,7 @@ These are small, self-contained, and unblock everything else.
 1. Add to `scripts/prerender.mjs` ROUTES: `/events/this-weekend`, `/things-to-do`, `/events/west-des-moines`, `/events/windsor-heights`, the four `/neighborhoods/*` pages.
 2. Remove from ROUTES: `/search`, `/pricing`, `/advertise`, `/business`. Add `noindex` to `/search` (`SearchResults.tsx` has none).
 3. Resolve `/weekend` vs `/events/this-weekend`: `301` `/weekend` → `/events/this-weekend` in `public/_redirects`. Keep the page with schema and canonical; delete the one without.
-4. Fix duplicate `FAQPage`: give `FAQSection` a `showSchema` default of `false`, or strip `FAQPage` from the `Enhanced*SEO` components. One emitter per page. Clears the GSC critical error.
+4. Duplicate `FAQPage` needs no code change — it was fixed in `2c28084`. Request validation in GSC so the stale critical error clears, and keep `npm run check-schema-dupes` in `validate` to stop it recurring.
 5. Fix `eventStatus`: concluded events are `EventScheduled` with a past `endDate` — never `EventPostponed`. Add `noindex, follow` to events more than ~30 days past.
 6. Fix `organizer`/`performer`: omit the fields when unknown rather than defaulting to `"Des Moines Insider"`.
 7. Rewrite the homepage title, description, and FAQ to target *things to do in Des Moines* instead of describing our own technology.

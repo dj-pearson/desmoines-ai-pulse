@@ -3,3 +3,11 @@
 # WEB-UX-016: canonical Visitor Guide is /visitors-guide. The pSEO
 # /things-to-do/tourists page duplicated that concept — 301 to the canonical.
 /things-to-do/tourists  /visitors-guide  301
+
+# WEB-SEO-007: /weekend and /events/this-weekend targeted the same query.
+# /events/this-weekend is the canonical one — it declares its own canonical URL,
+# emits EventListJsonLd and carries FAQ content, none of which /weekend did.
+# The route in App.tsx stays for now: per the Backward Compatibility rules in
+# CLAUDE.md a public route needs its 301 in place for at least one release
+# cycle before the route itself is removed.
+/weekend  /events/this-weekend  301
