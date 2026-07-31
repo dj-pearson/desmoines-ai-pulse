@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useTabState } from "@/hooks/useTabState";
 import { Link, useNavigate } from "react-router-dom";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import {
@@ -79,7 +79,7 @@ export default function SubscriptionPortal() {
   } = usePayments();
   const { tier, isPremium, subscription, plans, startCheckout, checkoutLoading } =
     useSubscription();
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useTabState("overview");
 
   const formatCurrency = (amount: number, currency = "usd") => {
     return new Intl.NumberFormat("en-US", {

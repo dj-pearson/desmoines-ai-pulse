@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTabState } from "@/hooks/useTabState";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAdminCampaigns, CampaignWithUser } from "@/hooks/useAdminCampaigns";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
@@ -31,6 +32,10 @@ export default function AdminCampaignDetail() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedCreative, setSelectedCreative] = useState<CampaignCreative | null>(null);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const [creativeTab, setCreativeTab] = useTabState("pending", {
+    param: "creatives",
+    validTabs: ["pending", "approved"],
+  });
   const [rejectionReason, setRejectionReason] = useState("");
   const [overrideDialogOpen, setOverrideDialogOpen] = useState(false);
   const [overridePrice, setOverridePrice] = useState("");
@@ -275,7 +280,7 @@ export default function AdminCampaignDetail() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="pending">
+          <Tabs value={creativeTab} onValueChange={setCreativeTab}>
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="pending">
                 Pending Review ({getPendingCreatives().length})

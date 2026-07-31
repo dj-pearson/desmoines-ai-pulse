@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { useTabState } from '@/hooks/useTabState';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -29,7 +30,7 @@ import { createEventSlugWithCentralTime } from '@/lib/timezone';
 export default function ProfilePage() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('upcoming');
+  const [activeTab, setActiveTab] = useTabState('upcoming');
 
   // Fetch user's upcoming events (going/interested status)
   const { data: upcomingEvents, isLoading: upcomingLoading } = useQuery({

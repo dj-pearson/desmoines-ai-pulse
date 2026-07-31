@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, act } from "@testing-library/react";
 
 /**
@@ -11,17 +11,28 @@ import { render, act } from "@testing-library/react";
 
 let authCallback: ((event: string, session: unknown) => void) | null = null;
 
-const makeSession = (token: string) => ({
+const makeSession = (token: string, userId = "u1") => ({
   access_token: token,
   expires_at: 1_700_000_000,
-  user: { id: "u1", email: "a@b.com" },
+  user: { id: userId, email: `${userId}@b.com` },
 });
 
 // Minimal chainable query stub for the admin check (returns no role/profile).
+// `deferRoleQueries` holds the answer open, standing in for a real network
+// round-trip so tests can observe what the UI does *while* a check is in
+// flight.
+let deferRoleQueries = false;
+let pendingRoleQueries: Array<() => void> = [];
+
 const fromChain: Record<string, unknown> = {};
 fromChain.select = () => fromChain;
 fromChain.eq = () => fromChain;
-fromChain.maybeSingle = async () => ({ data: null, error: null });
+fromChain.maybeSingle = () => {
+  if (!deferRoleQueries) return Promise.resolve({ data: null, error: null });
+  return new Promise((resolve) => {
+    pendingRoleQueries.push(() => resolve({ data: null, error: null }));
+  });
+};
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
@@ -42,7 +53,7 @@ vi.mock("@/integrations/supabase/client", () => ({
 
 import {
   AuthProvider,
-  useAuthStatus,
+  useAuthFlags as useAuthStatus,
   useAuthState,
 } from "@/contexts/AuthContext";
 
@@ -98,5 +109,125 @@ describe("AuthContext split (WEB-PERF-005)", () => {
 
     expect(statusRenders).toBe(statusBefore); // no status change → no re-render
     expect(stateRenders).toBeGreaterThan(stateBefore); // session changed → re-render
+  });
+});
+
+/**
+ * WEB-UX-008 — a browser tab regaining focus must not look like a new sign-in.
+ *
+ * supabase-js re-emits SIGNED_IN for the session we already hold every time the
+ * tab becomes visible (GoTrueClient#_recoverAndRefresh). If that flips
+ * `isAdminLoading`, ProtectedRoute swaps the page for a spinner and the whole
+ * subtree unmounts — losing the open tab, the scroll position and any
+ * half-filled form.
+ */
+describe("AuthContext tab-focus re-emitted SIGNED_IN (WEB-UX-008)", () => {
+  beforeEach(() => {
+    authCallback = null;
+    deferRoleQueries = false;
+    pendingRoleQueries = [];
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    pendingRoleQueries.forEach((resolve) => resolve());
+    pendingRoleQueries = [];
+  });
+
+  async function renderAndSettle() {
+    const seen: boolean[] = [];
+    function AdminLoadingProbe() {
+      seen.push(useAuthState().isAdminLoading);
+      return null;
+    }
+    await act(async () => {
+      render(
+        <AuthProvider>
+          <AdminLoadingProbe />
+        </AuthProvider>,
+      );
+    });
+    await flush();
+    await flush();
+    return seen;
+  }
+
+  it("does not re-enter the admin-loading state for the same user", async () => {
+    const seen = await renderAndSettle();
+    expect(seen.at(-1)).toBe(false);
+    const countBefore = seen.length;
+
+    // Tab hidden -> visible: same session, re-announced as SIGNED_IN.
+    await act(async () => {
+      authCallback?.("SIGNED_IN", makeSession("t1"));
+      await Promise.resolve();
+    });
+    await flush();
+
+    expect(seen.slice(countBefore).some(Boolean)).toBe(false);
+    expect(seen.at(-1)).toBe(false);
+  });
+
+  it("keeps state identity when the re-emitted session is unchanged", async () => {
+    let stateRenderCount = 0;
+    function CountingConsumer() {
+      stateRenderCount++;
+      useAuthState();
+      return null;
+    }
+    await act(async () => {
+      render(
+        <AuthProvider>
+          <CountingConsumer />
+        </AuthProvider>,
+      );
+    });
+    await flush();
+    await flush();
+
+    const before = stateRenderCount;
+    await act(async () => {
+      authCallback?.("SIGNED_IN", makeSession("t1"));
+      await Promise.resolve();
+    });
+    await flush();
+
+    // Identical session -> identical state object -> nothing re-renders.
+    expect(stateRenderCount).toBe(before);
+  });
+
+  it("still shows the admin check for a genuinely different user", async () => {
+    const seen = await renderAndSettle();
+    const countBefore = seen.length;
+
+    await act(async () => {
+      authCallback?.("SIGNED_IN", makeSession("t9", "someone-else"));
+      await Promise.resolve();
+    });
+
+    expect(seen.slice(countBefore).some(Boolean)).toBe(true);
+  });
+
+  it("never blocks the page while re-checking a stale admin cache", async () => {
+    const seen = await renderAndSettle();
+    const countBefore = seen.length;
+
+    // Age past the 5-minute admin-status cache TTL and hold the role query
+    // open: this is the real-world case, where you come back to the tab after
+    // a while and the check needs an actual round-trip. Blocking here is what
+    // unmounted the page and threw away everything the user was doing.
+    const realNow = Date.now();
+    vi.spyOn(Date, "now").mockReturnValue(realNow + 6 * 60 * 1000);
+    deferRoleQueries = true;
+
+    await act(async () => {
+      authCallback?.("SIGNED_IN", makeSession("t1"));
+      await Promise.resolve();
+    });
+    await flush();
+
+    expect(pendingRoleQueries.length).toBeGreaterThan(0); // check really is in flight
+    expect(seen.slice(countBefore).some(Boolean)).toBe(false);
+    expect(seen.at(-1)).toBe(false);
   });
 });

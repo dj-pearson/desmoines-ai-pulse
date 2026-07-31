@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTabState } from '@/hooks/useTabState';
 import { Helmet } from 'react-helmet-async';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -22,7 +23,7 @@ import {
 } from 'lucide-react';
 
 export default function CMSDashboard() {
-  const [activeTab, setActiveTab] = useState('articles');
+  const [activeTab, setActiveTab] = useTabState('articles');
 
   return (
     <>

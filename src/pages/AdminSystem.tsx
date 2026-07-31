@@ -1,5 +1,6 @@
-import { useState, Suspense } from "react";
+import { Suspense } from "react";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
+import { useTabState } from "@/hooks/useTabState";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import AdminNav from "@/components/admin/AdminNav";
 import UserRoleManager from "@/components/UserRoleManager";
@@ -24,10 +25,12 @@ const SYSTEM_TABS = [
   { id: "settings", label: "Settings", icon: Cog },
 ];
 
+const SYSTEM_TAB_IDS = SYSTEM_TABS.map((tab) => tab.id);
+
 export default function AdminSystem() {
   const { userRole } = useAdminAuth();
   useDocumentTitle("System Settings");
-  const [activeTab, setActiveTab] = useState("users");
+  const [activeTab, setActiveTab] = useTabState("users", { validTabs: SYSTEM_TAB_IDS });
 
   const canManageUsers = () => ["admin", "root_admin"].includes(userRole);
   const canManageContent = () =>

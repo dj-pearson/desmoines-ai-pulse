@@ -17,7 +17,7 @@ import { User, Mail, Phone, MapPin, Settings, Save, Edit, Users, Heart, Calendar
 import { useSocialFeatures } from "@/hooks/useSocialFeatures";
 import { useUserSubmittedEvents } from "@/hooks/useUserSubmittedEvents";
 import { useGamification } from "@/hooks/useGamification";
-import { useSearchParams } from "react-router-dom";
+import { useTabState } from "@/hooks/useTabState";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
@@ -31,8 +31,7 @@ export default function Profile() {
   const { data: submittedEvents } = useUserSubmittedEvents();
   const { userLevel, userXP, badges } = useGamification();
   const { toast } = useToast();
-  const [searchParams] = useSearchParams();
-  const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "overview");
+  const [activeTab, setActiveTab] = useTabState("overview");
   const [isEditing, setIsEditing] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [formData, setFormData] = useState({

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { createLogger } from '@/lib/logger';
 import { useAdminAuth } from "@/hooks/useAdminAuth";
+import { useTabState } from "@/hooks/useTabState";
 
 const log = createLogger('AdminContent');
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
@@ -57,11 +58,13 @@ const CONTENT_TABS = [
   { id: "article-editor", label: "New Article", icon: Plus },
 ];
 
+const CONTENT_TAB_IDS = CONTENT_TABS.map((tab) => tab.id);
+
 export default function AdminContent() {
   const { userRole } = useAdminAuth();
   useDocumentTitle("Content Management");
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState("events");
+  const [activeTab, setActiveTab] = useTabState("events", { validTabs: CONTENT_TAB_IDS });
   const [brokenLinksOnly, setBrokenLinksOnly] = useState(false);
 
   // Search state for each content type
