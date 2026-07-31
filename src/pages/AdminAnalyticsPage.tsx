@@ -1,5 +1,5 @@
-import { useState } from "react";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
+import { useTabState } from "@/hooks/useTabState";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { createLogger } from '@/lib/logger';
 
@@ -39,10 +39,12 @@ const ANALYTICS_TABS = [
   { id: "crm", label: "CRM Dashboard", icon: Contact },
 ];
 
+const ANALYTICS_TAB_IDS = ANALYTICS_TABS.map((tab) => tab.id);
+
 export default function AdminAnalyticsPage() {
   const { userRole } = useAdminAuth();
   useDocumentTitle("Analytics Dashboard");
-  const [activeTab, setActiveTab] = useState("users");
+  const [activeTab, setActiveTab] = useTabState("users", { validTabs: ANALYTICS_TAB_IDS });
 
   // Data hooks needed for DataQualityDashboard
   const events = useEvents();

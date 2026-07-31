@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useTabState } from "@/hooks/useTabState";
 import { useNavigate } from "react-router-dom";
 import { useAdminCampaigns } from "@/hooks/useAdminCampaigns";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
@@ -58,6 +59,9 @@ export default function AdminCampaigns() {
   const { campaigns, isLoading, fetchCampaigns } = useAdminCampaigns();
   const { toast } = useToast();
   useDocumentTitle("Campaign Management");
+  const [activeTab, setActiveTab] = useTabState("campaigns", {
+    validTabs: ["campaigns", "sponsored", "rates", "affiliates"],
+  });
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
@@ -232,7 +236,7 @@ export default function AdminCampaigns() {
         </p>
       </div>
 
-      <Tabs defaultValue="campaigns" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList>
           <TabsTrigger value="campaigns">
             Campaigns

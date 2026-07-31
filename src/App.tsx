@@ -4,7 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { RouteErrorBoundary } from "@/components/ui/route-error-boundary";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { lazy, Suspense, useState, useEffect, ComponentType } from "react";
+import { lazy, Suspense, useState, useEffect, useRef, ComponentType } from "react";
 import { sessionStore } from "@/lib/safeStorage";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { useKeyboardAware } from "@/hooks/useKeyboardAware";
@@ -15,7 +15,7 @@ import { useSwipeBack } from "@/hooks/useSwipeBack";
 import { useStatusBarStyle } from "@/hooks/useStatusBarStyle";
 import { useFocusOnRouteChange } from "@/hooks/useFocusOnRouteChange";
 import { usePageTracking } from "@/hooks/usePageTracking";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigationType } from "react-router-dom";
 import { KeyboardShortcutsModal } from "@/components/KeyboardShortcutsModal";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import BottomNav from "@/components/BottomNav";
@@ -233,13 +233,83 @@ const PageLoader = () => (
   </div>
 );
 
-// Scroll to top on route changes – essential for Capacitor where
+// Maximum number of remembered scroll positions (bounds the map over a long
+// session; anything older than the last 50 pages isn't worth restoring).
+const MAX_REMEMBERED_SCROLL_POSITIONS = 50;
+
+// Scroll management on route changes – essential for Capacitor where
 // the browser's default scroll restoration doesn't kick in.
-function ScrollToTopOnNavigate() {
+//
+// Forward navigation starts at the top of the new page. Going *back* restores
+// where you were, so returning to a long list doesn't dump you at the top of it
+// and make you scroll all the way down again.
+//
+// Keyed on pathname only: state that lives in the query string (the selected
+// tab, filters) must never cause a scroll jump.
+function ScrollRestoration() {
   const { pathname } = useLocation();
+  const navigationType = useNavigationType();
+  const positionsRef = useRef<Map<string, number>>(new Map());
+  const currentPathRef = useRef(pathname);
+
+  // Continuously remember where the user is on the current page.
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
-  }, [pathname]);
+    const handleScroll = () => {
+      const positions = positionsRef.current;
+      if (
+        positions.size >= MAX_REMEMBERED_SCROLL_POSITIONS &&
+        !positions.has(currentPathRef.current)
+      ) {
+        const oldest = positions.keys().next().value;
+        if (oldest !== undefined) positions.delete(oldest);
+      }
+      positions.set(currentPathRef.current, window.scrollY);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  useEffect(() => {
+    currentPathRef.current = pathname;
+    const saved =
+      navigationType === 'POP' ? positionsRef.current.get(pathname) : undefined;
+
+    if (saved === undefined) {
+      window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+      return;
+    }
+
+    // The page we're returning to may still be fetching, so the document can be
+    // too short to reach `saved` on the first frame. Re-apply a few times, and
+    // bail out the moment the user takes over so we never fight their input.
+    let cancelled = false;
+    const cancel = () => {
+      cancelled = true;
+    };
+    const interactionEvents = ['wheel', 'touchstart', 'keydown', 'mousedown'];
+    interactionEvents.forEach((event) =>
+      window.addEventListener(event, cancel, { once: true, passive: true })
+    );
+
+    const restore = () => {
+      if (cancelled) return;
+      window.scrollTo({ top: saved, behavior: 'instant' as ScrollBehavior });
+    };
+
+    restore();
+    const frame = requestAnimationFrame(restore);
+    const timers = [setTimeout(restore, 120), setTimeout(restore, 400)];
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+      timers.forEach(clearTimeout);
+      interactionEvents.forEach((event) =>
+        window.removeEventListener(event, cancel)
+      );
+    };
+  }, [pathname, navigationType]);
+
   return null;
 }
 
@@ -290,7 +360,7 @@ const App = () => (
   <AccessibilityProvider>
   <TooltipProvider>
     <BrowserRouter>
-      <ScrollToTopOnNavigate />
+      <ScrollRestoration />
       <AuthProvider>
         <SessionManager />
         <GuestFavoriteMigrator />

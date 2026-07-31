@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTabState } from "@/hooks/useTabState";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -62,6 +63,9 @@ export default function AdminSecurityManager() {
     suspiciousActivityThreshold: 10,
   });
   
+  const [activeTab, setActiveTab] = useTabState("settings", {
+    validTabs: ["settings", "monitoring", "access-control", "email-domains", "logs"],
+  });
   const [securityLogs, setSecurityLogs] = useState<SecurityLog[]>([]);
   const [blockedIPs, setBlockedIPs] = useState<string[]>([]);
   const [newWhitelistIP, setNewWhitelistIP] = useState("");
@@ -250,7 +254,7 @@ export default function AdminSecurityManager() {
         </Button>
       </div>
 
-      <Tabs defaultValue="settings" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="settings">Settings</TabsTrigger>
           <TabsTrigger value="monitoring">Monitoring</TabsTrigger>

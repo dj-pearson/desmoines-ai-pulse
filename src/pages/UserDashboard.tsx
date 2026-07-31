@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
-import { useNavigate, useSearchParams, Link } from "react-router-dom";
+import { useState } from "react";
+import { useNavigate, Link } from "react-router-dom";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useTabState } from "@/hooks/useTabState";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -45,10 +46,22 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { format } from "date-fns";
 import { toast } from "sonner";
 
+const DASHBOARD_TABS = [
+  "overview",
+  "submit-event",
+  "events",
+  "saved-searches",
+  "advertise",
+  "settings",
+] as const;
+
 export default function UserDashboard() {
-  const [activeTab, setActiveTab] = useState("overview");
+  // Tab lives in the URL so it survives a reload, a back-navigation, or any
+  // remount — previously the dashboard always snapped back to "overview".
+  const [activeTab, setActiveTab] = useTabState("overview", {
+    validTabs: DASHBOARD_TABS,
+  });
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user } = useAuth(); // No longer need to check authLoading - ProtectedRoute handles it
   useDocumentTitle("My Dashboard");
@@ -57,14 +70,6 @@ export default function UserDashboard() {
   const { campaigns, isLoading: campaignsLoading } = useCampaigns();
   const { tier, isPremium, isExpiringSoon, subscription } = useSubscription();
   const { favoritedEvents, remainingFavorites, favoritesLimit } = useFavorites();
-
-  useEffect(() => {
-    // Check for tab parameter from URL
-    const tabParam = searchParams.get("tab");
-    if (tabParam) {
-      setActiveTab(tabParam);
-    }
-  }, [searchParams]);
 
   const getStatusIcon = (status: string) => {
     switch (status) {

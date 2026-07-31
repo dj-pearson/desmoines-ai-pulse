@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTabState } from "@/hooks/useTabState";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
@@ -132,7 +133,9 @@ export default function AdminRefunds() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   useDocumentTitle("Refund Management");
-  const [activeTab, setActiveTab] = useState("refunds");
+  const [activeTab, setActiveTab] = useTabState("refunds", {
+    validTabs: ["refunds", "new-refund"],
+  });
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);

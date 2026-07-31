@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import { useTabState } from "@/hooks/useTabState";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -33,8 +34,7 @@ export default function BusinessHub() {
   const { user, isLoading: authLoading } = useAuth();
   const { businessProfile, loading: profileLoading } = useBusinessPartnership();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "dashboard");
+  const [activeTab, setActiveTab] = useTabState("dashboard");
 
   // Redirect to auth if not logged in
   if (!authLoading && !user) {

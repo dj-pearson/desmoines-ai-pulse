@@ -57,6 +57,20 @@ const adminStatusCache = new Map<string, { isAdmin: boolean; timestamp: number }
 const CACHE_TTL = 5 * 60 * 1000;
 const pendingChecks = new Map<string, Promise<boolean>>();
 
+/**
+ * Synchronous read of the admin cache. Returns null when there is no fresh
+ * entry. Lets a re-emitted auth event resolve admin status without ever
+ * entering the `isAdminLoading` state (which unmounts ProtectedRoute
+ * subtrees). See handleAuthChange. (WEB-UX-008)
+ */
+function readCachedAdmin(userId: string): boolean | null {
+  const cached = adminStatusCache.get(userId);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.isAdmin;
+  }
+  return null;
+}
+
 // Login attempt throttling — max 5 failed attempts per email per 15 minutes
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const MAX_ATTEMPTS_PER_EMAIL = 5;
@@ -141,6 +155,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isLoggingOutRef = useRef(false);
   // Track subscription for cleanup
   const subscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
+  // Id of the user whose admin status has already been resolved. Used to tell a
+  // real sign-in apart from supabase-js re-emitting SIGNED_IN for the session we
+  // already hold. (WEB-UX-008 — see handleAuthChange.)
+  const resolvedAdminForUserRef = useRef<string | null>(null);
 
   // Check admin status with caching
   const checkIsAdmin = useCallback(async (user: User): Promise<boolean> => {
@@ -192,6 +210,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return checkPromise;
   }, []);
 
+  /**
+   * Re-check admin status without touching `isAdminLoading`.
+   *
+   * Used for auth events that concern a user we've already resolved: the role
+   * still gets re-validated (a revoked admin loses access), but the UI never
+   * enters a loading state, so nothing unmounts. State identity is preserved
+   * when the answer hasn't changed, so this is a no-op re-render in the common
+   * case. (WEB-UX-008)
+   */
+  const revalidateAdminSilently = useCallback(async (user: User) => {
+    const isAdmin = await checkIsAdmin(user);
+    if (isLoggingOutRef.current) return;
+    setAuthState(prev => {
+      if (prev.user?.id !== user.id || prev.isAdmin === isAdmin) return prev;
+      log.debug('revalidateAdminSilently', 'Admin status changed', { isAdmin });
+      return { ...prev, isAdmin };
+    });
+  }, [checkIsAdmin]);
+
   // Handle auth state changes
   const handleAuthChange = useCallback(async (event: AuthChangeEvent, session: Session | null, isMounted: boolean) => {
     // Skip processing if we're logging out
@@ -208,6 +245,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (event === 'SIGNED_OUT') {
       log.info('handleAuthChange', 'User signed out via event');
       adminStatusCache.clear();
+      resolvedAdminForUserRef.current = null;
       setAuthState({
         user: null,
         session: null,
@@ -235,26 +273,70 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     // For SIGNED_IN, INITIAL_SESSION, or USER_UPDATED events
-    const needsAdminCheck = session?.user && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION');
+    const nextUser = session?.user || null;
+
+    // supabase-js re-emits SIGNED_IN for the session we ALREADY hold every time
+    // the browser tab regains visibility: its visibilitychange handler calls
+    // GoTrueClient#_recoverAndRefresh(), which ends in
+    // _notifyAllSubscribers('SIGNED_IN', currentSession). Re-running the admin
+    // check on that would flip `isAdminLoading`, and ProtectedRoute swaps its
+    // children for a spinner while that flag is set — unmounting the whole page
+    // and destroying the open tab, scroll position and any half-filled form.
+    // A same-user event is therefore a session refresh, not a sign-in.
+    // (WEB-UX-008)
+    if (nextUser && resolvedAdminForUserRef.current === nextUser.id) {
+      log.debug('handleAuthChange', 'Same-user auth event, refreshing session only', { event });
+      setAuthState(prev => {
+        // Keep object identity when nothing actually changed so effects keyed on
+        // `session`/`user` don't re-run on every tab focus.
+        if (prev.isAuthenticated && prev.session?.access_token === session?.access_token) {
+          return prev;
+        }
+        return {
+          ...prev,
+          user: nextUser,
+          session,
+          isLoading: false,
+          isAuthenticated: true,
+        };
+      });
+      // Still re-validate the role, just without a visible loading state.
+      void revalidateAdminSilently(nextUser);
+      return;
+    }
+
+    // A fresh admin answer already in cache resolves synchronously — no loading
+    // state, so a returning user never sees the page blink.
+    const cachedAdmin = nextUser ? readCachedAdmin(nextUser.id) : null;
+    const needsAdminCheck =
+      !!nextUser &&
+      cachedAdmin === null &&
+      (event === 'SIGNED_IN' || event === 'INITIAL_SESSION');
+
     setAuthState(prev => ({
       ...prev,
-      user: session?.user || null,
+      user: nextUser,
       session,
       isLoading: false,
       isAuthenticated: !!session,
-      isAdmin: prev.isAdmin, // Keep previous admin status while checking
+      isAdmin: cachedAdmin ?? prev.isAdmin, // Keep previous admin status while checking
       isAdminLoading: needsAdminCheck ? true : prev.isAdminLoading, // Mark as loading if checking
     }));
 
+    if (nextUser && cachedAdmin !== null) {
+      resolvedAdminForUserRef.current = nextUser.id;
+    }
+
     // Check admin status for new sessions
     if (needsAdminCheck) {
-      const isAdmin = await checkIsAdmin(session.user);
+      const isAdmin = await checkIsAdmin(nextUser);
       if (isMounted && !isLoggingOutRef.current) {
         log.debug('handleAuthChange', 'Admin check result', { isAdmin });
+        resolvedAdminForUserRef.current = nextUser.id;
         setAuthState(prev => ({ ...prev, isAdmin, isAdminLoading: false }));
       }
     }
-  }, [checkIsAdmin]);
+  }, [checkIsAdmin, revalidateAdminSilently]);
 
   useEffect(() => {
     log.info('init', 'Initializing auth context');
@@ -276,22 +358,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!isMounted) return;
         log.debug('init', 'Initial session', { hasSession: !!session, email: session?.user?.email });
 
+        const cachedAdmin = session?.user ? readCachedAdmin(session.user.id) : null;
+
         setAuthState({
           user: session?.user || null,
           session,
           isLoading: false,
           isAuthenticated: !!session,
-          isAdmin: false,
-          isAdminLoading: !!session?.user, // Set to true if we have a user to check
+          isAdmin: cachedAdmin ?? false,
+          isAdminLoading: !!session?.user && cachedAdmin === null, // Set to true if we have a user to check
           requiresMFA: false,
           mfaFactorId: null,
         });
 
         if (session?.user) {
-          const isAdmin = await checkIsAdmin(session.user);
-          if (isMounted) {
-            log.debug('init', 'Initial admin check', { isAdmin });
-            setAuthState(prev => ({ ...prev, isAdmin, isAdminLoading: false }));
+          if (cachedAdmin !== null) {
+            resolvedAdminForUserRef.current = session.user.id;
+          } else {
+            const isAdmin = await checkIsAdmin(session.user);
+            if (isMounted) {
+              log.debug('init', 'Initial admin check', { isAdmin });
+              resolvedAdminForUserRef.current = session.user.id;
+              setAuthState(prev => ({ ...prev, isAdmin, isAdminLoading: false }));
+            }
           }
         }
       } catch (error) {
@@ -431,6 +520,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Clear admin cache first
     adminStatusCache.clear();
     pendingChecks.clear();
+    resolvedAdminForUserRef.current = null;
 
     // Clear state immediately to update UI
     setAuthState({
