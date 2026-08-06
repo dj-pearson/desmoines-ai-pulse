@@ -19,7 +19,7 @@ Two purposes:
 | Gate | Result | Note |
 |---|---|---|
 | `npm run type-check` | **exit 0, zero files compiled** | root `tsconfig.json` is `"files": []` + project references; `--noEmit` without `-b` checks nothing. Confirms **WEB-CI-023**. |
-| `npx tsc -p tsconfig.app.json` | **fails** | ≥10 errors across ≥5 files (see §1.1, §1.3). Never runs in CI. |
+| `npx tsc -p tsconfig.app.json` | **fails: 403 errors** | across 54 files (see §1.7 for the breakdown). Never runs in CI. |
 | `npm run lint` | passes | 0 errors, **3249 warnings**. The `VideoPlayer.tsx` parser false-positive noted in WEB-SEC-001 is gone. |
 | `npm run check-imports` | passes | but skips `__tests__` — see §1.6 |
 | `npm run check-schema` | passes | baseline holds at **179** findings (84 in `src/`, 93 in edge functions) |
@@ -186,13 +186,46 @@ blocking unit lane has been red since the tests landed. This is the root cause o
 
 **Proposed: WEB-CI-024 (P3)** — stop skipping `__tests__`.
 
-### 1.7 — `tsc` on the real project takes >30 minutes here — P3, but it gates WEB-CI-023
+### 1.7 — Turning the type gate on means absorbing 403 errors, not a cleanup — P2, and it re-scopes WEB-CI-023
 
-`npx tsc -p tsconfig.app.json --noEmit` did not finish within 30 minutes on this
-container across repeated runs. Whoever fixes WEB-CI-023 will hit this: pointing
-CI at a config that actually compiles `src` turns a fast lane into a very slow
-one. Worth pairing that story with `incremental` + a build-cache step, or
-`--build` mode with cached `.tsbuildinfo`, rather than discovering it in CI.
+`npx tsc -p tsconfig.app.json --noEmit` exits 2 with **403 errors across 54
+files**. WEB-CI-023 currently reads as a config fix; it is not. Breakdown:
+
+| Bucket | Errors |
+|---|---|
+| In files already flagged by `schema-baseline.json` (the WEB-QA-018/019 dead-table cluster) | **285** |
+| In files *not* in the baseline — genuinely unexamined | **118** |
+
+By code: 118× `TS2769` (no matching overload), 100× `TS2339` (property does not
+exist), 52× `TS2345`, 51× `TS2589` (*type instantiation excessively deep*), 45×
+`TS2322`.
+
+Three things follow:
+
+- **285 of the 403 are the dead-table cluster wearing a different hat.** The CRM
+  hooks lead the count (`useCrmDeals` 40, `useCrmDashboard` 33, `useCrmContacts`
+  31, `useCrmTasks` 25, `useCrmSegments` 24). Resolving WEB-QA-018 collapses most
+  of this backlog for free — which is an argument for sequencing WEB-QA-018 before
+  WEB-CI-023, not after.
+- **Do not ship this as a hard gate.** The repo already has the right mechanism:
+  `scripts/strict-ratchet.mjs` + `npm run type-check:strict:ratchet`, whose own
+  header explains why ("a gate that always fails teaches everyone to ignore it,
+  and one that is simply absent lets the count drift up"). Point a second
+  per-file ratchet at `tsconfig.app.json` and WEB-CI-023 lands in one PR without
+  a 403-error burndown blocking it.
+- **Budget for the compile time.** The run did not finish within 30 minutes on
+  this container across repeated attempts. The 51 `TS2589`s are a likely
+  contributor and cluster in the same CRM hooks, so WEB-QA-018 may cut this too.
+  Pair the story with `incremental` + a cached `.tsbuildinfo` regardless.
+
+Of the 118 non-baseline errors, most are typing debt rather than live defects —
+but they are where §1.1 and §1.3 were hiding, and spot-checks found more of the
+same class: `MostSearched.tsx` renders `unknown` as a `ReactNode` 19 times;
+`PrivacyControls.tsx:102` carries a now-unused `@ts-expect-error` masking two
+live errors beside it; `EventsNearMe.tsx:66` reads `event.description` off a type
+that lacks it (degrades to `undefined`, so nearby cards can lose their blurb).
+Two that look alarming but are not: `EventDetails.tsx:290` narrows to `never` in
+an unreachable defensive branch, and the two `TS2304`s are §1.1.
 
 ---
 
@@ -232,17 +265,22 @@ of the WEB-SEC-001 hole.
   in the checker, not a test rewrite.
 - **WEB-PERF-020** — refresh 610 KB → 484 KB, and note §1.4 as the largest single
   remaining win.
-- **WEB-CI-023** — add the §1.7 compile-time constraint to its acceptance criteria.
+- **WEB-CI-023** — re-scope per §1.7: 403 errors, ship as a per-file ratchet
+  reusing `strict-ratchet.mjs`, and sequence it *after* WEB-QA-018 (which clears
+  285 of them). Raise from P2 accordingly — it is no longer a config one-liner.
 - **CLAUDE.md** — "73 Edge Functions" and "142 SQL migrations" are now 159 and 323.
 
 ## 4. Suggested order
 
 1. §1.1 `/stay` — one import, a public route is down right now.
-2. **WEB-CI-023** + §1.6 — until the type gate and import gate actually run,
-   findings §1.1/§1.3 recur. §1.7 says budget for the compile time.
+2. §1.6 — one line in `check-import-exports.mjs`, plus the two exports it then
+   catches. Turns the unit lane green and closes WEB-CI-020.
 3. §1.2 — probe prod for `profiles.role`, then consolidate onto
    `requireAdminOrApiKey()`.
 4. **WEB-QA-020** — the 8 unapplied migrations; needs the human go-ahead the story
    already flags.
 5. §1.4 — ~100 KB gz off the critical path from one file.
 6. §1.3, §1.5.
+7. **WEB-QA-018**, then **WEB-CI-023** as a ratchet (§1.7). Deliberately last:
+   WEB-QA-018 is a decision, not a defect, and it erases 285 of the 403 type
+   errors before the gate has to absorb them.
