@@ -7,10 +7,11 @@ notes alone.
 
 Two purposes:
 
-1. **New findings** — defects with no story in `prd.json`. Proposed story IDs
-   below; none have been appended to `prd.json` yet.
-2. **Verification** — which open stories are still true, and which PRD claims the
-   evidence now contradicts.
+1. **New findings** — defects that had no story in `prd.json`. All six have been
+   appended to `prd.json` with full acceptance criteria.
+2. **Verification** — every open story re-checked against the tree: which are
+   still true, which are already done, and which PRD claims the evidence
+   contradicts. Results are written back into `prd.json` (§2, §4).
 
 ---
 
@@ -56,7 +57,7 @@ part of the in-flight **WEB-SEO-002** work. It survived because:
 
 Fix is one import line. The interesting part is the three-layer miss.
 
-**Proposed: WEB-QA-023 (P1)** — fix the import, add `/stay` to route smoke, and
+**Added as WEB-QA-023 (P1)** — fix the import, add `/stay` to route smoke, and
 require that any route referenced in `App.tsx` be covered by smoke or prerender.
 
 ### 1.2 — Seven admin edge functions hand-roll an admin gate that the repo's own schema checker flags as unresolvable — P1
@@ -98,7 +99,7 @@ If the column is absent, all seven fail closed (403 to real admins) and
 present, they work but on a legacy column that `types.ts` no longer knows about.
 Neither state is one to ship on.
 
-**Proposed: WEB-SEC-023 (P1)** — probe prod for `profiles.role`, then migrate all
+**Added as WEB-SEC-023 (P1)** — probe prod for `profiles.role`, then migrate all
 eight call sites onto `requireAdminOrApiKey()` and record the `id` vs `user_id`
 answer somewhere enforceable.
 
@@ -116,7 +117,7 @@ This is the monetized affiliate path — `affiliate_url` is almost certainly the
 intended column, with `website` as fallback. Caught by `tsc -p tsconfig.app.json`
 as three `TS2339`s; invisible to CI.
 
-**Proposed: WEB-FEAT-012 (P2).**
+**Added as WEB-FEAT-012 (P2).**
 
 ### 1.4 — One barrel import puts 133 KB gz of unused icons in the critical path — P2
 
@@ -148,8 +149,8 @@ Fixing this one file is worth ~100 KB gz — about a fifth of the critical path 
 and it is the single largest cheap win against **WEB-PERF-020**. Replace the
 namespace import with an explicit map of the badge icons actually used.
 
-**Proposed: WEB-PERF-026 (P2).** Note WEB-PERF-020 currently records 610 KB; the
-measured figure is now 484 KB, so that story's number wants refreshing (§3).
+**Added as WEB-PERF-026 (P2).** WEB-PERF-020's 610 KB figure has been corrected
+to the measured 484 KB.
 
 ### 1.5 — The homepage counter counts events the events page hides, and cannot report failure — P2
 
@@ -167,7 +168,7 @@ This Week" trust strip. Three problems:
 - **Bypasses TanStack Query.** Raw `useState` + `useEffect` against CLAUDE.md's
   data-flow convention: no retry, no cache, no dedup, no `isError`.
 
-**Proposed: WEB-QA-024 (P2)** — port to TanStack Query, apply the
+**Added as WEB-QA-024 (P2)** — port to TanStack Query, apply the
 `is_hidden`/`is_merged` predicate, surface failure instead of rendering `0`.
 
 ### 1.6 — The import checker skips the one directory where the broken import lives — P3
@@ -184,7 +185,7 @@ So `npm run validate` reports "✅ No unresolved named imports found" while the
 blocking unit lane has been red since the tests landed. This is the root cause of
 **WEB-CI-020**, which the story records as a symptom.
 
-**Proposed: WEB-CI-024 (P3)** — stop skipping `__tests__`.
+**Added as WEB-CI-024 (P3)** — stop skipping `__tests__`.
 
 ### 1.7 — Turning the type gate on means absorbing 403 errors, not a cleanup — P2, and it re-scopes WEB-CI-023
 
@@ -229,7 +230,80 @@ an unreachable defensive branch, and the two `TS2304`s are §1.1.
 
 ---
 
-## 2. Open stories — re-verified against the tree
+## 2. Verification pass — all 104 open stories
+
+`prd.json` has been updated in place: **6 new stories added, 3 flipped to
+`passes:true`, 1 re-prioritised, 2 retitled, 44 notes appended.** Totals moved
+from 435/331/104 to **441 stories / 334 passing / 107 open**.
+
+### 2a. Verified COMPLETE — flipped to `passes:true`
+
+| Story | Why |
+|---|---|
+| **WEB-SEC-022** | All three code criteria done in `log-content-metrics/index.ts`: `checkRateLimit` at :18/:84, `MAX_EVENTS_PER_REQUEST=100` with `.slice()` at :60/:120, `MAX_METRIC_VALUE=1000` clamp at :67/:128. The residual "confirm anon SELECT on content_metrics" belongs to WEB-SEC-021 and is now tracked there. |
+| **WEB-SEO-009** | `EnhancedEventSEO.tsx` removed the `isUpcoming`→`EventPostponed` switch, and :139-140 derive `robotsDirective = isStaleEvent ? "noindex, follow" : "index, follow"` from the event's own start date, applied to both robots (:307) and googlebot (:308). |
+| **IOS-AUDIT-FEAT-009** | `PaywallView.swift:213-217` seeds `selectedPeriod` from `preferredPeriod`; :258 validates it against loaded products; `OnboardingView.swift:64` and `SubscriptionStatusBanner.swift:66` both pass `.annual`. |
+
+### 2b. Titles that had become factually false — corrected
+
+| Story | Was | Now |
+|---|---|---|
+| **XPLAT-002** | "Android never revokes a server-rejected subscription, and parses receipts by substring matching" | **Both defects are fixed.** `BillingService.kt:465-477` revokes via `_serverRevokedProductIDs` on a clean `valid:false`; :458 uses `decodeFromString<ValidationResponse>`; :452 correctly treats non-2xx as "not a verdict". Only the regression test is missing — **demoted P1 → P2**. |
+| **XPLAT-010** | "Android trip planner cannot express accessibility or dietary needs" | **It can now** — `TripPlannerViewModel.kt:34-35`, `TripPlannerScreen.kt:49-56`, `TripPlan.kt:72-83`. Still open on the other two criteria: `TripPlannerRemoteDataSource.kt` has no HTTP-status check and no `{error, code}` unpacking for 403/429, and the `existingTripId` decision is unmade. |
+
+Two more where the story is right but a number in it is wrong: **WEB-PERF-020**
+(610 KB → **484 KB** gz critical path) and **WEB-UX-032** (checkbox is `h-4 w-4`
+= **16×16px**, not the 20×20 recorded — worse than the story says).
+
+### 2c. Stories that look done and are not
+
+Worth calling out because a skim would close them:
+
+- **XPLAT-009** — `AskPulseScreen.kt:111` does show an upgrade prompt, but
+  `AskPulseViewModel.kt:116` only sets `quotaExceeded` *after* a 429. That is
+  reactive, not the "surface remaining quota before the 429" the criteria ask
+  for, and `AskPulseRepository.kt:33` still says *"Unknown keys (e.g. usage) are
+  ignored"*. Both Android criteria unmet; web half untouched.
+- **IOS-AUDIT-BUG-006** — `EventsViewModel.swift:69-73` fixed the desync with
+  `rawFetchedCount`. `RestaurantsViewModel.swift:144` still does
+  `currentOffset = allRestaurants.count` — the original bug, verbatim.
+- **IOS-AUDIT-REL-008** — screenshots *are* committed now
+  (`app-store-screenshots/en-US/`), but `ios-screenshots.yml:9-10` still lists
+  only 6.5" and 6.7" devices. No 6.9".
+- **WEB-SEO-013** — re-scoped, not closed. The sitemap half shipped
+  (`sitemap-pseo.xml`, referenced from `sitemap-index.xml:32`), but the generated
+  file contains **exactly one URL** against the ~950 pages the story describes.
+  The pipeline in `src/pseo/` has never been run at scale. The remaining work is
+  populating `pseo_pages`, not sitemap wiring.
+- **WEB-QA-013** — the code half is already fixed (`usePageTracking.ts:52` writes
+  `content_id: null`). It is blocked *solely* on migration `20260718000002`, i.e.
+  on WEB-QA-020. Nothing left to implement.
+
+### 2d. One `passes:true` story with a wrong note
+
+**WEB-SEC-001** lists `test-article-webhook` among the 12 functions it guarded.
+That directory does not exist, is absent from `config.toml`, and has no git
+history in this repo. `ArticleWebhookConfig.tsx:88` invokes it and gets nothing
+(tracked by XPLAT-008). The real count is **11, not 12**. Story stays
+`passes:true`; only the note was wrong.
+
+### 2e. Coverage — what I did and did not verify
+
+Verified concretely against the tree: **all 11 XPLAT**, **all 9 AOS**
+(greenfield — none of the nine agent functions exist), **~24 of 41 WEB**, and
+**~19 of 43 IOS-AUDIT**. That is roughly **63 of 107** open stories with fresh
+file:line evidence now written into `prd.json`.
+
+The ~44 I did not individually confirm are almost all iOS `UX-05x` / `PERF-02x` /
+`BUG-01x` P3s whose acceptance criteria are behavioural ("no screen renders
+blank", "no double-tap double-submit", "no per-frame system work"). Confirming
+those honestly needs a Swift toolchain and a simulator, neither of which exists
+in this container — a grep can tell you a modifier is present but not that the
+screen behaves. I would rather leave them unverified than mark them checked off a
+keyword match. **IOS-AUDIT-TEST-002 is the same constraint** and says so in its
+own note.
+
+## 3. Open stories — evidence refreshed
 
 | Story | Verdict | Evidence found this pass |
 |---|---|---|
@@ -257,20 +331,23 @@ of the WEB-SEC-001 hole.
 
 ---
 
-## 3. Suggested `prd.json` edits
+## 4. `prd.json` edits — APPLIED
 
-- Append **WEB-QA-023**, **WEB-SEC-023**, **WEB-FEAT-012**, **WEB-PERF-026**,
-  **WEB-QA-024**, **WEB-CI-024** (§1.1-1.6), all `passes:false`.
-- **WEB-CI-020** — add the §1.6 root cause; the fix is two exports plus one line
-  in the checker, not a test rewrite.
-- **WEB-PERF-020** — refresh 610 KB → 484 KB, and note §1.4 as the largest single
-  remaining win.
-- **WEB-CI-023** — re-scope per §1.7: 403 errors, ship as a per-file ratchet
-  reusing `strict-ratchet.mjs`, and sequence it *after* WEB-QA-018 (which clears
-  285 of them). Raise from P2 accordingly — it is no longer a config one-liner.
-- **CLAUDE.md** — "73 Edge Functions" and "142 SQL migrations" are now 159 and 323.
+All of the following are committed to `prd.json`, not proposed:
 
-## 4. Suggested order
+- **Added** WEB-QA-023 (P1), WEB-SEC-023 (P1), WEB-FEAT-012 (P2),
+  WEB-PERF-026 (P2), WEB-QA-024 (P2), WEB-CI-024 (P3) — §1.1-1.6, each with full
+  acceptance criteria and file:line evidence.
+- **Flipped** WEB-SEC-022, WEB-SEO-009, IOS-AUDIT-FEAT-009 to `passes:true`.
+- **Demoted** XPLAT-002 P1 → P2 and retitled it; retitled XPLAT-010.
+- **Appended dated evidence notes** to 44 stories.
+- **Corrected** WEB-PERF-020's bundle figure, WEB-UX-032's pixel figure,
+  WEB-SEC-001's function count, and re-scoped WEB-CI-023 and WEB-SEO-013.
+
+Still worth doing by hand: **CLAUDE.md** says "73 Edge Functions" and "142 SQL
+migrations"; the tree has **159** and **323**.
+
+## 5. Suggested order
 
 1. §1.1 `/stay` — one import, a public route is down right now.
 2. §1.6 — one line in `check-import-exports.mjs`, plus the two exports it then
