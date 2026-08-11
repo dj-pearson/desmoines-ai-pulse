@@ -124,7 +124,7 @@ export default function Footer() {
                   placeholder="Get your weekly Des Moines plan"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="bg-neutral-800 border-neutral-700 text-white placeholder:text-neutral-500 h-10"
+                  className="bg-neutral-800 border-neutral-700 text-white placeholder:text-neutral-400 h-10"
                   required
                   aria-describedby="newsletter-description"
                 />
@@ -136,11 +136,11 @@ export default function Footer() {
 
               {/* Social Proof + CAN-SPAM disclosure. Submitting the form is an
                   affirmative opt-in; we log it to consent_records. */}
-              <p className="text-neutral-500 text-xs mb-1 flex items-center gap-1">
+              <p className="text-neutral-400 text-xs mb-1 flex items-center gap-1">
                 <Users className="h-3 w-3" aria-hidden="true" />
                 Free forever, unsubscribe anytime.
               </p>
-              <p className="text-neutral-500 text-[11px] mb-4 leading-snug">
+              <p className="text-neutral-400 text-[11px] mb-4 leading-snug">
                 By subscribing you agree to receive marketing emails from Des Moines Insider and acknowledge our{" "}
                 <Link to="/privacy-policy" className="underline hover:text-neutral-300">
                   Privacy Policy
@@ -360,7 +360,7 @@ export default function Footer() {
               <Heart className="h-4 w-4 mx-1 text-red-500 fill-red-500" />
               <span>for Des Moines</span>
             </div>
-            <div className="text-neutral-500 text-xs space-y-1">
+            <div className="text-neutral-400 text-xs space-y-1">
               <p>
                 © {new Date().getFullYear()} Des Moines Insider. All rights reserved.
               </p>

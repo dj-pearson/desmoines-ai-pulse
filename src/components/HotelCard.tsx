@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Star, MapPin, Wifi, Car, Coffee, Dumbbell, PawPrint, Building2, ExternalLink } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
-import { getHotelTypeGradient } from "@/lib/categoryStyles";
+import { getHotelTypeGradient, STATUS_BADGE } from "@/lib/categoryStyles";
 
 type Hotel = Database["public"]["Tables"]["hotels"]["Row"];
 
@@ -69,7 +69,7 @@ export default function HotelCard({ hotel, variant = "default", showBookButton =
 
           {/* Featured badge */}
           {hotel.is_featured && (
-            <Badge className="absolute top-3 left-3 bg-amber-500 text-white border-0 text-xs">
+            <Badge className={`absolute top-3 left-3 ${STATUS_BADGE.featured} border-0 text-xs`}>
               Featured
             </Badge>
           )}

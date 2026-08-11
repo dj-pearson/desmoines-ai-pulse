@@ -537,7 +537,7 @@ export default function Index() {
                   We consider time, weather, location, your past preferences, and real-time availability to suggest the perfect experiences for you.
                 </p>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+                  <div className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400">
                     <Brain className="h-4 w-4" />
                     <span>Learns from your behavior</span>
                   </div>
@@ -557,7 +557,7 @@ export default function Index() {
                   Get alerts for events you'll love, weather changes affecting your plans, and last-minute availability—before you even ask.
                 </p>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm text-orange-600 dark:text-orange-400">
+                  <div className="flex items-center gap-2 text-sm text-orange-700 dark:text-orange-400">
                     <Sparkles className="h-4 w-4" />
                     <span>Smart notifications & alerts</span>
                   </div>

@@ -89,17 +89,30 @@
     --popover: 225 50% 8%;
     --popover-foreground: 225 20% 98%;
 
-    /* Primary: Des Moines Blue (Lightened slightly for dark mode visibility) */
-    --primary: 225 87% 60%;
+    /* Primary: Des Moines Blue (Lightened for dark mode visibility)
+     *
+     * WEB-UX-030: the light theme was audited and the dark theme never was. At
+     * L=60% this token failed AA in both of the ways it is used — 4.23:1 for
+     * --primary-foreground on a primary button (21 nodes, i.e. every primary
+     * CTA in the app) and 4.26:1 for text-primary on the dark card surface
+     * (5 more). L=68% takes those to 5.87:1 and 5.91:1. Same hue, same
+     * saturation; only the lightness moved, and it moved the direction dark
+     * mode already wanted. Hover goes to 73% (7.19:1). */
+    --primary: 225 87% 68%;
     --primary-foreground: 225 87% 10%;
-    --primary-hover: 225 87% 65%;
+    --primary-hover: 225 87% 73%;
     --primary-light: 225 87% 20%;
 
-    /* Secondary: Des Moines Red */
-    --secondary: 348 87% 55%;
-    /* Slightly brighter for dark mode */
+    /* Secondary: Des Moines Red
+     *
+     * WEB-UX-030: white on L=55% is 4.10:1 across 21 nodes. L=45% is 5.23:1.
+     * The old comment said "slightly brighter for dark mode", which is what
+     * broke it — brightening a mid-red under WHITE text moves it toward the
+     * text, not away. Hover now DARKENS (40%, 6.33:1), matching the light
+     * theme's 41% -> 36% rather than contradicting it. */
+    --secondary: 348 87% 45%;
     --secondary-foreground: 0 0% 100%;
-    --secondary-hover: 348 87% 60%;
+    --secondary-hover: 348 87% 40%;
 
     --muted: 225 30% 15%;
     --muted-foreground: 225 20% 70%;

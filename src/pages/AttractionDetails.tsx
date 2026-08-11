@@ -13,6 +13,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { LazyLocationMap } from "@/components/LazyLocationMap";
 import { getDirectionsUrl } from "@/lib/directions";
+import { STATUS_BADGE } from "@/lib/categoryStyles";
 import { OpenStatusChip } from "@/components/OpenStatusChip";
 import ShareDialog from "@/components/ShareDialog";
 import { FAQSection } from "@/components/FAQSection";
@@ -356,7 +357,7 @@ export default function AttractionDetails() {
               {/* Badges */}
               <div className="absolute top-4 left-4 flex gap-2 z-10">
                 {attraction.is_featured && (
-                  <Badge className="bg-amber-500 text-white border-0 shadow-lg text-sm font-semibold px-3 py-1">
+                  <Badge className={`${STATUS_BADGE.featured} border-0 shadow-lg text-sm font-semibold px-3 py-1`}>
                     <Sparkles className="h-3.5 w-3.5 mr-1.5" />
                     Featured
                   </Badge>

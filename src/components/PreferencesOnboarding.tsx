@@ -247,7 +247,7 @@ export function PreferencesOnboarding({
                       variant={isSelected ? 'default' : 'outline'}
                       className={cn(
                         'justify-start h-auto py-3',
-                        isSelected && 'bg-primary text-white'
+                        isSelected && 'bg-primary text-primary-foreground'
                       )}
                       onClick={() => toggleDietary(option.id)}
                     >
@@ -274,7 +274,7 @@ export function PreferencesOnboarding({
                       variant={isSelected ? 'default' : 'outline'}
                       className={cn(
                         'flex-col h-auto py-3 gap-1',
-                        isSelected && 'bg-primary text-white border-2 border-primary'
+                        isSelected && 'bg-primary text-primary-foreground border-2 border-primary'
                       )}
                       onClick={() => setSelectedPriceRange(option.id)}
                     >

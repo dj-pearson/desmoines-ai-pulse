@@ -7,15 +7,21 @@ import { SocialProofBadge } from "@/components/SocialProofBadge";
 import { getRestaurantOpenStatus } from "@/lib/restaurantHours";
 import { SponsoredBadge } from "@/components/SponsoredBadge";
 import { usePrefetchRestaurant } from "@/hooks/usePrefetchDetail";
-import { getCuisineGradient } from "@/lib/categoryStyles";
+import { getCuisineGradient, STATUS_BADGE } from "@/lib/categoryStyles";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { isSponsoredActive, logSponsoredClick } from "@/lib/sponsored";
 import { useSponsoredImpression } from "@/hooks/useSponsoredImpression";
 
+// WEB-UX-030: each entry carries its own dark pair. The render used to append
+// `dark:bg-opacity-20 dark:text-opacity-90`, which are no-ops — an opacity
+// modifier needs a colour utility in the same variant to act on, so in dark
+// mode these chips kept their LIGHT background and light text, measuring
+// 3.02:1 for green-700 on a slate card. text-green-600 was also below AA on
+// the light surface (3.30:1), so the vegetarian chip moves to -700 as well.
 const DIETARY_TAGS = [
-  { id: "vegan", label: "Vegan", icon: Leaf, bg: "bg-green-50", text: "text-green-700", keywords: ["vegan"] },
-  { id: "vegetarian", label: "Vegetarian", icon: Leaf, bg: "bg-green-50", text: "text-green-600", keywords: ["vegetarian", "veggie"] },
-  { id: "gluten-free", label: "GF", icon: Wheat, bg: "bg-amber-50", text: "text-amber-700", keywords: ["gluten free", "gluten-free", "celiac"] },
+  { id: "vegan", label: "Vegan", icon: Leaf, bg: "bg-green-50 dark:bg-green-950", text: "text-green-700 dark:text-green-300", keywords: ["vegan"] },
+  { id: "vegetarian", label: "Vegetarian", icon: Leaf, bg: "bg-green-50 dark:bg-green-950", text: "text-green-700 dark:text-green-300", keywords: ["vegetarian", "veggie"] },
+  { id: "gluten-free", label: "GF", icon: Wheat, bg: "bg-amber-50 dark:bg-amber-950", text: "text-amber-800 dark:text-amber-300", keywords: ["gluten free", "gluten-free", "celiac"] },
 ] as const;
 
 function inferDietaryTags(description?: string, cuisine?: string): typeof DIETARY_TAGS[number][] {
@@ -157,7 +163,7 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
           <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 z-10">
             {sponsoredActive && <SponsoredBadge />}
             {!sponsoredActive && isFeatured && (
-              <Badge className="bg-amber-500 text-white border-0 shadow-md text-xs font-semibold px-2.5 py-0.5">
+              <Badge className={`${STATUS_BADGE.featured} border-0 shadow-md text-xs font-semibold px-2.5 py-0.5`}>
                 <Sparkles className="h-3 w-3 mr-1" />
                 Featured
               </Badge>
@@ -166,7 +172,7 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
               <SocialProofBadge type="new" size="sm" />
             )}
             {openStatus.isOpen && (
-              <Badge className={`${openStatus.closingSoon ? 'bg-amber-500' : 'bg-emerald-500'} text-white border-0 shadow-md text-xs font-semibold px-2.5 py-0.5`}>
+              <Badge className={`${openStatus.closingSoon ? STATUS_BADGE.closingSoon : STATUS_BADGE.open} border-0 shadow-md text-xs font-semibold px-2.5 py-0.5`}>
                 <span className="relative flex h-2 w-2 mr-1.5">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-white" />
@@ -217,8 +223,11 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
                 <span className="text-xs text-muted-foreground">No rating yet</span>
               )}
             </div>
+            {/* WEB-UX-030: text-orange-600 on bg-orange-50 measured 3.35:1.
+                orange-700 is 4.88:1 on the same tint. Dark side untouched —
+                orange-400 on orange-950 already clears AA. */}
             {restaurant.popularity_score && restaurant.popularity_score > 70 && (
-              <Badge variant="outline" className="text-xs border-orange-200 text-orange-600 bg-orange-50 dark:bg-orange-950 dark:border-orange-800 dark:text-orange-400 gap-1">
+              <Badge variant="outline" className="text-xs border-orange-200 text-orange-700 bg-orange-50 dark:bg-orange-950 dark:border-orange-800 dark:text-orange-400 gap-1">
                 <Flame className="h-3 w-3" />
                 Popular
               </Badge>
@@ -236,7 +245,7 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
           {dietaryTags.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {dietaryTags.map(tag => (
-                <span key={tag.id} className={`inline-flex items-center gap-1 ${tag.bg} ${tag.text} dark:bg-opacity-20 dark:text-opacity-90 text-xs font-medium px-2 py-0.5 rounded-full`}>
+                <span key={tag.id} className={`inline-flex items-center gap-1 ${tag.bg} ${tag.text} text-xs font-medium px-2 py-0.5 rounded-full`}>
                   <tag.icon className="h-3 w-3" aria-hidden="true" />
                   {tag.label}
                 </span>

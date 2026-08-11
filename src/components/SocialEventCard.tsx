@@ -24,7 +24,7 @@ import {
   hasSpecificTime,
 } from '@/lib/timezone';
 import { Link } from 'react-router-dom';
-import { getEventCategoryStyle } from '@/lib/categoryStyles';
+import { getEventCategoryStyle, STATUS_BADGE } from '@/lib/categoryStyles';
 import { SponsoredBadge } from '@/components/SponsoredBadge';
 import { isSponsoredActive, logSponsoredClick } from '@/lib/sponsored';
 import { useSponsoredImpression } from '@/hooks/useSponsoredImpression';
@@ -189,7 +189,7 @@ function SocialEventCardComponent({
                 </Badge>
               )}
               {!sponsoredActive && event.is_featured && (
-                <Badge className="bg-amber-500 text-white border-0 shadow-lg text-[10px] px-2">
+                <Badge className={`${STATUS_BADGE.featured} border-0 shadow-lg text-[10px] px-2`}>
                   <Sparkles className="h-3 w-3 mr-1" />
                   Featured
                 </Badge>
@@ -209,7 +209,7 @@ function SocialEventCardComponent({
                   {event.category}
                 </Badge>
                 {isFree ? (
-                  <Badge className="bg-emerald-500 text-white border-0 text-[11px] font-medium">
+                  <Badge className={`${STATUS_BADGE.free} border-0 text-[11px] font-medium`}>
                     Free
                   </Badge>
                 ) : event.price ? (

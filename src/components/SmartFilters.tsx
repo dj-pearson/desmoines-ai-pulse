@@ -66,7 +66,7 @@ export function SmartFilters({
                   className={cn(
                     'transition-all duration-200',
                     isActive &&
-                      'bg-primary text-white hover:bg-primary/90 shadow-md'
+                      'bg-primary text-primary-foreground hover:bg-primary/90 shadow-md'
                   )}
                 >
                   <span className="mr-1.5">{filter.icon}</span>
@@ -130,7 +130,7 @@ export function SmartFilterChips({
             variant={isActive ? 'default' : 'secondary'}
             className={cn(
               'cursor-pointer hover:scale-105 transition-transform',
-              isActive && 'bg-primary text-white shadow-md'
+              isActive && 'bg-primary text-primary-foreground shadow-md'
             )}
             onClick={() => onFilterSelect(filter.id)}
           >
@@ -182,7 +182,7 @@ export function SmartLocationFilters({
             variant={isActive ? 'default' : 'outline'}
             className={cn(
               'cursor-pointer hover:scale-105 transition-transform',
-              isActive && 'bg-primary text-white shadow-md'
+              isActive && 'bg-primary text-primary-foreground shadow-md'
             )}
             onClick={() => onLocationSelect(neighborhood)}
           >
