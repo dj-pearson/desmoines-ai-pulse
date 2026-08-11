@@ -26,11 +26,11 @@ import {
 } from "../_shared/cors.ts";
 import { checkRateLimit, addRateLimitHeaders } from "../_shared/rateLimit.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { requireAdminOrApiKey, type AdminCaller } from "../_shared/apiKeyAuth.ts";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const FROM_ADDRESS = Deno.env.get("NEWSLETTER_FROM")
   ?? "Des Moines Insider <events@desmoinesinsider.com>";
-const ADMIN_ROLES = ["admin", "root_admin"] as const;
 
 interface Segment {
   sources?: string[];
@@ -114,35 +114,22 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Auth required" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } =
-      await supabase.auth.getUser(token);
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Invalid auth" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-    if (
-      !profile ||
-      !ADMIN_ROLES.includes(profile.role as typeof ADMIN_ROLES[number])
-    ) {
-      return new Response(JSON.stringify({ error: "Admin required" }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    // WEB-SEC-023: was a hand-rolled gate on profiles.role keyed by the row PK.
+    const caller: AdminCaller = { user: null };
+    const authFailure = await requireAdminOrApiKey(req, corsHeaders, caller);
+    if (authFailure) return authFailure;
+
+    // This function sends a test mail to, and stamps sent_by with, the admin who
+    // triggered it — so it needs a person, not a shared key.
+    const user = caller.user;
+    if (!user) {
+      return new Response(
+        JSON.stringify({ error: "This endpoint requires an admin user session" }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const body = await req.json().catch(() => ({}));

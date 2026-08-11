@@ -79,6 +79,40 @@ jobs:
       - name: Build production bundle
         run: npm run build
 
+  # WEB-CI-023. `npm run type-check` above runs `tsc --noEmit` against the root
+  # tsconfig, which is `"files": []` plus project references — so it compiles
+  # ZERO files and has always exited 0. Two P1 crashes shipped straight through
+  # it in one week: /stay called getCanonicalUrl with no import (TS2304), and
+  # useSocialFeatures returned a bare `loading` after an unused-var autofix
+  # renamed the binding (TS2552). Both are one-line errors that
+  # `tsc -p tsconfig.app.json` reports.
+  #
+  # It cannot gate on zero: the app project has 400 pre-existing errors, mostly
+  # PostgREST generic-instantiation noise. So it ratchets per-file, exactly like
+  # the strict one — a file that gets worse, or a new file that starts erroring,
+  # fails the build.
+  #
+  # Its own job rather than a step in `validate`: tsc over this project takes
+  # several minutes (the generated Supabase types provoke a lot of TS2589), and
+  # it must not sit in front of the build. Deliberately NOT in `npm run
+  # validate` for the same reason — local validate has to stay usable.
+  app-type-ratchet:
+    name: App project type ratchet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: tsconfig.app.json ratchet
+        run: npm run type-check:app:ratchet
+      # tsconfig.node.json is clean today, so this one is a real gate, not a
+      # ratchet. Keep it that way.
+      - name: tsconfig.node.json must stay clean
+        run: npx tsc -p tsconfig.node.json --noEmit
+
   migration-safety:
     name: Migration Safety
     runs-on: ubuntu-latest

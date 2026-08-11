@@ -85,14 +85,119 @@ export function requireApiKey(req: Request, corsHeaders: Record<string, string>)
 }
 
 /**
+ * Role values that count as administrative. Kept as one constant so a function
+ * can never accidentally accept a narrower or wider set (WEB-SEC-023).
+ */
+export const ADMIN_ROLE_VALUES = new Set(['admin', 'root_admin']);
+
+/**
+ * THE admin check. Mirrors the client-side one (src/contexts/AuthContext.tsx):
+ * 1) user_roles.role keyed by user_id, then 2) profiles.user_role keyed by user_id.
+ *
+ * WEB-SEC-023: eight functions used to hand-roll this as
+ * `profiles.select('role').eq('id', user.id)` — wrong column AND wrong key.
+ * `profiles.role` is not in the generated schema at all, so those checks fail
+ * closed and lock real admins out. Everything that needs to know whether a user
+ * is an admin calls this, and nothing queries the role columns directly.
+ *
+ * @param label - caller name, used only to tag the rejection diagnostic
+ */
+export async function isAdminUserId(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  userId: string,
+  label = 'isAdminUserId',
+): Promise<boolean> {
+  const { data: roleRow, error: roleErr } = await supabase
+    .from('user_roles')
+    .select('role')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (roleRow?.role && ADMIN_ROLE_VALUES.has(roleRow.role)) return true;
+
+  const { data: profile, error: profileErr } = await supabase
+    .from('profiles')
+    .select('user_role')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (profile?.user_role && ADMIN_ROLE_VALUES.has(profile.user_role)) return true;
+
+  // Surface exactly why the check rejected so the data can be fixed.
+  console.error(`[${label}] admin check failed`, {
+    userId,
+    user_roles_role: roleRow?.role ?? null,
+    user_roles_error: roleErr?.message ?? null,
+    profiles_user_role: profile?.user_role ?? null,
+    profiles_error: profileErr?.message ?? null,
+  });
+
+  return false;
+}
+
+/**
+ * Every admin's user_id. Use this instead of selecting from profiles by role —
+ * the returned values are user_ids (what campaign_notifications.recipient_user_id
+ * and every other FK expects), not the profiles row PK (WEB-SEC-023).
+ */
+export async function listAdminUserIds(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+): Promise<string[]> {
+  const ids = new Set<string>();
+
+  const { data: roleRows, error: roleErr } = await supabase
+    .from('user_roles')
+    .select('user_id, role')
+    .in('role', [...ADMIN_ROLE_VALUES]);
+
+  if (roleErr) {
+    console.error('[listAdminUserIds] user_roles query failed:', roleErr.message);
+  }
+  for (const row of roleRows ?? []) {
+    if (row?.user_id) ids.add(row.user_id);
+  }
+
+  const { data: profileRows, error: profileErr } = await supabase
+    .from('profiles')
+    .select('user_id, user_role')
+    .in('user_role', [...ADMIN_ROLE_VALUES]);
+
+  if (profileErr) {
+    console.error('[listAdminUserIds] profiles query failed:', profileErr.message);
+  }
+  for (const row of profileRows ?? []) {
+    if (row?.user_id) ids.add(row.user_id);
+  }
+
+  return [...ids];
+}
+
+/**
+ * Filled in by requireAdminOrApiKey when the caller authenticated with a user
+ * JWT rather than a shared key. Stays null for API-key / service-role callers,
+ * which have no user identity — functions that attribute a write to a person
+ * (`sent_by`, `created_by`, …) must handle that.
+ */
+export interface AdminCaller {
+  // deno-lint-ignore no-explicit-any
+  user: any | null;
+}
+
+/**
  * Validate that the request carries either a valid EDGE_FUNCTION_API_KEY
- * (cron / automation) or a valid Supabase user JWT belonging to a profile
- * with role='admin' (admin UI). On failure returns a 401/403 Response;
+ * (cron / automation) or a valid Supabase user JWT belonging to an admin
+ * (admin UI). On failure returns a 401/403 Response;
  * on success returns null and the caller continues.
+ *
+ * @param caller - optional out-param; receives the resolved user so callers
+ *   that need the admin's identity don't re-verify the JWT themselves.
  */
 export async function requireAdminOrApiKey(
   req: Request,
   corsHeaders: Record<string, string>,
+  caller?: AdminCaller,
 ): Promise<Response | null> {
   // 1) Try API key first — both X-API-Key and Authorization: Bearer <key>
   const expectedKey = Deno.env.get('EDGE_FUNCTION_API_KEY');
@@ -147,37 +252,10 @@ export async function requireAdminOrApiKey(
     );
   }
 
-  // Match the client-side admin check (src/contexts/AuthContext.tsx):
-  // 1) user_roles.role keyed by user_id, then 2) profiles.user_role keyed by user_id.
-  // Accepted values: 'admin' or 'root_admin'.
-  const ADMIN_VALUES = new Set(['admin', 'root_admin']);
-  const userId = userRes.user.id;
-
-  const { data: roleRow, error: roleErr } = await supabase
-    .from('user_roles')
-    .select('role')
-    .eq('user_id', userId)
-    .maybeSingle();
-
-  if (roleRow?.role && ADMIN_VALUES.has(roleRow.role)) return null;
-
-  const { data: profile, error: profileErr } = await supabase
-    .from('profiles')
-    .select('user_role')
-    .eq('user_id', userId)
-    .maybeSingle();
-
-  if (profile?.user_role && ADMIN_VALUES.has(profile.user_role)) return null;
-
-  // Surface exactly why the check rejected so the user can fix the data.
-  console.error('[requireAdminOrApiKey] admin check failed', {
-    userId,
-    userEmail: userRes.user.email,
-    user_roles_role: roleRow?.role ?? null,
-    user_roles_error: roleErr?.message ?? null,
-    profiles_user_role: profile?.user_role ?? null,
-    profiles_error: profileErr?.message ?? null,
-  });
+  if (await isAdminUserId(supabase, userRes.user.id, 'requireAdminOrApiKey')) {
+    if (caller) caller.user = userRes.user;
+    return null;
+  }
 
   // Diagnostic detail is logged server-side above; the client body stays generic
   // so we don't leak user ids / role internals to callers.

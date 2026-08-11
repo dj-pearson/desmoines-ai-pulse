@@ -12,8 +12,10 @@
  *   - Validates the token against stored value and expiry
  *   - Proceeds with account deletion if valid
  *
- * Legacy: POST without action field treated as direct deletion (backwards compat)
- *   - Only allowed if the account_deletion_tokens table doesn't exist yet
+ * Legacy: POST without an action field is treated as direct deletion, for
+ * backwards compatibility with shipped iOS/Android binaries that predate the
+ * two-step flow. See the branch at the bottom of the handler for the removal
+ * condition (XPLAT-001).
  *
  * Permanently deletes from: user_event_interactions, user_restaurant_interactions,
  * favorites, ratings, reviews, user_subscriptions, user_analytics, profiles,
@@ -41,6 +43,102 @@ function generateToken(): string {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
   return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Irreversibly erase the account. Shared by the confirmed two-step flow and the
+ * legacy no-body flow so the two can never drift in what they delete.
+ */
+async function performDeletion(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  // deno-lint-ignore no-explicit-any
+  user: any,
+  req: Request,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  const userId = user.id;
+
+  // Delete user data in order (respect foreign key constraints).
+  // Every table below is keyed by user_id. `user_analytics` holds
+  // behavioral rows (page_url, user_agent, session) that are identifiable
+  // once tied to user_id, so erasure must cover it too (GDPR Art. 17).
+  const tables = [
+    "user_event_interactions",
+    "user_restaurant_interactions",
+    "favorites",
+    "ratings",
+    "reviews",
+    "user_subscriptions",
+    "user_analytics",
+    "profiles",
+  ];
+
+  for (const table of tables) {
+    const { error } = await supabase
+      .from(table)
+      .delete()
+      .eq("user_id", userId);
+
+    if (error) {
+      // A table may not exist in every environment — warn and continue so a
+      // single failure never leaves the erasure half-done.
+      console.warn(`Warning deleting from ${table}:`, error.message);
+    }
+  }
+
+  // Newsletter subscriptions are keyed by email, not user_id. Remove any
+  // subscription tied to this account's email so marketing data is purged too.
+  if (user.email) {
+    const { error: newsletterError } = await supabase
+      .from("newsletter_subscribers")
+      .delete()
+      .eq("email", user.email.toLowerCase());
+    if (newsletterError) {
+      console.warn(
+        "Warning deleting from newsletter_subscribers:",
+        newsletterError.message,
+      );
+    }
+  }
+
+  // Delete the auth user entry
+  const { error: deleteAuthError } =
+    await supabase.auth.admin.deleteUser(userId);
+
+  if (deleteAuthError) {
+    console.error("Error deleting auth user:", deleteAuthError.message);
+    return new Response(
+      JSON.stringify({
+        error: "Failed to delete authentication record. Please contact support.",
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
+  }
+
+  console.log(`Successfully deleted account for user: ${userId}`);
+
+  await writeAuditLog(supabase, {
+    eventType: "account_deletion",
+    actorId: userId,
+    action: "delete_account",
+    resource: "profiles",
+    severity: "high",
+    ipAddress: auditIp(req),
+    userAgent: req.headers.get("user-agent"),
+    details: { target_user_id: userId },
+  });
+
+  return new Response(
+    JSON.stringify({ success: true }),
+    {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    }
+  );
 }
 
 serve(async (req) => {
@@ -197,89 +295,29 @@ serve(async (req) => {
         .delete()
         .eq("user_id", userId);
 
-      // Delete user data in order (respect foreign key constraints).
-      // Every table below is keyed by user_id. `user_analytics` holds
-      // behavioral rows (page_url, user_agent, session) that are identifiable
-      // once tied to user_id, so erasure must cover it too (GDPR Art. 17).
-      const tables = [
-        "user_event_interactions",
-        "user_restaurant_interactions",
-        "favorites",
-        "ratings",
-        "reviews",
-        "user_subscriptions",
-        "user_analytics",
-        "profiles",
-      ];
-
-      for (const table of tables) {
-        const { error } = await supabase
-          .from(table)
-          .delete()
-          .eq("user_id", userId);
-
-        if (error) {
-          // A table may not exist in every environment — warn and continue so a
-          // single failure never leaves the erasure half-done.
-          console.warn(`Warning deleting from ${table}:`, error.message);
-        }
-      }
-
-      // Newsletter subscriptions are keyed by email, not user_id. Remove any
-      // subscription tied to this account's email so marketing data is purged too.
-      if (user.email) {
-        const { error: newsletterError } = await supabase
-          .from("newsletter_subscribers")
-          .delete()
-          .eq("email", user.email.toLowerCase());
-        if (newsletterError) {
-          console.warn(
-            "Warning deleting from newsletter_subscribers:",
-            newsletterError.message,
-          );
-        }
-      }
-
-      // Delete the auth user entry
-      const { error: deleteAuthError } =
-        await supabase.auth.admin.deleteUser(userId);
-
-      if (deleteAuthError) {
-        console.error("Error deleting auth user:", deleteAuthError.message);
-        return new Response(
-          JSON.stringify({
-            error: "Failed to delete authentication record. Please contact support.",
-          }),
-          {
-            status: 500,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
-      }
-
-      console.log(`Successfully deleted account for user: ${userId}`);
-
-      await writeAuditLog(supabase, {
-        eventType: "account_deletion",
-        actorId: userId,
-        action: "delete_account",
-        resource: "profiles",
-        severity: "high",
-        ipAddress: auditIp(req),
-        userAgent: req.headers.get("user-agent"),
-        details: { target_user_id: userId },
-      });
-
-      return new Response(
-        JSON.stringify({ success: true }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      return await performDeletion(supabase, user, req, corsHeaders);
     }
 
-    // No action specified — return error
+    // Legacy: no action field — direct deletion (XPLAT-001).
+    //
+    // Every shipped iOS and Android binary invokes this function with an empty
+    // body. The two-step token flow (SEC-025) was added without a
+    // MIN_SUPPORTED_APP_VERSION bump, so those binaries have been getting a 400
+    // and account deletion has been broken on both stores — an App Store
+    // 5.1.1(v) violation. This branch restores the contract they were built
+    // against. Both clients run their own confirmation dialog before calling, so
+    // the user-facing "are you sure" step still exists; what is missing versus
+    // the two-step flow is the server-side proof of it.
+    //
+    // DEPRECATION (CLAUDE.md multi-release flow): the current clients now use
+    // request+confirm. Once MIN_SUPPORTED_APP_VERSION excludes every binary that
+    // predates that change, delete this branch and restore the 400.
+    if (action === undefined || action === null) {
+      console.log(`Legacy no-body deletion for user: ${userId}`);
+      return await performDeletion(supabase, user, req, corsHeaders);
+    }
+
+    // An action was supplied but is not one we handle.
     return new Response(
       JSON.stringify({
         error: "Invalid action. Use action: 'request' to get a confirmation token, then action: 'confirm' with the token.",

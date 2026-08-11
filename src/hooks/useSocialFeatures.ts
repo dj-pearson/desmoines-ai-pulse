@@ -66,7 +66,13 @@ export function useSocialFeatures() {
   const { user } = useAuth();
   const [friends, setFriends] = useState<Friend[]>([]);
   const [friendGroups, setFriendGroups] = useState<FriendGroup[]>([]);
-  const [_loading, setLoading] = useState(false);
+  // No `loading` state: every operation below is synchronous mock work (the
+  // backing tables do not exist — WEB-QA-018), so the flag was never set to
+  // anything but false. It used to be `const [_loading, setLoading]`, renamed
+  // by an unused-var autofix, while the return object below still referenced a
+  // bare `loading` — a ReferenceError that took /social down entirely. Restore
+  // real state here when the queries become real.
+  const loading = false;
 
   // Mock functions since tables don't exist yet
   const fetchFriends = async () => {

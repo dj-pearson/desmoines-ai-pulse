@@ -137,7 +137,7 @@ async function getUserRole(
     const { data: profileData } = await supabaseClient
       .from('profiles')
       .select('user_role')
-      .eq('id', userId)
+      .eq('user_id', userId)
       .single();
 
     if (profileData?.user_role) {

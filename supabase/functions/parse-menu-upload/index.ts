@@ -1,7 +1,7 @@
 /**
  * SECURITY: verify_jwt = false
  * Reason: Called from admin UI with a bearer token; JWT + admin-role check
- * enforced in the handler (profiles.role === 'admin') before any work.
+ * enforced in the handler via isAdminUserId() from _shared/apiKeyAuth.ts before any work.
  * Alternative measures: Service role key for DB writes, Anthropic API key kept server-side.
  * Risk level: LOW (admin-only feature, file size limited to 10 MB)
  */
@@ -9,6 +9,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getAIConfig, getAnthropicApiKey } from "../_shared/aiConfig.ts";
+import { isAdminUserId } from "../_shared/apiKeyAuth.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -199,12 +200,13 @@ serve(async (req) => {
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-    if (!profile || profile.role !== 'admin') {
+    // WEB-SEC-023: this used to be `profiles.select('role').eq('id', user.id)` —
+    // wrong column (profiles has user_role, not role) AND wrong key (id is the
+    // row PK, user_id is the auth.users FK). Both wrong at once meant the check
+    // returned no row and every admin got a 403, so this function has been
+    // uncallable. isAdminUserId is the one admin check; nothing queries the
+    // role columns directly.
+    if (!(await isAdminUserId(supabase, user.id, 'parse-menu-upload'))) {
       return new Response(
         JSON.stringify({ error: 'Admin access required' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

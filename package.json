@@ -22,6 +22,8 @@
     "type-check:strict": "tsc --project tsconfig.strict.json --noEmit",
     "type-check:strict:ratchet": "node scripts/strict-ratchet.mjs",
     "type-check:strict:update": "node scripts/strict-ratchet.mjs --update",
+    "type-check:app:ratchet": "node scripts/strict-ratchet.mjs --project app",
+    "type-check:app:update": "node scripts/strict-ratchet.mjs --project app --update",
     "preview": "vite preview",
     "migrate": "tsx scripts/run-migration.ts",
     "db:backup": "tsx scripts/supabase-backup.ts",

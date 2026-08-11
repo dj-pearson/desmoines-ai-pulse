@@ -12,6 +12,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14.21.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { listAdminUserIds } from "../_shared/apiKeyAuth.ts";
 
 // Stripe webhooks are server-to-server and do not require CORS headers.
 // Removing Access-Control-Allow-Origin prevents browser-based spoofing.
@@ -276,17 +277,19 @@ async function handleCampaignPayment(
     });
   }
 
-  // Notify admins about the new paid campaign
-  const { data: admins } = await supabase
-    .from("profiles")
-    .select("id")
-    .eq("role", "admin");
+  // Notify admins about the new paid campaign.
+  // WEB-SEC-023: this selected profiles.id where profiles.role='admin'. The role
+  // column is not in the schema, so the query matched nobody and every paid
+  // campaign notified no admin at all — silently, because the result is only
+  // length-checked. It also inserted the profiles row PK into
+  // recipient_user_id, which expects a user_id. listAdminUserIds returns user_ids.
+  const adminUserIds = await listAdminUserIds(supabase);
 
-  if (admins && admins.length > 0) {
+  if (adminUserIds.length > 0) {
     await supabase.from("campaign_notifications").insert(
-      admins.map((admin: { id: string }) => ({
+      adminUserIds.map((adminUserId: string) => ({
         campaign_id: campaignId,
-        recipient_user_id: admin.id,
+        recipient_user_id: adminUserId,
         notification_type: "payment_received",
         title: `New Payment: ${campaign?.name || 'Campaign'}`,
         message: `Payment of $${amountPaid.toFixed(2)} received for campaign "${campaign?.name}". Advertiser can now upload creatives.`,
