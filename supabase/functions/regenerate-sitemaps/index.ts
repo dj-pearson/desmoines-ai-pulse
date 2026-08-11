@@ -4,7 +4,7 @@
  * Event-driven sitemap regeneration. Drains the sitemap_change_queue (populated
  * by triggers on events/restaurants/attractions/articles), regenerates the
  * per-table sitemap XML files, writes them to the public `sitemaps` storage
- * bucket, and pings search engines for the changed URLs. Wrapped in the
+ * bucket, and submits the changed URLs to IndexNow. Wrapped in the
  * WEB-AUTO-001 jobRunner so runs are observable and failures alert.
  *
  * The XML structure mirrors scripts/generate-dynamic-sitemaps.ts (the build-time
@@ -23,6 +23,7 @@ import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { runJob } from "../_shared/jobRunner.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { submitToIndexNow } from "../_shared/indexNow.ts";
 
 const BASE_URL =
   Deno.env.get("SITE_URL") || Deno.env.get("VITE_SITE_URL") || "https://desmoinesinsider.com";
@@ -208,27 +209,6 @@ async function buildSitemaps(supabase: Supa) {
   return { sitemaps, urlIndex };
 }
 
-/** Best-effort search-engine ping for the sitemap index. Never throws. */
-async function pingSearchEngines(): Promise<Record<string, unknown>> {
-  const indexUrl = `${BASE_URL}/sitemap.xml`;
-  const targets = [
-    { name: "google", url: `https://www.google.com/ping?sitemap=${encodeURIComponent(indexUrl)}` },
-    { name: "bing", url: `https://www.bing.com/ping?sitemap=${encodeURIComponent(indexUrl)}` },
-  ];
-  const results: Record<string, unknown> = {};
-  await Promise.all(
-    targets.map(async (t) => {
-      try {
-        const res = await fetchWithTimeout(t.url, { method: "GET" });
-        results[t.name] = res.status;
-      } catch (err) {
-        results[t.name] = err instanceof Error ? err.message : String(err);
-      }
-    }),
-  );
-  return results;
-}
-
 /**
  * Best-effort submit of changed URLs to the Google Indexing API. Only runs when
  * GOOGLE_SERVICE_ACCOUNT_JSON is configured; otherwise returns skipped. Never throws.
@@ -332,8 +312,16 @@ serve(async (req) => {
       if (loc) changedUrls.add(loc);
     }
 
-    // 5. Ping search engines + best-effort Indexing API submission.
-    const ping = await pingSearchEngines();
+    // 5. Notify search engines about the URLs that actually changed.
+    //
+    // This used to GET the Google and Bing sitemap-ping endpoints. Both are
+    // dead — 404 "Sitemaps ping is deprecated" and 410 Gone respectively — so
+    // the job was reporting two failed calls as its notification step. See
+    // _shared/indexNow.ts. IndexNow covers Bing/Yandex/Naver/Seznam with the
+    // specific changed URLs; Google is covered by the `lastmod` values in the
+    // sitemaps written in step 3, plus the Indexing API below where a service
+    // account is configured.
+    const indexnow = await submitToIndexNow(BASE_URL, [...changedUrls]);
     const indexing = await submitToIndexingApi([...changedUrls]);
 
     // 6. Drain the queue.
@@ -349,12 +337,12 @@ serve(async (req) => {
       files_written: written,
       queue_drained: queue.length,
       changed_urls: changedUrls.size,
-      ping,
+      indexnow,
       indexing,
       base_url: BASE_URL,
     });
 
-    return { written, queueDrained: queue.length, changedUrls: changedUrls.size, ping, indexing };
+    return { written, queueDrained: queue.length, changedUrls: changedUrls.size, indexnow, indexing };
   });
 
   return new Response(JSON.stringify({ ok: job.ok, status: job.status, runId: job.runId, result: job.result, error: job.error }), {

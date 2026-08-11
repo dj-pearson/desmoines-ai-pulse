@@ -26,6 +26,10 @@ on:
       - 'src/hooks/useSubscription.ts'
       - 'src/hooks/__tests__/useSubscription.test.ts'
       - 'src/components/SubscriptionPlatformBreakdown.tsx'
+      # The IndexNow key file. Its contents have to match INDEXNOW_KEY exactly
+      # or every submission 403s, and the file lives nowhere near the function
+      # that depends on it — so a PR touching only public/ must run this suite.
+      - 'public/*.txt'
       - '.github/workflows/subscription-sync-tests.yml'
 
 concurrency:
@@ -59,6 +63,9 @@ jobs:
       # client/server deletion contract can't drift again (XPLAT-001).
       - run: deno test --allow-read supabase/functions/_tests/account-deletion-contract.test.ts
       - run: deno test --allow-none supabase/functions/_shared/jsonLdEvents.test.ts
+      # IndexNow payload filtering plus the key-file/constant drift check
+      # (WEB-SEO-011). Needs --allow-read for public/<key>.txt.
+      - run: deno test --allow-read supabase/functions/_tests/indexnow.test.ts
       # Event-source parsing invariants — see docs/scraping/EVENT_SOURCE_PLAYBOOK.md.
       # All fixture-based; no network access needed.
       - run: deno test --allow-none supabase/functions/_shared/centralTime.test.ts
