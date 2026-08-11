@@ -5,6 +5,10 @@ import { readRecentlyViewed, engagementByType, type RecentlyViewedType } from "@
 import { computeHomeSectionOrder, type HomeSectionKey } from "@/lib/homeSectionOrder";
 import { storage } from "@/lib/safeStorage";
 import { supabase } from "@/integrations/supabase/client";
+import { getSessionId } from "@/lib/adAnalytics";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("HomeInterestNav");
 
 const DOMAINS: Record<HomeSectionKey, { label: string; blurb: string; href: string; icon: typeof Calendar }> = {
   event: { label: "Events", blurb: "Concerts, festivals & things to do", href: "/events", icon: Calendar },
@@ -34,17 +38,27 @@ export function HomeInterestNav() {
     // Log the cohort once per session (best-effort, never blocks/throws).
     if (storage.get<string>(COHORT_KEY) === cohort) return;
     storage.set(COHORT_KEY, cohort);
-    // Fire-and-forget; cast bypasses the generated row type (session_id etc.
-    // are optional for our purposes) and any insert rejection is swallowed.
+    // WEB-QA-026: this used to put `cohort` ("control" / "personalized:<type>")
+    // into content_id, which is uuid NOT NULL — so every insert was rejected
+    // with 22P02 and this experiment has never recorded a row. The `as never`
+    // cast is what let it compile: it silenced the missing required session_id
+    // at the same time. The cohort belongs in filters_used, which is jsonb.
+    //
+    // The rejection is logged now rather than discarded. A measurement that
+    // fails silently is indistinguishable from one nobody is looking at.
     void supabase
       .from("user_analytics")
       .insert({
         event_type: "home_cohort",
         content_type: "home",
-        content_id: cohort,
+        content_id: crypto.randomUUID(),
+        session_id: getSessionId(),
         page_url: typeof window !== "undefined" ? window.location.href : null,
-      } as never)
-      .then(({ error }) => void error, () => undefined);
+        filters_used: { cohort },
+      })
+      .then(({ error }) => {
+        if (error) log.warn("cohort", "insert rejected", { code: error.code, message: error.message });
+      }, () => undefined);
   }, [cohort]);
 
   return (
