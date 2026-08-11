@@ -8,9 +8,25 @@
  * Cloudflare Pages serves those static files to crawlers, while the SPA bundle
  * (still present in the captured HTML) boots and takes over for real users.
  *
- * SAFETY: this NEVER fails the build. Any error (Chromium unavailable on the
- * build host, a route timing out, etc.) is logged and we exit 0, leaving the
- * normal SPA build in place — i.e. worst case is "same as before".
+ * FAILURE POLICY (WEB-OPS-020): a hub-route shortfall FAILS THE BUILD.
+ *
+ * This used to end in `.finally(() => process.exit(0))`, on the reasoning that
+ * a failed prerender leaves the SPA build intact so "worst case is same as
+ * before". That reasoning is wrong now. Prerendering is the mechanism — the
+ * only mechanism — by which the JS-less crawlers robots.txt invites see any
+ * content at all, and the build output is byte-identical whether it ran or
+ * not. So a Chromium launch failure produced a green build, a successful
+ * deploy, and a site that silently served empty shells to every AI crawler,
+ * with one `[prerender]` warning buried in build logs nobody reads.
+ *
+ * Measured against production on 2026-08-11: `/` returns 39 data-rh tags and
+ * its real canonical, `/restaurants/` 46, `/events/today/` 32 — so Chromium
+ * does launch on the Cloudflare Pages build image, and a shortfall there means
+ * something actually broke rather than the host being incapable.
+ *
+ * Fatal: puppeteer missing, Chromium unlaunchable, dist/index.html absent, or
+ * fewer hub routes written than PRERENDER_ROUTES contains. Not fatal: the
+ * entity pass, which is opt-in, budgeted, and fail-closed by design.
  *
  * TWO PASSES (WEB-SEO-006):
  *   1. Hub routes from PRERENDER_ROUTES — always run, no time budget.
@@ -45,7 +61,6 @@ import { PRERENDER_ROUTES } from './prerender-routes.mjs';
 import process from 'node:process';
 
 const DIST = path.resolve('dist');
-const PORT = 4178;
 
 // Curated public, static (non-param, non-auth, non-admin) routes worth indexing.
 // Defined in scripts/prerender-routes.mjs so public/sitemap-static.xml can be
@@ -165,6 +180,12 @@ function warn(msg) {
   console.warn(`[prerender] ${msg}`);
 }
 
+/**
+ * A condition that must fail the build rather than warn. See the failure policy
+ * at the top of this file. Thrown, not exited on, so cleanup still runs.
+ */
+class PrerenderFailure extends Error {}
+
 async function main() {
   if (process.env.PRERENDER === 'false') {
     console.log('[prerender] skipped (PRERENDER=false)');
@@ -173,8 +194,10 @@ async function main() {
 
   const indexPath = path.join(DIST, 'index.html');
   if (!fs.existsSync(indexPath)) {
-    warn('dist/index.html not found — skipping prerender');
-    return;
+    throw new PrerenderFailure(
+      `${indexPath} not found. vite build reported success, so either the output directory ` +
+        'moved or the build did not actually emit — nothing downstream of here can be trusted.',
+    );
   }
 
   // Cache the original SPA shell ONCE so per-route writes can't affect the
@@ -193,11 +216,24 @@ async function main() {
   // Cost me an hour chasing a phantom "concurrency broke Helmet" theory, which
   // a controlled A/B disproved. CI is unaffected because it always builds into
   // a fresh dist/, so this only bites re-runs — which is precisely when it is
-  // least expected. react-helmet-async marks every tag it manages with
-  // data-rh, so its presence is a reliable tell.
-  if (/\sdata-rh=/.test(indexHtml.toString('utf8'))) {
+  // least expected.
+  //
+  // The tell used to be `data-rh` anywhere in the file. That stopped working:
+  // index.html now authors data-rh onto its own fallback <title>/description/og
+  // tags on purpose (WEB-SEO-002/012 — it hands them to Helmet so per-page tags
+  // REPLACE rather than duplicate them), so the warning fired on every clean
+  // build. A warning that is always wrong is worse than no warning; it is how
+  // the real one gets scrolled past.
+  //
+  // React replaces the entire contents of #root when it renders, so the shell's
+  // <noscript> fallback block surviving inside #root is positive proof this file
+  // has not been rendered into.
+  const rootIndex = indexHtml.toString('utf8').indexOf('<div id="root">');
+  const rootHead = rootIndex === -1 ? '' : indexHtml.toString('utf8').slice(rootIndex, rootIndex + 600);
+  if (rootIndex !== -1 && !rootHead.includes('<noscript>')) {
     warn(
-      'dist/index.html is ALREADY PRERENDERED (found data-rh attributes). Using it as the SPA ' +
+      'dist/index.html is ALREADY PRERENDERED (the shell noscript fallback is gone from #root). ' +
+        'Using it as the SPA ' +
         'fallback can corrupt every route\'s <head> via hydration mismatch. Re-run `vite build` ' +
         'for a clean dist/ before prerendering; results from this run are not trustworthy.',
     );
@@ -211,8 +247,11 @@ async function main() {
   try {
     puppeteer = (await import('puppeteer')).default;
   } catch (e) {
-    warn(`puppeteer not available (${e.message}) — skipping prerender`);
-    return;
+    throw new PrerenderFailure(
+      `puppeteer could not be imported (${e.message}). It is a devDependency, so this normally ` +
+        'means the build host installed production dependencies only, or the Chromium download ' +
+        'was skipped. Prerendering cannot run and the deploy would ship shells to JS-less crawlers.',
+    );
   }
 
   // Static server for dist with SPA fallback to the cached index.html.
@@ -239,7 +278,15 @@ async function main() {
     res.end(indexHtml);
   });
 
-  await new Promise((resolve) => server.listen(PORT, resolve));
+  // Port 0 = let the OS pick a free one, then read it back. This used to be a
+  // hard-coded 4178, so a leftover prerender from an interrupted run made the
+  // next build die on EADDRINUSE — and, under the old exit-0 policy, ship an
+  // SPA-only bundle. Nothing outside this process needs to know the port.
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  const PORT = server.address().port;
 
   // ONE BROWSER PER WORKER, not one browser with N tabs (WEB-SEO-002).
   //
@@ -273,11 +320,20 @@ async function main() {
       ),
     );
   } catch (e) {
-    warn(`could not launch Chromium (${e.message}) — skipping prerender`);
     await Promise.all(browsers.map((b) => b.close().catch(() => {})));
     server.close();
-    return;
+    throw new PrerenderFailure(
+      `could not launch Chromium (${e.message}). On a Linux build host this is usually a missing ` +
+        'shared library (libnss3, libatk-1.0, libgbm) or a Chromium binary that npm ci did not ' +
+        'download. Production does launch it, so treat this as broken rather than unsupported.',
+    );
   }
+
+  /** Release the browsers and the static server. Safe to call more than once. */
+  const shutdown = async () => {
+    await Promise.all(browsers.map((b) => b.close().catch(() => {})));
+    server.close();
+  };
 
   let ok = 0;
   let failed = 0;
@@ -304,13 +360,30 @@ async function main() {
       // Wait for the SPA to render real content into #main-content rather than
       // for network idle — realtime sockets / analytics keep the network busy
       // and never reach networkidle (this is why the home route used to time out).
+      //
+      // ">40 characters" is not enough on its own. "Loading articles..." plus a
+      // heading clears 40 instantly, so this resolved mid-fetch and the capture
+      // downstream was a skeleton — which the publish gate then correctly
+      // rejected, failing the build. /articles did that on 2 of 4 consecutive
+      // clean builds, its render pass finishing in 11s against 20s on the runs
+      // that succeeded. The gate was right and this wait was wrong: it has to
+      // hold until the page is no longer telling us it is still loading.
+      //
+      // Same predicate the publish gate uses, so the two cannot disagree: a
+      // "Loading <thing>..." marker only counts as still-loading while
+      // #main-content is under 2000 characters — below-the-fold widgets on an
+      // otherwise complete page must not block the capture.
       await page
         .waitForFunction(
           () => {
             const m = document.getElementById('main-content');
-            return !!m && (m.textContent || '').trim().length > 40;
+            if (!m) return false;
+            const text = (m.textContent || '').trim();
+            if (text.length <= 40) return false;
+            const stillLoading = /Loading [a-z][a-z ]{2,24}\.\.\./i.test(document.body.innerHTML);
+            return !stillLoading || text.length >= 2000;
           },
-          { timeout: 15000 },
+          { timeout: 20000 },
         )
         .catch(() => {});
 
@@ -323,8 +396,32 @@ async function main() {
       // hits the timeout, same as the old sleep. Twelve hub routes are in that
       // state today (WEB-SEO-002), so keep the timeout short enough that they
       // do not dominate the run.
+      // The old predicate was `!!document.head.querySelector('[data-rh]')`, and
+      // it had silently become a no-op: index.html now authors 9 data-rh tags
+      // of its own (WEB-SEO-002/012 hands the fallback title/description/og
+      // tags to Helmet so per-page values REPLACE rather than duplicate them),
+      // so the selector matched before React had even mounted. Every route got
+      // the 250ms sleep below and nothing more.
+      //
+      // MEASURED CONSEQUENCE on a clean build: /events/free, /events/date-night,
+      // /events/ankeny and /events/johnston shipped with data-rh=9 — the shell
+      // count, i.e. Helmet never committed — no canonical, and the site-wide
+      // default description. Their siblings /events/kids, /events/urbandale,
+      // /events/altoona and /events/clive, which render the SAME component with
+      // the same props, shipped data-rh=30-31 with correct canonicals. Same
+      // build, same code: a race, not a missing component. That is the shape
+      // WEB-SEO-002 was reading as "12 routes render no SEOHead".
+      //
+      // Waiting for the count to EXCEED the shell's baseline is a real "Helmet
+      // has run" signal. Falling back to the count keeps this honest if a route
+      // genuinely renders no SEO component: it times out, exactly as before.
+      const shellDataRh = (buildHtml.match(/\sdata-rh[=\s>]/g) || []).length;
       await page
-        .waitForFunction(() => !!document.head.querySelector('[data-rh]'), { timeout: 5000 })
+        .waitForFunction(
+          (baseline) => document.head.querySelectorAll('[data-rh]').length > baseline,
+          { timeout: 8000 },
+          shellDataRh,
+        )
         .catch(() => {});
       await new Promise((r) => setTimeout(r, 250));
 
@@ -455,6 +552,26 @@ async function main() {
     `[prerender] hubs: ${ok} prerendered, ${failed} skipped, of ${ROUTES.length} routes in ${hubSeconds}s (concurrency ${CONCURRENCY})`,
   );
 
+  // The whole point of WEB-OPS-020: 1 of 35 must not look like 35 of 35. Every
+  // hub route is in sitemap-static.xml (check-seo-route-parity.mjs enforces
+  // that), so a missing one is a URL we told search engines to crawl and then
+  // served an empty shell.
+  // Assert against the artifact on disk, not against `ok`. A counter can be
+  // incremented by a render that wrote somewhere unexpected; dist/<route>/
+  // index.html is what Cloudflare actually serves.
+  const missingOnDisk = ROUTES.filter(
+    (route) => !fs.existsSync(path.join(route === '/' ? DIST : path.join(DIST, route), 'index.html')),
+  );
+  if (ok < ROUTES.length || missingOnDisk.length > 0) {
+    await shutdown();
+    throw new PrerenderFailure(
+      `hub prerender incomplete: ${ok}/${ROUTES.length} routes rendered (${failed} failed), ` +
+        `${missingOnDisk.length} missing from dist/${missingOnDisk.length ? `: ${missingOnDisk.join(', ')}` : ''}. ` +
+        'Per-route reasons are in the [prerender] warnings above.',
+    );
+  }
+  console.log(`[prerender] hub coverage verified on disk: ${ROUTES.length}/${ROUTES.length}`);
+
   // WEB-SEO-006: entity detail pages.
   let entityUnrendered = [];
   let entityTotal = 0;
@@ -485,8 +602,7 @@ async function main() {
     }
   }
 
-  await Promise.all(browsers.map((b) => b.close().catch(() => {})));
-  server.close();
+  await shutdown();
   const totalSeconds = Math.round((Date.now() - startedAt) / 1000);
   const scope = PRERENDER_ENTITIES ? `${ROUTES.length} hub + ${entityTotal} entity` : `${ROUTES.length} hub`;
   console.log(
@@ -495,8 +611,30 @@ async function main() {
       `stripped ${strippedTotal} runtime-injected modulepreload link(s); ` +
       `restored ${restoredFontsTotal} async font link(s)`,
   );
+
+  // WEB-OPS-020 AC5. The counts only ever existed in the raw build log, which
+  // is where a drop from 35 to 1 went unnoticed for weeks. The step summary is
+  // on the run's front page.
+  if (process.env.GITHUB_STEP_SUMMARY) {
+    const entityLine = PRERENDER_ENTITIES
+      ? `\n- Entity routes: ${entityTotal - entityUnrendered.length}/${entityTotal} (${entityUnrendered.length} over the ${ENTITY_BUDGET_SECONDS}s budget)`
+      : '\n- Entity routes: not run (PRERENDER_ENTITIES unset)';
+    fs.appendFileSync(
+      process.env.GITHUB_STEP_SUMMARY,
+      `### Prerender\n- Hub routes: **${ROUTES.length}/${ROUTES.length}** written to dist/${entityLine}\n- Wall clock: ${totalSeconds}s at concurrency ${CONCURRENCY}\n`,
+    );
+  }
 }
 
 main()
-  .catch((e) => warn(`unexpected error (${e.message}) — leaving SPA build intact`))
-  .finally(() => process.exit(0));
+  .then(() => process.exit(0))
+  .catch((e) => {
+    // ::error:: so the reason lands in the GitHub Actions run summary instead of
+    // only in the build log, where the old warning went to die.
+    if (process.env.GITHUB_ACTIONS === 'true') {
+      console.log(`::error title=Prerender failed::${e.message.replace(/\r?\n/g, ' ')}`);
+    }
+    console.error(`[prerender] FAILED: ${e.message}`);
+    if (!(e instanceof PrerenderFailure) && e.stack) console.error(e.stack);
+    process.exit(1);
+  });
