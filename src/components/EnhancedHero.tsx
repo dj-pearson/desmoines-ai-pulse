@@ -18,18 +18,21 @@ const HeroCityLite = IS_NATIVE
   : lazy(() => import("./HeroCityLite"));
 
 interface EnhancedHeroProps {
-  eventsToday?: number;
-  restaurantsCount?: number;
-  newThisWeek?: number;
+  // null = not known (still loading, or the count query failed). WEB-QA-024:
+  // these must never fall back to 0 — a confident "0 Events Today" is how a
+  // failed query reached visitors as a plausible number.
+  eventsToday?: number | null;
+  restaurantsCount?: number | null;
+  newThisWeek?: number | null;
   isLoadingStats?: boolean;
   onAIPlanClick?: () => void;
   className?: string;
 }
 
 export function EnhancedHero({
-  eventsToday = 0,
-  restaurantsCount = 0,
-  newThisWeek = 0,
+  eventsToday = null,
+  restaurantsCount = null,
+  newThisWeek = null,
   isLoadingStats = false,
   onAIPlanClick,
   className,
@@ -71,8 +74,12 @@ export function EnhancedHero({
         ? "Find the perfect dinner reservation or tonight's entertainment"
         : "Late-night dining, live music, and events happening right now";
 
-  // Use zero as placeholder so the numeric width stays stable (prevents CLS)
-  const statPlaceholder = 0;
+  // An em dash, not a zero. The tile keeps its min-h and tabular-nums so the
+  // CLS guard the placeholder existed for still holds, but an unknown count now
+  // reads as unknown instead of as "none" (WEB-QA-024).
+  const statPlaceholder = "—";
+  const formatStat = (value: number | null) =>
+    isLoadingStats || value === null ? statPlaceholder : value.toLocaleString();
 
   return (
     <section
@@ -162,9 +169,9 @@ export function EnhancedHero({
              consistent space regardless of loading state. */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12 max-w-4xl mx-auto">
           {([
-            { to: "/events/today", value: isLoadingStats ? statPlaceholder : eventsToday, label: "Events Today" },
-            { to: "/restaurants/open-now", value: isLoadingStats ? statPlaceholder : restaurantsCount, label: "Restaurants" },
-            { to: "/events", value: isLoadingStats ? statPlaceholder : newThisWeek, label: "New This Week" },
+            { to: "/events/today", value: formatStat(eventsToday), label: "Events Today" },
+            { to: "/restaurants/open-now", value: formatStat(restaurantsCount), label: "Restaurants" },
+            { to: "/events", value: formatStat(newThisWeek), label: "New This Week" },
             { to: "/trip-planner", value: "24/7", label: "AI Assistant" },
           ] as const).map((stat) => (
             <Link

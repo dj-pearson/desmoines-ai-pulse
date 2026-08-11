@@ -42,13 +42,13 @@ export default function GEOContent() {
         <div className="grid grid-cols-2 md:grid-cols-3 gap-6 my-8">
           <div className="text-center p-4 bg-card rounded-lg shadow-sm">
             <div className="text-3xl font-bold text-primary">
-              {statsLoading ? "—" : eventsToday.toLocaleString()}
+              {statsLoading || eventsToday === null ? "—" : eventsToday.toLocaleString()}
             </div>
             <p className="text-sm text-muted-foreground">Events Today</p>
           </div>
           <div className="text-center p-4 bg-card rounded-lg shadow-sm">
             <div className="text-3xl font-bold text-primary">
-              {statsLoading ? "—" : restaurantsCount.toLocaleString()}
+              {statsLoading || restaurantsCount === null ? "—" : restaurantsCount.toLocaleString()}
             </div>
             <p className="text-sm text-muted-foreground">Restaurants Listed</p>
           </div>

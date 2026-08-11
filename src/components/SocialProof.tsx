@@ -55,7 +55,7 @@ export function SocialProof() {
             >
               <stat.icon className="h-6 w-6 mx-auto mb-2 text-primary" aria-hidden="true" />
               <div className="text-3xl font-bold text-foreground mb-1">
-                {isLoading ? "—" : stat.value.toLocaleString()}
+                {isLoading || stat.value === null ? "—" : stat.value.toLocaleString()}
               </div>
               <div className="text-sm text-muted-foreground">{stat.label}</div>
             </div>
