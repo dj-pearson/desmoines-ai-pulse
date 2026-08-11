@@ -64,7 +64,21 @@ const eslint = new ESLint({
   ],
 });
 
-const results = await eslint.lintFiles(['src/**/*.ts', 'src/**/*.tsx']);
+/**
+ * Edge functions are included deliberately, and they are the more important
+ * half. WEB-BE-032 AC1: "triage the 335 edge-function sites first — server-side
+ * has no UI and no browser console, so a swallowed error there produces no
+ * signal at all". In src/ a discarded error at least leaves a broken screen
+ * somebody can see; in a Deno function it leaves nothing anywhere.
+ *
+ * supabase/functions/_tests/ is excluded: a test that discards an error fails
+ * the test, which is its own signal.
+ */
+const results = await eslint.lintFiles([
+  'src/**/*.ts',
+  'src/**/*.tsx',
+  'supabase/functions/**/*.ts',
+]);
 
 const current = {};
 let total = 0;
@@ -75,16 +89,34 @@ for (const r of results) {
   total += r.messages.length;
 }
 
+/**
+ * What the baseline covers. Recorded in the file so a WIDER scan is
+ * distinguishable from a regression — without it, adding edge functions looks
+ * identical to someone discarding 339 more errors, and the only way past the
+ * shrink-only guard would be to disable it.
+ */
+const SCOPE = 'src + supabase/functions';
+
 if (UPDATE) {
   const prev = existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, 'utf8')) : null;
-  if (prev && total > prev.total) {
+  const rescoped = prev && prev.scope !== SCOPE;
+
+  if (prev && total > prev.total && !rescoped) {
     console.error(
       `\n[error-handling] refusing to re-baseline upward: ${total} vs ${prev.total}.\n` +
         'The baseline may only shrink. Fix the new sites instead.\n'
     );
     process.exit(1);
   }
-  writeFileSync(BASELINE, `${JSON.stringify({ total, files: current }, null, 2)}\n`);
+  if (rescoped) {
+    console.warn(
+      `\n[error-handling] SCOPE CHANGED: "${prev.scope ?? '(unrecorded)'}" -> "${SCOPE}".\n` +
+        `Allowing a higher total (${prev.total} -> ${total}) because the scan now covers\n` +
+        'more code, not because more errors are being discarded. This is the only\n' +
+        'condition under which the baseline may grow.\n'
+    );
+  }
+  writeFileSync(BASELINE, `${JSON.stringify({ scope: SCOPE, total, files: current }, null, 2)}\n`);
   console.log(`[error-handling] baseline written: ${total} site(s) across ${Object.keys(current).length} file(s).`);
   process.exit(0);
 }
