@@ -40,7 +40,14 @@ function walk(dir, out = []) {
     const full = join(dir, entry);
     const st = statSync(full);
     if (st.isDirectory()) {
-      if (entry === 'node_modules' || entry === '__tests__') continue;
+      // __tests__ used to be skipped here. That skip is how
+      // OptimizedImage.test.ts merged importing { canTransform } — a name that
+      // had never existed in the module — and stayed broken for the life of the
+      // file while `npm run validate` printed "No unresolved named imports
+      // found" and the unit lane failed 4 of 158 (WEB-CI-020, WEB-CI-024).
+      // Test files import from the same modules under the same rules; they are
+      // exactly where this bug class hides, because nothing renders them.
+      if (entry === 'node_modules') continue;
       walk(full, out);
     } else if (EXTENSIONS.some((e) => entry.endsWith(e))) {
       out.push(full);
