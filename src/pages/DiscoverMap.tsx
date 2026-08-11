@@ -145,6 +145,20 @@ export default function DiscoverMap() {
     [layerFiltered, appliedBounds]
   );
 
+  // WEB-PERF-023. The list rendered every entry in `inView`, and with no bounds
+  // applied that is the full fetch — 200 events + 300 restaurants + 200
+  // attractions. Measured on a clean build: /map shipped 6,568 elements inside
+  // #root against a 481 median, the worst route on the site, and Lighthouse
+  // flags above ~1,500. The cost is HTML parse, DOM memory and hydration, all
+  // main-thread, all on the route most likely to be opened on a phone.
+  //
+  // Only the LIST is capped. Markers are untouched, so the map still plots
+  // everything, and the "N in view" counters below already report the true
+  // total — the number a user reads does not change.
+  const VISIBLE_RESULTS = 60;
+  const visibleResults = inView.slice(0, VISIBLE_RESULTS);
+  const hiddenResults = inView.length - visibleResults.length;
+
   const boundsAreStale =
     pendingBounds !== null && pendingBounds !== appliedBounds;
 
@@ -180,7 +194,7 @@ export default function DiscoverMap() {
           No results in this area. Pan or zoom out, then “Search this area”.
         </li>
       ) : (
-        inView.map((e) => (
+        visibleResults.map((e) => (
           <li key={e.id}>
             <button
               type="button"
@@ -213,6 +227,14 @@ export default function DiscoverMap() {
             </button>
           </li>
         ))
+      )}
+      {hiddenResults > 0 && (
+        // Say what is not shown. A list that stops at 60 without saying so reads
+        // as "there are 60 results", which is how a truncation becomes a fact.
+        <li className="p-3 text-xs text-muted-foreground border-t">
+          Showing the first {VISIBLE_RESULTS} of {inView.length} results. Zoom in or
+          pan, then “Search this area”, to narrow them down.
+        </li>
       )}
     </ul>
   );

@@ -17,6 +17,15 @@ import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
 
+/**
+ * WEB-PERF-023. The query fetches 100 and the grid rendered all of them, which
+ * measured 4,985 DOM elements inside #root — the second-worst route on the
+ * site, against a 481 median and a ~1,500 Lighthouse flag. 36 is three full
+ * rows of the lg:grid-cols-3 grid. Counts in the copy still report the true
+ * total; only the grid is capped.
+ */
+const VISIBLE_RESTAURANTS = 36;
+
 const dietaryOptions = [
   { id: "vegan", label: "Vegan", icon: Leaf, color: "text-green-600", keywords: ["vegan"] },
   { id: "vegetarian", label: "Vegetarian", icon: Leaf, color: "text-green-500", keywords: ["vegetarian", "veggie"] },
@@ -360,13 +369,29 @@ export default function DietaryRestaurants() {
                 : `Dietary-Friendly Restaurants (${restaurants.length})`
               }
             </h2>
+            {/* WEB-PERF-023: this rendered all 100 fetched restaurants, and
+                measured 4,985 elements inside #root against a 481 median —
+                Lighthouse flags above ~1,500. Only the grid is capped; the
+                heading above and every count in the copy still read
+                restaurants.length, so no displayed number changes. */}
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {restaurants.map((restaurant) => (
+              {restaurants.slice(0, VISIBLE_RESTAURANTS).map((restaurant) => (
                 <div key={restaurant.id} className="content-auto">
                   <RestaurantCard restaurant={restaurant} />
                 </div>
               ))}
             </div>
+            {restaurants.length > VISIBLE_RESTAURANTS && (
+              <div className="mt-8 text-center">
+                <p className="text-muted-foreground mb-3">
+                  Showing {VISIBLE_RESTAURANTS} of {restaurants.length}{' '}
+                  {selectedOption?.label.toLowerCase() ?? 'dietary-friendly'} restaurants.
+                </p>
+                <Button asChild variant="outline">
+                  <Link to="/restaurants">Browse all restaurants</Link>
+                </Button>
+              </div>
+            )}
           </>
         ) : (
           <Card>
