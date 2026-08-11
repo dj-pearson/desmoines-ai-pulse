@@ -52,6 +52,16 @@ export default function HotelDetails() {
   const { slug } = useParams<{ slug: string }>();
   const { hotel, isLoading, error } = useHotel(slug);
 
+  // WEB-FEAT-012. Three call sites below read hotel.source_url, a column
+  // public.hotels does not have — confirmed live, the REST API returns 42703
+  // "column hotels.source_url does not exist". So it was always undefined, the
+  // "Book Now" ternary was always falsy, and the monetized booking CTA never
+  // rendered on any hotel page. Resolve it once here so the three uses cannot
+  // drift apart again. affiliate_url first because that is the monetized link
+  // (it sits next to affiliate_provider and affiliate_url_updated_at); website
+  // is the fallback, and today it is the one that is actually populated.
+  const bookingUrl = hotel?.affiliate_url ?? hotel?.website ?? undefined;
+
   useDocumentTitle(hotel ? `${hotel.name} - Stay in Des Moines` : "Hotel Details");
 
   if (isLoading) {
@@ -349,7 +359,7 @@ export default function HotelDetails() {
                       <div className="mt-2">
                         <OpenStatusChip
                           hours={null}
-                          website={hotel.source_url}
+                          website={bookingUrl}
                           fallbackLabel="Check hotel site for hours & check-in"
                         />
                       </div>
@@ -433,10 +443,10 @@ export default function HotelDetails() {
       <StickyMobileCTA
         variant="hotel"
         primaryAction={
-          hotel.source_url
+          bookingUrl
             ? {
                 label: "Book Now",
-                href: hotel.source_url,
+                href: bookingUrl,
                 icon: "external",
                 isExternal: true,
               }
