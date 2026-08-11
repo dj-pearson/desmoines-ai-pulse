@@ -176,12 +176,9 @@ export default function LocalSEO({
         "addressRegion": "IA", 
         "addressCountry": "US"
       }
-    },
-    "organizer": {
-      "@type": "Organization",
-      "name": BRAND.name,
-      "url": BRAND.baseUrl,
     }
+    // WEB-SEO-010: no "organizer". This named BRAND.name as the organizer of
+    // whatever event the neighbourhood pages passed in, which is never true.
   } : null;
 
   // Generate Breadcrumb Schema

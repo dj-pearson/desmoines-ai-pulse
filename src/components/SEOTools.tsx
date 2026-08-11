@@ -375,10 +375,9 @@ Last updated: ${new Date().toLocaleDateString()}`;
             name: event.venue,
             address: event.location,
           },
-          organizer: {
-            "@type": "Organization",
-            name: "Des Moines Insider",
-          },
+          // WEB-SEO-010: no organizer. This admin tool generates schema markup
+          // for an operator to paste elsewhere, so a false organizer here
+          // propagates off-site where we cannot correct it.
         },
       })),
     };

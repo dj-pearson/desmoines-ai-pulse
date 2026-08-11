@@ -82,14 +82,25 @@ export function EventListJsonLd({
         validFrom: event.created_at || new Date().toISOString(),
       },
       isAccessibleForFree: isFree,
-      organizer: {
-        "@type": "Organization",
-        name: BRAND.name,
-        url: BRAND.baseUrl,
-      },
-      performer: event.venue
-        ? { "@type": "Organization", name: event.venue }
-        : { "@type": "Organization", name: BRAND.name, url: BRAND.baseUrl },
+      // WEB-SEO-010: organizer and performer are deliberately absent.
+      //
+      // This block named BRAND.name as the organizer of every event in the
+      // list, and named the VENUE as the performer — so a touring act at Field
+      // of Dreams shipped as organized by us and performed by the ballpark.
+      // The `events` table carries no organizer, performer or artist column, so
+      // there is nothing true to put here; an aggregator inserting itself as
+      // organizer of third-party events is a recognisable spam signature, and
+      // neither field earns us a rich result.
+      //
+      // This is the builder that mattered most and the one the original fix
+      // missed: it renders on the PRERENDERED hub pages (/events/today,
+      // /events/this-weekend, /events/free, /events/kids, /events/date-night,
+      // and the monthly pages), which is exactly the HTML the JS-less crawlers
+      // read. Measured on a clean build before this change: 6 prerendered pages
+      // carrying 119 organizer keys.
+      //
+      // If organizer/performer are ever captured during ingestion, add them
+      // back conditionally — never as a fallback.
     };
   };
 
