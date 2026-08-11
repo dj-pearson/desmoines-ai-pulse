@@ -365,16 +365,9 @@ struct SettingsView: View {
         errorMessage = nil
 
         do {
-            guard let client = SupabaseService.shared.client else {
-                throw NSError(domain: "Settings", code: -1,
-                              userInfo: [NSLocalizedDescriptionKey: "Supabase is not configured."])
-            }
-
-            // invoke returns Void in supabase-swift 2.x; throws on failure
-            try await client.functions.invoke(
-                "delete-user-account",
-                options: .init(method: .post)
-            )
+            // XPLAT-001 / IOS-AUDIT-BUG-018: shared with ProfileViewModel so the
+            // two deletion entry points cannot drift apart again.
+            try await AccountDeletionService.shared.deleteAccount()
 
             try await auth.signOut()
             dismiss()

@@ -131,12 +131,21 @@ serve(async (req) => {
           "generate_invoice_number"
         );
 
-        // Get user profile for billing info
+        // Get user profile for billing info.
+        // WEB-SEC-023: was .select("full_name, username").eq("id", user.id) —
+        // neither column exists on profiles and `id` is the row PK rather than
+        // the auth user id, so this returned nothing and every invoice fell
+        // back to the email address for customer_name.
         const { data: profile } = await supabase
           .from("profiles")
-          .select("full_name, username")
-          .eq("id", user.id)
-          .single();
+          .select("first_name, last_name")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        const profileName = [profile?.first_name, profile?.last_name]
+          .filter(Boolean)
+          .join(" ")
+          .trim();
 
         const newInvoice = {
           user_id: user.id,
@@ -148,7 +157,7 @@ serve(async (req) => {
           tax: 0,
           total: payment.amount,
           currency: payment.currency || "usd",
-          customer_name: profile?.full_name || profile?.username || user.email,
+          customer_name: profileName || user.email,
           customer_email: user.email,
           line_items: [
             {

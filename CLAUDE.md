@@ -75,7 +75,17 @@ const Page = lazy(() => import("./pages/Page"));
 
 ## Database
 
-Core tables: `events`, `restaurants`, `attractions`, `profiles`, `favorites`, `ratings`, `reviews`, `campaigns`, `advertisements`.
+Core tables: `events`, `restaurants`, `attractions`, `profiles`, `campaigns`.
+
+**Do not assume a table exists because it is named in this file or in `types.ts`.** Probed against production 2026-08-11: `favorites`, `ratings`, `reviews` and `advertisements` were listed here as core tables and all four return `42P01 (relation does not exist)`. They have been removed from the list above. This is not a documentation nit — code was written against them, it type-checks, and it fails only at runtime as an empty state (WEB-QA-017 tracks 179 such references, of which a production probe confirmed 45 missing tables and 32 missing columns, with zero false positives).
+
+To check a table before you write against it, ask PostgREST rather than reading the generated types — the types can be stale, and absence there is not proof:
+
+```bash
+curl -s -H "apikey: $VITE_SUPABASE_ANON_KEY" \
+  "$VITE_SUPABASE_URL/rest/v1/<table>?select=*&limit=1"
+# 42P01 = no such table, 42703 = no such column, [] = exists (RLS may hide rows)
+```
 
 Common columns across content tables: `id` (UUID PK), `name`/`title`, `description`, `category`, `image_url`, SEO fields (`seo_title`, `seo_description`, `seo_keywords`), GEO fields (`geo_summary`, `geo_key_facts`, `geo_faq`), `latitude`, `longitude`, `created_at`, `updated_at`.
 

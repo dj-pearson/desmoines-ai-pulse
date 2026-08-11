@@ -143,7 +143,8 @@ export default function Newsletter() {
           <Button
             type="submit"
             disabled={isLoading}
-            className="h-12 px-8 bg-green-600 hover:bg-green-700 text-white font-semibold"
+            // WEB-UX-030: white on green-600 is 3.30:1; green-700 is 5.02:1.
+            className="h-12 px-8 bg-green-700 hover:bg-green-800 text-white font-semibold"
             aria-label="Subscribe to newsletter"
           >
             {isLoading ? "Subscribing..." : "Subscribe Free"}

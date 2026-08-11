@@ -17,17 +17,21 @@ const createSlug = (name: string): string => {
 };
 import { useRestaurantOpenings } from "@/hooks/useSupabase";
 
+// WEB-UX-030: every value here carries white text. On the -500/-600 ramp that
+// measured 1.92:1 (yellow-500), 2.28:1 (green-500), 3.68:1 (blue-500) and
+// 3.30:1 (green-600) against the 4.5:1 AA floor. -700 is the first shade where
+// white clears it across all of them; the hues are unchanged.
 const statusConfig = {
-  opening_soon: { label: "Opening Soon", color: "bg-yellow-500" },
-  newly_opened: { label: "Newly Opened", color: "bg-green-500" },
-  announced: { label: "Announced", color: "bg-blue-500" },
-  open: { label: "Open", color: "bg-green-600" },
-  closed: { label: "Closed", color: "bg-red-500" },
+  opening_soon: { label: "Opening Soon", color: "bg-yellow-700" },
+  newly_opened: { label: "Newly Opened", color: "bg-green-700" },
+  announced: { label: "Announced", color: "bg-blue-700" },
+  open: { label: "Open", color: "bg-green-700" },
+  closed: { label: "Closed", color: "bg-red-700" },
 };
 
 const getStatusConfig = (status: string | undefined) => {
   if (!status || !statusConfig[status as keyof typeof statusConfig]) {
-    return { label: "Status Unknown", color: "bg-gray-500" };
+    return { label: "Status Unknown", color: "bg-gray-600" };
   }
   return statusConfig[status as keyof typeof statusConfig];
 };
@@ -161,12 +165,16 @@ export function RestaurantOpenings() {
                       Added{" "}
                       {new Date(restaurant.createdAt).toLocaleDateString()}
                     </span>
+                    {/* WEB-UX-030: this was text-[#DC143C], the brand crimson
+                        hardcoded past the theme, which reads 3.4:1 on the dark
+                        card. --primary carries a dark value (5.92:1) and is
+                        already the link colour everywhere else. */}
                     {restaurant.sourceUrl && (
                       <a
                         href={restaurant.sourceUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-[#DC143C] hover:text-[#8B0000] smooth-transition touch-target self-start"
+                        className="inline-flex items-center gap-1 text-xs text-primary hover:underline smooth-transition touch-target self-start"
                         aria-label={`Read more about ${restaurant.name} (opens in new tab)`}
                       >
                         <span aria-hidden="true">Read More</span>

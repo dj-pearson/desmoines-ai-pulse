@@ -31,6 +31,21 @@ jobs:
           npx tsx scripts/audit-rls.ts --json
           npx tsx scripts/security-config-snapshot.ts
 
+      # WEB-SEC-021 AC7. audit-rls.ts reads the migrations; this asks the
+      # question an attacker asks — does a GET with the anon key that ships in
+      # the client bundle return rows. A table added without an explicit policy
+      # is anon-readable the moment it exists, and no migration parse sees that
+      # if the policy was added by hand or applied out of order.
+      #
+      # Fails only on a NEWLY readable table. The 40 already readable are
+      # baselined, because fixing them needs migrations that are not applied
+      # yet (WEB-QA-020) and a check that is red on day one gets switched off.
+      - name: Anon-read exposure ratchet
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: npx tsx scripts/check-anon-exposure.ts
+
       - name: Diff against committed baselines and report drift
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

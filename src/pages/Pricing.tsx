@@ -399,10 +399,15 @@ export default function Pricing() {
                     {plan.badge && (
                       <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                         <Badge
+                          // WEB-UX-030: the non-popular branch overrode only the
+                          // BACKGROUND, so it kept the default variant's
+                          // text-primary-foreground on a red surface — fine in
+                          // the light theme where both are near-white/near-black
+                          // by luck, 3.4:1 in the dark one. Override the pair.
                           className={
                             plan.popular
                               ? "bg-primary text-primary-foreground"
-                              : "bg-secondary"
+                              : "bg-secondary text-secondary-foreground"
                           }
                         >
                           {plan.badge}

@@ -309,7 +309,7 @@ export function PreferencesSettings() {
                     variant={isSelected ? 'default' : 'outline'}
                     className={cn(
                       'justify-start h-auto py-3',
-                      isSelected && 'bg-primary text-white'
+                      isSelected && 'bg-primary text-primary-foreground'
                     )}
                     onClick={() => toggleDietary(option.id)}
                   >

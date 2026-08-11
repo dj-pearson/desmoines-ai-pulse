@@ -555,8 +555,18 @@ export default function Attractions() {
         {/* Screen reader announcement for result count changes */}
         <div {...regionProps}>{announcement}</div>
 
-        {/* Results Header */}
-        <div className="flex items-center justify-between mb-6">
+        {/* Results Header.
+            WEB-UX-031: this was a non-wrapping flex row, and at 320px it could
+            not fit. Measured: the row is 288px wide, the h2 shrinks to its
+            min-content 124.97px, and SortDropdown is a hard w-[180px] that
+            cannot shrink below its own min-content — 124.97 + 180 = 304.97
+            against 288 available. The overflow escaped to the document, whose
+            scrollWidth then ceiled 320.97 to 321, which is the "1px horizontal
+            scroll" this story reported. The 1px was rounding; the real overflow
+            was 17px.
+            flex-wrap lets the dropdown drop to its own line at that width and
+            changes nothing wider, since a row that fits never wraps. */}
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
           <h2 className="text-2xl font-bold">
             {searchQuery
               ? `Search results for "${searchQuery}"`

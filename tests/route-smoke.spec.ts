@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { test, expect, type Page } from '@playwright/test';
 
 /**
@@ -141,6 +144,81 @@ test.describe('Content routes survive their schema projections (WEB-QA-017)', ()
         (e) => /42703|PGRST\d{3}|does not exist/i.test(e) && !/user_analytics/i.test(e)
       );
       expect(schemaErrors, `schema errors on ${path}: ${schemaErrors.join('\n')}`).toHaveLength(0);
+    });
+  }
+});
+
+test.describe('Every public route in App.tsx mounts (WEB-QA-023)', () => {
+  /**
+   * /stay shipped to production calling getCanonicalUrl() with no import — a
+   * ReferenceError on render, so the page was nothing but the error boundary.
+   * Three gates missed it: `npm run type-check` compiles zero files (root
+   * tsconfig is `"files": []` + project references), the strict ratchet does not
+   * reach Hotels.tsx, and no test loaded the route.
+   *
+   * Naming /stay here would only close the /stay-shaped hole. So this reads the
+   * route table out of src/App.tsx and loads every public route it declares.
+   * There is no allowlist to keep in sync: add a <Route> and it is covered on
+   * the next run; delete one and it stops being checked. That property is the
+   * whole point — an exception list would have rotted before it caught anything.
+   *
+   * Excluded, with reasons:
+   *  - `:param` / `*` routes — no way to synthesize a valid id here. Those are
+   *    covered by the WEB-QA-002 and WEB-QA-017 blocks above with real slugs.
+   *  - ProtectedRoute routes — the guard redirects to /auth before the lazy
+   *    element is ever imported, so loading them proves nothing about the page.
+   *
+   * Kept cheap on purpose: 'domcontentloaded' plus a short settle, no
+   * networkidle. This asserts the route renders SOMETHING rather than crashing;
+   * data correctness is the other blocks' job.
+   */
+  const APP_TSX = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'App.tsx');
+
+  function publicRoutesFromAppTsx(): string[] {
+    const source = readFileSync(APP_TSX, 'utf8');
+    const routes: string[] = [];
+
+    for (const match of source.matchAll(/<Route\s+path="([^"]+)"([^>]*)>?/g)) {
+      const [, path, rest] = match;
+      if (path.includes(':') || path.includes('*')) continue;
+      if (rest.includes('ProtectedRoute')) continue;
+      if (!routes.includes(path)) routes.push(path);
+    }
+
+    return routes;
+  }
+
+  const routes = publicRoutesFromAppTsx();
+
+  test('the route table parsed out of App.tsx is not empty', () => {
+    // If a refactor changes how routes are declared, the loop below would
+    // silently cover nothing and this suite would go green while asserting
+    // zero. Fail loudly instead.
+    expect(
+      routes.length,
+      'Parsed 0 public routes from src/App.tsx — the <Route path="..."> pattern this suite reads has changed.'
+    ).toBeGreaterThan(20);
+  });
+
+  for (const route of routes) {
+    test(`${route} renders without crashing`, async ({ page }) => {
+      const consoleErrors = captureConsoleErrors(page);
+
+      const response = await page.goto(route, { waitUntil: 'domcontentloaded' });
+      expect(response?.status(), `${route} returned ${response?.status()}`).toBeLessThan(400);
+
+      // Give lazy chunks and the first render a moment; these pages are
+      // code-split, so the error boundary appears after the initial HTML.
+      await page.waitForTimeout(1500);
+
+      await expectNoErrorBoundary(page);
+
+      // The /stay failure mode: an identifier that survives bundling as a bare
+      // reference and throws the moment the component renders.
+      const fatal = consoleErrors.filter((e) =>
+        /ReferenceError|is not defined|is not a function|Minified React error #(130|31)|Element type is invalid/i.test(e)
+      );
+      expect(fatal, `fatal render error on ${route}:\n${fatal.join('\n')}`).toHaveLength(0);
     });
   }
 });

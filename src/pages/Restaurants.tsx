@@ -343,7 +343,10 @@ export default function Restaurants() {
         structuredData={restaurantsSchema}
         url="/restaurants"
       />
-      <div className="min-h-screen bg-gray-50">
+      {/* WEB-UX-030: bg-gray-50 had no dark counterpart, so in dark mode the
+          dark:text-gray-100 section headings below rendered near-white on
+          near-white (3.0:1 at best). */}
+      <div className="min-h-screen bg-gray-50 dark:bg-background">
         <Header />
 
         {/* Hero Section */}
@@ -552,7 +555,7 @@ export default function Restaurants() {
                     setFilters((prev) => ({ ...prev, sortBy: value as RestaurantFilterOptions["sortBy"] }))
                   }
                 >
-                  <SelectTrigger className="w-40 bg-white dark:bg-card rounded-xl shadow-sm text-sm">
+                  <SelectTrigger aria-label="Sort restaurants" className="w-40 bg-white dark:bg-card rounded-xl shadow-sm text-sm">
                     <SelectValue placeholder="Sort by" />
                   </SelectTrigger>
                   <SelectContent>
@@ -614,7 +617,10 @@ export default function Restaurants() {
                     variant="ghost"
                     size="sm"
                     onClick={() => setFilters((prev) => ({ ...prev, featuredOnly: true }))}
-                    className="text-[#2D1B69] hover:text-[#2D1B69]/80"
+                    // WEB-UX-030: was the brand navy hardcoded past the theme,
+                    // which is 1.4:1 on the dark background. text-primary is
+                    // 15.23:1 light / 5.92:1 dark because both ends move.
+                    className="text-primary hover:text-primary/80"
                   >
                     View All
                     <ArrowRight className="h-4 w-4 ml-1" />
@@ -858,7 +864,7 @@ export default function Restaurants() {
                   </p>
                 </div>
 
-                <h3 className="text-2xl font-semibold mb-4 text-gray-900">Best Neighborhoods for Dining in Des Moines</h3>
+                <h3 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Best Neighborhoods for Dining in Des Moines</h3>
 
                 <div className="grid md:grid-cols-2 gap-6 mb-8 not-prose">
                   <div className="bg-white p-6 rounded-2xl shadow-sm border">
@@ -910,7 +916,7 @@ export default function Restaurants() {
                   </div>
                 </div>
 
-                <h3 className="text-2xl font-semibold mb-4 text-gray-900">Dining Tips for Des Moines</h3>
+                <h3 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Dining Tips for Des Moines</h3>
 
                 <div className="space-y-4 mb-8 not-prose">
                   <div className="bg-white p-5 rounded-xl border flex gap-4 items-start">

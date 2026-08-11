@@ -28,7 +28,20 @@ interface SmartEventNavigationProps {
 export const SmartEventNavigation: React.FC<SmartEventNavigationProps> = ({
   onViewEventDetails,
 }) => {
-  const { events } = useEvents();
+  // WEB-PERF-022. This was useEvents() with no arguments, so no limit reached
+  // PostgREST and the homepage pulled every future event (260 at time of
+  // writing) with the full EVENT_LIST_COLUMNS projection — to render at most 30
+  // items across the six slices below, none larger than 6.
+  //
+  // The limit is 100 to MATCH AllInclusiveDashboard, which is also mounted on
+  // the homepage and already asks for 100. eventsQueryKey() is built from the
+  // normalised filters, so an identical filter object is an identical key and
+  // react-query serves both components from one request instead of two. Any
+  // other number here would reintroduce the second fetch.
+  //
+  // 100 nearest-by-date covers every slice: happeningNow, thisWeek and weekend
+  // are all near-term by construction, and free/featured slice to 4 and 6.
+  const { events } = useEvents({ limit: 100 });
   const [filteredEvents, setFilteredEvents] = useState<Event[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");

@@ -312,6 +312,44 @@ function scanFile(file, schema, findings) {
     for (const f of segment.matchAll(/\.(eq|neq|gt|gte|lt|lte|like|ilike|is|in|contains|order)\(\s*['"`](\w+)['"`]/g)) {
       report(f[2], f.index, `.${f[1]}('${f[2]}')`, '42703 (column does not exist)');
     }
+
+    // --- profiles: id is the row PK, user_id is the auth.users FK ----------
+    //
+    // WEB-SEC-023 AC4. public.profiles has BOTH. `id` defaults to its own uuid
+    // and has nothing to do with auth; `user_id` is what auth.uid() matches.
+    // Keying by `id` with a user id is a query that type-checks, passes this
+    // script's column check, and quietly returns zero rows — which on an
+    // authorization path means a real admin is denied. Four sites did exactly
+    // that, three of them role lookups: useSecurityContext, security/middleware,
+    // _shared/securityLayers and parse-menu-upload.
+    //
+    // Prose in a doc could not have caught those. This can.
+    if (table === 'profiles') {
+      for (const f of segment.matchAll(
+        /\.(eq|in)\(\s*['"`]id['"`]\s*,\s*([^)]+?)\s*\)/g
+      )) {
+        const arg = f[2];
+        // `user_id` is deliberately first. The original pattern used \buser\b,
+        // which cannot match inside "user_id" — `_` is a word character, so
+        // there is no boundary after "user". That is exactly the form a DB row
+        // hands you, and it let .eq("id", campaign.user_id) through twice in
+        // useAdminCampaigns.ts: a lookup that type-checks, passes the column
+        // check above, and returns nothing, so the admin campaign list rendered
+        // blank owner emails. A rule that misses the most common spelling of
+        // the thing it guards is not a rule.
+        if (!/user_id|\buser\b|\buserId\b|\bauthUser\b|\bsession\b|auth\.uid|\.user\.id/i.test(arg)) continue;
+        findings.push({
+          kind: 'profiles-key', file: rel,
+          line: lineOf(src, m.index + m[0].length + f.index),
+          name: 'profiles.id',
+          error: 'wrong key (silently returns zero rows)',
+          detail:
+            `.${f[1]}('id', ${arg}) on profiles — profiles.id is the row PK, not the ` +
+            `auth user id. Use .${f[1]}('user_id', ${arg}), or call isAdminUserId() ` +
+            `from supabase/functions/_shared/apiKeyAuth.ts if this is a role check.`,
+        });
+      }
+    }
   }
 
   return findings;
@@ -395,10 +433,15 @@ function main() {
     process.exit(0);
   }
 
-  for (const kind of ['table', 'rpc', 'column']) {
+  for (const kind of ['table', 'rpc', 'column', 'profiles-key']) {
     const group = findings.filter((f) => f.kind === kind);
     if (!group.length) continue;
-    const label = { table: 'MISSING TABLES', rpc: 'MISSING RPCs', column: 'MISSING COLUMNS' }[kind];
+    const label = {
+      table: 'MISSING TABLES',
+      rpc: 'MISSING RPCs',
+      column: 'MISSING COLUMNS',
+      'profiles-key': 'WRONG KEY ON profiles',
+    }[kind];
     console.log(`${label} (${group.length})`);
     for (const f of group.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line)) {
       console.log(`  ${f.file}:${f.line}`);
@@ -411,9 +454,11 @@ function main() {
   const tables = new Set(findings.filter((f) => f.kind === 'table').map((f) => f.name));
   const rpcs = new Set(findings.filter((f) => f.kind === 'rpc').map((f) => f.name));
   const cols = new Set(findings.filter((f) => f.kind === 'column').map((f) => f.name));
+  const keys = findings.filter((f) => f.kind === 'profiles-key').length;
   console.log(
     `${findings.length} unresolvable reference(s): ` +
-    `${tables.size} distinct table(s), ${rpcs.size} function(s), ${cols.size} column(s).`
+    `${tables.size} distinct table(s), ${rpcs.size} function(s), ${cols.size} column(s)` +
+    `${keys ? `, ${keys} wrong-key query(ies)` : ''}.`
   );
   console.log('Each one fails silently at runtime. See the header of this script.');
   process.exit(1);

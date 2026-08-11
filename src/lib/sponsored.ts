@@ -92,19 +92,29 @@ function writeSponsoredEvent(
   contentId: string
 ): void {
   void (async () => {
-    try {
-      await supabase.from("user_analytics").insert({
-        event_type: event,
-        content_type: contentType,
-        content_id: contentId,
-        session_id: getSessionId(),
-        page_url:
-          typeof window !== "undefined" ? window.location.pathname : null,
-        // Distinguish the inventory class from campaign/affiliate/house ads.
-        filters_used: { inventory_class: "sponsored_listing" },
+    // contentId here IS a real entity uuid (a restaurant/event row), unlike the
+    // labels that broke the other writers — see WEB-QA-026. Kept as-is.
+    //
+    // The reporting is not: supabase-js RESOLVES with an { error } object
+    // rather than throwing, so this try/catch could never fire and a rejected
+    // insert produced no signal at all. That is exactly how the ad-fill and
+    // home-cohort logs stayed broken from the day they shipped.
+    const { error } = await supabase.from("user_analytics").insert({
+      event_type: event,
+      content_type: contentType,
+      content_id: contentId,
+      session_id: getSessionId(),
+      page_url: typeof window !== "undefined" ? window.location.pathname : null,
+      // Distinguish the inventory class from campaign/affiliate/house ads.
+      filters_used: { inventory_class: "sponsored_listing" },
+    });
+    if (error) {
+      log.warn("writeSponsoredEvent", "insert rejected", {
+        event,
+        contentType,
+        code: error.code,
+        message: error.message,
       });
-    } catch (err) {
-      log.warn("writeSponsoredEvent", "failed", { error: String(err) });
     }
   })();
 }

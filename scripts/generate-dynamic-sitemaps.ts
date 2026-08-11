@@ -434,16 +434,24 @@ async function generateGuidesSitemap(): Promise<number | null> {
     return null;
   }
 
-  const urls = (guides ?? []).map(guide => ({
-    loc: `${baseUrl}/guides/${guide.slug || guide.id}`,
-    lastmod: guide.updated_at ? guide.updated_at.split('T')[0] : currentDate,
-    changefreq: 'monthly',
-    priority: '0.7'
-  }));
-
-  if (urls.length === 0) {
-    urls.push({ loc: `${baseUrl}/guides`, lastmod: currentDate, changefreq: 'monthly', priority: '0.7' });
-  }
+  // The /guides hub goes in FIRST, always. It was only being added on the
+  // empty and error paths, so the moment a single published guide existed the
+  // hub dropped out of the sitemap — and the hub is the one URL here that is
+  // actually prerendered (it is in PRERENDER_ROUTES; /guides/:slug is not).
+  // Measured 2026-08-11: /guides returns its own 106 KB document with the title
+  // "Des Moines Local Guides", while every /guides/:slug returns the same
+  // 173,953-byte prerendered HOMEPAGE to a JS-less crawler. So the generator
+  // was submitting only the URLs that serve homepage content and omitting the
+  // one that serves its own. WEB-SEO-003.
+  const urls = [
+    { loc: `${baseUrl}/guides`, lastmod: currentDate, changefreq: 'monthly', priority: '0.8' },
+    ...(guides ?? []).map(guide => ({
+      loc: `${baseUrl}/guides/${guide.slug || guide.id}`,
+      lastmod: guide.updated_at ? guide.updated_at.split('T')[0] : currentDate,
+      changefreq: 'monthly',
+      priority: '0.7'
+    })),
+  ];
 
   const xml = generateSitemapXML(urls);
   writeFileSync(join(process.cwd(), 'public', 'sitemap-guides.xml'), xml);

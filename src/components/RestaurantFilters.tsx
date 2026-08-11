@@ -194,7 +194,7 @@ export function RestaurantFilters({
                 value={filters.sortBy}
                 onValueChange={(value) => updateFilter("sortBy", value)}
               >
-                <SelectTrigger className="w-48">
+                <SelectTrigger aria-label="Sort restaurants" className="w-48">
                   <SelectValue placeholder="Sort by" />
                 </SelectTrigger>
                 <SelectContent>

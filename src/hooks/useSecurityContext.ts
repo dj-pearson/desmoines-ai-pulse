@@ -81,7 +81,7 @@ export function useSecurityContext(): UseSecurityContextReturn {
         const { data: profileData } = await supabase
           .from('profiles')
           .select('user_role')
-          .eq('id', userId)
+          .eq('user_id', userId)
           .single();
 
         if (profileData?.user_role) {

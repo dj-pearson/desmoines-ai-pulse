@@ -35,9 +35,13 @@ The three protected rulesets require the `pr-checks.yml` validation checks to pa
 }
 ```
 
-`integration_id: 15368` is GitHub Actions. The `context` strings are the **job `name:`** values in `pr-checks.yml` (not the workflow `name:`), which is what GitHub shows on the PR checks tab. `pr-checks.yml` now runs on PRs into `main`, `develop`, and `release/*` (WEB-CI-002), so these checks appear on every protected-branch PR.
+`integration_id: 15368` is GitHub Actions. The `context` strings are the **job `name:`** values in `pr-checks.yml` (not the workflow `name:`), which is what GitHub shows on the PR checks tab. `pr-checks.yml` is configured to run on PRs into `main`, `develop`, and `release/*` (WEB-CI-002).
 
-> **First-apply caveat:** GitHub treats a required check that has *never* run on a PR as pending forever. Before re-applying these rulesets, make sure `pr-checks.yml` has run green on at least one PR into each protected branch so the check contexts are "real".
+> **Configured to run is not the same as running.** Checked 2026-08-11: `gh workflow list --all` reported **PR Checks** as `disabled_manually`, and its last run was 2026-02-12 — under job names the current file no longer contains, so the workflow as written had never executed. Two of the three required contexts here (`Lint, Type Check, Test & Build` and `Secret Scanning (gitleaks)`) are produced by that workflow, so both had been unreportable for six months while merges proceeded on the bypass below. If you are reading this and something seems oddly permissive, check the workflow's **state** before you check its logic. See WEB-CI-025.
+
+> **First-apply caveat:** GitHub treats a required check that has *never* run on a PR as pending forever. Before re-applying these rulesets, make sure `pr-checks.yml` has run green on at least one PR into each protected branch so the check contexts are "real". This is also the failure mode above — it was live and unnoticed, because a permanently-pending check and a disabled workflow look identical from the PR page.
+
+**`App project type ratchet`** is deliberately **not** required, and that is a decision worth revisiting rather than an oversight. It is the only gate that compiles the app project: `npm run type-check` in the validate job runs bare `tsc --noEmit` against the root tsconfig, which is `"files": []` plus project references and therefore compiles **zero files** (WEB-CI-023). Two P1 crashes shipped straight through it in one week. The ratchet runs `tsc -p tsconfig.app.json` and takes several minutes, which is why it is a separate job. Left advisory because it cannot gate on zero — the app project carries ~395 pre-existing errors and the job passes only if no file gets *worse*. Make it required once you are comfortable that a re-baseline is a deliberate act rather than a routine one.
 
 **iOS/Android CI** (`Android CI`, `iOS CI`) are path-filtered (`ios/**`, `android/**`) and won't run on every PR — deliberately left out of the required set so web-only PRs aren't blocked waiting on a check that never starts. Add them only if you want to force every PR through those builds.
 

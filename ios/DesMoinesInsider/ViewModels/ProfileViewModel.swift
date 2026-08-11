@@ -71,16 +71,11 @@ final class ProfileViewModel {
         errorMessage = nil
 
         do {
-            guard let client = SupabaseService.shared.client else {
-                throw NSError(domain: "ProfileViewModel", code: -1,
-                              userInfo: [NSLocalizedDescriptionKey: "Supabase is not configured."])
-            }
-
-            // invoke returns Void in supabase-swift 2.x; throws on failure
-            try await client.functions.invoke(
-                "delete-user-account",
-                options: .init(method: .post)
-            )
+            // XPLAT-001: this used to POST an empty body, which the edge
+            // function has rejected with a 400 since the two-step token flow
+            // landed. AccountDeletionService speaks the current contract and is
+            // shared with SettingsView.
+            try await AccountDeletionService.shared.deleteAccount()
 
             try await auth.signOut()
         } catch {

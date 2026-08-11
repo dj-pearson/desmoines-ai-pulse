@@ -76,8 +76,60 @@ jobs:
       - name: Run unit tests with coverage
         run: npm run test:unit -- --coverage
 
+      # WEB-CI-025. This step CANNOT PASS without these. vite.config.ts has an
+      # assert-html-env-placeholders plugin that fails the build outright when
+      # VITE_SUPABASE_URL is absent, because index.html interpolates it as a
+      # %VAR% placeholder and the literal reaches vite's HTML parser. Measured
+      # by clearing the variable locally: "Build failed in 4ms", before
+      # generate-sitemaps output and long before prerender.
+      #
+      # The prerenderer then needs them for real: it renders each hub route with
+      # headless Chromium and refuses to publish a route that captured a loading
+      # or error state, so a credential-less build produces either a hard
+      # failure or 35 empty shells. Same secrets e2e.yml already reads.
+      #
+      # This job was disabled_manually on GitHub from 2026-02-12 until it was
+      # re-enabled, which is why the gap went unnoticed — the step never ran.
       - name: Build production bundle
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_SITE_URL: ${{ secrets.VITE_SITE_URL || 'https://desmoinesinsider.com' }}
         run: npm run build
+
+  # WEB-CI-023. `npm run type-check` above runs `tsc --noEmit` against the root
+  # tsconfig, which is `"files": []` plus project references — so it compiles
+  # ZERO files and has always exited 0. Two P1 crashes shipped straight through
+  # it in one week: /stay called getCanonicalUrl with no import (TS2304), and
+  # useSocialFeatures returned a bare `loading` after an unused-var autofix
+  # renamed the binding (TS2552). Both are one-line errors that
+  # `tsc -p tsconfig.app.json` reports.
+  #
+  # It cannot gate on zero: the app project has 400 pre-existing errors, mostly
+  # PostgREST generic-instantiation noise. So it ratchets per-file, exactly like
+  # the strict one — a file that gets worse, or a new file that starts erroring,
+  # fails the build.
+  #
+  # Its own job rather than a step in `validate`: tsc over this project takes
+  # several minutes (the generated Supabase types provoke a lot of TS2589), and
+  # it must not sit in front of the build. Deliberately NOT in `npm run
+  # validate` for the same reason — local validate has to stay usable.
+  app-type-ratchet:
+    name: App project type ratchet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: tsconfig.app.json ratchet
+        run: npm run type-check:app:ratchet
+      # tsconfig.node.json is clean today, so this one is a real gate, not a
+      # ratchet. Keep it that way.
+      - name: tsconfig.node.json must stay clean
+        run: npx tsc -p tsconfig.node.json --noEmit
 
   migration-safety:
     name: Migration Safety

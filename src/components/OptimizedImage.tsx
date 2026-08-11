@@ -8,6 +8,12 @@ const DEFAULT_WIDTHS = [320, 640, 768, 1024, 1280, 1536, 1920];
 // Supabase storage URL pattern for transformation
 const SUPABASE_STORAGE_PATTERN = /supabase\.co\/storage\/v1\/object\/public/;
 
+// Supabase serves originals from /object/public/ and RESIZED renditions from
+// /render/image/public/. The two are not interchangeable: sizing params on an
+// /object/public/ URL are ignored, not honoured.
+const STORAGE_OBJECT_PATH = "/storage/v1/object/public/";
+const STORAGE_RENDER_PATH = "/storage/v1/render/image/public/";
+
 export interface OptimizedImageProps {
   src: string;
   alt: string;
@@ -71,44 +77,66 @@ function generateSrcSet(src: string, widths: number[]): string {
 }
 
 /**
- * Get transformed image URL via edge function
+ * Can this URL be server-side resized? Only Supabase Storage public objects can
+ * (WEB-PERF-004). Everything else has to serve at its original size.
  */
-function getTransformedUrl(
-  src: string,
-  options: { width?: number; format?: string; quality?: number }
-): string {
-  const { width, format, quality } = options;
-
-  // If it's a Supabase storage URL, use the transform API
-  if (SUPABASE_STORAGE_PATTERN.test(src)) {
-    const url = new URL(src);
-    if (width) url.searchParams.set("width", String(width));
-    if (format) url.searchParams.set("format", format);
-    if (quality) url.searchParams.set("quality", String(quality));
-    return url.toString();
-  }
-
-  // For external URLs, use our image proxy edge function
-  const proxyUrl = new URL(
-    `${import.meta.env.VITE_SUPABASE_URL || ""}/functions/v1/image-transform`
-  );
-  proxyUrl.searchParams.set("url", src);
-  if (width) proxyUrl.searchParams.set("width", String(width));
-  if (format) proxyUrl.searchParams.set("format", format);
-  if (quality) proxyUrl.searchParams.set("quality", String(quality));
-
-  return proxyUrl.toString();
+export function canTransform(src: string): boolean {
+  return typeof src === "string" && SUPABASE_STORAGE_PATTERN.test(src);
 }
 
 /**
- * Generate srcset with transformed URLs
+ * Resized/reformatted URL for a Supabase Storage object; the input unchanged for
+ * anything else.
+ *
+ * Both branches used to be wrong, and both were wrong in the same silent way —
+ * they returned a URL that looked transformed and served the original bytes.
+ * Measured against the live host on 2026-08-11 with a real object
+ * (media/events/…/hero.png):
+ *
+ *   /object/public/…/hero.png                          200  image/png   1,011,030 B
+ *   /object/public/…/hero.png?width=320                200  image/png   1,011,030 B  ← old storage branch
+ *   /render/image/public/…?width=320&format=webp&q=80  200  image/webp     99,062 B  ← this
+ *
+ * Sizing params on /object/public/ are ignored, so every srcset candidate was
+ * the same full-size PNG under a different `w` descriptor: the browser picked
+ * the "smallest" one and downloaded a megabyte. 10.2x, on every storage image
+ * on the site.
+ *
+ * External URLs used to be routed through /functions/v1/image-transform. That
+ * function does not resize — its resize block is commented out at
+ * image-transform/index.ts:219-222 — so the proxy added a hop and a cache tier
+ * for zero bytes saved (WEB-PERF-021). They now pass through untouched.
  */
-function generateTransformedSrcSet(
+export function getTransformedUrl(
+  src: string,
+  options: { width?: number; format?: string; quality?: number }
+): string {
+  if (!canTransform(src)) return src;
+
+  const { width, format, quality } = options;
+  const url = new URL(src.replace(STORAGE_OBJECT_PATH, STORAGE_RENDER_PATH));
+  if (width) url.searchParams.set("width", String(width));
+  if (format) url.searchParams.set("format", format);
+  if (quality) url.searchParams.set("quality", String(quality));
+  return url.toString();
+}
+
+/**
+ * srcset of transformed URLs, or undefined when the source cannot be resized.
+ *
+ * Returning undefined matters. Emitting the same URL seven times under seven
+ * different `w` descriptors is worse than emitting no srcset at all: it tells
+ * the browser it has a choice of sizes, so it confidently picks a candidate and
+ * downloads the full-size original, and any bandwidth heuristic it applies is
+ * working from false widths.
+ */
+export function generateTransformedSrcSet(
   src: string,
   widths: number[],
   format?: string,
   quality?: number
-): string {
+): string | undefined {
+  if (!canTransform(src)) return undefined;
   return widths
     .map((w) => `${getTransformedUrl(src, { width: w, format, quality })} ${w}w`)
     .join(", ");
@@ -221,6 +249,9 @@ export default function OptimizedImage({
   // Generate picture element sources for modern formats
   const renderPictureSources = () => {
     if (!useTransformApi || error) return null;
+    // A <source> with no srcSet is inert at best; for a URL we cannot resize
+    // there is nothing to offer, so let the <img> below serve the original.
+    if (!canTransform(src)) return null;
 
     const sources = [];
 

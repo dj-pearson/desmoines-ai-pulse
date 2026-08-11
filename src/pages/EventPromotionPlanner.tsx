@@ -473,7 +473,7 @@ function FeatureCard({ icon, title, description }: { icon: React.ReactNode; titl
 function StepCard({ number, title, description }: { number: string; title: string; description: string }) {
   return (
     <div className="text-center">
-      <div className="w-12 h-12 bg-primary text-white rounded-full flex items-center justify-center text-xl font-bold mx-auto mb-3">
+      <div className="w-12 h-12 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-xl font-bold mx-auto mb-3">
         {number}
       </div>
       <h3 className="font-semibold mb-2">{title}</h3>

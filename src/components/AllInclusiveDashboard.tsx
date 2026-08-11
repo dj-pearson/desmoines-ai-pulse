@@ -466,9 +466,7 @@ export default function AllInclusiveDashboard({
                   e.preventDefault();
                   if (currentPage > 1) setCurrentPage(currentPage - 1);
                 }}
-                className={
-                  currentPage <= 1 ? "pointer-events-none opacity-50" : ""
-                }
+                disabled={currentPage <= 1}
               />
             </PaginationItem>
 
@@ -513,11 +511,7 @@ export default function AllInclusiveDashboard({
                   e.preventDefault();
                   if (currentPage < totalPages) setCurrentPage(currentPage + 1);
                 }}
-                className={
-                  currentPage >= totalPages
-                    ? "pointer-events-none opacity-50"
-                    : ""
-                }
+                disabled={currentPage >= totalPages}
               />
             </PaginationItem>
           </PaginationContent>

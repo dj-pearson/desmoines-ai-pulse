@@ -32,8 +32,16 @@ function QuickAction({
   const variantStyles = {
     default:
       "bg-white/10 hover:bg-white/20 text-white border-white/20 hover:border-white/30",
+    // WEB-UX-030: the leading bg-[#FFC107] is a solid fallback UNDER the
+    // gradient. #2D1B69 on this gold measures 10.17:1 at the gradient's start
+    // and 7.22:1 at its end, but a gradient sets background-IMAGE and leaves
+    // background-color transparent, so axe resolves the text against the
+    // nearest solid ancestor instead — the page. In the dark theme that is
+    // near-black, and the button was reported as a 4.5:1 failure it does not
+    // actually have. The solid base makes the computed colour honest, and
+    // doubles as a fallback if the gradient never paints.
     primary:
-      "bg-gradient-to-r from-[#FFD700] to-[#FFA500] hover:from-[#FFA500] hover:to-[#FFD700] text-[#2D1B69] border-0 shadow-lg hover:shadow-xl",
+      "bg-[#FFC107] bg-gradient-to-r from-[#FFD700] to-[#FFA500] hover:from-[#FFA500] hover:to-[#FFD700] text-[#2D1B69] border-0 shadow-lg hover:shadow-xl",
     secondary:
       "bg-white/5 hover:bg-white/15 text-white/90 border-white/10 hover:border-white/20",
   };
@@ -170,7 +178,7 @@ export function QuickActionsMobile({
       <Button
         size="lg"
         onClick={onAIPlanClick}
-        className="h-16 w-full bg-gradient-to-r from-[#FFD700] to-[#FFA500] hover:from-[#FFA500] hover:to-[#FFD700] text-[#2D1B69] font-bold shadow-lg gap-2"
+        className="h-16 w-full bg-[#FFC107] bg-gradient-to-r from-[#FFD700] to-[#FFA500] hover:from-[#FFA500] hover:to-[#FFD700] text-[#2D1B69] font-bold shadow-lg gap-2"
         aria-label="AI Plan My Night - build your itinerary"
       >
         <Sparkles className="h-5 w-5" aria-hidden="true" />

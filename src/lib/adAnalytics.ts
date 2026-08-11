@@ -15,7 +15,7 @@ const SESSION_KEY = "dmi-session-id";
 
 export type AdInventoryClass = "paid" | "affiliate" | "house";
 
-function getSessionId(): string {
+export function getSessionId(): string {
   let sessionId = storage.get<string>(SESSION_KEY);
   if (!sessionId) {
     sessionId = crypto.randomUUID();
@@ -52,18 +52,32 @@ function write(
   meta?: Record<string, unknown>
 ): void {
   void (async () => {
-    try {
-      await supabase.from("user_analytics").insert({
-        event_type: event,
-        content_type: "ad",
-        content_id: placement,
-        session_id: getSessionId(),
-        page_url:
-          typeof window !== "undefined" ? window.location.pathname : null,
-        filters_used: { inventory_class: inventoryClass, placement, ...meta },
+    // user_analytics.content_id is uuid NOT NULL. This used to pass `placement`
+    // ("top_banner"), so every insert was rejected with 22P02 "invalid input
+    // syntax for type uuid" — measured live on /events 2026-08-11. The
+    // placement is already carried in filters_used below, so nothing is lost by
+    // giving the column a real uuid; that also matches useAnalytics.ts:229,
+    // which mints one for page views for the same reason.
+    //
+    // AND THE REJECTION WAS INVISIBLE TWICE OVER. supabase-js RESOLVES with an
+    // { error } object rather than throwing, so the try/catch below never fired
+    // and the warn never ran. Affiliate and house ad fill rate — the whole
+    // point of this module — has recorded zero rows since it shipped.
+    const { error } = await supabase.from("user_analytics").insert({
+      event_type: event,
+      content_type: "ad",
+      content_id: crypto.randomUUID(),
+      session_id: getSessionId(),
+      page_url: typeof window !== "undefined" ? window.location.pathname : null,
+      filters_used: { inventory_class: inventoryClass, placement, ...meta },
+    });
+    if (error) {
+      log.warn("write", "insert rejected", {
+        event,
+        placement,
+        code: error.code,
+        message: error.message,
       });
-    } catch (err) {
-      log.warn("write", "failed", { error: String(err) });
     }
   })();
 }
