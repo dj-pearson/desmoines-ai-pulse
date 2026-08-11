@@ -329,7 +329,15 @@ function scanFile(file, schema, findings) {
         /\.(eq|in)\(\s*['"`]id['"`]\s*,\s*([^)]+?)\s*\)/g
       )) {
         const arg = f[2];
-        if (!/\buser\b|\buserId\b|\bauthUser\b|\bsession\b|auth\.uid|\.user\.id/i.test(arg)) continue;
+        // `user_id` is deliberately first. The original pattern used \buser\b,
+        // which cannot match inside "user_id" — `_` is a word character, so
+        // there is no boundary after "user". That is exactly the form a DB row
+        // hands you, and it let .eq("id", campaign.user_id) through twice in
+        // useAdminCampaigns.ts: a lookup that type-checks, passes the column
+        // check above, and returns nothing, so the admin campaign list rendered
+        // blank owner emails. A rule that misses the most common spelling of
+        // the thing it guards is not a rule.
+        if (!/user_id|\buser\b|\buserId\b|\bauthUser\b|\bsession\b|auth\.uid|\.user\.id/i.test(arg)) continue;
         findings.push({
           kind: 'profiles-key', file: rel,
           line: lineOf(src, m.index + m[0].length + f.index),

@@ -80,10 +80,17 @@ export function useAdminCampaigns() {
           // `profiles` has no `full_name`; it stores first_name/last_name.
           // Selecting it failed with 42703, so no campaign ever resolved an
           // owner email or name in the admin list.
+          //
+          // WEB-SEC-023: and the key was wrong too. profiles.user_id is the
+          // auth user id — validate_profile_user_id() in migration
+          // 20250905021821 compares NEW.user_id != auth.uid() — while
+          // profiles.id is the table's own PK. Matching a user_id value against
+          // id finds nothing, and .single() swallows that as undefined, so the
+          // admin list rendered blank owner details either way.
           const { data: userData } = await supabase
             .from("profiles")
             .select("email, first_name, last_name")
-            .eq("id", campaign.user_id)
+            .eq("user_id", campaign.user_id)
             .single();
 
           return {
@@ -118,11 +125,11 @@ export function useAdminCampaigns() {
 
       if (error) throw error;
 
-      // Fetch user info
+      // Fetch user info. Keyed on user_id, not id — see the note above.
       const { data: userData } = await supabase
         .from("profiles")
         .select("email, first_name, last_name")
-        .eq("id", data.user_id)
+        .eq("user_id", data.user_id)
         .single();
 
       return {
