@@ -54,33 +54,37 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # deno.lock is lockfile v5, which Deno 1.x refuses to read ("Unsupported
+      # lockfile version '5'"), so this job died on its first step. Deno 2 also
+      # dropped the `--allow-none` flag — the steps below rely on the default,
+      # which is already "no permissions".
       - uses: denoland/setup-deno@v1
         with:
-          deno-version: v1.x
+          deno-version: v2.x
       - run: deno test --allow-read supabase/functions/_tests/cross-platform-sync.test.ts
-      - run: deno test --allow-none supabase/functions/_tests/version-check.test.ts
+      - run: deno test supabase/functions/_tests/version-check.test.ts
       # Reads the iOS/Android sources as well as the edge function, so the
       # client/server deletion contract can't drift again (XPLAT-001).
       - run: deno test --allow-read supabase/functions/_tests/account-deletion-contract.test.ts
-      - run: deno test --allow-none supabase/functions/_shared/jsonLdEvents.test.ts
+      - run: deno test supabase/functions/_shared/jsonLdEvents.test.ts
       # IndexNow payload filtering plus the key-file/constant drift check
       # (WEB-SEO-011). Needs --allow-read for public/<key>.txt.
       - run: deno test --allow-read supabase/functions/_tests/indexnow.test.ts
       # Event-source parsing invariants — see docs/scraping/EVENT_SOURCE_PLAYBOOK.md.
       # All fixture-based; no network access needed.
-      - run: deno test --allow-none supabase/functions/_shared/centralTime.test.ts
-      - run: deno test --allow-none supabase/functions/_shared/eventSourceProfiles.test.ts
-      - run: deno test --allow-none supabase/functions/_shared/eventPageDiscovery.test.ts
-      - run: deno test --allow-none supabase/functions/_shared/htmlContentWindow.test.ts
-      - run: deno test --allow-none supabase/functions/_shared/domain-adapters/dispatch.test.ts
-      - run: deno test --allow-none supabase/functions/_shared/domain-adapters/tribeEvents.test.ts
-      - run: deno test --allow-none supabase/functions/_shared/domain-adapters/venueProfile.test.ts
+      - run: deno test supabase/functions/_shared/centralTime.test.ts
+      - run: deno test supabase/functions/_shared/eventSourceProfiles.test.ts
+      - run: deno test supabase/functions/_shared/eventPageDiscovery.test.ts
+      - run: deno test supabase/functions/_shared/htmlContentWindow.test.ts
+      - run: deno test supabase/functions/_shared/domain-adapters/dispatch.test.ts
+      - run: deno test supabase/functions/_shared/domain-adapters/tribeEvents.test.ts
+      - run: deno test supabase/functions/_shared/domain-adapters/venueProfile.test.ts
       # Menu-scraping invariants — see docs/scraping/MENU_SCRAPER.md.
       # All fixture-based; no network access needed.
-      - run: deno test --allow-none supabase/functions/_shared/menu/menuNormalize.test.ts
-      - run: deno test --allow-none supabase/functions/_shared/menu/menuContent.test.ts
-      - run: deno test --allow-none supabase/functions/_shared/menu/menuJsonLd.test.ts
-      - run: deno test --allow-none supabase/functions/_shared/menu/menuPlatforms.test.ts
-      - run: deno test --allow-none supabase/functions/_shared/menu/menuDiscovery.test.ts
-      - run: deno test --allow-none supabase/functions/_shared/menu/menuJson.test.ts
-      - run: deno test --allow-none supabase/functions/_shared/menu/menuUrls.test.ts
+      - run: deno test supabase/functions/_shared/menu/menuNormalize.test.ts
+      - run: deno test supabase/functions/_shared/menu/menuContent.test.ts
+      - run: deno test supabase/functions/_shared/menu/menuJsonLd.test.ts
+      - run: deno test supabase/functions/_shared/menu/menuPlatforms.test.ts
+      - run: deno test supabase/functions/_shared/menu/menuDiscovery.test.ts
+      - run: deno test supabase/functions/_shared/menu/menuJson.test.ts
+      - run: deno test supabase/functions/_shared/menu/menuUrls.test.ts

@@ -65,7 +65,7 @@ if (!URL_ || !KEY) {
 // moment types are regenerated.
 const types = readFileSync(join(ROOT, 'src/integrations/supabase/types.ts'), 'utf8');
 const tablesBlock = types.slice(types.indexOf('  public: {'), types.indexOf('    Views: {'));
-const tables = [...new Set([...tablesBlock.matchAll(/^      ([a-z0-9_]+): \{$/gm)].map((m) => m[1]))];
+const tables = [...new Set([...tablesBlock.matchAll(/^ {6}([a-z0-9_]+): \{$/gm)].map((m) => m[1]))];
 
 const headers = { apikey: KEY, Authorization: `Bearer ${KEY}`, Prefer: 'count=exact', Range: '0-0' };
 const exposed: Record<string, number> = {};

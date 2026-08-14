@@ -70,12 +70,18 @@ jobs:
           git add CHANGELOG.md
           git commit -m "docs(changelog): draft release notes for ${{ steps.gen.outputs.version }}"
           git push -u origin "$BR" --force-with-lease
+          # Build the body in a file. Inlining it as a `--body "$(...)"` heredoc
+          # put a bare `---` at column 1, which YAML read as a second document
+          # separator — the workflow failed to parse and every push produced a
+          # startup_failure run instead of running (or correctly skipping).
+          {
+            cat release-notes.md
+            printf '\n---\n'
+            printf '_Automated **draft** (AOS-DEV-007). Review the backward-compatibility checklist above, edit as needed, then publish. Nothing is auto-released._\n'
+          } > pr-body.md
           gh pr create --draft --base develop \
             --title "docs(changelog): draft release notes for ${{ steps.gen.outputs.version }}" \
-            --body "$(cat release-notes.md)
-
----
-_Automated **draft** (AOS-DEV-007). Review the backward-compatibility checklist above, edit as needed, then publish. Nothing is auto-released._" \
+            --body-file pr-body.md \
             2>/dev/null || echo "PR may already exist"
 
       - name: Record run (budgeted/audited)

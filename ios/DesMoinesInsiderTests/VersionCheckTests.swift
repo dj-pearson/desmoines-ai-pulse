@@ -40,7 +40,9 @@ final class VersionCheckTests: XCTestCase {
         """.data(using: .utf8)!
         let resp = try JSONDecoder().decode(VersionCheckService.Response.self, from: json)
         XCTAssertFalse(resp.forceUpgrade)
-        XCTAssertFalse(resp.updateAvailable)
+        // `updateAvailable` is optional on Response — only `forceUpgrade` is
+        // required, so this has to compare against the value, not coerce.
+        XCTAssertEqual(resp.updateAvailable, false)
     }
 
     func testAppVersionIsDottedNumeric() {
