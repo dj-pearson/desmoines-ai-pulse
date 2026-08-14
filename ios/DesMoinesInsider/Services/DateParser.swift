@@ -32,7 +32,7 @@ enum DateParser {
         let parsed = isoFractional.date(from: string)
             ?? isoFractional.date(from: Self.normalizedFraction(string))
             ?? isoBasic.date(from: string)
-            ?? fallbackFormatters.lazy.compactMap { $0.date(from: string) }.first
+            ?? fallbackFormatters.lazy.compactMap { Self.strictDate(from: string, using: $0) }.first
 
         if let parsed {
             parseCache.setObject(parsed as NSDate, forKey: key)
@@ -88,6 +88,22 @@ enum DateParser {
             return f
         }
     }()
+
+    /// Parses with `formatter` only when the result round-trips back to the exact
+    /// input string.
+    ///
+    /// `DateFormatter` does not hold a fixed `dateFormat` strictly: with
+    /// `en_US_POSIX` and "yyyy-MM-dd" it still accepts "2025/06/15" and returns
+    /// 2025-06-15, so a string in a format this parser does not claim to support
+    /// silently became a real Date. That is the dangerous failure mode — not a
+    /// nil, but a plausible wrong answer. Re-formatting the parsed date and
+    /// requiring an exact match rejects those while leaving every documented
+    /// format untouched, since each one formats back to itself.
+    private static func strictDate(from string: String, using formatter: DateFormatter) -> Date? {
+        guard let date = formatter.date(from: string),
+              formatter.string(from: date) == string else { return nil }
+        return date
+    }
 
     /// Rewrites the fractional-seconds component of an ISO-8601 string to exactly
     /// 3 digits so `ISO8601DateFormatter.withFractionalSeconds` accepts Postgres

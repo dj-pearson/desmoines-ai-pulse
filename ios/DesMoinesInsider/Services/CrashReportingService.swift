@@ -253,7 +253,7 @@ private final class CrashStore: @unchecked Sendable {
         promoteFatalMarkerLocked()
 
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        decoder.dateDecodingStrategy = Self.recordDateDecoding
         var records: [CrashRecord] = []
         for url in recordFileURLs() {
             guard let data = try? Data(contentsOf: url),
@@ -265,12 +265,18 @@ private final class CrashStore: @unchecked Sendable {
             records.append(record)
             if drain { try? FileManager.default.removeItem(at: url) }
         }
-        return records.sorted { $0.timestamp < $1.timestamp }
+        // `id` breaks ties so the order is total and reproducible. Records
+        // written before the fractional-seconds change below still carry
+        // whole-second timestamps and would otherwise come back in whatever
+        // order the non-stable sort produced.
+        return records.sorted {
+            $0.timestamp == $1.timestamp ? $0.id < $1.id : $0.timestamp < $1.timestamp
+        }
     }
 
     private func persist(_ record: CrashRecord) {
         let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
+        encoder.dateEncodingStrategy = Self.recordDateEncoding
         guard let data = try? encoder.encode(record) else { return }
         let url = dir.appendingPathComponent("\(record.id).json")
         do {
@@ -284,6 +290,46 @@ private final class CrashStore: @unchecked Sendable {
         let fm = FileManager.default
         guard let files = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else { return [] }
         return files.filter { $0.pathExtension == "json" }
+    }
+
+    // MARK: Record timestamps
+
+    // `JSONEncoder.dateEncodingStrategy = .iso8601` writes whole seconds, so two
+    // errors recorded in the same second came back with identical timestamps.
+    // `loadAll()` promises "newest last", but `sorted(by:)` is not stable, so
+    // equal timestamps returned in arbitrary order — the ordering a later
+    // uploader depends on, and the reason CrashReportingTests could not tell
+    // "first" from "second". Milliseconds make the order well-defined and keep
+    // the records themselves useful when errors arrive in bursts.
+
+    nonisolated(unsafe) private static let recordDateFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
+    nonisolated(unsafe) private static let legacyRecordDateFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
+    nonisolated(unsafe) static let recordDateEncoding = JSONEncoder.DateEncodingStrategy.custom { date, encoder in
+        var container = encoder.singleValueContainer()
+        try container.encode(CrashStore.recordDateFormatter.string(from: date))
+    }
+
+    /// Accepts the whole-second form as well, so records already on disk from a
+    /// previous build still decode instead of being dropped as corrupt.
+    nonisolated(unsafe) static let recordDateDecoding = JSONDecoder.DateDecodingStrategy.custom { decoder in
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        guard let date = CrashStore.recordDateFormatter.date(from: raw)
+                ?? CrashStore.legacyRecordDateFormatter.date(from: raw) else {
+            throw DecodingError.dataCorrupted(
+                .init(codingPath: decoder.codingPath, debugDescription: "Unparseable record timestamp: \(raw)")
+            )
+        }
+        return date
     }
 
     private func fatalMarkerURL() -> URL {

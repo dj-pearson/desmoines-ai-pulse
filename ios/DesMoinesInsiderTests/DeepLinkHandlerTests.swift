@@ -66,8 +66,13 @@ final class DeepLinkHandlerTests: XCTestCase {
 
     // MARK: - Custom Scheme
 
+    // These build the URL from `Config.appBundleId` rather than a literal. They
+    // previously used a "dsminsider://" scheme that appears nowhere else in the
+    // project — Info.plist registers only "com.desmoines.aipulse" — so every
+    // custom-scheme case parsed to nil and the four tests below failed.
+
     func testValidEventCustomScheme() {
-        let url = URL(string: "dsminsider://event/550e8400-e29b-41d4-a716-446655440000")!
+        let url = URL(string: "\(Config.appBundleId)://event/550e8400-e29b-41d4-a716-446655440000")!
         let result = handler.handle(url)
         XCTAssertTrue(result)
 
@@ -76,7 +81,7 @@ final class DeepLinkHandlerTests: XCTestCase {
     }
 
     func testHomeTabCustomScheme() {
-        let url = URL(string: "dsminsider://home")!
+        let url = URL(string: "\(Config.appBundleId)://home")!
         let result = handler.handle(url)
         XCTAssertTrue(result)
 
@@ -85,7 +90,7 @@ final class DeepLinkHandlerTests: XCTestCase {
     }
 
     func testInvalidIDCustomSchemeFallsBackToTab() {
-        let url = URL(string: "dsminsider://restaurant/malicious-input")!
+        let url = URL(string: "\(Config.appBundleId)://restaurant/malicious-input")!
         let result = handler.handle(url)
         XCTAssertTrue(result)
 
@@ -96,7 +101,7 @@ final class DeepLinkHandlerTests: XCTestCase {
     // MARK: - Consume
 
     func testConsumeDestinationClearsIt() {
-        let url = URL(string: "dsminsider://home")!
+        let url = URL(string: "\(Config.appBundleId)://home")!
         _ = handler.handle(url)
 
         let first = handler.consumeDestination()
