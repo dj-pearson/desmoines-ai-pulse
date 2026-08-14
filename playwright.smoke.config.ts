@@ -41,7 +41,19 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: 'npm run build && npx vite preview --port 4173',
+    // `vite build`, not `npm run build`. The full script also runs
+    // generate-sitemaps and prerender, and prerender drives a headless Chromium
+    // over 35 hub routes with a 20s content wait and an 8s Helmet wait apiece.
+    // When those waits are hit the step alone outruns the 300s budget below and
+    // the required lane fails with "Timed out waiting from config.webServer" —
+    // a network-timing failure that says nothing about the code under test.
+    //
+    // Nothing in route-smoke.spec.ts reads prerendered output: every assertion
+    // is client-side runtime behaviour (console errors, React #130, PostgREST
+    // status codes, route mounting). What the suite does need is a real bundle,
+    // because a named import with no matching export only becomes an undefined
+    // component once bundled — and `vite build` produces exactly that.
+    command: 'npx vite build && npx vite preview --port 4173',
     url: 'http://localhost:4173',
     reuseExistingServer: !process.env.CI,
     timeout: 300_000,
