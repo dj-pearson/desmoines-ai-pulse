@@ -185,12 +185,21 @@ export default defineConfig(({ command, mode }) => {
         // Improved code splitting - group related modules to reduce chunk count
         // and improve caching while avoiding circular dependencies
         manualChunks: (id) => {
-          // React core - MUST be first, highest priority
-          // This ensures React is always available before any other code
+          // React core - MUST be first, highest priority.
+          // This ensures React is always available before any other code.
+          //
+          // Matched on "node_modules/<pkg>/", not a bare includes("/react/"): that
+          // substring also matches @tiptap/react, @sentry/react, @use-gesture/react
+          // and @floating-ui/react-dom, so those packages and the modules they drag
+          // in landed in vendor-react. vendor-react then imported vendor-ui,
+          // vendor-three and vendor-recharts - circular chunks, which the browser
+          // resolves by evaluating vendor-ui before React's exports are assigned:
+          // "Cannot read properties of undefined (reading 'forwardRef')", and a
+          // site stuck on the loading spinner.
           if (
-            id.includes("/react/") ||
-            id.includes("/react-dom/") ||
-            id.includes("/scheduler/")
+            id.includes("node_modules/react/") ||
+            id.includes("node_modules/react-dom/") ||
+            id.includes("node_modules/scheduler/")
           ) {
             return "vendor-react";
           }
