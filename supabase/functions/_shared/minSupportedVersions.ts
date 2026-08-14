@@ -36,7 +36,7 @@ export const MIN_SUPPORTED_APP_VERSION: Record<MobilePlatform, string> = {
  * (non-blocking) update is available. Update on each store release.
  */
 export const LATEST_APP_VERSION: Record<MobilePlatform, string> = {
-  ios: "1.2.0",
+  ios: "1.2.1",
   android: "1.2.0",
 };
 
