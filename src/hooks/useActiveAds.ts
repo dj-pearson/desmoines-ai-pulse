@@ -40,8 +40,22 @@ export function useActiveAds(placementType: AdPlacement) {
     queryKey: ['active-ads', placementType],
     enabled: servable,
     queryFn: async (): Promise<ActiveAd | null> => {
+      // Send all three parameters, even though the last two are DEFAULT NULL.
+      //
+      // Production still carries two get_active_ads overloads — the superseded
+      // `(p_placement_type TEXT)` one and the canonical
+      // `(p_placement_type placement_type, p_session_id TEXT, p_user_id UUID)`.
+      // A one-argument call matches both, so PostgREST answers 300/PGRST203
+      // ("Could not choose the best candidate function") on every homepage load.
+      // Naming p_session_id and p_user_id excludes the single-parameter overload
+      // and the call resolves. supabase/migrations/20260718000001_resolve_get_
+      // active_ads_overload.sql drops the stray overload; this keeps the call
+      // site unambiguous whether or not that migration has been applied yet,
+      // and on any older client build that has not been redeployed.
       const { data, error } = await supabase.rpc('get_active_ads', {
         p_placement_type: placementType as ServablePlacement,
+        p_session_id: null,
+        p_user_id: null,
       });
       if (error) {
         // Log the PostgREST fields, not the bare object — a console-collapsed

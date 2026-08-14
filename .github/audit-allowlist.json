@@ -1,21 +1,15 @@
 {
-  "_comment": "WEB-CI-005: package names whose high/critical npm-audit advisories are ACCEPTED (pre-existing, mostly transitive dev-tooling) as of 2026-07-11. scripts/audit-check.mjs ignores these so the PR gate blocks only NEW high/critical advisories. Remediate by upgrading the dependency, then remove it from this list. Do NOT add a package here without a tracking note.",
+  "_comment": "WEB-CI-005: package names whose high/critical npm-audit advisories are ACCEPTED (pre-existing, mostly transitive dev-tooling). scripts/audit-check.mjs ignores these so the PR gate blocks only NEW high/critical advisories. Remediate by upgrading the dependency, then remove it from this list. Do NOT add a package here without a tracking note. Pruned 2026-08-14: basic-ftp, flatted, linkify-it, lodash, lodash-es, minimatch, picomatch, rollup, undici, vitest, ws and @remix-run/router no longer carry any advisory after the lockfile refresh, so their entries were masking nothing and would have hidden a genuinely new advisory.",
   "acceptedPackages": [
-    "@remix-run/router",
-    "basic-ftp",
-    "flatted",
     "jspdf",
-    "linkify-it",
-    "lodash",
-    "lodash-es",
-    "minimatch",
-    "picomatch",
     "react-router",
     "react-router-dom",
-    "rollup",
-    "undici",
-    "vite",
-    "vitest",
-    "ws"
-  ]
+    "vite"
+  ],
+  "_notes": {
+    "jspdf": "critical (path traversal / PDF injection). Fix is jspdf 4.x, a major bump from ^3.0.3 with a changed API surface for the admin PDF export. Tracked separately.",
+    "react-router": "moderate today, kept because react-router-dom carries it transitively; fix is react-router-dom 7.x, a major bump that changes the routing API in src/App.tsx.",
+    "react-router-dom": "see react-router.",
+    "vite": "high (path traversal in optimized-deps .map handling, dev server only). Fix is Vite 8, a major bump that also moves the build pipeline; not a CI-gate change."
+  }
 }
