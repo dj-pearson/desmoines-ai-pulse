@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { webVitalsConfig } from '@/lib/performanceConfig';
+import { hasConsent } from '@/components/CookieConsentBanner';
 
 interface WebVitalMetric {
   name: string;
@@ -46,6 +47,11 @@ export const useWebVitals = () => {
   };
 
   const sendToAnalytics = (metric: WebVitalMetric) => {
+    // No analytics consent, no send (WEB-LEGAL-001). gtag is present even when
+    // consent is denied (index.html defines the shim), so the presence check
+    // below is not a consent check.
+    if (!hasConsent('analytics')) return;
+
     // Send to Google Analytics 4 with custom metrics
     if (typeof window !== 'undefined' && 'gtag' in window) {
       (window as Window & { gtag?: (...args: unknown[]) => void }).gtag?.('event', 'web_vitals', {

@@ -137,10 +137,16 @@ Deno.test('split_legacy_mixed_platform_subs migration is idempotent', async () =
       import.meta.url,
     ),
   );
-  // The INSERT must guard against re-creating the web row
+  // The INSERT must guard against re-creating the web row.
+  //
+  // Accepts AND as well as WHERE: the guard is the NOT EXISTS subquery, and
+  // which keyword introduces it depends only on whether other predicates come
+  // first. The migration writes it as `AND NOT EXISTS (...)` because it already
+  // filters on platform and stripe_subscription_id, so the WHERE-only pattern
+  // rejected a migration that is in fact idempotent.
   assert(
-    /WHERE NOT EXISTS \(\s*SELECT 1[\s\S]*platform = 'web'\s*\)/.test(source),
-    'split migration must guard the web-row INSERT with WHERE NOT EXISTS',
+    /(?:WHERE|AND) NOT EXISTS \(\s*SELECT 1[\s\S]*platform = 'web'\s*\)/.test(source),
+    'split migration must guard the web-row INSERT with a NOT EXISTS subquery',
   );
   // The audit insert must use ON CONFLICT DO NOTHING
   assert(

@@ -1,6 +1,10 @@
 // GEO-optimized content component following best practices from the GEO.md document
+import { useHomepageStats } from "@/hooks/useHomepageStats";
 
 export default function GEOContent() {
+  // Real counts rather than hardcoded ones (WEB-SEO-015).
+  const { eventsToday, restaurantsCount, isLoading: statsLoading } = useHomepageStats();
+
   return (
     <article className="max-w-4xl mx-auto px-4 py-16 prose prose-lg dark:prose-invert">
       {/* Answer-first format for AI parsing */}
@@ -8,34 +12,49 @@ export default function GEOContent() {
         <h2 className="text-3xl font-bold mb-6">What Makes Des Moines Insider Different?</h2>
         
         <div className="bg-muted/50 p-6 rounded-lg mb-8">
+          {/* WEB-SEO-015: this block carried "50,000 monthly users", "95% accuracy"
+              and a direct claim to track more than Catch Des Moines, Cityview and
+              the Des Moines Register combined. None of it is measurable from
+              anything in this codebase, and the comparative claim names real
+              competitors. This component exists to be read by AI crawlers, so it
+              is the worst possible place for numbers we cannot stand behind —
+              assistants were already quoting them back as fact, attributed to us.
+              Replaced with claims that are true by construction. */}
           <p className="text-lg font-semibold mb-4">
-            <strong>Des Moines AI Pulse is the most comprehensive AI-powered guide to Des Moines,
-            featuring 1,000+ events, 500+ restaurants, 100+ attractions, and 75+ playgrounds.</strong>
+            <strong>Des Moines Insider is a local guide to events, restaurants, attractions and
+            playgrounds across the Des Moines metro.</strong>
           </p>
           <p>
-            Updated daily with AI-enhanced descriptions, our platform serves over 50,000 monthly
-            users with 95% accuracy in event listings and restaurant information. We track more
-            events and venues than Catch Des Moines, Cityview, and Des Moines Register combined.
+            Event listings are refreshed daily from venue and organiser sources across the metro
+            rather than waiting on submissions, and every event carries its date and start time in
+            Central Time. Restaurant hours are reviewed weekly so the open-now view reflects what is
+            actually serving.
           </p>
         </div>
 
-        {/* Statistics for AI optimization - Enhanced per SEO strategy */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 my-8">
+        {/* WEB-SEO-015: these tiles were hardcoded — "1,247 Events This Month",
+            "523 Verified Restaurants", "50,000+ Monthly Users" — but presented as
+            live figures. Two are now read from the database via useHomepageStats,
+            so they are true whenever they render and cannot drift. The monthly
+            users tile is gone: we have no analytics source for it, and an
+            audience claim is not something to guess at on a page written for AI
+            crawlers to quote. */}
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-6 my-8">
           <div className="text-center p-4 bg-card rounded-lg shadow-sm">
-            <div className="text-3xl font-bold text-primary">1,247</div>
-            <p className="text-sm text-muted-foreground">Events This Month</p>
+            <div className="text-3xl font-bold text-primary">
+              {statsLoading || eventsToday === null ? "—" : eventsToday.toLocaleString()}
+            </div>
+            <p className="text-sm text-muted-foreground">Events Today</p>
           </div>
           <div className="text-center p-4 bg-card rounded-lg shadow-sm">
-            <div className="text-3xl font-bold text-primary">523</div>
-            <p className="text-sm text-muted-foreground">Verified Restaurants</p>
-          </div>
-          <div className="text-center p-4 bg-card rounded-lg shadow-sm">
-            <div className="text-3xl font-bold text-primary">50,000+</div>
-            <p className="text-sm text-muted-foreground">Monthly Users</p>
+            <div className="text-3xl font-bold text-primary">
+              {statsLoading || restaurantsCount === null ? "—" : restaurantsCount.toLocaleString()}
+            </div>
+            <p className="text-sm text-muted-foreground">Restaurants Listed</p>
           </div>
           <div className="text-center p-4 bg-card rounded-lg shadow-sm">
             <div className="text-3xl font-bold text-primary">Daily</div>
-            <p className="text-sm text-muted-foreground">Updates</p>
+            <p className="text-sm text-muted-foreground">Event Updates</p>
           </div>
         </div>
       </section>
@@ -61,10 +80,11 @@ export default function GEOContent() {
             <h3 className="text-xl font-semibold mb-3">How current is your event information?</h3>
             <p className="mb-4">
               <strong>Our event database is updated multiple times daily through automated scraping
-              of 50+ sources and manual curation.</strong> Events are verified for accuracy, and
-              descriptions are enhanced with AI to ensure you have the most detailed information
-              available. According to our internal analytics, we capture 98% of public events in
-              the Des Moines metro area, making us the most comprehensive event discovery platform in Iowa.
+              of local venue and organiser sources.</strong> Events are checked for date and venue
+              accuracy, and descriptions are enhanced with AI. {/* WEB-SEO-015: the
+              "98% of public events, per our internal analytics" claim was removed — a
+              coverage percentage needs a defensible denominator (every public event in
+              the metro) that we have no way to count. */}
             </p>
           </div>
 
@@ -165,21 +185,16 @@ export default function GEOContent() {
           </ul>
         </div>
 
-        <div className="bg-card p-6 rounded-lg shadow-sm">
-          <h3 className="text-xl font-semibold mb-4">Platform Impact Statistics</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <ul className="space-y-2">
-              <li><strong>78% of users</strong> discover new venues through our recommendations</li>
-              <li><strong>65% increase</strong> in small business discovery since platform launch</li>
-              <li><strong>50,000+ monthly users</strong> rely on our platform for local discovery</li>
-            </ul>
-            <ul className="space-y-2">
-              <li><strong>4.8/5 average rating</strong> from 2,000+ user reviews</li>
-              <li><strong>Local events see 25% higher attendance</strong> when featured on our platform</li>
-              <li><strong>98% event capture rate</strong> across the Des Moines metro area</li>
-            </ul>
-          </div>
-        </div>
+        {/* WEB-SEO-015: a "Platform Impact Statistics" panel used to sit here
+            claiming 78% of users discover new venues, a 65% increase in small
+            business discovery, 50,000+ monthly users, 4.8/5 from 2,000+ reviews,
+            25% higher attendance for featured events, and a 98% event capture
+            rate. Not one of those is derivable from anything we store — there is
+            no reviews table, and no analytics pipeline producing the rest. Six
+            precise-looking figures in one panel is the exact shape that erodes
+            E-E-A-T, and on an AI-facing component it is how fabrications end up
+            quoted as fact. Removed outright; re-add individual figures only with
+            a stated method and date behind them. */}
       </section>
 
       {/* How-to guide for AI optimization */}

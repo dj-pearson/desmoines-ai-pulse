@@ -19,7 +19,6 @@ import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Badge } from '@/components/ui/badge';
 import type { EventFormData, EmailCaptureData } from '@/types/event-promotion';
 
 const formSchema = z.object({
@@ -102,16 +101,9 @@ export function EmailCaptureModal({ isOpen, onClose, onSubmit, eventData }: Emai
           />
         </div>
 
-        {/* Social Proof */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-          <div className="flex items-center gap-2 mb-2">
-            <Badge className="bg-blue-600">423 organizers</Badge>
-            <span className="text-sm text-gray-700">joined this week</span>
-          </div>
-          <p className="text-sm text-gray-600">
-            "This timeline helped us sell out our fundraiser 2 weeks early!" - Sarah M., Community Organizer
-          </p>
-        </div>
+        {/* WEB-LEGAL-002: removed a "Social Proof" block carrying a "423 organizers
+            joined this week" badge and a quote attributed to "Sarah M., Community
+            Organizer". Nothing counts organizers and no such person said it. */}
 
         {/* Form */}
         <Form {...form}>
