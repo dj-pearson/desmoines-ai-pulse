@@ -85,19 +85,31 @@ const PRERENDER_ENTITIES = process.env.PRERENDER_ENTITIES === 'true';
 const ENTITY_BUDGET_SECONDS = Number(process.env.PRERENDER_ENTITY_BUDGET_SECONDS) || 420;
 
 // Entity sitemaps, in priority order. If the budget runs out, later files lose
-// out — so this order is a product decision, not an alphabetical accident.
-// Events first: they are the freshest, the highest-intent, and the ones AI
-// assistants get asked about by name. Guides/articles are evergreen and are the
-// least damaged by shipping a day late.
+// out, so this order is a product decision, not an alphabetical accident.
+//
+// It used to put events first, on the reasoning that they are the freshest and
+// the highest-intent. Search Console says otherwise. Measured 2026-08-18 over
+// the 236 stored queries of 1,000 analysed:
+//
+//   restaurants and bare business names   6,794 impressions   112 clicks
+//   playgrounds and parks                   339 impressions     5 clicks
+//   events and "things to do"                 8 impressions     0 clicks
+//
+// Event intent is three queries and eight impressions. Restaurant pages carry
+// essentially all of the demand, 480 of them are in the sitemap, and they were
+// last in a queue that 312 event URLs entered first. Freshness is still the
+// reason events beat guides, but it is not a reason to spend the budget on them
+// ahead of the pages people actually search for.
 const ENTITY_SITEMAPS = [
-  'sitemap-events.xml',
-  // WEB-SEO-013: generated pSEO pages are pure SPA routes with no static
-  // fallback, so they need prerendering more than most — but they sit after
-  // events here because they are evergreen and events are not.
-  'sitemap-pseo.xml',
   'sitemap-restaurants.xml',
-  'sitemap-attractions.xml',
+  // Small files with real measured demand: 91 URLs between them, and queries
+  // like "big creek state park playground" already rank at position 4.4.
   'sitemap-playgrounds.xml',
+  'sitemap-attractions.xml',
+  // WEB-SEO-013: generated pSEO pages are pure SPA routes with no static
+  // fallback, so they need prerendering more than most.
+  'sitemap-pseo.xml',
+  'sitemap-events.xml',
   'sitemap-articles.xml',
   'sitemap-guides.xml',
 ];
