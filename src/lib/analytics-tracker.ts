@@ -6,6 +6,7 @@
 import type { AnalyticsEvent } from '@/types/event-promotion';
 import { createLogger } from '@/lib/logger';
 import { safeStorage } from '@/lib/safeStorage';
+import { hasConsent } from '@/components/CookieConsentBanner';
 
 const logger = createLogger('analyticsTracker');
 
@@ -145,8 +146,8 @@ function sendToAnalytics(event: AnalyticsEvent): void {
   // Implement integration with your analytics service
   // Examples: Google Analytics, Mixpanel, Segment, etc.
 
-  // For Google Analytics 4:
-  if (typeof window !== 'undefined' && (window as any).gtag) {
+  // For Google Analytics 4 - only with analytics consent (WEB-LEGAL-001).
+  if (typeof window !== 'undefined' && (window as any).gtag && hasConsent('analytics')) {
     (window as any).gtag('event', event.eventType, {
       ...event.data,
       timestamp: event.timestamp.toISOString(),

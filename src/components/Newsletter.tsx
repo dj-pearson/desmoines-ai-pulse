@@ -111,7 +111,8 @@ export default function Newsletter() {
             ))}
           </div>
           <span className="text-white/90 text-sm font-medium ml-2">
-            Join 15,000+ Des Moines insiders
+            {/* WEB-LEGAL-002: "15,000+" was not derived from anything. */}
+            Des Moines events, in your inbox
           </span>
         </div>
 

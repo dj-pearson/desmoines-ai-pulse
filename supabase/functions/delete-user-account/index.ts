@@ -24,6 +24,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
+import { purgeUserStorage, type BucketPurgeResult } from "../_shared/purgeUserStorage.ts";
 
 const TOKEN_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
 
@@ -212,6 +213,17 @@ serve(async (req) => {
         }
       }
 
+      // Purge uploaded files (WEB-LEGAL-003). Runs BEFORE the auth user is
+      // deleted, and covers every user-writable bucket. All of them are public,
+      // so a file left behind stays fetchable by URL forever, while the Privacy
+      // Policy promises erasure of the account and associated data.
+      const storageResults: BucketPurgeResult[] = await purgeUserStorage(supabase, userId);
+      const storageRemoved = storageResults.reduce((n, r) => n + r.removed, 0);
+      const storageFailures = storageResults.filter((r) => r.error);
+      for (const failure of storageFailures) {
+        console.warn(`Warning purging storage bucket ${failure.bucket}:`, failure.error);
+      }
+
       // Delete the auth user entry
       const { error: deleteAuthError } =
         await supabase.auth.admin.deleteUser(userId);
@@ -232,7 +244,15 @@ serve(async (req) => {
       console.log(`Successfully deleted account for user: ${userId}`);
 
       return new Response(
-        JSON.stringify({ success: true }),
+        JSON.stringify({
+          success: true,
+          // Reported rather than assumed: a purge that silently removed nothing
+          // is the defect this guards against.
+          storage_files_removed: storageRemoved,
+          ...(storageFailures.length > 0
+            ? { storage_incomplete: storageFailures.map((f) => f.bucket) }
+            : {}),
+        }),
         {
           status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },

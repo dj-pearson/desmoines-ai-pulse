@@ -51,86 +51,23 @@ export default function UserGeneratedContent() {
   });
   const [showReviewForm, setShowReviewForm] = useState(false);
 
-  // Mock user-generated data - would integrate with backend API
+  // WEB-LEGAL-002: this component used to seed itself with fabricated content
+  // about real, named local businesses and render it as community activity.
+  //
+  // Three "reviews" carried invented authors ("Sarah M.", "Mike R.",
+  // "Jennifer L.") with helpful counts and verified:true badges, and three
+  // "updates" asserted things that were simply not true: a limited-time
+  // Thanksgiving burger at Zombie Burger, short lines at Adventureland today, and
+  // a newly hired sommelier named Marcus at Proof Restaurant. That is fabricated
+  // consumer review content (16 CFR 465) plus false factual claims about
+  // identifiable third parties, on a live route (/real-time).
+  //
+  // Until this is wired to real data it shows nothing. public.user_ratings holds
+  // genuine reviews and is where a real implementation should read from; the
+  // submit handler below is still local-only and does not persist.
   useEffect(() => {
-    const mockReviews: UserReview[] = [
-      {
-        id: '1',
-        businessName: 'Zombie Burger + Drink Lab',
-        businessId: 'zombie-burger',
-        userName: 'Sarah M.',
-        userInitials: 'SM',
-        rating: 5,
-        review: "Perfect spot for families! The kids love the themed burgers and the playground area keeps them entertained. Much better than the touristy spots downtown. Portions are huge - we always share the 'Undead' burger.",
-        timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
-        helpful: 12,
-        tags: ['family-friendly', 'large-portions', 'local-favorite'],
-        verified: true,
-        photos: ['/images/zombie-burger-family.jpg']
-      },
-      {
-        id: '2', 
-        businessName: 'Proof Restaurant',
-        businessId: 'proof',
-        userName: 'Mike R.',
-        userInitials: 'MR',
-        rating: 4,
-        review: "Great date night spot but pricey. The cocktail program is excellent - try the bourbon flight. Parking can be tough on weekends. Make reservations well in advance, especially for Friday/Saturday.",
-        timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000), // 5 hours ago
-        helpful: 8,
-        tags: ['date-night', 'cocktails', 'reservations-required'],
-        verified: true
-      },
-      {
-        id: '3',
-        businessName: 'Science Center of Iowa',
-        businessId: 'sci',
-        userName: 'Jennifer L.',
-        userInitials: 'JL', 
-        rating: 5,
-        review: "Our kids (ages 6 and 9) had a blast! The hands-on exhibits are perfect for curious minds. Pro tip: go on weekday mornings to avoid crowds. The IMAX theater is worth the extra cost. Great for rainy day activities.",
-        timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000), // 1 day ago
-        helpful: 15,
-        tags: ['kids-activities', 'educational', 'weather-backup'],
-        verified: true
-      }
-    ];
-
-    const mockUpdates: BusinessUpdate[] = [
-      {
-        id: '1',
-        businessName: 'Zombie Burger + Drink Lab',
-        businessId: 'zombie-burger',
-        userName: 'Local Foodie',
-        updateType: 'special',
-        content: 'They have a new limited-time "Thanksgiving Leftover" burger through December! Turkey, stuffing, cranberry sauce - surprisingly good.',
-        timestamp: new Date(Date.now() - 30 * 60 * 1000), // 30 minutes ago
-        verified: true
-      },
-      {
-        id: '2',
-        businessName: 'Adventureland Park',
-        businessId: 'adventureland',
-        userName: 'Amy K.',
-        updateType: 'crowdedness',
-        content: 'Lines are really short today! Perfect weather and most kids are still in school. Great time to visit if you can!',
-        timestamp: new Date(Date.now() - 1 * 60 * 60 * 1000), // 1 hour ago
-        verified: false
-      },
-      {
-        id: '3',
-        businessName: 'Proof Restaurant',
-        businessId: 'proof',
-        userName: 'David S.',
-        updateType: 'service',
-        content: 'New sommelier just started - wine pairings have been exceptional this week. Ask for Marcus if you want great wine recommendations.',
-        timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000), // 3 hours ago
-        verified: false
-      }
-    ];
-
-    setReviews(mockReviews);
-    setUpdates(mockUpdates);
+    setReviews([]);
+    setUpdates([]);
   }, []);
 
   const handleSubmitReview = () => {
@@ -287,6 +224,11 @@ export default function UserGeneratedContent() {
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
+            {updates.length === 0 && (
+              <p className="text-sm text-muted-foreground py-2">
+                No community updates yet. Be the first to post one.
+              </p>
+            )}
             {updates.slice(0, 3).map((update) => (
               <div key={update.id} className="flex items-start gap-3 p-3 bg-white rounded-lg">
                 <div className="flex-shrink-0">
@@ -320,7 +262,13 @@ export default function UserGeneratedContent() {
       {/* Community Reviews */}
       <div className="space-y-4">
         <h3 className="text-xl font-semibold">Recent Community Reviews</h3>
-        
+
+        {reviews.length === 0 && (
+          <p className="text-sm text-muted-foreground">
+            No community reviews yet. Share the first one.
+          </p>
+        )}
+
         {reviews.map((review) => (
           <Card key={review.id} className="hover:shadow-md transition-shadow">
             <CardContent className="p-6">
@@ -397,20 +345,22 @@ export default function UserGeneratedContent() {
               </ul>
             </div>
             <div>
-              <h4 className="font-medium text-purple-800 mb-2">Real-Time Intelligence</h4>
+              {/* WEB-LEGAL-010: this list advertised "Current wait times" and
+                  "Special offers", neither of which anything records. Kept to
+                  what people can actually post here. */}
+              <h4 className="font-medium text-purple-800 mb-2">What people post</h4>
               <ul className="space-y-1 text-purple-700">
-                <li>• Current wait times</li>
                 <li>• Seasonal menu changes</li>
                 <li>• Service quality updates</li>
-                <li>• Special offers & events</li>
+                <li>• What a place is actually like on a weeknight</li>
               </ul>
             </div>
           </div>
           
           <div className="mt-4 p-3 bg-white/60 rounded-lg">
             <p className="text-purple-800 text-sm font-medium">
-              💡 Unlike tourist-focused platforms, our community shares real experiences 
-              from Des Moines residents who know these businesses as regulars, not just one-time visitors.
+              Posts here come from Des Moines residents rather than from a tourism
+              feed. Nothing is seeded, so this fills up as people write.
             </p>
           </div>
         </CardContent>

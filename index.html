@@ -350,33 +350,55 @@
       }
     </script>
 
-    <!-- Defer Google Analytics to reduce INP (Interaction to Next Paint) -->
+    <!-- Google Analytics, consent-gated (WEB-LEGAL-001) and deferred to protect INP.
+         Sets Consent Mode v2 defaults to DENIED and does NOT load gtag.js.
+         src/lib/analyticsConsent.ts is the only caller of __dmiLoadAnalytics(),
+         and calls it only once the visitor grants the analytics category.
+         Denial is the default even if the app never boots, which is what
+         PrivacyPolicy.tsx promises.
+         NOTE: pinned by a SHA-256 hash in public/_headers CSP script-src. If you
+         edit this block, regenerate the hash per _headers. -->
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag() {
         dataLayer.push(arguments);
       }
+
+      // Consent Mode v2 defaults. Everything non-essential starts denied, so a
+      // visitor who has not opted in gets no analytics or advertising storage
+      // even in the window before the app hydrates.
+      gtag("consent", "default", {
+        ad_storage: "denied",
+        ad_user_data: "denied",
+        ad_personalization: "denied",
+        analytics_storage: "denied",
+        personalization_storage: "denied",
+        functionality_storage: "granted",
+        security_storage: "granted",
+      });
       gtag("js", new Date());
       gtag("config", "G-XGQFFP9BHZ");
 
-      // Load GA after page is interactive
-      if ("requestIdleCallback" in window) {
-        requestIdleCallback(() => {
-          const script = document.createElement("script");
+      // Fetching gtag.js is itself a disclosure to Google, so the tag is not
+      // requested at all until consent is granted. Idempotent: repeated grants
+      // (banner reopened, event refired) load the script exactly once.
+      window.__dmiLoadAnalytics = function () {
+        if (window.__dmiAnalyticsLoaded) return;
+        window.__dmiAnalyticsLoaded = true;
+        var load = function () {
+          var script = document.createElement("script");
           script.async = true;
           script.src =
             "https://www.googletagmanager.com/gtag/js?id=G-XGQFFP9BHZ";
           document.head.appendChild(script);
-        });
-      } else {
-        setTimeout(() => {
-          const script = document.createElement("script");
-          script.async = true;
-          script.src =
-            "https://www.googletagmanager.com/gtag/js?id=G-XGQFFP9BHZ";
-          document.head.appendChild(script);
-        }, 4000);
-      }
+        };
+        // Preserve the original INP protection: load once the page is idle.
+        if ("requestIdleCallback" in window) {
+          requestIdleCallback(load);
+        } else {
+          setTimeout(load, 4000);
+        }
+      };
     </script>
 
     <title>Des Moines Insider: Events, Restaurants & Attractions</title>
@@ -438,11 +460,6 @@
           "@type": "Offer",
           "price": "0",
           "priceCurrency": "USD"
-        },
-        "aggregateRating": {
-          "@type": "AggregateRating",
-          "ratingValue": "4.8",
-          "reviewCount": "1247"
         },
         "featureList": [
           "Conversational AI search",

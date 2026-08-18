@@ -305,14 +305,12 @@ export default function Index() {
       "name": BRAND.region,
       "description": `${BRAND.city}, West Des Moines, Ankeny, Urbandale, Johnston, Clive, Waukee, Windsor Heights, and surrounding Central ${BRAND.state} communities`
     },
-    "hasMap": `https://www.google.com/maps/place/${BRAND.city.replace(' ', '+')},+${BRAND.stateAbbr}/@41.5868,-93.6250,12z`,
-    "aggregateRating": {
-      "@type": "AggregateRating",
-      "ratingValue": "4.8",
-      "reviewCount": "1247",
-      "bestRating": "5",
-      "worstRating": "1"
-    }
+    "hasMap": `https://www.google.com/maps/place/${BRAND.city.replace(' ', '+')},+${BRAND.stateAbbr}/@41.5868,-93.6250,12z`
+    // WEB-LEGAL-002: an aggregateRating of 4.8 from 1247 reviews was published
+    // here. There is no reviews table to derive either number from. A fabricated
+    // AggregateRating is what powers star ratings in search results, so this is
+    // both an endorsement claim and a structured-data policy violation. Re-add
+    // only when real review data exists to compute it.
   };
 
   const handleSearch = (

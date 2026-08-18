@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { initSentry, Sentry } from "@/lib/sentry";
 import { initErrorTracking } from "@/lib/errorHandler";
 import '@/lib/env'; // Validate environment variables at startup
+import { initAnalyticsConsent } from "@/lib/analyticsConsent";
 
 import App from "./App";
 import "./index.css";
@@ -13,6 +14,12 @@ import { initializeOnInteraction } from "./lib/lazyInit";
 
 // Initialize Sentry before anything else (only when DSN is configured)
 initSentry();
+
+// Apply the stored cookie choice to Google Consent Mode and, only if analytics
+// was granted, allow gtag.js to load at all (WEB-LEGAL-001). Runs early so the
+// grant is applied before any page-view work; denial needs no action because
+// index.html already defaults every non-essential category to denied.
+initAnalyticsConsent();
 
 // Wire Sentry into the centralized error handler
 if (import.meta.env.VITE_SENTRY_DSN) {

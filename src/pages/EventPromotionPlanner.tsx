@@ -249,21 +249,11 @@ export default function EventPromotionPlanner() {
               />
             </div>
 
-            {/* Social Proof */}
-            <div className="bg-green-50 border-2 border-green-200 rounded-lg p-6 mb-8">
-              <div className="flex items-center justify-center gap-4 mb-4">
-                <Users className="h-10 w-10 text-green-600" />
-                <div>
-                  <div className="text-3xl font-bold text-green-600">423+</div>
-                  <div className="text-gray-700">Des Moines Event Organizers</div>
-                </div>
-              </div>
-              <p className="text-center text-gray-600 italic">
-                "This timeline helped us increase our event attendance by 40% compared to last year!"
-                <br />
-                <span className="text-sm">- Sarah M., Downtown Farmers Market Coordinator</span>
-              </p>
-            </div>
+            {/* WEB-LEGAL-002: removed a "Social Proof" block claiming "423+ Des Moines
+                Event Organizers" and quoting "Sarah M., Downtown Farmers Market
+                Coordinator" saying the timeline raised attendance 40%. Nothing counts
+                organizers, no such person exists, and the 40% figure was a quantified
+                efficacy claim with no measurement behind it. */}
 
             {/* How It Works */}
             <Card className="mb-8">
