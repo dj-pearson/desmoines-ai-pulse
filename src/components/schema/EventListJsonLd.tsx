@@ -2,6 +2,7 @@ import { Helmet } from "react-helmet-async";
 import { Event } from "@/lib/types";
 import { createEventSlugWithCentralTime } from "@/lib/timezone";
 import { BRAND } from "@/lib/brandConfig";
+import { buildEventOffers } from "@/lib/eventOffers";
 
 interface EventListJsonLdProps {
   events: Event[];
@@ -40,7 +41,6 @@ export function EventListJsonLd({
     const endDate = event.end_date
       ? event.end_date
       : new Date(startMs + 3 * 60 * 60 * 1000).toISOString();
-    const isFree = !event.price || event.price.toLowerCase().includes('free') || event.price === '$0' || event.price === '0';
 
     return {
       "@type": "Event",
@@ -73,15 +73,12 @@ export function EventListJsonLd({
         ? [event.image_url]
         : [`${BRAND.baseUrl}${BRAND.ogImage}`],
       url: eventUrl,
-      offers: {
-        "@type": "Offer",
-        price: isFree ? "0" : (event.price?.replace(/[^0-9.]/g, '') || "0"),
-        priceCurrency: "USD",
-        availability: "https://schema.org/InStock",
+      // An unreadable price is omitted rather than published as "0".
+      // See src/lib/eventOffers.ts.
+      ...buildEventOffers(event.price, {
         url: event.source_url || eventUrl,
-        validFrom: event.created_at || new Date().toISOString(),
-      },
-      isAccessibleForFree: isFree,
+        validFrom: event.created_at,
+      }),
       // WEB-SEO-010: organizer and performer are deliberately absent.
       //
       // This block named BRAND.name as the organizer of every event in the

@@ -2,6 +2,7 @@ import { Helmet } from "react-helmet-async";
 import { Event } from "@/lib/types";
 import { createEventSlugWithCentralTime } from "@/lib/timezone";
 import { BRAND } from "@/lib/brandConfig";
+import { buildEventOffers } from "@/lib/eventOffers";
 
 interface EventSchemaProps {
   event: Event;
@@ -67,27 +68,12 @@ export default function EventSchema({ event, isUpcoming = true }: EventSchemaPro
       name: BRAND.name,
       url: BRAND.baseUrl
     },
-    offers: event.price && event.price.toLowerCase() !== 'free'
-      ? {
-          "@type": "Offer",
-          price: event.price.replace(/[^0-9.]/g, '') || "0",
-          priceCurrency: "USD",
-          availability: "https://schema.org/InStock",
-          url: event.source_url || `${BRAND.baseUrl}/events/${createEventSlugWithCentralTime(event.title, event)}`,
-          validFrom: new Date().toISOString(),
-          seller: {
-            "@type": "Organization",
-            name: event.venue || "Des Moines Insider"
-          }
-        }
-      : {
-          "@type": "Offer",
-          price: "0",
-          priceCurrency: "USD",
-          availability: "https://schema.org/InStock",
-          url: event.source_url || `${BRAND.baseUrl}/events/${createEventSlugWithCentralTime(event.title, event)}`,
-          validFrom: new Date().toISOString()
-        },
+    // An unreadable price is omitted rather than published as "0".
+    // See src/lib/eventOffers.ts.
+    ...buildEventOffers(event.price, {
+      url: event.source_url || `${BRAND.baseUrl}/events/${createEventSlugWithCentralTime(event.title, event)}`,
+      sellerName: event.venue,
+    }),
     performer: event.venue
       ? { "@type": "Organization", name: event.venue }
       : { "@type": "Organization", name: BRAND.name, url: BRAND.baseUrl },

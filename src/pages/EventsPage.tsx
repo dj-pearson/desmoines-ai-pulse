@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/loading-skeleton";
 import { SocialEventCard } from "@/components/SocialEventCard";
 import { arrangeSponsored } from "@/lib/sponsored";
+import { buildEventOffers } from "@/lib/eventOffers";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
 import { ActiveFilterChips } from "@/components/filters/ActiveFilterChips";
 import Header from "@/components/Header";
@@ -582,10 +583,9 @@ export default function EventsPage() {
         url: `${BRAND.baseUrl}/events/${createEventSlugWithCentralTime(event.title, event)}`,
         eventStatus: "https://schema.org/EventScheduled",
         eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
-        offers: event.price && event.price.toLowerCase() !== "free"
-          ? { "@type": "Offer", price: event.price.replace(/[^0-9.]/g, "") || "0", priceCurrency: "USD", availability: "https://schema.org/InStock" }
-          : { "@type": "Offer", price: "0", priceCurrency: "USD", availability: "https://schema.org/InStock" },
-        isAccessibleForFree: !event.price || event.price.toLowerCase().includes("free"),
+        // An unreadable price is omitted rather than published as "0".
+        // See src/lib/eventOffers.ts.
+        ...buildEventOffers(event.price),
       },
     })) || [],
   };

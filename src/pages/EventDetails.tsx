@@ -1,4 +1,5 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
+import { buildEventOffers } from "@/lib/eventOffers";
 import { Helmet } from "react-helmet-async";
 import { useEventBySlug } from "@/hooks/useEventBySlug";
 import { useEvents } from "@/hooks/useEvents";
@@ -318,10 +319,27 @@ export default function EventDetails() {
                           </div>
                           <div>
                             <p className="font-semibold text-foreground text-sm">Admission</p>
-                            <p className="text-sm text-muted-foreground" itemProp="offers" itemScope itemType="https://schema.org/Offer">
-                              <span itemProp="price" content={event.price.replace(/[^0-9.]/g, '') || '0'}>{event.price}</span>
-                              <meta itemProp="priceCurrency" content="USD" />
-                            </p>
+                            {/* The machine-readable price is attached only when the
+                                free-text value actually parses. "Varies" used to ship as
+                                content="0", i.e. a published claim that the event is free.
+                                See src/lib/eventOffers.ts. */}
+                            {(() => {
+                              const parsed = buildEventOffers(event.price).offers as
+                                | Record<string, string>
+                                | undefined;
+                              const amount = parsed?.price ?? parsed?.lowPrice;
+                              if (!amount) {
+                                return (
+                                  <p className="text-sm text-muted-foreground">{event.price}</p>
+                                );
+                              }
+                              return (
+                                <p className="text-sm text-muted-foreground" itemProp="offers" itemScope itemType="https://schema.org/Offer">
+                                  <span itemProp="price" content={amount}>{event.price}</span>
+                                  <meta itemProp="priceCurrency" content="USD" />
+                                </p>
+                              );
+                            })()}
                           </div>
                         </div>
                       )}

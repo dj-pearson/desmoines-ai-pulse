@@ -2,6 +2,7 @@ import { Helmet } from "react-helmet-async";
 import { Event } from "@/lib/types";
 import { createEventSlugWithCentralTime, hasSpecificTime, formatEventDate, formatInCentralTime } from "@/lib/timezone";
 import { BRAND } from "@/lib/brandConfig";
+import { buildEventOffers } from "@/lib/eventOffers";
 import { ogImageUrl } from "@/lib/ogImage";
 
 interface EnhancedEventSEOProps {
@@ -109,7 +110,6 @@ export default function EnhancedEventSEO({
   // Use actual event description for schema (Google penalizes keyword-stuffed descriptions)
   const schemaDescription = event.enhanced_description || event.original_description || `${event.title} - ${event.category} event in ${event.city || BRAND.city}, ${BRAND.state}`;
 
-  const isFree = !event.price || event.price.toLowerCase().includes('free') || event.price === '$0' || event.price === '0';
 
   // Primary Event Schema - Google Events compliant
   // Required: name, startDate, location
@@ -198,15 +198,12 @@ export default function EnhancedEventSEO({
       ? [event.image_url]
       : [`${BRAND.baseUrl}${BRAND.ogImage}`],
     "url": eventUrl,
-    "offers": {
-      "@type": "Offer",
-      "price": isFree ? "0" : (event.price?.replace(/[^0-9.]/g, '') || "0"),
-      "priceCurrency": "USD",
-      "availability": "https://schema.org/InStock",
-      "url": event.source_url || eventUrl,
-      "validFrom": event.created_at || new Date().toISOString(),
-    },
-    "isAccessibleForFree": isFree,
+    // An unreadable price is omitted rather than published as "0".
+    // See src/lib/eventOffers.ts.
+    ...buildEventOffers(event.price, {
+      url: event.source_url || eventUrl,
+      validFrom: event.created_at,
+    }),
     "inLanguage": "en-US",
     "mainEntityOfPage": { "@type": "WebPage", "@id": eventUrl },
   };
