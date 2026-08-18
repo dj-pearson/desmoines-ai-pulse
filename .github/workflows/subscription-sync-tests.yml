@@ -78,6 +78,10 @@ jobs:
       # directions and asserts every surface short-circuits before the model
       # call, which is the whole design (WEB-LEGAL-005).
       - run: deno test --allow-read supabase/functions/_tests/crisis-support.test.ts
+      # The trial-conversion notice must state amount, date and cancel path,
+      # and must not be gated on marketing consent or an LLM score
+      # (WEB-LEGAL-006).
+      - run: deno test --allow-read supabase/functions/_tests/trial-notice.test.ts
       - run: deno test supabase/functions/_shared/jsonLdEvents.test.ts
       # IndexNow payload filtering plus the key-file/constant drift check
       # (WEB-SEO-011). Needs --allow-read for public/<key>.txt.

@@ -140,7 +140,7 @@ const faqs = [
   },
   {
     question: "Is there a free trial?",
-    answer: "New Insider and VIP members get a 7-day free trial. If you don't cancel before the trial ends, your card will be charged the plan price shown at checkout and will auto-renew at the same price each period. Cancel any time during the trial from Account › Subscription and you won't be charged.",
+    answer: "New Insider and VIP members get a 7-day free trial. We email you before it ends, stating the exact amount and the date of the first charge. If you don't cancel before the trial ends, your card will be charged the plan price shown at checkout and will auto-renew at the same price each period. Cancel any time during the trial from Account › Subscription and you won't be charged.",
   },
   {
     question: "What payment methods do you accept?",
