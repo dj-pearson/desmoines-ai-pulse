@@ -2,6 +2,7 @@ import { Helmet } from "react-helmet-async";
 import { Event } from "@/lib/types";
 import { createEventSlugWithCentralTime } from "@/lib/timezone";
 import { BRAND } from "@/lib/brandConfig";
+import { buildEventOffers, isEventAccessibleForFree } from "@/lib/eventOffers";
 
 interface EventListJsonLdProps {
   events: Event[];
@@ -40,7 +41,8 @@ export function EventListJsonLd({
     const endDate = event.end_date
       ? event.end_date
       : new Date(startMs + 3 * 60 * 60 * 1000).toISOString();
-    const isFree = !event.price || event.price.toLowerCase().includes('free') || event.price === '$0' || event.price === '0';
+    const offers = buildEventOffers(event.price);
+    const accessibleForFree = isEventAccessibleForFree(event.price);
 
     return {
       "@type": "Event",
@@ -73,15 +75,17 @@ export function EventListJsonLd({
         ? [event.image_url]
         : [`${BRAND.baseUrl}${BRAND.ogImage}`],
       url: eventUrl,
-      offers: {
-        "@type": "Offer",
-        price: isFree ? "0" : (event.price?.replace(/[^0-9.]/g, '') || "0"),
-        priceCurrency: "USD",
-        availability: "https://schema.org/InStock",
-        url: event.source_url || eventUrl,
-        validFrom: event.created_at || new Date().toISOString(),
-      },
-      isAccessibleForFree: isFree,
+      // WEB-SEO-018: offers and isAccessibleForFree are both omitted when the
+      // price string is unreadable ("Varies", "TBD"). Asserting price "0" there
+      // is what made every one of these nodes claim a free event.
+      ...(offers && {
+        offers: {
+          ...offers,
+          url: event.source_url || eventUrl,
+          validFrom: event.created_at || new Date().toISOString(),
+        },
+      }),
+      ...(accessibleForFree !== undefined && { isAccessibleForFree: accessibleForFree }),
       // WEB-SEO-010: organizer and performer are deliberately absent.
       //
       // This block named BRAND.name as the organizer of every event in the

@@ -85,17 +85,28 @@ const PRERENDER_ENTITIES = process.env.PRERENDER_ENTITIES === 'true';
 const ENTITY_BUDGET_SECONDS = Number(process.env.PRERENDER_ENTITY_BUDGET_SECONDS) || 420;
 
 // Entity sitemaps, in priority order. If the budget runs out, later files lose
-// out — so this order is a product decision, not an alphabetical accident.
-// Events first: they are the freshest, the highest-intent, and the ones AI
-// assistants get asked about by name. Guides/articles are evergreen and are the
-// least damaged by shipping a day late.
+// out, so this order is a product decision, not an alphabetical accident. The
+// budget does run out: the last measured pass rendered 328 of 1,115 URLs in
+// 150s at concurrency 6, so roughly seven in ten entity URLs are decided by
+// this list alone.
+//
+// Restaurants first. The previous order put events first on the reasoning that
+// they are freshest and highest-intent, which is a plausible assumption and is
+// not what Search Console shows: in the 2026-08-17 pull, restaurant URLs drew
+// 6,794 impressions while event URLs drew far fewer and converted zero clicks.
+// Restaurants are also the larger set (480 URLs against 312), so they lose more
+// to a truncated budget. Events stay second because they are the half of the
+// list that goes stale, and guides/articles stay last because they do not.
+//
+// Re-check this against Search Console rather than against intuition. The
+// figure above is a single pull, not a trend.
 const ENTITY_SITEMAPS = [
+  'sitemap-restaurants.xml',
   'sitemap-events.xml',
   // WEB-SEO-013: generated pSEO pages are pure SPA routes with no static
-  // fallback, so they need prerendering more than most — but they sit after
-  // events here because they are evergreen and events are not.
+  // fallback, so they need prerendering more than most, but they sit behind the
+  // two entity sets that actually draw impressions.
   'sitemap-pseo.xml',
-  'sitemap-restaurants.xml',
   'sitemap-attractions.xml',
   'sitemap-playgrounds.xml',
   'sitemap-articles.xml',
