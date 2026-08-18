@@ -50,6 +50,7 @@ import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { NearbyContent } from "@/components/NearbyContent";
 import { LazyLocationMap } from "@/components/LazyLocationMap";
+import { eventPriceContent } from "@/lib/eventOffers";
 
 /** Upcoming events fetched to populate the related/nearby rails (3 shown each). */
 const RELATED_POOL_SIZE = 50;
@@ -318,10 +319,19 @@ export default function EventDetails() {
                           </div>
                           <div>
                             <p className="font-semibold text-foreground text-sm">Admission</p>
-                            <p className="text-sm text-muted-foreground" itemProp="offers" itemScope itemType="https://schema.org/Offer">
-                              <span itemProp="price" content={event.price.replace(/[^0-9.]/g, '') || '0'}>{event.price}</span>
-                              <meta itemProp="priceCurrency" content="USD" />
-                            </p>
+                            {/* WEB-SEO-018: microdata `price` takes one number
+                                only, so a range or an unreadable string drops
+                                the Offer scope and shows the text alone. The
+                                JSON-LD on this page still carries the full
+                                AggregateOffer. */}
+                            {eventPriceContent(event.price) ? (
+                              <p className="text-sm text-muted-foreground" itemProp="offers" itemScope itemType="https://schema.org/Offer">
+                                <span itemProp="price" content={eventPriceContent(event.price)}>{event.price}</span>
+                                <meta itemProp="priceCurrency" content="USD" />
+                              </p>
+                            ) : (
+                              <p className="text-sm text-muted-foreground">{event.price}</p>
+                            )}
                           </div>
                         </div>
                       )}

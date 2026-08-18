@@ -56,6 +56,7 @@ import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { SearchAutocomplete, addRecentSearch } from "@/components/SearchAutocomplete";
 import { formatCount } from "@/lib/pluralize";
+import { eventOfferProperties } from "@/lib/eventOffers";
 
 // Lazy load heavy map component (includes Leaflet library ~150KB)
 const EventsMap = lazy(() => import("@/components/EventsMap"));
@@ -582,10 +583,9 @@ export default function EventsPage() {
         url: `${BRAND.baseUrl}/events/${createEventSlugWithCentralTime(event.title, event)}`,
         eventStatus: "https://schema.org/EventScheduled",
         eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
-        offers: event.price && event.price.toLowerCase() !== "free"
-          ? { "@type": "Offer", price: event.price.replace(/[^0-9.]/g, "") || "0", priceCurrency: "USD", availability: "https://schema.org/InStock" }
-          : { "@type": "Offer", price: "0", priceCurrency: "USD", availability: "https://schema.org/InStock" },
-        isAccessibleForFree: !event.price || event.price.toLowerCase().includes("free"),
+        // WEB-SEO-018: a range yields an AggregateOffer, and an unreadable
+        // price ("Varies") yields neither key rather than a fabricated 0.
+        ...eventOfferProperties(event.price),
       },
     })) || [],
   };

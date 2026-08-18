@@ -3,6 +3,7 @@ import { Event } from "@/lib/types";
 import { createEventSlugWithCentralTime, hasSpecificTime, formatEventDate, formatInCentralTime } from "@/lib/timezone";
 import { BRAND } from "@/lib/brandConfig";
 import { ogImageUrl } from "@/lib/ogImage";
+import { buildEventOffers, isEventAccessibleForFree } from "@/lib/eventOffers";
 
 interface EnhancedEventSEOProps {
   event: Event;
@@ -109,7 +110,8 @@ export default function EnhancedEventSEO({
   // Use actual event description for schema (Google penalizes keyword-stuffed descriptions)
   const schemaDescription = event.enhanced_description || event.original_description || `${event.title} - ${event.category} event in ${event.city || BRAND.city}, ${BRAND.state}`;
 
-  const isFree = !event.price || event.price.toLowerCase().includes('free') || event.price === '$0' || event.price === '0';
+  const offers = buildEventOffers(event.price);
+  const accessibleForFree = isEventAccessibleForFree(event.price);
 
   // Primary Event Schema - Google Events compliant
   // Required: name, startDate, location
@@ -198,15 +200,16 @@ export default function EnhancedEventSEO({
       ? [event.image_url]
       : [`${BRAND.baseUrl}${BRAND.ogImage}`],
     "url": eventUrl,
-    "offers": {
-      "@type": "Offer",
-      "price": isFree ? "0" : (event.price?.replace(/[^0-9.]/g, '') || "0"),
-      "priceCurrency": "USD",
-      "availability": "https://schema.org/InStock",
-      "url": event.source_url || eventUrl,
-      "validFrom": event.created_at || new Date().toISOString(),
-    },
-    "isAccessibleForFree": isFree,
+    // WEB-SEO-018: a range becomes an AggregateOffer, and an unreadable price
+    // ("Varies") drops both properties rather than asserting a price of 0.
+    ...(offers && {
+      "offers": {
+        ...offers,
+        "url": event.source_url || eventUrl,
+        "validFrom": event.created_at || new Date().toISOString(),
+      },
+    }),
+    ...(accessibleForFree !== undefined && { "isAccessibleForFree": accessibleForFree }),
     "inLanguage": "en-US",
     "mainEntityOfPage": { "@type": "WebPage", "@id": eventUrl },
   };
@@ -237,9 +240,11 @@ export default function EnhancedEventSEO({
         "name": `How much does ${event.title} cost?`,
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": (!event.price || event.price.toLowerCase().includes('free'))
+          "text": accessibleForFree === true
             ? `${event.title} is a free event in ${BRAND.city}, ${BRAND.state}. No ticket purchase is required.`
-            : `Tickets for ${event.title} are ${event.price}. Visit the official event page for ticket information and availability.`
+            : accessibleForFree === undefined
+              ? `Ticket pricing for ${event.title} is set by the organiser. Visit the official event page for current prices and availability.`
+              : `Tickets for ${event.title} are ${event.price}. Visit the official event page for ticket information and availability.`
         }
       },
       {
