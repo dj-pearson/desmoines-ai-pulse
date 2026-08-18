@@ -23,6 +23,14 @@ export interface NurtureEmailArgs {
   unsubscribeToken?: string | null;
   qualityScore?: number | null;
   fromAddress?: string;
+  /**
+   * "marketing" (default) gets the full CAN-SPAM footer with an unsubscribe
+   * link. "transactional" gets the minimal footer and no unsubscribe, for
+   * messages the recipient cannot opt out of because they are about their own
+   * billing or account - see _shared/trialNotice.ts (WEB-LEGAL-006). Consent is
+   * still the caller's decision; this only picks the footer.
+   */
+  category?: "marketing" | "transactional";
 }
 
 export interface NurtureEmailResult {
@@ -44,7 +52,7 @@ export async function sendNurtureEmail(
     bodyHtml: args.bodyHtml,
     bodyText: args.bodyText,
     recipient: { email: args.email, unsubscribeToken: args.unsubscribeToken ?? null },
-    category: "marketing",
+    category: args.category ?? "marketing",
   });
 
   if (!apiKey) {

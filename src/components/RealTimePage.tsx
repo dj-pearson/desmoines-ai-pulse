@@ -16,21 +16,21 @@ export default function RealTimePage() {
     "@context": "https://schema.org",
     "@type": "WebPage",
     "name": "Real-Time Des Moines Business Information",
-    "description": "Live business hours, wait times, and community updates for Des Moines area",
+    "description": "Which Des Moines restaurants are open right now, worked out from their posted hours",
     "url": "https://desmoinesinsider.com/real-time",
     "mainEntity": {
       "@type": "ItemList",
-      "name": "Live Business Updates",
+      "name": "Open Now in Des Moines",
       "itemListElement": [
         {
           "@type": "LocalBusiness",
           "name": "Des Moines Area Restaurants",
-          "description": "Real-time hours and availability"
+          "description": "Open or closed now, from posted hours"
         },
         {
-          "@type": "TouristAttraction", 
+          "@type": "TouristAttraction",
           "name": "Des Moines Attractions",
-          "description": "Live capacity and wait times"
+          "description": "Attraction listings with published hours"
         }
       ]
     },
@@ -52,17 +52,15 @@ export default function RealTimePage() {
   return (
     <>
       <SEOHead
-        title="What's Open Right Now in Des Moines | Live Business Information"
-        description="Live business hours, wait times, and community updates for Des Moines restaurants, attractions, and services. Real-time information updated every 5 minutes by local residents."
+        title="What's Open Right Now in Des Moines"
+        description="See which Des Moines restaurants are open right now, worked out from their posted hours and the current time. Hours come from the venues themselves."
         type="website"
         keywords={[
           "Des Moines open now",
           "what's open Des Moines",
           "restaurant hours Des Moines",
-          "live business information",
-          "Des Moines wait times",
           "open restaurants near me",
-          "Des Moines real time updates"
+          "Des Moines restaurants open late"
         ]}
         structuredData={realTimePageSchema}
         url="/real-time"
@@ -73,7 +71,7 @@ export default function RealTimePage() {
         <div className="text-center space-y-4 mb-12">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-100 text-green-800 rounded-full text-sm font-medium mb-4">
             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-            Live Updates Every 5 Minutes
+            Rechecked while this page is open
           </div>
           
           <h1 className="text-4xl md:text-5xl font-bold text-gray-900 leading-tight">
@@ -81,8 +79,8 @@ export default function RealTimePage() {
           </h1>
           
           <p className="text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
-            Real-time business information from Des Moines residents. Check current hours, 
-            wait times, and availability before you visit. No more showing up to closed doors.
+            Open and closed status worked out from each venue&apos;s posted hours and the
+            current time in Des Moines. Call ahead for holidays and late changes.
           </p>
 
           {/* Quick Stats */}
@@ -218,35 +216,30 @@ export default function RealTimePage() {
             <div>
               <h3 className="text-xl font-semibold mb-4 text-gray-900">Why Real-Time Information Matters</h3>
               <p className="mb-4">
-                Des Moines Insider provides live business information that tourist guides can't offer. 
-                Our community-driven platform updates every 5 minutes with real conditions from local 
-                residents who frequent these businesses.
+                This page reads the opening hours each venue published and compares them
+                against the current time in Central Time, so the answer changes through the
+                day without anyone having to update a list by hand.
               </p>
               
               <h4 className="text-lg font-medium mb-3 text-gray-900">What Makes Us Different</h4>
               <ul className="space-y-2 text-sm">
-                <li>• <strong>Live wait times</strong> from actual customers</li>
-                <li>• <strong>Current availability</strong> and capacity levels</li>
-                <li>• <strong>Special offers</strong> and happy hour updates</li>
-                <li>• <strong>Real operating hours</strong> including holiday changes</li>
-                <li>• <strong>Community insights</strong> from Des Moines families</li>
+                <li>• <strong>Posted hours</strong> as the venue published them</li>
+                <li>• <strong>Central Time</strong> throughout, so evening cutoffs are right</li>
+                <li>• <strong>Rechecked</strong> while the page is open, as the clock moves</li>
               </ul>
             </div>
             
             <div>
               <h3 className="text-xl font-semibold mb-4 text-gray-900">For Residents, By Residents</h3>
               <p className="mb-4">
-                Unlike tourism-focused platforms like CatchDesMoines, our community shares experiences 
-                from the resident perspective. We know which restaurants are family-friendly, where 
-                to find the best local specials, and when places are actually worth visiting.
+                The community section below is open for residents to post reviews and updates.
+                It shows what people have actually submitted, so it starts empty rather than
+                pre-filled.
               </p>
               
               <h4 className="text-lg font-medium mb-3 text-gray-900">Community Features</h4>
               <ul className="space-y-2 text-sm">
-                <li>• <strong>Verified local reviews</strong> from Des Moines residents</li>
-                <li>• <strong>Real-time updates</strong> on business conditions</li>
-                <li>• <strong>Family-focused insights</strong> for local parents</li>
-                <li>• <strong>Seasonal information</strong> for year-round residents</li>
+                <li>• <strong>Reviews and updates</strong> written by people who live here</li>
                 <li>• <strong>Neighborhood context</strong> beyond downtown tourist areas</li>
               </ul>
             </div>
@@ -259,15 +252,12 @@ export default function RealTimePage() {
                 <div className="font-medium text-gray-900">Restaurants</div>
                 <ul className="mt-2 space-y-1 text-gray-600">
                   <li>• "restaurants open now"</li>
-                  <li>• "Des Moines wait times"</li>
-                  <li>• "happy hour specials"</li>
                 </ul>
               </div>
               <div>
                 <div className="font-medium text-gray-900">Attractions</div>
                 <ul className="mt-2 space-y-1 text-gray-600">
                   <li>• "Science Center hours"</li>
-                  <li>• "Adventureland crowds"</li>
                   <li>• "events today"</li>
                 </ul>
               </div>

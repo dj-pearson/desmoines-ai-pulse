@@ -16,6 +16,7 @@
  */
 import { scoreOutput } from "../scoreOutput.ts";
 import { sendNurtureEmail } from "../sendNurtureEmail.ts";
+import { buildTrialNotice, planAmount } from "../trialNotice.ts";
 import type { AgentRun } from "./types.ts";
 
 const AGENT_KEY = "subscription-nurture";
@@ -37,6 +38,21 @@ async function consented(supabase: Client, userId: string): Promise<{ email: str
 async function cappedRecently(supabase: Client, userId: string, kind: string, gapDays: number): Promise<boolean> {
   const { data } = await supabase.from("nurture_sends").select("created_at").eq("user_id", userId).eq("kind", kind).order("created_at", { ascending: false }).limit(1);
   return !!(data?.[0] && Date.now() - new Date(data[0].created_at).getTime() < gapDays * DAY);
+}
+
+/**
+ * Transactional sender for notices the recipient cannot opt out of, because
+ * they concern their own billing (WEB-LEGAL-006). Unlike sendStep below it does
+ * NOT consult messagingAllowed and does NOT run scoreOutput: both of those fail
+ * closed and silently, which for a required disclosure means the people most
+ * likely to be surprised by a charge are the ones least likely to be told.
+ */
+async function sendNotice(supabase: Client, userId: string, email: string, kind: string, subject: string, html: string, text: string): Promise<boolean> {
+  const res = await sendNurtureEmail(supabase, {
+    agentKey: AGENT_KEY, kind, userId, email, subject,
+    bodyHtml: html, bodyText: text, category: "transactional",
+  });
+  return res.ok;
 }
 
 async function sendStep(supabase: Client, userId: string, email: string, kind: string, subject: string, html: string, text: string): Promise<boolean> {
@@ -68,20 +84,55 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   }
 
   // ── 1) Trial ending ──────────────────────────────────────────────────
+  // Safety net only. stripe-webhook's customer.subscription.trial_will_end is
+  // the authoritative sender because Stripe hands it the exact price and date;
+  // this sweep covers the case where that event never arrives. Both dedupe on
+  // nurture_sends kind="trial_ending".
+  //
+  // Sent as a transactional notice: no marketing-consent check, no quality
+  // gate. It states the amount, the date and how to cancel (WEB-LEGAL-006).
   const trialCutoff = new Date(now + TRIAL_WINDOW_DAYS * DAY).toISOString();
   const { data: trials } = await supabase
     .from("user_subscriptions")
-    .select("user_id, current_period_end")
+    .select("user_id, plan_id, current_period_end, trial_end, billing_interval")
     .eq("status", "trialing")
     .not("current_period_end", "is", null)
     .lte("current_period_end", trialCutoff)
     .limit(300);
-  for (const t of (trials ?? []) as { user_id: string; current_period_end: string }[]) {
-    const c = await consented(supabase, t.user_id);
-    if (!c || !c.allowed) continue;
+  for (const t of (trials ?? []) as { user_id: string; plan_id: string | null; current_period_end: string; trial_end: string | null; billing_interval: string | null }[]) {
+    // Email address only. The marketing-preference check is deliberately
+    // absent here; this is a billing notice. See sendNotice above.
+    const { data: profile, error: profileError } = await supabase.from("profiles").select("email").eq("user_id", t.user_id).maybeSingle();
+    if (profileError) {
+      // Skip this user, keep the batch going, and leave a trace: a notice that
+      // silently never sends is the defect this story exists to fix.
+      console.error(`trial notice: profile lookup failed for ${t.user_id}:`, profileError.message);
+      continue;
+    }
+    const email = (profile as { email?: string } | null)?.email;
+    if (!email) continue;
     if (await cappedRecently(supabase, t.user_id, "trial_ending", TRIAL_WINDOW_DAYS + 1)) continue;
-    const html = `<h1>Your trial ends soon</h1><p>Keep your Insider perks — premium picks, the AI Trip Planner, and more — without interruption.</p><p><a href="${SITE}/profile?tab=settings">Manage your plan →</a></p>`;
-    if (await sendStep(supabase, t.user_id, c.email, "trial_ending", "Your Des Moines Insider trial ends soon", html, "Your trial ends soon — keep your Insider perks. Manage your plan.")) trial++;
+
+    // Best-effort: without it the notice still sends, naming no amount.
+    const { data: plan, error: planError } = await supabase
+      .from("subscription_plans")
+      .select("display_name, price_monthly, price_yearly")
+      .eq("id", t.plan_id)
+      .maybeSingle();
+    if (planError) {
+      console.warn(`trial notice: plan lookup failed for ${t.user_id}, omitting amount:`, planError.message);
+    }
+
+    const notice = buildTrialNotice({
+      planName: (plan as { display_name?: string } | null)?.display_name ?? "subscription",
+      amount: planAmount(plan as { price_monthly?: number | null; price_yearly?: number | null } | null, t.billing_interval),
+      interval: t.billing_interval,
+      // trial_end is the charge date; current_period_end only coincides with it.
+      chargeAt: t.trial_end ?? t.current_period_end,
+      siteUrl: SITE,
+    });
+
+    if (await sendNotice(supabase, t.user_id, email, "trial_ending", notice.subject, notice.html, notice.text)) trial++;
   }
 
   // ── 2) Dunning (past_due) ────────────────────────────────────────────

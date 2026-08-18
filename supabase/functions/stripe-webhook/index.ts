@@ -13,6 +13,8 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14.21.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { listAdminUserIds } from "../_shared/apiKeyAuth.ts";
+import { sendNurtureEmail } from "../_shared/sendNurtureEmail.ts";
+import { buildTrialNotice, planAmount } from "../_shared/trialNotice.ts";
 
 // Stripe webhooks are server-to-server and do not require CORS headers.
 // Removing Access-Control-Allow-Origin prevents browser-based spoofing.
@@ -136,6 +138,12 @@ serve(async (req) => {
       case "customer.subscription.deleted": {
         const subscription = event.data.object as Stripe.Subscription;
         await handleSubscriptionDeleted(supabase, subscription);
+        break;
+      }
+
+      case "customer.subscription.trial_will_end": {
+        const subscription = event.data.object as Stripe.Subscription;
+        await handleTrialWillEnd(supabase, subscription);
         break;
       }
 
@@ -343,6 +351,10 @@ async function handleSubscriptionPayment(
     trial_end: subscription.trial_end
       ? new Date(subscription.trial_end * 1000).toISOString()
       : null,
+    // WEB-LEGAL-006: needed to state the real renewal amount in the
+    // trial-conversion notice. Nothing else recorded monthly vs yearly, and it
+    // cannot be inferred during a trial because current_period_end is trial_end.
+    billing_interval: subscription.items?.data?.[0]?.price?.recurring?.interval ?? null,
   };
 
   if (existingSubscription) {
@@ -402,6 +414,11 @@ async function handleSubscriptionUpdated(
       cancel_at_period_end: subscription.cancel_at_period_end,
       canceled_at: subscription.canceled_at
         ? new Date(subscription.canceled_at * 1000).toISOString()
+        : null,
+      // Backfills existing rows as Stripe sends updates (WEB-LEGAL-006).
+      billing_interval: subscription.items?.data?.[0]?.price?.recurring?.interval ?? null,
+      trial_end: subscription.trial_end
+        ? new Date(subscription.trial_end * 1000).toISOString()
         : null,
     })
     .eq("stripe_subscription_id", subscription.id);
@@ -536,4 +553,112 @@ function mapStripeStatus(stripeStatus: Stripe.Subscription.Status): string {
   };
 
   return statusMap[stripeStatus] || "active";
+}
+
+
+/**
+ * customer.subscription.trial_will_end (WEB-LEGAL-006).
+ *
+ * Stripe fires this three days before a trial converts, and the event carries
+ * the exact price and trial_end, which makes it the authoritative source for
+ * the notice. subscription-nurture keeps a daily sweep as a safety net for when
+ * this never arrives; both dedupe through the nurture_sends ledger on
+ * kind="trial_ending".
+ *
+ * Deliberately NOT gated on marketing consent and NOT passed through the
+ * LLM quality gate. This is a billing disclosure, so suppressing it for someone
+ * who opted out of marketing would withhold it from exactly the people most
+ * likely to be surprised by the charge.
+ */
+async function handleTrialWillEnd(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  subscription: Stripe.Subscription,
+): Promise<void> {
+  if (!subscription.trial_end) return;
+
+  const { data: sub, error: subError } = await supabase
+    .from("user_subscriptions")
+    .select("user_id, plan_id")
+    .eq("stripe_subscription_id", subscription.id)
+    .maybeSingle();
+
+  if (subError) {
+    // Throwing returns a non-2xx, so Stripe retries and the notice is not lost.
+    console.error("trial_will_end: subscription lookup failed:", subError.message);
+    throw subError;
+  }
+  if (!sub?.user_id) {
+    console.warn(`trial_will_end: no local subscription for ${subscription.id}`);
+    return;
+  }
+
+  // Already sent for this trial? The daily sweep may have got there first.
+  const { data: priorSend, error: priorError } = await supabase
+    .from("nurture_sends")
+    .select("id")
+    .eq("user_id", sub.user_id)
+    .eq("kind", "trial_ending")
+    .gte("created_at", new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString())
+    .limit(1);
+  if (priorError) {
+    // Cannot prove it was already sent. Send anyway: a duplicate notice is a
+    // far better failure than a missing one.
+    console.warn("trial_will_end: dedupe check failed, sending anyway:", priorError.message);
+  } else if (priorSend && priorSend.length > 0) {
+    return;
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("email")
+    .eq("user_id", sub.user_id)
+    .maybeSingle();
+  if (profileError) {
+    console.error("trial_will_end: profile lookup failed:", profileError.message);
+    throw profileError;
+  }
+  if (!profile?.email) {
+    console.warn(`trial_will_end: no email for user ${sub.user_id}`);
+    return;
+  }
+
+  // Best-effort: without the plan row the notice still sends, naming no amount
+  // and pointing at the subscription page instead (see buildTrialNotice).
+  const { data: plan, error: planError } = await supabase
+    .from("subscription_plans")
+    .select("display_name, price_monthly, price_yearly")
+    .eq("id", sub.plan_id)
+    .maybeSingle();
+  if (planError) {
+    console.warn("trial_will_end: plan lookup failed, notice will omit the amount:", planError.message);
+  }
+
+  const price = subscription.items?.data?.[0]?.price;
+  const interval = price?.recurring?.interval ?? null;
+  // Prefer the amount Stripe will actually charge over the catalogue price.
+  const amount =
+    typeof price?.unit_amount === "number"
+      ? price.unit_amount / 100
+      : planAmount(plan, interval);
+
+  const notice = buildTrialNotice({
+    planName: plan?.display_name ?? "subscription",
+    amount,
+    interval,
+    chargeAt: new Date(subscription.trial_end * 1000).toISOString(),
+    siteUrl: (Deno.env.get("VITE_SITE_URL") || Deno.env.get("SITE_URL") ||
+      "https://desmoinesinsider.com").replace(/\/+$/, ""),
+  });
+
+  await sendNurtureEmail(supabase, {
+    agentKey: "stripe-webhook",
+    kind: "trial_ending",
+    userId: sub.user_id,
+    email: profile.email,
+    subject: notice.subject,
+    bodyHtml: notice.html,
+    bodyText: notice.text,
+    category: "transactional",
+  });
 }

@@ -92,6 +92,10 @@ const PENDING_MIGRATIONS = [
   // try/catch, so a missing table degrades logging only — but the reference is
   // still real and must not be baselined as a permanent violation.
   { table: 'menu_scrape_attempts', migration: '20260730000001' },
+  // Billing interval, needed so the trial-conversion notice can state the real
+  // amount (WEB-LEGAL-006). Additive nullable column; readers must treat NULL
+  // as "unknown" rather than assuming monthly.
+  { table: 'user_subscriptions', column: 'billing_interval', migration: '20260817000001' },
 ];
 
 const isPending = (table, column) =>
