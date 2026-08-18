@@ -28,6 +28,7 @@
 import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import { handleCors, getCorsHeaders, isOriginAllowed } from '../_shared/cors.ts';
+import { conversationHasCrisisIntent, crisisPayload } from '../_shared/crisisSupport.ts';
 import { checkRateLimitPersistent, addRateLimitHeaders } from '../_shared/rateLimit.ts';
 import { getAIConfig, getAnthropicApiKey } from '../_shared/aiConfig.ts';
 import { sanitizePostgrestPattern } from '../_shared/validation.ts';
@@ -368,6 +369,27 @@ serve(async (req) => {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
+  }
+
+  // Crisis check, before the quota and before the model (WEB-LEGAL-005).
+  //
+  // Ahead of the quota deliberately: someone in distress must not be turned
+  // away because they ran out of daily searches. Ahead of the model because
+  // SYSTEM_PROMPT forces every answer through the return_picks tool, so the
+  // model has no channel to say anything other than venue recommendations.
+  //
+  // picks and followUpSuggestions stay present and empty: shipped iOS and
+  // Android binaries decode both as non-optional, so dropping them would break
+  // parsing on clients that predate the crisis field. Those clients render an
+  // empty result rather than the card, which is degraded but not harmful. The
+  // important part is that they no longer answer distress with restaurants.
+  //
+  // Nothing about the message is logged, stored or counted.
+  if (conversationHasCrisisIntent(messages)) {
+    return new Response(
+      JSON.stringify({ picks: [], followUpSuggestions: [], ...crisisPayload() }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    );
   }
 
   // Tier + per-day quota

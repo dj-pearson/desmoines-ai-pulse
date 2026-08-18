@@ -19,6 +19,7 @@ import { writeAgentAudit } from "../_shared/auditLog.ts";
 import { retrieveKb } from "../_shared/kbRetrieve.ts";
 import { getAIConfig, getAnthropicApiKey } from "../_shared/aiConfig.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { crisisMessageText, crisisPayload, detectCrisisIntent } from "../_shared/crisisSupport.ts";
 
 const AGENT_KEY = "support-chat";
 const HUMAN_RE = /\b(speak|talk|connect|escalate|transfer)\b.{0,20}\b(human|person|agent|representative|rep|someone|support team)\b|\bhuman\b.{0,10}\bplease\b/i;
@@ -121,6 +122,18 @@ Deno.serve(async (req) => {
   const wantsHuman = body.talkToHuman === true;
   const lastUser = [...history].reverse().find((m) => m.role === "user")?.content ?? "";
   if (history.length === 0 && !wantsHuman) return j({ error: "messages required" }, 400, corsHeaders);
+
+  // Crisis check (WEB-LEGAL-005). Before runAgent, so no model call, no KB
+  // retrieval, no ticket and no agent ledger entry: a distressed message must
+  // not sit in a support queue waiting for a human who may be hours away. The
+  // reply is static and returned immediately. Nothing about it is stored.
+  if (detectCrisisIntent(lastUser)) {
+    return j(
+      { ok: true, escalated: false, reply: crisisMessageText(), sources: [], ...crisisPayload() },
+      200,
+      corsHeaders,
+    );
+  }
 
   const ledger = await runAgent(AGENT_KEY, async (ctx) => {
     // Explicit "talk to a human" (button or phrasing) → escalate immediately.

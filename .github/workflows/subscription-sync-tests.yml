@@ -74,6 +74,10 @@ jobs:
       # deliberately retained, so erasure coverage cannot drift silently
       # the next time a feature adds a table (WEB-LEGAL-004).
       - run: deno test --allow-read supabase/functions/_tests/user-data-tables.test.ts
+      # Crisis floor on the public AI surfaces: pins the matcher in both
+      # directions and asserts every surface short-circuits before the model
+      # call, which is the whole design (WEB-LEGAL-005).
+      - run: deno test --allow-read supabase/functions/_tests/crisis-support.test.ts
       - run: deno test supabase/functions/_shared/jsonLdEvents.test.ts
       # IndexNow payload filtering plus the key-file/constant drift check
       # (WEB-SEO-011). Needs --allow-read for public/<key>.txt.

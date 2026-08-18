@@ -19,6 +19,7 @@ import { writeAgentAudit } from "../auditLog.ts";
 import { scoreOutput } from "../scoreOutput.ts";
 import { retrieveKb, type KbPassage } from "../kbRetrieve.ts";
 import { getAIConfig } from "../aiConfig.ts";
+import { crisisMessageText, detectCrisisIntent } from "../crisisSupport.ts";
 import type { AgentRun } from "./types.ts";
 
 const AGENT_KEY = "support-responder";
@@ -128,6 +129,25 @@ export const run: AgentRun = async (ctx, { supabase, body }) => {
     }
 
     const question = `${t.subject ?? ""}\n${last?.sender === "user" ? last.body : t.body}`.trim();
+
+    // Crisis takes precedence over every other route (WEB-LEGAL-005). Not an
+    // escalation: escalating means a person picks this up when they next work
+    // the queue, which could be hours. Post the resources immediately AND flag
+    // for a human, rather than choosing between them. No model call, no KB
+    // retrieval, no quality gate - the reply is static.
+    if (detectCrisisIntent(question)) {
+      await supabase.from("support_messages").insert({
+        ticket_id: t.id,
+        sender: "agent",
+        body: crisisMessageText(),
+        metadata: { auto: true, crisisResources: true },
+      });
+      await escalate(supabase, t, null, "crisis resources sent; needs a human", ctx);
+      escalated++;
+      ctx.processed(1);
+      continue;
+    }
+
     const forcedHuman = HUMAN_RE.test(question);
     const sensitive = SENSITIVE_RE.test(question) || ["billing", "account", "legal"].includes((t.category ?? "").toLowerCase());
 

@@ -2,6 +2,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
 import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
+import { detectCrisisIntent, crisisPayload } from '../_shared/crisisSupport.ts';
 import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
 import { resolveEntitledTier, hasFeatureAccess } from "../_shared/entitlements.ts";
 import { getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
@@ -173,6 +174,23 @@ serve(async (req) => {
       preferences = {},
       existingTripId
     }: TripPlannerRequest = await req.json();
+
+    // Crisis check on the free-text preference fields (WEB-LEGAL-005). The
+    // itinerary planner is mostly structured input, but mustSee and the other
+    // string arrays are typed by the user and reach the model. Checked before
+    // any model call; nothing is logged or stored.
+    const freeText = [
+      ...(Array.isArray(preferences.mustSee) ? preferences.mustSee : []),
+      ...(Array.isArray(preferences.interests) ? preferences.interests : []),
+      ...(Array.isArray(preferences.accessibilityNeeds) ? preferences.accessibilityNeeds : []),
+      ...(Array.isArray(preferences.dietaryRestrictions) ? preferences.dietaryRestrictions : []),
+    ];
+    if (freeText.some((t) => detectCrisisIntent(t))) {
+      return new Response(
+        JSON.stringify(crisisPayload()),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
 
     // Validate dates
     const start = new Date(startDate);
