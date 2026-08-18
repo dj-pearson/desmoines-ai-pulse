@@ -17,9 +17,10 @@
  * two-step flow. See the branch at the bottom of the handler for the removal
  * condition (XPLAT-001).
  *
- * Permanently deletes from: user_event_interactions, user_restaurant_interactions,
- * favorites, ratings, reviews, user_subscriptions, user_analytics, profiles,
- * newsletter_subscribers (by email), and auth.users.
+ * Permanently deletes every table listed in _shared/userDataTables.ts
+ * (PURGE_TABLES), plus newsletter_subscribers (by email) and auth.users.
+ * Tables kept on purpose, each with its stated basis, are RETAINED_TABLES in
+ * the same file. Both lists are covered by _tests/user-data-tables.test.ts.
  *
  * Also purges uploaded files from every user-writable storage bucket
  * (WEB-LEGAL-003). See _shared/purgeUserStorage.ts for the bucket list and for
@@ -38,6 +39,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
 import { writeAuditLog, auditIp } from "../_shared/auditLog.ts";
 import { purgeUserStorage, type BucketPurgeResult } from "../_shared/purgeUserStorage.ts";
+import { PURGE_TABLES } from "../_shared/userDataTables.ts";
 
 const TOKEN_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
 
@@ -64,31 +66,33 @@ async function performDeletion(
 ): Promise<Response> {
   const userId = user.id;
 
-  // Delete user data in order (respect foreign key constraints).
-  // Every table below is keyed by user_id. `user_analytics` holds
-  // behavioral rows (page_url, user_agent, session) that are identifiable
-  // once tied to user_id, so erasure must cover it too (GDPR Art. 17).
-  const tables = [
-    "user_event_interactions",
-    "user_restaurant_interactions",
-    "favorites",
-    "ratings",
-    "reviews",
-    "user_subscriptions",
-    "user_analytics",
-    "profiles",
-  ];
+  // Delete user data in dependency order. The list, and the tables deliberately
+  // kept with their basis, live in _shared/userDataTables.ts, which is covered
+  // by a test that fails if a user_id table is left unclassified (WEB-LEGAL-004).
+  const tableFailures: { table: string; code?: string; message: string }[] = [];
 
-  for (const table of tables) {
+  for (const table of PURGE_TABLES) {
     const { error } = await supabase
       .from(table)
       .delete()
       .eq("user_id", userId);
 
-    if (error) {
-      // A table may not exist in every environment — warn and continue so a
-      // single failure never leaves the erasure half-done.
-      console.warn(`Warning deleting from ${table}:`, error.message);
+    if (!error) continue;
+
+    // Keep going so one failure never leaves the erasure half-done, but record
+    // it. The previous version warned and moved on, which made a delete against
+    // a table that does not exist (42P01) indistinguishable from a successful
+    // one - and console.* is stripped from production builds, so the warning did
+    // not even reach a log.
+    tableFailures.push({ table, code: error.code, message: error.message });
+
+    if (error.code === "42P01") {
+      console.error(
+        `Erasure targeted a non-existent table "${table}". The delete list has ` +
+        `drifted from the schema; see _shared/userDataTables.ts.`,
+      );
+    } else {
+      console.error(`Failed deleting from ${table} (${error.code}):`, error.message);
     }
   }
 
@@ -100,8 +104,13 @@ async function performDeletion(
       .delete()
       .eq("email", user.email.toLowerCase());
     if (newsletterError) {
-      console.warn(
-        "Warning deleting from newsletter_subscribers:",
+      tableFailures.push({
+        table: "newsletter_subscribers",
+        code: newsletterError.code,
+        message: newsletterError.message,
+      });
+      console.error(
+        "Failed deleting from newsletter_subscribers:",
         newsletterError.message,
       );
     }
@@ -149,17 +158,25 @@ async function performDeletion(
       target_user_id: userId,
       storage_files_removed: storageRemoved,
       storage_buckets: storageResults,
+      tables_attempted: PURGE_TABLES.length,
+      table_failures: tableFailures,
     },
   });
 
   return new Response(
     JSON.stringify({
+      // The auth record is gone, so the account is unrecoverable either way and
+      // the client should still sign out. But do not claim a clean erasure when
+      // rows or files were left behind - reporting success regardless is what
+      // hid this for so long.
       success: true,
-      // Reported rather than assumed: a purge that silently removed nothing is
-      // the defect this story exists to fix.
+      complete: tableFailures.length === 0 && storageFailures.length === 0,
       storage_files_removed: storageRemoved,
       ...(storageFailures.length > 0
         ? { storage_incomplete: storageFailures.map((f) => f.bucket) }
+        : {}),
+      ...(tableFailures.length > 0
+        ? { tables_incomplete: tableFailures.map((f) => f.table) }
         : {}),
     }),
     {

@@ -70,6 +70,10 @@ jobs:
       # bucket is public, so anything the purge misses stays fetchable by URL
       # (WEB-LEGAL-003).
       - run: deno test --allow-read supabase/functions/_tests/purge-user-storage.test.ts
+      # Fails when a table with a user_id column is neither purged nor
+      # deliberately retained, so erasure coverage cannot drift silently
+      # the next time a feature adds a table (WEB-LEGAL-004).
+      - run: deno test --allow-read supabase/functions/_tests/user-data-tables.test.ts
       - run: deno test supabase/functions/_shared/jsonLdEvents.test.ts
       # IndexNow payload filtering plus the key-file/constant drift check
       # (WEB-SEO-011). Needs --allow-read for public/<key>.txt.
