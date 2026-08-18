@@ -66,6 +66,10 @@ jobs:
       # Reads the iOS/Android sources as well as the edge function, so the
       # client/server deletion contract can't drift again (XPLAT-001).
       - run: deno test --allow-read supabase/functions/_tests/account-deletion-contract.test.ts
+      # Erasure has to reach uploaded files, not just table rows. Every upload
+      # bucket is public, so anything the purge misses stays fetchable by URL
+      # (WEB-LEGAL-003).
+      - run: deno test --allow-read supabase/functions/_tests/purge-user-storage.test.ts
       - run: deno test supabase/functions/_shared/jsonLdEvents.test.ts
       # IndexNow payload filtering plus the key-file/constant drift check
       # (WEB-SEO-011). Needs --allow-read for public/<key>.txt.

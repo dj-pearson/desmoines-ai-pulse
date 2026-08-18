@@ -21,6 +21,10 @@
  * favorites, ratings, reviews, user_subscriptions, user_analytics, profiles,
  * newsletter_subscribers (by email), and auth.users.
  *
+ * Also purges uploaded files from every user-writable storage bucket
+ * (WEB-LEGAL-003). See _shared/purgeUserStorage.ts for the bucket list and for
+ * why ad-creatives is excluded.
+ *
  * GDPR Art. 17 (right to erasure) — the delete set is kept aligned with every
  * table that stores user-identifiable data. Records with an independent legal
  * basis for retention (e.g. append-only consent_records kept as proof of
@@ -33,6 +37,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
 import { writeAuditLog, auditIp } from "../_shared/auditLog.ts";
+import { purgeUserStorage, type BucketPurgeResult } from "../_shared/purgeUserStorage.ts";
 
 const TOKEN_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
 
@@ -102,6 +107,17 @@ async function performDeletion(
     }
   }
 
+  // Purge uploaded files (WEB-LEGAL-003). Runs BEFORE the auth user is deleted:
+  // the service-role client works either way, but the audit entry below should
+  // be written while the subject is still resolvable. Every upload bucket is
+  // public, so a file left here stays fetchable by URL forever.
+  const storageResults: BucketPurgeResult[] = await purgeUserStorage(supabase, userId);
+  const storageRemoved = storageResults.reduce((n, r) => n + r.removed, 0);
+  const storageFailures = storageResults.filter((r) => r.error);
+  for (const failure of storageFailures) {
+    console.warn(`Warning purging storage bucket ${failure.bucket}:`, failure.error);
+  }
+
   // Delete the auth user entry
   const { error: deleteAuthError } =
     await supabase.auth.admin.deleteUser(userId);
@@ -129,11 +145,23 @@ async function performDeletion(
     severity: "high",
     ipAddress: auditIp(req),
     userAgent: req.headers.get("user-agent"),
-    details: { target_user_id: userId },
+    details: {
+      target_user_id: userId,
+      storage_files_removed: storageRemoved,
+      storage_buckets: storageResults,
+    },
   });
 
   return new Response(
-    JSON.stringify({ success: true }),
+    JSON.stringify({
+      success: true,
+      // Reported rather than assumed: a purge that silently removed nothing is
+      // the defect this story exists to fix.
+      storage_files_removed: storageRemoved,
+      ...(storageFailures.length > 0
+        ? { storage_incomplete: storageFailures.map((f) => f.bucket) }
+        : {}),
+    }),
     {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
