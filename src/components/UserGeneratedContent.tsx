@@ -345,20 +345,22 @@ export default function UserGeneratedContent() {
               </ul>
             </div>
             <div>
-              <h4 className="font-medium text-purple-800 mb-2">Real-Time Intelligence</h4>
+              {/* WEB-LEGAL-010: this list advertised "Current wait times" and
+                  "Special offers", neither of which anything records. Kept to
+                  what people can actually post here. */}
+              <h4 className="font-medium text-purple-800 mb-2">What people post</h4>
               <ul className="space-y-1 text-purple-700">
-                <li>• Current wait times</li>
                 <li>• Seasonal menu changes</li>
                 <li>• Service quality updates</li>
-                <li>• Special offers & events</li>
+                <li>• What a place is actually like on a weeknight</li>
               </ul>
             </div>
           </div>
           
           <div className="mt-4 p-3 bg-white/60 rounded-lg">
             <p className="text-purple-800 text-sm font-medium">
-              💡 Unlike tourist-focused platforms, our community shares real experiences 
-              from Des Moines residents who know these businesses as regulars, not just one-time visitors.
+              Posts here come from Des Moines residents rather than from a tourism
+              feed. Nothing is seeded, so this fills up as people write.
             </p>
           </div>
         </CardContent>
