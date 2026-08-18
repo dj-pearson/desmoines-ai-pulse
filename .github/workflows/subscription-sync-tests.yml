@@ -82,6 +82,9 @@ jobs:
       # and must not be gated on marketing consent or an LLM score
       # (WEB-LEGAL-006).
       - run: deno test --allow-read supabase/functions/_tests/trial-notice.test.ts
+      # A bucket created public must say why. Public means anonymous GET on a
+      # guessable path with no expiry (WEB-LEGAL-007).
+      - run: deno test --allow-read supabase/functions/_tests/storage-bucket-posture.test.ts
       - run: deno test supabase/functions/_shared/jsonLdEvents.test.ts
       # IndexNow payload filtering plus the key-file/constant drift check
       # (WEB-SEO-011). Needs --allow-read for public/<key>.txt.
