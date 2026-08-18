@@ -129,27 +129,6 @@ const maxYearlySavingsPct = Math.max(
     .map((p) => Math.round((1 - p.priceYearly / (p.priceMonthly * 12)) * 100)),
 );
 
-const testimonials = [
-  {
-    quote: "The early access to events has been a game-changer. I never miss the good stuff anymore!",
-    author: "Sarah M.",
-    role: "Insider Member",
-    avatar: "S",
-  },
-  {
-    quote: "Worth every penny. The personalized recommendations are spot-on.",
-    author: "Mike T.",
-    role: "VIP Member",
-    avatar: "M",
-  },
-  {
-    quote: "Finally, a local guide that actually knows Des Moines. Love the ad-free experience!",
-    author: "Jessica L.",
-    role: "Insider Member",
-    avatar: "J",
-  },
-];
-
 const faqs = [
   {
     question: "Do subscriptions auto-renew?",
@@ -552,48 +531,25 @@ export default function Pricing() {
             </div>
           </section>
 
-          {/* Testimonials */}
-          <section className="py-16">
-            <div className="container mx-auto px-4">
-              <h2 className="text-3xl font-bold text-center mb-4">
-                Loved by Des Moines Explorers
-              </h2>
-              <p className="text-muted-foreground text-center mb-12">
-                Join thousands of happy members
-              </p>
+          {/* WEB-LEGAL-002: a testimonials section stood here and was removed.
 
-              <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-                {testimonials.map((testimonial, idx) => (
-                  <Card key={idx} className="bg-card">
-                    <CardContent className="pt-6">
-                      <div className="flex items-center gap-1 mb-4">
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <Star
-                            key={star}
-                            className="h-4 w-4 fill-yellow-400 text-yellow-400"
-                          />
-                        ))}
-                      </div>
-                      <p className="text-muted-foreground mb-4 italic">
-                        "{testimonial.quote}"
-                      </p>
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-semibold text-primary">
-                          {testimonial.avatar}
-                        </div>
-                        <div>
-                          <p className="font-semibold text-sm">{testimonial.author}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {testimonial.role}
-                          </p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </div>
-          </section>
+              It carried three invented members - "Sarah M." (Insider), "Mike T."
+              (VIP) and "Jessica L." (Insider) - each with a hardcoded five-star
+              rating, under the headings "Loved by Des Moines Explorers" and
+              "Join thousands of happy members". Nobody by those names subscribed,
+              and nothing counts members.
+
+              The same three personas were deleted from SocialProof.tsx once
+              already (WEB-SEO-016); this copy survived on the page that asks for
+              money, which is the worst place to keep one. Fabricated consumer
+              endorsements are prohibited under the FTC endorsement guides
+              (16 CFR 255) and, since 2024, carry civil penalties per violation
+              under the Rule on Consumer Reviews and Testimonials (16 CFR 465).
+
+              If real testimonials or ratings are wired up later they belong here,
+              sourced and attributed to people who actually said them. user_ratings
+              holds genuine reviews and would be the place to start. Do not
+              reintroduce placeholder quotes "for layout". */}
 
           {/* FAQ */}
           <section className="py-16 bg-muted/30">
