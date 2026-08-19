@@ -408,3 +408,32 @@ bundle-budget-baseline.json (new), package.json, .github/workflows/e2e.yml, prd.
   representative module, so a per-name diff reads boundary churn as growth. This story already
   burned one pass on a "+23 KB regression" that did not exist.
 ---
+
+## 2026-08-19 - XPLAT-008 (the control, and a fourth 404)
+scripts/check-edge-function-calls.mjs diffs every invoked function name across src/, ios/ and
+android/ against supabase/functions/. It found FOUR guaranteed 404s, not the three two manual
+passes recorded: generate-writeup (src/hooks/useWriteupGenerator.ts:34, reached from
+ContentTable.tsx:449) had been missed. Wired into npm run validate behind a KNOWN_MISSING list
+that only shrinks. AC1's implement-or-remove decision is still open - it is a product call.
+
+**Learnings for future iterations:**
+- The three clients name edge functions three different ways, so one union of regexes over
+  everything is wrong twice. supabase-js and supabase-swift use functions.invoke("name") and
+  Swift puts the name on the NEXT line (\s* covers it). supabase-kt uses client.functions("name",
+  body = ...) with no .invoke at all - miss that and every Android call looks uncalled; apply it
+  to TypeScript and any local helper named functions() becomes a false hit. Keep patterns
+  per-surface.
+- Direct fetches to ${SUPABASE_URL}/functions/v1/<name> are a real call shape in src/ alongside
+  supabase-js (gsc-oauth, og-image, log-error, extract-catchdesmoines-urls). Match the FIRST path
+  segment only, which is what makes og-image/${type}/${id} and agent-runner/<key> resolve.
+- Report the INVERSE (functions nobody calls) as a warning, never a failure. Cron and webhook
+  functions have no client caller by design, and CLAUDE.md makes anything an old binary calls
+  load-bearing until MIN_SUPPORTED_APP_VERSION moves. A failing check here would talk somebody
+  into deleting a live endpoint.
+- An allowlist that records a live defect is fine; one that hides it is not. KNOWN_MISSING carries
+  a reason per entry and FAILS on a stale entry, so the check could be wired into validate today
+  instead of waiting for a decision - and waiting is how guards end up unrun.
+- Before assuming a missing function is a rename, check the contract. Three functions write
+  ai_writeup, but they take {contentType, batchSize} and the call site sends a per-item payload.
+  Repointing the hook would have traded a 404 for a 400.
+---
