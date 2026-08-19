@@ -155,8 +155,12 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   for (const p of (freeEngaged ?? []) as { user_id: string; email: string; lifecycle_signals: { messagingAllowed?: boolean } | null }[]) {
     if (p.lifecycle_signals?.messagingAllowed === false) continue;
     // Only prompt users WITHOUT an active/trialing paid sub (entitlement-safe read).
-    const { data: sub } = await supabase.from("user_subscriptions").select("status").eq("user_id", p.user_id).in("status", ["active", "trialing"]).maybeSingle();
-    if (sub) continue;
+    // WEB-BE-032: the error is captured and this fails CLOSED. maybeSingle()
+    // reports no-row as null data AND null error, so any error here is a real
+    // read failure - and a discarded one made a PAYING subscriber look like a
+    // free user and sent them an upgrade prompt.
+    const { data: sub, error: subError } = await supabase.from("user_subscriptions").select("status").eq("user_id", p.user_id).in("status", ["active", "trialing"]).maybeSingle();
+    if (subError || sub) continue;
     if (await cappedRecently(supabase, p.user_id, "upgrade_prompt", UPGRADE_GAP_DAYS)) continue;
     const html = `<h1>Get more from Des Moines Insider</h1><p>You're clearly enjoying the city — Insider unlocks premium picks and the AI Trip Planner to make every outing easier.</p><p><a href="${SITE}/profile?tab=settings">See Insider →</a></p>`;
     if (await sendStep(supabase, p.user_id, p.email, "upgrade_prompt", "Unlock more of Des Moines with Insider", html, "Insider unlocks premium picks and the AI Trip Planner. See Insider.")) upgrade++;

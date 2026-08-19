@@ -104,8 +104,10 @@ Deno.serve(async (req) => {
       // Cross-agent coordination — no overlap with any nurture in the window.
       if (await recentlyMessaged(supabase, p.user_id, COORD_WINDOW_DAYS)) { coordSkipped++; continue; }
 
-      // Re-engagement cadence.
-      const { data: last } = await supabase.from("nurture_sends").select("created_at").eq("user_id", p.user_id).eq("kind", KIND).order("created_at", { ascending: false }).limit(1);
+      // Re-engagement cadence. WEB-BE-032: error captured, cadence check fails
+      // CLOSED so an unreadable cap cannot become a second email.
+      const { data: last, error: lastError } = await supabase.from("nurture_sends").select("created_at").eq("user_id", p.user_id).eq("kind", KIND).order("created_at", { ascending: false }).limit(1);
+      if (lastError) { capped++; continue; }
       if (last?.[0] && now - new Date(last[0].created_at).getTime() < REENGAGE_GAP_DAYS * DAY) { capped++; continue; }
 
       const list = highlights.length

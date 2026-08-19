@@ -83,9 +83,12 @@ Deno.serve(async (req) => {
     for (const p of rows) {
       if (p.lifecycle_signals?.messagingAllowed === false) { skippedConsent++; continue; }
 
-      // Frequency cap.
-      const { data: recent } = await supabase
+      // Frequency cap. WEB-BE-032: the error is captured and the cap fails
+      // CLOSED - a discarded error left `recent` null, so the gap never applied
+      // and the user got a second digest inside the window.
+      const { data: recent, error: recentError } = await supabase
         .from("nurture_sends").select("created_at").eq("user_id", p.user_id).eq("kind", "weekly_digest").order("created_at", { ascending: false }).limit(1);
+      if (recentError) { skippedCap++; continue; }
       if (recent?.[0] && now - new Date(recent[0].created_at).getTime() < GAP_DAYS * DAY) { skippedCap++; continue; }
 
       // Tier (premium picks gated).

@@ -64,7 +64,14 @@ export async function notifyOps(supabase: Client, args: NotifyOpsArgs): Promise<
   // ── Frequency cap / coalesce ────────────────────────────────────────────
   try {
     const since = new Date(Date.now() - capWindow).toISOString();
-    const { data: recent } = await supabase
+    // WEB-BE-032, AC3: this one IGNORES its error deliberately, and unlike the
+    // frequency caps in the nurture agents that is the right call. This is ops
+    // alerting - a duplicate page is an annoyance, a swallowed page is an
+    // outage nobody hears about. The error is destructured so the decision is
+    // visible rather than implied, and the fall-through below sends.
+    // (The catch around this block never fires on a query failure: supabase-js
+    // RESOLVES with an { error } rather than throwing.)
+    const { data: recent, error: _capReadError } = await supabase
       .from("ops_notification_log")
       .select("id, suppressed_count")
       .eq("dedupe_key", dedupeKey)

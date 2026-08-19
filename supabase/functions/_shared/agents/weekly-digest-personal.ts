@@ -51,14 +51,19 @@ export const run: AgentRun = async (ctx, { supabase }) => {
     .limit(BATCH);
   const rows = (profiles ?? []) as { user_id: string; email: string; interests: unknown; lifecycle_signals: { messagingAllowed?: boolean } | null }[];
 
-  let sent = 0, skippedEmpty = 0, skippedCap = 0, gated = 0, skippedConsent = 0;
+  let sent = 0, skippedEmpty = 0, skippedCap = 0, gated = 0, skippedConsent = 0, capUnknown = 0;
 
   for (const p of rows) {
     if (p.lifecycle_signals?.messagingAllowed === false) { skippedConsent++; continue; }
 
-    // Frequency cap.
-    const { data: recent } = await supabase
+    // Frequency cap. WEB-BE-032: the error is captured and the cap fails
+    // CLOSED. supabase-js resolves with an { error } rather than throwing, so a
+    // discarded error left `recent` null, the cap never fired, and the user got
+    // a second digest inside the gap window. If we cannot confirm we have not
+    // already messaged someone, we do not message them.
+    const { data: recent, error: recentError } = await supabase
       .from("nurture_sends").select("created_at").eq("user_id", p.user_id).eq("kind", "weekly_digest").order("created_at", { ascending: false }).limit(1);
+    if (recentError) { capUnknown++; continue; }
     if (recent?.[0] && now - new Date(recent[0].created_at).getTime() < GAP_DAYS * DAY) { skippedCap++; continue; }
 
     // Tier (premium picks gated).
@@ -119,7 +124,7 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   }
 
   ctx.processed(rows.length);
-  ctx.summary(`weekly digest: ${sent} sent, ${skippedEmpty} skipped-empty, ${skippedCap} frequency-capped, ${gated} quality-gated, ${skippedConsent} no-consent`);
-  ctx.meta({ sent, skippedEmpty, skippedCap, gated, skippedConsent });
-  return { sent, skippedEmpty, skippedCap, gated };
+  ctx.summary(`weekly digest: ${sent} sent, ${skippedEmpty} skipped-empty, ${skippedCap} frequency-capped, ${capUnknown} cap-unreadable, ${gated} quality-gated, ${skippedConsent} no-consent`);
+  ctx.meta({ sent, skippedEmpty, skippedCap, capUnknown, gated, skippedConsent });
+  return { sent, skippedEmpty, skippedCap, capUnknown, gated };
 };

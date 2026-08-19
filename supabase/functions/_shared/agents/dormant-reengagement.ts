@@ -62,7 +62,7 @@ export const run: AgentRun = async (ctx, { supabase }) => {
     .limit(BATCH);
   const rows = (profiles ?? []) as { user_id: string; email: string; lifecycle_signals: { messagingAllowed?: boolean } | null }[];
 
-  let sent = 0, coordSkipped = 0, capped = 0, agedOut = 0, gated = 0, noConsent = 0;
+  let sent = 0, coordSkipped = 0, capped = 0, agedOut = 0, gated = 0, noConsent = 0, capUnknown = 0;
 
   for (const p of rows) {
     if (p.lifecycle_signals?.messagingAllowed === false) { noConsent++; continue; }
@@ -78,7 +78,11 @@ export const run: AgentRun = async (ctx, { supabase }) => {
     if (await recentlyMessaged(supabase, p.user_id, COORD_WINDOW_DAYS)) { coordSkipped++; continue; }
 
     // Re-engagement cadence.
-    const { data: last } = await supabase.from("nurture_sends").select("created_at").eq("user_id", p.user_id).eq("kind", KIND).order("created_at", { ascending: false }).limit(1);
+    // WEB-BE-032: the error is captured and the cadence check fails CLOSED. A
+    // discarded error left `last` null, so the gap never applied and a dormant
+    // user got a second re-engagement email inside the window.
+    const { data: last, error: lastError } = await supabase.from("nurture_sends").select("created_at").eq("user_id", p.user_id).eq("kind", KIND).order("created_at", { ascending: false }).limit(1);
+    if (lastError) { capUnknown++; continue; }
     if (last?.[0] && now - new Date(last[0].created_at).getTime() < REENGAGE_GAP_DAYS * DAY) { capped++; continue; }
 
     const list = highlights.length
@@ -95,7 +99,7 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   }
 
   ctx.processed(rows.length);
-  ctx.summary(`re-engagement: ${sent} sent, ${coordSkipped} coord-skipped, ${capped} capped, ${agedOut} aged-out, ${gated} gated; ${reactivations} reactivation(s)`);
-  ctx.meta({ sent, coordSkipped, capped, agedOut, gated, noConsent, reactivations });
-  return { sent, coordSkipped, capped, agedOut, reactivations };
+  ctx.summary(`re-engagement: ${sent} sent, ${coordSkipped} coord-skipped, ${capped} capped, ${capUnknown} cap-unreadable, ${agedOut} aged-out, ${gated} gated; ${reactivations} reactivation(s)`);
+  ctx.meta({ sent, coordSkipped, capped, capUnknown, agedOut, gated, noConsent, reactivations });
+  return { sent, coordSkipped, capped, capUnknown, agedOut, reactivations };
 };

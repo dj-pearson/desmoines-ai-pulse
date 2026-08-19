@@ -116,12 +116,14 @@ Deno.serve(async (req) => {
       // Win-back play only for high-risk, consented users, respecting frequency.
       if (score < HIGH_RISK) continue;
       if (signals.messagingAllowed === false) { skipped++; continue; }
-      const { data: recent } = await supabase
+      // WEB-BE-032: error captured, frequency check fails CLOSED.
+      const { data: recent, error: recentError } = await supabase
         .from("winback_interventions")
         .select("created_at")
         .eq("user_id", p.user_id)
         .order("created_at", { ascending: false })
         .limit(1);
+      if (recentError) { skipped++; continue; }
       if (recent?.[0] && now - new Date(recent[0].created_at).getTime() < INTERVENTION_GAP_DAYS * DAY) { skipped++; continue; }
 
       const wantsOffer = score >= OFFER_RISK;

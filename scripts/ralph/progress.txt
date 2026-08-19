@@ -273,3 +273,31 @@ Files changed:
 - Edge functions parse-check with `npx esbuild <file> --format=esm --target=es2022 >/dev/null`.
   Do NOT pass --loader=ts with a file path; esbuild only accepts that for stdin.
 ---
+
+## 2026-08-19 - WEB-BE-032 (send-suppression batch, 11 sites)
+Seven frequency caps that ask "did we already email this person recently?" plus two entitlement
+reads plus the weekly digest's pause flag and once-a-week idempotency check. All failed OPEN on a
+discarded error. Shortlist 39 -> 28, ratchet 516 -> 505.
+
+Files changed: _shared/agents/{weekly-digest-personal,churn-winback,dormant-reengagement,
+subscription-nurture}.ts, _shared/notifyOps.ts, assemble-weekly-digest/index.ts, and the four
+legacy agent-{weekly-digest,churn-winback,reengagement,subscription-nurture}/index.ts copies.
+
+**Learnings for future iterations:**
+- READ THIS BEFORE EDITING ANY AGENT. Migration 20260710000000 (repoint_agent_crons_to_runner) is
+  one of WEB-QA-020's unapplied eight, so production pg_cron STILL calls the individual
+  agent-<name> functions, not agent-runner. The consolidated _shared/agents/* files are not the
+  scheduled path in production today - the legacy agent-*/index.ts copies are. Fix both halves of
+  a pair until that migration lands, and do not trust "consolidated into agent-runner" in an
+  earlier progress note to mean the old copy is dead. It is deployed, declared in config.toml,
+  and cron'd.
+- Suppression windows fail closed, ops alerts fail open, and the difference is what the duplicate
+  costs. A second marketing email is a complaint; a swallowed ops page is an outage nobody hears
+  about. notifyOps keeps ignoring its error deliberately and now says so in a comment - that is
+  AC3's "mark the best-effort ones" rather than a miss.
+- A kill switch that a transient read error can bypass is not a kill switch. assemble-weekly-
+  digest's pause flag read as "not paused" whenever the read failed. Skipping one week is
+  recoverable; sending one somebody deliberately paused is not.
+- When adding a counter to an agent, put it in ctx.summary AND ctx.meta AND the returned object.
+  Additive keys only - the run record is read elsewhere.
+---

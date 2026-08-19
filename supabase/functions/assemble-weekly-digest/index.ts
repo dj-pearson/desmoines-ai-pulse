@@ -345,12 +345,20 @@ Deno.serve(async (req) => {
 
   // --- assemble: full pipeline, jobRunner-wrapped ---------------------------
   const job = await runJob('assemble-weekly-digest', async (ctx) => {
-    // 1) pause flag
-    const { data: flag } = await supabase
+    // 1) pause flag. WEB-BE-032: the error is captured and this fails CLOSED.
+    // This flag is a kill switch, and a kill switch a transient read error can
+    // bypass is not one - a discarded error left `flag` null, so a paused
+    // digest assembled and sent anyway. Skipping one week is recoverable;
+    // sending one somebody deliberately paused is not.
+    const { data: flag, error: flagError } = await supabase
       .from('feature_flags')
       .select('enabled')
       .eq('flag_key', PAUSE_FLAG)
       .maybeSingle();
+    if (flagError) {
+      ctx.meta({ paused: true, reason: 'pause_flag_unreadable', error: flagError.message });
+      return { paused: true, reason: 'pause_flag_unreadable' };
+    }
     if (flag && flag.enabled === false) {
       ctx.meta({ paused: true });
       return { paused: true };
@@ -358,12 +366,19 @@ Deno.serve(async (req) => {
 
     // 2) idempotency — already created a digest this week?
     const since = new Date(Date.now() - DEDUPE_DAYS * 24 * 60 * 60 * 1000).toISOString();
-    const { data: recent } = await supabase
+    const { data: recent, error: recentError } = await supabase
       .from('newsletter_campaigns')
       .select('id, created_at')
       .eq('campaign_type', 'weekly_digest')
       .gte('created_at', since)
       .limit(1);
+    // WEB-BE-032: the error is captured and this idempotency check fails
+    // CLOSED. A discarded error left `recent` null, so the guard read as "no
+    // digest yet" and assembled a second one for the same week.
+    if (recentError) {
+      ctx.meta({ skipped: 'dedupe_check_unreadable', error: recentError.message });
+      return { skipped: true, reason: 'dedupe_check_unreadable' };
+    }
     if (recent && recent.length > 0) {
       ctx.meta({ skipped: 'already_created_this_week' });
       return { skipped: true, existing: recent[0].id };

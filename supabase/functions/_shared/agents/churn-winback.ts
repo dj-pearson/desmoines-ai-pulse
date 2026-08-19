@@ -72,7 +72,7 @@ export const run: AgentRun = async (ctx, { supabase }) => {
     .limit(BATCH);
   const rows = (profiles ?? []) as { user_id: string; email: string; lifecycle_stage: string; lifecycle_signals: Signals | null }[];
 
-  let scored = 0, movedAtRisk = 0, valueReminders = 0, offers = 0, approvalsQueued = 0, gated = 0, skipped = 0;
+  let scored = 0, movedAtRisk = 0, valueReminders = 0, offers = 0, approvalsQueued = 0, gated = 0, skipped = 0, capUnknown = 0;
 
   for (const p of rows) {
     const signals = p.lifecycle_signals ?? {};
@@ -89,12 +89,16 @@ export const run: AgentRun = async (ctx, { supabase }) => {
     // Win-back play only for high-risk, consented users, respecting frequency.
     if (score < HIGH_RISK) continue;
     if (signals.messagingAllowed === false) { skipped++; continue; }
-    const { data: recent } = await supabase
+    // WEB-BE-032: the error is captured and this frequency check fails CLOSED.
+    // A discarded error left `recent` null, so the gap never applied and the
+    // user got a second win-back inside the window.
+    const { data: recent, error: recentError } = await supabase
       .from("winback_interventions")
       .select("created_at")
       .eq("user_id", p.user_id)
       .order("created_at", { ascending: false })
       .limit(1);
+    if (recentError) { capUnknown++; continue; }
     if (recent?.[0] && now - new Date(recent[0].created_at).getTime() < INTERVENTION_GAP_DAYS * DAY) { skipped++; continue; }
 
     const wantsOffer = score >= OFFER_RISK;
@@ -128,7 +132,7 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   }
 
   ctx.processed(rows.length);
-  ctx.summary(`churn: scored ${scored}, ${movedAtRisk}→at_risk; win-back ${valueReminders} reminders, ${offers} offers, ${approvalsQueued} approval-gated; effectiveness ${retained} retained / ${churnedOut} churned`);
-  ctx.meta({ scored, movedAtRisk, valueReminders, offers, approvalsQueued, gated, skipped, retained, churnedOut });
-  return { scored, movedAtRisk, valueReminders, offers, approvalsQueued, retained, churnedOut };
+  ctx.summary(`churn: scored ${scored}, ${movedAtRisk}→at_risk; win-back ${valueReminders} reminders, ${offers} offers, ${approvalsQueued} approval-gated, ${capUnknown} cap-unreadable; effectiveness ${retained} retained / ${churnedOut} churned`);
+  ctx.meta({ scored, movedAtRisk, valueReminders, offers, approvalsQueued, gated, skipped, capUnknown, retained, churnedOut });
+  return { scored, movedAtRisk, valueReminders, offers, approvalsQueued, capUnknown, retained, churnedOut };
 };
