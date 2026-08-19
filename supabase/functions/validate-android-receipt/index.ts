@@ -459,12 +459,29 @@ serve(async (req) => {
 
     // Check if user already has an Android subscription record. Scoped to
     // platform='android' so we don't clobber a web/Stripe or iOS row.
-    const { data: existing } = await supabase
+    //
+    // WEB-BE-032: see validate-ios-receipt - maybeSingle() reports no-row as
+    // null/null, so any error here is a real read failure. Discarding it sent
+    // this down the insert path, which violates UNIQUE(user_id, platform)
+    // (20260506000003) and 500s with a misleading reason.
+    const { data: existing, error: existingError } = await supabase
       .from('user_subscriptions')
       .select('id')
       .eq('user_id', user.id)
       .eq('platform', 'android')
       .maybeSingle();
+
+    if (existingError) {
+      console.error(
+        'validate-android-receipt: could not read existing subscription',
+        existingError.code,
+        existingError.message,
+      );
+      return new Response(
+        JSON.stringify({ valid: false, reason: 'Failed to read subscription record' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     if (existing) {
       const { error: updateError } = await supabase

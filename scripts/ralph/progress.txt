@@ -237,3 +237,39 @@ Files changed:
   the shape the app actually sees.
 - tests/ has no legal-copy assertions. WEB-LEGAL-009 is the right home for them.
 ---
+
+## 2026-08-19 - WEB-BE-032 (AC1 triage done, 4 AC2 sites fixed)
+The earlier passes stalled because "feeds a control decision" does not narrow anything: 316 of
+the 335 edge-function sites feed a conditional. Switched the filter to DIRECTION - does the
+discarded error push the code down the PERMISSIVE branch - and 516 sites became 39.
+
+Fixed the four in billing. create-subscription-checkout:145 was the sharpest: the comment above
+it says "prevent double-charging" and the lookup feeding that control discarded its error, so a
+failed read let the user buy a second subscription. The three receipt validators fell through to
+an insert that UNIQUE(user_id, platform) then rejected, producing a 500 that blamed the write.
+
+Files changed:
+- scripts/triage-failopen-guards.mjs (new) - the shortlist generator.
+- supabase/functions/create-subscription-checkout/index.ts, validate-ios-receipt/index.ts,
+  validate-android-receipt/index.ts, verify-apple-receipt/index.ts
+- error-handling-baseline.json 520 -> 516; prd.json notes.
+
+**Learnings for future iterations:**
+- The direction test, which generalises past this story: `if (x) return` means a discarded error
+  SKIPS the skip and the side effect runs twice (fail-open, dangerous). `if (!x) return` means it
+  returns early (fail-closed, merely degraded). Only the first shape is worth a fix.
+- Know which no-row idiom you are looking at before "fixing" one. `.maybeSingle()` reports no-row
+  as null data AND null error, so any error is real. `.single()` reports no-row as error
+  PGRST116, which is the normal path for a first-time buyer - treat any OTHER code as the
+  failure. Getting this backwards would 503 every new customer.
+- A shortlist generator should over-report and say so in its header. `if (row.owner !== uid)
+  return 403` is positive-and-exiting but fails closed; two of those were cleared with one read
+  each. Cost of a false positive: one read. Cost of a false negative here: a double charge.
+- NEXT BATCH, already identified: seven send-suppression windows named `recent`/`last` in the
+  digest/winback/reengagement agents. All ask "did we email this person recently?" and skip if
+  so, so a discarded error fails open into duplicate email. Check whether the agent-*/index.ts
+  copy is dead first - those were consolidated into agent-runner, so _shared/agents/* is often
+  the only live half of the pair.
+- Edge functions parse-check with `npx esbuild <file> --format=esm --target=es2022 >/dev/null`.
+  Do NOT pass --loader=ts with a file path; esbuild only accepts that for stdin.
+---

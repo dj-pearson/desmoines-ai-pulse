@@ -112,13 +112,34 @@ serve(async (req) => {
       ...(plan?.id ? { plan_id: plan.id } : {}),
     };
 
-    // Check if user already has a subscription record
-    const { data: existing } = await supabase
+    // Check if user already has a subscription record.
+    //
+    // WEB-BE-032: the error is captured, not discarded. .single() reports the
+    // no-row case as PGRST116, which is the expected path for a first-time
+    // purchaser; any other error is a real read failure, and discarding it
+    // sent this down the insert path where UNIQUE(user_id, platform)
+    // (20260506000003) rejects the row and the caller gets the wrong reason.
+    const { data: existing, error: existingError } = await supabase
       .from("user_subscriptions")
       .select("id")
       .eq("user_id", user.id)
       .limit(1)
       .single();
+
+    if (existingError && existingError.code !== "PGRST116") {
+      console.error(
+        "verify-apple-receipt: could not read existing subscription",
+        existingError.code,
+        existingError.message,
+      );
+      return new Response(
+        JSON.stringify({ error: "Failed to read subscription record" }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
 
     if (existing) {
       // Update existing subscription

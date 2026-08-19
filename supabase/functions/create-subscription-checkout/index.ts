@@ -142,13 +142,36 @@ serve(async (req) => {
       );
     }
 
-    // Check if user already has an active/trialing subscription
-    const { data: existingSubscription } = await supabase
+    // Check if user already has an active/trialing subscription.
+    // WEB-BE-032: the error is captured, not discarded. This lookup is the
+    // anti-double-charge control below, and supabase-js RESOLVES with an
+    // { error } rather than throwing - so dropping it made a failed read
+    // indistinguishable from "no subscription" and sent the user to Stripe to
+    // buy a second one. PGRST116 is the no-rows case .single() produces for a
+    // first-time buyer and is the expected path; anything else is a real
+    // failure and this control fails CLOSED.
+    const { data: existingSubscription, error: existingSubscriptionError } = await supabase
       .from("user_subscriptions")
       .select("id, stripe_subscription_id, status, cancel_at_period_end, plan_id")
       .eq("user_id", user.id)
       .in("status", ["active", "trialing"])
       .single();
+
+    if (existingSubscriptionError && existingSubscriptionError.code !== "PGRST116") {
+      console.error(
+        "create-subscription-checkout: could not read existing subscription",
+        existingSubscriptionError.code,
+        existingSubscriptionError.message,
+      );
+      return new Response(
+        JSON.stringify({
+          error:
+            "We could not confirm your current subscription status. Please try again in a moment.",
+          code: "subscription_lookup_failed",
+        }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // PROD-SUB-005: prevent double-charging. If the user has a subscription
     // that is set to cancel at period end, they should RESUME it from the
