@@ -78,8 +78,12 @@ export async function buildSecurityContext(): Promise<SecurityContext> {
  */
 async function getUserRole(userId: string): Promise<UserRole> {
   try {
-    // First check user_roles table (new standard)
-    const { data: roleData } = await supabase
+    // First check user_roles table (new standard).
+    // WEB-BE-032: the error is captured and LOGGED. The fall-through to 'user'
+    // below is the right direction (least privilege), but a discarded error
+    // made a demoted-by-outage admin indistinguishable from a normal user, with
+    // no signal anywhere. Behaviour is unchanged; the failure is now visible.
+    const { data: roleData, error: roleError } = await supabase
       .from('user_roles')
       .select('role')
       .eq('user_id', userId)
@@ -88,16 +92,26 @@ async function getUserRole(userId: string): Promise<UserRole> {
       .limit(1)
       .maybeSingle();
 
+    if (roleError) {
+      logger.error('getUserRole', 'user_roles read failed; falling back to profiles', { error: String(roleError) });
+    }
+
     if (roleData?.role) {
       return roleData.role as UserRole;
     }
 
-    // Fallback to profiles.user_role (legacy)
-    const { data: profileData } = await supabase
+    // Fallback to profiles.user_role (legacy). PGRST116 here is the ordinary
+    // no-row case; anything else means we resolved this user to 'user' without
+    // knowing, which is worth a log line.
+    const { data: profileData, error: profileError } = await supabase
       .from('profiles')
       .select('user_role')
       .eq('user_id', userId)
       .single();
+
+    if (profileError && profileError.code !== 'PGRST116') {
+      logger.error('getUserRole', 'profiles read failed; resolving as user', { error: String(profileError) });
+    }
 
     if (profileData?.user_role) {
       return profileData.user_role as UserRole;

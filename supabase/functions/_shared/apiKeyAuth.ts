@@ -108,10 +108,14 @@ export async function isAdminUserId(
   userId: string,
   label = 'isAdminUserId',
 ): Promise<boolean> {
+  // WEB-BE-032: .limit(1) - user_roles has no UNIQUE(user_id), so a duplicate
+  // row makes maybeSingle() error and this returns false for a real admin.
   const { data: roleRow, error: roleErr } = await supabase
     .from('user_roles')
     .select('role')
     .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   if (roleRow?.role && ADMIN_ROLE_VALUES.has(roleRow.role)) return true;

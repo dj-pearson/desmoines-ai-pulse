@@ -303,7 +303,9 @@ Deno.serve(async (req) => {
     if (!ownerRow) return json({ error: 'Content not found' }, 404, corsHeaders);
 
     if (ownerRow.user_id !== uid) {
-      const { data: roleRow } = await supabase.from('user_roles').select('role').eq('user_id', uid).maybeSingle();
+      // WEB-BE-032: .limit(1) - user_roles has no UNIQUE(user_id), so a
+      // duplicate row makes maybeSingle() error and silently denies an admin.
+      const { data: roleRow } = await supabase.from('user_roles').select('role').eq('user_id', uid).order('created_at', { ascending: false }).limit(1).maybeSingle();
       if (!roleRow || !['admin', 'root_admin'].includes(roleRow.role)) {
         return json({ error: 'Not authorized for this content' }, 403, corsHeaders);
       }

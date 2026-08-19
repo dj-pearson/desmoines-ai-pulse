@@ -301,3 +301,40 @@ legacy agent-{weekly-digest,churn-winback,reengagement,subscription-nurture}/ind
 - When adding a counter to an agent, put it in ctx.summary AND ctx.meta AND the returned object.
   Additive keys only - the run record is read elsewhere.
 ---
+
+## 2026-08-19 - WEB-BE-032 (silent admin-demotion chain)
+Found a complete privilege-loss chain where every link is a discarded error, and closed it in
+three layers. Ratchet 505 -> 497, shortlist 28 -> 21.
+
+public.user_roles has no uniqueness on user_id (baseline 20250100000000:44-50). assign-role:92
+read `existing` to choose UPDATE vs INSERT and discarded the error, so a failed read looked like
+"no row" and inserted a SECOND role row. Five readers then resolve a role with .maybeSingle() and
+no .limit(1) - AuthContext.tsx:176, moderate-content:306, triage-event-submission:138,
+apiKeyAuth.ts:112 and assign-role:92 itself - so all five start returning PGRST116 for that user,
+all five discard it, and all five resolve them to 'user'. One transient error demotes an admin
+everywhere, permanently, with no log line anywhere. Self-perpetuating too: the duplicate breaks
+the read that would have prevented the next one.
+
+Files changed: assign-role/index.ts, moderate-content/index.ts, triage-event-submission/index.ts,
+_shared/apiKeyAuth.ts, _shared/securityLayers.ts, src/contexts/AuthContext.tsx,
+src/lib/security/middleware.ts, and supabase/migrations/20260819000002_user_roles_unique_user_id.sql.
+
+**Learnings for future iterations:**
+- `.maybeSingle()` on a table with no UNIQUE on the filtered column is a latent PGRST116. Grep for
+  that pair before trusting any "one row per X" assumption: the constraint is the assumption, and
+  here it was never written down.
+- Fix a chain at every layer that a deploy does not gate. The `.limit(1)` half works against
+  production as it stands TODAY; the migration is the permanent fix but sits behind a stalled
+  queue (WEB-QA-020). Shipping only the migration would have left the hole open indefinitely.
+- Dedupe FIRST in the same migration as a new UNIQUE, or it fails to apply wherever the duplicate
+  it targets already exists. Keep the row the existing read path would have picked (here
+  ORDER BY created_at DESC LIMIT 1) so nobody's effective role changes, and carry NULLS LAST plus
+  an id tiebreaker because created_at is nullable on baseline rows.
+- Distinguish "no value" from "could not read" in any function feeding an AUDIT log. resolveRole
+  returned 'user' for both, so a failed read wrote "previous role: user" for a root_admin into an
+  immutable security log. Fails-closed is fine for authz and still wrong for a record of fact.
+- scripts/triage-failopen-guards.mjs has a real blind spot: it only matches guards whose
+  consequent returns/continues/breaks, so `if (x) {...} else {...}` where the ELSE does the damage
+  is invisible. assign-role:92, the start of this whole chain, never appeared on the shortlist.
+  Read the file; the tool ranks, it does not decide.
+---

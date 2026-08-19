@@ -54,6 +54,9 @@ serve(async (req) => {
 
   // 2) Confirm caller is admin/root_admin server-side (user_roles then profiles)
   const callerRole = await resolveRole(admin, callerId);
+  if (callerRole === null) {
+    return json({ error: 'Could not verify your role. Please try again.' }, 503);
+  }
   if (callerRole !== 'admin' && callerRole !== 'root_admin') {
     return json({ error: 'Admin role required' }, 403);
   }
@@ -82,17 +85,35 @@ serve(async (req) => {
     return json({ error: 'You cannot change your own role' }, 403);
   }
 
-  // Capture the previous role for the audit trail.
+  // Capture the previous role for the audit trail. null means "we could not
+  // read it", and it is recorded as null rather than being flattened to 'user'
+  // - a security audit log that invents a previous role is worse than one that
+  // admits it does not know.
   const oldRole = await resolveRole(admin, targetUserId);
 
   // 4) Write with the service client. assigned_by = verified caller, so the
   // existing validate_role_assignment trigger re-checks against a trustworthy
   // actor (not a client-supplied value).
-  const { data: existing } = await admin
+  // WEB-BE-032: the error is captured and this fails CLOSED. This read decides
+  // UPDATE vs INSERT, and user_roles has no UNIQUE(user_id) - so a discarded
+  // error took the INSERT path and gave the user a SECOND role row. Five
+  // readers then do .maybeSingle() on user_roles with no .limit(1)
+  // (AuthContext, moderate-content, triage-event-submission, apiKeyAuth, and
+  // this function), all of which start returning PGRST116 for that user and
+  // resolve them to 'user'. One transient read error silently demoted an admin,
+  // permanently, with nothing in any log. Refuse rather than guess.
+  const { data: existing, error: existingError } = await admin
     .from('user_roles')
     .select('id')
     .eq('user_id', targetUserId)
+    .order('created_at', { ascending: false })
+    .limit(1)
     .maybeSingle();
+
+  if (existingError) {
+    console.error('[assign-role] could not read existing role row:', existingError.code, existingError.message);
+    return json({ error: 'Could not read the current role. No change was made.' }, 503);
+  }
 
   let writeErr;
   if (existing?.id) {
@@ -135,25 +156,43 @@ serve(async (req) => {
   return json({ success: true, targetUserId, role, previousRole: oldRole });
 });
 
-/** Resolve a user's effective role from user_roles, falling back to profiles. */
+/**
+ * Resolve a user's effective role from user_roles, falling back to profiles.
+ *
+ * WEB-BE-032: returns null for "could not determine", which is NOT the same as
+ * 'user'. Collapsing the two was wrong in both directions. As an authorization
+ * input it fails closed either way, but silently - an admin denied by a
+ * transient read error looks identical to a non-admin. And as the source of
+ * old_role in the audit trail it FABRICATED a value: a failed read recorded
+ * "previous role: user" for someone who was root_admin, in an immutable log
+ * nobody can reconstruct later. Callers decide what to do with null.
+ */
 async function resolveRole(
   admin: ReturnType<typeof createClient>,
   userId: string,
-): Promise<Role> {
-  const { data: roleRow } = await admin
+): Promise<Role | null> {
+  const { data: roleRow, error: roleError } = await admin
     .from('user_roles')
     .select('role')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
+  if (roleError) {
+    console.error('[assign-role] user_roles read failed:', roleError.code, roleError.message);
+    return null;
+  }
   if (roleRow?.role && VALID_ROLES.includes(roleRow.role as Role)) return roleRow.role as Role;
 
-  const { data: profile } = await admin
+  const { data: profile, error: profileError } = await admin
     .from('profiles')
     .select('user_role')
     .eq('user_id', userId)
     .maybeSingle();
+  if (profileError) {
+    console.error('[assign-role] profiles read failed:', profileError.code, profileError.message);
+    return null;
+  }
   if (profile?.user_role && VALID_ROLES.includes(profile.user_role as Role)) {
     return profile.user_role as Role;
   }

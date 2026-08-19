@@ -172,11 +172,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const checkPromise = (async () => {
       try {
-        const { data: rolesData } = await supabase
+        // WEB-BE-032: .limit(1) so a duplicate user_roles row cannot make this
+        // read fail (the table has no UNIQUE(user_id), and maybeSingle() errors
+        // on more than one row), and the error is captured so a failed read is
+        // never CACHED as "not an admin" below.
+        const { data: rolesData, error: rolesError } = await supabase
           .from("user_roles")
           .select("role")
           .eq("user_id", user.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
           .maybeSingle();
+
+        if (rolesError) {
+          log.error('checkIsAdmin', 'user_roles read failed; not caching a negative', { error: rolesError });
+          return false;
+        }
 
         if (rolesData?.role) {
           const isAdmin = rolesData.role === 'admin' || rolesData.role === 'root_admin';

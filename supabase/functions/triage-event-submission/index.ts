@@ -135,7 +135,9 @@ Deno.serve(async (req) => {
     const uid = userRes?.user?.id;
     if (!uid) return json({ error: 'Invalid token' }, 401, corsHeaders);
     if (uid !== submission.user_id) {
-      const { data: roleRow } = await supabase.from('user_roles').select('role').eq('user_id', uid).maybeSingle();
+      // WEB-BE-032: .limit(1) - see moderate-content. A duplicate user_roles
+      // row would otherwise make this deny a genuine admin.
+      const { data: roleRow } = await supabase.from('user_roles').select('role').eq('user_id', uid).order('created_at', { ascending: false }).limit(1).maybeSingle();
       if (!roleRow || !['admin', 'root_admin'].includes(roleRow.role)) {
         return json({ error: 'Not authorized for this submission' }, 403, corsHeaders);
       }

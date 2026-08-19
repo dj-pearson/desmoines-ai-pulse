@@ -119,8 +119,10 @@ async function getUserRole(
   userId: string
 ): Promise<UserRole> {
   try {
-    // Check user_roles table
-    const { data: roleData } = await supabaseClient
+    // Check user_roles table.
+    // WEB-BE-032: the error is captured and logged. The fall-through to 'user'
+    // is the right direction; the silence was not.
+    const { data: roleData, error: roleError } = await supabaseClient
       .from('user_roles')
       .select('role')
       .eq('user_id', userId)
@@ -129,16 +131,24 @@ async function getUserRole(
       .limit(1)
       .maybeSingle();
 
+    if (roleError) {
+      console.error('[securityLayers] user_roles read failed; falling back to profiles:', roleError.message);
+    }
+
     if (roleData?.role) {
       return roleData.role as UserRole;
     }
 
-    // Fallback to profiles
-    const { data: profileData } = await supabaseClient
+    // Fallback to profiles. PGRST116 is the ordinary no-row case.
+    const { data: profileData, error: profileError } = await supabaseClient
       .from('profiles')
       .select('user_role')
       .eq('user_id', userId)
       .single();
+
+    if (profileError && profileError.code !== 'PGRST116') {
+      console.error('[securityLayers] profiles read failed; resolving as user:', profileError.message);
+    }
 
     if (profileData?.user_role) {
       return profileData.user_role as UserRole;
