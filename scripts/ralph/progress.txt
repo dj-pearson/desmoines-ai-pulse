@@ -162,3 +162,45 @@ Quality: type-check passes; moderate-content parses via esbuild; useRatings/Mode
 - WEB-FEAT-010 (photo reviews) seam is ready: add 'review_photo' to the content_moderation.content_type CHECK + the decide_moderation branch + a loadItem('review_photo') branch in moderate-content (score the caption / run image safety), and insert photos with their own gate column 'pending'. event_photos already has is_approved — reconcile that with moderation_status or route through this queue.
 - Next story WEB-AUTO-010 (campaign creative auto-review): same shape — on campaign_creatives insert run automated checks (image dims/aspect, target URL https+resolves, Claude brand-safety on text, advertiser standing); pass -> is_approved auto-set, fail -> stays pending with machine-readable reasons in AdminCampaigns. BACKWARD COMPAT: get_active_ads RPC behavior unchanged (iOS reads it), campaigns/advertisements additive only. Reuse the content_moderation pattern OR campaign-specific columns; AdminCampaigns (~lines 180-200) has the manual is_approved toggle today.
 ---
+
+## 2026-08-19 - WEB-OPS-021 (closed, verified) + WEB-SEC-021 (ACs 1/2/3/5 written)
+Loop pass over the 93 open prd.json items. Two outcomes.
+
+WEB-OPS-021 closed without a code change: afd9b5e (2026-08-14, already in origin/main) fixed
+release-notes.yml and nobody updated the story. Verified against the GitHub workflows API rather
+than assumed - the workflow is state=active, its run history ends at the 2026-08-11 failure, and
+main has been pushed since (eight commits and two merges on 2026-08-18) with zero release-notes
+runs produced. Zero runs is the correct outcome for a file that parses and skips a non-release
+branch; the ten prior "failures" were startup_failure from an unparseable YAML file.
+
+WEB-SEC-021 ACs 1/2/3/5: supabase/migrations/20260819000001_close_anon_reads_on_internal_tables.sql.
+Closes anon SELECT on blocked_email_domains, role_definitions, permission_definitions,
+role_permissions, pricing_rules, ai_environment_config. Not applied (same deploy queue as
+WEB-QA-020). ACs 4/6/8 stay open.
+
+Files changed:
+- supabase/migrations/20260819000001_close_anon_reads_on_internal_tables.sql (new)
+- prd.json - WEB-OPS-021 passes:true; WEB-SEC-021 notes.
+
+**Learnings for future iterations:**
+- A tightening migration can be executed and measured in this container. `initdb` under
+  /var/tmp (NOT the scratchpad - initdb refuses a directory it cannot chown) gives a throwaway
+  PostgreSQL 16 on port 55432. Seed it with the real policies out of the creating migration plus
+  Supabase's bootstrap `GRANT SELECT ON ALL TABLES IN SCHEMA public TO anon`, stub `auth.uid()`
+  to a fixed uuid, and you can prove the before/after and the idempotent re-run. "Written but
+  unverifiable" is a choice, not a constraint, for anything that is pure SQL.
+- Revoking the table GRANT is what actually closes a table; the policy is the readable half.
+  For a table no migration in this repo creates (pricing_rules, ai_environment_config) the policy
+  names are unknowable, so the grant is the ONLY lever - wrap it in a to_regclass DO block.
+- Before any anon revoke, grep src/ ios/ android/ supabase/functions/ scripts/ for the table name.
+  blocked_email_domains looked load-bearing for signup and is not: the client calls the
+  is_email_domain_blocked SECURITY DEFINER RPC, never the table. That distinction is the whole
+  backward-compat question and it took one grep.
+- Do NOT re-baseline anon-exposure-baseline.json when writing the fix. The ratchet fails on a
+  NEWLY exposed table, so removing a still-exposed entry before the deploy turns CI red.
+- prd.json is stale relative to main. WEB-OPS-021 had been fixed for five days. Worth checking
+  git log and the GitHub API for a story before implementing it.
+- The top of the backlog is mostly not code. PR Checks (206663793) and Daily Event Crawler
+  (211496360) are both still state=disabled_manually as of 2026-08-19, and the GitHub MCP tools
+  expose no enable method - that needs `gh workflow enable` or the Actions UI, from Dj.
+---
