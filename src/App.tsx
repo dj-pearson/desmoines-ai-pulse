@@ -159,14 +159,19 @@ const ThingsToDoHub = lazyWithRetry(() => import("./pages/ThingsToDoHub"));
 // Event submission
 const SubmitEvent = lazyWithRetry(() => import("./pages/SubmitEvent"));
 
-// Legal pages — direct imports (small static content, must always be reachable)
-import PrivacyPolicy from "./pages/PrivacyPolicy";
-import Terms from "./pages/Terms";
-import AccessibilityStatement from "./pages/AccessibilityStatement";
-import CookiePolicy from "./pages/CookiePolicy";
-import DMCAPolicy from "./pages/DMCAPolicy";
-import AcceptableUsePolicy from "./pages/AcceptableUsePolicy";
-import DataProcessingAgreement from "./pages/DataProcessingAgreement";
+// Legal pages. These were direct imports, on the reasoning that they are small
+// static content that must always be reachable. Measured (WEB-PERF-020): they
+// are 35 KB gzipped of module bytes in the entry chunk, paid by every visitor
+// on first paint for pages almost none of them open. "Always reachable" is what
+// lazyWithRetry is for - it retries a failed chunk fetch, which is a stronger
+// guarantee than a static import that simply makes the bundle bigger.
+const PrivacyPolicy = lazyWithRetry(() => import("./pages/PrivacyPolicy"));
+const Terms = lazyWithRetry(() => import("./pages/Terms"));
+const AccessibilityStatement = lazyWithRetry(() => import("./pages/AccessibilityStatement"));
+const CookiePolicy = lazyWithRetry(() => import("./pages/CookiePolicy"));
+const DMCAPolicy = lazyWithRetry(() => import("./pages/DMCAPolicy"));
+const AcceptableUsePolicy = lazyWithRetry(() => import("./pages/AcceptableUsePolicy"));
+const DataProcessingAgreement = lazyWithRetry(() => import("./pages/DataProcessingAgreement"));
 
 // Cookie consent (GDPR/CCPA opt-in banner) — lightweight, mount globally
 import { CookieConsentBanner } from "@/components/CookieConsentBanner";

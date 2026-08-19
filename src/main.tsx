@@ -3,7 +3,13 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HelmetProvider } from "react-helmet-async";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import { initSentry, getSentryDsn, Sentry } from "@/lib/sentry";
+import {
+  initSentry,
+  getSentryDsn,
+  captureException as sentryCaptureException,
+  captureMessage as sentryCaptureMessage,
+} from "@/lib/sentry";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { initErrorTracking } from "@/lib/errorHandler";
 import '@/lib/env'; // Validate environment variables at startup
 import { initAnalyticsConsent } from "@/lib/analyticsConsent";
@@ -27,13 +33,13 @@ initAnalyticsConsent();
 if (getSentryDsn()) {
   initErrorTracking({
     captureException(error, context) {
-      Sentry.captureException(error, {
+      sentryCaptureException(error, {
         tags: { component: context.component, action: context.action },
         extra: context.metadata,
       });
     },
     captureMessage(message, level) {
-      Sentry.captureMessage(message, level as 'info' | 'warning' | 'error');
+      sentryCaptureMessage(message, level as 'info' | 'warning' | 'error');
     },
   });
 }
@@ -211,7 +217,12 @@ function initializeApp() {
     // Render immediately - this is the critical path
     root.render(
       <StrictMode>
-        <Sentry.ErrorBoundary fallback={<p>An unexpected error occurred.</p>}>
+        {/* WEB-PERF-020: the app's own boundary, not Sentry.ErrorBoundary.
+            That component could only come from a statically imported SDK, which
+            is exactly what put 123 KB gz of error reporting on the critical
+            path. This one reports through handleError -> the Sentry bridge
+            above, so React errors still reach Sentry once it loads. */}
+        <ErrorBoundary>
           <ThemeProvider defaultTheme="system" storageKey="dmi-theme">
             <HelmetProvider>
               <QueryClientProvider client={queryClient}>
@@ -219,7 +230,7 @@ function initializeApp() {
               </QueryClientProvider>
             </HelmetProvider>
           </ThemeProvider>
-        </Sentry.ErrorBoundary>
+        </ErrorBoundary>
       </StrictMode>
     );
   } catch (err: any) {

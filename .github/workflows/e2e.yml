@@ -75,6 +75,12 @@ jobs:
       - name: Run smoke suite against a production build
         run: npm run test:smoke
 
+      # WEB-PERF-020 AC4. The smoke lane's webServer already ran `vite build`,
+      # so dist/ is sitting there and this costs nothing. It cannot live in
+      # `npm run validate`, which does not build.
+      - name: Check critical-path bundle budget
+        run: npm run check-bundle-budget
+
       - name: Upload smoke report
         if: always()
         uses: actions/upload-artifact@v4

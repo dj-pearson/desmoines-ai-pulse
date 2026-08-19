@@ -57,6 +57,7 @@
     "check-imports": "node scripts/check-import-exports.mjs",
     "check-schema": "node scripts/check-schema-usage.mjs",
     "check-consent-csp": "node scripts/check-consent-and-csp.mjs",
+    "check-bundle-budget": "node scripts/check-bundle-budget.mjs",
     "check-error-handling": "node scripts/check-error-handling.mjs",
     "check-error-handling:update": "node scripts/check-error-handling.mjs --update",
     "check-schema:all": "node scripts/check-schema-usage.mjs --all",

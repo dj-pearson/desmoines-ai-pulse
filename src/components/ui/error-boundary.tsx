@@ -5,6 +5,7 @@ import { AlertTriangle, RefreshCw, Home } from "lucide-react";
 import { Link } from "react-router-dom";
 import { sessionStore } from "@/lib/safeStorage";
 import { createLogger } from "@/lib/logger";
+import { handleError } from "@/lib/errorHandler";
 
 const logger = createLogger('ErrorBoundary');
 
@@ -47,8 +48,16 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     // Log detailed error information
     logger.error('componentDidCatch', 'Error Boundary caught an error', errorDetails);
 
-    // In production, you would send this to an error tracking service
-    // Example: Sentry.captureException(error, { contexts: { react: errorInfo } });
+    // Report through the centralized handler, which forwards to whatever error
+    // tracker main.tsx registered (Sentry today). WEB-PERF-020 made this the
+    // app's top-level boundary in place of Sentry.ErrorBoundary, so this call
+    // is what keeps React render errors reaching Sentry - it is no longer a
+    // "you would send this somewhere" comment.
+    handleError(error, {
+      component: 'ErrorBoundary',
+      action: 'componentDidCatch',
+      metadata: { componentStack: errorInfo.componentStack },
+    });
 
     // Store error in sessionStorage for debugging (cleared on successful navigation)
     const recentErrors = sessionStore.get<unknown[]>('app_errors', []) ?? [];

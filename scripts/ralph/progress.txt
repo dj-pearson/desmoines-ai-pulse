@@ -370,3 +370,41 @@ COMPLIANCE_AUDIT.md, prd.json.
   is switched off (WEB-CI-025). The e2e smoke job is the only required lane running today, so a
   check that must bite goes in both.
 ---
+
+## 2026-08-19 - WEB-PERF-020 (critical path 370.8 -> 299.2 KB gz)
+Measured before touching anything, and the answer was neither of the two things the story
+predicted. @sentry/browser + @sentry-internal/browser-utils + @sentry/react were 123.4 KB gz of
+the entry chunk - a third of the critical path - for error reporting that by definition is not
+needed to render the first frame. Second: seven legal pages were STATIC imports in App.tsx
+(35 KB gz) under the comment "must always be reachable".
+
+Files changed: src/lib/sentry.ts (rewritten, no static SDK import), src/main.tsx,
+src/components/ui/error-boundary.tsx, src/App.tsx, scripts/check-bundle-budget.mjs (new),
+bundle-budget-baseline.json (new), package.json, .github/workflows/e2e.yml, prd.json.
+
+**Learnings for future iterations:**
+- ANALYZE=true vite build writes dist/stats.html with the whole module graph as JSON in a
+  `const data = {...}` assignment on one line. Parse it directly (find 'const data = ', read to
+  the newline) and attribute tree leaves via nodeParts[uid].gzipLength -> nodeMetas[metaUid].id.
+  Ten minutes of that beats any amount of guessing about what is in a chunk.
+- Per-module gzip figures from the visualizer do NOT sum to the emitted chunk's gzip - each is
+  compressed alone, the chunk shares a dictionary. Use them for PROPORTIONS, never as a savings
+  estimate.
+- Code-splitting raises total bytes and lowers critical bytes. Sentry alone gzips to 171.7 KB as
+  its own chunk versus 123.4 KB of module bytes inside the entry chunk. That is expected, not a
+  regression, and worth saying out loud before someone reads the total and reverts it.
+- Deferring an error reporter needs a buffer, not just a dynamic import, or you lose exactly the
+  boot-time errors you most want. Native 'error'/'unhandledrejection' listeners installed
+  synchronously + a bounded queue replayed on load + an uncaught error pulling the load forward.
+  Bound the queue: a boot loop that throws every frame otherwise turns an error into a leak.
+- Do not re-export an SDK namespace from a module you just made lazy. `export { Sentry }` is what
+  forced the eager import; a future `import { Sentry } from '@/lib/sentry'` would silently undo
+  the whole change. Export functions instead.
+- Measure with `npx vite build`, NOT `npm run build`. The latter runs generate-sitemaps and the
+  prerenderer, which need real credentials, and the prerenderer REWRITES index.html - so it
+  changes which chunks count as critical. Two numbers for the same tree in this story's history
+  (299 vs 395) are that difference, not a regression.
+- A bundle check must compare TOTALS, not named chunks. Rollup names shared chunks after a
+  representative module, so a per-name diff reads boundary churn as growth. This story already
+  burned one pass on a "+23 KB regression" that did not exist.
+---

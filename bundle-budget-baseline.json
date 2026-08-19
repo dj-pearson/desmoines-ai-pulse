@@ -1,0 +1,34 @@
+{
+  "criticalPathBytes": 306770,
+  "targetKb": 200,
+  "chunks": [
+    {
+      "name": "index-DVi9GxEC.js",
+      "gzip": 106618
+    },
+    {
+      "name": "vendor-ui-C_-N2xt7.js",
+      "gzip": 56375
+    },
+    {
+      "name": "vendor-react-BiiAzKFc.js",
+      "gzip": 47387
+    },
+    {
+      "name": "vendor-supabase-D2i1cj3v.js",
+      "gzip": 45352
+    },
+    {
+      "name": "vendor-icons-HzCcXuMg.js",
+      "gzip": 21100
+    },
+    {
+      "name": "vendor-react-ecosystem-CzP__ZoA.js",
+      "gzip": 19197
+    },
+    {
+      "name": "vendor-dates-DGgN_2Iz.js",
+      "gzip": 10741
+    }
+  ]
+}
