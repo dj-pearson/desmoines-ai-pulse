@@ -8,6 +8,15 @@
  * wording is a good-faith draft, NOT legal advice — have counsel review before
  * relying on it, and fill in the bracketed placeholders (EU/UK representative,
  * registered postal address) with real values.
+ *
+ * The "Categories of Sources" and "Where Our Listings Come From" sections were
+ * added for WEB-LEGAL-008 (CCPA/CPRA 1798.110(a)(2)). Every factual claim in them
+ * was checked against the code before it was written, not described from intent:
+ * the crawl allowlist is _shared/fetchGuard.ts, the prospect pipeline's fields are
+ * prospect_leads / crm_leads (business_name, category, city, website - no personal
+ * contact columns), and the events table has no organizer-contact column at all.
+ * How much of the pipeline to describe publicly is the owner's call - review this
+ * copy before merging.
  */
 import { Link } from "react-router-dom";
 import Header from "@/components/Header";
@@ -19,7 +28,7 @@ import { Button } from "@/components/ui/button";
 import { reopenConsentBanner } from "@/components/CookieConsentBanner";
 
 export default function PrivacyPolicy() {
-  const lastUpdated = "July 23, 2026";
+  const lastUpdated = "August 19, 2026";
 
   return (
     <div className="min-h-screen bg-background">
@@ -118,6 +127,73 @@ export default function PrivacyPolicy() {
               <li>Basic profile information from social login providers (Google, Apple)</li>
               <li>Calendar availability if you use our calendar integration features</li>
             </ul>
+
+            <h3 className="text-xl font-medium mt-6 mb-3">Categories of Sources</h3>
+            <p>
+              We collect personal information from four categories of source. This list is the complete set;
+              we do not buy personal information from data brokers or list vendors.
+            </p>
+            <ul className="list-disc pl-6 space-y-2">
+              <li><strong>Directly from you:</strong> what you type into an account, newsletter, listing, review, event submission, advertising or contact form</li>
+              <li><strong>Automatically from your device:</strong> the device, usage, log and approximate-location data described above, collected through cookies and similar technologies where you have consented</li>
+              <li><strong>From services you choose to connect:</strong> social login providers (Google, Apple), Stripe when you pay us, and your calendar if you use the calendar features</li>
+              <li><strong>From public business and event sources:</strong> the listing pipeline described in the next section. This produces business information rather than information about you, and is the reason the section exists as a separate disclosure</li>
+            </ul>
+          </section>
+
+          <section className="mb-8">
+            <h2 className="text-2xl font-semibold mt-8 mb-4">Where Our Listings Come From</h2>
+            <p>
+              Not every listing on this site was submitted to us. A large share of our event, restaurant,
+              attraction and venue content is assembled automatically from public sources: venue and
+              restaurant websites, public event calendars such as Catch Des Moines, ticketing feeds, and
+              published menus. We use automated crawlers, a third-party crawling service, and AI models to
+              read those pages and turn them into listings. Crawling is limited to a maintained list of
+              source domains rather than the open web, and we keep the source URL with each listing and
+              publish it in that page's structured data.
+            </p>
+            <p>
+              The crawling service we use is configurable and handles published web pages, not your
+              personal information, which is why it does not appear in the sub-processor list above. The AI
+              models that read those pages are the OpenAI and Anthropic services already listed there.
+            </p>
+
+            <h3 className="text-xl font-medium mt-6 mb-3">What That Pipeline Collects</h3>
+            <p>
+              It collects business facts, not facts about you: event title, date and time, venue name and
+              street address, price, description, image and source URL; restaurant name, address, business
+              phone number, hours, menu items and ratings. It does not collect personal names, personal
+              email addresses or personal phone numbers, and our event records have no organizer-contact
+              fields to hold them. Because this material describes businesses and public events, it is not
+              in the ordinary case personal information under CCPA/CPRA or personal data under the GDPR.
+            </p>
+            <p>
+              A listing can still name an individual in passing, most often a performer in an event title.
+              If you are named in a listing and want it corrected or removed, ask us using the details in{" "}
+              <strong>Contact Us</strong> below and we will handle it as a correction or erasure request.
+              A site owner who does not want their published listings crawled can ask us to exclude their
+              domain the same way.
+            </p>
+
+            <h3 className="text-xl font-medium mt-6 mb-3">Advertiser Prospecting</h3>
+            <p>
+              We keep a list of local businesses that might want to advertise with us. It is generated from
+              businesses already listed on this site, and each record holds business-level fields only:
+              business name, category, city, website, and an internal fit score. It holds no personal
+              contact details. We do not buy contact lists, and this pipeline does not crawl third-party
+              sites to find people.
+            </p>
+
+            <h3 className="text-xl font-medium mt-6 mb-3">Why Our Terms Prohibit Scraping</h3>
+            <p>
+              Our <Link to="/terms" className="text-primary hover:underline">Terms of Service</Link>
+              {" "}prohibit scraping or crawling this Site, and we crawl other sites. That is a deliberate
+              position, not an oversight. The restriction in our Terms protects our infrastructure from
+              unmetered automated load and protects the compiled database we invest in maintaining; it is
+              not a claim that reading published pages is wrong. What we collect is limited to publicly
+              published business listing information from an allowlist of sources, we attribute it, and we
+              honour a request to be excluded.
+            </p>
           </section>
 
           <section className="mb-8">

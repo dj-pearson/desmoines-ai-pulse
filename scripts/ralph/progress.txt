@@ -204,3 +204,36 @@ Files changed:
   (211496360) are both still state=disabled_manually as of 2026-08-19, and the GitHub MCP tools
   expose no enable method - that needs `gh workflow enable` or the Actions UI, from Dj.
 ---
+
+## 2026-08-19 - WEB-LEGAL-008 (drafted, awaiting owner review)
+Added "Categories of Sources" and "Where Our Listings Come From" to
+src/pages/PrivacyPolicy.tsx. passes stays FALSE on purpose: the story says have the copy
+reviewed rather than shipped unilaterally, and no review has happened.
+
+The useful part was AC7 - enumerate what the pipeline actually ingests before writing copy.
+It ingests less than the story assumed. events has 57 columns and no organizer/contact/email/
+phone field at all; prospect_leads and crm_leads hold business_name/category/city/website and
+have no personal-contact column. So the honest disclosure is "we collect businesses, not
+contacts", not a broad admission.
+
+Files changed:
+- src/pages/PrivacyPolicy.tsx - two new sections, lastUpdated bumped, verification trail in
+  the file header.
+- prd.json - WEB-LEGAL-008 notes.
+
+**Learnings for future iterations:**
+- Legal copy is a factual claim about the code, so check each sentence against the code before
+  writing it. Two claims died that way: nothing in this repo fetches or parses robots.txt (the
+  only robots handling is a <meta name=robots> read in crawl-site, which is SEO auditing), and
+  the scraper backend is chosen at runtime from SCRAPER_BACKEND across browserless/puppeteer/
+  playwright/firecrawl/fetch (_shared/scraper.ts:36), so naming one vendor would be wrong on
+  any deploy that sets a different value.
+- When a disclosure names a vendor that is NOT in the sub-processor list, say why in the copy.
+  Silence there reads as drift; one sentence ("it handles published web pages, not your
+  personal information") closes it without touching the reconciled list.
+- To find personal-data columns fast, parse the Row block for a table out of
+  src/integrations/supabase/types.ts and regex the column names for
+  organizer|contact|email|phone|owner|author|host. Faster than reading migrations, and it is
+  the shape the app actually sees.
+- tests/ has no legal-copy assertions. WEB-LEGAL-009 is the right home for them.
+---
