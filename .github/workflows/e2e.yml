@@ -65,6 +65,13 @@ jobs:
       - name: Check import/export integrity
         run: npm run check-imports
 
+      # WEB-LEGAL-009 AC5. This also belongs in `npm run validate`, and it is
+      # there - but PR Checks is switched off on GitHub (WEB-CI-025), so this
+      # smoke job is the only required lane that runs at all today. Node-only,
+      # no browser, under a second.
+      - name: Check consent gate and CSP hashes
+        run: npm run check-consent-csp
+
       - name: Run smoke suite against a production build
         run: npm run test:smoke
 

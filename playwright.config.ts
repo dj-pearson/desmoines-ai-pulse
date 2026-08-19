@@ -11,9 +11,12 @@ import { defineConfig, devices } from '@playwright/test';
  */
 export default defineConfig({
   testDir: './tests',
-  // route-smoke.spec.ts must run against a production build, not the dev server —
-  // see playwright.smoke.config.ts for why. Run it with `npm run test:smoke`.
-  testIgnore: 'route-smoke.spec.ts',
+  // route-smoke.spec.ts and cookie-consent.spec.ts must run against a
+  // production build, not the dev server — see playwright.smoke.config.ts for
+  // why. Both run in the REQUIRED smoke lane via `npm run test:smoke`; ignoring
+  // them here keeps the quarantined lane from running them a second time under
+  // continue-on-error, where a failure would be invisible.
+  testIgnore: /(route-smoke|cookie-consent)\.spec\.ts/,
   /* Run tests in files in parallel */
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */

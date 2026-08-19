@@ -20,7 +20,14 @@ import { defineConfig, devices } from '@playwright/test';
  */
 export default defineConfig({
   testDir: './tests',
-  testMatch: 'route-smoke.spec.ts',
+  // WEB-LEGAL-009 AC5: cookie-consent.spec.ts is here rather than in the broad
+  // lane on purpose. It is the only check that would have caught WEB-LEGAL-001
+  // (GA4 firing for every visitor), and the broad lane is quarantined with
+  // continue-on-error, so a consent regression there could not fail a build.
+  // A production build is also the more faithful environment for it: the
+  // consent gate lives in an inline script in index.html that is pinned by a
+  // CSP hash, and only a real build serves the bytes the browser will get.
+  testMatch: /(route-smoke|cookie-consent)\.spec\.ts/,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

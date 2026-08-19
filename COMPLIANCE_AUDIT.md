@@ -135,3 +135,25 @@ behavior in a real browser: no request to googletagmanager.com and no `_ga`
 cookie for a visitor who has not opted in, under GPC, or after an explicit
 rejection, and a load that does happen after opt-in. Run against the pre-fix
 commit, that spec fails on three of its five cases.
+
+**Update 2026-08-19 (WEB-LEGAL-009).** That spec existed but could not fail a
+build. It sat in the broad Playwright lane, which `e2e.yml` runs with
+`continue-on-error: true` by design, so a consent regression would have been
+reported and ignored - the same shape of defect as the one it guards. It now
+runs in the required smoke lane against a production build, which is also the
+more faithful environment: the consent gate is an inline script in `index.html`
+pinned by a CSP hash, and only a real build serves the bytes a browser gets.
+
+Two static checks were added alongside it, in `scripts/check-consent-and-csp.mjs`
+(`npm run check-consent-csp`, wired into `npm run validate` and into the smoke
+job). The first fails if `gtag.js` is loaded from a static `<script src>` or if
+the Consent Mode default is missing or not `denied` - the WEB-LEGAL-001 defect
+itself. The second fails if any executable inline script in `index.html` has no
+matching SHA-256 in the `_headers` CSP, which is the trap the fix set for
+itself: edit the consent block without regenerating its hash and the browser
+refuses to run it, which looks exactly like a working consent gate. All four
+failure modes were verified to fire by mutating `index.html` and restoring it.
+
+The static checks are deliberately narrow and are not a compliance linter. They
+also do not replace the browser test - a source-level check would have passed on
+the broken version, which is the whole lesson of this section.

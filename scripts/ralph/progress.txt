@@ -338,3 +338,35 @@ src/lib/security/middleware.ts, and supabase/migrations/20260819000002_user_role
   is invisible. assign-role:92, the start of this whole chain, never appeared on the shortlist.
   Read the file; the tool ranks, it does not decide.
 ---
+
+## 2026-08-19 - WEB-LEGAL-009 (closed)
+The story's headline item (AC4, the Playwright consent assertion) already existed. The actual gap
+was AC5: tests/cookie-consent.spec.ts ran only in the broad lane, which e2e.yml runs with
+continue-on-error: true, so the check that would have caught WEB-LEGAL-001 could not fail a build.
+Same defect shape as the one it guards, one level up.
+
+Files changed: scripts/check-consent-and-csp.mjs (new), package.json (check-consent-csp, added to
+validate), playwright.smoke.config.ts + playwright.config.ts (consent suite moved to the required
+lane, removed from the quarantined one), .github/workflows/e2e.yml (static check as a smoke step),
+COMPLIANCE_AUDIT.md, prd.json.
+
+**Learnings for future iterations:**
+- Before implementing an AC, check whether it is already true. Two of seven were: AC4 shipped with
+  WEB-LEGAL-001, and AC3's SCAN_ROOTS in check-schema-usage.mjs already covers supabase/functions
+  (the WEB-SEO-003 pass extended it). AC3 is even phrased conditionally - "if it currently only
+  scans src/" - and the condition is false. Reading first turned a day of work into an afternoon.
+- A check that exists in a quarantined lane is not a check. playwright.smoke.config.ts uses
+  testMatch, so adding a spec file to tests/ silently lands it in the non-blocking lane. If a new
+  spec is meant to gate merges, it has to be named in the smoke config AND excluded from
+  playwright.config.ts testIgnore, or it runs twice and the failure that counts is the ignored one.
+- TEST THE CHECKER. Both of this one's first-draft rules were wrong in the direction of crying
+  wolf: keying the consent rule on the googletagmanager HOST flagged a harmless
+  <link rel="dns-prefetch">, and /script-src([^;]*);/ over public/_headers matches the # COMMENT
+  that documents the hash recipe rather than the policy line, reporting every hash as missing.
+  Both would have been "found a critical bug" reports. Mutate the source, watch it fire, restore.
+- CSP script-src does not apply to non-executable script types. index.html has a 1.3KB
+  application/ld+json block; hashing every <script> without checking `type` fails forever.
+- npm run validate is the right home for a static check AND is currently inert, because PR Checks
+  is switched off (WEB-CI-025). The e2e smoke job is the only required lane running today, so a
+  check that must bite goes in both.
+---
