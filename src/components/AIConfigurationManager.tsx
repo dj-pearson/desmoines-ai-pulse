@@ -458,7 +458,7 @@ export function AIConfigurationManager() {
                 </p>
                 <ul className="text-amber-800 dark:text-amber-200 space-y-1 list-disc list-inside">
                   <li><strong>Default Model</strong>: Used for complex tasks like event extraction, article generation, and content crawling. Current: <strong>{currentModel}</strong></li>
-                  <li><strong>Lightweight Model</strong>: Used for fast, cost-effective tasks like SEO generation and NLP parsing. Current: <strong>{getSetting('lightweight_model', 'claude-sonnet-5')}</strong></li>
+                  <li><strong>Lightweight Model</strong>: Used for fast, cost-effective tasks like SEO generation and NLP parsing. Current: <strong>{getSetting('lightweight_model', 'claude-haiku-4-5')}</strong></li>
                 </ul>
               </div>
             </div>

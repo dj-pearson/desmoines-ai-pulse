@@ -16,12 +16,12 @@
 --
 -- Model ids are used exactly as published, with no date suffix.
 --
--- lightweight_model moves too. It existed to route cheap work (NLP parsing, SEO
--- snippets) to Haiku, and collapsing it onto the same model as default_model
--- gives up that saving. It is deliberate: one model id across the platform is
--- the requested state. To restore a cheap tier later, set lightweight_model
--- back to a current Haiku id - the calling code already reads the two keys
--- separately, so nothing else has to change.
+-- lightweight_model stays a separate, cheaper tier and moves to
+-- claude-haiku-4-5. It routes NLP parsing, SEO snippets, moderation and
+-- submission triage, which do not need a Sonnet-class model; the calling code
+-- reads the two keys separately via buildLightweightClaudeRequest(). Its old
+-- value carried a date suffix (claude-haiku-4-5-20251001) - ids are used
+-- exactly as published now.
 -- ============================================================================
 
 INSERT INTO public.ai_configuration (setting_key, setting_value, description, created_at, updated_at)
@@ -40,8 +40,8 @@ ON CONFLICT (setting_key) DO UPDATE SET
 INSERT INTO public.ai_configuration (setting_key, setting_value, description, created_at, updated_at)
 VALUES (
     'lightweight_model',
-    '"claude-sonnet-5"'::jsonb,
-    'Model for quick queries and NLP parsing. Same id as default_model for now; set a Haiku id here to restore a cheap tier.',
+    '"claude-haiku-4-5"'::jsonb,
+    'Model for quick queries, NLP parsing, moderation and triage (Claude Haiku 4.5)',
     NOW(),
     NOW()
 )

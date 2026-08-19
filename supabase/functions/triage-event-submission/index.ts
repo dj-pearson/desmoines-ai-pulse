@@ -47,7 +47,7 @@ async function safetyCheck(s: Submission): Promise<SafetyVerdict> {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
-        model: 'claude-sonnet-5',
+        model: 'claude-haiku-4-5',
         max_tokens: 300,
         system,
         messages: [{ role: 'user', content: userContent }],

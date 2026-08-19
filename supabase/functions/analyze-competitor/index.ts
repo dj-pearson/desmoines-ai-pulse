@@ -284,7 +284,7 @@ Please provide analysis in the following JSON format:
       'anthropic-version': '2023-06-01'
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-5',
+      model: 'claude-haiku-4-5',
       max_tokens: 1000,
       messages: [{
         role: 'user',
@@ -390,7 +390,7 @@ Return as JSON array.
       'anthropic-version': '2023-06-01'
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-5',
+      model: 'claude-haiku-4-5',
       max_tokens: 1500,
       messages: [{
         role: 'user',
