@@ -437,3 +437,34 @@ that only shrinks. AC1's implement-or-remove decision is still open - it is a pr
   ai_writeup, but they take {contentType, batchSize} and the call site sends a per-item payload.
   Repointing the hook would have traded a 404 for a 400.
 ---
+
+## 2026-08-19 - XPLAT-011 (closed)
+Contract tests for the four multi-client edge functions that lacked them.
+supabase/functions/_tests/multi-client-contract.test.ts, 8 tests, wired into the deno job.
+
+Scoped by measurement: enumerating invoke() names across src/, ios/ and android/ gives exactly
+six functions with callers on more than one surface, and two already had a contract test
+(delete-user-account, version-check). A function with ONE caller cannot drift.
+
+**Learnings for future iterations:**
+- AC2 was already done. account-deletion-contract.test.ts has existed and been wired into CI
+  since XPLAT-001; the story's 2026-07-18 "the tests themselves are still missing" note predates
+  it. Read supabase/functions/_tests/ before writing anything there.
+- DENO RUNS IN THIS CONTAINER: `npm i -g deno` (registry.npmjs.org is allowed by the proxy) gets
+  you Deno 2.9.5. deno.land AND jsr.io are both 403 through the proxy, so any test importing
+  https://deno.land/std/... or jsr:@std/... cannot run locally - but `node:assert/strict` is
+  built into Deno, needs no fetch, and gives ok()/equal()/deepEqual(). Write new _tests/ files
+  against node:assert and they are runnable here as well as in CI.
+- The useful cross-platform assertion is a SUBSET check, not a spot check. Parse the server's
+  request interface and the client's payload-builder block, then require the client's keys to be
+  a subset of the server's. That catches the silent case - a field sent, accepted, and never
+  read - which no amount of "does it 200" testing finds.
+- Parse allowlists (VALID_SURFACES, VALID_PLATFORMS) off the server and the literals off each
+  client, rather than hardcoding either side in the test. The test then survives a legitimate
+  addition and still fails on a mismatch.
+- WATCH OUT backing files up to /tmp by basename: two of the four files I mutated were both
+  named index.ts, so the second backup clobbered the first and "restoring" wrote discover-chat's
+  source into register-device-token. `git checkout --` is the safe restore; git status caught it.
+- deno.lock was stale - still pinning puppeteer ^24.15.0 and sharp ~0.34.5 after afd9b5e bumped
+  package.json. Deno rewrote it on first run. Worth a look if the deno job ever behaves oddly.
+---

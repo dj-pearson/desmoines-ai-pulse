@@ -85,6 +85,10 @@ jobs:
       # A bucket created public must say why. Public means anonymous GET on a
       # guessable path with no expiry (WEB-LEGAL-007).
       - run: deno test --allow-read supabase/functions/_tests/storage-bucket-posture.test.ts
+      # Request contracts for the four functions more than one client calls
+      # (XPLAT-011). Reads both sides of each contract off disk, so it needs
+      # --allow-read and nothing else.
+      - run: deno test --allow-read supabase/functions/_tests/multi-client-contract.test.ts
       - run: deno test supabase/functions/_shared/jsonLdEvents.test.ts
       # IndexNow payload filtering plus the key-file/constant drift check
       # (WEB-SEO-011). Needs --allow-read for public/<key>.txt.
