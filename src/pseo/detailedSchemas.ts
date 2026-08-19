@@ -134,7 +134,7 @@ export interface PageMeta {
   page_type: PageTypeId;             // DETERMINISTIC
   generated_at: string;              // DETERMINISTIC — ISO 8601
   prompt_version: string;            // DETERMINISTIC — semver e.g. "2.0.0"
-  model_used: string;                // DETERMINISTIC — e.g. "claude-sonnet-4-6"
+  model_used: string;                // DETERMINISTIC — e.g. "claude-sonnet-5"
   source_record_ids: string[];       // FROM-DB — UUIDs of items referenced (0-20)
   combination: Record<string, string>; // DETERMINISTIC — dimension slug pairs
   freshness_days: number;            // DETERMINISTIC — how many days before refresh

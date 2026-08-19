@@ -64,7 +64,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 4000,\n  \"messages\": [{\n    \"role\": \"user\",\n    \"content\": \"Extract ALL events from Hoyt Sherman Place. Return ONLY a JSON array.\\n\\nFor each event:\\n- title (string)\\n- description (brief)\\n- date (ISO 8601 YYYY-MM-DD)\\n- time (string or null)\\n- venue_name: 'Hoyt Sherman Place'\\n- address: '1501 Woodland Ave, Des Moines, IA 50309'\\n- city: 'Des Moines'\\n- state: 'IA'\\n- category (Music, Comedy, Theater, Community, Other)\\n- price (string or null)\\n- image_url (full URL or null)\\n- ticket_url (full URL or null)\\n- source_url: 'https://hoytsherman.org/events/'\\n\\nHTML:\\n{{ $json.body.substring(0, 25000) }}\"\n  }]\n}",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-5\",\n  \"max_tokens\": 4000,\n  \"messages\": [{\n    \"role\": \"user\",\n    \"content\": \"Extract ALL events from Hoyt Sherman Place. Return ONLY a JSON array.\\n\\nFor each event:\\n- title (string)\\n- description (brief)\\n- date (ISO 8601 YYYY-MM-DD)\\n- time (string or null)\\n- venue_name: 'Hoyt Sherman Place'\\n- address: '1501 Woodland Ave, Des Moines, IA 50309'\\n- city: 'Des Moines'\\n- state: 'IA'\\n- category (Music, Comedy, Theater, Community, Other)\\n- price (string or null)\\n- image_url (full URL or null)\\n- ticket_url (full URL or null)\\n- source_url: 'https://hoytsherman.org/events/'\\n\\nHTML:\\n{{ $json.body.substring(0, 25000) }}\"\n  }]\n}",
         "options": {
           "timeout": 120000
         }

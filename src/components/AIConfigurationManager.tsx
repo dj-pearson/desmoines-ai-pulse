@@ -193,7 +193,7 @@ export function AIConfigurationManager() {
                         <Label htmlFor="model_id">Model ID</Label>
                         <Input
                           id="model_id"
-                          placeholder="claude-sonnet-4-5-20250929"
+                          placeholder="claude-sonnet-5"
                           value={newModel.model_id}
                           onChange={(e) => setNewModel({ ...newModel, model_id: e.target.value })}
                         />
@@ -458,7 +458,7 @@ export function AIConfigurationManager() {
                 </p>
                 <ul className="text-amber-800 dark:text-amber-200 space-y-1 list-disc list-inside">
                   <li><strong>Default Model</strong>: Used for complex tasks like event extraction, article generation, and content crawling. Current: <strong>{currentModel}</strong></li>
-                  <li><strong>Lightweight Model</strong>: Used for fast, cost-effective tasks like SEO generation and NLP parsing. Current: <strong>{getSetting('lightweight_model', 'claude-haiku-4-5-20251001')}</strong></li>
+                  <li><strong>Lightweight Model</strong>: Used for fast, cost-effective tasks like SEO generation and NLP parsing. Current: <strong>{getSetting('lightweight_model', 'claude-sonnet-5')}</strong></li>
                 </ul>
               </div>
             </div>

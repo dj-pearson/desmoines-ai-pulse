@@ -351,7 +351,11 @@ Generate writeups for ALL ${eventsToEnhance.length} events listed above. Each wr
       failureCount,
       results,
       promptUsed,
-      claudeModel: "claude-sonnet-4-20250514"
+      // Report the model that actually ran. This was hardcoded to
+      // "claude-sonnet-4-20250514" while the request above went through
+      // getAIConfig(), so the response named a model this function had not
+      // called since the config moved off Sonnet 4.
+      claudeModel: config.default_model
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200

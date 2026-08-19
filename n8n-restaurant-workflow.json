@@ -156,7 +156,7 @@
           "method": "POST",
           "sendBody": true,
           "specifyBody": "json",
-          "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 2000,\n  \"messages\": [{\n    \"role\": \"user\",\n    \"content\": \"Analyze this article and extract restaurant information if present. Article: {{ $json.body }}\\n\\nExtract:\\n1. Restaurant name\\n2. Full address (street, city, state, zip)\\n3. Cuisine type\\n4. Opening date or status (announced/opening_soon/newly_opened)\\n5. Brief description (2-3 sentences)\\n6. Phone number (if mentioned)\\n7. Website (if mentioned)\\n\\nReturn as JSON with keys: name, address, city, cuisine, opening_date, status, description, phone, website. If no restaurant found, return {found: false}\"\n  }]\n}",
+          "jsonBody": "={\n  \"model\": \"claude-sonnet-5\",\n  \"max_tokens\": 2000,\n  \"messages\": [{\n    \"role\": \"user\",\n    \"content\": \"Analyze this article and extract restaurant information if present. Article: {{ $json.body }}\\n\\nExtract:\\n1. Restaurant name\\n2. Full address (street, city, state, zip)\\n3. Cuisine type\\n4. Opening date or status (announced/opening_soon/newly_opened)\\n5. Brief description (2-3 sentences)\\n6. Phone number (if mentioned)\\n7. Website (if mentioned)\\n\\nReturn as JSON with keys: name, address, city, cuisine, opening_date, status, description, phone, website. If no restaurant found, return {found: false}\"\n  }]\n}",
           "options": {}
         },
         "name": "AI Extract Restaurant Info",

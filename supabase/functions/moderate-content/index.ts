@@ -38,7 +38,7 @@ type Verdict = 'approved' | 'flagged' | 'rejected' | 'error';
 
 const PAUSE_FLAG = 'content_moderation_enabled';
 const SWEEP_BATCH = 25;     // reviews re-moderated per sweep run
-const MODEL = 'claude-3-haiku-20240307';
+const MODEL = 'claude-sonnet-5';
 
 function json(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...headers, 'Content-Type': 'application/json' } });

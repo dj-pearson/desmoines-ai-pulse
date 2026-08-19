@@ -66,7 +66,7 @@
           "method": "POST",
           "sendBody": true,
           "specifyBody": "json",
-          "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 1000,\n  \"messages\": [{\n    \"role\": \"user\",\n    \"content\": \"Analyze this social media post about a Des Moines restaurant. Post: {{ $json.text }}\\n\\nDetermine:\\n1. Is this about a NEW restaurant or announcement? (yes/no)\\n2. If yes, extract: restaurant name, location, type of cuisine\\n3. Opening status: announced, opening soon, or newly opened\\n\\nReturn JSON: {isNew: boolean, name: string, location: string, cuisine: string, status: string}\"\n  }]\n}"
+          "jsonBody": "={\n  \"model\": \"claude-sonnet-5\",\n  \"max_tokens\": 1000,\n  \"messages\": [{\n    \"role\": \"user\",\n    \"content\": \"Analyze this social media post about a Des Moines restaurant. Post: {{ $json.text }}\\n\\nDetermine:\\n1. Is this about a NEW restaurant or announcement? (yes/no)\\n2. If yes, extract: restaurant name, location, type of cuisine\\n3. Opening status: announced, opening soon, or newly opened\\n\\nReturn JSON: {isNew: boolean, name: string, location: string, cuisine: string, status: string}\"\n  }]\n}"
         },
         "name": "AI Analyze Post",
         "type": "n8n-nodes-base.httpRequest",

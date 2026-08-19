@@ -63,8 +63,7 @@ CATCHDESMOINES_BASE_URL = "https://www.catchdesmoines.com"
 EVENTS_LIST_URL = f"{CATCHDESMOINES_BASE_URL}/events/"
 CENTRAL_TZ = ZoneInfo("America/Chicago")
 
-# Claude 4.5 Sonnet model
-CLAUDE_MODEL = "claude-sonnet-4-5-20250929"
+CLAUDE_MODEL = "claude-sonnet-5"
 
 
 class CatchDesMoinesCrawler:

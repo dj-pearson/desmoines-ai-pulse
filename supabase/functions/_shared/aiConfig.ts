@@ -148,8 +148,8 @@ export async function getAIConfig(
 
     // Cache the config — DB stores all values as strings, so parse numerics
     configCache = {
-      default_model: String(config.default_model || "claude-sonnet-4-5-20250929"),
-      lightweight_model: String(config.lightweight_model || "claude-haiku-4-5-20251001"),
+      default_model: String(config.default_model || "claude-sonnet-5"),
+      lightweight_model: String(config.lightweight_model || "claude-sonnet-5"),
       api_endpoint: String(config.api_endpoint || "https://api.anthropic.com/v1/messages"),
       max_tokens_standard: parseInt(String(config.max_tokens_standard), 10) || 2000,
       max_tokens_large: parseInt(String(config.max_tokens_large), 10) || 8000,
@@ -170,10 +170,9 @@ export async function getAIConfig(
     console.error("Failed to fetch AI config, using fallback:", error);
 
     // Fallback to default values if database fetch fails
-    // Using Claude 4.5 Sonnet as the default model (most capable)
     const fallbackConfig: AIConfig = {
-      default_model: "claude-sonnet-4-5-20250929",
-      lightweight_model: "claude-haiku-4-5-20251001",
+      default_model: "claude-sonnet-5",
+      lightweight_model: "claude-sonnet-5",
       api_endpoint: "https://api.anthropic.com/v1/messages",
       max_tokens_standard: 2000,
       max_tokens_large: 8000,

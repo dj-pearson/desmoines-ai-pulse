@@ -42,7 +42,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 4000,\n  \"messages\": [{\n    \"role\": \"user\",\n    \"content\": \"Extract upcoming Iowa Wolves HOME games. Return ONLY a JSON array.\\n\\nFor each game:\\n- title: 'Iowa Wolves vs [Opponent]'\\n- description: 'NBA G League basketball - affiliate of the Minnesota Timberwolves'\\n- date (ISO 8601 YYYY-MM-DD)\\n- time (string or null)\\n- venue_name: 'Wells Fargo Arena'\\n- address: '730 3rd St, Des Moines, IA 50309'\\n- city: 'Des Moines'\\n- state: 'IA'\\n- category: 'Sports'\\n- price: null\\n- image_url: null\\n- ticket_url: 'https://iowa.gleague.nba.com/tickets/'\\n- source_url: 'https://iowa.gleague.nba.com/schedule/'\\n\\nOnly HOME games.\\n\\nHTML:\\n{{ $json.body.substring(0, 30000) }}\"\n  }]\n}",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-5\",\n  \"max_tokens\": 4000,\n  \"messages\": [{\n    \"role\": \"user\",\n    \"content\": \"Extract upcoming Iowa Wolves HOME games. Return ONLY a JSON array.\\n\\nFor each game:\\n- title: 'Iowa Wolves vs [Opponent]'\\n- description: 'NBA G League basketball - affiliate of the Minnesota Timberwolves'\\n- date (ISO 8601 YYYY-MM-DD)\\n- time (string or null)\\n- venue_name: 'Wells Fargo Arena'\\n- address: '730 3rd St, Des Moines, IA 50309'\\n- city: 'Des Moines'\\n- state: 'IA'\\n- category: 'Sports'\\n- price: null\\n- image_url: null\\n- ticket_url: 'https://iowa.gleague.nba.com/tickets/'\\n- source_url: 'https://iowa.gleague.nba.com/schedule/'\\n\\nOnly HOME games.\\n\\nHTML:\\n{{ $json.body.substring(0, 30000) }}\"\n  }]\n}",
         "options": { "timeout": 120000 }
       },
       "name": "Extract with Claude",
