@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -20,12 +19,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.desmoines.aipulse.util.markdown.MarkdownBlock
@@ -68,16 +71,16 @@ private fun rememberBlocks(content: String): List<MarkdownBlock>? =
 private fun MarkdownBlockView(block: MarkdownBlock, onLinkClick: (String) -> Unit) {
     when (block) {
         is MarkdownBlock.Heading -> Text(
-            text = inline(block.text),
+            text = inline(block.text, onLinkClick),
             style = headingStyle(block.level),
             fontWeight = FontWeight.Bold,
         )
-        is MarkdownBlock.Paragraph -> LinkableText(inline(block.text), MaterialTheme.typography.bodyLarge, onLinkClick)
+        is MarkdownBlock.Paragraph -> LinkableText(inline(block.text, onLinkClick), MaterialTheme.typography.bodyLarge)
         is MarkdownBlock.BulletList -> Column {
             block.items.forEach { item ->
                 Row {
                     Text("•  ", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
-                    LinkableText(inline(item), MaterialTheme.typography.bodyLarge, onLinkClick)
+                    LinkableText(inline(item, onLinkClick), MaterialTheme.typography.bodyLarge)
                 }
             }
         }
@@ -85,7 +88,7 @@ private fun MarkdownBlockView(block: MarkdownBlock, onLinkClick: (String) -> Uni
             block.items.forEachIndexed { index, item ->
                 Row {
                     Text("${index + 1}.  ", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
-                    LinkableText(inline(item), MaterialTheme.typography.bodyLarge, onLinkClick)
+                    LinkableText(inline(item, onLinkClick), MaterialTheme.typography.bodyLarge)
                 }
             }
         }
@@ -118,16 +121,13 @@ private fun MarkdownBlockView(block: MarkdownBlock, onLinkClick: (String) -> Uni
     }
 }
 
+/**
+ * Links ride along inside the [AnnotatedString] as [LinkAnnotation.Clickable], so a
+ * plain [Text] does its own hit-testing, click dispatch and a11y link semantics.
+ */
 @Composable
-private fun LinkableText(text: AnnotatedString, style: androidx.compose.ui.text.TextStyle, onLinkClick: (String) -> Unit) {
-    val color = MaterialTheme.colorScheme.onSurface
-    ClickableText(
-        text = text,
-        style = style.copy(color = color),
-        onClick = { offset ->
-            text.getStringAnnotations(LINK_TAG, offset, offset).firstOrNull()?.let { onLinkClick(it.item) }
-        },
-    )
+private fun LinkableText(text: AnnotatedString, style: TextStyle) {
+    Text(text = text, style = style.copy(color = MaterialTheme.colorScheme.onSurface))
 }
 
 @Composable
@@ -142,7 +142,7 @@ private fun headingStyle(level: Int) = when (level) {
 
 /** Parse inline bold (**), italic (*), code (`), and [label](url) links. */
 @Composable
-private fun inline(text: String): AnnotatedString {
+private fun inline(text: String, onLinkClick: (String) -> Unit): AnnotatedString {
     val linkColor = MaterialTheme.colorScheme.primary
     val codeBg = MaterialTheme.colorScheme.surfaceVariant
     return buildAnnotatedString {
@@ -180,9 +180,14 @@ private fun inline(text: String): AnnotatedString {
                         if (paren > close) {
                             val label = text.substring(i + 1, close)
                             val url = text.substring(close + 2, paren)
-                            pushStringAnnotation(LINK_TAG, url)
-                            withStyle(SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline)) { append(label) }
-                            pop()
+                            withLink(
+                                LinkAnnotation.Clickable(
+                                    tag = LINK_TAG,
+                                    styles = TextLinkStyles(
+                                        style = SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline),
+                                    ),
+                                ) { onLinkClick(url) },
+                            ) { append(label) }
                             i = paren + 1
                         } else { append(text[i]); i++ }
                     } else { append(text[i]); i++ }
