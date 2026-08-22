@@ -42,8 +42,7 @@
     "subscription-lifecycle",
     "subscription-nurture",
     "support-responder",
-    "ticket-classifier",
-    "uptime-monitor"
+    "ticket-classifier"
   ],
   "healthy": [
     "auto-trigger-scraping-jobs",
