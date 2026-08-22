@@ -141,7 +141,18 @@ function parseSchema() {
       continue;
     }
 
-    const entityMatch = /^ {6}(\w+): \{/.exec(line);
+    // `name: {` OR a bare `name:` whose body starts on the next line. The
+    // codegen emits OVERLOADED functions as a union:
+    //       get_active_ads:
+    //         | { Args: ...; Returns: ... }
+    //         | { Args: ...; Returns: ... }
+    // so requiring ` {` on the same line made every overloaded function
+    // invisible, and this script then reported it as "no such function in
+    // the generated schema". get_active_ads, fuzzy_search_events,
+    // fuzzy_search_restaurants and calculate_campaign_pricing were all
+    // baselined that way while existing in production the whole time.
+    // \s*$ also tolerates the trailing CR of a CRLF checkout.
+    const entityMatch = /^ {6}(\w+):(?: \{| *\r?$)/.exec(line);
     if (entityMatch) {
       entity = entityMatch[1];
       inRow = false;
