@@ -33,6 +33,13 @@
  * Counts, names and error text only. Never cron.job.command, which embeds the
  * credential lookup.
  *
+ * It reads a SNAPSHOT rather than cron.job_run_details itself. Aggregating that
+ * table live times out over the API -- 188 MB, 256k rows, indexed only on runid,
+ * and CREATE INDEX on it returns "must be owner of table job_run_details". The
+ * snapshot is refreshed every 30 minutes by a pg_cron job that calls a plain SQL
+ * function, so neither failure mode above can reach it, and a stale snapshot
+ * fails this check rather than freezing it green.
+ *
  * Usage:
  *   npx tsx scripts/check-cron-health.ts            # check
  *   npx tsx scripts/check-cron-health.ts --update   # re-baseline
@@ -44,7 +51,8 @@ import { fileURLToPath } from 'node:url';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const BASELINE = join(ROOT, 'cron-health-baseline.json');
 const UPDATE = process.argv.includes('--update');
-const WINDOW_HOURS = 24;
+/** A snapshot older than this means the snapshot job itself stopped. */
+const MAX_SNAPSHOT_AGE_MINUTES = 120;
 
 function env(key: string): string | undefined {
   if (process.env[key]) return process.env[key];
@@ -71,12 +79,14 @@ interface Row {
   jobname: string;
   schedule: string;
   active: boolean;
+  window_hours: number;
   runs: number;
   succeeded: number;
   failed: number;
   last_success: string | null;
   last_failure: string | null;
   last_error: string | null;
+  captured_at: string;
 }
 
 const res = await fetch(`${URL_}/rest/v1/rpc/cron_health`, {
@@ -86,18 +96,34 @@ const res = await fetch(`${URL_}/rest/v1/rpc/cron_health`, {
     Authorization: `Bearer ${KEY}`,
     'Content-Type': 'application/json',
   },
-  body: JSON.stringify({ window_hours: WINDOW_HOURS }),
+  body: '{}',
 });
 
 if (!res.ok) {
   console.error(`[cron-health] cron_health RPC returned ${res.status}: ${(await res.text()).slice(0, 200)}`);
-  console.error('  Apply supabase/migrations/20260822000008_cron_health_rpc.sql if it is missing.');
+  console.error('  Apply supabase/migrations/20260822000009_cron_health_snapshot.sql if it is missing.');
   process.exit(1);
 }
 
 const rows = (await res.json()) as Row[];
 if (rows.length === 0) {
   console.error('[cron-health] cron_health returned no jobs at all - refusing to pass.');
+  console.error('  Either the snapshot has never been populated, or pg_cron has no jobs.');
+  process.exit(1);
+}
+
+// The snapshot is written by the cron-health-snapshot job, which is one of the
+// few that works because it calls a plain SQL function and makes no HTTP call.
+// If it stops, every count below freezes at its last value and this check would
+// keep passing on stale data -- the precise failure this story is about.
+const capturedAt = new Date(rows[0].captured_at);
+const ageMinutes = (Date.now() - capturedAt.getTime()) / 60_000;
+if (!Number.isFinite(ageMinutes) || ageMinutes > MAX_SNAPSHOT_AGE_MINUTES) {
+  console.error(
+    `[cron-health] snapshot is ${Math.round(ageMinutes)} minutes old ` +
+      `(captured ${rows[0].captured_at}), over the ${MAX_SNAPSHOT_AGE_MINUTES}-minute limit.`,
+  );
+  console.error('  The cron-health-snapshot job (*/30) has stopped, so these counts are frozen.');
   process.exit(1);
 }
 
@@ -132,7 +158,7 @@ const regressed = failing.filter((j) => knownHealthy.has(j));
 const fixed = base.failing.filter((j) => healthy.includes(j));
 
 console.log(
-  `[cron-health] last ${WINDOW_HOURS}h: ${ran.length} job(s) ran, ` +
+  `[cron-health] last ${rows[0].window_hours}h (snapshot ${Math.round(ageMinutes)}m old): ${ran.length} job(s) ran, ` +
     `${healthy.length} healthy, ${failing.length} failing every run. ` +
     `${totals.ok} succeeded / ${totals.bad} failed.`,
 );
