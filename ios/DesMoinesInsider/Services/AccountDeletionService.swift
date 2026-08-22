@@ -96,4 +96,23 @@ final class AccountDeletionService {
             throw DeletionError.notConfirmed
         }
     }
+
+    /// Deletes the account and tears the local session down.
+    ///
+    /// The sign-out is BEST EFFORT on purpose (IOS-AUDIT-BUG-018 AC2). Once the
+    /// server reports the account gone it is gone, so a failing sign-out must not
+    /// be reported as a failed deletion - which is exactly what both call sites
+    /// used to do: `try await deleteAccount(); try await auth.signOut()` inside
+    /// one do/catch, so a network blip on the second line told the user their
+    /// deletion had failed, and in SettingsView also skipped the dismiss, leaving
+    /// them on a settings screen for an account that no longer exists.
+    ///
+    /// Discarding the sign-out error is safe because AuthService.signOut purges
+    /// local user state in a `defer` regardless of whether the network call
+    /// throws, so the session, keychain, favorites and caches are cleared either
+    /// way. What is discarded is the REPORT, not the teardown.
+    func deleteAccountAndSignOut() async throws {
+        try await deleteAccount()
+        try? await AuthService.shared.signOut()
+    }
 }

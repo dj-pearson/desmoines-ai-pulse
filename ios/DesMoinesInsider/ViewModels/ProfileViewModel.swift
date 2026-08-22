@@ -14,6 +14,13 @@ final class ProfileViewModel {
     private(set) var isSaving = false
     private(set) var isDeleting = false
     private(set) var errorMessage: String?
+
+    /// True when the CURRENT errorMessage came from a failed deletion.
+    ///
+    /// ProfileView shows one shared "Error" alert for profile saves and for
+    /// deletion, so a bare Retry button there would offer to retry the wrong
+    /// thing (IOS-AUDIT-BUG-018 AC3).
+    private(set) var deletionFailed = false
     var showSaveSuccess = false
     var showDeleteConfirmation = false
 
@@ -62,6 +69,7 @@ final class ProfileViewModel {
 
     func clearError() {
         errorMessage = nil
+        deletionFailed = false
     }
 
     // MARK: - Delete Account
@@ -69,17 +77,20 @@ final class ProfileViewModel {
     func deleteAccount() async {
         isDeleting = true
         errorMessage = nil
+        deletionFailed = false
 
         do {
             // XPLAT-001: this used to POST an empty body, which the edge
             // function has rejected with a 400 since the two-step token flow
             // landed. AccountDeletionService speaks the current contract and is
             // shared with SettingsView.
-            try await AccountDeletionService.shared.deleteAccount()
-
-            try await auth.signOut()
+            // IOS-AUDIT-BUG-018 AC2: the sign-out is inside the service and is
+            // best effort, so a failing sign-out after a SUCCESSFUL delete is no
+            // longer reported to the user as a failed deletion.
+            try await AccountDeletionService.shared.deleteAccountAndSignOut()
         } catch {
             errorMessage = error.localizedDescription
+            deletionFailed = true
         }
 
         isDeleting = false
