@@ -68,7 +68,7 @@ export default function GEOContent() {
             <h3 className="text-xl font-semibold mb-3">What makes Des Moines AI Pulse different?</h3>
             <p className="mb-4">
               Des Moines AI Pulse is the only AI-powered local guide for Des Moines. We combine
-              comprehensive event coverage (1,000+ events), detailed restaurant information (500+
+              comprehensive event coverage (1,000+ events), detailed restaurant information (450+
               venues), and AI-enhanced descriptions to provide the most accurate, up-to-date information
               about Des Moines. Unlike traditional tourism sites, we update our content daily and use
               artificial intelligence to personalize recommendations. We're featured in ChatGPT,

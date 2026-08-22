@@ -17,7 +17,9 @@ python-dateutil>=2.8.2
 python-dotenv>=1.0.0
 
 # Anthropic Claude API
-anthropic>=0.39.0
+# Pinned to the 1.x API. anthropic 1.0.0 removed temperature from
+# Messages.create(); an unpinned >=0.39 quietly upgraded CI into it.
+anthropic>=1.0.0,<2.0.0
 
 # NumPy (pinned for stability)
 numpy>=1.26.0,<2.0

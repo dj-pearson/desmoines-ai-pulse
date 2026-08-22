@@ -27,6 +27,13 @@ jobs:
   crawl-events:
     name: Crawl CatchDesMoines Events
     runs-on: ubuntu-latest
+    # SUPABASE_SERVICE_ROLE_KEY and ANTHROPIC_API_KEY are scoped to the "Scrape"
+    # environment, not to the repository. Without this line they resolve to the
+    # empty string and catchdesmoines_crawler.py:90 raises "SUPABASE_URL and
+    # SUPABASE_SERVICE_ROLE_KEY must be set" after ~1m45s of setup. That is the
+    # failure that ran daily until 2026-02-12 and got this workflow switched off
+    # (WEB-SEO-017). Scrape has no protection rules, so this adds no approval gate.
+    environment: Scrape
     timeout-minutes: 30
 
     steps:
@@ -164,6 +171,8 @@ jobs:
   update-ai-config:
     name: Update AI Configuration
     runs-on: ubuntu-latest
+    # Same reason as crawl-events: SUPABASE_SERVICE_ROLE_KEY lives in Scrape.
+    environment: Scrape
     needs: crawl-events
     if: success() && github.event_name == 'workflow_dispatch'
 

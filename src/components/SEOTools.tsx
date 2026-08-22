@@ -268,6 +268,17 @@ Sitemap: https://desmoinesinsider.com/sitemap.xml
 Crawl-delay: 1`;
   };
 
+  // WEB-QA-003 AC5: the Key Data Points below are hand-maintained and were the
+  // last place the old overstated counts survived. public/llms.txt was corrected
+  // under WEB-SEO-015, but this generator still emitted "500+ monthly events",
+  // "50+ attractions" and "100+ playgrounds" — so regenerating and publishing
+  // would have silently reverted that fix.
+  //
+  // Measured against the production database 2026-08-22: 341 upcoming events,
+  // 480 restaurants, 22 attractions, 69 playgrounds. Figures are rounded DOWN
+  // and kept identical to public/llms.txt so this generator reproduces the
+  // corrected file rather than a third set of numbers. Re-measure before editing;
+  // generating both from the database alongside the sitemaps would end the drift.
   const generateLLMsTxt = () => {
     return `# Des Moines Insider - AI Crawler Instructions
 # This file provides guidance for AI crawlers like Perplexity, OpenAI, Claude, etc.
@@ -294,10 +305,10 @@ Des Moines Insider is your AI-powered guide to events, restaurants, attractions,
 - All venue information is checked for accuracy
 
 ### Key Data Points:
-- 500+ monthly events tracked
-- 200+ restaurants catalogued  
-- 50+ attractions documented
-- 100+ playgrounds mapped
+- 250+ upcoming events tracked
+- 450+ restaurants catalogued
+- 20+ attractions documented
+- 65+ family activity locations mapped
 
 ### Local Focus:
 - Primary coverage: Des Moines metro area

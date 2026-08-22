@@ -78,6 +78,9 @@ class CatchDesMoinesCrawler:
         self.events_found: list = []
         self.events_inserted: int = 0
         self.duplicates_skipped: int = 0
+        # Extraction failures are counted, not swallowed. A run that extracts
+        # nothing because the API call blew up must not exit 0 looking healthy.
+        self.extraction_errors: int = 0
 
     def _init_clients(self):
         """Initialize Supabase and Anthropic clients."""
@@ -268,7 +271,6 @@ Return ONLY the JSON array. No other text."""
             message = self.anthropic_client.messages.create(
                 model=CLAUDE_MODEL,
                 max_tokens=8000,
-                temperature=0.1,
                 messages=[
                     {"role": "user", "content": prompt}
                 ]
@@ -292,9 +294,11 @@ Return ONLY the JSON array. No other text."""
             return events
 
         except json.JSONDecodeError as e:
+            self.extraction_errors += 1
             logger.error(f"JSON parse error: {e}")
             return []
         except Exception as e:
+            self.extraction_errors += 1
             logger.error(f"Claude API error: {e}")
             return []
 
@@ -426,7 +430,13 @@ Return ONLY the JSON array. No other text."""
             events = await self.extract_events_with_claude(html, f"{EVENTS_LIST_URL}?page={page}")
 
             if not events:
-                logger.info(f"No more events found on page {page + 1}")
+                if self.extraction_errors:
+                    logger.error(
+                        f"Extraction failed on page {page + 1} - stopping. "
+                        "This is a failure, not an empty page."
+                    )
+                else:
+                    logger.info(f"No more events found on page {page + 1}")
                 break
 
             all_events.extend(events)
@@ -476,12 +486,14 @@ Return ONLY the JSON array. No other text."""
         logger.info(f"Total events extracted: {len(all_events)}")
         logger.info(f"Events inserted: {self.events_inserted}")
         logger.info(f"Duplicates skipped: {self.duplicates_skipped}")
+        logger.info(f"Extraction errors: {self.extraction_errors}")
         logger.info("=" * 60)
 
         return {
             "total_found": len(all_events),
             "inserted": self.events_inserted,
             "duplicates": self.duplicates_skipped,
+            "extraction_errors": self.extraction_errors,
         }
 
 
@@ -510,9 +522,21 @@ async def main():
             f.write(f"events_found={result['total_found']}\n")
             f.write(f"events_inserted={result['inserted']}\n")
             f.write(f"duplicates_skipped={result['duplicates']}\n")
+            f.write(f"extraction_errors={result['extraction_errors']}\n")
 
     return result
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    _result = asyncio.run(main())
+    # Exit non-zero when extraction failed. Without this the crawler reported
+    # success while extracting zero events, so a green daily run proved nothing.
+    # run() returns None when the first page fails and it aborts early - that
+    # path is already a failure.
+    if _result is None:
+        sys.exit(1)
+    if _result["extraction_errors"]:
+        logger.error(
+            f"{_result['extraction_errors']} extraction error(s) - failing the run"
+        )
+        sys.exit(1)

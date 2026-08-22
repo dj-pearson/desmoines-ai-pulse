@@ -13,6 +13,10 @@ on:
 jobs:
   audit:
     runs-on: ubuntu-latest
+    # SUPABASE_SERVICE_ROLE_KEY is an environment secret scoped to "Scrape", not
+    # a repository secret. The bucket-posture step below needs it, and a job
+    # without this line silently receives an empty string (WEB-SEO-017).
+    environment: Scrape
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -45,6 +49,23 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: npx tsx scripts/check-anon-exposure.ts
+
+      # WEB-QA-020. storage-bucket-posture.test.ts reads the MIGRATIONS, so it
+      # proves a bucket-closing migration was WRITTEN, not that it was APPLIED.
+      # On 2026-08-22 that gap was real: user-uploads was still public in
+      # production while the test sat green, because the closing migration had
+      # been merged in August and never run. This asks production directly.
+      #
+      # It parses its expectations out of that same test file, so there is one
+      # list and the offline and live checks cannot drift apart. Needs a
+      # service-role key: measured with the anon key, GET /storage/v1/bucket
+      # returns [] and GET /storage/v1/bucket/<id> returns 400 for every bucket
+      # regardless of posture, so anon cannot tell public from private.
+      - name: Storage bucket posture drift
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npx tsx scripts/check-bucket-posture.ts
 
       - name: Diff against committed baselines and report drift
         env:

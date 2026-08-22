@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import { handleError } from "@/lib/errorHandler";
+import { formatInCentralTime, CENTRAL_TIMEZONE } from "@/lib/timezone";
 
 export interface UserSubmittedEvent {
   id: string;
@@ -213,30 +215,90 @@ export function useReviewEvent() {
 
       if (error) throw error;
 
-      // If approved, publish to the main events table
+      // If approved, publish to the main events table.
+      //
+      // WEB-QA-018: this insert previously named four columns that do not exist
+      // on public.events -- description, start_time, end_time and address -- so
+      // it failed with PGRST204 every single time. The error was only
+      // console.error'd, and console.* is stripped from production builds
+      // (vite.config.ts esbuild.drop), so in production it produced no signal at
+      // all: the caller's toast.success fired and admins believed approved
+      // submissions were being published. Nothing was.
+      //
+      // Column mapping now follows the convention the crawler already uses
+      // (crawlers/catchdesmoines_crawler.py:372-389), confirmed against the live
+      // schema: description -> original_description + enhanced_description,
+      // start_time -> event_start_local. All 1246 production rows populate both
+      // description columns that way.
+      //
+      // event_start_local is `timestamp without time zone` -- local wall-clock,
+      // not the user's free-text start_time. It is derived from the submission's
+      // timestamptz date via the project's Central-time helper, matching all
+      // 1246 existing rows. The free-text start_time is not published: readers
+      // fall back event_start_local -> event_start_utc -> date anyway
+      // (EnhancedEventSEO.tsx:26, SocialEventCard.tsx:72).
+      //
+      // start_time and end_time are deliberately not published: events has no
+      // text time columns, and end_date is a timestamptz used by 0 of 1246 rows.
+      // Both values stay on the user_submitted_events row, so nothing is lost. address is folded into location, which is what the geocoding
+      // trigger reads and is NOT NULL on events.
       if (status === 'approved' && data) {
         const submittedEvent = data as UserSubmittedEvent;
+
+        // events.date is NOT NULL. Fail loudly rather than sending an insert
+        // that cannot succeed.
+        if (!submittedEvent.date) {
+          throw new Error(
+            `Submission "${submittedEvent.title}" has no date, so it cannot be published. ` +
+            'The review decision was saved; set a date on the submission and approve it again.'
+          );
+        }
+
+        const description = submittedEvent.description?.trim() || null;
+        const address = submittedEvent.address?.trim();
+        const submittedLocation = submittedEvent.location?.trim();
+        // location is NOT NULL on events; prefer the most specific value we have.
+        const location = [submittedLocation, address]
+          .filter((part): part is string => Boolean(part))
+          .filter((part, i, all) => all.indexOf(part) === i)
+          .join(' - ') || 'Des Moines, IA';
+
         const { error: publishError } = await supabase
           .from('events')
           .insert([{
             title: submittedEvent.title,
-            description: submittedEvent.description || null,
-            date: submittedEvent.date || null,
-            start_time: submittedEvent.start_time || null,
-            end_time: submittedEvent.end_time || null,
+            original_description: description,
+            enhanced_description: description,
+            date: submittedEvent.date,
+            event_start_local: formatInCentralTime(
+              submittedEvent.date,
+              "yyyy-MM-dd'T'HH:mm:ss"
+            ),
+            event_start_utc: submittedEvent.date,
+            event_timezone: CENTRAL_TIMEZONE,
             venue: submittedEvent.venue || null,
-            location: submittedEvent.location || null,
-            address: submittedEvent.address || null,
+            location,
             price: submittedEvent.price || null,
             category: submittedEvent.category || 'General',
             source_url: submittedEvent.website_url || null,
             image_url: submittedEvent.image_url || null,
-            city: submittedEvent.location || 'Des Moines',
+            city: submittedLocation || 'Des Moines',
             source: 'user_submitted',
           }]);
 
         if (publishError) {
-          console.error('Failed to publish to events table:', publishError);
+          // Throw rather than log. The review decision above is already saved,
+          // so the honest outcome is "approved but not published" and the admin
+          // needs to see it -- EventReviewSystem.tsx catches this and replaces
+          // its success toast with an error.
+          handleError(publishError, {
+            component: 'useReviewEvent',
+            action: 'publishApprovedSubmission',
+          });
+          throw new Error(
+            `Approval saved, but publishing "${submittedEvent.title}" to the events ` +
+            `feed failed: ${publishError.message}`
+          );
         }
       }
 
