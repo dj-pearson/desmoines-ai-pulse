@@ -254,12 +254,20 @@ actor EventsService {
         let client = try db()
         let today = DateParser.toISO( Calendar.current.startOfDay(for: Date()))
 
+        // IOS-AUDIT-PERF-027: the bounding box goes BEFORE the limit. Without it
+        // this took the next `limit` events by date across all 1,246 rows and then
+        // filtered by distance, so a user near a quiet part of the metro could get
+        // an empty list while events in radius sat past the cutoff.
+        let box = GeoBoundingBox(centerLat: latitude, centerLng: longitude, radiusMiles: radiusMiles)
+
         let events: [Event] = try await client
             .from("events")
             .select()
             .gte("date", value: today)
-            .not("latitude", operator: .is, value: "null")
-            .not("longitude", operator: .is, value: "null")
+            .gte("latitude", value: box.minLat)
+            .lte("latitude", value: box.maxLat)
+            .gte("longitude", value: box.minLng)
+            .lte("longitude", value: box.maxLng)
             .order("date", ascending: true)
             .limit(limit)
             .execute()
