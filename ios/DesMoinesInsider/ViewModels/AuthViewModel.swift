@@ -36,7 +36,14 @@ final class AuthViewModel {
 
     var isLockedOut: Bool { lockoutSecondsRemaining > 0 }
 
-    private let auth = AuthService.shared
+    /// Injected so the error/info routing below can be tested without a network
+    /// round-trip (IOS-AUDIT-TEST-002). Defaults to the shared instance, so the
+    /// single production call site, AuthView.swift:6, is unchanged.
+    private let auth: AuthProviding
+
+    init(auth: AuthProviding = AuthService.shared) {
+        self.auth = auth
+    }
 
     var isAuthenticated: Bool { auth.isAuthenticated }
     var currentUser: UserProfile? { auth.currentProfile }

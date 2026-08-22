@@ -377,3 +377,30 @@ final class AuthService {
         }
     }
 }
+
+// MARK: - Injection seam
+
+/// The slice of AuthService that AuthViewModel drives.
+///
+/// Added for IOS-AUDIT-TEST-002. AuthViewModel held `AuthService.shared`
+/// directly, so its error routing could only be exercised by reaching the real
+/// Supabase backend: no test could assert that a failed sign-in surfaces as an
+/// error while a successful password reset surfaces as neutral INFO, which is
+/// the exact distinction IOS-AUDIT-UX-017 introduced and the exact thing a
+/// refactor would silently undo.
+///
+/// Deliberately narrow. It lists only what the view model calls, so adding a
+/// method to AuthService does not oblige every fake to grow.
+@MainActor
+protocol AuthProviding: AnyObject {
+    var isAuthenticated: Bool { get }
+    var currentProfile: UserProfile? { get }
+
+    func signIn(email: String, password: String) async throws
+    func signUp(email: String, password: String, firstName: String?, lastName: String?, interests: [String]?) async throws
+    func signInWithApple(credential: ASAuthorizationAppleIDCredential) async throws
+    func signOut() async throws
+    func resetPassword(email: String) async throws
+}
+
+extension AuthService: AuthProviding {}
