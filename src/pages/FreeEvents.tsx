@@ -160,7 +160,7 @@ export default function FreeEvents() {
             <div className="flex items-center gap-1">
               <DollarSign className="h-4 w-4" />
               <span className="line-through">$0.00</span>
-              <span className="font-semibold text-green-600 ml-2">Free Admission</span>
+              <span className="font-semibold text-green-700 ml-2">Free Admission</span>
             </div>
             <div className="flex items-center gap-1">
               <MapPin className="h-4 w-4" />
@@ -202,7 +202,7 @@ export default function FreeEvents() {
                 <div className="text-sm text-muted-foreground">Locations</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-green-600">
+                <div className="text-2xl font-bold text-green-700">
                   100%
                 </div>
                 <div className="text-sm text-muted-foreground">Free Admission</div>
