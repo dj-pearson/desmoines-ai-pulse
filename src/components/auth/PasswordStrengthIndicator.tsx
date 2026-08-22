@@ -145,7 +145,7 @@ export function PasswordStrengthIndicator({
                   {isMet ? (
                     <Check className="h-4 w-4 flex-shrink-0" />
                   ) : (
-                    <X className="h-4 w-4 flex-shrink-0 text-gray-400" />
+                    <X className="h-4 w-4 flex-shrink-0 text-gray-500" />
                   )}
                   <span>{req}</span>
                 </li>

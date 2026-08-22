@@ -861,7 +861,7 @@ export default function Attractions() {
                       </span>
                       <span className="block text-xs text-gray-500">{count} attractions</span>
                     </div>
-                    <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-[#2D1B69]" />
+                    <ChevronRight className="h-4 w-4 text-gray-500 group-hover:text-[#2D1B69]" />
                   </button>
                 );
               })}

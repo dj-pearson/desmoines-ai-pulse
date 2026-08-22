@@ -376,7 +376,7 @@ export default function Restaurants() {
             {/* Search Bar - The Main Event */}
             <div className="max-w-3xl mx-auto">
               <div className="relative">
-                <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 z-10" />
+                <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500 z-10" />
                 <Input
                   ref={searchInputRef}
                   type="text"
@@ -388,7 +388,7 @@ export default function Restaurants() {
                       addRecentSearch('restaurants', searchInput);
                     }
                   }}
-                  className="w-full h-14 pl-14 pr-36 text-base md:text-lg bg-white border-0 rounded-2xl shadow-2xl shadow-black/20 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-0 placeholder:text-gray-400"
+                  className="w-full h-14 pl-14 pr-36 text-base md:text-lg bg-white border-0 rounded-2xl shadow-2xl shadow-black/20 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-0 placeholder:text-gray-500"
                   aria-label="Search restaurants"
                 />
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
@@ -396,7 +396,7 @@ export default function Restaurants() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-11 w-11 sm:h-8 sm:w-8 text-gray-400 hover:text-gray-600"
+                      className="h-11 w-11 sm:h-8 sm:w-8 text-gray-500 hover:text-gray-600"
                       onClick={() => {
                         setSearchInput("");
                         setFilters((prev) => ({ ...prev, search: "" }));
