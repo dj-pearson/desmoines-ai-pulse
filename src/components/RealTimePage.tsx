@@ -86,7 +86,7 @@ export default function RealTimePage() {
           {/* Quick Stats */}
           <div className="flex justify-center gap-8 mt-8">
             <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">500+</div>
+              <div className="text-2xl font-bold text-blue-600">450+</div>
               <div className="text-sm text-gray-600">Businesses Tracked</div>
             </div>
             <div className="text-center">
