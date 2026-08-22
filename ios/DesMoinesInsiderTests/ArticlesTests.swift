@@ -209,12 +209,17 @@ final class ArticlesTests: XCTestCase {
     func testWhitespaceOnlyContentCountsAsNoBody() throws {
         // NOT NULL permits this today, so it is the case that can actually occur.
         let json = """
-        {"id": "a-blank", "title": "Blank", "slug": "blank", "content": "   
-  "}
+        {"id": "a-blank", "title": "Blank", "slug": "blank", "content": "    "}
         """.data(using: .utf8)!
 
         let article = try JSONDecoder().decode(Article.self, from: json)
         XCTAssertFalse(article.hasContent, "whitespace is not a body")
+
+        // Newlines and tabs too. Built from scalars rather than escapes: a real
+        // newline inside the JSON literal above breaks the multi-line string,
+        // which is how the first version of this test failed to compile.
+        let mixedWhitespace = [" ", String(UnicodeScalar(10)), String(UnicodeScalar(9))].joined()
+        XCTAssertFalse(Article(id: "n", title: "T", slug: "s", content: mixedWhitespace).hasContent)
     }
 
     /// The whole point: an array containing one bad row still decodes the rest.
