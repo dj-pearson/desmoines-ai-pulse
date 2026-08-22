@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
 /**
@@ -42,10 +42,54 @@ const pages = [
   { path: '/search', name: 'advanced-search' },
 ];
 
+/**
+ * Wait for CSS animations to settle before an axe scan.
+ *
+ * Cards on several pages carry `animate-fade-in` (opacity 0->1 over 0.3s) with
+ * a staggered animationDelay - Articles.tsx uses index * 50ms across 18
+ * articles, so the last card is still fading at ~1200ms. Scanning mid-stagger
+ * makes axe measure contrast against PARTIALLY TRANSPARENT text and report a
+ * violation that does not exist once the page settles.
+ *
+ * Measured: /articles reported color-contrast #757d95 on white at 4.09:1.
+ * --muted-foreground is HSL(225 20% 40%) = #525c7a, which is 6.62:1 on white.
+ * #757d95 is exactly #525c7a composited over white at 80% opacity - a byte
+ * match, checked against 50/60/70/75/80/90%. The scan was simply early.
+ *
+ * Infinite animations (spinners, animate-pulse) never reach 'finished', so they
+ * are excluded rather than waited on, and the whole wait is best-effort: a
+ * timeout here must not fail an accessibility test.
+ */
+async function waitForAnimations(pw: Page): Promise<void> {
+  await pw
+    .waitForFunction(
+      () =>
+        document
+          .getAnimations()
+          .filter((a) => a.effect?.getTiming?.().iterations !== Infinity)
+          .every((a) => a.playState === 'finished'),
+      null,
+      { timeout: 5000 },
+    )
+    .catch(() => {
+      /* best effort: scan a still-animating page rather than fail the test */
+    });
+}
+
 test.describe('Automated Accessibility Testing with Axe', () => {
   for (const page of pages) {
     test(`${page.name} should not have accessibility violations`, async ({ page: pw }) => {
-      await pw.goto(page.path, { waitUntil: 'networkidle' });
+      // The homepage never reaches networkidle in dev - goto still times out at
+      // 60s because requests stay in flight - so both homepage scans were
+      // failing as goto timeouts and the highest-traffic page was never
+      // actually scanned. domcontentloaded plus the #main-content landmark is
+      // both reachable and a better "rendered" signal; animations then settle.
+      test.setTimeout(120_000);
+      await pw.goto(page.path, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+      await pw.waitForSelector('#main-content', { timeout: 60_000 }).catch(() => {
+        /* absence is a finding for the WCAG 2.4.1 tests, not a reason to abort */
+      });
+      await waitForAnimations(pw);
 
       const accessibilityScanResults = await new AxeBuilder({ page: pw })
         .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
@@ -66,7 +110,17 @@ test.describe('Automated Accessibility Testing with Axe', () => {
     });
 
     test(`${page.name} should not have critical accessibility violations`, async ({ page: pw }) => {
-      await pw.goto(page.path, { waitUntil: 'networkidle' });
+      // The homepage never reaches networkidle in dev - goto still times out at
+      // 60s because requests stay in flight - so both homepage scans were
+      // failing as goto timeouts and the highest-traffic page was never
+      // actually scanned. domcontentloaded plus the #main-content landmark is
+      // both reachable and a better "rendered" signal; animations then settle.
+      test.setTimeout(120_000);
+      await pw.goto(page.path, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+      await pw.waitForSelector('#main-content', { timeout: 60_000 }).catch(() => {
+        /* absence is a finding for the WCAG 2.4.1 tests, not a reason to abort */
+      });
+      await waitForAnimations(pw);
 
       const accessibilityScanResults = await new AxeBuilder({ page: pw })
         .withTags(['wcag2a', 'wcag2aa'])
