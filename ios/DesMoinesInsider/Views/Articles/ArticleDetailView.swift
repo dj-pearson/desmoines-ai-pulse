@@ -26,11 +26,18 @@ struct ArticleDetailView: View {
                     Divider()
 
                     // Body — interactive links open the in-app browser.
-                    ArticleMarkdownView(markdown: article.content)
-                        .environment(\.openURL, OpenURLAction { url in
-                            openLink(url)
-                            return .handled
-                        })
+                    // IOS-AUDIT-BUG-005: an article with no body used to render an
+                    // empty VStack, so the screen looked broken rather than
+                    // explaining itself. Offer the web version instead.
+                    if article.hasContent {
+                        ArticleMarkdownView(markdown: article.content)
+                            .environment(\.openURL, OpenURLAction { url in
+                                openLink(url)
+                                return .handled
+                            })
+                    } else {
+                        emptyBodyFallback
+                    }
 
                     // Free-tier ad slot inside the reader (IOS-ADS-010/012).
                     // AdSlot renders nothing for subscribers.
@@ -102,6 +109,32 @@ struct ArticleDetailView: View {
     }
 
     // MARK: - Header (title + meta)
+
+    /// Shown when an article has no body (IOS-AUDIT-BUG-005).
+    ///
+    /// The article still has a title, an image and a category, so the screen is
+    /// not empty -- what is missing is the text. Saying so and offering the web
+    /// version is better than a blank column that reads as a loading failure the
+    /// user could retry out of.
+    private var emptyBodyFallback: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("This article does not have a readable version yet.")
+                .font(.body)
+                .foregroundStyle(.secondary)
+
+            // Article.webURL already builds this and is covered by a test, so
+            // there is no second place for the /articles/<slug> shape to drift.
+            Button {
+                openLink(article.webURL)
+            } label: {
+                Label("Read on the web", systemImage: "safari")
+            }
+            .buttonStyle(.bordered)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 8)
+    }
+
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 10) {
