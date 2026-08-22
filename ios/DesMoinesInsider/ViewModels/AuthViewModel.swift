@@ -7,7 +7,12 @@ import AuthenticationServices
 @Observable
 final class AuthViewModel {
     var email = ""
-    var password = ""
+    var password = "" {
+        didSet {
+            guard password != oldValue else { return }
+            passwordStrength = Self.strength(of: password)
+        }
+    }
     var confirmPassword = ""
     var firstName = ""
     var lastName = ""
@@ -57,8 +62,19 @@ final class AuthViewModel {
         return email.range(of: pattern, options: .regularExpression) != nil
     }
 
-    /// Password strength: .none (empty), .weak, .medium, .strong
-    var passwordStrength: PasswordStrength {
+    /// Password strength: .none (empty), .weak, .medium, .strong.
+    ///
+    /// Stored and recomputed in `password`'s didSet (IOS-AUDIT-PERF-022). As a
+    /// computed property it ran up to four regex scans on every read, and the
+    /// sign-up form reads it from the strength meter, its label and the submit
+    /// guard - so it ran several times per keystroke, on the main actor, while the
+    /// user was typing.
+    ///
+    /// Unlike the deals list this is safe to cache outright: it depends only on
+    /// `password`, and nothing else can change it.
+    private(set) var passwordStrength: PasswordStrength = .none
+
+    private static func strength(of password: String) -> PasswordStrength {
         guard !password.isEmpty else { return .none }
         var score = 0
         if password.count >= 8 { score += 1 }
