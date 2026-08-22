@@ -124,9 +124,14 @@ with it. But it has two direct consequences for this story:
    the asymmetry is about *what* is collected, which survives this finding. An argument
    resting on "we crawl politely" would not.
 
-Worth treating as its own piece of work: a declared User-Agent with a contact URL, and a
-robots.txt check in `scrapeUrl`, would cost little and would make the position in section
-3 straightforwardly true rather than narrowly true.
+**Half of this is now fixed** — filed and built as WEB-SEC-024 on the same day. `scrapeUrl`
+checks robots.txt before any backend runs, fail-open on every ambiguity, with 13 offline
+tests in CI. So the robots sentence CAN go back into section 2 once that ships.
+
+What is still open there is the User-Agent, and it is a content decision rather than a
+technical one: declaring ourselves as a bot is the honest option and will reduce ingestion,
+because sites that block bots will then successfully block us. Given the crawl pipeline is
+currently the only thing keeping the site fresh, that was not taken unilaterally.
 
 ---
 
@@ -178,10 +183,9 @@ Two consistency items for review, both pre-existing rather than introduced here:
    no crawler, vendor or source site. Naming Firecrawl, or naming
    `catchdesmoines.com` as a source, is more transparent and also more operationally
    revealing. My recommendation is the category-level wording above.
-2. **Answered, and it changed the draft** — see 3a. The crawlers do not honour
-   robots.txt and present a Chrome User-Agent, so the robots claim was removed rather
-   than published. What remains open is whether to fix that (declared UA plus a
-   robots.txt check in `scrapeUrl`) before or after this policy text ships.
+2. **Answered, and half fixed** — see 3a. The robots.txt check is built (WEB-SEC-024),
+   so the robots sentence can be restored to section 2 once it ships. The User-Agent is
+   the remaining decision, and it trades honesty against ingestion volume.
 3. **Does the business-contact paragraph belong here at all** while `prospect_leads` is
    empty and external enrichment is off? Publishing a notice for collection that has not
    started is the cautious choice; the alternative is to hold it until the pipeline is
