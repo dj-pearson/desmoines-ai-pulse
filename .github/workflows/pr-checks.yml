@@ -131,6 +131,14 @@ jobs:
       - name: Critical-path JS budget
         run: node scripts/check-bundle-budget.mjs
 
+      # WEB-LEGAL-009 AC2. Also runs after the build, because Vite rewrites
+      # index.html and the CSP has to match what is SERVED, not the source.
+      # Guards the pinning WEB-LEGAL-001 depends on: editing the inline consent
+      # bootstrap without regenerating its hash makes the browser refuse to run
+      # it, and nothing else in the build would say so.
+      - name: CSP inline-script hashes
+        run: node scripts/check-csp-hashes.mjs
+
   # WEB-CI-023. `npm run type-check` above runs `tsc --noEmit` against the root
   # tsconfig, which is `"files": []` plus project references — so it compiles
   # ZERO files and has always exited 0. Two P1 crashes shipped straight through
