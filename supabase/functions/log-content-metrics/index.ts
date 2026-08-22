@@ -29,6 +29,11 @@ const ALLOWED_METRIC_TYPES = new Set([
   "click",
   "share",
   "bookmark",
+  // useContentTracking fires this from the favorite button on the detail
+  // pages. It was the one metric_type that hook produced which this allowlist
+  // dropped, so adding it is what lets the hook stop writing to the table
+  // directly (the anon key cannot insert; every attempt returned 42501).
+  "favorite",
   "hover",
   "scroll",
   "filter",
