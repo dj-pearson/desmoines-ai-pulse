@@ -8,6 +8,7 @@ import com.desmoines.aipulse.data.model.TripBudget
 import com.desmoines.aipulse.data.model.TripPace
 import com.desmoines.aipulse.data.model.TripPlan
 import com.desmoines.aipulse.data.remote.BillingService
+import com.desmoines.aipulse.data.remote.TripPlannerServerError
 import com.desmoines.aipulse.data.remote.TripPreferences
 import com.desmoines.aipulse.data.repository.AuthRepository
 import com.desmoines.aipulse.data.repository.TripPlannerRepository
@@ -184,11 +185,19 @@ class TripPlannerViewModel @Inject constructor(
                     refreshQuota()
                 }
                 .onFailure { error ->
+                    // XPLAT-010 AC2: a 403 upgrade_required is a paywall, not a
+                    // fault. Route it to the subscription screen the way web does,
+                    // rather than showing "try again" for something retrying cannot
+                    // fix. quota_exceeded keeps its server message, which names the
+                    // limit and when it resets.
+                    val serverError = error as? TripPlannerServerError
                     _uiState.update {
                         it.copy(
                             isGenerating = false,
                             errorMessage = error.message
                                 ?: "Couldn't build your itinerary. Try again.",
+                            navigateToSubscription = it.navigateToSubscription ||
+                                serverError?.code == "upgrade_required",
                         )
                     }
                 }
