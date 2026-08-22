@@ -18,11 +18,47 @@ actor AttractionsService {
         return supabase
     }
 
+    /// Server-side ordering for a paged attractions query (IOS-AUDIT-BUG-006 AC1).
+    ///
+    /// Sorting used to happen in the view model, over only the pages fetched so
+    /// far, so "Top rated" ranked the loaded subset rather than the collection -
+    /// the best-rated attraction on page 3 stayed below page 1 until page 3
+    /// happened to load.
+    enum Sort {
+        case newest
+        case rating
+        case name
+
+        var column: String {
+            switch self {
+            case .newest: return "created_at"
+            case .rating: return "rating"
+            case .name: return "name"
+            }
+        }
+
+        var ascending: Bool {
+            switch self {
+            case .newest, .rating: return false
+            case .name: return true
+            }
+        }
+    }
+
     struct AttractionsQuery {
         var searchText: String?
+        /// Single-type filter. Ignored when `types` is set.
         var type: String?
+        /// Multi-type filter, applied server-side with an IN clause
+        /// (IOS-AUDIT-BUG-006 AC2). The view model used to fetch a broad page and
+        /// drop non-matching rows in Swift, which could shrink a page to almost
+        /// nothing - and because loadMore only fires within 5 items of the end of
+        /// the DISPLAY list, a page filtered down to two rows left the user unable
+        /// to scroll far enough to request the next one.
+        var types: [String]?
         var minRating: Double?
         var isFeatured: Bool?
+        var sortBy: Sort = .newest
         var limit: Int = Config.defaultPageSize
         var offset: Int = 0
     }
@@ -48,8 +84,10 @@ actor AttractionsService {
             request = request.or("name.ilike.%\(search)%,type.ilike.%\(search)%,location.ilike.%\(search)%")
         }
 
-        // Type filter
-        if let type = query.type, !type.isEmpty {
+        // Type filter. `types` wins when both are supplied.
+        if let types = query.types, !types.isEmpty {
+            request = request.in("type", values: types)
+        } else if let type = query.type, !type.isEmpty {
             request = request.eq("type", value: type)
         }
 
@@ -64,8 +102,13 @@ actor AttractionsService {
         }
 
         // Order and pagination (transforms must come after all filters)
+        // Ordering is server-side so an offset window means the same thing on
+        // every page. A secondary key on id keeps the order total: rows sharing a
+        // rating (or a null one) would otherwise be free to swap between pages and
+        // appear twice or not at all.
         let finalRequest = request
-            .order("created_at", ascending: false)
+            .order(query.sortBy.column, ascending: query.sortBy.ascending, nullsFirst: false)
+            .order("id", ascending: true)
             .range(from: query.offset, to: query.offset + query.limit - 1)
 
         let response = try await finalRequest.execute()
