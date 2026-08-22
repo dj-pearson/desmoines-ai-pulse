@@ -2,7 +2,7 @@
 Started: 2026-06-12T01:18:32.104Z
 
 ## Codebase Patterns (read before starting)
-- **PRD lives at repo-root `prd.json`** (branch claude/web-platform-autonomy, == current branch HEAD). NOT scripts/ralph/prd.json. Pick highest-priority story with passes:false.
+- **PRD lives at repo-root `prd.json` on `main`** (461 stories). NOT scripts/ralph/prd.json. Pick highest-priority story with passes:false. CORRECTED 2026-08-22: `claude/web-platform-autonomy`, which prd.json still named as branchName, is 556 commits behind main and carries a DIFFERENT, older prd.json (46 stories, 0 open). `develop` is 639 behind main with a third prd.json (41 stories, 31 open). The gitflow in CLAUDE.md is not what the repo does - work branches off `main` and PRs back into `main` (see PR #366). Branch off main.
 - **New DB tables/views/RPCs are NOT added to generated `src/integrations/supabase/types.ts`.** Access them with `supabase.from("name" as never)` / `supabase.rpc("name" as never, {...} as never)` and cast results `as unknown as T[]` (see JobHealthPanel, MergeReviewPanel). BUT when you ADD A COLUMN to an EXISTING table you DO hand-add it to the Row block in types.ts (kept alphabetical) so `.eq()/.select()` stay typed.
 - **Edge function skeleton:** `handleCors`/`getCorsHeaders` from `_shared/cors.ts`, `requireAdminOrApiKey` from `_shared/apiKeyAuth.ts` (accepts X-API-Key, the SERVICE-ROLE bearer that cron sends, OR an admin JWT — so one gate covers cron + admin re-run), `runJob` from `_shared/jobRunner.ts`. Register the fn in `supabase/config.toml` with `verify_jwt = false` so your own auth gate runs. `Deno.serve(async (req)=>{ const c=handleCors(req); if(c) return c; const cors=getCorsHeaders(origin); const fail=await requireAdminOrApiKey(req,cors); if(fail) return fail; ... })`.
 - **jobRunner:** `await runJob('name', async (ctx)=>{ ctx.processed(n); ctx.failed(m); ctx.meta({...}); return summary }, {maxAttempts})`. Returns `{ok,status,result,...}`. `ok=true` even when status==='partial' (ctx.failed>0 but fn didn't throw). Never throws. Counts/metadata land in `automation_job_runs` + the Job Health panel. Add re-runnable jobs to `RERUNNABLE` in JobHealthPanel.tsx.
@@ -12,6 +12,8 @@ Started: 2026-06-12T01:18:32.104Z
 - **Repointing all child FKs generically** (merge/dedupe/delete-with-children): loop `pg_constraint` where `contype='f' AND confrelid=<table>::regclass AND array_length(conkey,1)=1` and the referenced col is `id`; `EXECUTE format('UPDATE public.%I SET %I=$1 WHERE %I=$2', child_table, child_col, child_col)`. Catch `unique_violation OR check_violation` and fall back to a ctid row-by-row move that DELETEs only the genuine collisions.
 - **Admin tabs:** add `{id,label,icon}` to `CONTENT_TABS` (AdminContent.tsx) or `SYSTEM_TABS` (AdminSystem.tsx) + render `{activeTab === "id" && <Panel/>}`. Panels: `useQuery` with `refetchInterval`, admin-gated by RLS `is_admin()` + `useAdminAuth()`.
 - **Favorites are NOT a `favorites` table** — event favorites live in `user_event_interactions (event_id, interaction_type='favorite')`.
+- **`gh` resolves to the WRONG repo by default.** Two remotes: origin `dj-pearson/desmoines-ai-pulse` (real) and upstream `dj-pearson/blank-canvas-events`. A bare `gh` command answers about UPSTREAM - it reports 1 workflow instead of 22 and no runs since 2025-11-11, which reads exactly like "CI is dead" and is not. Run `gh repo set-default dj-pearson/desmoines-ai-pulse` (git-config-local, does not survive a fresh clone) or always pass `-R`. Distrust any prior story note sourced from a bare gh call.
+- **GitHub Actions secrets are split across two scopes.** Repository secrets hold the VITE_*/mobile-signing set; `ANTHROPIC_API_KEY` and `SUPABASE_SERVICE_ROLE_KEY` live ONLY in the **`Scrape` environment**. A job that does not declare `environment: Scrape` gets the empty string for those two, with no warning - the job just fails downstream. Check with `gh api repos/OWNER/REPO/environments/Scrape/secrets`. `EDGE_FUNCTION_API_KEY` and `CLOUDFLARE_DEPLOY_HOOK_URL` exist in NEITHER scope.
 - **Lint:** `npm run lint` (`eslint .`) exits 1 due to a PRE-EXISTING parser false-positive at `src/components/media/VideoPlayer.tsx:587` (',' expected) — tsc accepts the file; it predates these stories. Verify YOUR files with targeted `npx eslint <files>` (warnings like no-console are allowed across the repo; only 0 errors matter).
 - **Deno parse check (no Supabase in container):** `npx esbuild supabase/functions/<fn>/index.ts --bundle --external:https://* --format=esm --platform=neutral --outfile=/dev/null`. Migrations can't be applied locally — write them additive + idempotent (IF NOT EXISTS / CREATE OR REPLACE / guarded DO blocks).
 
@@ -161,4 +163,29 @@ Quality: type-check passes; moderate-content parses via esbuild; useRatings/Mode
 - content_rating_aggregates still counts a rejected review's numeric rating (only review_text is hidden via fetchRatings). Out of scope to rewire the aggregate trigger; note if a future story needs hidden ratings excluded from the average.
 - WEB-FEAT-010 (photo reviews) seam is ready: add 'review_photo' to the content_moderation.content_type CHECK + the decide_moderation branch + a loadItem('review_photo') branch in moderate-content (score the caption / run image safety), and insert photos with their own gate column 'pending'. event_photos already has is_approved — reconcile that with moderation_status or route through this queue.
 - Next story WEB-AUTO-010 (campaign creative auto-review): same shape — on campaign_creatives insert run automated checks (image dims/aspect, target URL https+resolves, Claude brand-safety on text, advertiser standing); pass -> is_approved auto-set, fail -> stays pending with machine-readable reasons in AdminCampaigns. BACKWARD COMPAT: get_active_ads RPC behavior unchanged (iOS reads it), campaigns/advertisements additive only. Reuse the content_moderation pattern OR campaign-specific columns; AdminCampaigns (~lines 180-200) has the manual is_approved toggle today.
+---
+
+## 2026-08-22 - WEB-SEO-017 + WEB-CI-025 (CI was not broken, it was unplugged)
+Both priority-1 CI stories turned out to share one cause nobody had looked for: secrets in an environment scope no workflow declared.
+
+Files changed:
+- .github/workflows/event-crawler.yml - `environment: Scrape` on crawl-events and on update-ai-config, with the why inline.
+- prd.json - branchName retargeted to claude/prd-p1-loop (claude/web-platform-autonomy is 556 behind main and holds a different PRD); WEB-SEO-017 and WEB-CI-025 notes rewritten with the root cause and the remaining blockers.
+- scripts/ralph/progress.txt - two new Codebase Patterns (gh default repo, split secret scopes) + corrected the PRD-location pattern.
+
+Repo settings changed (not files):
+- `gh workflow enable pr-checks.yml` and `gh workflow enable event-crawler.yml` - both were state=disabled_manually, both now active.
+- `gh repo set-default dj-pearson/desmoines-ai-pulse`.
+
+Evidence:
+- WEB-CI-025 AC5: npm run validate exit 0 (0 errors, 5111 warnings); npm run build exit 0, vite 23.4s, prerender 35/35 hub routes, 0 failed. Main is green.
+- WEB-SEO-017 AC4: eight consecutive scheduled crawler failures 2026-02-05..2026-02-12, each ~1m45s, then disabled on 2026-02-12. Uniform duration = same early step every time.
+- Root cause: crawlers/catchdesmoines_crawler.py:90 raises "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set". Those secrets are environment-scoped to Scrape; crawl-events declared no environment.
+
+**Learnings for future iterations:**
+- A story that says a workflow is "switched OFF" is describing the symptom. Ask what it was doing before it was switched off - `gh run list --workflow=X` survives the disable and the uniform ~1m45s duration across eight runs is what pointed at a single early step rather than flaky scraping.
+- Expired logs are not a dead end. `gh run view --log-failed` returns HTTP 410 after ~90 days, but `gh run view --json jobs` still returns job names and conclusions forever. "Lint & Typecheck failed, Build skipped" was enough to date the pr-checks failure to a workflow structure that no longer exists.
+- Secret existence is not secret reachability. `gh secret list` showed SUPABASE_URL present and looked fine; the two keys that mattered were invisible to that command because they are environment secrets. Always check `gh api repos/.../environments/<name>/secrets` too.
+- Before adding `environment:` to a job, check `protection_rules` and `deployment_branch_policy` on that environment. Scrape has neither, so it adds no approval gate - an environment with required reviewers would silently park every scheduled run in a pending approval instead.
+- Next: WEB-SEO-017 AC2 cannot fully pass until CLOUDFLARE_DEPLOY_HOOK_URL exists (publish-freshness warns and exits 0 without it, so a successful crawl still reaches no crawler). WEB-CI-025 AC4 needs a throwaway PR to confirm the check reports. Both need a human.
 ---
