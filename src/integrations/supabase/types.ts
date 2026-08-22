@@ -12713,6 +12713,28 @@ export type Database = {
       }
     }
     Functions: {
+      // Hand-added with migration 20260822000011 (WEB-QA-019 AC2). Remove when
+      // the generated types are next regenerated against production.
+      batch_increment_views: {
+        Args: { event_ids: string[] }
+        Returns: undefined
+      }
+      get_content_view_stats: {
+        Args: { p_content_id: string; p_content_type: string }
+        Returns: {
+          recent_views_24h: number
+          total_views: number
+          trending_score: number
+        }[]
+      }
+      increment_event_view: {
+        Args: { event_id: string }
+        Returns: undefined
+      }
+      increment_restaurant_view: {
+        Args: { restaurant_id: string }
+        Returns: undefined
+      }
       _postgis_deprecate: {
         Args: { newname: string; oldname: string; version: string }
         Returns: undefined

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { createLogger } from '@/lib/logger';
 
@@ -6,179 +6,156 @@ const logger = createLogger('useViewTracking');
 
 interface ViewCount {
   total_views: number;
-  recent_views: number; // Last 24 hours
-  trending_score: number; // Weighted score for trending
+  /** Views in the last 24h. Always 0 today - see the note on ZERO IS THE HONEST
+   *  ANSWER below. */
+  recent_views: number;
+  /** Weighted trending score. Always 0 today, same reason. */
+  trending_score: number;
 }
 
+const EMPTY: ViewCount = { total_views: 0, recent_views: 0, trending_score: 0 };
+
 /**
- * Hook for tracking and fetching view counts for events
- * Uses Supabase for real-time analytics
+ * View counts for an entity (WEB-QA-019 AC2).
+ *
+ * WHAT THIS USED TO DO. It read an `event_analytics` table that does not exist
+ * -- 42P01 on every call -- and on failure fell through to generateFallbackData,
+ * which hashed the entity id into a number between 50 and 250, called 30% of it
+ * "recent views" and derived a "trending score" from it. EventCard renders
+ * `ViewCountBadge ... timeframe="last hour"` when recent_views > 20 and a
+ * trending badge when trending_score > 70, so a large share of event cards had
+ * been showing real users invented social proof. The true number was 0: three
+ * increment RPCs were missing (PGRST202) and events.view_count was 0 across all
+ * 1,246 rows.
+ *
+ * WEB-QA-019 AC1 offers "implement it, or remove the call and its fallback
+ * path". This does both -- the RPCs exist as of migration 20260822000011, and
+ * the fabricating fallback is gone.
+ *
+ * ZERO IS THE HONEST ANSWER for recency, not a stub left to fill in. Nothing
+ * records WHEN a view happened: view_count is a lifetime total with no per-view
+ * log behind it. content_metrics looked like a source until it was measured --
+ * 23,160 of its rows are content_type='page' against 16 'event', none in the
+ * last 24 hours. So both badges stay unrendered, which is correct: a badge
+ * claiming "42 views in the last hour" has to be backed by 42 views in the last
+ * hour.
  */
 export function useViewTracking(eventId: string) {
-  const [viewData, setViewData] = useState<ViewCount>({
-    total_views: 0,
-    recent_views: 0,
-    trending_score: 0,
-  });
+  const [viewData, setViewData] = useState<ViewCount>(EMPTY);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch view count from Supabase
   useEffect(() => {
+    let active = true;
+
     async function fetchViewCount() {
-      try {
-        // Try to get from view_counts table if it exists
-        const { data, error } = await supabase
-          .from('event_analytics')
-          .select('view_count, recent_views_24h, trending_score')
-          .eq('event_id', eventId)
-          .single();
-
-        if (error) {
-          // Table might not exist yet, use fallback
-          logger.debug('fetchViewCount', 'Analytics table not available, using fallback');
-          setViewData(generateFallbackData(eventId));
-        } else if (data) {
-          setViewData({
-            total_views: data.view_count || 0,
-            recent_views: data.recent_views_24h || 0,
-            trending_score: data.trending_score || 0,
-          });
-        } else {
-          setViewData(generateFallbackData(eventId));
-        }
-      } catch (error) {
-        logger.debug('fetchViewCount', 'View tracking error', { error });
-        setViewData(generateFallbackData(eventId));
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
-    fetchViewCount();
-  }, [eventId]);
-
-  // Track a view (increment counter)
-  const trackView = async () => {
-    try {
-      // Attempt to increment view count
-      const { error } = await supabase.rpc('increment_event_view', {
-        event_id: eventId,
+      const { data, error } = await supabase.rpc('get_content_view_stats', {
+        p_content_type: 'event',
+        p_content_id: eventId,
       });
+
+      if (!active) return;
 
       if (error) {
-        logger.debug('trackView', 'View tracking not available', { error: error.message });
-        // Silently fail - analytics are nice to have but not critical
+        // Show nothing rather than something invented. The badges are gated on
+        // non-zero values, so an outage hides them instead of guessing.
+        logger.debug('fetchViewCount', 'View stats unavailable', { error: error.message });
+        setViewData(EMPTY);
       } else {
-        // Update local state optimistically
-        setViewData((prev) => ({
-          ...prev,
-          total_views: prev.total_views + 1,
-          recent_views: prev.recent_views + 1,
-        }));
+        const row = Array.isArray(data) ? data[0] : data;
+        setViewData({
+          total_views: row?.total_views ?? 0,
+          recent_views: row?.recent_views_24h ?? 0,
+          trending_score: Number(row?.trending_score ?? 0),
+        });
       }
-    } catch (error) {
-      logger.debug('trackView', 'Error tracking view', { error });
-      // Silently fail
-    }
-  };
-
-  return {
-    viewData,
-    trackView,
-    isLoading,
-  };
-}
-
-/**
- * Generate realistic fallback data based on event ID
- * This ensures a consistent experience even if analytics aren't set up yet
- */
-function generateFallbackData(eventId: string): ViewCount {
-  // Use event ID as seed for consistent random numbers
-  const seed = eventId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  const random = (seed * 9301 + 49297) % 233280;
-  const normalized = random / 233280;
-
-  // Generate realistic-looking numbers
-  const baseViews = Math.floor(normalized * 200) + 50; // 50-250 views
-  const recentViews = Math.floor(baseViews * 0.3); // 30% are recent
-  const trendingScore = baseViews > 150 ? normalized * 100 : normalized * 50;
-
-  return {
-    total_views: baseViews,
-    recent_views: recentViews,
-    trending_score: trendingScore,
-  };
-}
-
-/**
- * Hook for tracking restaurant views
- */
-export function useRestaurantViewTracking(restaurantId: string) {
-  const [viewData, setViewData] = useState<ViewCount>({
-    total_views: 0,
-    recent_views: 0,
-    trending_score: 0,
-  });
-
-  useEffect(() => {
-    async function fetchViewCount() {
-      try {
-        const { data, error } = await supabase
-          .from('restaurant_analytics')
-          .select('view_count, recent_views_24h, trending_score')
-          .eq('restaurant_id', restaurantId)
-          .single();
-
-        if (error || !data) {
-          setViewData(generateFallbackData(restaurantId));
-        } else {
-          setViewData({
-            total_views: data.view_count || 0,
-            recent_views: data.recent_views_24h || 0,
-            trending_score: data.trending_score || 0,
-          });
-        }
-      } catch (_error) {
-        setViewData(generateFallbackData(restaurantId));
-      }
+      setIsLoading(false);
     }
 
     fetchViewCount();
-  }, [restaurantId]);
+    return () => {
+      active = false;
+    };
+  }, [eventId]);
 
-  const trackView = async () => {
-    try {
-      await supabase.rpc('increment_restaurant_view', {
-        restaurant_id: restaurantId,
-      });
+  const trackView = useCallback(async () => {
+    const { error } = await supabase.rpc('increment_event_view', { event_id: eventId });
 
-      setViewData((prev) => ({
-        ...prev,
-        total_views: prev.total_views + 1,
-        recent_views: prev.recent_views + 1,
-      }));
-    } catch (error) {
-      logger.debug('trackRestaurantView', 'Error tracking restaurant view', { error });
+    if (error) {
+      logger.debug('trackView', 'View tracking failed', { error: error.message });
+      return;
     }
-  };
 
-  return {
-    viewData,
-    trackView,
-  };
+    setViewData((prev) => ({ ...prev, total_views: prev.total_views + 1 }));
+  }, [eventId]);
+
+  return { viewData, trackView, isLoading };
 }
 
 /**
- * Batch track multiple views (for list pages)
- * Useful for tracking impressions without making individual requests
+ * View counts for a restaurant. Same shape and the same honesty rule as
+ * useViewTracking above.
+ */
+export function useRestaurantViewTracking(restaurantId: string) {
+  const [viewData, setViewData] = useState<ViewCount>(EMPTY);
+
+  useEffect(() => {
+    let active = true;
+
+    async function fetchViewCount() {
+      const { data, error } = await supabase.rpc('get_content_view_stats', {
+        p_content_type: 'restaurant',
+        p_content_id: restaurantId,
+      });
+
+      if (!active) return;
+
+      if (error) {
+        logger.debug('fetchRestaurantViews', 'View stats unavailable', { error: error.message });
+        setViewData(EMPTY);
+        return;
+      }
+
+      const row = Array.isArray(data) ? data[0] : data;
+      setViewData({
+        total_views: row?.total_views ?? 0,
+        recent_views: row?.recent_views_24h ?? 0,
+        trending_score: Number(row?.trending_score ?? 0),
+      });
+    }
+
+    fetchViewCount();
+    return () => {
+      active = false;
+    };
+  }, [restaurantId]);
+
+  const trackView = useCallback(async () => {
+    const { error } = await supabase.rpc('increment_restaurant_view', {
+      restaurant_id: restaurantId,
+    });
+
+    if (error) {
+      logger.debug('trackRestaurantView', 'View tracking failed', { error: error.message });
+      return;
+    }
+
+    setViewData((prev) => ({ ...prev, total_views: prev.total_views + 1 }));
+  }, [restaurantId]);
+
+  return { viewData, trackView };
+}
+
+/**
+ * Record an impression for several events at once, for list pages.
+ *
+ * The RPC caps the array at 200 and de-duplicates, so a repeated id in one batch
+ * counts once.
  */
 export async function batchTrackViews(eventIds: string[]) {
-  try {
-    await supabase.rpc('batch_increment_views', {
-      event_ids: eventIds,
-    });
-  } catch (error) {
-    logger.debug('batchTrackViews', 'Batch view tracking not available', { error });
+  if (eventIds.length === 0) return;
+
+  const { error } = await supabase.rpc('batch_increment_views', { event_ids: eventIds });
+  if (error) {
+    logger.debug('batchTrackViews', 'Batch view tracking failed', { error: error.message });
   }
 }

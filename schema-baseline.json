@@ -1,6 +1,6 @@
 {
   "$comment": "Known unresolvable Supabase references, frozen by scripts/check-schema-usage.mjs --update. This list must only ever SHRINK. Each entry is a feature that silently does nothing in production.",
-  "generated": 278,
+  "generated": 273,
   "findings": [
     "column|src/components/cms/ContentQueue.tsx|content_queue.priority",
     "column|src/hooks/useCommunityFeatures.ts|event_photos.is_approved",
@@ -75,9 +75,6 @@
     "rpc|src/hooks/useTripPlanner.ts|get_trip_itinerary",
     "rpc|src/hooks/useUsage.ts|get_current_usage",
     "rpc|src/hooks/useUsage.ts|record_usage_event",
-    "rpc|src/hooks/useViewTracking.ts|batch_increment_views",
-    "rpc|src/hooks/useViewTracking.ts|increment_event_view",
-    "rpc|src/hooks/useViewTracking.ts|increment_restaurant_view",
     "rpc|supabase/functions/dispatch-scheduled-newsletters/index.ts|reclaim_stuck_newsletter_campaigns",
     "rpc|supabase/functions/generate-invoice-pdf/index.ts|generate_invoice_number",
     "rpc|supabase/functions/generate-itinerary/index.ts|generate_trip_share_code",
@@ -123,8 +120,6 @@
     "table|src/hooks/useTripPlanner.ts|trip_plan_items",
     "table|src/hooks/useTripPlanner.ts|trip_plans",
     "table|src/hooks/useUsage.ts|usage_events",
-    "table|src/hooks/useViewTracking.ts|event_analytics",
-    "table|src/hooks/useViewTracking.ts|restaurant_analytics",
     "table|src/pages/AdminRefunds.tsx|payments",
     "table|supabase/functions/_shared/agents/billing-selfservice.ts|payments",
     "table|supabase/functions/_shared/agents/fraud-abuse-detector.ts|payments",
