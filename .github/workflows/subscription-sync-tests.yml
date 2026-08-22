@@ -65,6 +65,10 @@ jobs:
       - run: deno test supabase/functions/_tests/version-check.test.ts
       # Reads the iOS/Android sources as well as the edge function, so the
       # client/server deletion contract can't drift again (XPLAT-001).
+      # XPLAT-011. Asserts docstring, implementation and all three clients agree
+      # on the request contract -- the comparison nobody was making when
+      # XPLAT-001 shipped a two-step docstring against three bodyless clients.
+      - run: deno test --allow-read supabase/functions/_tests/client-contract.test.ts
       - run: deno test --allow-read supabase/functions/_tests/account-deletion-contract.test.ts
       # Erasure has to reach uploaded files, not just table rows. Every upload
       # bucket is public, so anything the purge misses stays fetchable by URL

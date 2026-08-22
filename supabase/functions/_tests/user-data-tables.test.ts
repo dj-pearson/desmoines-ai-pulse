@@ -36,9 +36,14 @@ const typesSource = await Deno.readTextFile(
 /** table name -> column names, parsed from the generated Row types. */
 function parseSchema(src: string): Map<string, string[]> {
   const out = new Map<string, string[]>();
-  const table = /\n {6}(\w+): \{\n {8}Row: \{([\s\S]*?)\n {8}\}\n/g;
+  // \r?\n, not \n. types.ts is stored with LF but Git checks it out as CRLF on
+  // Windows (core.autocrlf), and an LF-only regex parses ZERO tables there — so
+  // this suite passes in CI and fails on every Windows checkout. The assertion
+  // below catches the zero, so it was never a false pass, but the failure reads
+  // as a schema problem rather than a line-ending one.
+  const table = /\r?\n {6}(\w+): \{\r?\n {8}Row: \{([\s\S]*?)\r?\n {8}\}\r?\n/g;
   for (const m of src.matchAll(table)) {
-    const cols = [...m[2].matchAll(/\n {10}(\w+)\??:/g)].map((c) => c[1]);
+    const cols = [...m[2].matchAll(/\r?\n {10}(\w+)\??:/g)].map((c) => c[1]);
     out.set(m[1], cols);
   }
   return out;
