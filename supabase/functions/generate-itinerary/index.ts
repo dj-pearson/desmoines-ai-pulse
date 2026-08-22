@@ -48,8 +48,17 @@ interface TripPlannerRequest {
     mustSee?: string[];             // Specific places they want to include
     avoidCategories?: string[];     // Categories to avoid
   };
-  // Optional: existing trip plan to update/enhance
-  existingTripId?: string;
+  // XPLAT-010 AC3: `existingTripId` used to be declared here as "existing trip
+  // plan to update/enhance". It was removed 2026-08-22 because the capability
+  // existed on NEITHER side: no client ever sent it - not web, not iOS, not
+  // Android, confirmed by the XPLAT-011 contract scan - and the handler
+  // destructured it and never read it again. It documented a feature nobody
+  // could use.
+  //
+  // Not a backward-compatibility break under CLAUDE.md. That rule protects a
+  // field shipped binaries SEND, and none do; and the wire behaviour is
+  // unchanged either way, since a request carrying an extra property still
+  // parses and the property was already ignored.
 }
 
 interface ItineraryItem {
@@ -172,7 +181,6 @@ serve(async (req) => {
       startDate,
       endDate,
       preferences = {},
-      existingTripId
     }: TripPlannerRequest = await req.json();
 
     // Crisis check on the free-text preference fields (WEB-LEGAL-005). The
