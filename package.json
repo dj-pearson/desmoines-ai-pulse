@@ -48,6 +48,7 @@
     "test:forms": "playwright test tests/forms.spec.ts",
     "test:search": "playwright test tests/search-filters.spec.ts",
     "test:a11y": "playwright test tests/accessibility.spec.ts",
+    "test:a11y:axe": "playwright test --config=playwright.a11y.config.ts",
     "test:report": "playwright show-report",
     "test:codegen": "playwright codegen http://localhost:5173",
     "test:export": "node export-test-results.cjs markdown && node export-test-results.cjs csv && node export-test-results.cjs json",

@@ -61,19 +61,45 @@ const pages = [
  * timeout here must not fail an accessibility test.
  */
 async function waitForAnimations(pw: Page): Promise<void> {
-  await pw
-    .waitForFunction(
-      () =>
-        document
-          .getAnimations()
-          .filter((a) => a.effect?.getTiming?.().iterations !== Infinity)
-          .every((a) => a.playState === 'finished'),
-      null,
-      { timeout: 5000 },
-    )
-    .catch(() => {
-      /* best effort: scan a still-animating page rather than fail the test */
-    });
+  // FINISH the animations rather than wait them out.
+  //
+  // This used to poll for every non-infinite animation to reach playState
+  // 'finished', with a 5s timeout and a catch that scanned anyway. On a warm
+  // machine that is fine. Under load it is not: /articles staggers
+  // `animate-fade-in` by index * 50ms across 18 cards, and when workers contend
+  // for CPU the last card is still fading after the timeout. The catch then
+  // swallowed the give-up and axe measured contrast against partially
+  // transparent text -- reporting #757d95 at 4.09:1 for text that is #525c7a at
+  // 6.62:1 once opaque. That is how this lane failed in CI having passed
+  // locally, and a silent degrade into measuring the wrong thing is exactly
+  // what a required gate must not do.
+  //
+  // Animation.finish() jumps to the end state, which is the state a contrast
+  // scan wants anyway, and it does not race. Infinite animations cannot be
+  // finished and are skipped -- axe reads whatever frame they are on, which is
+  // correct, since for a spinner every frame is a shipped frame.
+  const unsettled = await pw.evaluate(() => {
+    const finite = () =>
+      document.getAnimations().filter((a) => a.effect?.getTiming?.().iterations !== Infinity);
+
+    for (const animation of finite()) {
+      try {
+        animation.finish();
+      } catch {
+        /* not finishable (no active timeline); it is counted below */
+      }
+    }
+
+    return finite().filter((a) => a.playState !== 'finished').length;
+  });
+
+  if (unsettled > 0) {
+    // Reported, not swallowed. If a violation shows up on a page that logs this,
+    // the animation is the first thing to rule out.
+    console.warn(
+      `[a11y] ${unsettled} animation(s) would not finish; the scan below may read a mid-transition DOM.`,
+    );
+  }
 }
 
 test.describe('Automated Accessibility Testing with Axe', () => {
