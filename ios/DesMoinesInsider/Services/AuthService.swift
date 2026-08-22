@@ -26,8 +26,20 @@ final class AuthService {
     /// email before returning it to us).
     var needsEmailVerification: Bool {
         guard let user = currentUser else { return false }
-        if user.emailConfirmedAt != nil { return false }
-        return primaryProvider(for: user) != "apple"
+        return Self.needsEmailVerification(
+            emailConfirmedAt: user.emailConfirmedAt,
+            primaryProvider: primaryProvider(for: user)
+        )
+    }
+
+    /// The decision above with the Supabase `User` removed, so it can be
+    /// tested (IOS-AUDIT-TEST-002). `User` is `private(set)` and not
+    /// constructible here, which is why the Apple carve-out went unasserted --
+    /// and getting it wrong strands every Apple user on the verify-email screen
+    /// with no way off, since Apple never sends them a confirmation mail.
+    static func needsEmailVerification(emailConfirmedAt: Date?, primaryProvider: String?) -> Bool {
+        if emailConfirmedAt != nil { return false }
+        return primaryProvider != "apple"
     }
 
     private func primaryProvider(for user: User) -> String? {

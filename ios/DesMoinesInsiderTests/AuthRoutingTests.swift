@@ -323,4 +323,33 @@ final class AuthRoutingTests: XCTestCase {
         XCTAssertTrue(vm.showError)
         XCTAssertEqual(vm.errorMessage, "Network unavailable")
     }
+
+    // MARK: - AC3: who the verify-email gate applies to
+
+    /// DesMoinesInsiderApp.swift:71 routes on needsEmailVerification, so this
+    /// decides whether a signed-in user reaches the app or the verify screen.
+    func testConfirmedEmailNeverNeedsVerification() {
+        XCTAssertFalse(AuthService.needsEmailVerification(emailConfirmedAt: Date(), primaryProvider: "email"))
+        XCTAssertFalse(AuthService.needsEmailVerification(emailConfirmedAt: Date(), primaryProvider: "apple"))
+        XCTAssertFalse(AuthService.needsEmailVerification(emailConfirmedAt: Date(), primaryProvider: nil))
+    }
+
+    func testUnconfirmedEmailUserNeedsVerification() {
+        XCTAssertTrue(AuthService.needsEmailVerification(emailConfirmedAt: nil, primaryProvider: "email"))
+        XCTAssertTrue(AuthService.needsEmailVerification(emailConfirmedAt: nil, primaryProvider: "google"))
+    }
+
+    /// Apple pre-verifies the address, and never sends a confirmation mail. If
+    /// this returned true an Apple user would be parked on the verify-email
+    /// screen permanently, waiting for a message that is not coming.
+    func testAppleUserIsTreatedAsVerifiedWithoutAConfirmationTimestamp() {
+        XCTAssertFalse(AuthService.needsEmailVerification(emailConfirmedAt: nil, primaryProvider: "apple"))
+    }
+
+    /// The fallback in primaryProvider(for:) can return nil when app_metadata is
+    /// missing and identities is empty. Unknown provider must fail toward asking
+    /// for verification rather than skipping it.
+    func testUnknownProviderStillRequiresVerification() {
+        XCTAssertTrue(AuthService.needsEmailVerification(emailConfirmedAt: nil, primaryProvider: nil))
+    }
 }
