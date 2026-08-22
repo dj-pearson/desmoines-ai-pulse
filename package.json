@@ -176,7 +176,6 @@
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.7.0",
-    "@vitest/coverage-v8": "4.1.10",
     "autoprefixer": "^10.4.20",
     "babel-plugin-react-remove-properties": "^0.3.0",
     "eslint": "^9.9.0",

@@ -73,8 +73,33 @@ jobs:
       - name: strictNullChecks ratchet
         run: npm run type-check:strict:ratchet
 
-      - name: Run unit tests with coverage
-        run: npm run test:unit -- --coverage
+      # WEB-CI-025. Was `npm run test:unit -- --coverage`, which could never pass:
+      # vitest.config.ts declares coverage.provider 'v8' but @vitest/coverage-v8
+      # is in neither dependencies nor devDependencies, so the step died with
+      # "MISSING DEPENDENCY Cannot find dependency '@vitest/coverage-v8'". It was
+      # invisible for six months because this workflow was disabled, and
+      # `npm run validate` never runs the unit tests.
+      #
+      # Adding the provider is NOT a one-line fix, and two attempts proved it
+      # (4192d32e, 8451fca3, both reverted). package-lock.json carries an invalid
+      # dedupe -- `npm ls esbuild` reports
+      #   esbuild@0.25.12 deduped invalid: "^0.27.0 || ^0.28.0"
+      #   from node_modules/vitest/node_modules/vite
+      # Nothing exercises that path while the provider is absent. Add any
+      # dependency and npm resolves it honestly, pulls esbuild 0.28.2, and the
+      # lockfile no longer satisfies `npm ci` on the runner: "Missing:
+      # esbuild@0.28.2 from lock file". Local npm 11 and the runner's npm 10
+      # (node 20) also disagree about what to write.
+      #
+      # Coverage was never gated -- vitest.config.ts sets no thresholds, and the
+      # measured figure is 2.26% of statements. So the flag cost the gate its
+      # ability to run at all in exchange for a number nobody checks. Dropped.
+      # The 223 unit tests, which are the point, now actually run.
+      #
+      # Fixing the dedupe is worth doing on its own, with npm 10 to match the
+      # runner and `npm ci` verified before pushing rather than after.
+      - name: Run unit tests
+        run: npm run test:unit
 
       # WEB-CI-025. This step CANNOT PASS without these. vite.config.ts has an
       # assert-html-env-placeholders plugin that fails the build outright when
