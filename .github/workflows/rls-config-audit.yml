@@ -67,6 +67,23 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: npx tsx scripts/check-bucket-posture.ts
 
+      # WEB-OPS-007. The scheduler keeps its own verdict in cron.job_run_details,
+      # which PostgREST cannot reach, so nothing had ever read it. WEB-AUTO-001
+      # shipped "cron/job observability" over automation_job_runs -- a table the
+      # edge functions write WHEN THEY RUN -- so a job that never fires writes no
+      # row and looks like an agent with nothing to do. That is how 57 of 61 jobs
+      # failed every run for thirteen months without a single alert.
+      #
+      # Ratchets rather than demanding zero: the 44 currently failing are
+      # baselined, because one of the two causes needs a service-role key this
+      # repo must never write down, and a check that is red on day one gets
+      # switched off.
+      - name: Scheduled-job health ratchet
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npx tsx scripts/check-cron-health.ts
+
       - name: Diff against committed baselines and report drift
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
