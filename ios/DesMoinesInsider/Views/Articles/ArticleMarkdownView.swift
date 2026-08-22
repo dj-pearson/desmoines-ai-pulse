@@ -13,7 +13,22 @@ import SwiftUI
 struct ArticleMarkdownView: View {
     let markdown: String
 
-    private var blocks: [MarkdownBlock] { MarkdownBlock.parse(markdown) }
+    /// Parsed ONCE in init (IOS-AUDIT-PERF-023).
+    ///
+    /// This was `private var blocks: [MarkdownBlock] { MarkdownBlock.parse(markdown) }`
+    /// -- a computed property, so every body evaluation re-ran the whole block
+    /// parser over the entire article. The inline pass was worse: `inline()` was
+    /// called from inside view(for:), so AttributedString(markdown:) ran again for
+    /// every heading, paragraph, list item and quote on every render too.
+    ///
+    /// RenderedBlock resolves both at construction. `markdown` is a `let`, so the
+    /// work happens exactly once per article.
+    private let blocks: [RenderedBlock]
+
+    init(markdown: String) {
+        self.markdown = markdown
+        self.blocks = MarkdownBlock.parse(markdown).map(RenderedBlock.init)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -28,18 +43,18 @@ struct ArticleMarkdownView: View {
     }
 
     @ViewBuilder
-    private func view(for block: MarkdownBlock) -> some View {
-        switch block {
-        case let .heading(level, text):
-            Text(inline(text))
+    private func view(for rendered: RenderedBlock) -> some View {
+        switch rendered.block {
+        case let .heading(level, _):
+            Text(rendered.text ?? AttributedString())
                 .font(headingFont(level))
                 .fontWeight(.bold)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, level <= 2 ? 6 : 2)
                 .accessibilityAddTraits(.isHeader)
 
-        case let .paragraph(text):
-            Text(inline(text))
+        case .paragraph:
+            Text(rendered.text ?? AttributedString())
                 .font(.body)
                 .lineSpacing(5)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -58,15 +73,15 @@ struct ArticleMarkdownView: View {
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .accessibilityLabel(alt.isEmpty ? "Article image" : alt)
 
-        case let .bulletList(items):
+        case .bulletList:
             VStack(alignment: .leading, spacing: 8) {
-                ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                ForEach(Array(rendered.items.enumerated()), id: \.offset) { _, item in
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
                         Text("•")
                             .font(.body.weight(.bold))
                             .foregroundStyle(Color.accentColor)
                             .accessibilityHidden(true)
-                        Text(inline(item))
+                        Text(item)
                             .font(.body)
                             .lineSpacing(4)
                     }
@@ -74,15 +89,15 @@ struct ArticleMarkdownView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-        case let .orderedList(items):
+        case .orderedList:
             VStack(alignment: .leading, spacing: 8) {
-                ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                ForEach(Array(rendered.items.enumerated()), id: \.offset) { index, item in
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
                         Text("\(index + 1).")
                             .font(.body.weight(.semibold))
                             .foregroundStyle(Color.accentColor)
                             .accessibilityHidden(true)
-                        Text(inline(item))
+                        Text(item)
                             .font(.body)
                             .lineSpacing(4)
                     }
@@ -90,12 +105,12 @@ struct ArticleMarkdownView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-        case let .quote(text):
+        case .quote:
             HStack(spacing: 12) {
                 Rectangle()
                     .fill(Color.accentColor.opacity(0.5))
                     .frame(width: 3)
-                Text(inline(text))
+                Text(rendered.text ?? AttributedString())
                     .font(.body.italic())
                     .foregroundStyle(.secondary)
                     .lineSpacing(4)
@@ -123,9 +138,52 @@ struct ArticleMarkdownView: View {
         }
     }
 
-    /// Inline markdown → AttributedString. Falls back to plain text if parsing
+}
+
+// MARK: - Pre-rendered block
+
+/// A parsed block with its inline markdown already resolved (IOS-AUDIT-PERF-023).
+///
+/// The inline pass is the expensive half: AttributedString(markdown:) used to run
+/// from inside the view body for every heading, paragraph, list item and quote on
+/// every render. Doing it here means once per article, and the result cannot
+/// differ -- it is the same function on the same input, and it depends on nothing
+/// from the environment.
+struct RenderedBlock {
+    let block: MarkdownBlock
+    /// Resolved text for the single-text cases. nil for image, code and divider,
+    /// which render their raw value or nothing.
+    let text: AttributedString?
+    /// Resolved items for the two list cases. Empty otherwise.
+    let items: [AttributedString]
+
+    init(_ block: MarkdownBlock) {
+        self.block = block
+        switch block {
+        case let .heading(_, text):
+            self.text = Self.inline(text)
+            self.items = []
+        case let .paragraph(text):
+            self.text = Self.inline(text)
+            self.items = []
+        case let .quote(text):
+            self.text = Self.inline(text)
+            self.items = []
+        case let .bulletList(items):
+            self.text = nil
+            self.items = items.map(Self.inline)
+        case let .orderedList(items):
+            self.text = nil
+            self.items = items.map(Self.inline)
+        case .image, .code, .divider:
+            self.text = nil
+            self.items = []
+        }
+    }
+
+    /// Inline markdown -> AttributedString. Falls back to plain text if parsing
     /// fails so content never disappears.
-    private func inline(_ text: String) -> AttributedString {
+    static func inline(_ text: String) -> AttributedString {
         let options = AttributedString.MarkdownParsingOptions(
             interpretedSyntax: .inlineOnlyPreservingWhitespace
         )
@@ -138,7 +196,7 @@ struct ArticleMarkdownView: View {
 
 // MARK: - Block model + parser
 
-enum MarkdownBlock: Identifiable {
+enum MarkdownBlock {
     case heading(level: Int, text: String)
     case paragraph(String)
     case image(url: String, alt: String)
@@ -148,18 +206,16 @@ enum MarkdownBlock: Identifiable {
     case code(String)
     case divider
 
-    var id: String {
-        switch self {
-        case let .heading(level, text): return "h\(level)-\(text)"
-        case let .paragraph(text): return "p-\(text.prefix(40))-\(text.count)"
-        case let .image(url, _): return "img-\(url)"
-        case let .bulletList(items): return "ul-\(items.joined().prefix(40))-\(items.count)"
-        case let .orderedList(items): return "ol-\(items.joined().prefix(40))-\(items.count)"
-        case let .quote(text): return "q-\(text.prefix(40))"
-        case let .code(text): return "code-\(text.prefix(40))-\(text.count)"
-        case .divider: return "hr-\(UUID().uuidString)"
-        }
-    }
+    // IOS-AUDIT-PERF-023 AC2: the `id` property was REMOVED rather than made
+    // position-stable, because it was never used. ArticleMarkdownView identifies
+    // blocks by their offset (the source is immutable, so position is the stable
+    // identity), and no other file referenced MarkdownBlock.id.
+    //
+    // It could not have been made stable in place either: its divider case
+    // returned "hr-\(UUID().uuidString)", a NEW id on every access, which defeats
+    // diffing entirely -- while the obvious fix of a constant "hr" would collide
+    // between two dividers in one article. Identity belongs to the position, not
+    // to the block.
 
     /// Parses GitHub-flavored markdown into a flat list of blocks. Deliberately
     /// small — handles the structures our editor emits (headings, paragraphs,
