@@ -40,15 +40,16 @@ actor VotingService {
                 .execute()
                 .value
 
-            // Vote counts per category (one extra read, like the web).
-            struct CountRow: Decodable { let category_id: String }
-            let countRows: [CountRow] = (try? await client
-                .from("votes")
-                .select("category_id")
+            // Vote counts per category, aggregated server-side
+            // (IOS-AUDIT-PERF-026). This used to SELECT every row of `votes` and
+            // count them here, so the read grew with total votes cast app-wide -
+            // and it pulled ballots the app has no use for.
+            struct TallyRow: Decodable { let category_id: String; let vote_count: Int }
+            let tallies: [TallyRow] = (try? await client
+                .rpc("voting_category_tallies")
                 .execute()
                 .value) ?? []
-            var counts: [String: Int] = [:]
-            for row in countRows { counts[row.category_id, default: 0] += 1 }
+            let counts = Dictionary(uniqueKeysWithValues: tallies.map { ($0.category_id, $0.vote_count) })
 
             for i in categories.indices {
                 categories[i].voteCount = counts[categories[i].id] ?? 0
@@ -68,17 +69,43 @@ actor VotingService {
             let entity_id: String?
             let custom_entry: String?
         }
-        let votes: [VoteRow] = try await client
-            .from("votes")
-            .select("entity_type, entity_id, custom_entry")
-            .eq("category_id", value: categoryId)
-            .execute()
-            .value
+        // Aggregated server-side (IOS-AUDIT-PERF-026). The RPC groups by
+        // entity_id, falling back to custom_entry, which is exactly what
+        // VoteResult.aggregate does - that helper stays, covered by its own
+        // tests, and is used for the fallback below.
+        struct ResultRow: Decodable {
+            let entity_type: String
+            let entity_id: String?
+            let custom_entry: String?
+            let vote_count: Int
+        }
+        struct ResultsParams: Encodable { let p_category_id: String }
 
-        // Aggregate by entity_id (or custom_entry) via the shared pure helper.
-        var results = VoteResult.aggregate(votes.map {
-            VoteResult.Raw(entityType: $0.entity_type, entityId: $0.entity_id, customEntry: $0.custom_entry)
-        })
+        var results: [VoteResult]
+        if let rows: [ResultRow] = try? await client
+            .rpc("voting_results", params: ResultsParams(p_category_id: categoryId))
+            .execute()
+            .value {
+            results = rows.map {
+                VoteResult(
+                    entityType: $0.entity_type,
+                    entityId: $0.entity_id,
+                    customEntry: $0.custom_entry,
+                    voteCount: $0.vote_count
+                )
+            }
+        } else {
+            // Fallback for a project without the RPC deployed.
+            let votes: [VoteRow] = try await client
+                .from("votes")
+                .select("entity_type, entity_id, custom_entry")
+                .eq("category_id", value: categoryId)
+                .execute()
+                .value
+            results = VoteResult.aggregate(votes.map {
+                VoteResult.Raw(entityType: $0.entity_type, entityId: $0.entity_id, customEntry: $0.custom_entry)
+            })
+        }
 
         await enrich(&results, client: client)
         return results
