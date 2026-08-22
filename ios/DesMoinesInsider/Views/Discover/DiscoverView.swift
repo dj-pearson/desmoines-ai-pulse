@@ -231,15 +231,15 @@ struct DiscoverView: View {
             // a tap looks identical to a swipe (IOS-AUDIT-UX-018).
             actionButton(systemImage: "xmark", color: .red, label: "Skip", size: 56) {
                 guard !viewModel.deck.isEmpty else { return }
-                swipeCommand = .skip
+                swipeCommand = .skip()
             }
             actionButton(systemImage: "arrow.up", color: .blue, label: "More like this", size: 64) {
                 guard !viewModel.deck.isEmpty else { return }
-                swipeCommand = .boost
+                swipeCommand = .boost()
             }
             actionButton(systemImage: "heart.fill", color: .green, label: "Save", size: 56) {
                 guard !viewModel.deck.isEmpty else { return }
-                swipeCommand = .like
+                swipeCommand = .like()
             }
         }
         .disabled(viewModel.deck.isEmpty)

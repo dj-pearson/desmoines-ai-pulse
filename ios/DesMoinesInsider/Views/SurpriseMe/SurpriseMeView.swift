@@ -168,7 +168,14 @@ struct SurpriseMeView: View {
         }
         .scaleEffect(revealed ? 1.0 : 0.92)
         .opacity(revealed ? 1.0 : 0)
-        .onAppear {
+        // IOS-AUDIT-BUG-010 AC2: keyed on the pick id, not .onAppear, exactly as
+        // the organic reveal above already is. onAppear fires once per view
+        // identity, and SwiftUI reuses this view across rolls -- so a second
+        // sponsored pick in a row never re-ran the animation and, because
+        // `revealed` is reset to false when a new pick loads, the card stayed at
+        // opacity 0. An invisible ad that still counts as served (AC3).
+        .task(id: sponsored.id) {
+            revealed = false
             withAnimation(.spring(response: 0.55, dampingFraction: 0.75)) {
                 revealed = true
             }

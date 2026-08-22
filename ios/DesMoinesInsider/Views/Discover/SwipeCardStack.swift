@@ -25,7 +25,27 @@ struct SwipeCardStack: View {
     @Binding var command: Command?
 
     /// A button-driven swipe, mapped to the matching commit direction.
-    enum Command: Equatable { case skip, like, boost }
+    /// A one-shot instruction from the action bar, carrying an identity token.
+    ///
+    /// IOS-AUDIT-BUG-010 AC1. This was a bare enum, so two taps of the same
+    /// button produced the SAME value and onChange had nothing to observe. It was
+    /// papered over by writing `command = nil` after handling, which works only if
+    /// the nil is observed before the next tap - and SwiftUI coalesces state
+    /// changes within an update cycle, so a fast double tap could go .skip -> .skip
+    /// with the nil never seen, and the second tap was swallowed.
+    ///
+    /// The token makes every issue distinct, so no two commands can ever compare
+    /// equal and the clear-to-nil is belt-and-braces rather than load-bearing.
+    struct Command: Equatable {
+        enum Action: Equatable { case skip, like, boost }
+
+        let action: Action
+        private let token = UUID()
+
+        static func skip() -> Command { Command(action: .skip) }
+        static func like() -> Command { Command(action: .like) }
+        static func boost() -> Command { Command(action: .boost) }
+    }
 
     @State private var dragOffset: CGSize = .zero
     @State private var isDismissing = false
@@ -109,7 +129,7 @@ struct SwipeCardStack: View {
         // Drive button taps through the same animated commit path as a swipe.
         .onChange(of: command) { _, newValue in
             guard let newValue else { return }
-            switch newValue {
+            switch newValue.action {
             case .skip: programmaticSkip()
             case .like: programmaticLike()
             case .boost: programmaticBoost()
