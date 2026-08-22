@@ -4061,7 +4061,9 @@ export type Database = {
           is_deleted: boolean | null
           is_pinned: boolean | null
           likes_count: number
+          media_url: string | null
           message: string
+          message_type: string
           parent_id: string | null
           updated_at: string
           user_id: string
@@ -4073,7 +4075,9 @@ export type Database = {
           is_deleted?: boolean | null
           is_pinned?: boolean | null
           likes_count?: number
+          media_url?: string | null
           message: string
+          message_type?: string
           parent_id?: string | null
           updated_at?: string
           user_id: string
@@ -4085,7 +4089,9 @@ export type Database = {
           is_deleted?: boolean | null
           is_pinned?: boolean | null
           likes_count?: number
+          media_url?: string | null
           message?: string
+          message_type?: string
           parent_id?: string | null
           updated_at?: string
           user_id?: string

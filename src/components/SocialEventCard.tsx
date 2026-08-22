@@ -88,7 +88,7 @@ function SocialEventCardComponent({
   const eventUrl = `/events/${eventSlug}`;
 
   const isFree = !event.price || event.price.toLowerCase().includes('free') || event.price === '$0';
-  const isLive = liveStats && liveStats.total_checkins > 0;
+  const isLive = (liveStats?.total_checkins ?? 0) > 0;
   const attendeeCount = attendees?.length || liveStats?.current_attendees || 0;
 
   // Sponsored listing (WEB-FEAT-005): active only while not expired.
@@ -261,10 +261,10 @@ function SocialEventCardComponent({
                   <span className="font-medium">{attendeeCount}</span>
                   <span>interested</span>
                 </div>
-                {liveStats?.total_checkins > 0 && (
+                {(liveStats?.total_checkins ?? 0) > 0 && (
                   <div className="flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                    <span>{liveStats.total_checkins} checked in</span>
+                    <span>{liveStats?.total_checkins} checked in</span>
                   </div>
                 )}
               </div>

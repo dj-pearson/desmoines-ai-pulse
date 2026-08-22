@@ -21,20 +21,26 @@ export interface EventDiscussion {
   user_id: string;
   message: string;
   message_type: 'comment' | 'photo' | 'video' | 'tip';
-  media_url?: string;
-  parent_id?: string;
+  // Nullable in the database, so nullable here. Declaring these as
+  // `?: string` claimed absent-or-string when Postgres returns null, which is
+  // what made the mapped row unassignable (WEB-QA-016).
+  media_url?: string | null;
+  parent_id?: string | null;
   likes_count: number;
   created_at: string;
   updated_at: string;
 }
 
 export interface EventLiveStats {
+  // Every column except event_id is nullable in public.event_live_stats; the
+  // row does not exist until the first attendee, check-in or comment. Callers
+  // must coalesce rather than assume a number (WEB-QA-016).
   event_id: string;
-  current_attendees: number;
-  total_checkins: number;
-  discussion_count: number;
-  photos_count: number;
-  last_activity: string;
+  current_attendees: number | null;
+  total_checkins: number | null;
+  discussion_count: number | null;
+  photos_count: number | null;
+  last_activity: string | null;
 }
 
 export interface EventCheckin {
