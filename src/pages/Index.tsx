@@ -389,12 +389,6 @@ export default function Index() {
         structuredData={structuredData}
       />
 
-      {/* LocalBusiness Structured Data - Critical for Local SEO */}
-      <Helmet>
-        <script type="application/ld+json">
-          {JSON.stringify(localBusinessData)}
-        </script>
-      </Helmet>
 
       {/* BreadcrumbList Schema - Helps with rich snippets in search results */}
       <BreadcrumbListSchema
@@ -424,6 +418,16 @@ export default function Index() {
         title={HOME_TITLE}
         description={HOME_DESCRIPTION}
         canonicalUrl={`${BRAND.baseUrl}/`}
+        /* WEB-SEO-013: without this SEOStructure emits its OWN LocalBusiness
+           default, so the homepage shipped TWO LocalBusiness blocks - measured
+           in dist/index.html at 1437 and 799 bytes, different content, both
+           describing the same business. Google treats a duplicated entity type
+           on one page as ambiguous and may use neither. Passing the block
+           rendered above makes the two emitters agree on one object, which is
+           the same trick the WEB-SEO-012 comment applies to title and
+           description. The default also carried a placeholder telephone,
+           +1-515-000-0000, which is now not emitted at all. */
+        structuredData={localBusinessData}
       />
 
       {/* Main content wrapper with semantic HTML for AI parsing */}

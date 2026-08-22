@@ -125,3 +125,71 @@ export function restoreAsyncFontLinks(html) {
   );
   return [out, count];
 }
+
+/**
+ * Drop superseded Helmet JSON-LD blocks (WEB-SEO-013).
+ *
+ * MEASURED, not guessed. Five prerendered routes emitted the same schema @type
+ * twice from Helmet-managed script tags: FAQPage on /events/today,
+ * /events/ankeny, /events/johnston and /events/urbandale, and LocalBusiness on
+ * the homepage. Google treats a duplicated entity type on one page as ambiguous
+ * and may use neither copy.
+ *
+ * WEB-SEO-013's note attributed this to a route collision - "the React route
+ * and the published pSEO page for the same slug each emit one". The bytes say
+ * otherwise. On /events/ankeny the two blocks are both 733 bytes and differ at
+ * exactly one character:
+ *     "We currently have 0 upcoming events in Ankeny..."
+ *     "We currently have 1 upcoming events in Ankeny..."
+ * That is ONE component captured at two data states. Helmet updates the head by
+ * removing its previous tags and inserting new ones, so a DOM snapshot taken
+ * between those steps keeps both. The giveaway is that the affected set MOVES
+ * between runs: production had /events/altoona duplicated and /events/ankeny
+ * clean, while a local prerender of the same commit produced the opposite. No
+ * wait fixes that - there is no observable "Helmet has settled" state, only a
+ * longer gamble.
+ *
+ * So the LAST block of each @type wins, which is the settled render, since
+ * Helmet appends the newest. Only `data-rh` tags are considered: that attribute
+ * is what marks a tag as Helmet-managed and therefore replaceable. A JSON-LD
+ * block written directly into index.html is never touched.
+ *
+ * NOT a general "one @type per page" rule, and the difference matters. The
+ * homepage's two LocalBusiness blocks were genuinely different objects, 1437
+ * and 799 bytes, from two components that each emitted one - a source defect,
+ * fixed in Index.tsx by giving SEOStructure the block the page already builds.
+ * This function would have masked that by silently dropping the richer copy,
+ * which is why every drop is counted and reported in the prerender summary
+ * instead of being done quietly.
+ */
+export function dedupeJsonLd(html) {
+  const blocks = [];
+  const re = /<script([^>]*type="application\/ld\+json"[^>]*)>([\s\S]*?)<\/script>/g;
+
+  for (let m = re.exec(html); m; m = re.exec(html)) {
+    const [full, attrs, body] = m;
+    const type = /"@type"\s*:\s*"([^"]+)"/.exec(body);
+    blocks.push({
+      full,
+      index: m.index,
+      helmet: /\bdata-rh\b/.test(attrs),
+      type: type ? type[1] : null,
+    });
+  }
+
+  // Last occurrence of each @type wins, among Helmet-managed blocks only.
+  const lastOfType = new Map();
+  for (const b of blocks) {
+    if (b.helmet && b.type) lastOfType.set(b.type, b.index);
+  }
+
+  const doomed = blocks.filter((b) => b.helmet && b.type && lastOfType.get(b.type) !== b.index);
+  if (doomed.length === 0) return [html, 0];
+
+  // Splice from the end so earlier offsets stay valid.
+  let out = html;
+  for (const b of [...doomed].sort((a, c) => c.index - a.index)) {
+    out = out.slice(0, b.index) + out.slice(b.index + b.full.length);
+  }
+  return [out, doomed.length];
+}
