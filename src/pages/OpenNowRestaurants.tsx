@@ -176,7 +176,7 @@ export default function OpenNowRestaurants() {
             </div>
             <div className="flex items-center gap-1">
               <Clock className="h-4 w-4" />
-              <span className="font-semibold text-green-600">{format(currentTime, "h:mm a")}</span>
+              <span className="font-semibold text-green-700">{format(currentTime, "h:mm a")}</span>
             </div>
             <div className="flex items-center gap-1">
               <MapPin className="h-4 w-4" />
@@ -187,7 +187,7 @@ export default function OpenNowRestaurants() {
           <p className="text-lg text-muted-foreground max-w-3xl mb-4">
             <strong>Find {openRestaurants.length}+ restaurants likely open now in Des Moines.</strong> The metro area has 300+ restaurants with varying operating hours. We filter based on typical operating hours for each restaurant. Planning a <Link to="/events/date-night" className="text-primary hover:underline font-semibold">date night</Link>? Check restaurant hours before your event.
           </p>
-          <p className="text-sm text-muted-foreground/70 max-w-3xl">
+          <p className="text-sm text-muted-foreground max-w-3xl">
             Hours are estimated based on available data. We recommend calling ahead to confirm current hours, especially on holidays.
           </p>
 
@@ -201,7 +201,7 @@ export default function OpenNowRestaurants() {
           <CardContent className="pt-6">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
               <div>
-                <div className="text-2xl font-bold text-green-600">
+                <div className="text-2xl font-bold text-green-700">
                   {openRestaurants.length}+
                 </div>
                 <div className="text-sm text-muted-foreground">

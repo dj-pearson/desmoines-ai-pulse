@@ -382,7 +382,7 @@ export default function Playgrounds() {
                   value={selectedAgeRange}
                   onValueChange={setSelectedAgeRange}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger aria-label="Age Range">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -401,7 +401,7 @@ export default function Playgrounds() {
                   Location
                 </label>
                 <Select value={location} onValueChange={setLocation}>
-                  <SelectTrigger>
+                  <SelectTrigger aria-label="Location">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -427,7 +427,7 @@ export default function Playgrounds() {
                   Featured
                 </label>
                 <Select value={featuredOnly} onValueChange={setFeaturedOnly}>
-                  <SelectTrigger>
+                  <SelectTrigger aria-label="Featured">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

@@ -318,7 +318,7 @@ export default function AccessibilityStatement() {
                 href="https://www.w3.org/WAI/standards-guidelines/wcag/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-primary hover:underline inline-flex items-center gap-1"
+                className="text-primary underline inline-flex items-center gap-1"
               >
                 Web Content Accessibility Guidelines (WCAG)
                 <ExternalLink className="h-3 w-3" aria-hidden="true" />
@@ -347,7 +347,7 @@ export default function AccessibilityStatement() {
                 href="https://developer.apple.com/help/app-store-connect/manage-app-accessibility/overview-of-accessibility-nutrition-labels"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-primary hover:underline inline-flex items-center gap-1"
+                className="text-primary underline inline-flex items-center gap-1"
               >
                 Apple's Accessibility Nutrition Labels
                 <ExternalLink className="h-3 w-3" aria-hidden="true" />
@@ -766,7 +766,7 @@ export default function AccessibilityStatement() {
                       <p className="font-medium">Email</p>
                       <a
                         href="mailto:accessibility@desmoinesinsider.com"
-                        className="text-primary hover:underline"
+                        className="text-primary underline"
                       >
                         accessibility@desmoinesinsider.com
                       </a>
@@ -810,11 +810,11 @@ export default function AccessibilityStatement() {
           <section className="mt-12 pt-8 border-t">
             <p className="text-sm text-muted-foreground">
               For more information about our policies, please review our{" "}
-              <Link to="/privacy-policy" className="text-primary hover:underline">
+              <Link to="/privacy-policy" className="text-primary underline">
                 Privacy Policy
               </Link>{" "}
               and{" "}
-              <Link to="/terms" className="text-primary hover:underline">
+              <Link to="/terms" className="text-primary underline">
                 Terms of Service
               </Link>.
             </p>
@@ -824,7 +824,7 @@ export default function AccessibilityStatement() {
                 href="https://www.w3.org/WAI/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-primary hover:underline inline-flex items-center gap-1"
+                className="text-primary underline inline-flex items-center gap-1"
               >
                 W3C Web Accessibility Initiative (WAI)
                 <ExternalLink className="h-3 w-3" aria-hidden="true" />
@@ -837,7 +837,7 @@ export default function AccessibilityStatement() {
                 href="https://www.apple.com/accessibility/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-primary hover:underline inline-flex items-center gap-1"
+                className="text-primary underline inline-flex items-center gap-1"
               >
                 Apple Accessibility
                 <ExternalLink className="h-3 w-3" aria-hidden="true" />
