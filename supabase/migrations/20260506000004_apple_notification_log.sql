@@ -1,4 +1,28 @@
 -- =============================================================================
+-- SUPERSEDED AND UNRUNNABLE -- DO NOT EDIT, DO NOT RELY ON THIS FILE
+-- =============================================================================
+-- This migration has NEVER RUN and never will. Its version number, 20260506000004, is
+-- already recorded in supabase_migrations.schema_migrations under the name
+-- 'media_assets_dedup' -- a DIFFERENT migration was applied under this
+-- version. `supabase db push` skips any version already in the ledger, so the
+-- SQL below is dead.
+--
+-- It also means a version-only drift check reports this as "applied" while
+-- public.apple_notification_log does not exist. That is exactly what happened: the
+-- table was absent from production for months while every audit said in sync.
+--
+-- The live definition is 20260822000005_billing_webhook_audit_logs.sql, which
+-- takes a fresh version and therefore actually applies. It differs from the
+-- SQL below in two ways that matter:
+--   * notification_type is NULLABLE. The Play webhook inserts null on its
+--     skipped_no_payload path, which the NOT NULL below would have rejected.
+--   * the idempotency key carries a UNIQUE constraint, without which a
+--     SELECT-then-INSERT guard cannot stop two concurrent deliveries.
+--
+-- Kept rather than deleted so the history is legible (WEB-BE-030).
+-- =============================================================================
+
+-- =============================================================================
 -- Apple App Store Server Notifications v2 — idempotency log
 -- =============================================================================
 -- Records every Apple notification we receive, keyed by Apple's
