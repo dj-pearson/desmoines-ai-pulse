@@ -19,8 +19,27 @@ export interface ActiveAd {
 const AD_STALE_TIME = 5 * 60 * 1000;
 
 /** Placements the `placement_type` DB enum actually accepts. Anything outside this
- *  set makes the RPC fail with `invalid input value for enum placement_type`. */
-const SERVABLE_PLACEMENTS = ['top_banner', 'featured_spot', 'below_fold'] as const;
+ *  set makes the RPC fail with `invalid input value for enum placement_type`.
+ *
+ *  XPLAT-005: sponsored_listing was missing here while iOS (CampaignAdService
+ *  .swift:20-25) and Android (CampaignAdService.kt:66-69) both carried it, so
+ *  that placement rendered on mobile only. The omission was justified by the
+ *  comment above, and that justification was simply out of date — the live enum
+ *  has carried all four values for some time. Verified against production:
+ *    SELECT enumlabel FROM pg_enum ... WHERE typname='placement_type'
+ *      -> top_banner, featured_spot, below_fold, sponsored_listing
+ *  and get_active_ads('sponsored_listing') returns HTTP 200.
+ *
+ *  `sidebar` is still deliberately absent: it is a front-end-only name that was
+ *  never added to the enum, which is why isServable short-circuits it below
+ *  rather than letting it reach the RPC (AC3 is the decision on whether it
+ *  should exist at all). */
+const SERVABLE_PLACEMENTS = [
+  'top_banner',
+  'featured_spot',
+  'below_fold',
+  'sponsored_listing',
+] as const;
 
 type ServablePlacement = typeof SERVABLE_PLACEMENTS[number];
 export type AdPlacement = ServablePlacement | 'sidebar';
