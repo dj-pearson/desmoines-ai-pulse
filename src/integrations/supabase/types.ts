@@ -1992,6 +1992,7 @@ export type Database = {
           link_url: string | null
           placement_type: Database["public"]["Enums"]["placement_type"]
           rejection_reason: string | null
+          review_path: string | null
           reviewed_at: string | null
           reviewed_by: string | null
           title: string | null
@@ -2015,6 +2016,7 @@ export type Database = {
           link_url?: string | null
           placement_type: Database["public"]["Enums"]["placement_type"]
           rejection_reason?: string | null
+          review_path?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           title?: string | null
@@ -2038,6 +2040,7 @@ export type Database = {
           link_url?: string | null
           placement_type?: Database["public"]["Enums"]["placement_type"]
           rejection_reason?: string | null
+          review_path?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           title?: string | null

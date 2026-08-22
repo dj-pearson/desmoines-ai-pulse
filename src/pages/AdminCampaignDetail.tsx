@@ -15,6 +15,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Check, X, DollarSign, Calendar, User, Image as ImageIcon, ExternalLink, AlertCircle } from "lucide-react";
 import { CampaignCreative } from "@/hooks/useCampaigns";
+import { CreativePreview } from "@/components/advertising/CreativePreview";
 
 export default function AdminCampaignDetail() {
   const { campaignId } = useParams<{ campaignId: string }>();
@@ -304,17 +305,13 @@ export default function AdminCampaignDetail() {
                   {getPendingCreatives().map((creative) => (
                     <Card key={creative.id} className="overflow-hidden">
                       <div className="aspect-video relative bg-muted">
-                        {creative.image_url ? (
-                          <img
-                            src={creative.image_url}
-                            alt={creative.title || 'Ad creative'}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex items-center justify-center h-full">
-                            <ImageIcon className="h-12 w-12 text-muted-foreground" />
-                          </div>
-                        )}
+                        {/* WEB-LEGAL-011: an unapproved creative has no public
+                            URL, so this signs its private review path. */}
+                        <CreativePreview
+                          imageUrl={creative.image_url}
+                          reviewPath={creative.review_path}
+                          alt={creative.title || 'Ad creative'}
+                        />
                       </div>
                       <CardContent className="pt-4">
                         <div className="mb-4">
@@ -397,17 +394,13 @@ export default function AdminCampaignDetail() {
                   {getApprovedCreatives().map((creative) => (
                     <Card key={creative.id} className="overflow-hidden border-green-200">
                       <div className="aspect-video relative bg-muted">
-                        {creative.image_url ? (
-                          <img
-                            src={creative.image_url}
-                            alt={creative.title || 'Ad creative'}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex items-center justify-center h-full">
-                            <ImageIcon className="h-12 w-12 text-muted-foreground" />
-                          </div>
-                        )}
+                        {/* WEB-LEGAL-011: an unapproved creative has no public
+                            URL, so this signs its private review path. */}
+                        <CreativePreview
+                          imageUrl={creative.image_url}
+                          reviewPath={creative.review_path}
+                          alt={creative.title || 'Ad creative'}
+                        />
                         <div className="absolute top-2 right-2">
                           <Badge className="bg-green-500">Approved</Badge>
                         </div>

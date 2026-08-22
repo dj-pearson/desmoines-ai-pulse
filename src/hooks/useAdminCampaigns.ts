@@ -4,6 +4,7 @@ import { useToast } from "./use-toast";
 import { Campaign, CampaignCreative } from "./useCampaigns";
 import { createLogger } from '@/lib/logger';
 import { notifyAdvertiser } from "./useCampaignNotifications";
+import { publishCreative, discardReviewCopy } from "@/lib/adCreativeStorage";
 
 const log = createLogger('useAdminCampaigns');
 
@@ -150,6 +151,27 @@ export function useAdminCampaigns() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
 
+      // WEB-LEGAL-011: the creative sits in the PRIVATE ad-creatives-review
+      // bucket until this moment, with image_url null. Approving it publishes
+      // the object into the public bucket and sets image_url.
+      //
+      // Publish BEFORE the update, and let a failure abort the whole approval.
+      // An approved row with a null image_url renders as a blank ad slot for
+      // the entire campaign, and get_active_ads would happily serve it --
+      // strictly worse than a failed approval the admin can retry.
+      const { data: creative, error: readError } = await supabase
+        .from("campaign_creatives")
+        .select("review_path, image_url")
+        .eq("id", creativeId)
+        .single();
+
+      if (readError) throw readError;
+
+      let publishedUrl = creative?.image_url ?? null;
+      if (creative?.review_path) {
+        publishedUrl = await publishCreative(creative.review_path);
+      }
+
       const { error } = await supabase
         .from("campaign_creatives")
         .update({
@@ -157,10 +179,18 @@ export function useAdminCampaigns() {
           reviewed_by: user?.id,
           reviewed_at: new Date().toISOString(),
           rejection_reason: null,
+          image_url: publishedUrl,
         })
         .eq("id", creativeId);
 
       if (error) throw error;
+
+      // Only now that the row points at the public copy. Best effort: a leftover
+      // private duplicate is untidy, not a leak, and must not fail an approval
+      // that has already succeeded.
+      if (creative?.review_path) {
+        await discardReviewCopy(creative.review_path);
+      }
 
       // Fetch the campaign to get owner info and dates
       const { data: campaign } = await supabase

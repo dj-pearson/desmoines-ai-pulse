@@ -100,12 +100,26 @@ export function CreativeUploadForm({
     setImageMetadata(metadata);
   };
 
+  /**
+   * Uploads to the PRIVATE ad-creatives-review bucket and returns the object
+   * path (WEB-LEGAL-011).
+   *
+   * This used to upload to the public ad-creatives bucket and return
+   * getPublicUrl, so a creative was world-readable from the moment of upload --
+   * anyone who guessed the path saw unreleased campaign artwork, and a rejected
+   * creative stayed readable forever.
+   *
+   * The object moves to the public bucket at approval, in
+   * useAdminCampaigns.approveCreative, which is also where image_url is set.
+   * Approved creatives are public by nature; the confidentiality window is only
+   * pending and rejected.
+   */
   const uploadToStorage = async (file: File): Promise<string> => {
     const fileExt = file.name.split('.').pop();
     const fileName = `${campaignId}/${placementType}/${Date.now()}.${fileExt}`;
 
     const { data, error } = await supabase.storage
-      .from('ad-creatives')
+      .from('ad-creatives-review')
       .upload(fileName, file, {
         cacheControl: '3600',
         upsert: false,
@@ -113,11 +127,9 @@ export function CreativeUploadForm({
 
     if (error) throw error;
 
-    const { data: urlData } = supabase.storage
-      .from('ad-creatives')
-      .getPublicUrl(data.path);
-
-    return urlData.publicUrl;
+    // No getPublicUrl: the bucket is private, so a public URL would 400. Admin
+    // previews sign this path; see AdminCampaignDetail.
+    return data.path;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -128,8 +140,9 @@ export function CreativeUploadForm({
     setIsUploading(true);
 
     try {
-      // Upload file to storage
-      const imageUrl = await uploadToStorage(uploadedFile!);
+      // Upload to the private review bucket. image_url stays null until an
+      // admin approves and the object is copied into the public bucket.
+      const reviewPath = await uploadToStorage(uploadedFile!);
 
       // Create creative record
       const { error: createError } = await supabase
@@ -139,7 +152,8 @@ export function CreativeUploadForm({
           placement_type: placementType,
           title: formData.title,
           description: formData.description,
-          image_url: imageUrl,
+          image_url: null,
+          review_path: reviewPath,
           link_url: formData.linkUrl,
           cta_text: formData.ctaText,
           is_approved: false,
