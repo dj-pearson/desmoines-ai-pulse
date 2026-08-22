@@ -43,10 +43,59 @@ const MULTI_CLIENT = [
     fn: 'delete-user-account/index.ts',
     // Every documented action must have a matching branch in the handler.
     documentedActions: ['request', 'confirm'],
+    // Fields the handler reads out of the request body. Each client has to send
+    // every one of them.
+    requestFields: ['action'],
     clients: [
       'ios/DesMoinesInsider/Services/AccountDeletionService.swift',
       'android/app/src/main/java/com/desmoines/aipulse/ui/screens/profile/ProfileViewModel.kt',
       'src/components/PrivacyControls.tsx',
+    ],
+  },
+  {
+    fn: 'generate-itinerary/index.ts',
+    documentedActions: [],
+    requestFields: ['startDate', 'endDate', 'preferences'],
+    clients: [
+      'ios/DesMoinesInsider/Services/TripPlannerService.swift',
+      'android/app/src/main/java/com/desmoines/aipulse/data/remote/TripPlannerRemoteDataSource.kt',
+      'src/hooks/useTripPlanner.ts',
+    ],
+  },
+  {
+    fn: 'discover-chat/index.ts',
+    documentedActions: [],
+    requestFields: ['messages'],
+    clients: [
+      'ios/DesMoinesInsider/Services/AskPulseService.swift',
+      'android/app/src/main/java/com/desmoines/aipulse/data/repository/AskPulseRepository.kt',
+    ],
+  },
+  {
+    fn: 'get-sponsored-pick/index.ts',
+    documentedActions: [],
+    requestFields: ['surface'],
+    clients: [
+      'ios/DesMoinesInsider/Services/SponsoredPickService.swift',
+      'android/app/src/main/java/com/desmoines/aipulse/data/remote/SponsoredPickService.kt',
+    ],
+  },
+  {
+    fn: 'register-device-token/index.ts',
+    documentedActions: [],
+    requestFields: ['deviceToken', 'platform'],
+    clients: [
+      'ios/DesMoinesInsider/Services/PushNotificationService.swift',
+      'android/app/src/main/java/com/desmoines/aipulse/util/PushNotificationService.kt',
+    ],
+  },
+  {
+    fn: 'version-check/index.ts',
+    documentedActions: [],
+    requestFields: ['platform', 'version'],
+    clients: [
+      'ios/DesMoinesInsider/Services/VersionCheckService.swift',
+      'android/app/src/main/java/com/desmoines/aipulse/util/VersionCheckService.kt',
     ],
   },
 ];
@@ -118,7 +167,10 @@ function stripComments(src: string): string {
 
 Deno.test('every client sends the documented action field', async () => {
   // The assertion that would have caught XPLAT-001 outright.
-  for (const { fn, clients } of MULTI_CLIENT) {
+  // Only the entries that document an action flow. The other five have no
+  // actions; their contract is the field check below.
+  for (const { fn, clients, documentedActions } of MULTI_CLIENT) {
+    if (documentedActions.length === 0) continue;
     for (const client of clients) {
       let raw: string;
       try {
@@ -144,4 +196,112 @@ Deno.test('every client sends the documented action field', async () => {
       );
     }
   }
+});
+
+/**
+ * AC1, the field half: what the function READS out of the body, every client
+ * must SEND.
+ *
+ * The action check above only fits delete-user-account. Five of the six
+ * multi-client functions have no action flow at all -- their contract is a set
+ * of field names, and a client that omits one gets a 400 or a silently degraded
+ * response rather than a crash, which is harder to notice than XPLAT-001 was.
+ *
+ * Matching is by field NAME, which is deliberately loose: iOS sends Swift
+ * Encodable structs, Android builds JsonObjects and the web passes an object
+ * literal, so there is no shared syntax to assert on. A name that appears
+ * nowhere in the caller is still conclusive -- it cannot be being sent.
+ */
+Deno.test('every client sends every field the function reads', async () => {
+  for (const { fn, requestFields, clients } of MULTI_CLIENT) {
+    if (requestFields.length === 0) continue;
+
+    const fnSrc = await read(new URL(fn, FUNCTIONS));
+    for (const field of requestFields) {
+      // The function must genuinely read it, or the list has gone stale and is
+      // asserting a contract nobody implements.
+      assert(
+        new RegExp(`\\b${field}\\b`).test(stripComments(fnSrc)),
+        `${fn}: requestFields lists "${field}" but the handler never reads it`,
+      );
+    }
+
+    for (const client of clients) {
+      const src = stripComments(await read(new URL(client, REPO)));
+      for (const field of requestFields) {
+        assert(
+          new RegExp(`\\b${field}\\b`).test(src),
+          `${client} calls ${fn} but never mentions "${field}", which the ` +
+            'handler reads out of the request body.',
+        );
+      }
+    }
+  }
+});
+
+/**
+ * The assertion that keeps MULTI_CLIENT from going stale, which is the real
+ * risk to AC1: a hand-maintained list of contracts silently stops covering the
+ * thing it was written for.
+ *
+ * Scans the three client trees for edge-function invocations and requires every
+ * function called from more than one platform to be listed above. Each platform
+ * has its own call syntax and all three are matched:
+ *     web      supabase.functions.invoke('name', ...)
+ *     iOS      client.functions.invoke(  "name",   -- name on the next line
+ *     Android  client.functions(         "name",   -- a call, not .invoke
+ * plus a raw /functions/v1/<name> URL anywhere.
+ *
+ * The Android form is why this matters. A scan written for `.invoke(` alone
+ * finds two multi-client functions; adding the Kotlin call form finds six.
+ */
+Deno.test('every multi-platform edge function is covered by MULTI_CLIENT', async () => {
+  const CLIENT_ROOTS: Record<string, string> = { web: 'src', ios: 'ios', android: 'android' };
+  const CODE = /\.(ts|tsx|swift|kt)$/;
+  const CALL =
+    /functions\/v1\/([a-z0-9-]+)|invoke\(\s*["']([a-z0-9-]+)["']|functions\(\s*["']([a-z0-9-]+)["']/g;
+
+  const knownFunctions = new Set<string>();
+  for await (const entry of Deno.readDir(FUNCTIONS)) {
+    if (entry.isDirectory && !entry.name.startsWith('_')) knownFunctions.add(entry.name);
+  }
+
+  async function* walk(dir: URL): AsyncGenerator<URL> {
+    for await (const entry of Deno.readDir(dir)) {
+      const child = new URL(`${entry.name}${entry.isDirectory ? '/' : ''}`, dir);
+      if (entry.isDirectory) {
+        if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
+        yield* walk(child);
+      } else if (CODE.test(entry.name)) {
+        yield child;
+      }
+    }
+  }
+
+  const platformsByFn = new Map<string, Set<string>>();
+  for (const [platform, root] of Object.entries(CLIENT_ROOTS)) {
+    for await (const file of walk(new URL(`${root}/`, REPO))) {
+      const src = await read(file);
+      for (const m of src.matchAll(CALL)) {
+        const name = m[1] ?? m[2] ?? m[3];
+        if (!knownFunctions.has(name)) continue;
+        if (!platformsByFn.has(name)) platformsByFn.set(name, new Set());
+        platformsByFn.get(name)!.add(platform);
+      }
+    }
+  }
+
+  const covered = new Set(MULTI_CLIENT.map((e) => e.fn.replace('/index.ts', '')));
+  const missing = [...platformsByFn.entries()]
+    .filter(([name, platforms]) => platforms.size > 1 && !covered.has(name))
+    .map(([name, platforms]) => `${name} (${[...platforms].sort().join(', ')})`)
+    .sort();
+
+  assertEquals(
+    missing,
+    [],
+    'These edge functions are called from more than one client platform and have ' +
+      'no contract entry. Add them to MULTI_CLIENT with the fields their handler ' +
+      'reads:\n  ' + missing.join('\n  '),
+  );
 });
