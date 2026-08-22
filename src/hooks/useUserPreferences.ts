@@ -15,8 +15,16 @@ const log = createLogger('useUserPreferences');
 const STORAGE_KEY = 'desmoines_user_preferences';
 
 /**
- * Hook for managing user preferences across the application
- * Syncs with localStorage and Supabase (when available)
+ * Hook for managing user preferences across the application.
+ *
+ * LOCAL-ONLY. Preferences live in localStorage via @/lib/safeStorage and are
+ * not synced anywhere — they do not follow a user to another browser and do
+ * not survive clearing site data. See the NOTE in loadPreferences for why, and
+ * WEB-QA-015 for restoring real sync.
+ *
+ * This docstring used to claim it "syncs with localStorage and Supabase (when
+ * available)", which contradicted the note twenty lines below it and had been
+ * false for every user since the hook was written.
  */
 export function useUserPreferences() {
   const { user } = useAuth();
