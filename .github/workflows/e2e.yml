@@ -1,14 +1,21 @@
 name: E2E (critical suites)
 
-# Two lanes, on purpose (WEB-CI-003):
+# Three lanes, on purpose (WEB-CI-003, WEB-CI-021):
 #
-#   1. `smoke`  — BLOCKING. A small critical-journey suite that must stay green.
-#                 No continue-on-error. This is the lane to add to the branch
-#                 ruleset's required status checks.
-#   2. `e2e`    — NON-BLOCKING quarantine. The broad suites, which carry a known
-#                 failure backlog (accessibility violations, PROD-A11Y-001).
-#                 Keeps producing signal + an uploaded report without freezing
-#                 merges while that backlog is worked down.
+#   1. `smoke`     — BLOCKING. A small critical-journey suite that must stay
+#                    green. No continue-on-error. This is the lane in the branch
+#                    ruleset's required status checks.
+#   2. `a11y-axe`  — BLOCKING. The axe describe block only. Promoted out of the
+#                    quarantine lane once its backlog reached zero: 20 failed /
+#                    28 passed at the start of the WEB-CI-021 work, 48 passed /
+#                    0 failed now. Axe is deterministic — it reads the rendered
+#                    DOM against fixed WCAG rules — so it can gate. The
+#                    keyboard, focus and heading-hierarchy blocks stay advisory
+#                    below, because their remaining failures have not been shown
+#                    to be real.
+#   3. `e2e`       — NON-BLOCKING quarantine. The rest of the broad suites,
+#                    which carry a known failure backlog. Keeps producing signal
+#                    + an uploaded report without freezing merges.
 #
 # Why a separate blocking lane instead of just un-quarantining the broad suites:
 # ~28% of the full Playwright run was failing, so making it required would block
@@ -77,6 +84,62 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  # WEB-CI-021 ACs 1 and 2. AC1 offered "remove continue-on-error, or split
+  # accessibility into its own blocking job"; this is the split, because the
+  # other blocks in that file are not ready and removing the flag wholesale
+  # would gate on failures nobody has confirmed are real.
+  #
+  # AC3 offered a failure baseline instead. Not needed: the axe block is at
+  # zero, and a ratchet over zero is just a gate with extra machinery.
+  #
+  # Real credentials, like `smoke` and unlike the quarantine lane. With
+  # placeholder creds the data-driven pages render error states, so the scan
+  # would pass by testing a different page than production serves.
+  a11y-axe:
+    name: Accessibility (axe, required)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+      VITE_SITE_URL: ${{ secrets.VITE_SITE_URL || 'https://desmoinesinsider.com' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium + system deps
+        run: npx playwright install --with-deps chromium
+
+      # One project on purpose. The same DOM scanned at two viewports finds the
+      # same violations, and doubling the runtime of a required gate buys
+      # nothing. Responsive a11y has its own block in the advisory lane.
+      - name: Run the axe accessibility block
+        run: >-
+          npx playwright test
+          tests/accessibility.spec.ts
+          -g "Automated Accessibility Testing with Axe"
+          --project=chromium-desktop
+
+      - name: Upload axe report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-a11y-axe-report
+          path: playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
+
   # QUARANTINE LANE — non-blocking by design. Do not add to required checks
   # until its backlog is worked down; see docs/E2E_TRIAGE.md for the current
   # pass rate and what is quarantined.
@@ -118,6 +181,7 @@ jobs:
           tests/mobile-responsive.spec.ts
           --project=chromium-desktop
           --project=mobile-chrome
+          --grep-invert "Automated Accessibility Testing with Axe"
 
       - name: Upload Playwright report
         if: always()
