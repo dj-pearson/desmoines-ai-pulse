@@ -122,6 +122,15 @@ jobs:
           VITE_SITE_URL: ${{ secrets.VITE_SITE_URL || 'https://desmoinesinsider.com' }}
         run: npm run build
 
+      # WEB-PERF-020 AC4. Runs after the build because it measures dist/. A
+      # RATCHET, not the 200 KB budget itself -- the critical path is 370 KB, so
+      # enforcing the goal outright would be red on day one, which is how the
+      # accessibility lane (WEB-CI-021) and the unit lane (WEB-CI-020) both
+      # ended up on continue-on-error. It fails on growth past the baseline and
+      # prints the distance to 200 KB every run so the goal stays visible.
+      - name: Critical-path JS budget
+        run: node scripts/check-bundle-budget.mjs
+
   # WEB-CI-023. `npm run type-check` above runs `tsc --noEmit` against the root
   # tsconfig, which is `"files": []` plus project references — so it compiles
   # ZERO files and has always exited 0. Two P1 crashes shipped straight through
