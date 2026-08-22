@@ -12,6 +12,10 @@ Started: 2026-06-12T01:18:32.104Z
 - **Repointing all child FKs generically** (merge/dedupe/delete-with-children): loop `pg_constraint` where `contype='f' AND confrelid=<table>::regclass AND array_length(conkey,1)=1` and the referenced col is `id`; `EXECUTE format('UPDATE public.%I SET %I=$1 WHERE %I=$2', child_table, child_col, child_col)`. Catch `unique_violation OR check_violation` and fall back to a ctid row-by-row move that DELETEs only the genuine collisions.
 - **Admin tabs:** add `{id,label,icon}` to `CONTENT_TABS` (AdminContent.tsx) or `SYSTEM_TABS` (AdminSystem.tsx) + render `{activeTab === "id" && <Panel/>}`. Panels: `useQuery` with `refetchInterval`, admin-gated by RLS `is_admin()` + `useAdminAuth()`.
 - **Favorites are NOT a `favorites` table** — event favorites live in `user_event_interactions (event_id, interaction_type='favorite')`.
+- **This environment HAS production database access.** `.env` carries `SUPABASE_DB_URL` and `psql` is on PATH. Multiple stories (WEB-QA-003, WEB-QA-020, WEB-CI-026, WEB-SEO-017) assert "this environment has no production DB access" and every one of them is wrong. Read freely; to test a change safely wrap it in `BEGIN; ... ROLLBACK;` and call the function through PostgREST afterwards to confirm the client-visible behaviour. Applying a migration to production is the OWNER'S call - ask first.
+- **`RETURNS TABLE(col, ...)` makes every listed column an OUT PARAMETER in scope for the whole PL/pgSQL body.** Any unqualified reference to that name inside the body - especially in a subquery against a table that has a column of the same name - raises 42702 "column reference is ambiguous". Always alias the table and qualify (`FROM ad_impressions ai WHERE ai.campaign_id = ...`). Do NOT reach for `#variable_conflict use_column`: it resolves the ambiguity silently and hides the next occurrence.
+- **Fixing one error reveals the next one; do not assume the story's recorded error is still the live error.** get_active_ads went PGRST203 (overload) -> 42702 (ambiguous column) once the overload was dropped. The event crawler went missing-secrets -> `temperature` kwarg -> 0-events-extracted, one per run. Re-measure against production before trusting any note, however recent.
+- **Uniform failure durations are a fingerprint.** Eight crawler runs at ~1m45s meant one early step, not flaky scraping. Conversely, do not read a job list's duration column without checking WHICH job failed - the e2e ~30m entries were the quarantined suite being cancelled, while the required Smoke job had already failed at 3m06s.
 - **`gh` resolves to the WRONG repo by default.** Two remotes: origin `dj-pearson/desmoines-ai-pulse` (real) and upstream `dj-pearson/blank-canvas-events`. A bare `gh` command answers about UPSTREAM - it reports 1 workflow instead of 22 and no runs since 2025-11-11, which reads exactly like "CI is dead" and is not. Run `gh repo set-default dj-pearson/desmoines-ai-pulse` (git-config-local, does not survive a fresh clone) or always pass `-R`. Distrust any prior story note sourced from a bare gh call.
 - **GitHub Actions secrets are split across two scopes.** Repository secrets hold the VITE_*/mobile-signing set; `ANTHROPIC_API_KEY` and `SUPABASE_SERVICE_ROLE_KEY` live ONLY in the **`Scrape` environment**. A job that does not declare `environment: Scrape` gets the empty string for those two, with no warning - the job just fails downstream. Check with `gh api repos/OWNER/REPO/environments/Scrape/secrets`. `EDGE_FUNCTION_API_KEY` and `CLOUDFLARE_DEPLOY_HOOK_URL` exist in NEITHER scope.
 - **Lint:** `npm run lint` (`eslint .`) exits 1 due to a PRE-EXISTING parser false-positive at `src/components/media/VideoPlayer.tsx:587` (',' expected) — tsc accepts the file; it predates these stories. Verify YOUR files with targeted `npx eslint <files>` (warnings like no-console are allowed across the repo; only 0 errors matter).
@@ -188,4 +192,26 @@ Evidence:
 - Secret existence is not secret reachability. `gh secret list` showed SUPABASE_URL present and looked fine; the two keys that mattered were invisible to that command because they are environment secrets. Always check `gh api repos/.../environments/<name>/secrets` too.
 - Before adding `environment:` to a job, check `protection_rules` and `deployment_branch_policy` on that environment. Scrape has neither, so it adds no approval gate - an environment with required reviewers would silently park every scheduled run in a pending approval instead.
 - Next: WEB-SEO-017 AC2 cannot fully pass until CLOUDFLARE_DEPLOY_HOOK_URL exists (publish-freshness warns and exits 0 without it, so a successful crawl still reaches no crawler). WEB-CI-025 AC4 needs a throwaway PR to confirm the check reports. Both need a human.
+---
+
+## 2026-08-22 (2) - WEB-CI-026 + corrections to WEB-QA-003 / WEB-QA-020
+The required smoke gate was red for one reason, and it was not the one the story guessed.
+
+Files changed:
+- supabase/migrations/20260822000001_fix_get_active_ads_ambiguous_campaign_id.sql - NEW. Aliases ad_impressions as ai in both frequency-cap subqueries and qualifies every column.
+- prd.json - WEB-CI-026 root cause + fix; WEB-QA-003 and WEB-QA-020 premises corrected; WEB-SEO-017 verification.
+- scripts/ralph/progress.txt - four new Codebase Patterns.
+
+Applied to production (owner-approved): 20260822000001, recorded in supabase_migrations.schema_migrations.
+
+Evidence:
+- Smoke job run 32190783843: 79 passed, 1 failed, 3m06s. Failing assertion tests/route-smoke.spec.ts:72. Console error: get_active_ads 42702 ambiguous campaign_id.
+- Cause: RETURNS TABLE(campaign_id uuid, ...) puts campaign_id in scope as an OUT parameter; both subqueries referenced it unqualified against ad_impressions.
+- Verified in a rolled-back transaction with all three argument shapes, then applied and re-verified through PostgREST as anon: all four placements return [] instead of 42702.
+- Migration state measured directly: 323 applied, 326 on disk, 2 genuinely pending (not the 8 WEB-QA-020 claims). Nothing applied-but-missing-from-disk.
+
+**Learnings for future iterations:** (patterns hoisted to Codebase Patterns above)
+- The canonical get_active_ads (enum signature, three params) is NOT defined in any migration in this repo - only the superseded TEXT overload is, in 20260227000000. It existed in the live database with no checked-in source. 20260822000001 now carries the full body, so the file and the database finally agree. Watch for other RPCs in the same state: `SELECT proname FROM pg_proc ...` against the live DB will find them, grep of supabase/migrations/ will not.
+- 20260817000002_close_unused_public_bucket.sql is pending and it TIGHTENS access (storage bucket user-uploads -> private). Its filename asserts the bucket is unused and that assertion is unverified. Audit readers before applying it; it is the one pending migration that can actually break something.
+- The event crawler's remaining problem is extraction quality, not plumbing: it now calls the API successfully and Claude returns an empty array from ~429k characters of the events page. Worth its own story - likely JS-rendered markup or a prompt that no longer matches the page structure.
 ---
