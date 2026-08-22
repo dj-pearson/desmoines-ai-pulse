@@ -114,31 +114,61 @@ final class CertificatePinningService: NSObject, URLSessionDelegate {
             return
         }
 
-        // Check if any certificate in the chain matches our pinned SPKI hashes
-        var matched = false
-
         let certificateChain = SecTrustCopyCertificateChain(serverTrust) as? [SecCertificate] ?? []
-        for certificate in certificateChain {
 
-            if let spkiHash = spkiSHA256Hash(of: certificate) {
-                if pinnedSPKIHashes.contains(spkiHash) {
-                    matched = true
-                    break
-                }
+        switch decide(host: host, certificateChain: certificateChain, reportOnly: reportOnly) {
+        case .notAPinnedHost:
+            // Unreachable: the pinnedDomains guard above already returned. Kept
+            // exhaustive so adding a case is a compile error, not a silent allow.
+            completionHandler(.performDefaultHandling, nil)
+        case .pinMatched:
+            completionHandler(.useCredential, URLCredential(trust: serverTrust))
+        case .mismatchAllowedReportOnly:
+            AppLogger.network.warning("Certificate pinning mismatch for \(host) (report-only mode, connection allowed)")
+            completionHandler(.useCredential, URLCredential(trust: serverTrust))
+        case .mismatchBlocked:
+            AppLogger.network.error("Certificate pinning failed for \(host) - connection blocked")
+            completionHandler(.cancelAuthenticationChallenge, nil)
+        }
+    }
+
+    // MARK: - Decision (testable seam)
+
+    /// The outcome of the pin check for one connection.
+    ///
+    /// Split out of `urlSession(_:didReceive:completionHandler:)` because that
+    /// method cannot be driven from a unit test: `URLAuthenticationChallenge`
+    /// needs a `URLProtectionSpace` carrying a `SecTrust`, and no public
+    /// initializer attaches one. Without this seam, ACs 2 and 3 of
+    /// IOS-AUDIT-SEC-001 - reject a non-pinned cert when enforcing, allow and
+    /// log it when report-only - can only be checked by pointing a real device
+    /// at a MITM proxy, which is why they sat unverified.
+    enum PinDecision: Equatable {
+        case notAPinnedHost
+        case pinMatched
+        case mismatchAllowedReportOnly
+        case mismatchBlocked
+    }
+
+    /// True when this service pins connections to `host`.
+    func pins(host: String) -> Bool {
+        pinnedDomains.contains(where: { host.hasSuffix($0) })
+    }
+
+    /// The pin decision for an already trust-validated certificate chain.
+    ///
+    /// `reportOnly` is a parameter rather than a read of the `reportOnly`
+    /// property so a test can exercise both modes without a Release build.
+    func decide(host: String, certificateChain: [SecCertificate], reportOnly: Bool) -> PinDecision {
+        guard pins(host: host) else { return .notAPinnedHost }
+
+        for certificate in certificateChain {
+            if let spkiHash = spkiSHA256Hash(of: certificate), pinnedSPKIHashes.contains(spkiHash) {
+                return .pinMatched
             }
         }
 
-        if matched {
-            completionHandler(.useCredential, URLCredential(trust: serverTrust))
-        } else if reportOnly {
-            // In debug mode, log the mismatch but allow the connection
-            AppLogger.network.warning("Certificate pinning mismatch for \(host) (report-only mode, connection allowed)")
-            completionHandler(.useCredential, URLCredential(trust: serverTrust))
-        } else {
-            // In production, block the connection
-            AppLogger.network.error("Certificate pinning failed for \(host) — connection blocked")
-            completionHandler(.cancelAuthenticationChallenge, nil)
-        }
+        return reportOnly ? .mismatchAllowedReportOnly : .mismatchBlocked
     }
 
     // MARK: - SPKI Hash Extraction
@@ -197,7 +227,10 @@ final class CertificatePinningService: NSObject, URLSessionDelegate {
     }
 
     /// Computes the base64 SHA-256 of a certificate's DER-encoded SubjectPublicKeyInfo.
-    private func spkiSHA256Hash(of certificate: SecCertificate) -> String? {
+    /// Internal rather than private so CertificatePinningTests can assert the
+    /// header reconstruction below against real certificates. It is the part
+    /// most likely to be silently wrong, and a wrong hash matches nothing.
+    func spkiSHA256Hash(of certificate: SecCertificate) -> String? {
         guard let publicKey = SecCertificateCopyKey(certificate) else { return nil }
 
         var error: Unmanaged<CFError>?
