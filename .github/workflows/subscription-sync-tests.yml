@@ -84,6 +84,9 @@ jobs:
       - run: deno test --allow-read supabase/functions/_tests/trial-notice.test.ts
       # A bucket created public must say why. Public means anonymous GET on a
       # guessable path with no expiry (WEB-LEGAL-007).
+      # WEB-BE-030 AC4. Asserts the UNIQUE constraint that makes the guard real,
+      # and that both webhooks read the lookup error instead of only its data.
+      - run: deno test --allow-read supabase/functions/_tests/billing-webhook-idempotency.test.ts
       - run: deno test --allow-read supabase/functions/_tests/storage-bucket-posture.test.ts
       - run: deno test supabase/functions/_shared/jsonLdEvents.test.ts
       # IndexNow payload filtering plus the key-file/constant drift check
