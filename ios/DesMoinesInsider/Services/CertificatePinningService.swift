@@ -55,6 +55,11 @@ final class CertificatePinningService: NSObject, URLSessionDelegate {
     /// NOT be the only pin — it is here to tighten the common case, while WE1
     /// carries continuity across leaf reissues.
     ///
+    /// RE-VERIFIED 2026-08-23: all three pins still present in the live chain.
+    /// `scripts/verify-cert-pins.sh` now checks this rather than only printing
+    /// it, and runs in iOS CI, so drift fails a build instead of waiting to be
+    /// noticed. Rotation procedure: docs/CERT_PIN_ROTATION.md.
+    ///
     /// BEFORE FLIPPING `Config.certificatePinningEnforced` (IOS-AUDIT-SEC-013):
     /// re-run the verify script, confirm the leaf hash below still matches or
     /// update it, and confirm at least two pins in this set are present in the
@@ -125,9 +130,11 @@ final class CertificatePinningService: NSObject, URLSessionDelegate {
             completionHandler(.useCredential, URLCredential(trust: serverTrust))
         case .mismatchAllowedReportOnly:
             AppLogger.network.warning("Certificate pinning mismatch for \(host) (report-only mode, connection allowed)")
+            noteMismatch(host: host, blocked: false)
             completionHandler(.useCredential, URLCredential(trust: serverTrust))
         case .mismatchBlocked:
             AppLogger.network.error("Certificate pinning failed for \(host) - connection blocked")
+            noteMismatch(host: host, blocked: true)
             completionHandler(.cancelAuthenticationChallenge, nil)
         }
     }
@@ -169,6 +176,64 @@ final class CertificatePinningService: NSObject, URLSessionDelegate {
         }
 
         return reportOnly ? .mismatchAllowedReportOnly : .mismatchBlocked
+    }
+
+    // MARK: - Mismatch telemetry (IOS-AUDIT-SEC-013 AC4)
+
+    /// Hosts already reported this process run.
+    ///
+    /// A mismatch does not happen once. It happens on every request for as long
+    /// as the bad chain is presented, which on a busy screen is dozens per
+    /// minute -- and `log-error` is rate-limited to 60/minute per IP, so an
+    /// unthrottled reporter would spend the whole budget on one device and
+    /// starve the crash uploads sharing it. One report per host per run is
+    /// enough to answer the only question the report-only window asks: is any
+    /// real user seeing a chain we do not pin.
+    private let mismatchLock = NSLock()
+    private var reportedMismatchHosts: Set<String> = []
+
+    /// Send one pin mismatch to the backend error sink.
+    ///
+    /// This is the AC4 requirement, and it is what makes flipping enforcement
+    /// (AC2) a decision with evidence rather than a guess: while report-only,
+    /// every mismatch a real device sees lands in `error_events` under
+    /// component `ios-cert-pin`. A window with zero of them is the argument for
+    /// enforcing; a window with any is the reason not to, and names the host.
+    ///
+    /// Deliberately carries no certificate material. The host and whether the
+    /// connection was blocked are what a decision needs; a chain dump would be
+    /// unique per connection, which would give every report its own cluster
+    /// signature and make the count unreadable.
+    func noteMismatch(host: String, blocked: Bool) {
+        mismatchLock.lock()
+        let isFirst = reportedMismatchHosts.insert(host).inserted
+        mismatchLock.unlock()
+        guard isFirst else { return }
+
+        Task.detached {
+            _ = await ErrorSink.send(
+                message: "Certificate pin mismatch for \(host)",
+                component: "ios-cert-pin",
+                action: blocked ? "blocked" : "report_only",
+                route: "ios/\(Config.appVersion)",
+                severity: blocked ? "critical" : "warning"
+            )
+        }
+    }
+
+    /// Whether `host` has already been reported this run. Exposed for tests --
+    /// the throttle is the part that silently stops reporting if it is wrong.
+    func hasReportedMismatch(host: String) -> Bool {
+        mismatchLock.lock()
+        defer { mismatchLock.unlock() }
+        return reportedMismatchHosts.contains(host)
+    }
+
+    /// Clear the throttle. Tests only.
+    func resetMismatchThrottle() {
+        mismatchLock.lock()
+        reportedMismatchHosts.removeAll()
+        mismatchLock.unlock()
     }
 
     // MARK: - SPKI Hash Extraction

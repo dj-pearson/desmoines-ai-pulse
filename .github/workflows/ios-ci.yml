@@ -370,3 +370,12 @@ jobs:
             exit 1
           fi
           echo "✅ Configuration validation passed"
+
+      # IOS-AUDIT-SEC-013 AC5: certificate pins are the one thing in this app
+      # that can take every installed binary offline with no server-side remedy,
+      # and they drift on their own schedule - the Supabase leaf reissues about
+      # every 90 days. This fails when fewer than two declared pins appear in
+      # the live chain, which is the point at which one more rotation would lock
+      # out every enforcing client. See docs/CERT_PIN_ROTATION.md.
+      - name: Verify certificate pins against the live host
+        run: bash scripts/verify-cert-pins.sh

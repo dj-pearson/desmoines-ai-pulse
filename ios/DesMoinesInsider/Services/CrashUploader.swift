@@ -34,9 +34,6 @@ enum CrashUploader {
     /// the remainder is not dropped, it waits for the next launch.
     static let maxPerLaunch = 20
 
-    /// Endpoint path on the Supabase functions host.
-    static let functionPath = "/functions/v1/log-error"
-
     // MARK: - Payload (pure, and the part under test)
 
     /// The JSON body posted for one record.
@@ -108,15 +105,14 @@ enum CrashUploader {
     /// it. Safe to call on every launch; a no-op when unconfigured or empty.
     @MainActor
     static func uploadPending() async {
-        guard let base = Config.supabaseURL, let anonKey = Config.supabaseAnonKey else { return }
-        guard let endpoint = URL(string: base.absoluteString + functionPath) else { return }
+        guard Config.isConfigured else { return }
 
         let records = CrashReportingService.shared.pendingRecords()
         guard !records.isEmpty else { return }
 
         var uploaded = 0
         for record in records.prefix(maxPerLaunch) {
-            guard await post(payload(for: record), to: endpoint, anonKey: anonKey) else {
+            guard await post(payload(for: record)) else {
                 // One failure almost always means the network is down, not that
                 // this record is bad. Stop rather than burn the rest against it.
                 break
@@ -130,22 +126,15 @@ enum CrashUploader {
         }
     }
 
-    /// Returns whether the sink accepted the record.
-    private static func post(_ body: [String: String], to endpoint: URL, anonKey: String) async -> Bool {
-        var request = URLRequest(url: endpoint)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 15
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(anonKey, forHTTPHeaderField: "apikey")
-        request.setValue("Bearer \(anonKey)", forHTTPHeaderField: "Authorization")
-
-        do {
-            request.httpBody = try JSONSerialization.data(withJSONObject: body)
-            let (_, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse else { return false }
-            return (200...299).contains(http.statusCode)
-        } catch {
-            return false
-        }
+    /// Returns whether the sink accepted the record. The HTTP itself lives
+    /// in ErrorSink, which pin-mismatch reporting shares (IOS-AUDIT-SEC-013).
+    private static func post(_ body: [String: String]) async -> Bool {
+        await ErrorSink.send(
+            message: body["message"] ?? "",
+            component: body["component"] ?? "",
+            action: body["action"] ?? "",
+            route: body["route"] ?? "",
+            severity: body["severity"] ?? "error"
+        )
     }
 }

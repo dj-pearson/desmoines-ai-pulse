@@ -198,4 +198,44 @@ final class CertificatePinningTests: XCTestCase {
             .mismatchBlocked
         )
     }
+
+    // MARK: - Mismatch telemetry throttle (IOS-AUDIT-SEC-013 AC4)
+
+    func testMismatchIsReportedOncePerHostPerRun() {
+        let service = CertificatePinningService.shared
+        service.resetMismatchThrottle()
+        defer { service.resetMismatchThrottle() }
+
+        XCTAssertFalse(service.hasReportedMismatch(host: "a.supabase.co"))
+        service.noteMismatch(host: "a.supabase.co", blocked: false)
+        XCTAssertTrue(service.hasReportedMismatch(host: "a.supabase.co"))
+
+        // The point of the throttle: a mismatch repeats on every request, and
+        // the sink is rate-limited to 60/minute per IP shared with crash
+        // uploads. A second call must not queue a second report.
+        service.noteMismatch(host: "a.supabase.co", blocked: true)
+        XCTAssertTrue(service.hasReportedMismatch(host: "a.supabase.co"))
+    }
+
+    func testThrottleIsPerHostNotGlobal() {
+        let service = CertificatePinningService.shared
+        service.resetMismatchThrottle()
+        defer { service.resetMismatchThrottle() }
+
+        service.noteMismatch(host: "a.supabase.co", blocked: false)
+        // A second host being silently swallowed would hide the case that
+        // matters most - a mismatch appearing on a host we did not expect.
+        XCTAssertFalse(service.hasReportedMismatch(host: "b.supabase.co"))
+        service.noteMismatch(host: "b.supabase.co", blocked: false)
+        XCTAssertTrue(service.hasReportedMismatch(host: "b.supabase.co"))
+    }
+
+    func testResetClearsEveryHost() {
+        let service = CertificatePinningService.shared
+        service.noteMismatch(host: "a.supabase.co", blocked: false)
+        service.noteMismatch(host: "b.supabase.co", blocked: false)
+        service.resetMismatchThrottle()
+        XCTAssertFalse(service.hasReportedMismatch(host: "a.supabase.co"))
+        XCTAssertFalse(service.hasReportedMismatch(host: "b.supabase.co"))
+    }
 }
