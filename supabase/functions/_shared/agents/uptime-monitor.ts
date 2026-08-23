@@ -43,7 +43,26 @@ function buildTargets(): Target[] {
     .filter(Boolean);
   // Health probes must be non-mutating: OPTIONS preflight returns CORS headers
   // from handleCors before any auth/logic runs.
+  //
+  // WHICH IS ALSO THIS PROBE'S BLIND SPOT, and it is not theoretical. Measured
+  // against production on 2026-08-23:
+  //     OPTIONS /functions/v1/api-events  -> 204
+  //     GET     /functions/v1/api-events  -> 500 Internal server error
+  // The public events API had been answering 500 to every caller, and this
+  // monitor would have reported it healthy, because OPTIONS returns before any
+  // handler code runs. An OPTIONS probe detects a function that fails to BOOT
+  // or is missing; it cannot detect one that is broken INSIDE.
   const fns = (Deno.env.get("UPTIME_FUNCTIONS") || "agent-ops-digest,version-check")
+    .split(",")
+    .map((f) => f.trim())
+    .filter(Boolean);
+
+  // Opt-in GET probes for endpoints that are safe to actually call: read-only,
+  // no auth side effects, no spend. DELIBERATELY EMPTY BY DEFAULT - which
+  // function is safe to GET is an operator's judgement, not something this file
+  // should assume, and a wrong guess here means a monitor with side effects.
+  // api-events and api-restaurants are the obvious candidates.
+  const getFns = (Deno.env.get("UPTIME_FUNCTIONS_GET") || "")
     .split(",")
     .map((f) => f.trim())
     .filter(Boolean);
@@ -57,6 +76,13 @@ function buildTargets(): Target[] {
   if (supabaseUrl) {
     for (const fn of fns) {
       targets.push({ key: `fn:${fn}`, kind: "function", url: `${supabaseUrl}/functions/v1/${fn}`, method: "OPTIONS" });
+    }
+    // Keyed `fn-get:` rather than `fn:` on purpose: a function can legitimately
+    // be probed both ways, and the consecutive-failure counter is per target
+    // key. Sharing a key would let a healthy OPTIONS reset the GET streak and
+    // hide exactly the outage this exists to catch.
+    for (const fn of getFns) {
+      targets.push({ key: `fn-get:${fn}`, kind: "function", url: `${supabaseUrl}/functions/v1/${fn}`, method: "GET" });
     }
   }
   return targets;
