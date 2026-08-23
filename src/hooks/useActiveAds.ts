@@ -14,6 +14,21 @@ export interface ActiveAd {
   cta_text?: string;
 }
 
+/**
+ * Whether a creative has enough to draw. Mirrors Android's
+ * `CampaignAd.isRenderable` (data/model/CampaignAd.kt) so the three surfaces
+ * agree on what counts as an ad (XPLAT-005 AC2).
+ *
+ * Exported for the test, and because "what is renderable" is a rule worth
+ * having one definition of rather than three.
+ */
+export function isRenderable(ad: ActiveAd | null | undefined): ad is ActiveAd {
+  if (!ad?.campaign_id || !ad?.creative_id) return false;
+  const hasTitle = (ad.title ?? '').trim().length > 0;
+  const hasImage = (ad.image_url ?? '').trim().length > 0;
+  return hasTitle || hasImage;
+}
+
 // Campaign creatives change slowly relative to a page view — cache ~5 min
 // (WEB-FEAT-004) so browsing doesn't re-hit the RPC on every list render.
 const AD_STALE_TIME = 5 * 60 * 1000;
@@ -94,7 +109,20 @@ export function useActiveAds(placementType: AdPlacement) {
         });
         throw error;
       }
-      return (data?.[0] as ActiveAd | undefined) ?? null;
+      // Take the first RENDERABLE row, not the first row (XPLAT-005 AC2).
+      //
+      // Android has filtered on `isRenderable` since it shipped; web took
+      // data[0] unconditionally and iOS required only non-nil ids, so a
+      // creative with no title and no image rendered as an empty ad slot on
+      // two surfaces and was correctly skipped on the third. An empty slot is
+      // worse than no slot: it takes layout space, it is reported as an
+      // impression, and the advertiser is billed for it.
+      //
+      // Same rule as CampaignAd.isRenderable in Android: something to read or
+      // something to look at. Deliberately not "and" - a text-only creative is
+      // a legitimate ad.
+      const rows = (data ?? []) as ActiveAd[];
+      return rows.find(isRenderable) ?? null;
     },
     staleTime: AD_STALE_TIME,
   });
