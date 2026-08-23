@@ -72,15 +72,24 @@ Deno.serve(async (req) => {
     // ── 1. Credential stuffing (failed logins) ──────────────────────────────
     const { data: fails } = await supabase
       .from("login_attempts")
-      .select("email, ip_address")
-      .eq("success", false)
-      .gte("attempt_time", sinceIso)
+      // Real columns are client_ip and attempted_at; ip_address / attempt_time
+      // belong to failed_login_attempts, a SEPARATE table with 0 rows and no
+      // writer anywhere in the codebase. This query named one table and the
+      // other table's columns, so it 42703d and the credential-stuffing
+      // detector has never seen an attempt (WEB-QA-017).
+      //
+      // NO success FILTER, and its absence is the point rather than an
+      // omission: check-login-attempt INSERTs on record_failure and DELETEs
+      // the email's rows on record_success, so every row here is already a
+      // failure. There is no success column because success is not stored.
+      .select("email, client_ip")
+      .gte("attempted_at", sinceIso)
       .limit(5000);
 
     const byIp = new Map<string, number>();
     const byEmailIps = new Map<string, Set<string>>();
-    for (const r of (fails ?? []) as { email: string; ip_address: string | null }[]) {
-      const ip = r.ip_address ?? "unknown";
+    for (const r of (fails ?? []) as { email: string; client_ip: string | null }[]) {
+      const ip = r.client_ip ?? "unknown";
       byIp.set(ip, (byIp.get(ip) ?? 0) + 1);
       if (!byEmailIps.has(r.email)) byEmailIps.set(r.email, new Set());
       byEmailIps.get(r.email)!.add(ip);

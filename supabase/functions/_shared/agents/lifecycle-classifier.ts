@@ -57,12 +57,24 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   const since90 = new Date(now - 90 * DAY).toISOString();
 
   // Bulk-fetch activity signals (a few queries, aggregated in memory).
-  const [favs, revs, subs, logins, unsub] = await Promise.all([
+  const [favs, revs, subs, unsub] = await Promise.all([
     supabase.from("content_favorites").select("user_id, created_at").in("user_id", userIds).gte("created_at", since90),
     supabase.from("event_reviews").select("user_id, created_at").in("user_id", userIds).gte("created_at", since90),
     supabase.from("user_subscriptions").select("user_id, status").in("user_id", userIds),
-    supabase.from("login_attempts").select("email, attempt_time, success").in("email", emails).eq("success", true).gte("attempt_time", since90),
-    supabase.from("newsletter_subscribers").select("email, status").in("email", emails),
+    // LOGIN REMOVED AS AN ACTIVITY SIGNAL (WEB-QA-017). It asked
+    // login_attempts for successful logins, and that table NEVER HOLDS ONE:
+    // check-login-attempt inserts on record_failure and DELETES the email's
+    // rows on record_success, so a success is recorded by absence. The
+    // columns it named (attempt_time, success) belong to
+    // failed_login_attempts, a separate table with 0 rows and no writer.
+    //
+    // RENAMING THE COLUMNS WOULD HAVE BEEN THE WRONG FIX. The query 42703s
+    // today, so the signal contributes nothing; pointed at the real columns
+    // it would contribute the time of the last FAILED login as evidence of
+    // activity, which is worse than contributing nothing. The other four
+    // signals - favourites, reviews, subscriptions, newsletter - are
+    // unaffected. A real last-login needs a source that does not exist yet.
+        supabase.from("newsletter_subscribers").select("email, status").in("email", emails),
   ]);
 
   const lastActiveByUser = new Map<string, number>();
@@ -76,11 +88,6 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   for (const r of (revs.data ?? []) as { user_id: string; created_at: string }[]) bump(r.user_id, r.created_at, false);
   const subByUser = new Map<string, string>();
   for (const s of (subs.data ?? []) as { user_id: string; status: string }[]) subByUser.set(s.user_id, s.status);
-  const loginByEmail = new Map<string, number>();
-  for (const l of (logins.data ?? []) as { email: string; attempt_time: string }[]) {
-    const t = new Date(l.attempt_time).getTime();
-    if (!Number.isNaN(t)) loginByEmail.set(l.email, Math.max(loginByEmail.get(l.email) ?? 0, t));
-  }
   const unsubByEmail = new Map<string, string>();
   for (const u of (unsub.data ?? []) as { email: string; status: string }[]) unsubByEmail.set(u.email, u.status);
 
@@ -88,10 +95,7 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   const historyRows: Record<string, unknown>[] = [];
   for (const p of rows) {
     const signupT = new Date(p.created_at).getTime();
-    const lastActivity = Math.max(
-      lastActiveByUser.get(p.user_id) ?? 0,
-      p.email ? loginByEmail.get(p.email) ?? 0 : 0,
-    );
+    const lastActivity = lastActiveByUser.get(p.user_id) ?? 0;
     const commPref = (p.communication_preferences ?? {}) as { marketing?: boolean; email?: boolean };
     const messagingAllowed =
       (p.email ? unsubByEmail.get(p.email) !== "unsubscribed" : true) &&
