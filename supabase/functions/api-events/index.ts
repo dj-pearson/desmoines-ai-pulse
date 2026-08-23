@@ -47,10 +47,25 @@ serve(async (req) => {
   try {
     const url = new URL(req.url);
     const pathname = url.pathname;
+
+    // THE DETAIL BRANCH WAS UNREACHABLE. Routing tested
+    // `!pathname.includes("/events/")` for the list, and the request path is
+    // /api-events/<id> - which contains "-events/", never "/events/". So every
+    // request, id or not, fell into the list branch and /api-events/<id>
+    // returned a paginated list rather than one event. It was invisible
+    // because the list branch 500s on its own (see the select below), so both
+    // shapes failed identically.
+    //
+    // The trailing segment after the function name is the id, or nothing. That
+    // is the actual question, and it does not depend on a substring that a
+    // rename could break again.
+    const segments = pathname.split("/").filter(Boolean);
+    const fnIndex = segments.lastIndexOf("api-events");
+    const eventIdSegment = fnIndex === -1 ? undefined : segments[fnIndex + 1];
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // GET /api-events - List events
-    if (req.method === "GET" && !pathname.includes("/events/")) {
+    if (req.method === "GET" && !eventIdSegment) {
       // Validate query parameters
       const validationResult = validateQueryParams(url, {
         limit: { type: 'number', min: 1, max: 100, default: 20 },
@@ -168,9 +183,8 @@ serve(async (req) => {
     }
 
     // GET /api-events/{id} - Get event details
-    if (req.method === "GET" && pathname.includes("/")) {
-      const pathParts = pathname.split("/").filter(Boolean);
-      const eventId = pathParts[pathParts.length - 1];
+    if (req.method === "GET" && eventIdSegment) {
+      const eventId = eventIdSegment;
 
       const { data, error } = await supabase
         .from("events")
