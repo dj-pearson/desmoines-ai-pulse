@@ -130,23 +130,11 @@ actor HotelsService {
     // MARK: - Filter options
 
     /// Distinct neighborhoods/areas for active hotels (filter chips). Fails soft.
+    ///
+    /// Server-side since IOS-AUDIT-PERF-025. The is_active filter moved into
+    /// SQL with it, so the chip list cannot drift from the listing it filters.
     func fetchAreas() async -> [String] {
         guard let client = try? db() else { return [] }
-        struct AreaRow: Decodable { let area: String? }
-        do {
-            let rows: [AreaRow] = try await client
-                .from("hotels")
-                .select("area")
-                .eq("is_active", value: true)
-                .not("area", operator: .is, value: "null")
-                .execute()
-                .value
-            let areas = rows
-                .compactMap { $0.area?.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-            return Array(Set(areas)).sorted()
-        } catch {
-            return []
-        }
+        return (try? await FilterValues.fetch(source: .hotelArea, client: client)) ?? []
     }
 }
