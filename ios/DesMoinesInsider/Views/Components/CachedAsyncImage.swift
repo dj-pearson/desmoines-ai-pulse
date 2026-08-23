@@ -8,6 +8,33 @@ import ImageIO
 /// - Memory cache: 50 MB, instant (< 1 frame)
 /// - Disk cache: 200 MB, fast (1-2 frames)
 /// - Network: placeholder shown while loading
+/// The blur-up thumbnail used by CachedAsyncImage.
+///
+/// Lives outside the generic view so the detached decode task does not have
+/// to capture a `CachedAsyncImage<Placeholder>.Type` metatype, whose
+/// Sendability depends on the caller's Placeholder.
+enum BlurUpThumbnail {
+    /// Generate a tiny thumbnail for blur-up effect (12x12 then scaled up).
+    ///
+    /// `nonisolated` so it can run inside the detached decode task. Nothing
+    /// here touches view state - it takes a UIImage and returns a new one.
+    ///
+    /// WHAT THIS EFFECT ACTUALLY DOES TODAY, measured rather than assumed: the
+    /// thumbnail is derived from the fully decoded image, and `image` is
+    /// assigned a few statements later, so the blurred frame is on screen only
+    /// for the duration of the disk write between them. It is a flicker between
+    /// the spinner and the photo, not a progressive load. Deleting it outright
+    /// would be cheaper and probably look better, and that is a product call
+    /// rather than a performance one - see IOS-AUDIT-PERF-029.
+    static func make(from image: UIImage) -> UIImage? {
+        let size = CGSize(width: 12, height: 12)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: size))
+        }
+    }
+}
+
 struct CachedAsyncImage<Placeholder: View>: View {
     let url: String?
     /// When true (default), images are decoded at most to the device's native
@@ -123,13 +150,25 @@ struct CachedAsyncImage<Placeholder: View>: View {
             // the disk path already does — so a large first-load image doesn't
             // hitch scrolling on a cold cache (IOS-AUDIT-PERF-003).
             let maxPixelSize = maxPixels
-            let uiImage = await Task.detached(priority: .utility) {
-                ImageDownsampler.decode(data, maxPixelSize: maxPixelSize)
+            // The blur-up thumbnail is produced in the SAME detached task as
+            // the decode (IOS-AUDIT-PERF-029). It used to be built on the main
+            // actor, which put a UIGraphicsImageRenderer pass - a full render,
+            // not a copy - on the main thread for every first-time network
+            // load, i.e. once per image on a cold cache while the user is
+            // scrolling. It never needed to be there: it reads a UIImage and
+            // writes a new one, and UIGraphicsImageRenderer renders to a bitmap
+            // off-main safely.
+            let (uiImage, blurUp) = await Task.detached(priority: .utility) {
+                () -> (UIImage?, UIImage?) in
+                guard let decoded = ImageDownsampler.decode(data, maxPixelSize: maxPixelSize) else {
+                    return (nil, nil)
+                }
+                return (decoded, BlurUpThumbnail.make(from: decoded))
             }.value
             if let uiImage {
                 // Show tiny blurred thumbnail first for progressive feel
                 if thumbnail == nil {
-                    thumbnail = Self.generateThumbnail(from: uiImage)
+                    thumbnail = blurUp
                 }
 
                 ImageCache.shared.setMemory(uiImage, for: urlString, cost: uiImage.approxMemoryCost)
@@ -159,15 +198,6 @@ struct CachedAsyncImage<Placeholder: View>: View {
         }
 
         isLoading = false
-    }
-
-    /// Generate a tiny thumbnail for blur-up effect (12x12 then scaled up).
-    private static func generateThumbnail(from image: UIImage) -> UIImage? {
-        let size = CGSize(width: 12, height: 12)
-        let renderer = UIGraphicsImageRenderer(size: size)
-        return renderer.image { _ in
-            image.draw(in: CGRect(origin: .zero, size: size))
-        }
     }
 
     /// Extract max-age from Cache-Control header, default to 7 days.
