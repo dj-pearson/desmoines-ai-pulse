@@ -1,3 +1,4 @@
+import { LucideSprite } from "@/components/ui/icon-sprite.generated";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -376,6 +377,9 @@ const KeyboardShortcutsProvider = ({ children }: { children: React.ReactNode }) 
 
 const App = () => (
   <AccessibilityProvider>
+  {/* Defines the <symbol> set every <SpriteIcon /> references. Rendered
+      once, before anything that uses it (WEB-PERF-023). */}
+  <LucideSprite />
   <TooltipProvider>
     <BrowserRouter>
       <ScrollRestoration />
