@@ -17,15 +17,25 @@ struct EventDetailView: View {
         storeKit.currentTier == .insider || storeKit.currentTier == .vip
     }
 
+    /// The event actually rendered.
+    ///
+    /// Every subview below used to read the passed-in `event` directly, so the
+    /// view model's own `event` - which loadEvent has always set - was written
+    /// and never read by anything on screen. Refreshing it changed nothing.
+    /// Reading through the view model here is what makes the background refresh
+    /// visible; the passed-in row is the value until that returns
+    /// (IOS-AUDIT-UX-058).
+    private var displayEvent: Event { viewModel.event ?? event }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                EventDetailHeader(event: event, onImageTap: { showImageViewer = true })
+                EventDetailHeader(event: displayEvent, onImageTap: { showImageViewer = true })
 
-                EventDetailInfo(event: event)
+                EventDetailInfo(event: displayEvent)
 
                 EventDetailActions(
-                    event: event,
+                    event: displayEvent,
                     hasPremiumAccess: hasPremiumAccess,
                     calendarAdded: viewModel.calendarAdded,
                     isReminderSet: notifications.isReminderSet(for: event.id),
@@ -35,7 +45,7 @@ struct EventDetailView: View {
                 )
 
                 EventDetailInsiderTips(
-                    event: event,
+                    event: displayEvent,
                     hasPremiumAccess: hasPremiumAccess,
                     currentTier: storeKit.currentTier,
                     onShowSubscription: { showSubscription = true }
@@ -46,7 +56,7 @@ struct EventDetailView: View {
                 // checkout in Safari, NOT StoreKit (see PromoteListing.swift).
                 if auth.isAdmin {
                     PromoteListingButton(
-                        listing: .event(id: event.id, name: event.title),
+                        listing: .event(id: event.id, name: displayEvent.title),
                         style: .inline
                     )
                     .padding(.horizontal)
@@ -98,9 +108,9 @@ struct EventDetailView: View {
         }
         .fullScreenCover(isPresented: $showImageViewer) {
             FullScreenImageViewer(
-                imageUrl: event.imageUrl,
+                imageUrl: displayEvent.imageUrl,
                 isPresented: $showImageViewer,
-                accessibilityDescription: "Photo of \(event.title)",
+                accessibilityDescription: "Photo of \(displayEvent.title)",
             )
         }
         .sheet(isPresented: $showSubscription) {
@@ -110,7 +120,7 @@ struct EventDetailView: View {
             await viewModel.loadEvent(event)
             // IOS-PARITY-007 — feed the Dashboard "Jump back in" rail.
             RecentlyViewedService.shared.record(
-                type: "event", id: event.id, title: event.title, imageUrl: event.imageUrl
+                type: "event", id: event.id, title: displayEvent.title, imageUrl: displayEvent.imageUrl
             )
         }
     }

@@ -10,6 +10,12 @@ final class EventDetailViewModel {
     private(set) var isLoading = false
     private(set) var errorMessage: String?
 
+    /// A background re-fetch is running behind content that is already on
+    /// screen. Distinct from isLoading, which means "there is nothing to show
+    /// yet" - conflating the two is what made the prefetched path raise a
+    /// loading flag for work the user was not waiting on (IOS-AUDIT-UX-058).
+    private(set) var isRefreshing = false
+
     private let service = EventsService.shared
     private let favorites = FavoritesService.shared
 
@@ -31,20 +37,49 @@ final class EventDetailViewModel {
         isLoading = false
     }
 
-    /// Load from a pre-fetched event (avoids re-fetch when navigating from list).
+    /// Show a pre-fetched event immediately, then refresh it behind the scenes.
+    ///
+    /// The prefetched row is whatever the list had, which may have come from
+    /// the on-disk query cache and be as old as its TTL. This used to be the
+    /// end of it: the event was displayed and never re-read, so a listing whose
+    /// time, venue or price had changed since the list was cached showed the
+    /// old values indefinitely.
+    ///
+    /// isLoading is deliberately NOT raised here. There is already something on
+    /// screen; a loading flag would describe work the user is not waiting for.
     func loadEvent(_ prefetched: Event) async {
         event = prefetched
-        isLoading = true
 
+        async let related: Void = loadRelated(id: prefetched.id, category: prefetched.category)
+        async let refreshed: Void = refreshFromServer(id: prefetched.id)
+        _ = await (related, refreshed)
+    }
+
+    private func loadRelated(id: String, category: String?) async {
+        guard let category else { return }
         do {
-            if let category = prefetched.category {
-                relatedEvents = try await service.fetchRelatedEvents(eventId: prefetched.id, category: category)
-            }
+            relatedEvents = try await service.fetchRelatedEvents(eventId: id, category: category)
         } catch {
             relatedEvents = []
         }
+    }
 
-        isLoading = false
+    /// Re-read the full row and swap it in only if it actually differs.
+    ///
+    /// The equality check is what keeps AC3 honest: assigning an identical
+    /// Event would invalidate every view reading it for no visible reason, and
+    /// the common case is that nothing changed.
+    ///
+    /// A failure is silent on purpose. The user is looking at a complete event
+    /// already; an error banner over working content would be worse than the
+    /// stale field it is warning about.
+    private func refreshFromServer(id: String) async {
+        isRefreshing = true
+        defer { isRefreshing = false }
+
+        guard let fresh = try? await service.fetchEvent(id: id) else { return }
+        guard fresh != event else { return }
+        event = fresh
     }
 
     // MARK: - Favorites
