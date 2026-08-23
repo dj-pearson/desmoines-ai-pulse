@@ -62,7 +62,17 @@ const failures = [];
 // Only <script> elements with a src. A string inside the inline loader is the
 // dynamic path and is the whole point.
 for (const tag of html.match(/<script\b[^>]*>/gi) ?? []) {
-  if (/\bsrc\s*=/.test(tag) && /\bsrc\s*=\s*["'](?:https?:)?\/\/(?:www\.)?googletagmanager\.com(?:[\/"'?#]|$)/i.test(tag)) {
+  // Two conditions, and the second is the load-bearing one. The anchored regex
+  // is what CodeQL asks for and matches the ordinary shape. The plain substring
+  // test is what keeps this a DENY guard: a tag that reaches gtag.js by another
+  // route - a proxy path, a query parameter, a protocol-relative redirect -
+  // still discloses the visitor to Google, and an anchored host match alone
+  // would wave it through. Narrowing a rule that exists to CATCH something is
+  // not the same as narrowing one that exists to permit it.
+  const anchoredHost =
+    /\bsrc\s*=\s*["'](?:https?:)?\/\/(?:www\.)?googletagmanager\.com(?:[\/"'?#]|$)/i.test(tag);
+  const mentionsHost = tag.toLowerCase().includes('googletagmanager');
+  if (/\bsrc\s*=/.test(tag) && (anchoredHost || mentionsHost)) {
     failures.push(
       'index.html loads googletagmanager.com from a <script src> tag. The request ' +
         'itself is a disclosure to Google, so it must not be made until consent is ' +

@@ -310,7 +310,12 @@ jobs:
       # Same job as the unit tests on purpose: the simulator is already booted
       # and the SPM cache is warm, so this costs a UI-test build rather than a
       # whole extra job.
+      # Bounded so a hung UI test fails this step instead of eating the job's
+      # 30 minutes and taking the already-passed unit-test result down with it.
+      # A UI test that waits on an element which never appears does not fail on
+      # its own - it waits until something outside kills it.
       - name: Run UI tests
+        timeout-minutes: 12
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
           set -o pipefail
