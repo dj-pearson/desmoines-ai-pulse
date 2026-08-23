@@ -76,17 +76,25 @@ Deno.serve(async (req) => {
     }
 
     // Upcoming highlights (fetched once) for "what you missed / what's next".
-    const { data: evs } = await supabase
+    const { data: evs, error: evsError } = await supabase
       .from("events").select("id, title, date, city").gte("date", new Date(now).toISOString()).is("archived_at", null).order("date", { ascending: true }).limit(5);
+    // Best-effort: the email falls back to a generic "see what is happening"
+    // link when there are no highlights, so a failed read costs personalisation
+    // and not the send (WEB-BE-032 AC3).
+    if (evsError) console.warn(`[dormant-reengagement] highlights read failed: ${evsError.message}`);
     const highlights = (evs ?? []) as { id: string; title: string | null; date: string; city: string | null }[];
 
-    const { data: profiles } = await supabase
+    const { data: profiles, error: profilesError } = await supabase
       .from("profiles")
       .select("user_id, email, lifecycle_signals, reengage_suppressed_at")
       .eq("lifecycle_stage", "dormant")
       .is("reengage_suppressed_at", null)
       .not("email", "is", null)
       .limit(BATCH);
+    // Candidate list. A dropped error empties it and the run reports "0 sent" as
+    // a SUCCESS, which is indistinguishable from having no dormant users - the
+    // way a scheduled job dies unnoticed (WEB-BE-032 AC2).
+    if (profilesError) throw new Error(`dormant profiles read failed: ${profilesError.message}`);
     const rows = (profiles ?? []) as { user_id: string; email: string; lifecycle_signals: { messagingAllowed?: boolean } | null }[];
 
     let sent = 0, coordSkipped = 0, capped = 0, agedOut = 0, gated = 0, noConsent = 0;
@@ -105,7 +113,14 @@ Deno.serve(async (req) => {
       if (await recentlyMessaged(supabase, p.user_id, COORD_WINDOW_DAYS)) { coordSkipped++; continue; }
 
       // Re-engagement cadence.
-      const { data: last } = await supabase.from("nurture_sends").select("created_at").eq("user_id", p.user_id).eq("kind", KIND).order("created_at", { ascending: false }).limit(1);
+      const { data: last, error: lastError } = await supabase.from("nurture_sends").select("created_at").eq("user_id", p.user_id).eq("kind", KIND).order("created_at", { ascending: false }).limit(1);
+      // FAIL CLOSED. `last` empty reads as "never re-engaged", which sends - so a
+      // dropped error bypasses the re-engagement cadence for every dormant user in
+      // the sweep (WEB-BE-032 AC2).
+      if (lastError) {
+        console.warn(`[dormant-reengagement] cadence read failed for ${p.user_id}; suppressing: ${lastError.message}`);
+        capped++; continue;
+      }
       if (last?.[0] && now - new Date(last[0].created_at).getTime() < REENGAGE_GAP_DAYS * DAY) { capped++; continue; }
 
       const list = highlights.length
