@@ -1,6 +1,6 @@
 {
   "scope": "src + supabase/functions; data|count destructures; rule-scoped counting",
-  "total": 325,
+  "total": 316,
   "files": {
     "src/components/admin/AdRateManager.tsx": 1,
     "src/components/admin/BlockedEmailDomainsManager.tsx": 1,
@@ -132,7 +132,6 @@
     "supabase/functions/resend-webhook/index.ts": 1,
     "supabase/functions/restaurant-opening-scraper/index.ts": 1,
     "supabase/functions/run-scheduled-audit/index.ts": 3,
-    "supabase/functions/scrape-restaurant-menus/index.ts": 5,
     "supabase/functions/security-middleware/index.ts": 1,
     "supabase/functions/send-campaign-notification/index.ts": 2,
     "supabase/functions/send-event-reminders/index.ts": 1,
@@ -141,7 +140,6 @@
     "supabase/functions/stripe-webhook/index.ts": 3,
     "supabase/functions/subscription-lifecycle/index.ts": 1,
     "supabase/functions/support-chat/index.ts": 2,
-    "supabase/functions/support-console/index.ts": 4,
     "supabase/functions/support-csat-submit/index.ts": 1,
     "supabase/functions/support-kb-embed/index.ts": 1,
     "supabase/functions/support-ticket-reclassify/index.ts": 1,
