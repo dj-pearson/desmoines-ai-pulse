@@ -111,11 +111,21 @@ export const run: AgentRun = async (ctx, { supabase, body }) => {
 
   for (const t of rows) {
     // ── Thread state: only respond when the user spoke last (anti-ping-pong).
-    const { data: msgs } = await supabase
+    const { data: msgs, error: msgsError } = await supabase
       .from("support_messages")
       .select("sender, body, created_at")
       .eq("ticket_id", t.id)
       .order("created_at", { ascending: true });
+    // FAIL CLOSED. An empty thread makes `last` undefined, so the
+    // anti-ping-pong guard below (`last && last.sender === "agent"`) does not
+    // fire and agentReplies is 0, so the reply cap does not either - a
+    // dropped error makes the agent answer a ticket it has ALREADY answered,
+    // every run, which is the exact behaviour those two lines exist to stop
+    // (WEB-BE-032 AC2).
+    if (msgsError) {
+      console.warn(`[support-responder] thread read failed for ticket ${t.id}; skipping: ${msgsError.message}`);
+      skipped++; continue;
+    }
     const thread = (msgs ?? []) as { sender: string; body: string; created_at: string }[];
     const agentReplies = thread.filter((m) => m.sender === "agent").length;
     const last = thread[thread.length - 1];
