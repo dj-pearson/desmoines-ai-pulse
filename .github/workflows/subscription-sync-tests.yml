@@ -91,6 +91,11 @@ jobs:
       # crawled anyway. Found while drafting the Privacy Policy's sources section:
       # the ordinary reassurance would have been a false statement in it.
       - run: deno test --allow-read supabase/functions/_tests/robots.test.ts
+      # WEB-BE-032. The ops digest counted with `count ?? 0` and discarded the
+      # error, so a digest that could read nothing printed the same eleven
+      # zeros as a system with nothing wrong. Pins that an unreadable section
+      # never renders as a healthy one.
+      - run: deno test supabase/functions/_tests/digest-format.test.ts
       # Crisis floor on the public AI surfaces: pins the matcher in both
       # directions and asserts every surface short-circuits before the model
       # call, which is the whole design (WEB-LEGAL-005).
