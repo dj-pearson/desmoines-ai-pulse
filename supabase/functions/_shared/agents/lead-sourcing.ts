@@ -102,7 +102,13 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   const keys = [...new Set(candidates.map((c) => c.dedupe_key))];
   const existing = new Set<string>();
   for (let i = 0; i < keys.length; i += 200) {
-    const { data } = await supabase.from("prospect_leads").select("dedupe_key").in("dedupe_key", keys.slice(i, i + 200));
+    const { data, error } = await supabase.from("prospect_leads").select("dedupe_key").in("dedupe_key", keys.slice(i, i + 200));
+    // RAISE. `existing` is the entire dedupe: a dropped error leaves it empty,
+    // every candidate reads as new, and the insert below writes a duplicate
+    // prospect_leads row for every lead on every run. A partial dedupe set is
+    // worse than none, because the run reports the duplicates as new leads
+    // (WEB-BE-032 AC2).
+    if (error) throw new Error(`prospect_leads dedupe read failed: ${error.message}`);
     for (const d of (data ?? []) as { dedupe_key: string }[]) existing.add(d.dedupe_key);
   }
   const fresh: Lead[] = [];
