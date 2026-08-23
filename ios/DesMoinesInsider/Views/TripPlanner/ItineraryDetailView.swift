@@ -425,23 +425,52 @@ private struct TripMapPreview: View {
         .mapStyle(.standard)
         .allowsHitTesting(false)
         .accessibilityLabel("Map of \(markers.count) itinerary stops")
-        .task { await geocode() }
+        // Keyed on the stops. A bare `.task` re-runs on every appearance, so
+        // returning to an itinerary re-issued the whole batch (PERF-024).
+        .task(id: locations) { await geocode() }
     }
 
+    /// Stops geocoded per itinerary. CLGeocoder is rate-limited per app, so
+    /// this stays a cap rather than becoming "all of them".
+    private static let maxStops = 8
+
     private func geocode() async {
-        let geocoder = CLGeocoder()
-        // Cap to keep geocoding light and within rate limits.
-        let unique = Array(Set(locations)).prefix(8)
+        // Sorted, not just de-duplicated: Set iteration order varies per run,
+        // so which eight stops survived the cap - and therefore what the map
+        // framed - changed between appearances of the same itinerary.
+        let unique = Array(Set(locations)).sorted().prefix(Self.maxStops)
+
+        // Anything already resolved is painted before a single request goes
+        // out, so a revisit draws immediately instead of rebuilding the map
+        // marker by marker.
         var found: [GeocodedPlace] = []
+        var pending: [String] = []
         for location in unique {
-            let query = location.localizedCaseInsensitiveContains("Des Moines")
-                ? location
-                : "\(location), Des Moines, IA"
-            if let placemarks = try? await geocoder.geocodeAddressString(query),
-               let coord = placemarks.first?.location?.coordinate {
-                found.append(GeocodedPlace(name: location, coordinate: coord))
+            let query = TripGeocodeCache.normalizedQuery(for: location)
+            if let coordinate = TripGeocodeCache.cached(query) {
+                found.append(GeocodedPlace(name: location, coordinate: coordinate))
+            } else {
+                pending.append(location)
             }
         }
         markers = found
+        guard !pending.isEmpty else { return }
+
+        let geocoder = CLGeocoder()
+        for location in pending {
+            // `try?` swallows the CancellationError the geocoder throws, so
+            // without this the loop kept issuing requests for a screen the
+            // user had already left - the exact traffic the rate limit is
+            // counting.
+            guard !Task.isCancelled else { return }
+
+            let query = TripGeocodeCache.normalizedQuery(for: location)
+            guard let placemarks = try? await geocoder.geocodeAddressString(query),
+                  let coordinate = placemarks.first?.location?.coordinate else { continue }
+
+            TripGeocodeCache.store(coordinate, for: query)
+            found.append(GeocodedPlace(name: location, coordinate: coordinate))
+            markers = found
+        }
     }
 }
