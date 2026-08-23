@@ -2991,6 +2991,7 @@ export type Database = {
           content_type: string
           created_at: string | null
           id: string
+          priority: number
           rejection_reason: string | null
           reviewed_at: string | null
           reviewed_by: string | null
@@ -3007,6 +3008,7 @@ export type Database = {
           content_type: string
           created_at?: string | null
           id?: string
+          priority?: number
           rejection_reason?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -3023,6 +3025,7 @@ export type Database = {
           content_type?: string
           created_at?: string | null
           id?: string
+          priority?: number
           rejection_reason?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
