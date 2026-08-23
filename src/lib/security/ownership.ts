@@ -150,22 +150,43 @@ async function checkTeamAccess(
         return false;
       }
 
-      // Check if the campaign belongs to a team member's owner
+      // Check if the campaign belongs to a team member's owner.
+      //
+      // Both reads discarded their error. That direction is fail-CLOSED here -
+      // an unreadable row denies access, which is the right answer for an
+      // authorization check - but it was also SILENT, so a legitimate team
+      // member locked out by a transient read failure produced no signal
+      // anywhere and looked identical to someone who simply has no access.
+      // The verdict is unchanged; only the silence is.
       if (data && data.length > 0) {
-        const { data: campaign } = await supabase
+        const { data: campaign, error: campaignError } = await supabase
           .from('campaigns')
           .select('user_id')
           .eq('id', resourceId)
           .single();
 
+        if (campaignError && campaignError.code !== 'PGRST116') {
+          logger.error('checkTeamAccess', 'Could not read the campaign - denying access', {
+            resourceId,
+            error: String(campaignError),
+          });
+        }
+
         if (campaign) {
-          const { data: teamMembership } = await supabase
+          const { data: teamMembership, error: membershipError } = await supabase
             .from('campaign_team_members')
             .select('id')
             .eq('team_member_id', context.userId)
             .eq('campaign_owner_id', campaign.user_id)
             .eq('invitation_status', 'accepted')
             .single();
+
+          if (membershipError && membershipError.code !== 'PGRST116') {
+            logger.error('checkTeamAccess', 'Could not read team membership - denying access', {
+              resourceId,
+              error: String(membershipError),
+            });
+          }
 
           return !!teamMembership;
         }

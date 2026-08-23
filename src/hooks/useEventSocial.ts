@@ -71,7 +71,7 @@ export function useEventSocial(eventId: string) {
     
     try {
       // Fetch attendees
-      const { data: attendeesData } = await supabase
+      const { data: attendeesData, error: attendeesError } = await supabase
         .from('event_attendees')
         .select('*')
         .eq('event_id', eventId)
@@ -79,7 +79,7 @@ export function useEventSocial(eventId: string) {
         .order('created_at', { ascending: false });
 
       // Fetch discussions
-      const { data: discussionsData } = await supabase
+      const { data: discussionsData, error: discussionsError } = await supabase
         .from('event_discussions')
         .select('*')
         .eq('event_id', eventId)
@@ -87,15 +87,24 @@ export function useEventSocial(eventId: string) {
         .limit(50);
 
       // Fetch live stats
-      const { data: statsData } = await supabase
+      const { data: statsData, error: statsError } = await supabase
         .from('event_live_stats')
         .select('*')
         .eq('event_id', eventId)
         .maybeSingle();
 
-      // Check user's attendance status
+      // Check user's attendance status.
+      //
+      // THESE TWO ARE THE DANGEROUS ONES. Their results were destructured
+      // without `error`, so a failed read produced null and the setters below
+      // asserted "you are not attending" and "you are not checked in" to a user
+      // who might be both. The UI then offers to RSVP again and to check in
+      // again, and the user duplicates a row they already own. On a failed read
+      // the previous state is LEFT ALONE - not knowing is not the same as
+      // knowing the answer is no, and the list reads above can be blank without
+      // telling the user anything false about themselves.
       if (user) {
-        const { data: userAttendanceData } = await supabase
+        const { data: userAttendanceData, error: userAttendanceError } = await supabase
           .from('event_attendees')
           .select('status')
           .eq('event_id', eventId)
@@ -103,15 +112,42 @@ export function useEventSocial(eventId: string) {
           .maybeSingle();
 
         // Check if user is checked in
-        const { data: checkinData } = await supabase
+        const { data: checkinData, error: checkinError } = await supabase
           .from('event_checkins')
           .select('id')
           .eq('event_id', eventId)
           .eq('user_id', user.id)
           .maybeSingle();
 
-        setUserAttendanceStatus(userAttendanceData?.status || null);
-        setIsCheckedIn(!!checkinData);
+        if (userAttendanceError) {
+          logger.error('fetchEventSocialData', 'Could not read your attendance status', {
+            eventId,
+            error: userAttendanceError,
+          });
+        } else {
+          setUserAttendanceStatus(userAttendanceData?.status || null);
+        }
+
+        if (checkinError) {
+          logger.error('fetchEventSocialData', 'Could not read your check-in status', {
+            eventId,
+            error: checkinError,
+          });
+        } else {
+          setIsCheckedIn(!!checkinData);
+        }
+      }
+
+      // A blank list because the read failed and a blank list because nobody
+      // is going render identically. Logged so the difference exists somewhere.
+      if (attendeesError) {
+        logger.error('fetchEventSocialData', 'Could not read attendees', { eventId, error: attendeesError });
+      }
+      if (discussionsError) {
+        logger.error('fetchEventSocialData', 'Could not read discussions', { eventId, error: discussionsError });
+      }
+      if (statsError) {
+        logger.error('fetchEventSocialData', 'Could not read live stats', { eventId, error: statsError });
       }
 
       setAttendees((attendeesData || []).map(a => ({
