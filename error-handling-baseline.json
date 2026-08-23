@@ -1,6 +1,6 @@
 {
   "scope": "src + supabase/functions; data|count destructures; rule-scoped counting",
-  "total": 333,
+  "total": 325,
   "files": {
     "src/components/admin/AdRateManager.tsx": 1,
     "src/components/admin/BlockedEmailDomainsManager.tsx": 1,
@@ -147,7 +147,6 @@
     "supabase/functions/support-ticket-reclassify/index.ts": 1,
     "supabase/functions/triage-event-submission/index.ts": 2,
     "supabase/functions/_shared/agents/backup-verifier.ts": 1,
-    "supabase/functions/_shared/agents/churn-winback.ts": 4,
     "supabase/functions/_shared/agents/ci-health-watcher.ts": 1,
     "supabase/functions/_shared/agents/config-drift-auditor.ts": 1,
     "supabase/functions/_shared/agents/csat-agent.ts": 1,
@@ -159,7 +158,6 @@
     "supabase/functions/_shared/agents/edge-metrics-monitor.ts": 2,
     "supabase/functions/_shared/agents/fraud-abuse-detector.ts": 2,
     "supabase/functions/_shared/agents/lead-enrichment.ts": 4,
-    "supabase/functions/_shared/agents/lead-sourcing.ts": 4,
     "supabase/functions/_shared/agents/lifecycle-classifier.ts": 1,
     "supabase/functions/_shared/agents/link-content-monitor.ts": 2,
     "supabase/functions/_shared/agents/milestone-recognition.ts": 1,
