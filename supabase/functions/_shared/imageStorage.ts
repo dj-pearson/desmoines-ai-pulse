@@ -491,23 +491,36 @@ export async function fetchAndStoreImage(
     const mediaContentType = CONTENT_TYPE_MAP[category] || category;
 
     // Guard against re-running on the same record.
-    const { data: existing } = await supabase
+    //
+    // This and the two dedup passes below are IDEMPOTENCY reads: a dropped
+    // error reads as "not stored yet" and the image is downloaded and written
+    // again. The cost is duplicate bytes and a duplicate media_assets row, not
+    // a wrong result, so they stay best-effort - but they are logged, because a
+    // media_assets table that has gone unreadable turns every hero image into a
+    // fresh download and nothing would have said so (WEB-BE-032 AC3).
+    const { data: existing, error: existingError } = await supabase
       .from("media_assets")
       .select("file_path")
       .eq("content_type", mediaContentType)
       .eq("content_id", contentId)
       .maybeSingle();
+    if (existingError) {
+      console.warn(`[imageStorage] re-run guard read failed for ${contentId}: ${existingError.message}`);
+    }
     if (existing?.file_path) {
       return cdnUrlFor(existing.file_path);
     }
 
     // ── Dedup pass 1: same source URL already downloaded for someone else? ──
-    const { data: bySource } = await supabase
+    const { data: bySource, error: bySourceError } = await supabase
       .from("media_assets")
       .select("file_path, mime_type, file_size, content_hash")
       .eq("source_url", sourceImageUrl)
       .limit(1)
       .maybeSingle();
+    if (bySourceError) {
+      console.warn(`[imageStorage] source-url dedup read failed: ${bySourceError.message}`);
+    }
 
     if (bySource?.file_path) {
       await insertSharedAssetRow(supabase, {
@@ -569,12 +582,15 @@ export async function fetchAndStoreImage(
 
     // ── Dedup pass 2: same byte content already stored under a different URL? ──
     const contentHash = await sha256Hex(buffer);
-    const { data: byHash } = await supabase
+    const { data: byHash, error: byHashError } = await supabase
       .from("media_assets")
       .select("file_path, mime_type, file_size")
       .eq("content_hash", contentHash)
       .limit(1)
       .maybeSingle();
+    if (byHashError) {
+      console.warn(`[imageStorage] content-hash dedup read failed: ${byHashError.message}`);
+    }
 
     if (byHash?.file_path) {
       await insertSharedAssetRow(supabase, {

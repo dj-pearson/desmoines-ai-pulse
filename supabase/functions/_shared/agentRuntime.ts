@@ -337,11 +337,17 @@ interface MonthlyBudgetState {
  *  error, report no budget so a metrics hiccup can't wrongly block the agent. */
 async function monthlyBudgetState(supabase: SupabaseClient, agentKey: string): Promise<MonthlyBudgetState> {
   try {
-    const { data } = await supabase
+    // The catch below could never see a query failure: postgrest-js resolves
+    // with { data: null, error } and throws only on a transport error. So a
+    // budget view that had gone unreadable disabled cost governance for every
+    // agent, silently, with the warning it logs unreachable (WEB-BE-032 AC3).
+    // The fail-open decision is unchanged and is documented above.
+    const { data, error } = await supabase
       .from("agent_month_spend")
       .select("monthly_cost_budget_usd, spend_mtd, category")
       .eq("agent_key", agentKey)
       .maybeSingle();
+    if (error) throw error;
     return {
       budgetUsd: data?.monthly_cost_budget_usd ?? null,
       spendMtd: Number(data?.spend_mtd ?? 0),
