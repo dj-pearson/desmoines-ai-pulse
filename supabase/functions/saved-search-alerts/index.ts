@@ -182,7 +182,11 @@ serve(async (req) => {
     if (userIds.length > 0 && RESEND_API_KEY) {
       const { data: profiles, error: profilesError } = await supabase
         .from("profiles")
-        .select("id, email, email_verified")
+        // profiles has NO email_verified column - confirmed 42703 against
+        // production - so this select failed and, since WEB-BE-032 made the
+        // failure raise, the whole nightly run aborted. Before that it fell to
+        // an empty list and sent nothing, silently.
+        .select("id, email")
         .in("id", userIds);
       if (profilesError) {
         // Fails closed already - `profiles ?? []` sends nothing - but silently,
@@ -212,8 +216,13 @@ serve(async (req) => {
       for (const profile of profiles ?? []) {
         const uid = (profile as any).id as string;
         const email = (profile as any).email as string | null;
-        const verified = (profile as any).email_verified as boolean | null;
-        if (!email || verified === false) continue;
+        // THE VERIFICATION GATE IS GONE BECAUSE IT NEVER EXISTED. Nothing in
+        // the schema records whether an address is confirmed, so there is no
+        // column to read and no honest way to keep the check. Recipients are
+        // users who saved a search and enabled alerts on their own account,
+        // which is the consent this send rests on. If verification is wanted,
+        // it needs a column first - recorded rather than silently dropped.
+        if (!email) continue;
         if (prefMap.get(uid) === false) continue; // opted out
 
         const groups = perUser.get(uid);

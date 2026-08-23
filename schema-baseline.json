@@ -1,6 +1,6 @@
 {
   "$comment": "Known unresolvable Supabase references, frozen by scripts/check-schema-usage.mjs --update. This list must only ever SHRINK. Each entry is a feature that silently does nothing in production.",
-  "generated": 225,
+  "generated": 222,
   "findings": [
     "column|src/hooks/useCrmActivities.ts|crm_activities.activity_type",
     "column|src/hooks/useCrmActivities.ts|crm_activities.contact_id",
@@ -18,7 +18,6 @@
     "column|supabase/functions/agent-link-monitor/index.ts|events.archived_at",
     "column|supabase/functions/agent-reengagement/index.ts|events.archived_at",
     "column|supabase/functions/agent-weekly-digest/index.ts|events.archived_at",
-    "column|supabase/functions/analyze-competitor/index.ts|events.description",
     "column|supabase/functions/firecrawl-scraper/index.ts|competitors.competitor_id",
     "column|supabase/functions/firecrawl-scraper/index.ts|competitors.title",
     "column|supabase/functions/firecrawl-scraper/index.ts|competitors.venue",
@@ -27,8 +26,6 @@
     "column|supabase/functions/generate-proposal/index.ts|ad_price_list.lifecycle_stage",
     "column|supabase/functions/generate-proposal/index.ts|ad_price_list.status",
     "column|supabase/functions/get-sponsored-pick/index.ts|sponsored_listing_links.image_url",
-    "column|supabase/functions/saved-search-alerts/index.ts|profiles.email_verified",
-    "column|supabase/functions/social-media-manager/index.ts|events.name",
     "rpc|scripts/run-migration.ts|exec_sql",
     "rpc|src/components/auth/SessionManagementDashboard.tsx|revoke_all_other_sessions",
     "rpc|src/components/auth/SessionManagementDashboard.tsx|revoke_session",

@@ -428,7 +428,11 @@ serve(async (req) => {
       // Debug endpoint to check available content
       const { data: events, error: eventsError } = await supabase
         .from("events")
-        .select("id, title, name, date")
+        // `name` is a restaurants column; events have `title`. Asking for it
+        // 42703d, so this debug endpoint returned an error instead of events.
+        // The consumers already read `title || name` because they handle both
+        // entity types, so dropping it here changes nothing downstream.
+        .select("id, title, date")
         .gte("date", new Date().toISOString())
         .order("date", { ascending: true })
         .limit(5);
