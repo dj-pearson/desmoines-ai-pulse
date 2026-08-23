@@ -22,15 +22,15 @@
 
 	<key>NSPrivacyAccessedAPITypes</key>
 	<array>
-		<!-- UserDefaults — used by the Supabase SDK for session/config state. -->
-		<dict>
-			<key>NSPrivacyAccessedAPIType</key>
-			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
-			<key>NSPrivacyAccessedAPITypeReasons</key>
-			<array>
-				<string>CA92.1</string>
-			</array>
-		</dict>
+		<!-- UserDefaults was declared here on the stated grounds that the
+		     Supabase SDK reads and writes it. It does not: supabase-swift contains
+		     no UserDefaults reference at all (audited 2026-08-23 against its source,
+		     since it ships no privacy manifest of its own and its usage is therefore
+		     this app's responsibility). The Clip's own four source files use none
+		     either.
+		     Removed. scripts/check-privacy-manifest.mjs fails the build the moment
+		     the Clip touches UserDefaults, which is the direction that actually gets
+		     a submission rejected. (IOS-AUDIT-REL-014) -->
 	</array>
 </dict>
 </plist>

@@ -114,24 +114,29 @@
 				<string>CA92.1</string>
 			</array>
 		</dict>
-		<!-- File timestamp APIs — used by QueryCache for disk cache TTL expiration -->
+		<!-- File timestamp APIs. QueryCache reads modification dates to expire
+		     cached responses, and CachedAsyncImage reads them to evict the oldest
+		     images. Both are inside the app container.
+		     Reason 3B52.1, not C617.1: C617.1 is "display file timestamps to the
+		     person using the device", which this app never does. 3B52.1 covers
+		     timestamps of files inside the app container, which is the actual use.
+		     (IOS-AUDIT-REL-014) -->
 		<dict>
 			<key>NSPrivacyAccessedAPIType</key>
 			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
 			<key>NSPrivacyAccessedAPITypeReasons</key>
 			<array>
-				<string>C617.1</string>
+				<string>3B52.1</string>
 			</array>
 		</dict>
-		<!-- Disk space APIs — used to check available storage before caching -->
-		<dict>
-			<key>NSPrivacyAccessedAPIType</key>
-			<string>NSPrivacyAccessedAPICategoryDiskSpace</string>
-			<key>NSPrivacyAccessedAPITypeReasons</key>
-			<array>
-				<string>E174.1</string>
-			</array>
-		</dict>
+		<!-- DiskSpace was declared here and is used NOWHERE: no
+		     volumeAvailableCapacity, no attributesOfFileSystem, no statfs, in this
+		     app or in supabase-swift. The comment claimed "used to check available
+		     storage before caching"; the caches evict by age and count instead.
+		     Removed rather than left as a harmless extra - a manifest exists to be
+		     true, and scripts/check-privacy-manifest.mjs now fails the build if a
+		     disk-space API is added without restoring this entry.
+		     (IOS-AUDIT-REL-014) -->
 	</array>
 </dict>
 </plist>

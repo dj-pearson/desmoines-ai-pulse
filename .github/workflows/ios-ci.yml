@@ -377,5 +377,11 @@ jobs:
       # every 90 days. This fails when fewer than two declared pins appear in
       # the live chain, which is the point at which one more rotation would lock
       # out every enforcing client. See docs/CERT_PIN_ROTATION.md.
+      # IOS-AUDIT-REL-014: a required-reason API used but not declared is what
+      # gets a submission rejected, and the reviewer is the one who finds it.
+      # Offline; no credentials needed.
+      - name: Privacy manifest reconciliation
+        run: node scripts/check-privacy-manifest.mjs
+
       - name: Verify certificate pins against the live host
         run: bash scripts/verify-cert-pins.sh
