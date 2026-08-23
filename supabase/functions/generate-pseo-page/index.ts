@@ -79,11 +79,21 @@ serve(async (req) => {
 
     // Check if page already exists
     if (!forceRegenerate) {
-      const { data: existing } = await supabase
+      const { data: existing, error: existingError } = await supabase
         .from('pseo_pages')
         .select('id')
         .eq('id', pageId)
         .single();
+
+      // The caller passed forceRegenerate=false, i.e. explicitly asked NOT to
+      // overwrite an existing page. A dropped error reads as "no page yet" and
+      // regenerates over one that exists (WEB-BE-032 AC2).
+      //
+      // PGRST116 is excluded: .single() reports "no rows" as an error, and that
+      // is the ordinary first-generation case this branch exists for.
+      if (existingError && existingError.code !== 'PGRST116') {
+        return jsonResponse({ success: false, error: `Could not check for an existing page: ${existingError.message}` }, 500);
+      }
 
       if (existing) {
         return jsonResponse({
