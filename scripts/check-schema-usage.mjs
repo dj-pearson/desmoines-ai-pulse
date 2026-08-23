@@ -315,8 +315,26 @@ function scanFile(file, schema, findings) {
     // Inspect the chained call segment following this `.from()`. Bounded to
     // the next `.from(` or end of statement-ish region to avoid bleeding into
     // an adjacent query.
+    //
+    // THE BOUND ACCEPTS ANY `.from(`, NOT ONLY A QUOTED ONE. It used to require
+    // a literal table name, so `.from(tableName)` — a variable — did not stop
+    // the segment and this query absorbed the columns of every dynamic-table
+    // query within 2000 characters after it. Two verified cases:
+    //   firecrawl-scraper  `.from('competitors').select('id')` then, further
+    //     down, an insert into `.from(tableName)`. competitor_id / title / venue
+    //     were reported against competitors; they belong to competitor_content,
+    //     which has them.
+    //   generate-proposal  `.from("ad_price_list")` then
+    //     `count(supabase, "profiles", q => q.eq("lifecycle_stage", ...))`.
+    //     lifecycle_stage / status / date / archived_at were reported against
+    //     ad_price_list; their real tables are profiles, newsletter_subscribers
+    //     and events.
+    //
+    // Widening the terminator only ever SHRINKS a segment, so it cannot hide a
+    // column belonging to this table: that chain ends before the next `.from(`
+    // by definition, and PostgREST-js has no nested `.from()`.
     const rest = src.slice(m.index + m[0].length);
-    const nextFrom = rest.search(/\.from\(\s*['"`]/);
+    const nextFrom = rest.search(/\.from\(/);
     const segment = nextFrom === -1 ? rest.slice(0, 2000) : rest.slice(0, Math.min(nextFrom, 2000));
 
     const report = (col, at, api, error) => {
