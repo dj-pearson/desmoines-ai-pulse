@@ -96,7 +96,8 @@ export function handleError(
     return;
   }
 
-  // Show user-friendly error message based on error type
+  // Build the user-facing message and dispatch it. NOTE: nothing currently
+  // listens - see showErrorToUser's docstring before relying on this to notify.
   const userMessage = getUserFriendlyMessage(errorObj);
   showErrorToUser(userMessage, severity);
 }
@@ -174,12 +175,28 @@ function getUserFriendlyMessage(error: Error): string {
 }
 
 /**
- * Show error to user (stub - implement with your toast library)
+ * NOTHING SHOWS THIS TO THE USER TODAY. Read this before assuming handleError
+ * notifies anybody.
+ *
+ * It dispatches an `app-error` CustomEvent, and as of 2026-08-23 the ONLY
+ * addEventListener('app-error') in the repository is inside
+ * src/lib/__tests__/errorHandler.test.ts, which adds one in order to observe
+ * the dispatch. No component listens. So the "Show user-friendly error message"
+ * step in handleError above is a dispatch into an empty room, across 75 call
+ * sites, and the tests pass because they assert the dispatch rather than the
+ * delivery.
+ *
+ * It is left as an event rather than wired to a toast because turning it on is
+ * a product decision, not a code one: several of those 75 sites are background
+ * or best-effort paths where a toast would be noise, and switching them all on
+ * at once is a UX change nobody has asked for. Whoever wires this up should
+ * pick the severities that deserve a toast rather than routing all of them.
+ *
+ * The error itself is NOT lost - handleError logs it and, in production, sends
+ * it to the error tracker and the AOS-DEV-001 pipeline before reaching here.
+ * What is missing is the half the user can see.
  */
 function showErrorToUser(message: string, severity: ErrorSeverity): void {
-  // This should be implemented with your actual toast/notification system
-  // Example: toast.error(message);
-
   logger.debug('showErrorToUser', `${severity}: ${message}`);
 
   // Create a custom event that components can listen to

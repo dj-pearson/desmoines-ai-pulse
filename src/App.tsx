@@ -1,6 +1,4 @@
 import { LucideSprite } from "@/components/ui/icon-sprite.generated";
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { RouteErrorBoundary } from "@/components/ui/route-error-boundary";
@@ -53,6 +51,13 @@ function lazyWithRetry(
 }
 
 // Lazy load pages for better mobile performance
+const Toaster = lazyWithRetry(() =>
+  import("@/components/ui/toaster").then((m) => ({ default: m.Toaster })),
+);
+const Sonner = lazyWithRetry(() =>
+  import("@/components/ui/sonner").then((m) => ({ default: m.Toaster })),
+);
+
 const Index = lazyWithRetry(() => import("./pages/Index"));
 const Auth = lazyWithRetry(() => import("./pages/Auth"));
 const AuthCallback = lazyWithRetry(() => import("./pages/AuthCallback"));
@@ -390,8 +395,26 @@ const App = () => (
         <OfflineBanner />
         <ErrorBoundary>
           <KeyboardShortcutsProvider>
-            <Toaster />
-            <Sonner />
+            {/* Both toasters are lazy. Neither draws anything until a toast
+                fires, and between them they were 58 KB of the entry chunk -
+                sonner 32.7 KB and @radix-ui/react-toast 25.4 KB, measured
+                (WEB-PERF-020).
+
+                SAFE FOR THE SHADCN ONE BY CONSTRUCTION: use-toast keeps its
+                state in a module-level `memoryState` and useToast() seeds from
+                it on mount, so a toast dispatched before this mounts is still
+                rendered when it does.
+
+                SAFE FOR SONNER BECAUSE NOTHING ON THE CRITICAL PATH CALLS IT.
+                Its toast() lives in the sonner module, so any page that raises
+                one has already loaded sonner; and handleError does not toast at
+                all today (see showErrorToUser). Suspense fallback is null: a
+                toaster that has not arrived should render nothing, not a
+                placeholder. */}
+            <Suspense fallback={null}>
+              <Toaster />
+              <Sonner />
+            </Suspense>
             <AccessibilityWidget />
             <RouteErrorBoundary>
             <main id="main-content" tabIndex={-1} className="pb-bottom-nav">
