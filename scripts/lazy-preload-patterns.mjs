@@ -149,6 +149,16 @@ export function restoreAsyncFontLinks(html) {
  * wait fixes that - there is no observable "Helmet has settled" state, only a
  * longer gamble.
  *
+ * FIXED AT SOURCE 2026-08-23 (WEB-SEO-008), and this is now a backstop rather
+ * than the fix. Eight pages passed `faqData` whose every answer interpolates a
+ * live count, so the loading render and the loaded render genuinely differed
+ * and both got captured. They now pass `undefined` while loading, so the
+ * loading render emits no FAQPage at all and there is only ever one block to
+ * snapshot. The prerender summary went from "dropped 1" to "dropped 0" and
+ * every hub route emits exactly one FAQPage. Keep this function: it still
+ * catches the next component that does the same thing, and it counts what it
+ * drops so the next one is visible rather than silently corrected.
+ *
  * So the LAST block of each @type wins, which is the settled render, since
  * Helmet appends the newest. Only `data-rh` tags are considered: that attribute
  * is what marks a tag as Helmet-managed and therefore replaceable. A JSON-LD

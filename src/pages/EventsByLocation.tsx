@@ -250,7 +250,13 @@ export default function EventsByLocation() {
         canonicalUrl={`${BRAND.baseUrl}/events/${slug}`}
         pageType="website"
         breadcrumbs={breadcrumbs}
-        faqData={faqData}
+        // Withheld until the data lands (WEB-SEO-008). Every answer here
+        // interpolates a live count, so the loading render and the loaded
+        // render produce DIFFERENT FAQPage JSON - and react-helmet-async
+        // appends script children that differ rather than replacing them, so
+        // the prerender captured both. Production served two FAQPage blocks
+        // on this page, one saying "0 events" and one saying "8 events".
+        faqData={isLoading ? undefined : faqData}
         suburb={suburbInfo.name}
       />
       <EventListJsonLd
