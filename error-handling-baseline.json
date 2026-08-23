@@ -1,6 +1,6 @@
 {
   "scope": "src + supabase/functions; data|count destructures; rule-scoped counting",
-  "total": 354,
+  "total": 343,
   "files": {
     "src/components/admin/AdRateManager.tsx": 1,
     "src/components/admin/BlockedEmailDomainsManager.tsx": 1,
@@ -140,8 +140,6 @@
     "supabase/functions/send-event-reminders/index.ts": 1,
     "supabase/functions/send-seo-notification/index.ts": 1,
     "supabase/functions/send-weekly-digest/index.ts": 1,
-    "supabase/functions/social-daily-poster/index.ts": 4,
-    "supabase/functions/social-media-manager/index.ts": 7,
     "supabase/functions/stripe-webhook/index.ts": 3,
     "supabase/functions/subscription-lifecycle/index.ts": 1,
     "supabase/functions/support-chat/index.ts": 2,
