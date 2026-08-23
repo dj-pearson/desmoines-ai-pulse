@@ -15,17 +15,12 @@ final class WeatherService {
     enum Conditions: String {
         case clear, cloudy, rain, snow, fog, thunder, unknown
 
-        var humanLabel: String {
-            switch self {
-            case .clear: return "sunny"
-            case .cloudy: return "cloudy"
-            case .rain: return "rainy"
-            case .snow: return "snowy"
-            case .fog: return "foggy"
-            case .thunder: return "stormy"
-            case .unknown: return ""
-            }
-        }
+        // A `humanLabel` ("sunny", "rainy", ...) used to live here with no
+        // callers. RightNowRibbon does not need it: its templates carry their
+        // own phrasing through `headline(temperatureF:)`. A second source of
+        // weather wording that nothing reads is worse than none - the next
+        // person writing weather copy has to work out which one is live
+        // (IOS-AUDIT-UX-060).
     }
 
     struct Snapshot: Codable, Equatable {

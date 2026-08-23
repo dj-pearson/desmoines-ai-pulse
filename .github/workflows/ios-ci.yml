@@ -380,6 +380,12 @@ jobs:
       # IOS-AUDIT-REL-014: a required-reason API used but not declared is what
       # gets a submission rejected, and the reviewer is the one who finds it.
       # Offline; no credentials needed.
+      # IOS-AUDIT-UX-060: Swift has no warning for an unused internal property,
+      # and every one found here so far was a MISSING SURFACE rather than dead
+      # code - state a screen needed that no screen read.
+      - name: Unread view-model and service members
+        run: node scripts/check-unused-members.mjs
+
       - name: Privacy manifest reconciliation
         run: node scripts/check-privacy-manifest.mjs
 

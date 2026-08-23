@@ -217,7 +217,31 @@ struct AskPulseView: View {
         }
     }
 
+    /// Messages remaining today.
+    ///
+    /// AskPulseService has recorded `lastUsage` on every response since it was
+    /// written and nothing displayed it, so the first a user learned about the
+    /// limit was hitting it - the quotaExceeded error below was the entire UI
+    /// for this (IOS-AUDIT-UX-060).
+    @ViewBuilder
+    private var quotaLabel: some View {
+        if let usage = service.lastUsage {
+            Text(usage.displayString)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .accessibilityLabel("Pulse messages: \(usage.displayString)")
+        }
+    }
+
     private var inputBar: some View {
+        VStack(spacing: 4) {
+            quotaLabel
+            composer
+        }
+    }
+
+    private var composer: some View {
         HStack(spacing: 8) {
             TextField("date night near downtown…", text: $input, axis: .vertical)
                 .lineLimit(1...3)
