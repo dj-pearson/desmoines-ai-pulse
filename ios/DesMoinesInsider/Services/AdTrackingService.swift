@@ -66,32 +66,79 @@ final class AdTrackingService {
 
     private struct AdSession: Codable { let id: String; let timestamp: TimeInterval }
 
+    /// The live session, so a read does not have to go to disk.
+    private var cachedSession: AdSession?
+
+    /// How stale the PERSISTED timestamp is allowed to get before the window
+    /// extension is written again.
+    ///
+    /// The session lasts 30 minutes; persisting the extension to the nearest
+    /// minute cannot change whether a session is live except within one minute
+    /// of expiry, and only if the app is killed in that minute. That is the
+    /// entire cost, and it buys removing a JSON decode, a JSON encode and a
+    /// UserDefaults write from EVERY read of sessionId - which is every
+    /// impression, every click and every frequency-cap check.
+    private static let sessionPersistInterval: TimeInterval = 60
+
     private var sessionId: String {
         let now = Date().timeIntervalSince1970
-        if let data = UserDefaults.standard.data(forKey: Self.sessionKey),
-           let session = try? JSONDecoder().decode(AdSession.self, from: data),
-           now - session.timestamp < Self.sessionDuration {
-            save(AdSession(id: session.id, timestamp: now)) // extend window on use
-            return session.id
+
+        // In-memory first. Falls back to disk once per launch, or after the
+        // window lapses.
+        let existing = cachedSession ?? loadSession()
+        if let existing, now - existing.timestamp < Self.sessionDuration {
+            // Extend in memory always; persist only when the stored timestamp
+            // has fallen behind, so termination cannot lose more than
+            // sessionPersistInterval of the window.
+            cachedSession = AdSession(id: existing.id, timestamp: now)
+            if now - persistedAt >= Self.sessionPersistInterval {
+                save(AdSession(id: existing.id, timestamp: now))
+            }
+            return existing.id
         }
+
         let fresh = AdSession(id: "session_\(Int(now * 1000))_\(UUID().uuidString.prefix(6))", timestamp: now)
+        cachedSession = fresh
         save(fresh)
         return fresh.id
+    }
+
+    /// Timestamp last written to disk. A new id always writes, so this starts
+    /// accurate and stays accurate.
+    private var persistedAt: TimeInterval = 0
+
+    private func loadSession() -> AdSession? {
+        guard let data = UserDefaults.standard.data(forKey: Self.sessionKey),
+              let session = try? JSONDecoder().decode(AdSession.self, from: data) else {
+            return nil
+        }
+        cachedSession = session
+        persistedAt = session.timestamp
+        return session
     }
 
     private func save(_ session: AdSession) {
         if let data = try? JSONEncoder().encode(session) {
             UserDefaults.standard.set(data, forKey: Self.sessionKey)
+            persistedAt = session.timestamp
         }
     }
 
-    private var todayString: String {
+    /// Built once. DateFormatter construction is one of the more expensive
+    /// things in Foundation, and this ran on every impression and every click
+    /// purely to produce today's date. Same class of defect as the session
+    /// write above, found in the same file.
+    nonisolated(unsafe) private static let dayFormatter: DateFormatter = {
         let f = DateFormatter()
         f.calendar = Calendar(identifier: .gregorian)
         f.locale = Locale(identifier: "en_US_POSIX")
         f.timeZone = TimeZone(identifier: "UTC")
         f.dateFormat = "yyyy-MM-dd"
-        return f.string(from: Date())
+        return f
+    }()
+
+    private var todayString: String {
+        Self.dayFormatter.string(from: Date())
     }
 
     // MARK: - Frequency capping (IOS-ADS-014 · shouldShowAd parity)
