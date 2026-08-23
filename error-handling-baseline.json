@@ -1,6 +1,6 @@
 {
   "scope": "src + supabase/functions; data|count destructures; rule-scoped counting",
-  "total": 304,
+  "total": 295,
   "files": {
     "src/components/admin/AdRateManager.tsx": 1,
     "src/components/admin/BlockedEmailDomainsManager.tsx": 1,
@@ -38,7 +38,6 @@
     "src/hooks/useGoogleIndexing.ts": 1,
     "src/hooks/useHotels.ts": 2,
     "src/hooks/usePayments.ts": 2,
-    "src/hooks/usePersonalizedRecommendations.ts": 4,
     "src/hooks/usePrefetchDetail.ts": 2,
     "src/hooks/usePushNotifications.ts": 1,
     "src/hooks/useRatings.ts": 1,
@@ -47,7 +46,6 @@
     "src/hooks/useSavedSearchAlerts.ts": 1,
     "src/hooks/useSecurityContext.ts": 2,
     "src/hooks/useSimplePersonalization.ts": 2,
-    "src/hooks/useSmartRecommendations.ts": 5,
     "src/hooks/useSystemMonitoring.ts": 1,
     "src/hooks/useTrendingContent.ts": 2,
     "src/hooks/useTripPlanner.ts": 1,
