@@ -54,16 +54,31 @@ export function useTeamManagement(campaignOwnerId?: string) {
 
   const inviteTeamMember = async (email: string, role: "admin" | "editor" | "viewer"): Promise<boolean> => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      // An auth read that FAILED and a user who is genuinely signed out both
+      // produced "Not authenticated", which sends a signed-in person to the
+      // login screen for a network blip.
+      if (authError) throw new Error(`Could not verify your session: ${authError.message}`);
       if (!user) throw new Error("Not authenticated");
 
-      // Check if already invited
-      const { data: existing } = await supabase
+      // Check if already invited.
+      //
+      // PGRST116 IS THE SUCCESS CASE HERE - .single() reports "no rows" as an
+      // error, and no rows is exactly what "not yet invited" looks like. Any
+      // OTHER error used to land in the same place, because the result was
+      // destructured without `error`: existing came back null and a second
+      // invitation was created, with a second token, for someone who already
+      // had one. The guard has to tell the two apart or it is not a guard.
+      const { data: existing, error: existingError } = await supabase
         .from("campaign_team_members")
         .select("id")
         .eq("campaign_owner_id", user.id)
         .eq("team_member_email", email)
         .single();
+
+      if (existingError && existingError.code !== "PGRST116") {
+        throw new Error(`Could not check existing invitations: ${existingError.message}`);
+      }
 
       if (existing) {
         toast({
@@ -200,7 +215,11 @@ export function useTeamManagement(campaignOwnerId?: string) {
 
   const acceptInvitation = async (token: string): Promise<boolean> => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      // An auth read that FAILED and a user who is genuinely signed out both
+      // produced "Not authenticated", which sends a signed-in person to the
+      // login screen for a network blip.
+      if (authError) throw new Error(`Could not verify your session: ${authError.message}`);
       if (!user) throw new Error("Not authenticated");
 
       // Find invitation by token
