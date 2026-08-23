@@ -40,6 +40,30 @@ export enum ErrorSeverity {
 }
 
 /**
+ * Report an error that has already been handled visibly - an error boundary
+ * showing its fallback, a form showing its own message - without ALSO showing a
+ * toast. handleError() at ERROR severity does both, so a boundary calling it
+ * rendered the fallback and popped a toast for the same failure.
+ *
+ * Everything else is identical: same tracker, same production pipeline.
+ */
+export function captureHandledError(error: Error | unknown, context: ErrorContext = {}): void {
+  const errorObj = error instanceof Error ? error : new Error(String(error));
+
+  const contextStr = context.component || context.action
+    ? `${context.component || ''}${context.component && context.action ? ':' : ''}${context.action || ''}`
+    : 'unknown';
+  logger.error(contextStr, `ERROR: ${errorObj.message}`, context.metadata);
+
+  if (import.meta.env.PROD && errorTracker) {
+    errorTracker.captureException(errorObj, context);
+  }
+  if (import.meta.env.PROD) {
+    reportErrorEvent(errorObj.message, context, ErrorSeverity.ERROR);
+  }
+}
+
+/**
  * Handle application errors with consistent behavior
  */
 export function handleError(

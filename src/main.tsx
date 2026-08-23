@@ -3,7 +3,8 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HelmetProvider } from "react-helmet-async";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import { initSentry, getSentryDsn, Sentry } from "@/lib/sentry";
+import { initSentry, getSentryDsn, captureException, captureMessage } from "@/lib/sentry";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { initErrorTracking } from "@/lib/errorHandler";
 import '@/lib/env'; // Validate environment variables at startup
 import { initAnalyticsConsent } from "@/lib/analyticsConsent";
@@ -25,15 +26,17 @@ initAnalyticsConsent();
 // Wire Sentry into the centralized error handler (matches initSentry's DSN
 // resolution so the bridge activates whenever Sentry itself does).
 if (getSentryDsn()) {
+  // These forward into a buffer until the Sentry chunk lands, so an error
+  // during boot is delayed rather than dropped (WEB-PERF-020).
   initErrorTracking({
     captureException(error, context) {
-      Sentry.captureException(error, {
+      captureException(error, {
         tags: { component: context.component, action: context.action },
         extra: context.metadata,
       });
     },
     captureMessage(message, level) {
-      Sentry.captureMessage(message, level as 'info' | 'warning' | 'error');
+      captureMessage(message, level as 'info' | 'warning' | 'error');
     },
   });
 }
@@ -211,7 +214,12 @@ function initializeApp() {
     // Render immediately - this is the critical path
     root.render(
       <StrictMode>
-        <Sentry.ErrorBoundary fallback={<p>An unexpected error occurred.</p>}>
+        {/* Was Sentry.ErrorBoundary, which pinned @sentry/react into the entry
+            chunk - 27% of it - for a component that renders nothing until
+            something throws. The app's own boundary now reports through
+            captureHandledError, so React render errors still reach Sentry
+            (WEB-PERF-020). */}
+        <ErrorBoundary>
           <ThemeProvider defaultTheme="system" storageKey="dmi-theme">
             <HelmetProvider>
               <QueryClientProvider client={queryClient}>
@@ -219,7 +227,7 @@ function initializeApp() {
               </QueryClientProvider>
             </HelmetProvider>
           </ThemeProvider>
-        </Sentry.ErrorBoundary>
+        </ErrorBoundary>
       </StrictMode>
     );
   } catch (err: any) {

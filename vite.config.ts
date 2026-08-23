@@ -151,11 +151,28 @@ export default defineConfig(({ command, mode }) => {
       },
     }),
     command === "serve" && componentTagger(),
-    // Bundle analyzer - run with ANALYZE=true npm run build
+    // Bundle analyzer - run with ANALYZE=true npm run build.
+    //
+    // `open` is opt-out rather than hardcoded true: an analyzer that always
+    // launches a browser cannot be run from CI, from a container, or by an
+    // agent, which means the measurement behind WEB-PERF-020's budget was only
+    // ever available to someone sitting at the machine. ANALYZE_OPEN=false
+    // keeps the report and skips the browser.
     process.env.ANALYZE === "true" &&
       visualizer({
-        open: true,
+        open: process.env.ANALYZE_OPEN !== "false",
         filename: "dist/stats.html",
+        gzipSize: true,
+        brotliSize: true,
+      }),
+    // Machine-readable twin of the same report. The HTML is for reading; this
+    // is what lets a script answer "what is actually in the entry chunk"
+    // without a human scrubbing a treemap.
+    process.env.ANALYZE === "true" &&
+      visualizer({
+        open: false,
+        filename: "dist/stats.json",
+        template: "raw-data",
         gzipSize: true,
         brotliSize: true,
       }),
