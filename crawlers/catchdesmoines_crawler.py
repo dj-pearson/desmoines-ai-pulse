@@ -66,6 +66,86 @@ CENTRAL_TZ = ZoneInfo("America/Chicago")
 # Claude 4.5 Sonnet model
 CLAUDE_MODEL = "claude-sonnet-4-5-20250929"
 
+# Event detail links on the listing page: /event/<slug>/<id>. Used both to build
+# the extraction window and to tell "the listing did not render" apart from
+# "there are no events today" - two outcomes that used to look identical.
+EVENT_LINK_RE = re.compile(r"/event/[a-z0-9-]+/\d+")
+
+# Blocks that carry no event information and most of the bytes.
+_DROP_BLOCKS = [
+    re.compile(r"<script[^>]*>[\s\S]*?</script>", re.IGNORECASE),
+    re.compile(r"<style[^>]*>[\s\S]*?</style>", re.IGNORECASE),
+    re.compile(r"<head[\s\S]*?</head>", re.IGNORECASE),
+    re.compile(r"<svg[\s\S]*?</svg>", re.IGNORECASE),
+    re.compile(r"<noscript[\s\S]*?</noscript>", re.IGNORECASE),
+    re.compile(r"<!--[\s\S]*?-->"),
+]
+
+# Tags that only ever carry attributes we are dropping anyway.
+_VOID_TAGS = {
+    "img", "source", "input", "link", "meta", "br", "hr",
+    "path", "use", "picture", "iframe", "form", "button", "svg",
+}
+
+_TAG_RE = re.compile(r"<([a-zA-Z][a-zA-Z0-9]*)\b[^>]*>")
+_CLOSE_VOID_RE = re.compile(r"</(?:%s)>" % "|".join(_VOID_TAGS), re.IGNORECASE)
+_HREF_RE = re.compile(r'href="([^"]*)"')
+
+# Safety net, not the mechanism. Measured 2026-08-23: the rendered listing is
+# ~431,000 chars and cleans to ~34,000, so this never fires in practice - which
+# is the point. It used to be 50,000 applied to the RAW html, where the first
+# event link sat at character 194,134.
+MAX_EXTRACTION_CHARS = 60000
+
+
+def clean_html_for_extraction(html: str) -> str:
+    """Reduce a rendered listing page to the markup that carries event data.
+
+    THE BUG THIS REPLACES, measured against the live page on 2026-08-23. The old
+    version stripped <script> and <style> and then took `html[:50000]`. The
+    rendered page is 430,862 characters; after that strip it is 259,164; and the
+    FIRST /event/ link sits at character 194,134. So the model was handed 50,000
+    characters that ended 144,134 characters before the first event, and
+    correctly returned an empty array. The run logged "Extraction errors: 0" and
+    exited green, because nothing had actually gone wrong - the crawler simply
+    never showed Claude an event.
+
+    The fix is not a bigger window. 194,134 characters of preamble hold 13,900
+    characters of visible text; the rest is class lists, srcset, data attributes
+    and inline SVG. Dropping the markup nobody needs takes the whole page from
+    259,164 to about 34,000 characters, which fits with room to spare, so the
+    model sees every event on the page instead of a prefix of the navigation.
+
+    href is the one attribute kept: the prompt asks for detail_url, and that
+    lives nowhere else.
+    """
+    cleaned = html
+    for pattern in _DROP_BLOCKS:
+        cleaned = pattern.sub("", cleaned)
+
+    def _strip_attrs(match: "re.Match") -> str:
+        tag = match.group(1).lower()
+        if tag in _VOID_TAGS:
+            return ""
+        if tag == "a":
+            href = _HREF_RE.search(match.group(0))
+            return '<a href="%s">' % href.group(1) if href else "<a>"
+        return "<%s>" % tag
+
+    cleaned = _TAG_RE.sub(_strip_attrs, cleaned)
+    cleaned = _CLOSE_VOID_RE.sub("", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+
+    if len(cleaned) > MAX_EXTRACTION_CHARS:
+        # Anchor the window on the events, never on the head of the document -
+        # that is the mistake being fixed. Keep a little context before the first
+        # link so the surrounding card markup comes along.
+        first = EVENT_LINK_RE.search(cleaned)
+        start = max(0, first.start() - 2000) if first else 0
+        cleaned = cleaned[start:start + MAX_EXTRACTION_CHARS]
+
+    return cleaned
+
 
 class CatchDesMoinesCrawler:
     """Crawler for catchdesmoines.com events."""
@@ -212,10 +292,25 @@ class CatchDesMoinesCrawler:
         """Use Claude 4.5 Sonnet to extract events from HTML."""
         logger.info(f"Extracting events from {page_url} using Claude {CLAUDE_MODEL}")
 
-        # Clean HTML for Claude (limit size)
-        clean_html = re.sub(r'<script[^>]*>[\s\S]*?</script>', '', html, flags=re.IGNORECASE)
-        clean_html = re.sub(r'<style[^>]*>[\s\S]*?</style>', '', clean_html, flags=re.IGNORECASE)
-        clean_html = clean_html[:50000]  # Limit to 50k chars
+        clean_html = clean_html_for_extraction(html)
+        link_count = len(EVENT_LINK_RE.findall(clean_html))
+        logger.info(
+            f"Cleaned {len(html)} chars to {len(clean_html)} for extraction; "
+            f"{link_count} event link(s) visible to the model"
+        )
+
+        # No links means the listing did not render or its URL shape changed -
+        # a crawler failure. An empty result from a page that DID carry links is
+        # a quiet day. Conflating the two is how six months of green runs
+        # ingested nothing.
+        if link_count == 0:
+            self.extraction_errors += 1
+            logger.error(
+                "No /event/<slug>/<id> links in the cleaned listing HTML - "
+                "the page did not render or its markup changed. Not calling the "
+                "model; there is nothing on this page to extract."
+            )
+            return []
 
         today = datetime.now(CENTRAL_TZ).strftime("%Y-%m-%d")
 
