@@ -3373,8 +3373,8 @@
         "Primary action buttons remain visible above the keyboard"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Evidence: BestOfCategoryView.swift:14 plain ScrollView no dismiss; GroupSessionView.swift:19 fixed VStack."
+      "passes": true,
+      "notes": "DONE 2026-08-23 (claude/prd-p1-loop). All three ACs met. iOS CI 32640745294: 326 tests, 6 skipped, 0 failures.\n\nAC1. The Best Of category screen holds a nominee SEARCH field and a WRITE-IN field inside a plain ScrollView,\nwith the leaderboard below both - so with the keyboard up the thing the user is typing about was covered, and\nthere was no gesture to put the keyboard away short of finding a Done button that is not there.\n\nAC2 AND AC3, which are the same defect. The group session screen was a fixed VStack with a Spacer, so the join\ncode field, the Join button and the error text all sat at the bottom of a NON-SCROLLING screen. With the keyboard\nup, or at an accessibility text size, all three were pushed off with no way to reach them - including the error\nexplaining why the code had just been rejected, which is the moment the user most needs to read something. Now a\nScrollView. The Spacer is gone: inside a ScrollView it fights the scroll rather than centring anything.\n\nALSO FIXED, AND IT WAS MINE: SearchableChipGrid (added for IOS-AUDIT-UX-055 one commit earlier) put a TextField\nabove a chip grid inside a popover, and a popover has no Done button - so there was no way to dismiss that\nkeyboard either. Caught by sweeping every ScrollView containing a TextField rather than only the two the AC\nnames.\n\nTWO OTHERS DELIBERATELY LEFT ALONE. That sweep found AskPulseView and the Restaurants filter grid. The filter\ngrid is fixed above. AskPulseView's composer is PINNED below the transcript rather than inside the ScrollView, so\nnothing is covered; adding interactive dismissal there would change chat scrolling behaviour that works, and\nnobody asked for it.\n\nEvidence: BestOfCategoryView.swift:14 plain ScrollView no dismiss; GroupSessionView.swift:19 fixed VStack."
     },
     {
       "id": "IOS-AUDIT-UX-057",
