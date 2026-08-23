@@ -76,12 +76,20 @@ export const run: AgentRun = async (ctx, { supabase }) => {
     if (allowed === false) { skipped++; continue; }
 
     // Prior onboarding sends for this user.
-    const { data: priorSends } = await supabase
+    const { data: priorSends, error: priorSendsError } = await supabase
       .from("nurture_sends")
       .select("kind, created_at, id")
       .eq("user_id", p.user_id)
       .eq("agent_key", AGENT_KEY)
       .order("created_at", { ascending: false });
+    // FAIL CLOSED. `prior` drives BOTH the frequency cap below and which drip
+    // step is due, so a dropped error empties it and the user is treated as
+    // never having been messaged - re-sending step one and bypassing the gap
+    // (WEB-BE-032 AC2).
+    if (priorSendsError) {
+      console.warn(`[onboarding-drip] prior sends read failed for ${p.user_id}; skipping: ${priorSendsError.message}`);
+      skipped++; continue;
+    }
     const prior = (priorSends ?? []) as { kind: string; created_at: string; id: string }[];
 
     // Activation stamping: if a first-value send exists without activation and
