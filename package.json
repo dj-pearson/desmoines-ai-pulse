@@ -76,6 +76,7 @@
     "ralph:android:resume": "node scripts/ralph/ralph.mjs --tool claude --prd prd-android.json --instructions scripts/ralph/CLAUDE-android.md --resume",
     "check-seo-routes": "node scripts/check-seo-route-parity.mjs",
     "icons:sprite": "node scripts/generate-icon-sprite.mjs",
+    "check-pseo-inventory": "tsx scripts/check-pseo-inventory.ts",
     "check-icon-sprite": "node scripts/generate-icon-sprite.mjs --check",
     "check-schema-dupes": "node scripts/check-duplicate-schema.mjs",
     "audit:seo-head": "node scripts/audit-prerendered-seo.mjs"
