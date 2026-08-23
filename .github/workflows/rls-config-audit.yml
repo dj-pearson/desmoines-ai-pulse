@@ -94,6 +94,13 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: npx tsx scripts/check-duplicate-entities.ts
 
+      # WEB-SEC-025: step 3 replaces the USING (true) SELECT policy on
+      # votes. A read that is not scoped to the caller returns ballots today
+      # and an empty array after, silently - a denied SELECT under RLS is an
+      # empty result, not an error. Offline; no credentials needed.
+      - name: Ballot read guard
+        run: bash scripts/check-ballot-reads.sh
+
       - name: Scheduled-job health ratchet
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

@@ -64,15 +64,11 @@ actor VotingService {
     func fetchResults(categoryId: String) async throws -> [VoteResult] {
         let client = try db()
 
-        struct VoteRow: Decodable {
-            let entity_type: String
-            let entity_id: String?
-            let custom_entry: String?
-        }
         // Aggregated server-side (IOS-AUDIT-PERF-026). The RPC groups by
         // entity_id, falling back to custom_entry, which is exactly what
-        // VoteResult.aggregate does - that helper stays, covered by its own
-        // tests, and is used for the fallback below.
+        // VoteResult.aggregate does. That helper is no longer called from
+        // here - it is kept for its tests, which pin the grouping rule the
+        // SQL now has to match.
         struct ResultRow: Decodable {
             let entity_type: String
             let entity_id: String?
@@ -81,30 +77,29 @@ actor VotingService {
         }
         struct ResultsParams: Encodable { let p_category_id: String }
 
-        var results: [VoteResult]
-        if let rows: [ResultRow] = try? await client
+        // The raw-table fallback that used to sit here has been REMOVED
+        // (WEB-SEC-025 step 2). It was there for a project without the RPC
+        // deployed; both RPCs are deployed and verified against production.
+        //
+        // Keeping it would have defeated the point. Step 3 replaces the
+        // "Public read votes" USING (true) policy, and it can only run once
+        // no shipped binary reads the raw table - a fallback is a read path
+        // that survives the policy change and starts failing then, on a
+        // release nobody connects to this one.
+        //
+        // An RPC failure now yields an empty leaderboard rather than raw
+        // ballots, which is the correct direction to fail.
+        let rows: [ResultRow] = (try? await client
             .rpc("voting_results", params: ResultsParams(p_category_id: categoryId))
             .execute()
-            .value {
-            results = rows.map {
-                VoteResult(
-                    entityType: $0.entity_type,
-                    entityId: $0.entity_id,
-                    customEntry: $0.custom_entry,
-                    voteCount: $0.vote_count
-                )
-            }
-        } else {
-            // Fallback for a project without the RPC deployed.
-            let votes: [VoteRow] = try await client
-                .from("votes")
-                .select("entity_type, entity_id, custom_entry")
-                .eq("category_id", value: categoryId)
-                .execute()
-                .value
-            results = VoteResult.aggregate(votes.map {
-                VoteResult.Raw(entityType: $0.entity_type, entityId: $0.entity_id, customEntry: $0.custom_entry)
-            })
+            .value) ?? []
+        var results: [VoteResult] = rows.map {
+            VoteResult(
+                entityType: $0.entity_type,
+                entityId: $0.entity_id,
+                customEntry: $0.custom_entry,
+                voteCount: $0.vote_count
+            )
         }
 
         await enrich(&results, client: client)
@@ -222,45 +217,35 @@ actor VotingService {
     /// Builds the entityId → category-name map for the current #1 (entity-backed)
     /// pick in each active category. Custom write-ins can't badge a listing card,
     /// so only entity_id winners are included. Fails soft to an empty map.
+    /// Server-side since WEB-SEC-025 step 2.
+    ///
+    /// This was the widest read of the ballot table in the app: unlike the
+    /// leaderboard it was not scoped to a category, so it pulled every vote
+    /// ever cast, each carrying user_id, to compute one map of at most a few
+    /// dozen entries. It also fetched the category list purely to resolve
+    /// names, which the RPC now joins.
+    ///
+    /// Ties resolve by entity_id in SQL. Dictionary.max(by:) resolved them by
+    /// whatever order the hash table yielded, which was not stable between
+    /// launches.
     func fetchWinners() async -> [String: String] {
         guard let client = try? db() else { return [:] }
-        do {
-            let categories: [VotingCategory] = try await client
-                .from("voting_categories")
-                .select()
-                .eq("is_active", value: true)
-                .execute()
-                .value
 
-            struct VoteRow: Decodable {
-                let category_id: String
-                let entity_id: String?
-            }
-            let votes: [VoteRow] = try await client
-                .from("votes")
-                .select("category_id, entity_id")
-                .execute()
-                .value
-
-            // Tally entity votes per category.
-            var tally: [String: [String: Int]] = [:] // categoryId -> entityId -> count
-            for v in votes {
-                guard let entityId = v.entity_id else { continue }
-                tally[v.category_id, default: [:]][entityId, default: 0] += 1
-            }
-
-            let categoryName = Dictionary(uniqueKeysWithValues: categories.map { ($0.id, $0.name) })
-            var winners: [String: String] = [:]
-            for (categoryId, entityCounts) in tally {
-                guard let name = categoryName[categoryId],
-                      let top = entityCounts.max(by: { $0.value < $1.value }) else { continue }
-                // Last write wins if an entity tops multiple categories — rare;
-                // acceptable for a badge.
-                winners[top.key] = name
-            }
-            return winners
-        } catch {
-            return [:]
+        struct WinnerRow: Decodable {
+            let category_name: String
+            let entity_id: String
         }
+        let rows: [WinnerRow] = (try? await client
+            .rpc("voting_winners")
+            .execute()
+            .value) ?? []
+
+        var winners: [String: String] = [:]
+        for row in rows {
+            // Last write wins if an entity tops multiple categories - rare,
+            // and acceptable for a badge.
+            winners[row.entity_id] = row.category_name
+        }
+        return winners
     }
 }
