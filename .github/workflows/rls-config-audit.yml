@@ -94,6 +94,17 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: npx tsx scripts/check-duplicate-entities.ts
 
+      # WEB-OPS-007: 62 of 157 edge functions in the repo have never been
+      # deployed, so 34 of the 56 cron jobs that post to a function post to a
+      # 404. A function directory looks identical to a deployed function and
+      # there is no deploy step in CI, so nothing surfaced it. Probes with the
+      # anon key; sends {} so nothing is executed.
+      - name: Edge-function deploy ratchet
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: npx tsx scripts/check-edge-deploys.ts
+
       # WEB-SEC-025: step 3 replaces the USING (true) SELECT policy on
       # votes. A read that is not scoped to the caller returns ballots today
       # and an empty array after, silently - a denied SELECT under RLS is an
