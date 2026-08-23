@@ -64,7 +64,11 @@ export async function notifyOps(supabase: Client, args: NotifyOpsArgs): Promise<
   // ── Frequency cap / coalesce ────────────────────────────────────────────
   try {
     const since = new Date(Date.now() - capWindow).toISOString();
-    const { data: recent } = await supabase
+    // The fail-open decision below is deliberate and documented at the catch.
+    // The error is read because postgrest-js resolves with { data: null, error }
+    // on a query failure and throws only on a transport error, so that warning
+    // was unreachable for the case it describes (WEB-BE-032 AC3).
+    const { data: recent, error } = await supabase
       .from("ops_notification_log")
       .select("id, suppressed_count")
       .eq("dedupe_key", dedupeKey)
@@ -72,6 +76,7 @@ export async function notifyOps(supabase: Client, args: NotifyOpsArgs): Promise<
       .order("last_sent_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+    if (error) throw error;
 
     if (recent?.id) {
       // Within the window — coalesce: bump the counter, do not send again.

@@ -57,11 +57,14 @@ export async function sendNurtureEmail(
 
   if (!apiKey) {
     // No mailer configured — record the intent as skipped, don't fail the run.
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("nurture_sends")
       .insert({ user_id: args.userId, email: args.email, agent_key: args.agentKey, kind: args.kind, status: "skipped", quality_score: args.qualityScore ?? null })
       .select("id")
       .single();
+    // Best-effort: nothing was sent, so a missing ledger row costs only the
+    // record of an attempt that did not happen (WEB-BE-032 AC3).
+    if (error) console.warn("[sendNurtureEmail] failed to record skipped send:", error.message);
     return { ok: false, sendId: data?.id, error: "RESEND_API_KEY not set" };
   }
 
@@ -77,11 +80,22 @@ export async function sendNurtureEmail(
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(`Resend ${res.status}: ${(body?.message ?? "").slice(0, 160)}`);
     const messageId = body?.id ?? null;
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("nurture_sends")
       .insert({ user_id: args.userId, email: args.email, agent_key: args.agentKey, kind: args.kind, resend_message_id: messageId, status: "queued", quality_score: args.qualityScore ?? null })
       .select("id")
       .single();
+    // NOT best-effort, even though the send already succeeded. nurture_sends is
+    // what recentlyMessaged and shouldAgeOut read, so a dropped row means this
+    // email is invisible to the frequency cap and the user can be mailed again
+    // on the next run (WEB-BE-032 AC2). The mail is out either way, so the
+    // result stays ok:true - the point is that the failure is now visible.
+    if (error) {
+      console.error(
+        `[sendNurtureEmail] SENT but failed to record ${args.kind} for ${args.userId}; frequency cap will not see it:`,
+        error.message,
+      );
+    }
     return { ok: true, sendId: data?.id, messageId: messageId ?? undefined };
   } catch (err) {
     const message = (err as Error)?.message ?? "send error";

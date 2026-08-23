@@ -95,11 +95,16 @@ export async function runJob<T>(
       let skipId: string | null = null;
       try {
         const nowIso = new Date().toISOString();
-        const { data } = await supabase
+        // Best-effort, but the error is read: postgrest-js resolves with
+        // { data: null, error } on a query failure and throws only on a
+        // transport error, so the catch below never saw the common case
+        // (WEB-BE-032 AC3).
+        const { data, error } = await supabase
           .from('automation_job_runs')
           .insert({ job_name: jobName, status: 'skipped', finished_at: nowIso, metadata: { pausedReason: pause.reason } })
           .select('id')
           .single();
+        if (error) throw error;
         skipId = data?.id ?? null;
       } catch (err) {
         console.warn(`[jobRunner:${jobName}] failed to record skipped run:`, err);
@@ -128,11 +133,14 @@ export async function runJob<T>(
   let runId: string | null = null;
   if (supabase) {
     try {
-      const { data } = await supabase
+      // Best-effort; see the skipped-run insert above for why the error is
+      // read here rather than left to the catch.
+      const { data, error } = await supabase
         .from('automation_job_runs')
         .insert({ job_name: jobName, status: 'running' })
         .select('id')
         .single();
+      if (error) throw error;
       runId = data?.id ?? null;
     } catch (err) {
       console.error(`[jobRunner:${jobName}] failed to open run row:`, err);
