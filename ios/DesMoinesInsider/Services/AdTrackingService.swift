@@ -35,7 +35,47 @@ import Supabase
 @MainActor
 final class AdTrackingService {
     static let shared = AdTrackingService()
-    private init() { pending = Self.loadQueue() }
+
+    /// Where the session and the offline queue live. Injectable so a test can
+    /// use an isolated suite instead of the runner's real defaults
+    /// (IOS-AUDIT-TEST-004 AC2).
+    private let defaults: UserDefaults
+
+    private init() {
+        defaults = .standard
+        pending = Self.loadQueue(from: .standard)
+    }
+
+    #if DEBUG
+    /// Test seam. A second instance over its own defaults suite, so the offline
+    /// queue can be seeded and drained without a Supabase client and without
+    /// touching the values the app is using.
+    init(testDefaults: UserDefaults) {
+        defaults = testDefaults
+        pending = Self.loadQueue(from: testDefaults)
+    }
+
+    /// Rows waiting to be sent. The queue is the ONLY observable effect the
+    /// consent gate has in a unit test - logImpression and logClick return nil
+    /// and void on every path once the Supabase client is nil, so asserting on
+    /// their return value would pass with the gate deleted.
+    var pendingEventCountForTesting: Int { pending.impressions.count + pending.clicks.count }
+
+    /// Queues one impression as if it had been logged while offline.
+    func seedPendingImpressionForTesting(campaignId: String = "c1", creativeId: String = "cr1") {
+        enqueue(impression: ImpressionRow(
+            campaign_id: campaignId,
+            creative_id: creativeId,
+            placement_type: "test",
+            user_id: nil,
+            session_id: "s1",
+            device_type: "mobile",
+            browser: "ios-app",
+            date: todayString,
+            client_event_id: UUID().uuidString
+        ))
+    }
+    #endif
 
     private let supabase = SupabaseService.shared.client
     private let analytics = AnalyticsService.shared
@@ -108,7 +148,7 @@ final class AdTrackingService {
     private var persistedAt: TimeInterval = 0
 
     private func loadSession() -> AdSession? {
-        guard let data = UserDefaults.standard.data(forKey: Self.sessionKey),
+        guard let data = defaults.data(forKey: Self.sessionKey),
               let session = try? JSONDecoder().decode(AdSession.self, from: data) else {
             return nil
         }
@@ -119,7 +159,7 @@ final class AdTrackingService {
 
     private func save(_ session: AdSession) {
         if let data = try? JSONEncoder().encode(session) {
-            UserDefaults.standard.set(data, forKey: Self.sessionKey)
+            defaults.set(data, forKey: Self.sessionKey)
             persistedAt = session.timestamp
         }
     }
@@ -197,11 +237,14 @@ final class AdTrackingService {
     /// offline, the row is queued and flushed on reconnect (no id returned).
     @discardableResult
     func logImpression(campaignId: String, creativeId: String, placement: String) async -> String? {
-        guard let client = supabase, !Config.isUITesting else { return nil }
         // Ad-interaction telemetry is tied to user_id, so it must respect the
         // analytics consent choice — same gate AnalyticsService applies
         // (IOS-AUDIT-SEC-008). Without this, ad_impressions wrote for all users.
+        //
+        // Checked BEFORE the client guard so the rule holds in every
+        // configuration, not just the one where a client happens to exist.
         guard ConsentService.shared.analyticsConsent else { return nil }
+        guard let client = supabase, !Config.isUITesting else { return nil }
         let session = sessionId
         let dedupeKey = "\(campaignId)|\(creativeId)|\(session)"
         guard !loggedImpressions.contains(dedupeKey) else { return nil }
@@ -250,9 +293,9 @@ final class AdTrackingService {
     /// Logs a click for a campaign creative, linked to its impression when known.
     /// Offline-safe: queued and flushed on reconnect.
     func logClick(campaignId: String, creativeId: String, impressionId: String?) async {
-        guard let client = supabase, !Config.isUITesting else { return }
-        // Respect analytics consent (IOS-AUDIT-SEC-008).
+        // Respect analytics consent (IOS-AUDIT-SEC-008), before the client guard.
         guard ConsentService.shared.analyticsConsent else { return }
+        guard let client = supabase, !Config.isUITesting else { return }
         let row = ClickRow(
             campaign_id: campaignId,
             creative_id: creativeId,
@@ -369,8 +412,8 @@ final class AdTrackingService {
 
     private var pending: PendingQueue
 
-    private static func loadQueue() -> PendingQueue {
-        guard let data = UserDefaults.standard.data(forKey: queueKey),
+    private static func loadQueue(from defaults: UserDefaults) -> PendingQueue {
+        guard let data = defaults.data(forKey: queueKey),
               let queue = try? JSONDecoder().decode(PendingQueue.self, from: data) else {
             return PendingQueue()
         }
@@ -379,7 +422,7 @@ final class AdTrackingService {
 
     private func persistQueue() {
         if let data = try? JSONEncoder().encode(pending) {
-            UserDefaults.standard.set(data, forKey: Self.queueKey)
+            defaults.set(data, forKey: Self.queueKey)
         }
     }
 
@@ -398,9 +441,13 @@ final class AdTrackingService {
     /// Drains the offline queue. Called by `NetworkMonitor` on reconnect and on
     /// app launch. Best-effort: rows that still fail stay queued for next time.
     func flushPendingEvents() async {
-        guard let client = supabase, !Config.isUITesting else { return }
         // If the user revoked analytics consent while offline, drop the queued
         // ad telemetry instead of sending it on reconnect (IOS-AUDIT-SEC-008).
+        //
+        // This runs BEFORE the client guard deliberately. Telemetry the user has
+        // refused should not sit on disk waiting for a client to appear, and
+        // ordering it first is also what makes the gate assertable: with no
+        // client the queue is the one effect a test can see.
         guard ConsentService.shared.analyticsConsent else {
             if !pending.isEmpty {
                 pending = PendingQueue()
@@ -408,6 +455,7 @@ final class AdTrackingService {
             }
             return
         }
+        guard let client = supabase, !Config.isUITesting else { return }
         guard NetworkMonitor.shared.isConnected, !pending.isEmpty else { return }
 
         // Upsert on the queued idempotency key, not insert (IOS-AUDIT-BUG-017).
