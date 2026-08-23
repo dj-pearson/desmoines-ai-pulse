@@ -52,7 +52,11 @@ struct HotelDetailView: View {
             SafariView(url: target.url).ignoresSafeArea()
         }
         .fullScreenCover(isPresented: $showImageViewer) {
-            FullScreenImageViewer(imageUrl: selectedImageURL, isPresented: $showImageViewer)
+            FullScreenImageViewer(
+                imageUrl: selectedImageURL,
+                isPresented: $showImageViewer,
+                accessibilityDescription: "Photo of \(hotel.name)",
+            )
         }
         .task {
             RecentlyViewedService.shared.record(
@@ -77,7 +81,12 @@ struct HotelDetailView: View {
             .accessibilityHidden(true)
         } else {
             TabView {
-                ForEach(gallery, id: \.self) { url in
+                // IOS-AUDIT-UX-052 AC5: enumerated so each photo can say WHICH
+                // one it is. Every card previously read "Photo of <hotel>. Tap to
+                // view full screen." - identical for all of them, so a VoiceOver
+                // user swiping the carousel had no way to tell they had moved, or
+                // how many were left.
+                ForEach(Array(gallery.enumerated()), id: \.element) { index, url in
                     Button {
                         selectedImageURL = url
                         showImageViewer = true
@@ -89,7 +98,8 @@ struct HotelDetailView: View {
                         .clipped()
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Photo of \(hotel.name). Tap to view full screen.")
+                    .accessibilityLabel("Photo \(index + 1) of \(gallery.count) of \(hotel.name)")
+                    .accessibilityHint("Opens the photo full screen")
                 }
             }
             .frame(height: 280)

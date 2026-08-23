@@ -5,6 +5,13 @@ struct FullScreenImageViewer: View {
     let imageUrl: String?
     @Binding var isPresented: Bool
 
+    /// What the image is of (IOS-AUDIT-UX-052 AC2).
+    ///
+    /// Defaults to a generic string so no call site breaks, but every real one
+    /// passes the subject - without it VoiceOver announced nothing at all for a
+    /// view whose entire content is one image.
+    var accessibilityDescription: String = "Image"
+
     @State private var scale: CGFloat = 1.0
     @State private var lastScale: CGFloat = 1.0
     @State private var offset: CGSize = .zero
@@ -38,6 +45,30 @@ struct FullScreenImageViewer: View {
                         .tint(.white)
                 }
                 .aspectRatio(contentMode: .fit)
+                // IOS-AUDIT-UX-052 AC2. Pinch and double-tap are the only ways to
+                // zoom, and neither exists for a VoiceOver user - the adjustable
+                // action is what makes the feature reachable at all, rather than
+                // a nicety on top of it.
+                .accessibilityElement()
+                .accessibilityLabel(accessibilityDescription)
+                .accessibilityValue("Zoomed \(Int(scale.rounded() * 100)) percent")
+                .accessibilityHint("Swipe up or down to zoom")
+                .accessibilityAdjustableAction { direction in
+                    let step: CGFloat = 0.5
+                    switch direction {
+                    case .increment: scale = min(scale + step, maxScale)
+                    case .decrement: scale = max(scale - step, 1.0)
+                    @unknown default: break
+                    }
+                    lastScale = scale
+                    // Recentre when zoomed back out, matching what the pinch
+                    // gesture does on end - otherwise the image can be left
+                    // panned off-screen with no way to bring it back.
+                    if scale <= 1.0 {
+                        offset = .zero
+                        lastOffset = .zero
+                    }
+                }
                 .scaleEffect(scale)
                 .offset(x: offset.width, y: offset.height + dragOffset.height)
                 .gesture(

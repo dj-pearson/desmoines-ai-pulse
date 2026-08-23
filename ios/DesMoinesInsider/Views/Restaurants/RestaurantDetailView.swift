@@ -77,7 +77,11 @@ struct RestaurantDetailView: View {
             ShareSheet(items: [shareText])
         }
         .fullScreenCover(isPresented: $showImageViewer) {
-            FullScreenImageViewer(imageUrl: restaurant.imageUrl, isPresented: $showImageViewer)
+            FullScreenImageViewer(
+                imageUrl: restaurant.imageUrl,
+                isPresented: $showImageViewer,
+                accessibilityDescription: "Photo of \(restaurant.name)",
+            )
         }
         .sheet(isPresented: $showSubscription) {
             PaywallView(context: .diningTips)

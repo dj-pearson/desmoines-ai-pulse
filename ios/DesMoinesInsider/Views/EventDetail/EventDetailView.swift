@@ -97,7 +97,11 @@ struct EventDetailView: View {
             Text(viewModel.calendarError ?? "")
         }
         .fullScreenCover(isPresented: $showImageViewer) {
-            FullScreenImageViewer(imageUrl: event.imageUrl, isPresented: $showImageViewer)
+            FullScreenImageViewer(
+                imageUrl: event.imageUrl,
+                isPresented: $showImageViewer,
+                accessibilityDescription: "Photo of \(event.title)",
+            )
         }
         .sheet(isPresented: $showSubscription) {
             PaywallView(context: .insiderTips)
