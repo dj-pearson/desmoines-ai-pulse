@@ -256,21 +256,35 @@ serve(async (req) => {
 
   // ── Step 1: Unstick items — reset in_progress items older than 5 min ──────
   const stuckCutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-  const { count: unstuckCount } = await supabase
+  const { count: unstuckCount, error: unstuckError } = await supabase
     .from("pseo_generation_queue")
     .update({ status: "pending", started_at: null, error_message: "Reset after timeout" })
     .eq("status", "in_progress")
     .lt("started_at", stuckCutoff)
     .select("*", { count: "exact", head: true } as never);
 
-  if (unstuckCount && unstuckCount > 0) {
+  if (unstuckError) {
+    console.error("pseo-batch-worker: could not reset stuck items:", unstuckError.message);
+  } else if (unstuckCount && unstuckCount > 0) {
     console.log(`pseo-batch-worker: reset ${unstuckCount} stuck in_progress items back to pending`);
   }
 
   // ── Step 2: Seed queue if needed ──────────────────────────────────────────
-  const { count: totalCount } = await supabase
+  // AN UNREADABLE COUNT MUST NOT LOOK LIKE AN EMPTY QUEUE. `!totalCount` was
+  // true for a failed read as well as for zero, and the next line seeds the
+  // queue - so a transient error re-seeded a queue that already had items,
+  // duplicating generation jobs and the model spend behind them.
+  const { count: totalCount, error: totalError } = await supabase
     .from("pseo_generation_queue")
     .select("*", { count: "exact", head: true });
+
+  if (totalError) {
+    console.error("pseo-batch-worker: could not size the queue:", totalError.message);
+    return jsonResponse(
+      { error: "Could not read the generation queue", details: totalError.message },
+      503,
+    );
+  }
 
   const queueIsEmpty = !totalCount || totalCount === 0;
   const forceSeed = body.seed === true;

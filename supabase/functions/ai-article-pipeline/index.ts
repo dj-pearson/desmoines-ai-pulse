@@ -102,11 +102,20 @@ Deno.serve(async (req) => {
     // --- daily cap (auto-published only) ------------------------------------
     const startOfDay = new Date();
     startOfDay.setUTCHours(0, 0, 0, 0);
-    const { count: publishedToday } = await supabase
+    // The cap fails CLOSED. `publishedToday ?? 0` meant an unreadable count
+    // read as "nothing published today", so the daily limit on auto-published
+    // articles - and the model spend behind each one - simply never applied
+    // while the read was broken.
+    const { count: publishedToday, error: capError } = await supabase
       .from('articles')
       .select('id', { count: 'exact', head: true })
       .eq('is_auto_published', true)
       .gte('published_at', startOfDay.toISOString());
+    if (capError) {
+      console.error('[ai-article-pipeline] daily-cap count failed:', capError.message);
+      ctx.meta({ capped: true, capUnreadable: true });
+      return { capped: true, decision: 'capped', reason: 'daily cap could not be verified' };
+    }
     if ((publishedToday ?? 0) >= DAILY_CAP) {
       ctx.meta({ capped: true, publishedToday });
       return { capped: true, decision: 'capped', publishedToday };

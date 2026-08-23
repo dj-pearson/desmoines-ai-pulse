@@ -30,10 +30,22 @@ function esc(s: string): string {
   return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] ?? c));
 }
 
+/**
+ * THROWS RATHER THAN RETURNING ZERO. These five counts become audience
+ * statistics in a proposal document sent to a prospective advertiser - total
+ * profiles, active profiles, upcoming events, restaurants, newsletter
+ * subscribers. `count ?? 0` published a fabricated figure derived from a query
+ * that never ran, and a single failed read among the five produced an
+ * incoherent picture (no members, four thousand events) that still went out.
+ * A proposal with no numbers is a retry; a proposal with wrong ones is a claim.
+ */
 async function count(supabase: Client, table: string, apply?: (q: Client) => Client): Promise<number> {
   let q = supabase.from(table).select("id", { count: "exact", head: true });
   if (apply) q = apply(q);
-  const { count } = await q;
+  const { count, error } = await q;
+  if (error) {
+    throw new Error(`Could not count ${table} for the proposal: ${error.message}`);
+  }
   return count ?? 0;
 }
 

@@ -269,11 +269,21 @@ function linksResolve(content: DigestContent): boolean {
   });
 }
 
+/**
+ * -1 means "could not read", which the pre-send gate below treats as a failure
+ * exactly like zero. Returning 0 for an unreadable count happened to land on
+ * the safe side of that gate, but it also told the PREVIEW that the newsletter
+ * has no subscribers - a number an operator reads and believes.
+ */
 async function activeSubscriberCount(supabase: SupabaseClient): Promise<number> {
-  const { count } = await supabase
+  const { count, error } = await supabase
     .from('newsletter_subscribers')
     .select('email', { count: 'exact', head: true })
     .eq('status', 'active');
+  if (error) {
+    console.error('[assemble-weekly-digest] subscriber count failed:', error.message);
+    return -1;
+  }
   return count ?? 0;
 }
 
@@ -377,7 +387,8 @@ Deno.serve(async (req) => {
     // 4) pre-send validation gates — any failure throws (aborts + alerts).
     const recipientCount = await activeSubscriberCount(supabase);
     const gateFailures: string[] = [];
-    if (recipientCount <= 0) gateFailures.push('no active subscribers');
+    if (recipientCount < 0) gateFailures.push('subscriber count could not be read');
+    else if (recipientCount === 0) gateFailures.push('no active subscribers');
     if (totalItems <= 0) gateFailures.push('no content to send (events/restaurants/article all empty)');
     if (subject.length === 0 || subject.length > SUBJECT_MAX) {
       gateFailures.push(`subject length ${subject.length} outside 1..${SUBJECT_MAX}`);
