@@ -333,9 +333,20 @@ function scanFile(file, schema, findings) {
     // Widening the terminator only ever SHRINKS a segment, so it cannot hide a
     // column belonging to this table: that chain ends before the next `.from(`
     // by definition, and PostgREST-js has no nested `.from()`.
+    // A HELPER THAT TAKES THE CLIENT ALSO ENDS THE CHAIN. generate-proposal has
+    //     count(supabase, "profiles", (q) => q.eq("lifecycle_stage", "active"))
+    // after a `.from("ad_price_list")` query. There is no `.from(` inside it, so
+    // the segment ran straight through and lifecycle_stage, status, date and
+    // archived_at were all reported against ad_price_list. Their real tables are
+    // profiles, newsletter_subscribers and events.
+    //
+    // `name(supabase,` is the signature of that shape and nothing else: a
+    // PostgREST chain never passes the client to itself. Like the `.from(`
+    // bound, this only ever shrinks a segment.
     const rest = src.slice(m.index + m[0].length);
-    const nextFrom = rest.search(/\.from\(/);
-    const segment = nextFrom === -1 ? rest.slice(0, 2000) : rest.slice(0, Math.min(nextFrom, 2000));
+    const stops = [rest.search(/\.from\(/), rest.search(/\b\w+\(\s*supabase\s*,/)].filter((i) => i !== -1);
+    const cut = stops.length > 0 ? Math.min(...stops) : -1;
+    const segment = cut === -1 ? rest.slice(0, 2000) : rest.slice(0, Math.min(cut, 2000));
 
     const report = (col, at, api, error) => {
       if (columns.has(col)) return;
