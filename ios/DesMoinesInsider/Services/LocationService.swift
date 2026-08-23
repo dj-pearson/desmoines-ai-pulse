@@ -31,16 +31,19 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
     private static let locationTimeout: TimeInterval = 10.0
 
     /// How long a fix stays reusable.
-    static let cacheLifetime: TimeInterval = 300
+    nonisolated static let cacheLifetime: TimeInterval = 300
 
-    /// Whether a status permits using location at all. Pure, so the ordering
-    /// this story is about can be asserted without CoreLocation.
-    static func isAuthorized(_ status: CLAuthorizationStatus) -> Bool {
+    /// Whether a status permits using location at all.
+    ///
+    /// `nonisolated` because it is a pure function of its argument, and the
+    /// service being @MainActor otherwise makes it unusable from anywhere
+    /// else - including a test, which is the point of extracting it.
+    nonisolated static func isAuthorized(_ status: CLAuthorizationStatus) -> Bool {
         status == .authorizedWhenInUse || status == .authorizedAlways
     }
 
     /// Whether a fix taken at `timestamp` is still reusable at `now`.
-    static func isFresh(_ timestamp: Date, now: Date) -> Bool {
+    nonisolated static func isFresh(_ timestamp: Date, now: Date) -> Bool {
         now.timeIntervalSince(timestamp) < cacheLifetime
     }
 
