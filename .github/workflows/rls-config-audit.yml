@@ -78,6 +78,22 @@ jobs:
       # baselined, because one of the two causes needs a service-role key this
       # repo must never write down, and a check that is red on day one gets
       # switched off.
+      # WEB-SEO-019 AC5. Two restaurants existed twice at the same address, the
+      # second pair written EIGHT SECONDS apart - one ingest run inserting the
+      # same record twice, because the scraper checks for an existing row with a
+      # SELECT before its INSERT and nothing stands behind that. Both records in
+      # one batch pass the check, since neither is in the table when the other is
+      # looked up.
+      #
+      # A detector rather than a unique index: an index would convert a duplicate
+      # insert into a hard failure inside a per-record loop that does not handle
+      # one, which is a tightening in the CLAUDE.md sense.
+      - name: Duplicate entity detector
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npx tsx scripts/check-duplicate-entities.ts
+
       - name: Scheduled-job health ratchet
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
