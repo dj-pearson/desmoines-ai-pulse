@@ -42,6 +42,23 @@ final class WeatherService {
         var isStale: Bool {
             Date().timeIntervalSince(fetchedAt) > 30 * 60
         }
+
+        /// Whether this snapshot was taken close enough to `coordinate` to
+        /// describe the weather there (IOS-AUDIT-BUG-015).
+        ///
+        /// The dedupe path already applied this; the network-failure fallback
+        /// did not, and returned whatever snapshot happened to be cached. So a
+        /// user in another city with no connection was shown Des Moines weather
+        /// presented as their own - wrong in a way that looks completely normal.
+        func isNear(_ coordinate: CLLocationCoordinate2D) -> Bool {
+            abs(latitude - coordinate.latitude) < Snapshot.proximityDegrees
+                && abs(longitude - coordinate.longitude) < Snapshot.proximityDegrees
+        }
+
+        /// About 5.5 km of latitude. Weather is a city-scale quantity, so this
+        /// is deliberately loose - it exists to catch a different CITY, not a
+        /// different street.
+        static let proximityDegrees: Double = 0.05
     }
 
     private(set) var current: Snapshot?
@@ -64,12 +81,13 @@ final class WeatherService {
     func refresh(for location: CLLocation) async -> Snapshot? {
         // Cheap dedupe: if we already have a fresh snapshot for roughly this
         // location, skip the network call.
-        if let snap = current,
-           !snap.isStale,
-           abs(snap.latitude - location.coordinate.latitude) < 0.05,
-           abs(snap.longitude - location.coordinate.longitude) < 0.05 {
+        if let snap = current, !snap.isStale, snap.isNear(location.coordinate) {
             return snap
         }
+
+        // Everything below can fall back to the cache. It is only a valid
+        // fallback for the place it was taken.
+        let fallback = current.flatMap { $0.isNear(location.coordinate) ? $0 : nil }
 
         // Round to ~1km (2 decimal places) before sending to the third-party
         // Open-Meteo host — city-level weather doesn't need exact coordinates and
@@ -79,7 +97,7 @@ final class WeatherService {
         let urlString =
             "https://api.open-meteo.com/v1/forecast?latitude=\(lat)&longitude=\(lon)" +
             "&current=temperature_2m,weather_code&temperature_unit=fahrenheit"
-        guard let url = URL(string: urlString) else { return current }
+        guard let url = URL(string: urlString) else { return fallback }
 
         do {
             var req = URLRequest(url: url)
@@ -87,7 +105,7 @@ final class WeatherService {
             let (data, response) = try await URLSession.shared.data(for: req)
             guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
                 lastError = "Weather HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)"
-                return current
+                return fallback
             }
 
             struct Payload: Decodable {
@@ -114,7 +132,7 @@ final class WeatherService {
             return snapshot
         } catch {
             lastError = error.localizedDescription
-            return current
+            return fallback
         }
     }
 

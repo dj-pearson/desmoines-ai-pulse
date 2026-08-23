@@ -10,8 +10,18 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
 
     private(set) var userLocation: CLLocation?
     private(set) var authorizationStatus: CLAuthorizationStatus = .notDetermined
-    private(set) var isLocating = false
     private(set) var locationError: String?
+
+    /// Derived from the request actually in flight, not from a per-call flag
+    /// (IOS-AUDIT-BUG-015).
+    ///
+    /// It used to be a stored property set true on entry with
+    /// `defer { isLocating = false }`. Two overlapping callers is the normal
+    /// case here - several rails ask for location as a screen appears - and
+    /// the first one to return, including the one that returns instantly from
+    /// cache, ran its defer and switched the spinner off while the other was
+    /// still waiting.
+    var isLocating: Bool { isRequestInFlight }
 
     private let locationManager = CLLocationManager()
     private var pendingContinuations: [CheckedContinuation<CLLocation, Error>] = []
@@ -19,6 +29,20 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
 
     /// Timeout duration for location requests (10 seconds).
     private static let locationTimeout: TimeInterval = 10.0
+
+    /// How long a fix stays reusable.
+    static let cacheLifetime: TimeInterval = 300
+
+    /// Whether a status permits using location at all. Pure, so the ordering
+    /// this story is about can be asserted without CoreLocation.
+    static func isAuthorized(_ status: CLAuthorizationStatus) -> Bool {
+        status == .authorizedWhenInUse || status == .authorizedAlways
+    }
+
+    /// Whether a fix taken at `timestamp` is still reusable at `now`.
+    static func isFresh(_ timestamp: Date, now: Date) -> Bool {
+        now.timeIntervalSince(timestamp) < cacheLifetime
+    }
 
     override init() {
         super.init()
@@ -36,20 +60,21 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
     // MARK: - Get Current Location
 
     func getCurrentLocation() async throws -> CLLocation {
-        isLocating = true
         locationError = nil
 
-        defer { isLocating = false }
-
-        // Check if we have a recent location (< 5 min old)
-        if let existing = userLocation,
-           existing.timestamp.timeIntervalSinceNow > -300 {
-            return existing
-        }
-
-        guard authorizationStatus == .authorizedWhenInUse || authorizationStatus == .authorizedAlways else {
+        // AUTHORIZATION FIRST. This guard used to sit BELOW the cache shortcut,
+        // so for five minutes after a user revoked location in Settings the app
+        // kept handing out the coordinate it had already taken - which is the
+        // one thing revoking is supposed to stop (IOS-AUDIT-BUG-015).
+        guard Self.isAuthorized(authorizationStatus) else {
             requestPermission()
             throw LocationError.permissionDenied
+        }
+
+        // Recent enough to reuse (< 5 min old).
+        if let existing = userLocation,
+           Self.isFresh(existing.timestamp, now: Date()) {
+            return existing
         }
 
         return try await withCheckedThrowingContinuation { continuation in
@@ -117,13 +142,26 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
             for c in continuations {
                 c.resume(throwing: error)
             }
-            self.isLocating = false
         }
     }
 
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         Task { @MainActor in
-            self.authorizationStatus = manager.authorizationStatus
+            let status = manager.authorizationStatus
+            self.authorizationStatus = status
+            guard !Self.isAuthorized(status) else { return }
+
+            // Revoked. Drop the fix rather than only refusing to hand out new
+            // ones: distance(from:) reads userLocation directly with no
+            // authorization check, so every "0.4 mi away" label on screen would
+            // otherwise keep using the coordinate the user just withdrew.
+            self.userLocation = nil
+            self.isRequestInFlight = false
+            let continuations = self.pendingContinuations
+            self.pendingContinuations.removeAll()
+            for c in continuations {
+                c.resume(throwing: LocationError.permissionDenied)
+            }
         }
     }
 
