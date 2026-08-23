@@ -170,10 +170,23 @@ jobs:
       - name: Install Playwright Chromium + system deps
         run: npx playwright install --with-deps chromium
 
+      # --global-timeout is what makes this lane usable. The step is
+      # continue-on-error, so a failing suite is absorbed by design - but the
+      # broad suites do not finish inside the 30-minute JOB timeout, and a
+      # job cancelled by timeout is not something continue-on-error can
+      # absorb. Every run of this lane has been cancelled, so it has produced
+      # a permanent red mark and no report at all.
+      #
+      # At 25 minutes Playwright stops itself, writes the report for what it
+      # did run, and exits non-zero - which continue-on-error then swallows.
+      # The lane goes from "cancelled, no artifact" to "green, partial report",
+      # which is the difference between a signal and a habit of ignoring one.
+      # Five minutes of headroom is left for the upload step.
       - name: Run critical E2E suites (Chromium only)
         continue-on-error: true
         run: >-
           npx playwright test
+          --global-timeout=1500000
           tests/accessibility.spec.ts
           tests/links-and-buttons.spec.ts
           tests/forms.spec.ts
