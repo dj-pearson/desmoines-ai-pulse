@@ -1,6 +1,6 @@
 {
   "$comment": "Known unresolvable Supabase references, frozen by scripts/check-schema-usage.mjs --update. This list must only ever SHRINK. Each entry is a feature that silently does nothing in production.",
-  "generated": 261,
+  "generated": 254,
   "findings": [
     "column|src/components/cms/ContentQueue.tsx|content_queue.priority",
     "column|src/hooks/useCommunityFeatures.ts|event_photos.is_approved",
@@ -129,7 +129,6 @@
     "table|supabase/functions/agent-fraud-monitor/index.ts|payments",
     "table|supabase/functions/agent-fraud-monitor/index.ts|usage_events",
     "table|supabase/functions/analyze-images/index.ts|seo_image_analysis",
-    "table|supabase/functions/appstore-server-notifications-v2/index.ts|apple_notification_log",
     "table|supabase/functions/autonomy-overview/index.ts|event_submissions",
     "table|supabase/functions/check-core-web-vitals/index.ts|seo_core_web_vitals",
     "table|supabase/functions/crawl-site/index.ts|seo_crawl_results",
@@ -138,7 +137,6 @@
     "table|supabase/functions/generate-itinerary/index.ts|trip_plan_items",
     "table|supabase/functions/generate-itinerary/index.ts|trip_plans",
     "table|supabase/functions/manage-subscription/index.ts|payments",
-    "table|supabase/functions/play-rtdn-webhook/index.ts|play_rtdn_log",
     "table|supabase/functions/register-device-token/index.ts|device_tokens",
     "table|supabase/functions/run-scheduled-audit/index.ts|seo_alert_rules",
     "table|supabase/functions/run-scheduled-audit/index.ts|seo_alerts",

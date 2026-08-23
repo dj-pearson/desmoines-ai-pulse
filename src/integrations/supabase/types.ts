@@ -1189,6 +1189,45 @@ export type Database = {
         }
         Relationships: []
       }
+      apple_notification_log: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          id: string
+          notification_type: string | null
+          notification_uuid: string
+          original_transaction_id: string | null
+          processed_at: string
+          status: string
+          subtype: string | null
+          user_subscription_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          notification_type?: string | null
+          notification_uuid: string
+          original_transaction_id?: string | null
+          processed_at?: string
+          status: string
+          subtype?: string | null
+          user_subscription_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          notification_type?: string | null
+          notification_uuid?: string
+          original_transaction_id?: string | null
+          processed_at?: string
+          status?: string
+          subtype?: string | null
+          user_subscription_id?: string | null
+        }
+        Relationships: []
+      }
       articles: {
         Row: {
           author_id: string | null
@@ -6653,6 +6692,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      play_rtdn_log: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          id: string
+          message_id: string
+          notification_type: string | null
+          processed_at: string
+          purchase_token: string | null
+          status: string
+          subscription_id: string | null
+          user_subscription_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          message_id: string
+          notification_type?: string | null
+          processed_at?: string
+          purchase_token?: string | null
+          status: string
+          subscription_id?: string | null
+          user_subscription_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          message_id?: string
+          notification_type?: string | null
+          processed_at?: string
+          purchase_token?: string | null
+          status?: string
+          subscription_id?: string | null
+          user_subscription_id?: string | null
+        }
+        Relationships: []
       }
       playgrounds: {
         Row: {
