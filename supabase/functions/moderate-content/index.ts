@@ -192,12 +192,26 @@ async function approveItem(supabase: SupabaseClient, contentType: ContentType, c
   await supabase.from(table).update({ moderation_status: 'approved' }).eq('id', contentId);
 }
 
+/**
+ * Whether moderation is switched off. PAUSED MEANS AUTO-APPROVE, see moderateOne
+ * - so the safe direction on a failed read is NOT paused, and this deliberately
+ * keeps failing that way (WEB-BE-032 AC3). Failing closed here would wave
+ * unmoderated content straight through, which is the opposite of what a kill
+ * switch is for.
+ *
+ * The error is captured so a flag table that has gone unreadable is visible
+ * rather than silently costing Claude credits on every sweep.
+ */
 async function isPaused(supabase: SupabaseClient): Promise<boolean> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('feature_flags')
     .select('enabled')
     .eq('flag_key', PAUSE_FLAG)
     .maybeSingle<{ enabled: boolean }>();
+  if (error) {
+    console.warn(`[moderate-content] pause flag unreadable; moderating anyway: ${error.message}`);
+    return false;
+  }
   return data?.enabled === false;
 }
 
@@ -294,16 +308,24 @@ Deno.serve(async (req) => {
 
   if (!isInternal) {
     if (!bearer) return json({ error: 'Authentication required' }, 401, corsHeaders);
-    const { data: userRes } = await supabase.auth.getUser(bearer);
+    // Every read in this block gates AUTHORIZATION, so all three fail closed -
+    // that direction was already right. What was missing is any signal when
+    // they fail: a database blip reached the caller as 'Content not found' or a
+    // flat 403 with nothing server-side to distinguish it from a real denial
+    // (WEB-BE-032 AC2).
+    const { data: userRes, error: authError } = await supabase.auth.getUser(bearer);
+    if (authError) console.warn(`[moderate-content] token check failed: ${authError.message}`);
     const uid = userRes?.user?.id;
     if (!uid) return json({ error: 'Invalid token' }, 401, corsHeaders);
 
     const ownerTable = contentType === 'review' ? 'user_ratings' : 'contact_submissions';
-    const { data: ownerRow } = await supabase.from(ownerTable).select('user_id').eq('id', contentId).maybeSingle<{ user_id: string | null }>();
+    const { data: ownerRow, error: ownerError } = await supabase.from(ownerTable).select('user_id').eq('id', contentId).maybeSingle<{ user_id: string | null }>();
+    if (ownerError) console.warn(`[moderate-content] ${ownerTable} owner read failed: ${ownerError.message}`);
     if (!ownerRow) return json({ error: 'Content not found' }, 404, corsHeaders);
 
     if (ownerRow.user_id !== uid) {
-      const { data: roleRow } = await supabase.from('user_roles').select('role').eq('user_id', uid).maybeSingle();
+      const { data: roleRow, error: roleError } = await supabase.from('user_roles').select('role').eq('user_id', uid).maybeSingle();
+      if (roleError) console.warn(`[moderate-content] user_roles read failed for ${uid}: ${roleError.message}`);
       if (!roleRow || !['admin', 'root_admin'].includes(roleRow.role)) {
         return json({ error: 'Not authorized for this content' }, 403, corsHeaders);
       }

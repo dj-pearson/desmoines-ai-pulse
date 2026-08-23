@@ -106,12 +106,19 @@ async function buildSitemaps(supabase: Supa) {
   // Events (exclude hidden/stale — WEB-AUTO-006)
   const evIndex = new Map<string, string>();
   {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("events")
       .select("id, title, date, event_start_utc, updated_at")
       .neq("is_hidden", true)
       .order("date", { ascending: false })
       .limit(5000);
+    // THROW, do not fall back to an empty list. Every read in this builder
+    // feeds a file that is then WRITTEN over the live sitemap, so a dropped
+    // error publishes a sitemap with zero events in it and delists the whole
+    // section from every crawler. Failing the job leaves the previous sitemap
+    // in place, which is the correct outcome of a failed regeneration
+    // (WEB-BE-032 AC2).
+    if (error) throw new Error(`events read failed: ${error.message}`);
     const urls: SitemapUrl[] = (data ?? []).map((e: any) => {
       const loc = `${BASE_URL}/events/${eventSlug(e.title, e)}`;
       evIndex.set(e.id, loc);
@@ -130,11 +137,12 @@ async function buildSitemaps(supabase: Supa) {
   // Restaurants
   const rIndex = new Map<string, string>();
   {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("restaurants")
       .select("id, name, slug, is_featured, updated_at")
       .order("name")
       .limit(5000);
+    if (error) throw new Error(`restaurants read failed: ${error.message}`);
     const urls: SitemapUrl[] = (data ?? []).map((r: any) => {
       const loc = `${BASE_URL}/restaurants/${r.slug || slugify(r.name)}`;
       rIndex.set(r.id, loc);
@@ -153,10 +161,11 @@ async function buildSitemaps(supabase: Supa) {
   // Attractions
   const aIndex = new Map<string, string>();
   {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("attractions")
       .select("id, name, updated_at")
       .order("name");
+    if (error) throw new Error(`attractions read failed: ${error.message}`);
     const urls: SitemapUrl[] = (data ?? []).map((a: any) => {
       const loc = `${BASE_URL}/attractions/${slugify(a.name)}`;
       aIndex.set(a.id, loc);
@@ -175,10 +184,11 @@ async function buildSitemaps(supabase: Supa) {
   // Articles (published)
   const artIndex = new Map<string, string>();
   {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("articles")
       .select("id, slug, status, updated_at, created_at")
       .order("created_at", { ascending: false });
+    if (error) throw new Error(`articles read failed: ${error.message}`);
     const urls: SitemapUrl[] = (data ?? [])
       .filter((a: any) => !a.status || a.status === "published")
       .map((a: any) => {
@@ -278,12 +288,19 @@ serve(async (req) => {
   const job = await runJob("regenerate-sitemaps", async (ctx) => {
     // 1. Claim the unprocessed change queue (best-effort; queue is an optimization
     //    signal — we always do a full regen so a missed row never stales the map).
-    const { data: pending } = await supabase
+    const { data: pending, error: pendingError } = await supabase
       .from("sitemap_change_queue")
       .select("id, content_type, content_id, action")
       .is("processed_at", null)
       .order("created_at", { ascending: true })
       .limit(2000);
+    // Genuinely best-effort, unlike the reads in buildSitemaps: the queue is an
+    // optimisation signal and a full regen happens either way, so an empty
+    // queue costs nothing (WEB-BE-032 AC3). Logged so a queue table that has
+    // gone unreadable does not stay invisible forever.
+    if (pendingError) {
+      console.warn(`[regenerate-sitemaps] change queue unreadable: ${pendingError.message}`);
+    }
     const queue = pending ?? [];
 
     // 2. Regenerate every sitemap file and capture per-row canonical URLs.
