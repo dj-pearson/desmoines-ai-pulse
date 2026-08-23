@@ -58,15 +58,30 @@ final class AdTrackingConsentTests: XCTestCase {
         )
     }
 
-    func testAbsentConsentDropsQueuedTelemetryOnFlush() async {
-        // Never answered is not consent.
+    func testAnUnansweredConsentFollowsWhateverConsentServiceResolvesTo() async throws {
+        // The granted branch below only holds with no client to send through.
+        try XCTSkipUnless(SupabaseService.shared.client == nil, "Requires an unconfigured Supabase client.")
+
+        // "Never answered" is NOT the same as denied here, and this test failed
+        // once for assuming it was. ConsentService.init calls
+        // register(defaults:) to grant analytics for non-EU regions, and a
+        // registered default survives removeObject - so on a US simulator an
+        // absent key reads as GRANTED, deliberately (opt-out outside the EU,
+        // opt-in inside it).
+        //
+        // The property that holds in both regions is that the flush obeys
+        // whatever ConsentService reports, so that is what is asserted.
         UserDefaults.standard.removeObject(forKey: "gdpr_consent_analytics")
+        let resolved = ConsentService.shared.analyticsConsent
+
         let service = makeService()
         service.seedPendingImpressionForTesting()
-
         await service.flushPendingEvents()
 
-        XCTAssertEqual(service.pendingEventCountForTesting, 0)
+        XCTAssertEqual(
+            service.pendingEventCountForTesting, resolved ? 1 : 0,
+            "The queue must follow the resolved consent value, not the presence of the key."
+        )
     }
 
     func testGrantedConsentKeepsQueuedTelemetryWhenItCannotBeSent() async throws {

@@ -61,6 +61,11 @@ final class AdTrackingService {
     /// their return value would pass with the gate deleted.
     var pendingEventCountForTesting: Int { pending.impressions.count + pending.clicks.count }
 
+    /// Sponsored-listing dedupe keys burned this session. The set is otherwise
+    /// private and the analytics sink is a no-op, so this is the only way to
+    /// assert that a listing seen twice is counted once.
+    var sponsoredImpressionKeyCountForTesting: Int { loggedSponsoredImpressions.count }
+
     /// Queues one impression as if it had been logged while offline.
     func seedPendingImpressionForTesting(campaignId: String = "c1", creativeId: String = "cr1") {
         enqueue(impression: ImpressionRow(
@@ -338,9 +343,21 @@ final class AdTrackingService {
     // MARK: - Sponsored listings (distinct, RLS-safe) — IOS-ADS-011 / IOS-ADS-015
 
     func logSponsoredImpression(listingType: String, listingId: String, placement: String = "feed") {
+        // Consent first, so a refused impression does not BURN the dedupe key.
+        // trackEvent drops the event when consent is missing, and the insert
+        // below used to happen anyway - so a user who accepted analytics
+        // mid-session would never log an impression for a listing that had
+        // already scrolled past under the old answer (IOS-AUDIT-TEST-003).
+        guard ConsentService.shared.analyticsConsent else { return }
+
         // De-dupe per app session so a listing scrolling in/out of view — or
         // appearing in more than one feed — logs at most one impression
         // (IOS-AUDIT-PERF-006), mirroring the campaign-creative dedupe above.
+        //
+        // The key is COMPOSED, and that composition is the contract: it is the
+        // same (itemType, itemId) pair get-sponsored-pick uses to build
+        // SponsoredPick.id. Rename either field on the server and every
+        // impression starts looking new.
         let dedupeKey = "\(listingType)|\(listingId)|\(placement)"
         guard !loggedSponsoredImpressions.contains(dedupeKey) else { return }
         loggedSponsoredImpressions.insert(dedupeKey)
