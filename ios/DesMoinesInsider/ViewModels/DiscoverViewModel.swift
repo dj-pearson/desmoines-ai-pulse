@@ -161,6 +161,15 @@ final class DiscoverViewModel {
     private(set) var filter: DiscoverFilterContext
     private(set) var deck: [SwipeItem] = []
     private(set) var isLoading = false
+
+    /// True when the last batch fetch threw (IOS-AUDIT-UX-051 AC3).
+    ///
+    /// Both batch fetchers used to swallow their error and set hasMore... = false,
+    /// so a network failure produced an empty deck and the "You've seen
+    /// everything" screen. That tells the user they have exhausted the content
+    /// when in fact nothing loaded - and the only affordance offered was a Reset
+    /// that would fail the same way, silently.
+    private(set) var lastLoadFailed = false
     private(set) var totalSwipes = 0
     private(set) var likedItems: [SwipeItem] = []
 
@@ -202,6 +211,7 @@ final class DiscoverViewModel {
 
     func reload() async {
         isLoading = true
+        lastLoadFailed = false
         deck = []
         eventOffset = 0
         restaurantOffset = 0
@@ -399,6 +409,7 @@ final class DiscoverViewModel {
         } catch {
             guard generation == fetchGeneration else { return }
             hasMoreEvents = false
+            lastLoadFailed = true
         }
     }
 
@@ -430,6 +441,7 @@ final class DiscoverViewModel {
         } catch {
             guard generation == fetchGeneration else { return }
             hasMoreRestaurants = false
+            lastLoadFailed = true
         }
     }
 

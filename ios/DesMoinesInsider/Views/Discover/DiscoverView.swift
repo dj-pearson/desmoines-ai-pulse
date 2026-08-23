@@ -197,13 +197,23 @@ struct DiscoverView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "sparkles")
+        // IOS-AUDIT-UX-051 AC3. Three states, not one. The deck being empty
+        // because the fetch FAILED is not the same as having seen everything,
+        // and it used to render identically - so a user on a flaky connection
+        // was told they had exhausted the content and offered a Reset that would
+        // fail the same way, with no feedback either time.
+        let failed = viewModel.lastLoadFailed
+
+        return VStack(spacing: 14) {
+            Image(systemName: failed ? "wifi.exclamationmark" : "sparkles")
                 .font(.system(size: 44))
-                .foregroundStyle(.purple.opacity(0.7))
-            Text("You've seen everything")
+                .foregroundStyle(failed ? Color.orange : .purple.opacity(0.7))
+                .accessibilityHidden(true)
+            Text(failed ? "Couldn't load more" : "You've seen everything")
                 .font(.title3.weight(.semibold))
-            Text("Come back later for fresh picks, or reset to swipe again.")
+            Text(failed
+                 ? "Check your connection and try again."
+                 : "Come back later for fresh picks, or reset to swipe again.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -212,12 +222,19 @@ struct DiscoverView: View {
                 stackId = UUID()
                 Task { await viewModel.reload() }
             } label: {
-                Label("Reset deck", systemImage: "arrow.counterclockwise")
+                // The progress state is the other half of AC3: reload() already
+                // published isLoading and nothing consumed it, so pressing Reset
+                // looked like it had done nothing until the deck repopulated.
+                Label(
+                    viewModel.isLoading ? "Loading..." : (failed ? "Try again" : "Reset deck"),
+                    systemImage: viewModel.isLoading ? "arrow.triangle.2.circlepath" : "arrow.counterclockwise",
+                )
                     .font(.subheadline.weight(.semibold))
                     .padding(.horizontal, 18)
                     .padding(.vertical, 10)
                     .background(Color.accentColor.opacity(0.15), in: Capsule())
             }
+            .disabled(viewModel.isLoading)
             .padding(.top, 6)
         }
     }
