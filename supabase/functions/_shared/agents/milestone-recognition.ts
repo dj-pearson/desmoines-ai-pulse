@@ -61,8 +61,8 @@ export const run: AgentRun = async (ctx, { supabase }) => {
 
   const userIds = rows.map((r) => r.user_id);
   const [favs, revs] = await Promise.all([
-    supabase.from("favorites").select("user_id, created_at").in("user_id", userIds).limit(20000),
-    supabase.from("reviews").select("user_id, created_at").in("user_id", userIds).limit(20000),
+    supabase.from("content_favorites").select("user_id, created_at").in("user_id", userIds).limit(20000),
+    supabase.from("event_reviews").select("user_id, created_at").in("user_id", userIds).limit(20000),
   ]);
   const favByUser = new Map<string, number[]>();
   const revByUser = new Map<string, number[]>();

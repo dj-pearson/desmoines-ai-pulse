@@ -114,7 +114,7 @@ Deno.serve(async (req) => {
       // Activation stamping: if a first-value send exists without activation and
       // the user now has a favorite created after it, record activation.
       const fvSend = prior.find((s) => s.kind === "onboarding_first_value");
-      const { data: favs } = await supabase.from("favorites").select("created_at").eq("user_id", p.user_id).order("created_at", { ascending: false }).limit(1);
+      const { data: favs } = await supabase.from("content_favorites").select("created_at").eq("user_id", p.user_id).order("created_at", { ascending: false }).limit(1);
       const lastFav = (favs?.[0]?.created_at as string | undefined) ?? null;
       const hasFavorite = !!lastFav;
       if (fvSend && lastFav && new Date(lastFav).getTime() > new Date(fvSend.created_at).getTime()) {

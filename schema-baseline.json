@@ -1,6 +1,6 @@
 {
   "$comment": "Known unresolvable Supabase references, frozen by scripts/check-schema-usage.mjs --update. This list must only ever SHRINK. Each entry is a feature that silently does nothing in production.",
-  "generated": 273,
+  "generated": 261,
   "findings": [
     "column|src/components/cms/ContentQueue.tsx|content_queue.priority",
     "column|src/hooks/useCommunityFeatures.ts|event_photos.is_approved",
@@ -124,20 +124,10 @@
     "table|supabase/functions/_shared/agents/billing-selfservice.ts|payments",
     "table|supabase/functions/_shared/agents/fraud-abuse-detector.ts|payments",
     "table|supabase/functions/_shared/agents/fraud-abuse-detector.ts|usage_events",
-    "table|supabase/functions/_shared/agents/lifecycle-classifier.ts|favorites",
-    "table|supabase/functions/_shared/agents/lifecycle-classifier.ts|reviews",
-    "table|supabase/functions/_shared/agents/milestone-recognition.ts|favorites",
-    "table|supabase/functions/_shared/agents/milestone-recognition.ts|reviews",
-    "table|supabase/functions/_shared/agents/onboarding-drip.ts|favorites",
     "table|supabase/functions/_shared/imageStorage.ts|media",
     "table|supabase/functions/agent-billing-selfservice/index.ts|payments",
     "table|supabase/functions/agent-fraud-monitor/index.ts|payments",
     "table|supabase/functions/agent-fraud-monitor/index.ts|usage_events",
-    "table|supabase/functions/agent-lifecycle/index.ts|favorites",
-    "table|supabase/functions/agent-lifecycle/index.ts|reviews",
-    "table|supabase/functions/agent-milestones/index.ts|favorites",
-    "table|supabase/functions/agent-milestones/index.ts|reviews",
-    "table|supabase/functions/agent-onboarding-drip/index.ts|favorites",
     "table|supabase/functions/analyze-images/index.ts|seo_image_analysis",
     "table|supabase/functions/appstore-server-notifications-v2/index.ts|apple_notification_log",
     "table|supabase/functions/autonomy-overview/index.ts|event_submissions",
@@ -158,8 +148,6 @@
     "table|supabase/functions/send-seo-notification/index.ts|seo_alerts",
     "table|supabase/functions/send-seo-notification/index.ts|seo_notification_preferences",
     "table|supabase/functions/seo-audit/index.ts|seo_audit_history",
-    "table|supabase/functions/stripe-webhook/index.ts|payments",
-    "table|supabase/functions/support-console/index.ts|favorites",
-    "table|supabase/functions/support-console/index.ts|reviews"
+    "table|supabase/functions/stripe-webhook/index.ts|payments"
   ]
 }
