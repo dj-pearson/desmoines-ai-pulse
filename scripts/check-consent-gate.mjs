@@ -62,7 +62,7 @@ const failures = [];
 // Only <script> elements with a src. A string inside the inline loader is the
 // dynamic path and is the whole point.
 for (const tag of html.match(/<script\b[^>]*>/gi) ?? []) {
-  if (/\bsrc\s*=/.test(tag) && /googletagmanager\.com/i.test(tag)) {
+  if (/\bsrc\s*=/.test(tag) && /\bsrc\s*=\s*["'](?:https?:)?\/\/(?:www\.)?googletagmanager\.com(?:[\/"'?#]|$)/i.test(tag)) {
     failures.push(
       'index.html loads googletagmanager.com from a <script src> tag. The request ' +
         'itself is a disclosure to Google, so it must not be made until consent is ' +
