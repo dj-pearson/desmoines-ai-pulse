@@ -116,12 +116,19 @@ Deno.serve(async (req) => {
       // Win-back play only for high-risk, consented users, respecting frequency.
       if (score < HIGH_RISK) continue;
       if (signals.messagingAllowed === false) { skipped++; continue; }
-      const { data: recent } = await supabase
+      const { data: recent, error: recentError } = await supabase
         .from("winback_interventions")
         .select("created_at")
         .eq("user_id", p.user_id)
         .order("created_at", { ascending: false })
         .limit(1);
+      // FAIL CLOSED. An empty result reads as "no recent contact", which sends -
+      // so a dropped error bypasses the intervention gap for everyone in the sweep
+      // (WEB-BE-032 AC2).
+      if (recentError) {
+        console.warn(`[churn-winback] intervention gap read failed for ${p.user_id}; suppressing: ${recentError.message}`);
+        skipped++; continue;
+      }
       if (recent?.[0] && now - new Date(recent[0].created_at).getTime() < INTERVENTION_GAP_DAYS * DAY) { skipped++; continue; }
 
       const wantsOffer = score >= OFFER_RISK;
