@@ -337,8 +337,6 @@
     "supabase/functions/support-csat-submit/index.ts:51",
     "supabase/functions/support-ticket-reclassify/index.ts:55",
     "supabase/functions/triage-event-submission/index.ts:134",
-    "supabase/functions/triage-event-submission/index.ts:138",
-    "supabase/functions/verify-apple-receipt/index.ts:97",
-    "supabase/functions/verify-apple-receipt/index.ts:116"
+    "supabase/functions/triage-event-submission/index.ts:138"
   ]
 }
