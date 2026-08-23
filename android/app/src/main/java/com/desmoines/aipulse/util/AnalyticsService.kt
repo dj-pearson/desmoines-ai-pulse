@@ -33,7 +33,14 @@ class FirebaseAnalyticsSink(
  *
  * Non-essential events are dropped unless ConsentService.analyticsConsent is true.
  * Essential telemetry (crash/auth-error breadcrumbs) is never gated. No PII —
- * event names + structural parameters only. Event names mirror iOS verbatim.
+ * event names + structural parameters only.
+ *
+ * Event NAMES mirror iOS verbatim. The DATA does not: iOS AnalyticsService is
+ * a stub whose every Firebase call is commented out, so it emits nothing at
+ * all. This class is the only mobile surface reporting. Do not read a
+ * cross-platform funnel from these events - it compares Android against zero,
+ * and an absent iOS line means iOS never reported, not that iOS users did not
+ * convert (XPLAT-004 AC5).
  */
 @Singleton
 class AnalyticsService @Inject constructor(

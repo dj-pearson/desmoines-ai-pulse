@@ -157,6 +157,12 @@ struct DesMoinesInsiderApp: App {
                     CrashReportingService.shared.setUserId(uid)
                 }
 
+                // Drain whatever the previous run recorded. Every crash since
+                // IOS-AUDIT-FEAT-010 has been captured to disk and never sent
+                // anywhere; this is the upload half (XPLAT-004 AC1). Silent on
+                // failure, and records survive a failed attempt.
+                await CrashUploader.uploadPending()
+
                 // Launch-time minimum-supported-version gate (IOS-AUDIT-REL-001).
                 // Fails open, so a backend hiccup never blocks a supported build.
                 await versionCheck.checkOnLaunch()

@@ -2,12 +2,27 @@ import Foundation
 import os
 import CryptoKit
 
-/// Lightweight analytics facade that wraps Firebase Analytics.
+/// EMITS NOTHING. This is a stub, and every track* call below ends at a debug
+/// log line that release builds do not keep.
 ///
-/// Tracks key user actions anonymously. Respects GDPR consent via ConsentService.
-/// When Firebase is integrated, calls Analytics.logEvent(). Until then, logs locally.
+/// The previous docstring described it as "a lightweight analytics facade that
+/// wraps Firebase Analytics", which reads as working code with Firebase behind
+/// it. There is no Firebase dependency, no GoogleService-Info.plist, and every
+/// Analytics.logEvent call is commented out. Anyone reading a funnel report and
+/// seeing no iOS data would reasonably conclude iOS users are not converting,
+/// rather than that iOS never reported (IOS-AUDIT-FEAT-030 AC5, XPLAT-004 AC5).
 ///
-/// To activate:
+/// ANDROID DOES EMIT, through a real Firebase sink, and its own docstring says
+/// "Event names mirror iOS verbatim". The names do match; the data does not.
+/// Any cross-platform comparison built on that is measuring Android against
+/// zero.
+///
+/// The consent gate below is real and is kept: when this is activated, the gate
+/// must already be in the path rather than be added afterwards.
+///
+/// To activate (XPLAT-004 AC2 decides whether Firebase is the right target at
+/// all - the web surface uses Sentry, and routing both mobile apps through the
+/// existing log-error function would unify them instead):
 ///   1. Add Firebase SPM package to project.yml
 ///   2. Add GoogleService-Info.plist to Resources
 ///   3. Uncomment Firebase imports and calls below
