@@ -19,6 +19,9 @@ struct DashboardView: View {
     @State private var isLoading = true
     @State private var detailTarget: DetailTarget?
     @State private var showTripPlanner = false
+    /// Surfaces a failed recently-viewed lookup. Nothing else on this
+    /// screen reports failure to the user (IOS-AUDIT-UX-057).
+    @State private var toast: ToastMessage?
 
     enum DetailTarget: Identifiable, Hashable {
         case event(Event)
@@ -86,6 +89,7 @@ struct DashboardView: View {
             TripPlannerView(showsCloseButton: true)
         }
         .task { await load() }
+        .toastOverlay(message: $toast)
         .refreshable { await load() }
     }
 
@@ -129,7 +133,16 @@ struct DashboardView: View {
                 favStat("Guides", favorites.favoriteArticleIds.count, "doc.richtext")
             }
             .padding(.horizontal)
-            if favorites.totalFavoritesCount == 0 && favorites.favoriteArticleIds.isEmpty {
+            // IOS-AUDIT-UX-051 AC4: distinguish "still loading" from "nothing
+            // saved". The counts above read 0 while the fetch is in flight, so an
+            // unqualified empty hint told returning users their saves were gone.
+            if favorites.isLoading {
+                Text("Loading your saved items...")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal)
+                    .accessibilityLabel("Loading your saved items")
+            } else if favorites.totalFavoritesCount == 0 && favorites.favoriteArticleIds.isEmpty {
                 EmptyHint(text: "Tap the heart on any listing to save it here.", actionTitle: nil, action: nil)
             }
         }
@@ -277,6 +290,12 @@ struct DashboardView: View {
                     break
                 }
             } catch {
+                // A recently-viewed row whose listing has since been removed, or
+                // a dropped connection, used to do nothing at all: the tap
+                // registered, the row highlighted, and no screen opened. In
+                // release the log below is compiled out, so there was literally
+                // no output (IOS-AUDIT-UX-057).
+                toast = .error("Couldn't open that. It may have been removed.")
                 #if DEBUG
                 AppLogger.network.warning("Dashboard openRecent failed: \(error.localizedDescription)")
                 #endif

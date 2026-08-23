@@ -22,8 +22,8 @@ data class CrashRecord(
  *
  * Installs a global uncaught-exception handler (chaining the previous one) and persists
  * records as JSON files under [crashDir]. Survives process death; [pendingRecords]/
- * [flushPendingRecords] drain the queue (a future `crash-report` edge function will
- * upload them). Android has no POSIX signal handler — the VM uncaught handler is the analog.
+ * [flushPendingRecords] drain the queue; CrashUploader posts them to the existing
+ * log-error sink (XPLAT-004). Android has no POSIX signal handler; the VM uncaught handler is the analog.
  *
  * Context-free for plain-JVM tests; the Hilt provider supplies `filesDir/CrashReports`.
  */
@@ -55,11 +55,24 @@ class CrashReportingService(
         capture(throwable, fatal = false, context = context)
     }
 
-    /** All unsent records, oldest first. */
-    fun pendingRecords(): List<CrashRecord> =
+    /**
+     * Unsent records paired with the file backing each one, oldest first.
+     *
+     * CrashUploader needs the file, not just the record: a record has no id,
+     * so there is no other way to delete exactly the one the sink accepted.
+     * Draining first and deleting everything would lose whatever failed to
+     * upload, which is disproportionately the crashes that happen when the
+     * network is worst.
+     */
+    fun pendingEntries(): List<Pair<File, CrashRecord>> =
         (crashDir.listFiles()?.sortedBy { it.lastModified() } ?: emptyList()).mapNotNull { file ->
-            runCatching { json.decodeFromString(CrashRecord.serializer(), file.readText()) }.getOrNull()
+            runCatching { json.decodeFromString(CrashRecord.serializer(), file.readText()) }
+                .getOrNull()
+                ?.let { file to it }
         }
+
+    /** All unsent records, oldest first. */
+    fun pendingRecords(): List<CrashRecord> = pendingEntries().map { it.second }
 
     /** Drain the queue, returning the records that were pending and deleting them. */
     fun flushPendingRecords(): List<CrashRecord> {

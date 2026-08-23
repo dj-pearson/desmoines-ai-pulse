@@ -25,6 +25,18 @@
  * are one-line TS2304/TS2552 errors that `tsc -p tsconfig.app.json` reports and
  * nothing in CI ever ran.
  *
+ * RE-BASELINE ON LINUX ONLY. The `app` baseline is platform-dependent and the
+ * gap is large: the same commit reports 0 errors on Windows and 378 in CI.
+ * TypeScript resolves module paths case-insensitively on a case-insensitive
+ * filesystem, so an import whose case does not match the file on disk
+ * compiles locally and fails on Linux, taking every file downstream of it
+ * with it. A baseline written on Windows therefore records zero and turns
+ * this check permanently red for everyone else - which is exactly what
+ * happened on 2026-08-23 and was reverted.
+ *
+ * If you need to re-baseline, take the numbers from a CI run, or run this
+ * inside WSL/Docker. Do not trust a local Windows count.
+ *
  * NOTE: `include` does not bound what tsc checks — every transitively imported
  * file is checked too. That is why a baseline covers files not listed as roots.
  *
@@ -65,6 +77,9 @@ const REBASELINE_CMD =
 const BASELINE = join(ROOT, project.baseline);
 const UPDATE = process.argv.includes('--update');
 
+/** Errors printed per regressed file. Enough to diagnose, short of a wall. */
+const MAX_ERROR_LINES = 25;
+
 function collectErrors() {
   let output = '';
   try {
@@ -80,17 +95,23 @@ function collectErrors() {
   }
 
   const counts = {};
+  // Kept so a regression can be reported with the actual compiler output.
+  // Without it this script says 'useCrmContacts.ts: 31 -> 32' and nothing
+  // else, which is unactionable when the errors only appear on Linux and the
+  // person reading it is on Windows.
+  const lines = {};
   for (const line of output.split('\n')) {
     // e.g. src/hooks/useVoting.ts(42,7): error TS2532: Object is possibly 'undefined'.
     const m = line.match(/^(.+?)\(\d+,\d+\): error TS\d+:/);
     if (!m) continue;
     const file = m[1].replace(/\\/g, '/');
     counts[file] = (counts[file] || 0) + 1;
+    (lines[file] ||= []).push(line.trim());
   }
-  return counts;
+  return { counts, lines };
 }
 
-const current = collectErrors();
+const { counts: current, lines: currentLines } = collectErrors();
 const currentTotal = Object.values(current).reduce((a, b) => a + b, 0);
 
 if (UPDATE || !existsSync(BASELINE)) {
@@ -135,6 +156,13 @@ if (regressions.length) {
   for (const r of regressions) {
     const label = r.before === 0 ? 'NEW' : `${r.before} -> ${r.after}`;
     console.error(`  ${r.file}: ${label}`);
+    // Print the errors themselves. A count alone cannot be acted on, and for
+    // the app project the errors frequently do not reproduce off Linux.
+    for (const line of (currentLines[r.file] || []).slice(0, MAX_ERROR_LINES)) {
+      console.error(`      ${line}`);
+    }
+    const extra = (currentLines[r.file] || []).length - MAX_ERROR_LINES;
+    if (extra > 0) console.error(`      ... and ${extra} more in this file`);
   }
   console.error(
     '\nFix the new errors, or if this is a deliberate trade, re-baseline with:\n' +

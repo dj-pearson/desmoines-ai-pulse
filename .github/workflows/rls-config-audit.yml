@@ -67,6 +67,64 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: npx tsx scripts/check-bucket-posture.ts
 
+      # WEB-OPS-007. The scheduler keeps its own verdict in cron.job_run_details,
+      # which PostgREST cannot reach, so nothing had ever read it. WEB-AUTO-001
+      # shipped "cron/job observability" over automation_job_runs -- a table the
+      # edge functions write WHEN THEY RUN -- so a job that never fires writes no
+      # row and looks like an agent with nothing to do. That is how 57 of 61 jobs
+      # failed every run for thirteen months without a single alert.
+      #
+      # Ratchets rather than demanding zero: the 44 currently failing are
+      # baselined, because one of the two causes needs a service-role key this
+      # repo must never write down, and a check that is red on day one gets
+      # switched off.
+      # WEB-SEO-019 AC5. Two restaurants existed twice at the same address, the
+      # second pair written EIGHT SECONDS apart - one ingest run inserting the
+      # same record twice, because the scraper checks for an existing row with a
+      # SELECT before its INSERT and nothing stands behind that. Both records in
+      # one batch pass the check, since neither is in the table when the other is
+      # looked up.
+      #
+      # A detector rather than a unique index: an index would convert a duplicate
+      # insert into a hard failure inside a per-record loop that does not handle
+      # one, which is a tightening in the CLAUDE.md sense.
+      - name: Duplicate entity detector
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npx tsx scripts/check-duplicate-entities.ts
+
+      # WEB-OPS-007: 62 of 157 edge functions in the repo have never been
+      # deployed, so 34 of the 56 cron jobs that post to a function post to a
+      # 404. A function directory looks identical to a deployed function and
+      # there is no deploy step in CI, so nothing surfaced it. Probes with the
+      # anon key; sends {} so nothing is executed.
+      # WEB-BE-032 AC4: `{ data }` without `error` cannot tell a missing table
+      # from an empty one, which is why 29 missing tables went unnoticed for
+      # months. Baselined at the existing sites; fails only on new ones.
+      # Offline; no credentials needed.
+      - name: Discarded Supabase errors
+        run: node scripts/check-discarded-supabase-errors.mjs
+
+      - name: Edge-function deploy ratchet
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: npx tsx scripts/check-edge-deploys.ts
+
+      # WEB-SEC-025: step 3 replaces the USING (true) SELECT policy on
+      # votes. A read that is not scoped to the caller returns ballots today
+      # and an empty array after, silently - a denied SELECT under RLS is an
+      # empty result, not an error. Offline; no credentials needed.
+      - name: Ballot read guard
+        run: bash scripts/check-ballot-reads.sh
+
+      - name: Scheduled-job health ratchet
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npx tsx scripts/check-cron-health.ts
+
       - name: Diff against committed baselines and report drift
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

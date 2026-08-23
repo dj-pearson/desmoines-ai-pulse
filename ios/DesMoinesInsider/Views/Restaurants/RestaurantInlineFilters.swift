@@ -52,6 +52,62 @@ private struct FilterPillLabel: View {
     }
 }
 
+/// A chip grid with a filter field, for lists too long to show at once.
+///
+/// Cuisine and Area both did `prefix(40)` with no indication anything had been
+/// dropped. Measured against production: 69 cuisines and 456 distinct areas, so
+/// the Area popover was showing under 9% of what exists and a user looking for
+/// a neighborhood late in the alphabet had no way to reach it and no way to know
+/// it was there (IOS-AUDIT-UX-055).
+///
+/// The cap stays - a 456-chip popover is not usable either - but it now applies
+/// to what MATCHES, and the footer says how many were not shown.
+private struct SearchableChipGrid: View {
+    let items: [String]
+    let isSelected: (String) -> Bool
+    let onTap: (String) -> Void
+
+    /// Above this, typing is faster than scanning.
+    private static let searchThreshold = 12
+    private static let visibleLimit = 40
+
+    @State private var query = ""
+
+    private var matches: [String] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return items }
+        return items.filter { $0.localizedCaseInsensitiveContains(trimmed) }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if items.count > Self.searchThreshold {
+                TextField("Search", text: $query)
+                    .textFieldStyle(.roundedBorder)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+            }
+
+            FlowChipGrid(items: Array(matches.prefix(Self.visibleLimit))) { item in
+                isSelected(item)
+            } onTap: { item in
+                onTap(item)
+            }
+
+            if matches.isEmpty {
+                Text("No matches for \(query)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else if matches.count > Self.visibleLimit {
+                // Says what is hidden instead of hiding it silently.
+                Text("\(matches.count - Self.visibleLimit) more - keep typing to narrow")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
 // MARK: - Cuisine Pill
 
 private struct CuisinePill: View {
@@ -75,7 +131,7 @@ private struct CuisinePill: View {
             PopoverList(title: "Cuisine", hasSelection: !viewModel.selectedCuisines.isEmpty) {
                 viewModel.selectedCuisines = []
             } content: {
-                FlowChipGrid(items: viewModel.availableCuisines.prefix(40).map { $0 }) { item in
+                SearchableChipGrid(items: viewModel.availableCuisines) { item in
                     viewModel.selectedCuisines.contains(item)
                 } onTap: { item in
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -176,7 +232,7 @@ private struct AreaPill: View {
             PopoverList(title: "Neighborhood", hasSelection: !viewModel.selectedLocations.isEmpty) {
                 viewModel.selectedLocations = []
             } content: {
-                FlowChipGrid(items: viewModel.availableLocations.prefix(40).map { $0 }) { item in
+                SearchableChipGrid(items: viewModel.availableLocations) { item in
                     viewModel.selectedLocations.contains(item)
                 } onTap: { item in
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -241,6 +297,15 @@ private struct RatingPill: View {
                             .accessibilityAddTraits(selected ? .isSelected : [])
                         }
                     }
+                    // The slider had no readout, so a value between the quick
+                    // picks - 2.5, say - was invisible: every chip showed
+                    // unselected and nothing said what had been chosen
+                    // (IOS-AUDIT-UX-055).
+                    Text(viewModel.minRating == 0 ? "Any rating" : "\(formatted(viewModel.minRating))+ stars")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(viewModel.minRating == 0 ? Color.secondary : Color.accentColor)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .accessibilityHidden(true)
                     Slider(
                         value: $viewModel.minRating,
                         in: 0...5,
@@ -459,6 +524,11 @@ private struct FlowChipGrid: View {
                 }
             }
         }
+        // SearchableChipGrid puts a TextField above this grid, and a popover
+        // has no Done button - so without this there is no gesture to put the
+        // keyboard away (IOS-AUDIT-UX-056, closing a gap the search field
+        // introduced in IOS-AUDIT-UX-055).
+        .scrollDismissesKeyboard(.interactively)
     }
 }
 

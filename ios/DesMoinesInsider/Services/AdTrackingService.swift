@@ -35,7 +35,52 @@ import Supabase
 @MainActor
 final class AdTrackingService {
     static let shared = AdTrackingService()
-    private init() { pending = Self.loadQueue() }
+
+    /// Where the session and the offline queue live. Injectable so a test can
+    /// use an isolated suite instead of the runner's real defaults
+    /// (IOS-AUDIT-TEST-004 AC2).
+    private let defaults: UserDefaults
+
+    private init() {
+        defaults = .standard
+        pending = Self.loadQueue(from: .standard)
+    }
+
+    #if DEBUG
+    /// Test seam. A second instance over its own defaults suite, so the offline
+    /// queue can be seeded and drained without a Supabase client and without
+    /// touching the values the app is using.
+    init(testDefaults: UserDefaults) {
+        defaults = testDefaults
+        pending = Self.loadQueue(from: testDefaults)
+    }
+
+    /// Rows waiting to be sent. The queue is the ONLY observable effect the
+    /// consent gate has in a unit test - logImpression and logClick return nil
+    /// and void on every path once the Supabase client is nil, so asserting on
+    /// their return value would pass with the gate deleted.
+    var pendingEventCountForTesting: Int { pending.impressions.count + pending.clicks.count }
+
+    /// Sponsored-listing dedupe keys burned this session. The set is otherwise
+    /// private and the analytics sink is a no-op, so this is the only way to
+    /// assert that a listing seen twice is counted once.
+    var sponsoredImpressionKeyCountForTesting: Int { loggedSponsoredImpressions.count }
+
+    /// Queues one impression as if it had been logged while offline.
+    func seedPendingImpressionForTesting(campaignId: String = "c1", creativeId: String = "cr1") {
+        enqueue(impression: ImpressionRow(
+            campaign_id: campaignId,
+            creative_id: creativeId,
+            placement_type: "test",
+            user_id: nil,
+            session_id: "s1",
+            device_type: "mobile",
+            browser: "ios-app",
+            date: todayString,
+            client_event_id: UUID().uuidString
+        ))
+    }
+    #endif
 
     private let supabase = SupabaseService.shared.client
     private let analytics = AnalyticsService.shared
@@ -66,32 +111,79 @@ final class AdTrackingService {
 
     private struct AdSession: Codable { let id: String; let timestamp: TimeInterval }
 
+    /// The live session, so a read does not have to go to disk.
+    private var cachedSession: AdSession?
+
+    /// How stale the PERSISTED timestamp is allowed to get before the window
+    /// extension is written again.
+    ///
+    /// The session lasts 30 minutes; persisting the extension to the nearest
+    /// minute cannot change whether a session is live except within one minute
+    /// of expiry, and only if the app is killed in that minute. That is the
+    /// entire cost, and it buys removing a JSON decode, a JSON encode and a
+    /// UserDefaults write from EVERY read of sessionId - which is every
+    /// impression, every click and every frequency-cap check.
+    private static let sessionPersistInterval: TimeInterval = 60
+
     private var sessionId: String {
         let now = Date().timeIntervalSince1970
-        if let data = UserDefaults.standard.data(forKey: Self.sessionKey),
-           let session = try? JSONDecoder().decode(AdSession.self, from: data),
-           now - session.timestamp < Self.sessionDuration {
-            save(AdSession(id: session.id, timestamp: now)) // extend window on use
-            return session.id
+
+        // In-memory first. Falls back to disk once per launch, or after the
+        // window lapses.
+        let existing = cachedSession ?? loadSession()
+        if let existing, now - existing.timestamp < Self.sessionDuration {
+            // Extend in memory always; persist only when the stored timestamp
+            // has fallen behind, so termination cannot lose more than
+            // sessionPersistInterval of the window.
+            cachedSession = AdSession(id: existing.id, timestamp: now)
+            if now - persistedAt >= Self.sessionPersistInterval {
+                save(AdSession(id: existing.id, timestamp: now))
+            }
+            return existing.id
         }
+
         let fresh = AdSession(id: "session_\(Int(now * 1000))_\(UUID().uuidString.prefix(6))", timestamp: now)
+        cachedSession = fresh
         save(fresh)
         return fresh.id
     }
 
+    /// Timestamp last written to disk. A new id always writes, so this starts
+    /// accurate and stays accurate.
+    private var persistedAt: TimeInterval = 0
+
+    private func loadSession() -> AdSession? {
+        guard let data = defaults.data(forKey: Self.sessionKey),
+              let session = try? JSONDecoder().decode(AdSession.self, from: data) else {
+            return nil
+        }
+        cachedSession = session
+        persistedAt = session.timestamp
+        return session
+    }
+
     private func save(_ session: AdSession) {
         if let data = try? JSONEncoder().encode(session) {
-            UserDefaults.standard.set(data, forKey: Self.sessionKey)
+            defaults.set(data, forKey: Self.sessionKey)
+            persistedAt = session.timestamp
         }
     }
 
-    private var todayString: String {
+    /// Built once. DateFormatter construction is one of the more expensive
+    /// things in Foundation, and this ran on every impression and every click
+    /// purely to produce today's date. Same class of defect as the session
+    /// write above, found in the same file.
+    nonisolated(unsafe) private static let dayFormatter: DateFormatter = {
         let f = DateFormatter()
         f.calendar = Calendar(identifier: .gregorian)
         f.locale = Locale(identifier: "en_US_POSIX")
         f.timeZone = TimeZone(identifier: "UTC")
         f.dateFormat = "yyyy-MM-dd"
-        return f.string(from: Date())
+        return f
+    }()
+
+    private var todayString: String {
+        Self.dayFormatter.string(from: Date())
     }
 
     // MARK: - Frequency capping (IOS-ADS-014 · shouldShowAd parity)
@@ -150,11 +242,14 @@ final class AdTrackingService {
     /// offline, the row is queued and flushed on reconnect (no id returned).
     @discardableResult
     func logImpression(campaignId: String, creativeId: String, placement: String) async -> String? {
-        guard let client = supabase, !Config.isUITesting else { return nil }
         // Ad-interaction telemetry is tied to user_id, so it must respect the
         // analytics consent choice — same gate AnalyticsService applies
         // (IOS-AUDIT-SEC-008). Without this, ad_impressions wrote for all users.
+        //
+        // Checked BEFORE the client guard so the rule holds in every
+        // configuration, not just the one where a client happens to exist.
         guard ConsentService.shared.analyticsConsent else { return nil }
+        guard let client = supabase, !Config.isUITesting else { return nil }
         let session = sessionId
         let dedupeKey = "\(campaignId)|\(creativeId)|\(session)"
         guard !loggedImpressions.contains(dedupeKey) else { return nil }
@@ -168,7 +263,10 @@ final class AdTrackingService {
             session_id: session,
             device_type: "mobile",
             browser: "ios-app",
-            date: todayString
+            date: todayString,
+            // Minted at queue time, not send time - a key generated per
+            // attempt is a different key on the retry (IOS-AUDIT-BUG-017).
+            client_event_id: UUID().uuidString
         )
 
         // Offline → queue and flush later (IOS-ADS-014).
@@ -200,14 +298,15 @@ final class AdTrackingService {
     /// Logs a click for a campaign creative, linked to its impression when known.
     /// Offline-safe: queued and flushed on reconnect.
     func logClick(campaignId: String, creativeId: String, impressionId: String?) async {
-        guard let client = supabase, !Config.isUITesting else { return }
-        // Respect analytics consent (IOS-AUDIT-SEC-008).
+        // Respect analytics consent (IOS-AUDIT-SEC-008), before the client guard.
         guard ConsentService.shared.analyticsConsent else { return }
+        guard let client = supabase, !Config.isUITesting else { return }
         let row = ClickRow(
             campaign_id: campaignId,
             creative_id: creativeId,
             impression_id: impressionId,
-            date: todayString
+            date: todayString,
+            client_event_id: UUID().uuidString
         )
 
         guard NetworkMonitor.shared.isConnected else {
@@ -244,9 +343,21 @@ final class AdTrackingService {
     // MARK: - Sponsored listings (distinct, RLS-safe) — IOS-ADS-011 / IOS-ADS-015
 
     func logSponsoredImpression(listingType: String, listingId: String, placement: String = "feed") {
+        // Consent first, so a refused impression does not BURN the dedupe key.
+        // trackEvent drops the event when consent is missing, and the insert
+        // below used to happen anyway - so a user who accepted analytics
+        // mid-session would never log an impression for a listing that had
+        // already scrolled past under the old answer (IOS-AUDIT-TEST-003).
+        guard ConsentService.shared.analyticsConsent else { return }
+
         // De-dupe per app session so a listing scrolling in/out of view — or
         // appearing in more than one feed — logs at most one impression
         // (IOS-AUDIT-PERF-006), mirroring the campaign-creative dedupe above.
+        //
+        // The key is COMPOSED, and that composition is the contract: it is the
+        // same (itemType, itemId) pair get-sponsored-pick uses to build
+        // SponsoredPick.id. Rename either field on the server and every
+        // impression starts looking new.
         let dedupeKey = "\(listingType)|\(listingId)|\(placement)"
         guard !loggedSponsoredImpressions.contains(dedupeKey) else { return }
         loggedSponsoredImpressions.insert(dedupeKey)
@@ -290,6 +401,11 @@ final class AdTrackingService {
         let device_type: String
         let browser: String
         let date: String
+        /// Idempotency key, minted when the row is queued (IOS-AUDIT-BUG-017).
+        /// Optional so a queue written by an earlier build still decodes; the
+        /// queue in UserDefaults is a stored schema and a required field would
+        /// make every existing entry fail to decode and disappear.
+        var client_event_id: String?
     }
 
     private struct ClickRow: Codable {
@@ -297,6 +413,8 @@ final class AdTrackingService {
         let creative_id: String
         let impression_id: String?
         let date: String
+        /// See ImpressionRow.client_event_id.
+        var client_event_id: String?
     }
 
     private struct PendingQueue: Codable {
@@ -311,8 +429,8 @@ final class AdTrackingService {
 
     private var pending: PendingQueue
 
-    private static func loadQueue() -> PendingQueue {
-        guard let data = UserDefaults.standard.data(forKey: queueKey),
+    private static func loadQueue(from defaults: UserDefaults) -> PendingQueue {
+        guard let data = defaults.data(forKey: queueKey),
               let queue = try? JSONDecoder().decode(PendingQueue.self, from: data) else {
             return PendingQueue()
         }
@@ -321,7 +439,7 @@ final class AdTrackingService {
 
     private func persistQueue() {
         if let data = try? JSONEncoder().encode(pending) {
-            UserDefaults.standard.set(data, forKey: Self.queueKey)
+            defaults.set(data, forKey: Self.queueKey)
         }
     }
 
@@ -340,9 +458,13 @@ final class AdTrackingService {
     /// Drains the offline queue. Called by `NetworkMonitor` on reconnect and on
     /// app launch. Best-effort: rows that still fail stay queued for next time.
     func flushPendingEvents() async {
-        guard let client = supabase, !Config.isUITesting else { return }
         // If the user revoked analytics consent while offline, drop the queued
         // ad telemetry instead of sending it on reconnect (IOS-AUDIT-SEC-008).
+        //
+        // This runs BEFORE the client guard deliberately. Telemetry the user has
+        // refused should not sit on disk waiting for a client to appear, and
+        // ordering it first is also what makes the gate assertable: with no
+        // client the queue is the one effect a test can see.
         guard ConsentService.shared.analyticsConsent else {
             if !pending.isEmpty {
                 pending = PendingQueue()
@@ -350,12 +472,20 @@ final class AdTrackingService {
             }
             return
         }
+        guard let client = supabase, !Config.isUITesting else { return }
         guard NetworkMonitor.shared.isConnected, !pending.isEmpty else { return }
 
+        // Upsert on the queued idempotency key, not insert (IOS-AUDIT-BUG-017).
+        // A lost response is indistinguishable from a lost request here, so a
+        // requeued row used to be counted twice - inflating exactly the numbers
+        // advertisers are billed against.
         var remainingImpressions: [ImpressionRow] = []
         for row in pending.impressions {
             do {
-                try await client.from("ad_impressions").insert(row).execute()
+                try await client
+                    .from("ad_impressions")
+                    .upsert(row, onConflict: "client_event_id", ignoreDuplicates: true)
+                    .execute()
             } catch {
                 remainingImpressions.append(row)
             }
@@ -364,7 +494,10 @@ final class AdTrackingService {
         var remainingClicks: [ClickRow] = []
         for row in pending.clicks {
             do {
-                try await client.from("ad_clicks").insert(row).execute()
+                try await client
+                    .from("ad_clicks")
+                    .upsert(row, onConflict: "client_event_id", ignoreDuplicates: true)
+                    .execute()
             } catch {
                 remainingClicks.append(row)
             }

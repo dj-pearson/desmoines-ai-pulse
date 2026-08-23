@@ -12,6 +12,7 @@ import io.github.jan.supabase.postgrest.query.Count
 import io.github.jan.supabase.postgrest.query.Order
 import io.github.jan.supabase.postgrest.rpc
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.isSuccess
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -56,6 +57,57 @@ data class GenerateItineraryResponse(
     val error: String? = null,
 )
 
+/**
+ * A structured refusal from generate-itinerary (XPLAT-010 AC2).
+ *
+ * The function answers 403 with {error, code:"upgrade_required"} and 429 with
+ * {error, code:"quota_exceeded"}. Android read neither the status nor the code,
+ * so a free user who hit the paywall and a user who ran out of monthly trips
+ * both got the same generic failure, while web (useTripPlanner.ts:175-185)
+ * unpacks the body and shows an upgrade prompt.
+ */
+class TripPlannerServerError(
+    override val message: String,
+    val code: String? = null,
+) : Exception(message)
+
+@Serializable
+internal data class ServerErrorBody(
+    val error: String? = null,
+    val code: String? = null,
+)
+
+/**
+ * Maps a generate-itinerary response to a typed error, or null when it is not
+ * an error at all.
+ *
+ * Pure and internal so it can be unit-tested without a Supabase client or an
+ * Android Context - the reason the status check was missing in the first place
+ * is that everything around it needs both.
+ *
+ * A non-2xx WITHOUT a parseable body still produces an error: falling through
+ * to the normal decode would surface `success:false, error:null` and the user
+ * would see nothing at all.
+ */
+internal fun tripPlannerServerError(
+    isSuccessStatus: Boolean,
+    statusCode: Int,
+    body: String,
+    json: Json,
+): TripPlannerServerError? {
+    if (isSuccessStatus) return null
+
+    val parsed = runCatching {
+        json.decodeFromString(ServerErrorBody.serializer(), body)
+    }.getOrNull()
+
+    return TripPlannerServerError(
+        message = parsed?.error?.takeIf { it.isNotBlank() }
+            ?: "Trip planning is unavailable right now (HTTP $statusCode).",
+        code = parsed?.code,
+    )
+}
+
 @Singleton
 class TripPlannerRemoteDataSource @Inject constructor(
     private val supabaseClient: SupabaseClient?,
@@ -95,6 +147,14 @@ class TripPlannerRemoteDataSource @Inject constructor(
         }
         val response = db().functions("generate-itinerary", body = payload)
         val body = response.bodyAsText()
+
+        // Status first. A 403 or 429 carries a structured {error, code} body that
+        // decodes cleanly into GenerateItineraryResponse as success:false, so
+        // without this check the refusal reason is silently discarded and the
+        // caller cannot tell a paywall from a backend fault (XPLAT-010 AC2).
+        tripPlannerServerError(response.status.isSuccess(), response.status.value, body, json)
+            ?.let { throw it }
+
         return json.decodeFromString(GenerateItineraryResponse.serializer(), body)
     }
 

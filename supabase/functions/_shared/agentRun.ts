@@ -119,7 +119,12 @@ export async function runAgent<T>(
       let skipRunId: string | null = null;
       try {
         const nowIso = new Date().toISOString();
-        const { data } = await supabase
+        // BEST-EFFORT BOOKKEEPING, and the error is read rather than dropped
+        // because the surrounding catch cannot see it: postgrest-js RESOLVES
+        // with { data: null, error } on a query failure and only throws on a
+        // transport error, so `catch (err)` below never fired for the common
+        // case and the warning it logs was unreachable (WEB-BE-032 AC3).
+        const { data, error } = await supabase
           .from("automation_job_runs")
           .insert({
             job_name: agentKey,
@@ -131,6 +136,7 @@ export async function runAgent<T>(
           })
           .select("id")
           .single();
+        if (error) throw error;
         skipRunId = data?.id ?? null;
       } catch (err) {
         console.warn(`[agentRun:${agentKey}] failed to record skipped run:`, err instanceof Error ? err.message : String(err));
@@ -152,11 +158,14 @@ export async function runAgent<T>(
   let runId: string | null = null;
   if (supabase) {
     try {
-      const { data } = await supabase
+      // Best-effort; see the note on the skipped-run insert above for why the
+      // error is read here rather than left to the catch.
+      const { data, error } = await supabase
         .from("automation_job_runs")
         .insert({ job_name: agentKey, agent_key: agentKey, status: "running" })
         .select("id")
         .single();
+      if (error) throw error;
       runId = data?.id ?? null;
     } catch (err) {
       console.warn(`[agentRun:${agentKey}] failed to open run row:`, err instanceof Error ? err.message : String(err));

@@ -537,8 +537,12 @@ struct PaywallView: View {
             ?? storeKit.product(for: tier, period: .monthly) {
             return "\(product.displayPrice)\(selectedPeriod.shortSuffix)"
         }
-        // Fallback marketing price if products haven't loaded yet.
-        return tier == .vip ? "$12.99/mo" : "$4.99/mo"
+        // No price rather than a marketing one (IOS-AUDIT-FEAT-036). This used
+        // to return a hardcoded "$12.99/mo" / "$4.99/mo" while products loaded
+        // or when they failed to. Both are USD, so every user outside the US
+        // saw a currency they will not be charged in - and a price the user
+        // reads and decides on is worse wrong than absent.
+        return ""
     }
 
     /// Keep the selected period valid when switching tiers (e.g. annual may not

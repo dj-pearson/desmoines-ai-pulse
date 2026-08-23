@@ -5,33 +5,80 @@ import Foundation
 @MainActor
 @Observable
 final class DealsViewModel {
-    private(set) var allDeals: [Deal] = []
+    private(set) var allDeals: [Deal] = [] {
+        didSet { recomputeDerivedState() }
+    }
     private(set) var isLoading = true
     private(set) var errorMessage: String?
 
     var selectedCategory: String? {
-        didSet { guard selectedCategory != oldValue else { return } }
+        didSet {
+            guard selectedCategory != oldValue else { return }
+            recomputeMatching()
+        }
     }
     var activeNowOnly = false
-    var searchText = ""
+    var searchText = "" {
+        didSet {
+            guard searchText != oldValue else { return }
+            recomputeMatching()
+        }
+    }
+
+    init() {}
+
+    /// Test seam: start with a fixed set of deals so the derived state can be
+    /// asserted without a network round trip.
+    ///
+    /// Calls recomputeDerivedState() explicitly because a `didSet` does NOT fire
+    /// for an assignment made during initialization.
+    init(deals: [Deal]) {
+        self.allDeals = deals
+        recomputeDerivedState()
+    }
 
     private let service = DealsService.shared
     private let cache = QueryCache.shared
     private static let cacheKey = "deals-all"
 
     /// entity_type categories present in the loaded deals (for filter chips).
-    var categories: [String] {
-        Array(Set(allDeals.map(\.entityType))).sorted()
+    ///
+    /// Stored rather than computed (IOS-AUDIT-PERF-022): it depends only on
+    /// allDeals, and as a computed property it rebuilt a Set and sorted it on
+    /// every single body evaluation.
+    private(set) var categories: [String] = []
+
+    /// Deals matching the CATEGORY and SEARCH filters. Stored, because neither
+    /// input depends on the clock.
+    private(set) var matchingDeals: [Deal] = []
+
+    /// Deals after every filter, including active-now.
+    ///
+    /// AC1 asks for this to be stored too, and it deliberately is NOT. isActiveNow()
+    /// reads the current time, so caching its result would freeze the "active now"
+    /// filter at whenever the last recompute happened -- a deal would keep showing
+    /// as open after its window closed, which is a behaviour change AC3 forbids.
+    ///
+    /// Everything expensive that CAN be cached already is: the Set-and-sort for the
+    /// chips, the per-deal lowercasing for search, and the category pass. What is
+    /// left is one predicate over an already-narrowed list, and only when the
+    /// toggle is on.
+    var filteredDeals: [Deal] {
+        guard activeNowOnly else { return matchingDeals }
+        return matchingDeals.filter { $0.isActiveNow() }
     }
 
-    /// Deals after applying category + active-now + search filters.
-    var filteredDeals: [Deal] {
+    /// Rebuilds everything derived from allDeals.
+    private func recomputeDerivedState() {
+        categories = Array(Set(allDeals.map(\.entityType))).sorted()
+        recomputeMatching()
+    }
+
+    /// Rebuilds the clock-independent filter result.
+    private func recomputeMatching() {
         var deals = allDeals
         if let category = selectedCategory {
             deals = deals.filter { $0.entityType == category }
-        }
-        if activeNowOnly {
-            deals = deals.filter { $0.isActiveNow() }
         }
         let query = searchText.trimmingCharacters(in: .whitespaces).lowercased()
         if !query.isEmpty {
@@ -41,7 +88,7 @@ final class DealsViewModel {
                     || ($0.description?.lowercased().contains(query) ?? false)
             }
         }
-        return deals
+        matchingDeals = deals
     }
 
     var activeFilterCount: Int {

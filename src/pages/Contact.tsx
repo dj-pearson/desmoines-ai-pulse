@@ -142,7 +142,7 @@ export default function Contact() {
                         <p className="font-medium">General inquiries</p>
                         <a
                           href="mailto:hello@desmoinesinsider.com"
-                          className="text-muted-foreground hover:text-primary transition-colors"
+                          className="text-muted-foreground underline hover:text-primary transition-colors"
                         >
                           hello@desmoinesinsider.com
                         </a>
@@ -185,7 +185,7 @@ export default function Contact() {
                       <p className="font-medium text-foreground">Privacy requests (CCPA / GDPR)</p>
                       <a
                         href="mailto:privacy@desmoinesinsider.com"
-                        className="text-muted-foreground hover:text-primary transition-colors"
+                        className="text-muted-foreground underline hover:text-primary transition-colors"
                       >
                         privacy@desmoinesinsider.com
                       </a>
@@ -194,7 +194,7 @@ export default function Contact() {
                       <p className="font-medium text-foreground">DMCA / copyright</p>
                       <a
                         href="mailto:dmca@desmoinesinsider.com"
-                        className="text-muted-foreground hover:text-primary transition-colors"
+                        className="text-muted-foreground underline hover:text-primary transition-colors"
                       >
                         dmca@desmoinesinsider.com
                       </a>
@@ -203,7 +203,7 @@ export default function Contact() {
                       <p className="font-medium text-foreground">Abuse / acceptable-use reports</p>
                       <a
                         href="mailto:abuse@desmoinesinsider.com"
-                        className="text-muted-foreground hover:text-primary transition-colors"
+                        className="text-muted-foreground underline hover:text-primary transition-colors"
                       >
                         abuse@desmoinesinsider.com
                       </a>
@@ -212,7 +212,7 @@ export default function Contact() {
                       <p className="font-medium text-foreground">Security disclosures</p>
                       <a
                         href="mailto:security@desmoinesinsider.com"
-                        className="text-muted-foreground hover:text-primary transition-colors"
+                        className="text-muted-foreground underline hover:text-primary transition-colors"
                       >
                         security@desmoinesinsider.com
                       </a>
@@ -221,7 +221,7 @@ export default function Contact() {
                       <p className="font-medium text-foreground">Billing &amp; refunds</p>
                       <a
                         href="mailto:billing@desmoinesinsider.com"
-                        className="text-muted-foreground hover:text-primary transition-colors"
+                        className="text-muted-foreground underline hover:text-primary transition-colors"
                       >
                         billing@desmoinesinsider.com
                       </a>
@@ -230,7 +230,7 @@ export default function Contact() {
                       <p className="font-medium text-foreground">DPA / B2B legal</p>
                       <a
                         href="mailto:legal@desmoinesinsider.com"
-                        className="text-muted-foreground hover:text-primary transition-colors"
+                        className="text-muted-foreground underline hover:text-primary transition-colors"
                       >
                         legal@desmoinesinsider.com
                       </a>
@@ -239,7 +239,7 @@ export default function Contact() {
                       <p className="font-medium text-foreground">Unsubscribe</p>
                       <a
                         href="mailto:unsubscribe@desmoinesinsider.com"
-                        className="text-muted-foreground hover:text-primary transition-colors"
+                        className="text-muted-foreground underline hover:text-primary transition-colors"
                       >
                         unsubscribe@desmoinesinsider.com
                       </a>

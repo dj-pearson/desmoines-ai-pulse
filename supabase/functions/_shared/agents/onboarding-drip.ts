@@ -76,18 +76,26 @@ export const run: AgentRun = async (ctx, { supabase }) => {
     if (allowed === false) { skipped++; continue; }
 
     // Prior onboarding sends for this user.
-    const { data: priorSends } = await supabase
+    const { data: priorSends, error: priorSendsError } = await supabase
       .from("nurture_sends")
       .select("kind, created_at, id")
       .eq("user_id", p.user_id)
       .eq("agent_key", AGENT_KEY)
       .order("created_at", { ascending: false });
+    // FAIL CLOSED. `prior` drives BOTH the frequency cap below and which drip
+    // step is due, so a dropped error empties it and the user is treated as
+    // never having been messaged - re-sending step one and bypassing the gap
+    // (WEB-BE-032 AC2).
+    if (priorSendsError) {
+      console.warn(`[onboarding-drip] prior sends read failed for ${p.user_id}; skipping: ${priorSendsError.message}`);
+      skipped++; continue;
+    }
     const prior = (priorSends ?? []) as { kind: string; created_at: string; id: string }[];
 
     // Activation stamping: if a first-value send exists without activation and
     // the user now has a favorite created after it, record activation.
     const fvSend = prior.find((s) => s.kind === "onboarding_first_value");
-    const { data: favs } = await supabase.from("favorites").select("created_at").eq("user_id", p.user_id).order("created_at", { ascending: false }).limit(1);
+    const { data: favs } = await supabase.from("content_favorites").select("created_at").eq("user_id", p.user_id).order("created_at", { ascending: false }).limit(1);
     const lastFav = (favs?.[0]?.created_at as string | undefined) ?? null;
     const hasFavorite = !!lastFav;
     if (fvSend && lastFav && new Date(lastFav).getTime() > new Date(fvSend.created_at).getTime()) {

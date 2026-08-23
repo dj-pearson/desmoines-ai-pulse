@@ -293,37 +293,54 @@ actor RestaurantsService {
 
     // MARK: - Cuisine List
 
+    /// Distinct cuisines for the filter chips.
+    ///
+    /// Server-side since IOS-AUDIT-PERF-025. This used to select the cuisine
+    /// column with no limit and de-duplicate into a Swift Set, so opening the
+    /// filter sheet downloaded one row per restaurant to end up with about
+    /// seventy strings. The cost was proportional to the table; the result
+    /// never was.
     func fetchAvailableCuisines() async throws -> [String] {
-        struct CuisineRow: Decodable {
-            let cuisine: String?
-        }
-        let client = try db()
-        let rows: [CuisineRow] = try await client
-            .from("restaurants")
-            .select("cuisine")
-            .not("cuisine", operator: .is, value: "null")
-            .order("cuisine", ascending: true)
-            .execute()
-            .value
-
-        return Array(Set(rows.compactMap(\.cuisine))).sorted()
+        try await FilterValues.fetch(source: .restaurantCuisine, client: db())
     }
 
     // MARK: - Location / Area List
 
+    /// Distinct locations for the filter chips.
+    ///
+    /// Server-side since IOS-AUDIT-PERF-025, and this one saves the least,
+    /// because `location` holds a full street address rather than an area:
+    /// 456 distinct values across 478 restaurants, measured on production.
+    /// RestaurantInlineFilters renders `availableLocations.prefix(40)`, so the
+    /// Location filter is the first forty street addresses in alphabetical
+    /// order - a chip reading "100 Plymouth St W, Le Mars, IA 51031, USA".
+    ///
+    /// Making that list cheaper to fetch does not make it useful. The fix is a
+    /// city filter, and it is a bigger change than this story: the chip value
+    /// is matched with `.in("location", ...)` here and passed as
+    /// `location_filter` to search_restaurants, so switching to cities means
+    /// changing a predicate and the meaning of an RPC parameter that shipped
+    /// binaries already send. Filed rather than smuggled in.
     func fetchAvailableLocations() async throws -> [String] {
-        struct LocationRow: Decodable {
-            let location: String?
-        }
-        let client = try db()
-        let rows: [LocationRow] = try await client
-            .from("restaurants")
-            .select("location")
-            .not("location", operator: .is, value: "null")
-            .order("location", ascending: true)
-            .execute()
-            .value
-
-        return Array(Set(rows.compactMap(\.location))).sorted()
+        try await FilterValues.fetch(source: .restaurantLocation, client: db())
     }
 }
+
+/// What SearchViewModel needs from RestaurantsService (IOS-AUDIT-TEST-006).
+/// One page of restaurants for a query. All DiscoverViewModel needs.
+protocol RestaurantPageProviding: Sendable {
+    func fetchRestaurants(query: RestaurantsService.RestaurantsQuery) async throws -> RestaurantsService.RestaurantsResponse
+}
+
+/// Search additionally needs the fuzzy fallback.
+protocol RestaurantSearchProviding: RestaurantPageProviding {
+    func fuzzySearchRestaurants(query: String, limit: Int) async throws -> [Restaurant]
+}
+
+extension RestaurantSearchProviding {
+    func fuzzySearchRestaurants(query: String) async throws -> [Restaurant] {
+        try await fuzzySearchRestaurants(query: query, limit: 20)
+    }
+}
+
+extension RestaurantsService: RestaurantSearchProviding {}

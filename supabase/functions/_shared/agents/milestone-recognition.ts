@@ -61,8 +61,8 @@ export const run: AgentRun = async (ctx, { supabase }) => {
 
   const userIds = rows.map((r) => r.user_id);
   const [favs, revs] = await Promise.all([
-    supabase.from("favorites").select("user_id, created_at").in("user_id", userIds).limit(20000),
-    supabase.from("reviews").select("user_id, created_at").in("user_id", userIds).limit(20000),
+    supabase.from("content_favorites").select("user_id, created_at").in("user_id", userIds).limit(20000),
+    supabase.from("event_reviews").select("user_id, created_at").in("user_id", userIds).limit(20000),
   ]);
   const favByUser = new Map<string, number[]>();
   const revByUser = new Map<string, number[]>();
@@ -93,7 +93,14 @@ export const run: AgentRun = async (ctx, { supabase }) => {
     if (candidates.length === 0) continue;
 
     // Filter out already-recognized ones.
-    const { data: existing } = await supabase.from("user_milestones").select("milestone_type, milestone_value").eq("user_id", p.user_id);
+    const { data: existing, error: existingError } = await supabase.from("user_milestones").select("milestone_type, milestone_value").eq("user_id", p.user_id);
+    // FAIL CLOSED. `seen` empty means every milestone reads as new, so a
+    // dropped error re-recognises and RE-EMAILS milestones the user was
+    // already congratulated for (WEB-BE-032 AC2).
+    if (existingError) {
+      console.warn(`[milestone-recognition] recognised-milestone read failed for ${p.user_id}; skipping: ${existingError.message}`);
+      continue;
+    }
     const seen = new Set((existing ?? []).map((e: { milestone_type: string; milestone_value: number }) => `${e.milestone_type}:${e.milestone_value}`));
     const fresh = candidates.filter((c) => !seen.has(`${c.type}:${c.value}`));
     if (fresh.length === 0) continue;
@@ -105,8 +112,11 @@ export const run: AgentRun = async (ctx, { supabase }) => {
     let emailedNow = false, sendId: string | null = null;
     const consent = p.lifecycle_signals?.messagingAllowed !== false;
     if (consent) {
-      const { data: lastEmail } = await supabase.from("nurture_sends").select("created_at").eq("user_id", p.user_id).like("kind", "milestone_%").order("created_at", { ascending: false }).limit(1);
-      const withinCap = lastEmail?.[0] && now - new Date(lastEmail[0].created_at).getTime() < EMAIL_GAP_DAYS * DAY;
+      const { data: lastEmail, error: lastEmailError } = await supabase.from("nurture_sends").select("created_at").eq("user_id", p.user_id).like("kind", "milestone_%").order("created_at", { ascending: false }).limit(1);
+      // Same shape: a dropped error reads as "not emailed recently" and sends.
+      const withinCapFallback = Boolean(lastEmailError);
+      if (lastEmailError) console.warn(`[milestone-recognition] email cap read failed for ${p.user_id}; suppressing: ${lastEmailError.message}`);
+      const withinCap = withinCapFallback || Boolean(lastEmail?.[0] && now - new Date(lastEmail[0].created_at).getTime() < EMAIL_GAP_DAYS * DAY);
       const overlapping = await recentlyMessaged(supabase, p.user_id, COORD_DAYS);
       if (!withinCap && !overlapping) {
         const subject = `Nice work — ${pick.label}! 🎉`;

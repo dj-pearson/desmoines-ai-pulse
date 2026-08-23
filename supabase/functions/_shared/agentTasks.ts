@@ -128,7 +128,7 @@ export async function createAgentTask(
     // Idempotent on dedupeKey: don't stack duplicate open tasks for the same
     // ongoing condition (e.g. a persistent security anomaly re-detected each run).
     if (input.dedupeKey) {
-      const { data: existing } = await supabase
+      const { data: existing, error: existingError } = await supabase
         .from("agent_tasks")
         .select("*")
         .eq("agent_key", input.agentKey)
@@ -136,6 +136,15 @@ export async function createAgentTask(
         .in("status", ["open", "escalated", "assigned", "auto_resolving"])
         .limit(1)
         .maybeSingle();
+
+      // The idempotency guard AC2 of WEB-BE-032 names explicitly. A discarded
+      // error here reads as "no open task exists" and stacks a duplicate every
+      // run - and the conditions that carry a dedupeKey are the persistent ones
+      // (a security anomaly re-detected each cycle), so the duplicate is not a
+      // one-off. Refusing to create beats creating a second copy: the caller
+      // already handles ok:false, and the condition will be re-detected.
+      if (existingError) throw existingError;
+
       if (existing) {
         return { ok: true, task: existing as AgentTaskRow, tier: existing.tier, status: existing.status, slaDueAt: existing.sla_due_at };
       }

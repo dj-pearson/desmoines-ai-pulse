@@ -105,6 +105,14 @@ struct DiscoverView: View {
             .navigationDestination(for: Restaurant.self) { RestaurantDetailView(restaurant: $0) }
             .task { await viewModel.loadInitial() }
             .toastOverlay(message: $toast)
+            // The toast state existed and nothing ever assigned it
+            // (IOS-AUDIT-UX-057). A liked card that failed to save animated away
+            // exactly like one that saved.
+            .onChange(of: viewModel.favoriteSaveFailed) { _, failed in
+                guard failed else { return }
+                toast = .error("Couldn't save that one. Check your connection.")
+                viewModel.acknowledgeFavoriteFailure()
+            }
             .sheet(isPresented: Binding(get: { !hasSeenIntro }, set: { hasSeenIntro = !$0 })) {
                 introSheet
                     .presentationDetents([.medium])
@@ -197,13 +205,23 @@ struct DiscoverView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "sparkles")
+        // IOS-AUDIT-UX-051 AC3. Three states, not one. The deck being empty
+        // because the fetch FAILED is not the same as having seen everything,
+        // and it used to render identically - so a user on a flaky connection
+        // was told they had exhausted the content and offered a Reset that would
+        // fail the same way, with no feedback either time.
+        let failed = viewModel.lastLoadFailed
+
+        return VStack(spacing: 14) {
+            Image(systemName: failed ? "wifi.exclamationmark" : "sparkles")
                 .font(.system(size: 44))
-                .foregroundStyle(.purple.opacity(0.7))
-            Text("You've seen everything")
+                .foregroundStyle(failed ? Color.orange : .purple.opacity(0.7))
+                .accessibilityHidden(true)
+            Text(failed ? "Couldn't load more" : "You've seen everything")
                 .font(.title3.weight(.semibold))
-            Text("Come back later for fresh picks, or reset to swipe again.")
+            Text(failed
+                 ? "Check your connection and try again."
+                 : "Come back later for fresh picks, or reset to swipe again.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -212,12 +230,19 @@ struct DiscoverView: View {
                 stackId = UUID()
                 Task { await viewModel.reload() }
             } label: {
-                Label("Reset deck", systemImage: "arrow.counterclockwise")
+                // The progress state is the other half of AC3: reload() already
+                // published isLoading and nothing consumed it, so pressing Reset
+                // looked like it had done nothing until the deck repopulated.
+                Label(
+                    viewModel.isLoading ? "Loading..." : (failed ? "Try again" : "Reset deck"),
+                    systemImage: viewModel.isLoading ? "arrow.triangle.2.circlepath" : "arrow.counterclockwise",
+                )
                     .font(.subheadline.weight(.semibold))
                     .padding(.horizontal, 18)
                     .padding(.vertical, 10)
                     .background(Color.accentColor.opacity(0.15), in: Capsule())
             }
+            .disabled(viewModel.isLoading)
             .padding(.top, 6)
         }
     }
@@ -231,15 +256,15 @@ struct DiscoverView: View {
             // a tap looks identical to a swipe (IOS-AUDIT-UX-018).
             actionButton(systemImage: "xmark", color: .red, label: "Skip", size: 56) {
                 guard !viewModel.deck.isEmpty else { return }
-                swipeCommand = .skip
+                swipeCommand = .skip()
             }
             actionButton(systemImage: "arrow.up", color: .blue, label: "More like this", size: 64) {
                 guard !viewModel.deck.isEmpty else { return }
-                swipeCommand = .boost
+                swipeCommand = .boost()
             }
             actionButton(systemImage: "heart.fill", color: .green, label: "Save", size: 56) {
                 guard !viewModel.deck.isEmpty else { return }
-                swipeCommand = .like
+                swipeCommand = .like()
             }
         }
         .disabled(viewModel.deck.isEmpty)

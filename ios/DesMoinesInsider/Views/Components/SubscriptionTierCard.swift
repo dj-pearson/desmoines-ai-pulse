@@ -137,12 +137,23 @@ struct SubscriptionTierCard: View {
 
 /// Monthly / Annual billing toggle matching Android `BillingCycleToggle`.
 ///
-/// NOTE (IOS-AUDIT-UX-032): this component and `SubscriptionTierCard` are not yet
-/// wired to a live screen. Before using them in production, drive `annualLabel`
-/// and the card's `price`/`billingLabel` from StoreKit (`Product.displayPrice`
-/// and PaywallView's computed `annualSavingsPercent`) — do NOT ship the
-/// placeholder "save 20%" / "$14.99" strings, which can diverge from the real
-/// products.
+/// STILL UNWIRED, and the warning has been re-checked rather than copied
+/// forward (IOS-AUDIT-FEAT-036). Neither this toggle nor `SubscriptionTierCard`
+/// has a single call site outside the #Preview at the bottom of this file. The
+/// live screens are SubscriptionView and PaywallView.
+///
+/// The original warning named placeholder "save 20%" and "$14.99" strings. Both
+/// are already gone from the component API: `price` and `billingLabel` are
+/// required lets with no default, and `annualLabel` defaults to a neutral
+/// "Annual" rather than a savings claim, so a caller cannot accidentally ship an
+/// invented number. The only "$14.99" left is in the #Preview, and it is not even
+/// a real tier price - Insider is $4.99 and VIP is $12.99.
+///
+/// So the remaining risk is not the placeholders, it is that these two are dead
+/// code carrying a stale caution. Wiring them means redesigning the subscription
+/// screen; deleting them is a product call. Whoever does wire them: pass
+/// `Product.displayPrice` and PaywallView's computed `annualSavingsPercent`,
+/// never a literal.
 struct BillingCycleToggle: View {
     @Binding var isAnnual: Bool
     /// Defaults to a neutral label so a real savings percent (from StoreKit) is

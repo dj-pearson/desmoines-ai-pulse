@@ -118,6 +118,48 @@ struct SubscriptionView: View {
     // MARK: - Current Tier Badge
 
     private var currentTierBadge: some View {
+        VStack(spacing: 10) {
+            // The server rejected a receipt this device still holds, so the tier
+            // above has already been lowered (StoreKitService:120 subtracts the
+            // revoked ids before resolving). Without this the user simply drops
+            // from Insider to Free with no explanation and no route to a fix.
+            //
+            // hasServerRevokedEntitlement was written for exactly this - its
+            // docstring says "UI can surface a subscription could not be verified
+            // state" - and nothing read it until now.
+            if storeKit.hasServerRevokedEntitlement {
+                revokedEntitlementNotice
+            }
+
+            tierBadgeRow
+        }
+    }
+
+    private var revokedEntitlementNotice: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("We couldn't verify your subscription")
+                    .font(.subheadline.weight(.semibold))
+                Text("Your purchase could not be confirmed with the App Store, so premium features are paused. Restoring purchases usually fixes it.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Button("Restore Purchases") {
+                    Task { await storeKit.restorePurchases() }
+                }
+                .font(.footnote.weight(.semibold))
+                .padding(.top, 2)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+        .accessibilityElement(children: .combine)
+    }
+
+    private var tierBadgeRow: some View {
         HStack(spacing: 8) {
             Image(systemName: badgeIcon(for: storeKit.currentTier))
                 .foregroundStyle(badgeColor(for: storeKit.currentTier))
@@ -130,11 +172,38 @@ struct SubscriptionView: View {
         .accessibilityLabel("Your current plan is \(storeKit.currentTier.displayName)")
     }
 
+    // MARK: - Pricing
+
+    /// "Insider - $4.99/mo" built from the loaded StoreKit product.
+    ///
+    /// These two headings were hardcoded USD strings on a LIVE screen
+    /// (IOS-AUDIT-FEAT-036). Two things were wrong with that, and the second is
+    /// the one that matters: a literal price can drift from what App Store
+    /// Connect actually charges, and "$4.99" is shown to a user in London who
+    /// will be billed in pounds. Product.displayPrice is localized and
+    /// currency-correct by construction.
+    ///
+    /// THE NAME ALONE WHEN PRODUCTS HAVE NOT LOADED, not a fallback price.
+    /// StoreKit products load asynchronously and fail offline, and a wrong price
+    /// is worse than no price: the user reads it, decides on it, and is charged
+    /// something else. The list still says what the tier includes.
+    private func tierHeading(_ name: String, tier: SubscriptionTier) -> String {
+        // Qualified: this file imports StoreKit, where a bare
+        // `SubscriptionPeriod` resolves to Product.SubscriptionPeriod rather
+        // than ours.
+        let product = StoreKitService.SubscriptionPeriod.allCases
+            .lazy
+            .compactMap { storeKit.product(for: tier, period: $0) }
+            .first
+        guard let product else { return name }
+        return "\(name) - \(product.displayPrice)"
+    }
+
     // MARK: - Features List
 
     private var featuresList: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Insider — $4.99/mo")
+            Text(tierHeading("Insider", tier: .insider))
                 .font(.caption.weight(.bold))
                 .foregroundStyle(.orange)
             featureRow(icon: "map.fill", color: .orange, text: "AI Trip Planner (5 trips/month)")
@@ -148,7 +217,7 @@ struct SubscriptionView: View {
             Divider()
                 .padding(.vertical, 4)
 
-            Text("VIP — $12.99/mo")
+            Text(tierHeading("VIP", tier: .vip))
                 .font(.caption.weight(.bold))
                 .foregroundStyle(.purple)
             featureRow(icon: "map.fill", color: .purple, text: "Unlimited AI Trip Planner")

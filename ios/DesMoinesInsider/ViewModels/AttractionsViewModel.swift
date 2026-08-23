@@ -55,6 +55,17 @@ final class AttractionsViewModel {
         case name = "Name"
 
         var id: String { rawValue }
+
+        /// The service-level sort this option maps to. Kept as a mapping rather
+        /// than reusing one enum, so the picker's display strings stay a UI
+        /// concern and the service does not inherit them.
+        var serviceSort: AttractionsService.Sort {
+            switch self {
+            case .newest: return .newest
+            case .rating: return .rating
+            case .name: return .name
+            }
+        }
     }
 
     var activeFilterCount: Int {
@@ -107,7 +118,7 @@ final class AttractionsViewModel {
             // overwrite results for the current filters (last-writer-wins race).
             guard !Task.isCancelled, generation == loadGeneration else { return }
             rawAttractions = response.attractions
-            attractions = applySort(rawAttractions)
+            attractions = rawAttractions
             hasMore = response.hasMore
         } catch {
             guard generation == loadGeneration else { return }
@@ -140,7 +151,7 @@ final class AttractionsViewModel {
             // reset already replaced.
             guard generation == loadGeneration else { isLoadingMore = false; return }
             rawAttractions += response.attractions
-            attractions = applySort(rawAttractions)
+            attractions = rawAttractions
             hasMore = response.hasMore
         } catch {
             // Pagination failures shouldn't break the main view — just stop loading more.
@@ -165,37 +176,27 @@ final class AttractionsViewModel {
     // MARK: - Private
 
     private func buildQuery() -> AttractionsService.AttractionsQuery {
+        // IOS-AUDIT-BUG-006: type filtering and sorting are both server-side now.
+        // Doing either in Swift made the offset window mean something different
+        // from what the server paged by.
         AttractionsService.AttractionsQuery(
             searchText: searchText.trimmingCharacters(in: .whitespaces).isEmpty ? nil : searchText,
-            // AttractionsService supports a single type filter; when multiple
-            // types are selected we fetch a broader set and filter client-side
-            // in `applySort` below.
-            type: selectedTypes.count == 1 ? selectedTypes.first?.rawValue : nil,
+            types: selectedTypes.isEmpty ? nil : selectedTypes.map(\.rawValue).sorted(),
             minRating: minRating > 0 ? minRating : nil,
             isFeatured: featuredOnly ? true : nil,
+            sortBy: sortBy.serviceSort,
             limit: pageSize,
             offset: offset
         )
     }
 
-    /// Apply client-side sort and (when >1 type is selected) client-side type filter.
-    private func applySort(_ items: [Attraction]) -> [Attraction] {
-        var filtered = items
-        if selectedTypes.count > 1 {
-            filtered = filtered.filter { selectedTypes.contains($0.attractionType) }
-        }
-
-        switch sortBy {
-        case .newest:
-            return filtered // server already orders by created_at desc
-        case .rating:
-            return filtered.sorted {
-                ($0.rating ?? 0) > ($1.rating ?? 0)
-            }
-        case .name:
-            return filtered.sorted { $0.name < $1.name }
-        }
-    }
+    // applySort was removed here (IOS-AUDIT-BUG-006). It sorted, and filtered by
+    // type, only the pages fetched so far - so "Top rated" ranked the loaded
+    // subset rather than the collection, and a multi-type filter could shrink a
+    // page to a couple of rows. The second one had a nastier consequence than a
+    // short list: loadMoreIfNeeded fires within 5 items of the end of the DISPLAY
+    // list, so a heavily filtered page left the user unable to scroll far enough
+    // to ask for the next one. Both moved into the query.
 
     /// Single debounced entry point for search + every filter change. Cancels any
     /// pending fetch and replaces it, so a burst of filter mutations collapses to

@@ -37,7 +37,11 @@ interface ProviderRow {
 
 export const run: AgentRun = async (ctx, { supabase }) => {
   const nowIso = new Date().toISOString();
-  const { data: rows } = await supabase.from("provider_spend_mtd").select("*");
+  const { data: rows, error: rowsError } = await supabase.from("provider_spend_mtd").select("*");
+  // RAISE. No providers means nothing is throttled and nothing is paused, and
+  // the run reports that as a success - so a failed read silently switches off
+  // the spend guard this agent exists to be (WEB-BE-032 AC2).
+  if (rowsError) throw new Error(`provider_spend_mtd read failed: ${rowsError.message}`);
   const providers = (rows ?? []) as (ProviderRow & { spend_mtd: number })[];
 
   let throttledCount = 0;
@@ -55,11 +59,13 @@ export const run: AgentRun = async (ctx, { supabase }) => {
     summary[p.provider] = { spend: Math.round(spend * 100) / 100, budget, pct };
 
     // Agents drawing on this provider (candidates to pause / re-enable).
-    const { data: agentRows } = await supabase
+    const { data: agentRows, error: agentRowsError } = await supabase
       .from("agent_registry")
       .select("agent_key, enabled")
       .eq("provider", p.provider)
       .neq("agent_key", AGENT_KEY); // never pause the watchdog itself
+    // Same reasoning: an empty list means a hard budget breach pauses nothing.
+    if (agentRowsError) throw new Error(`agent_registry read failed: ${agentRowsError.message}`);
     const agents = (agentRows ?? []) as { agent_key: string; enabled: boolean }[];
 
     if (ratio >= p.hard_pct) {
@@ -118,11 +124,18 @@ export const run: AgentRun = async (ctx, { supabase }) => {
 // Re-enable agents this watchdog auto-paused for a provider now back under the
 // hard line. Reversible + audited. Returns the count re-enabled.
 async function recover(supabase: Client, p: { provider: string }, nowIso: string): Promise<number> {
-  const { data: budget } = await supabase
+  const { data: budget, error: budgetError } = await supabase
     .from("provider_budgets")
     .select("auto_paused_agents")
     .eq("provider", p.provider)
     .maybeSingle();
+  // Fails safe - no recovery means no extra spend - but silently, and the
+  // symptom is agents that were auto-paused staying paused forever with
+  // nothing saying why (WEB-BE-032 AC3).
+  if (budgetError) {
+    console.warn(`[api-cost-watchdog] budget read failed for ${p.provider}; skipping recovery: ${budgetError.message}`);
+    return 0;
+  }
   const paused = (budget?.auto_paused_agents ?? []) as string[];
   if (paused.length === 0) return 0;
   await supabase.from("agent_registry").update({ enabled: true }).in("agent_key", paused);

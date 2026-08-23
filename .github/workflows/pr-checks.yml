@@ -122,6 +122,44 @@ jobs:
           VITE_SITE_URL: ${{ secrets.VITE_SITE_URL || 'https://desmoinesinsider.com' }}
         run: npm run build
 
+      # WEB-PERF-020 AC4. Runs after the build because it measures dist/. A
+      # RATCHET, not the 200 KB budget itself -- the critical path is 370 KB, so
+      # enforcing the goal outright would be red on day one, which is how the
+      # accessibility lane (WEB-CI-021) and the unit lane (WEB-CI-020) both
+      # ended up on continue-on-error. It fails on growth past the baseline and
+      # prints the distance to 200 KB every run so the goal stays visible.
+      # WEB-LEGAL-009 AC1: analytics that loads before consent lives in
+      # index.html - not TypeScript, not tested, not linted - which is how
+      # WEB-LEGAL-001 shipped while a document said it was fixed.
+      - name: Consent gate on third-party tags
+        run: node scripts/check-consent-gate.mjs
+
+      # WEB-SEO-006: the SPA fallback serves the prerendered HOMEPAGE for every
+      # unmatched route, so 884 sitemapped URLs answered with the homepage
+      # canonical - an instruction to treat them all as one page. Runs after the
+      # build so it can also confirm the rewrite still has a canonical to target.
+      - name: SPA fallback does not claim to be the homepage
+        run: node scripts/check-spa-fallback-canonical.mjs
+
+      # WEB-SEO-013 AC7: pseo_pages rows are DATA, so a generated page landing on
+      # a hand-built route is invisible to every static check here - nothing
+      # compares a database row to src/App.tsx. Offline; reads a committed slug
+      # list, and ratchets rather than gating, because each existing collision
+      # needs a per-slug decision.
+      - name: pSEO slugs do not collide with real routes
+        run: node scripts/check-pseo-route-collisions.mjs
+
+      - name: Critical-path JS budget
+        run: node scripts/check-bundle-budget.mjs
+
+      # WEB-LEGAL-009 AC2. Also runs after the build, because Vite rewrites
+      # index.html and the CSP has to match what is SERVED, not the source.
+      # Guards the pinning WEB-LEGAL-001 depends on: editing the inline consent
+      # bootstrap without regenerating its hash makes the browser refuse to run
+      # it, and nothing else in the build would say so.
+      - name: CSP inline-script hashes
+        run: node scripts/check-csp-hashes.mjs
+
   # WEB-CI-023. `npm run type-check` above runs `tsc --noEmit` against the root
   # tsconfig, which is `"files": []` plus project references — so it compiles
   # ZERO files and has always exited 0. Two P1 crashes shipped straight through

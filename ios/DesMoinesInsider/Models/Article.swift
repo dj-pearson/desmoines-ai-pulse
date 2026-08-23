@@ -9,7 +9,27 @@ struct Article: Identifiable, Codable, Hashable {
     let id: String
     let title: String
     let slug: String
-    let content: String
+    /// The markdown body.
+    ///
+    /// Backed by an optional so a null or missing `content` cannot fail the
+    /// decode of the WHOLE array (IOS-AUDIT-BUG-005). Decodable stops at the
+    /// first bad element, so one malformed row took the entire Articles screen
+    /// down rather than hiding one card.
+    ///
+    /// The column is currently NOT NULL and 0 of 18 published rows are empty, so
+    /// this is hardening against a schema the database presently forbids -- but
+    /// an empty STRING is already permitted, is indistinguishable here, and is
+    /// what the empty-body fallback in ArticleDetailView handles.
+    ///
+    /// Exposed as a non-optional `String` so no call site changes.
+    private let rawContent: String?
+
+    var content: String { rawContent ?? "" }
+
+    /// True when there is no body to render.
+    var hasContent: Bool {
+        !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
     var excerpt: String?
     var featuredImageUrl: String?
     var category: String?
@@ -22,7 +42,8 @@ struct Article: Identifiable, Codable, Hashable {
     var updatedAt: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, title, slug, content, excerpt, category, tags
+        case id, title, slug, excerpt, category, tags
+        case rawContent = "content"
         case featuredImageUrl = "featured_image_url"
         case seoTitle = "seo_title"
         case seoDescription = "seo_description"
@@ -137,6 +158,49 @@ extension Article {
             data.metaSecondary = CardMetaLine(icon: "calendar", text: formattedDate)
         }
         return data
+    }
+}
+
+// MARK: - Construction
+
+extension Article {
+    /// Memberwise init taking `content:` rather than the private `rawContent:`.
+    ///
+    /// Declared in an extension so the synthesized memberwise init survives, and
+    /// so the two existing call sites -- the preview fixture and the test helper --
+    /// are unchanged by IOS-AUDIT-BUG-005 making the storage optional.
+    init(
+        id: String,
+        title: String,
+        slug: String,
+        content: String?,
+        excerpt: String? = nil,
+        featuredImageUrl: String? = nil,
+        category: String? = nil,
+        tags: [String]? = nil,
+        seoTitle: String? = nil,
+        seoDescription: String? = nil,
+        viewCount: Int? = nil,
+        publishedAt: String? = nil,
+        createdAt: String? = nil,
+        updatedAt: String? = nil
+    ) {
+        self.init(
+            id: id,
+            title: title,
+            slug: slug,
+            rawContent: content,
+            excerpt: excerpt,
+            featuredImageUrl: featuredImageUrl,
+            category: category,
+            tags: tags,
+            seoTitle: seoTitle,
+            seoDescription: seoDescription,
+            viewCount: viewCount,
+            publishedAt: publishedAt,
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
     }
 }
 

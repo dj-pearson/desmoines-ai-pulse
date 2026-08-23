@@ -294,6 +294,17 @@ struct SearchView: View {
         ScrollView {
             LazyVStack(spacing: 12) {
                 Color.clear.frame(height: 0).id("top")
+
+                // IOS-AUDIT-UX-051 AC2. The whole-search empty state above fires
+                // only when EVERY tab is empty, so a search matching 6 events and
+                // 0 restaurants rendered the Restaurants tab as a blank scroll
+                // view - indistinguishable from a tab that had not finished
+                // loading. The tab bar already shows a per-tab count; this says
+                // the same thing where the user is actually looking.
+                if countFor(viewModel.selectedTab) == 0 {
+                    emptyTabState
+                }
+
                 switch viewModel.selectedTab {
                 case .events:
                     ForEach(Array(viewModel.eventResults.enumerated()), id: \.element.id) { index, event in
@@ -413,6 +424,34 @@ struct SearchView: View {
     }
 
     // MARK: - Helpers
+
+    /// Shown when the SELECTED tab has no matches but the search itself did.
+    ///
+    /// Names the other tabs that do have results, so the user can act on it
+    /// rather than concluding the search failed.
+    private var emptyTabState: some View {
+        let others = SearchViewModel.SearchTab.allCases
+            .filter { $0 != viewModel.selectedTab && countFor($0) > 0 }
+
+        return VStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.title)
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            Text("No \(viewModel.selectedTab.rawValue.lowercased()) match this search.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            if !others.isEmpty {
+                Text("Results in \(others.map(\.rawValue).joined(separator: " and ")).")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 32)
+    }
 
     private func countFor(_ tab: SearchViewModel.SearchTab) -> Int {
         switch tab {

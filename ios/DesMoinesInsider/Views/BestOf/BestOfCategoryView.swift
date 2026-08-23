@@ -20,6 +20,11 @@ struct BestOfCategoryView: View {
             .padding(.horizontal)
             .padding(.bottom, 28)
         }
+        // The voting booth holds a nominee search field and a write-in field, and
+        // the leaderboard sits below both - so with the keyboard up the thing the
+        // user is typing about was unreachable and there was no gesture to put the
+        // keyboard away short of finding a Done button (IOS-AUDIT-UX-056).
+        .scrollDismissesKeyboard(.interactively)
         .navigationTitle(viewModel.category.name)
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await viewModel.refresh() }

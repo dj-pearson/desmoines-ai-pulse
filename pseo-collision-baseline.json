@@ -1,0 +1,10 @@
+{
+  "$comment": "WEB-SEO-013 AC7. Published pSEO slugs that collide exactly with a hand-built route. This list must only ever SHRINK - each entry is two pages competing for one query. Re-baseline with: node scripts/check-pseo-route-collisions.mjs --update",
+  "collisions": [
+    "/events/ankeny",
+    "/events/date-night",
+    "/events/this-weekend",
+    "/events/today",
+    "/events/west-des-moines"
+  ]
+}

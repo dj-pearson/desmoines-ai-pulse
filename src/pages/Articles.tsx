@@ -221,7 +221,7 @@ const Articles: React.FC = () => {
                   <div>
                     <label className="text-sm font-medium mb-2 block">Category</label>
                     <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                      <SelectTrigger>
+                      <SelectTrigger aria-label="Filter articles by category">
                         <SelectValue placeholder="All Categories" />
                       </SelectTrigger>
                       <SelectContent>
@@ -238,7 +238,7 @@ const Articles: React.FC = () => {
                   <div>
                     <label className="text-sm font-medium mb-2 block">Sort By</label>
                     <Select value={sortBy} onValueChange={setSortBy}>
-                      <SelectTrigger>
+                      <SelectTrigger aria-label="Sort articles">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>

@@ -125,13 +125,12 @@ struct SettingsView: View {
                     }
 
                     if notificationStatus == .authorized {
-                        // The toggle drives UserDefaults directly via the binding
-                        // below; no separate @AppStorage local (which wouldn't be
-                        // installed as view state anyway) — IOS-AUDIT-UX-029.
-                        Toggle(isOn: Binding(
-                            get: { UserDefaults.standard.bool(forKey: "eventRemindersEnabled") },
-                            set: { UserDefaults.standard.set($0, forKey: "eventRemindersEnabled") }
-                        )) {
+                        // IOS-AUDIT-BUG-012: bound to the service, not straight to
+                        // UserDefaults. The key is the same one, so an existing
+                        // preference survives - what changed is that something now
+                        // READS it: scheduleReminder refuses while this is off, and
+                        // switching it off cancels what is already pending.
+                        Toggle(isOn: $notifications.remindersEnabled) {
                             Label("Event Reminders", systemImage: "calendar.badge.clock")
                         }
 
@@ -275,11 +274,17 @@ struct SettingsView: View {
             } message: {
                 Text("This will permanently delete your account, favorites, and all associated data. This action cannot be undone.")
             }
-            .alert("Error", isPresented: .init(
+            // IOS-AUDIT-BUG-018 AC3. This alert has exactly one setter - the
+            // deletion catch below - so the retry is unambiguous here and needs
+            // no discriminator, unlike ProfileView where it is shared.
+            .alert("Couldn't Delete Account", isPresented: .init(
                 get: { errorMessage != nil },
                 set: { if !$0 { errorMessage = nil } }
             )) {
-                Button("OK", role: .cancel) {}
+                Button("Try Again") {
+                    Task { await deleteAccount() }
+                }
+                Button("Cancel", role: .cancel) {}
             } message: {
                 Text(errorMessage ?? "")
             }
@@ -367,9 +372,10 @@ struct SettingsView: View {
         do {
             // XPLAT-001 / IOS-AUDIT-BUG-018: shared with ProfileViewModel so the
             // two deletion entry points cannot drift apart again.
-            try await AccountDeletionService.shared.deleteAccount()
-
-            try await auth.signOut()
+            // IOS-AUDIT-BUG-018 AC2: sign-out moved into the service and made
+            // best effort, so dismiss() now runs whenever the account is actually
+            // gone rather than being skipped by a sign-out blip.
+            try await AccountDeletionService.shared.deleteAccountAndSignOut()
             dismiss()
         } catch {
             errorMessage = error.localizedDescription

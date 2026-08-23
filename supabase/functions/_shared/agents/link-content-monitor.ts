@@ -168,20 +168,34 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   const toProbe = candidates.slice(0, LINK_BUDGET);
   // Load existing state for just these links.
   const stateByKey = new Map<string, { id: string; consecutive_failures: number; marked_dead: boolean; first_failed_at: string | null }>();
+  const unreadableState = new Set<string>();
   for (const c of toProbe) {
-    const { data: existing } = await supabase
+    const { data: existing, error: existingError } = await supabase
       .from("content_link_checks")
       .select("id, consecutive_failures, marked_dead, first_failed_at")
       .eq("target_table", c.table)
       .eq("row_id", c.rowId)
       .eq("url", c.url)
       .maybeSingle();
+    // A dropped error reads as "no prior state for this link", so
+    // consecutive_failures restarts at 1 every run and a genuinely dead link
+    // never reaches marked_dead - the counter this table exists to keep is the
+    // thing the missing error resets. Skip the candidate instead (WEB-BE-032 AC2).
+    if (existingError) {
+      unreadableState.add(`${c.table}:${c.rowId}:${c.url}`);
+      console.warn(`[link-content-monitor] link state read failed for ${c.url}; skipping: ${existingError.message}`);
+      continue;
+    }
     if (existing) stateByKey.set(`${c.table}:${c.rowId}:${c.url}`, existing);
   }
 
   let okLinks = 0;
   let deadLinks = 0;
   for (const c of toProbe) {
+    // Skipping the state read is not enough on its own: an unread link probed
+    // with no prior state writes consecutive_failures back to 1, which is the
+    // reset this guard exists to prevent. Leave the row untouched this run.
+    if (unreadableState.has(`${c.table}:${c.rowId}:${c.url}`)) continue;
     const probe = await probeLink(c.url);
     const key = `${c.table}:${c.rowId}:${c.url}`;
     const prev = stateByKey.get(key);

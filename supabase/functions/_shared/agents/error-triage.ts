@@ -30,13 +30,16 @@ interface Cluster {
 
 export const run: AgentRun = async (ctx, { supabase }) => {
   const sinceIso = new Date(Date.now() - WINDOW_H * 60 * 60 * 1000).toISOString();
-  const { data: events } = await supabase
+  const { data: events, error: eventsError } = await supabase
     .from("error_events")
     .select("signature, message_redacted, component, action, route, severity, source, user_id, created_at")
     .gte("created_at", sinceIso)
     .limit(50000);
 
   // Cluster by signature.
+  // No events means nothing to triage, which the run reports as a SUCCESS -
+  // indistinguishable from a quiet window (WEB-BE-032 AC2).
+  if (eventsError) throw new Error(`error_events read failed: ${eventsError.message}`);
   const clusters = new Map<string, Cluster>();
   for (const e of (events ?? []) as Array<Record<string, string | null>>) {
     const sig = e.signature!;
@@ -84,7 +87,7 @@ export const run: AgentRun = async (ctx, { supabase }) => {
     };
 
     // Upsert: refresh an existing open task's payload, else create.
-    const { data: existing } = await supabase
+    const { data: existing, error: existingError } = await supabase
       .from("agent_tasks")
       .select("id")
       .eq("agent_key", AGENT_KEY)
@@ -93,6 +96,13 @@ export const run: AgentRun = async (ctx, { supabase }) => {
       .limit(1)
       .maybeSingle();
 
+    // A dropped error reads as "no open task for this signature" and creates a
+    // SECOND task every run, for a signature that by definition keeps firing.
+    // Same idempotency shape as agentTasks.createTask (WEB-BE-032 AC2).
+    if (existingError) {
+      console.warn(`[error-triage] dedupe read failed for ${dedupeKey}; skipping: ${existingError.message}`);
+      continue;
+    }
     if (existing?.id) {
       await supabase.from("agent_tasks").update({ payload }).eq("id", existing.id);
     } else {
@@ -111,13 +121,16 @@ export const run: AgentRun = async (ctx, { supabase }) => {
 
   // Auto-close: open error tasks whose signature had no events in the window.
   let closed = 0;
-  const { data: openTasks } = await supabase
+  const { data: openTasks, error: openTasksError } = await supabase
     .from("agent_tasks")
     .select("id, dedupe_key")
     .eq("agent_key", AGENT_KEY)
     .in("status", ["open", "escalated", "assigned", "auto_resolving"])
     .like("dedupe_key", "error:%")
     .limit(5000);
+  // Best-effort: an empty list closes nothing, which is the safe direction
+  // for an auto-close sweep (WEB-BE-032 AC3).
+  if (openTasksError) console.warn(`[error-triage] auto-close sweep read failed: ${openTasksError.message}`);
   for (const t of (openTasks ?? []) as { id: string; dedupe_key: string }[]) {
     const sig = t.dedupe_key.slice("error:".length);
     if (!activeSigs.has(sig)) {

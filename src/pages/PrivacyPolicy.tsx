@@ -59,10 +59,10 @@ export default function PrivacyPolicy() {
             </p>
             <p>
               This policy should be read together with our{" "}
-              <Link to="/cookie-policy" className="text-primary hover:underline">Cookie Policy</Link>{" "}
+              <Link to="/cookie-policy" className="text-primary underline">Cookie Policy</Link>{" "}
               (which describes the specific cookies and similar technologies we use and how to control them) and, for business
               customers, our{" "}
-              <Link to="/dpa" className="text-primary hover:underline">Data Processing Agreement</Link>.
+              <Link to="/dpa" className="text-primary underline">Data Processing Agreement</Link>.
             </p>
           </section>
 
@@ -71,7 +71,7 @@ export default function PrivacyPolicy() {
             <p>
               For the purposes of the EU and UK General Data Protection Regulation ("GDPR"), Des Moines Insider is the
               <strong> data controller</strong> of the personal information described in this policy. You can reach our
-              privacy team at <a href="mailto:privacy@desmoinesinsider.com" className="text-primary hover:underline">privacy@desmoinesinsider.com</a>.
+              privacy team at <a href="mailto:privacy@desmoinesinsider.com" className="text-primary underline">privacy@desmoinesinsider.com</a>.
             </p>
           </section>
 
@@ -101,7 +101,7 @@ export default function PrivacyPolicy() {
             <p>
               Usage and analytics data described above are collected only where you have granted the relevant cookie consent.
               See <strong>Your Privacy Choices</strong> below and our{" "}
-              <Link to="/cookie-policy" className="text-primary hover:underline">Cookie Policy</Link>.
+              <Link to="/cookie-policy" className="text-primary underline">Cookie Policy</Link>.
             </p>
 
             <h3 className="text-xl font-medium mt-6 mb-3">Sensitive Personal Information</h3>
@@ -191,7 +191,7 @@ export default function PrivacyPolicy() {
               Non-essential cookies are <strong>off by default</strong> and are only set after you opt in. You can change your
               choices at any time from the <strong>Your Privacy Choices</strong> control, and we honor the Global Privacy
               Control (GPC) browser signal automatically. For full details, see our{" "}
-              <Link to="/cookie-policy" className="text-primary hover:underline">Cookie Policy</Link>.
+              <Link to="/cookie-policy" className="text-primary underline">Cookie Policy</Link>.
             </p>
           </section>
 
@@ -222,7 +222,7 @@ export default function PrivacyPolicy() {
             </ul>
             <p>
               A complete and current list of sub-processors, including the categories of data and safeguards, is maintained in
-              our <Link to="/dpa" className="text-primary hover:underline">Data Processing Agreement</Link>.
+              our <Link to="/dpa" className="text-primary underline">Data Processing Agreement</Link>.
             </p>
           </section>
 
@@ -260,9 +260,9 @@ export default function PrivacyPolicy() {
             </ul>
             <p>
               You can exercise most of these rights directly from your{" "}
-              <Link to="/profile" className="text-primary hover:underline">account settings</Link> (which include self-service
+              <Link to="/profile" className="text-primary underline">account settings</Link> (which include self-service
               data export and account deletion) or by emailing{" "}
-              <a href="mailto:privacy@desmoinesinsider.com" className="text-primary hover:underline">privacy@desmoinesinsider.com</a>.
+              <a href="mailto:privacy@desmoinesinsider.com" className="text-primary underline">privacy@desmoinesinsider.com</a>.
               We will respond within the timeframes required by applicable law (generally 30–45 days). If we decline a request,
               you have the right to appeal by replying to our response, and to lodge a complaint with your local data protection
               authority.
@@ -313,7 +313,7 @@ export default function PrivacyPolicy() {
               Our Site is not intended for children under 13 years of age, and where consent is required for data processing in
               the EEA/UK, our services are directed to users aged 16 and older. We do not knowingly collect personal information
               from children under 13. If you believe we have collected information from a child under 13, please contact us
-              immediately at <a href="mailto:privacy@desmoinesinsider.com" className="text-primary hover:underline">privacy@desmoinesinsider.com</a>{" "}
+              immediately at <a href="mailto:privacy@desmoinesinsider.com" className="text-primary underline">privacy@desmoinesinsider.com</a>{" "}
               so we can delete it.
             </p>
           </section>
@@ -328,7 +328,7 @@ export default function PrivacyPolicy() {
               information. We do not use or disclose sensitive personal information for purposes that require a right-to-limit
               option. To exercise any of these rights, use the tools in your account settings, the{" "}
               <strong>Your Privacy Choices</strong> control, or email{" "}
-              <a href="mailto:privacy@desmoinesinsider.com" className="text-primary hover:underline">privacy@desmoinesinsider.com</a>.
+              <a href="mailto:privacy@desmoinesinsider.com" className="text-primary underline">privacy@desmoinesinsider.com</a>.
               You may use an authorized agent to submit a request on your behalf.
             </p>
           </section>
@@ -341,7 +341,7 @@ export default function PrivacyPolicy() {
               sub-processors are located. Where we transfer personal data out of the EEA or UK, we rely on appropriate
               safeguards such as the European Commission's Standard Contractual Clauses (SCCs) and the UK International Data
               Transfer Addendum, as described in our{" "}
-              <Link to="/dpa" className="text-primary hover:underline">Data Processing Agreement</Link>.
+              <Link to="/dpa" className="text-primary underline">Data Processing Agreement</Link>.
             </p>
             <h3 className="text-xl font-medium mt-6 mb-3">EU / UK Representative</h3>
             <p>
@@ -349,7 +349,7 @@ export default function PrivacyPolicy() {
                   target or monitor EEA/UK data subjects, then replace this paragraph. */}
               If and where required under Article 27 of the GDPR, we will appoint a representative in the EU and/or UK. Until a
               representative is named here, EEA and UK residents may contact our privacy team directly at{" "}
-              <a href="mailto:privacy@desmoinesinsider.com" className="text-primary hover:underline">privacy@desmoinesinsider.com</a>{" "}
+              <a href="mailto:privacy@desmoinesinsider.com" className="text-primary underline">privacy@desmoinesinsider.com</a>{" "}
               for any data-protection matter.
             </p>
           </section>
@@ -381,8 +381,8 @@ export default function PrivacyPolicy() {
           <section className="mt-12 pt-8 border-t">
             <p className="text-sm text-muted-foreground">
               By using Des Moines Insider, you acknowledge that you have read and understood this Privacy Policy.
-              Please also review our <Link to="/terms" className="text-primary hover:underline">Terms of Service</Link>{" "}
-              and <Link to="/cookie-policy" className="text-primary hover:underline">Cookie Policy</Link>.
+              Please also review our <Link to="/terms" className="text-primary underline">Terms of Service</Link>{" "}
+              and <Link to="/cookie-policy" className="text-primary underline">Cookie Policy</Link>.
             </p>
           </section>
         </article>

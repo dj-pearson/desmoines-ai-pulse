@@ -68,6 +68,7 @@ final class NeighborhoodViewModel {
     func enableNearby() async {
         location.requestPermission()
         isLoading = true
+        nearbyUnavailable = false
 
         // Wait for the permission dialog to resolve (bounded), then await a
         // real fix — getCurrentLocation() has its own internal timeout.
@@ -77,12 +78,32 @@ final class NeighborhoodViewModel {
             waited += .milliseconds(200)
         }
 
-        if location.authorizationStatus == .authorizedWhenInUse
-            || location.authorizationStatus == .authorizedAlways {
-            _ = try? await location.getCurrentLocation()
+        if LocationService.isAuthorized(location.authorizationStatus) {
+            // A granted permission can still yield no fix - indoors, airplane
+            // mode, or the service's own 10s timeout.
+            nearbyUnavailable = (try? await location.getCurrentLocation()) == nil
+        } else {
+            // Denied, restricted, or the prompt was never answered. The button
+            // used to do nothing visible in every one of those cases: the list
+            // reloaded in the same order and the user had no way to tell whether
+            // the feature was broken or they had said no months ago
+            // (IOS-AUDIT-UX-057).
+            nearbyUnavailable = true
         }
 
         await refresh()
+    }
+
+    /// The nearby sort was asked for and could not be applied. Drives the
+    /// explanation in NeighborhoodDetailView; cleared on the next attempt.
+    ///
+    /// Deliberately one flag rather than a message: the view knows whether the
+    /// user can fix it from Settings by reading authorizationStatus, and a
+    /// string here would duplicate that decision.
+    private(set) var nearbyUnavailable = false
+
+    func dismissNearbyNotice() {
+        nearbyUnavailable = false
     }
 
     // MARK: - Batches (broad fetch, filtered client-side by area)

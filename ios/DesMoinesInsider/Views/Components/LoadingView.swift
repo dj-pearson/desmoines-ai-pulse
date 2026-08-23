@@ -13,6 +13,19 @@ struct LoadingView: View {
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // IOS-AUDIT-UX-052 AC3. A bare ProgressView plus a Text reads as two
+        // elements, and VoiceOver announces neither when the view appears - so a
+        // screen that is loading is silent, which is indistinguishable from one
+        // that is empty.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(message)
+        .accessibilityAddTraits(.updatesFrequently)
+        .onAppear {
+            // Announced rather than only labelled: the user has to move focus to
+            // hear a label, and the point is to say something is happening
+            // without them going looking.
+            AccessibilityNotification.Announcement(message).post()
+        }
     }
 }
 
@@ -27,6 +40,11 @@ struct InlineLoadingView: View {
         }
         .frame(maxWidth: .infinity)
         .padding()
+        // One element, not a spinner and a label. No announcement here: this
+        // appears repeatedly while paging, and announcing every page would talk
+        // over whatever the user is reading.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Loading more")
     }
 }
 

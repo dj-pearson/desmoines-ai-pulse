@@ -57,8 +57,15 @@ export const run: AgentRun = async (ctx, { supabase }) => {
     if (p.lifecycle_signals?.messagingAllowed === false) { skippedConsent++; continue; }
 
     // Frequency cap.
-    const { data: recent } = await supabase
+    const { data: recent, error: recentError } = await supabase
       .from("nurture_sends").select("created_at").eq("user_id", p.user_id).eq("kind", "weekly_digest").order("created_at", { ascending: false }).limit(1);
+    // FAIL CLOSED. An empty result reads as "no recent contact", which sends -
+    // so a dropped error bypasses the frequency cap for everyone in the sweep
+    // (WEB-BE-032 AC2).
+    if (recentError) {
+      console.warn(`[weekly-digest] frequency cap read failed for ${p.user_id}; suppressing: ${recentError.message}`);
+      skippedCap++; continue;
+    }
     if (recent?.[0] && now - new Date(recent[0].created_at).getTime() < GAP_DAYS * DAY) { skippedCap++; continue; }
 
     // Tier (premium picks gated).

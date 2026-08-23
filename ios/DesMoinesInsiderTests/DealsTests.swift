@@ -84,4 +84,85 @@ final class DealsTests: XCTestCase {
         deal.daysOfWeek = nil
         XCTAssertTrue(deal.isActiveNow(date(2026, 6, 3, 3), calendar: calendar))
     }
+
+    // MARK: - IOS-AUDIT-PERF-022: derived state is stored, except the clock-dependent part
+
+    private func deals(_ specs: [(id: String, title: String, business: String, type: String, desc: String?)]) -> [Deal] {
+        let rows = specs.map { spec -> String in
+            let description = spec.desc.map { "\"description\": \"\($0)\"," } ?? ""
+            return """
+            {"id": "\(spec.id)", "title": "\(spec.title)", \(description)
+             "business_name": "\(spec.business)", "entity_type": "\(spec.type)",
+             "deal_type": "percentage"}
+            """
+        }
+        let json = "[\(rows.joined(separator: ","))]".data(using: .utf8)!
+        return (try? JSONDecoder().decode([Deal].self, from: json)) ?? []
+    }
+
+    @MainActor
+    func testCategoriesAreUniqueAndSorted() {
+        let vm = DealsViewModel(deals: deals([
+            ("1", "A", "Biz", "restaurant", nil),
+            ("2", "B", "Biz", "attraction", nil),
+            ("3", "C", "Biz", "restaurant", nil),
+        ]))
+        XCTAssertEqual(vm.categories, ["attraction", "restaurant"])
+    }
+
+    @MainActor
+    func testCategoryFilterNarrowsTheStoredList() {
+        let vm = DealsViewModel(deals: deals([
+            ("1", "A", "Biz", "restaurant", nil),
+            ("2", "B", "Biz", "attraction", nil),
+        ]))
+        XCTAssertEqual(vm.matchingDeals.count, 2)
+
+        vm.selectedCategory = "restaurant"
+        XCTAssertEqual(vm.matchingDeals.map(\.id), ["1"], "didSet must recompute, not wait for a read")
+
+        vm.selectedCategory = nil
+        XCTAssertEqual(vm.matchingDeals.count, 2)
+    }
+
+    @MainActor
+    func testSearchMatchesTitleBusinessAndDescriptionCaseInsensitively() {
+        let vm = DealsViewModel(deals: deals([
+            ("1", "Half Price Pizza", "Tonys", "restaurant", nil),
+            ("2", "Free Coffee", "Bean Co", "restaurant", nil),
+            ("3", "Museum Entry", "Science Center", "attraction", "Kids go free"),
+        ]))
+
+        vm.searchText = "PIZZA"
+        XCTAssertEqual(vm.matchingDeals.map(\.id), ["1"], "title match, case-insensitive")
+
+        vm.searchText = "bean"
+        XCTAssertEqual(vm.matchingDeals.map(\.id), ["2"], "business name match")
+
+        vm.searchText = "kids"
+        XCTAssertEqual(vm.matchingDeals.map(\.id), ["3"], "description match")
+
+        vm.searchText = "   "
+        XCTAssertEqual(vm.matchingDeals.count, 3, "a whitespace-only query is not a filter")
+    }
+
+    /// The reason filteredDeals is NOT stored, contrary to what the AC asks for.
+    ///
+    /// isActiveNow() reads the current time. Caching its result would freeze the
+    /// filter at whenever the last recompute ran, so a deal would keep showing as
+    /// open after its window closed. The split is: matchingDeals holds everything
+    /// clock-independent, filteredDeals applies the time predicate at read time.
+    @MainActor
+    func testActiveNowFilterIsNotBakedIntoTheStoredList() {
+        let vm = DealsViewModel(deals: deals([
+            ("1", "A", "Biz", "restaurant", nil),
+            ("2", "B", "Biz", "restaurant", nil),
+        ]))
+
+        vm.activeNowOnly = true
+        XCTAssertEqual(vm.matchingDeals.count, 2, "the stored list must never have the time filter applied")
+
+        vm.activeNowOnly = false
+        XCTAssertEqual(vm.filteredDeals.map(\.id), vm.matchingDeals.map(\.id))
+    }
 }

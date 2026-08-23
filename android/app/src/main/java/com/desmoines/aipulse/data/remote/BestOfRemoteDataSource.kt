@@ -6,8 +6,10 @@ import com.desmoines.aipulse.data.model.Vote
 import com.desmoines.aipulse.data.model.VotingCategory
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
+import io.github.jan.supabase.postgrest.rpc
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import javax.inject.Inject
@@ -33,22 +35,36 @@ class BestOfRemoteDataSource @Inject constructor(
     }
 
     @Serializable
-    private data class CategoryIdRow(@kotlinx.serialization.SerialName("category_id") val categoryId: String? = null)
+    private data class CategoryTallyRow(
+        @SerialName("category_id") val categoryId: String? = null,
+        @SerialName("vote_count") val voteCount: Int = 0,
+    )
 
-    /** Vote totals per category, grouped client-side over the votes table (web useVoting parity). */
+    /**
+     * Vote totals per category, aggregated server-side (WEB-SEC-025 step 2).
+     *
+     * This used to select every row of `votes` and count them in Kotlin, so
+     * the device held one row per ballot -- and `votes` carries `user_id`
+     * under a SELECT policy of USING (true). The RPC returns counts and
+     * nothing else, so the leaderboard stops depending on a read that step 3
+     * revokes.
+     */
     private suspend fun fetchVoteCounts(): Map<String, Int> =
-        db().from("votes").select(Columns.list("category_id"))
-            .decodeList<CategoryIdRow>()
-            .mapNotNull { it.categoryId }
-            .groupingBy { it }
-            .eachCount()
+        db().postgrest.rpc(function = "voting_category_tallies")
+            .decodeList<CategoryTallyRow>()
+            .mapNotNull { row -> row.categoryId?.let { it to row.voteCount } }
+            .toMap()
 
     @Serializable
     private data class VoteAggRow(
         @SerialName("entity_type") val entityType: String = "",
         @SerialName("entity_id") val entityId: String? = null,
         @SerialName("custom_entry") val customEntry: String? = null,
+        @SerialName("vote_count") val voteCount: Int = 0,
     )
+
+    @Serializable
+    private data class CategoryIdParams(@SerialName("p_category_id") val categoryId: String)
 
     /**
      * Category leaderboard: votes aggregated by entity (or custom write-in),
@@ -56,18 +72,21 @@ class BestOfRemoteDataSource @Inject constructor(
      * (fail-soft — a failed enrich leaves the raw entry rather than erroring).
      */
     suspend fun fetchResults(categoryId: String): List<LeaderboardEntry> {
-        val votes = db().from("votes")
-            .select(Columns.list("entity_type", "entity_id", "custom_entry")) {
-                filter { eq("category_id", categoryId) }
-            }.decodeList<VoteAggRow>()
+        // Aggregated server-side (WEB-SEC-025 step 2). The RPC groups by
+        // entity_id, falling back to custom_entry, which is the same grouping
+        // this method used to do over the raw ballots -- and it returns no
+        // user_id and no vote ids.
+        val votes = db().postgrest
+            .rpc(function = "voting_results", parameters = CategoryIdParams(categoryId = categoryId))
+            .decodeList<VoteAggRow>()
 
-        // Aggregate by entity id, or a stable key for write-ins.
+        // One row per entity already; the key is kept so write-ins collapse the
+        // same way they did before.
         data class Acc(val type: String, val entityId: String?, val custom: String?, var count: Int)
         val grouped = LinkedHashMap<String, Acc>()
         votes.forEach { v ->
             val key = v.entityId ?: "custom:${v.customEntry?.trim()?.lowercase().orEmpty()}"
-            val acc = grouped.getOrPut(key) { Acc(v.entityType, v.entityId, v.customEntry, 0) }
-            acc.count++
+            grouped[key] = Acc(v.entityType, v.entityId, v.customEntry, v.voteCount)
         }
 
         // Batch-enrich names/images per entity type, fail-soft.
@@ -106,38 +125,33 @@ class BestOfRemoteDataSource @Inject constructor(
     }
 
     @Serializable
-    private data class WinnerVoteRow(
+    private data class WinnerRow(
         @SerialName("entity_id") val entityId: String? = null,
-        @SerialName("category_id") val categoryId: String? = null,
+        @SerialName("category_name") val categoryName: String? = null,
     )
 
-    @Serializable
-    private data class CategoryNameRow(val id: String, val name: String)
-
     /**
-     * Computes the current winner (top entity) of every active category and maps
-     * the winning entity id → "Best {Category}" for app-wide award badges.
-     * Custom write-ins are excluded (no entity to badge).
+     * Winning entity of every active category, mapped to "Best {Category}" for
+     * app-wide award badges. Custom write-ins are excluded -- there is no
+     * entity to badge.
+     *
+     * Server-side since WEB-SEC-025 step 2. This was the widest of the three
+     * raw reads: unlike the leaderboard it was not scoped to a category, so it
+     * pulled every ballot ever cast, each carrying user_id.
+     *
+     * Ties now resolve by entity_id in SQL. The previous maxByOrNull resolved
+     * them by whichever key the grouping happened to yield first, which was
+     * not stable between calls.
      */
-    suspend fun fetchWinners(): Map<String, String> {
-        val votes = db().from("votes")
-            .select(Columns.list("entity_id", "category_id"))
-            .decodeList<WinnerVoteRow>()
-        val categories = db().from("voting_categories")
-            .select(Columns.list("id", "name")) { filter { eq("is_active", true) } }
-            .decodeList<CategoryNameRow>()
-        val categoryName = categories.associate { it.id to it.name }
-
-        val winners = mutableMapOf<String, String>()
-        votes.filter { it.entityId != null && it.categoryId != null }
-            .groupBy { it.categoryId!! }
-            .forEach { (catId, rows) ->
-                val topEntity = rows.groupingBy { it.entityId!! }.eachCount().maxByOrNull { it.value }?.key
-                val name = categoryName[catId]
-                if (topEntity != null && name != null) winners[topEntity] = "Best $name"
+    suspend fun fetchWinners(): Map<String, String> =
+        db().postgrest.rpc(function = "voting_winners")
+            .decodeList<WinnerRow>()
+            .mapNotNull { row ->
+                val entity = row.entityId ?: return@mapNotNull null
+                val name = row.categoryName ?: return@mapNotNull null
+                entity to "Best $name"
             }
-        return winners
-    }
+            .toMap()
 
     /** A single category by id (for the voting booth header). */
     suspend fun fetchCategory(categoryId: String): VotingCategory? =

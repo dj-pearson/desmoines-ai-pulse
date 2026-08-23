@@ -103,10 +103,43 @@ struct NeighborhoodDetailView: View {
                         .font(.caption.weight(.semibold))
                 }
                 .buttonStyle(.bordered)
+
+                if viewModel.nearbyUnavailable {
+                    // The button used to reload in the same order and say
+                    // nothing, so a denied permission and a broken feature
+                    // looked identical (IOS-AUDIT-UX-057).
+                    HStack(spacing: 6) {
+                        Image(systemName: "location.slash")
+                        Text(nearbyNoticeText)
+                        if canOpenLocationSettings {
+                            Button("Settings") {
+                                if let url = URL(string: UIApplication.openSettingsURLString) {
+                                    UIApplication.shared.open(url)
+                                }
+                            }
+                            .font(.caption.weight(.semibold))
+                        }
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal)
+    }
+
+    /// Denied is fixable from Settings; a missing fix is not, and telling
+    /// someone to open Settings when the problem is that they are indoors is
+    /// worse than saying nothing.
+    private var canOpenLocationSettings: Bool {
+        !LocationService.isAuthorized(LocationService.shared.authorizationStatus)
+    }
+
+    private var nearbyNoticeText: String {
+        canOpenLocationSettings
+            ? "Location is off, so results aren't sorted by distance."
+            : "Couldn't get your location, so results aren't sorted by distance."
     }
 
     // MARK: - Events

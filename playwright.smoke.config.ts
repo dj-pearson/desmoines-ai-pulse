@@ -20,7 +20,19 @@ import { defineConfig, devices } from '@playwright/test';
  */
 export default defineConfig({
   testDir: './tests',
-  testMatch: 'route-smoke.spec.ts',
+  // cookie-consent.spec.ts joins route-smoke here for WEB-LEGAL-009 AC5.
+  //
+  // It already asserted the right thing - reject analytics, then check that no
+  // googletagmanager request is made and no _ga cookie is set - and it lived in
+  // the QUARANTINED broad lane, which e2e.yml runs non-blocking. A compliance
+  // check that cannot fail a PR is decorative, and WEB-LEGAL-001 is the exact
+  // defect that shipped while a document said it was fixed.
+  //
+  // It belongs here specifically because it asserts REAL BROWSER BEHAVIOUR -
+  // network requests and cookies - which no source-text check can establish.
+  // scripts/check-consent-gate.mjs covers the source side; this covers what
+  // actually happens.
+  testMatch: /(route-smoke|cookie-consent)\.spec\.ts/,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

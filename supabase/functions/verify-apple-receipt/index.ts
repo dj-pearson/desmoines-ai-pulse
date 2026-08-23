@@ -94,12 +94,16 @@ serve(async (req) => {
     }
 
     // Look up the matching subscription plan
-    const { data: plan } = await supabase
+    const { data: plan, error: planError } = await supabase
       .from("subscription_plans")
       .select("id")
       .ilike("name", `%${tier}%`)
       .limit(1)
       .single();
+
+    // Survivable: plan_id is only spread in when present, so a failed lookup
+    // writes the subscription without it rather than losing the purchase.
+    if (planError) console.warn(`[verify-apple-receipt] subscription_plans lookup failed: ${planError.message}`);
 
     // Upsert into user_subscriptions
     const subscriptionData = {
@@ -113,12 +117,28 @@ serve(async (req) => {
     };
 
     // Check if user already has a subscription record
-    const { data: existing } = await supabase
+    const { data: existing, error: existingError } = await supabase
       .from("user_subscriptions")
       .select("id")
       .eq("user_id", user.id)
       .limit(1)
       .single();
+
+    // This read decides UPDATE vs INSERT, and a dropped error reads as "no
+    // row" and inserts - so every renewal would add another user_subscriptions
+    // row and the entitlement a reader sees would depend on row order
+    // (WEB-BE-032 AC2). Same defect fixed in validate-ios-receipt, which
+    // supersedes this function; this one is kept because no shipped binary can
+    // be proven not to call it (XPLAT-008 AC3), which is exactly why it needs
+    // the fix rather than being left to rot.
+    //
+    // PGRST116 IS NOT A FAILURE HERE. This uses .single(), not maybeSingle(),
+    // so "no rows" arrives as an error - and that is the ordinary first-time
+    // subscriber. Throwing on every error would break exactly the case this
+    // path exists for, so only the OTHER errors throw.
+    if (existingError && existingError.code !== "PGRST116") {
+      throw new Error(`user_subscriptions lookup failed: ${existingError.message}`);
+    }
 
     if (existing) {
       // Update existing subscription

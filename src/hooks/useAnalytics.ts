@@ -174,7 +174,7 @@ export function useAnalytics() {
       // Batch content metrics to Edge Function (reduces overhead)
       try {
         const isUuid = (v: unknown) => typeof v === 'string' && /[0-9a-fA-F-]{36}/.test(v);
-        const allowedTypes = new Set(['view','search','click','share','bookmark','hover','scroll','filter']);
+        const allowedTypes = new Set(['view','search','click','share','bookmark','favorite','hover','scroll','filter']);
         const allowedContent = new Set(['event','restaurant','attraction','playground','page','search_result']);
 
         const metricEvents = eventsToFlush

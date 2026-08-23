@@ -191,7 +191,7 @@ export default function AttractionDetails() {
         <div className="min-h-screen bg-gray-50 flex items-center justify-center">
           <Card className="max-w-md mx-auto text-center shadow-lg rounded-2xl">
             <CardContent className="p-8">
-              <Landmark className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+              <Landmark className="h-16 w-16 text-gray-500 mx-auto mb-4" />
               <h2 className="text-2xl font-bold text-gray-800 mb-2">
                 Attraction Not Found
               </h2>

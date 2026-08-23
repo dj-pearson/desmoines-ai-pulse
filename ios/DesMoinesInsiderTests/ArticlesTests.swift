@@ -169,6 +169,84 @@ final class ArticlesTests: XCTestCase {
 
     // MARK: - Helpers
 
+    // MARK: - IOS-AUDIT-BUG-005: one bad row must not take the screen down
+
+    /// Decodable stops at the first bad element, so a single article with a null
+    /// body used to fail the decode of the ENTIRE array -- the Articles screen
+    /// went blank rather than hiding one card.
+    ///
+    /// The column is NOT NULL today and 0 of 18 published rows are empty, so this
+    /// is hardening against a schema the database presently forbids. What is NOT
+    /// hypothetical is the empty string, which NOT NULL permits and which the
+    /// third case here covers.
+    func testArticleDecodesWithNullContent() throws {
+        let json = """
+        {
+          "id": "a-null",
+          "title": "Body missing",
+          "slug": "body-missing",
+          "content": null,
+          "published_at": "2026-05-20T14:00:00Z"
+        }
+        """.data(using: .utf8)!
+
+        let article = try JSONDecoder().decode(Article.self, from: json)
+        XCTAssertEqual(article.content, "")
+        XCTAssertFalse(article.hasContent)
+        XCTAssertEqual(article.title, "Body missing")
+    }
+
+    func testArticleDecodesWithMissingContentKey() throws {
+        let json = """
+        {"id": "a-absent", "title": "No key", "slug": "no-key"}
+        """.data(using: .utf8)!
+
+        let article = try JSONDecoder().decode(Article.self, from: json)
+        XCTAssertEqual(article.content, "")
+        XCTAssertFalse(article.hasContent)
+    }
+
+    func testWhitespaceOnlyContentCountsAsNoBody() throws {
+        // NOT NULL permits this today, so it is the case that can actually occur.
+        let json = """
+        {"id": "a-blank", "title": "Blank", "slug": "blank", "content": "    "}
+        """.data(using: .utf8)!
+
+        let article = try JSONDecoder().decode(Article.self, from: json)
+        XCTAssertFalse(article.hasContent, "whitespace is not a body")
+
+        // Newlines and tabs too. Built from scalars rather than escapes: a real
+        // newline inside the JSON literal above breaks the multi-line string,
+        // which is how the first version of this test failed to compile.
+        let mixedWhitespace = [" ", String(UnicodeScalar(10)), String(UnicodeScalar(9))].joined()
+        XCTAssertFalse(Article(id: "n", title: "T", slug: "s", content: mixedWhitespace).hasContent)
+    }
+
+    /// The whole point: an array containing one bad row still decodes the rest.
+    func testArrayWithOneNullContentRowStillDecodesEveryArticle() throws {
+        let json = """
+        [
+          {"id": "a-1", "title": "Fine", "slug": "fine", "content": "# Body"},
+          {"id": "a-2", "title": "Broken", "slug": "broken", "content": null},
+          {"id": "a-3", "title": "Also fine", "slug": "also-fine", "content": "# Body"}
+        ]
+        """.data(using: .utf8)!
+
+        let articles = try JSONDecoder().decode([Article].self, from: json)
+        XCTAssertEqual(articles.count, 3, "one null body must not drop the other two")
+        XCTAssertTrue(articles[0].hasContent)
+        XCTAssertFalse(articles[1].hasContent)
+        XCTAssertTrue(articles[2].hasContent)
+    }
+
+    func testDisplaySummaryIsEmptyRatherThanCrashingWithNoBody() throws {
+        let json = """
+        {"id": "a-x", "title": "T", "slug": "s", "content": null}
+        """.data(using: .utf8)!
+        let article = try JSONDecoder().decode(Article.self, from: json)
+        XCTAssertEqual(article.displaySummary, "")
+    }
+
     private func makeArticle(content: String, excerpt: String? = nil) -> Article {
         Article(
             id: "t", title: "Test Article", slug: "test", content: content,

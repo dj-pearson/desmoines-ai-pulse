@@ -35,7 +35,16 @@ function fill(t: string, name: string): string {
 
 async function suppressed(supabase: Client, email: string): Promise<boolean> {
   const domain = email.split("@")[1] ?? "";
-  const { data } = await supabase.from("outreach_suppression").select("id").or(`email.eq.${email},domain.eq.${domain}`).limit(1);
+  const { data, error } = await supabase.from("outreach_suppression").select("id").or(`email.eq.${email},domain.eq.${domain}`).limit(1);
+  // FAIL CLOSED, and this is the one in this file that is not merely a cadence
+  // question. Returning false means NOT suppressed, which sends - so a dropped
+  // error emails everyone on the suppression list. A suppression list is the
+  // one place where "we could not check" has to mean "do not send"
+  // (WEB-BE-032 AC2).
+  if (error) {
+    console.warn(`[outreach-sequencer] suppression check failed for ${email}; treating as suppressed: ${error.message}`);
+    return true;
+  }
   return (data ?? []).length > 0;
 }
 
@@ -74,7 +83,14 @@ export const run: AgentRun = async (ctx, { supabase }) => {
     if (await suppressed(supabase, email)) { skipped++; continue; }
 
     // Determine next step from prior sends + cadence.
-    const { data: prior } = await supabase.from("outreach_sends").select("step, created_at").eq("lead_id", l.id).order("created_at", { ascending: false });
+    const { data: prior, error: priorError } = await supabase.from("outreach_sends").select("step, created_at").eq("lead_id", l.id).order("created_at", { ascending: false });
+    // FAIL CLOSED. An empty list makes lastStep 0, which RESTARTS THE SEQUENCE
+    // at step 1 for a lead that may already have had all of them - a cold
+    // outreach email sent again to someone who has stopped replying.
+    if (priorError) {
+      console.warn(`[outreach-sequencer] prior sends read failed for lead ${l.id}; skipping: ${priorError.message}`);
+      skipped++; continue;
+    }
     const sends = (prior ?? []) as { step: number; created_at: string }[];
     const lastStep = sends.length ? Math.max(...sends.map((s) => s.step)) : 0;
     if (lastStep >= MAX_STEP) { done++; continue; }

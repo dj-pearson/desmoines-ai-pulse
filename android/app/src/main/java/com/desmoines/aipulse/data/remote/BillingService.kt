@@ -458,7 +458,11 @@ class BillingService @Inject constructor(
 
                 val decoded = validationJson.decodeFromString<ValidationResponse>(bodyString)
 
-                if (decoded.valid) {
+                // The verdict itself lives in validationOutcome at the bottom of
+                // this file so it can be unit-tested (XPLAT-002 AC3). The status
+                // is already known 2xx here; passing it keeps the rule in one
+                // place rather than half here and half there.
+                if (validationOutcome(response.status.isSuccess(), decoded.valid) == ValidationOutcome.GRANT) {
                     Log.i(TAG, "Server validation succeeded for product=$productId")
                     // Clear any prior revocation — e.g. the user re-subscribed
                     // after a refund.
@@ -665,4 +669,47 @@ data class ValidationResponse(
         val tier: String? = null,
         val expiresAt: String? = null,
     )
+}
+
+/**
+ * What a validate-android-receipt response means for the local entitlement
+ * (XPLAT-002 AC3).
+ *
+ * Extracted from the middle of validateWithServer so it can be tested. The
+ * branch it replaces sits in a private suspend function that reaches Google
+ * Play billing and a SupabaseClient and needs an Android Context, so the
+ * DECISION was unreachable from a unit test even though it is the part that
+ * can revoke a paying user.
+ */
+internal enum class ValidationOutcome {
+    /** 2xx and valid:true. Clear any prior revocation. */
+    GRANT,
+
+    /** 2xx and valid:false. The server definitively rejected the receipt. */
+    REVOKE,
+
+    /**
+     * Not a verdict. Retry, then fall through to the grace period WITHOUT
+     * revoking.
+     *
+     * This is the case worth guarding. validate-android-receipt returns
+     * valid:false for auth failures, bad input and "Server configuration
+     * error" as well as for genuine rejections, so reading every valid:false
+     * as definitive would revoke EVERY paying user during a backend outage or
+     * a misconfigured deploy. Only a 2xx body is a verdict.
+     */
+    NO_VERDICT,
+}
+
+/**
+ * @param isSuccessStatus whether the HTTP status was 2xx
+ * @param valid the decoded `valid` field, or null when the body did not decode
+ */
+internal fun validationOutcome(isSuccessStatus: Boolean, valid: Boolean?): ValidationOutcome = when {
+    !isSuccessStatus -> ValidationOutcome.NO_VERDICT
+    valid == true -> ValidationOutcome.GRANT
+    valid == false -> ValidationOutcome.REVOKE
+    // A 2xx that does not decode is not a verdict either. Failing toward
+    // NO_VERDICT keeps a malformed response from revoking anyone.
+    else -> ValidationOutcome.NO_VERDICT
 }

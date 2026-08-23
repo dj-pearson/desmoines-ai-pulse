@@ -301,6 +301,41 @@ jobs:
             }
           echo "✅ Unit tests passed"
 
+      # IOS-AUDIT-REL-015: DesMoinesInsiderUITests existed and ran only in the
+      # screenshot lane, which is manual. These are navigation tests that happen
+      # to take screenshots - they tap a tab and wait for content - so they catch
+      # the two failures unit tests structurally cannot: the app not launching at
+      # all, and a tab or screen disappearing.
+      #
+      # Same job as the unit tests on purpose: the simulator is already booted
+      # and the SPM cache is warm, so this costs a UI-test build rather than a
+      # whole extra job.
+      # Bounded so a hung UI test fails this step instead of eating the job's
+      # 30 minutes and taking the already-passed unit-test result down with it.
+      # A UI test that waits on an element which never appears does not fail on
+      # its own - it waits until something outside kills it.
+      - name: Run UI tests
+        timeout-minutes: 12
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project DesMoinesInsider.xcodeproj \
+            -scheme DesMoinesInsiderUITests \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,name=iPhone 16,OS=latest" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cache" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee "$RUNNER_TEMP/xcodebuild-uitest.log" | xcpretty --color --test || {
+              echo ""
+              echo "::error::UI tests failed!"
+              grep -E "(Test Case.*failed|error:)" "$RUNNER_TEMP/xcodebuild-uitest.log" | head -30
+              exit 1
+            }
+          echo "UI tests passed"
+
       - name: Report version
         if: needs.version-bump.outputs.bumped == 'true'
         run: |
@@ -370,3 +405,31 @@ jobs:
             exit 1
           fi
           echo "✅ Configuration validation passed"
+
+      # IOS-AUDIT-SEC-013 AC5: certificate pins are the one thing in this app
+      # that can take every installed binary offline with no server-side remedy,
+      # and they drift on their own schedule - the Supabase leaf reissues about
+      # every 90 days. This fails when fewer than two declared pins appear in
+      # the live chain, which is the point at which one more rotation would lock
+      # out every enforcing client. See docs/CERT_PIN_ROTATION.md.
+      # IOS-AUDIT-REL-014: a required-reason API used but not declared is what
+      # gets a submission rejected, and the reviewer is the one who finds it.
+      # Offline; no credentials needed.
+      # IOS-AUDIT-UX-060: Swift has no warning for an unused internal property,
+      # and every one found here so far was a MISSING SURFACE rather than dead
+      # code - state a screen needed that no screen read.
+      - name: Unread view-model and service members
+        run: node scripts/check-unused-members.mjs
+
+      - name: Privacy manifest reconciliation
+        run: node scripts/check-privacy-manifest.mjs
+
+      # IOS-AUDIT-REL-008: the Snapfile already SAID the three device lists must
+      # match and nothing enforced it. The screenshot lane is workflow_dispatch-
+      # only, so a drift produces no failure at all - the first symptom is a
+      # submission missing a required size. Offline; reads three files.
+      - name: Screenshot device lists agree
+        run: node scripts/check-screenshot-devices.mjs
+
+      - name: Verify certificate pins against the live host
+        run: bash scripts/verify-cert-pins.sh

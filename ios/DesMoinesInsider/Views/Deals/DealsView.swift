@@ -9,7 +9,10 @@ struct DealsView: View {
 
     @State private var viewModel = DealsViewModel()
     @State private var entityTarget: DealEntityTarget?
-    @State private var resolving = false
+    /// The deal whose deep-link is being resolved, not just THAT one is.
+    /// A bare Bool cannot say which card was tapped, so the spinner had
+    /// nowhere to go and the list looked frozen (IOS-AUDIT-UX-053).
+    @State private var resolvingDealId: String?
 
     var body: some View {
         if ownsNavigationStack {
@@ -47,7 +50,9 @@ struct DealsView: View {
                 } else {
                     LazyVStack(spacing: 12) {
                         ForEach(Array(viewModel.filteredDeals.enumerated()), id: \.element.id) { index, deal in
-                            DealCardView(deal: deal) { open(deal) }
+                            DealCardView(deal: deal, isResolving: resolvingDealId == deal.id) {
+                                open(deal)
+                            }
                             if index == AdConfig.inFeedFirstSlot - 1 {
                                 AdSlot(.feed)
                             }
@@ -141,10 +146,10 @@ struct DealsView: View {
     // MARK: - Deep-link to the related listing
 
     private func open(_ deal: Deal) {
-        guard let entityId = deal.entityId, !resolving else { return }
-        resolving = true
+        guard let entityId = deal.entityId, resolvingDealId == nil else { return }
+        resolvingDealId = deal.id
         Task {
-            defer { resolving = false }
+            defer { resolvingDealId = nil }
             do {
                 switch deal.entityType {
                 case "restaurant":
@@ -188,13 +193,16 @@ enum DealEntityTarget: Identifiable, Hashable {
 
 private struct DealCardView: View {
     let deal: Deal
+    /// This card's deep-link is being fetched. Drives the spinner and blocks
+    /// a second tap at the source rather than only in the handler.
+    var isResolving: Bool = false
     let onTap: () -> Void
 
     private var isTappable: Bool { deal.entityId != nil }
 
     var body: some View {
         Button {
-            if isTappable {
+            if isTappable, !isResolving {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 onTap()
             }
@@ -234,7 +242,13 @@ private struct DealCardView: View {
                     }
                 }
                 Spacer(minLength: 0)
-                if isTappable {
+                if isResolving {
+                    // Replaces the chevron rather than sitting beside it, so
+                    // the row does not reflow while the fetch is in flight.
+                    ProgressView()
+                        .controlSize(.small)
+                        .accessibilityLabel("Opening")
+                } else if isTappable {
                     Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
                 }
             }

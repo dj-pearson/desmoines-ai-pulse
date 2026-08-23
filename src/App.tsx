@@ -16,7 +16,9 @@ import { useStatusBarStyle } from "@/hooks/useStatusBarStyle";
 import { useFocusOnRouteChange } from "@/hooks/useFocusOnRouteChange";
 import { usePageTracking } from "@/hooks/usePageTracking";
 import { useLocation, useNavigationType } from "react-router-dom";
-import { KeyboardShortcutsModal } from "@/components/KeyboardShortcutsModal";
+const KeyboardShortcutsModal = lazyWithRetry(() =>
+  import("@/components/KeyboardShortcutsModal").then((m) => ({ default: m.KeyboardShortcutsModal })),
+);
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import BottomNav from "@/components/BottomNav";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -159,14 +161,27 @@ const ThingsToDoHub = lazyWithRetry(() => import("./pages/ThingsToDoHub"));
 // Event submission
 const SubmitEvent = lazyWithRetry(() => import("./pages/SubmitEvent"));
 
-// Legal pages — direct imports (small static content, must always be reachable)
-import PrivacyPolicy from "./pages/PrivacyPolicy";
-import Terms from "./pages/Terms";
-import AccessibilityStatement from "./pages/AccessibilityStatement";
-import CookiePolicy from "./pages/CookiePolicy";
-import DMCAPolicy from "./pages/DMCAPolicy";
-import AcceptableUsePolicy from "./pages/AcceptableUsePolicy";
-import DataProcessingAgreement from "./pages/DataProcessingAgreement";
+// Legal pages (WEB-PERF-020 AC3). These were direct imports, on the reasoning
+// that they are "small static content, must always be reachable". They are not
+// small - 2,554 lines across the seven - and they are the least-visited routes
+// on the site, so every first paint of the homepage was paying for the DMCA
+// policy.
+//
+// "Must always be reachable" is what lazyWithRetry is for: a failed chunk load
+// reloads once and then surfaces to the error boundary, which is the same
+// treatment every other route already gets.
+//
+// Checked rather than assumed: /privacy-policy and /terms are in
+// SITEMAP_ONLY_ROUTES, so they are sitemapped and NOT prerendered. The eager
+// import was therefore buying nothing for crawlers either - those routes have
+// always been client-rendered. It only cost every other page its first paint.
+const PrivacyPolicy = lazyWithRetry(() => import("./pages/PrivacyPolicy"));
+const Terms = lazyWithRetry(() => import("./pages/Terms"));
+const AccessibilityStatement = lazyWithRetry(() => import("./pages/AccessibilityStatement"));
+const CookiePolicy = lazyWithRetry(() => import("./pages/CookiePolicy"));
+const DMCAPolicy = lazyWithRetry(() => import("./pages/DMCAPolicy"));
+const AcceptableUsePolicy = lazyWithRetry(() => import("./pages/AcceptableUsePolicy"));
+const DataProcessingAgreement = lazyWithRetry(() => import("./pages/DataProcessingAgreement"));
 
 // Cookie consent (GDPR/CCPA opt-in banner) — lightweight, mount globally
 import { CookieConsentBanner } from "@/components/CookieConsentBanner";
@@ -348,10 +363,13 @@ const KeyboardShortcutsProvider = ({ children }: { children: React.ReactNode }) 
   return (
     <div ref={pageTransitionRef}>
       {children}
-      <KeyboardShortcutsModal
-        open={showShortcutsModal}
-        onOpenChange={setShowShortcutsModal}
-      />
+      {/* WEB-PERF-020 AC3: mounted only while open, so its chunk is fetched the
+          first time someone presses "?" rather than by every visitor. */}
+      {showShortcutsModal && (
+        <Suspense fallback={null}>
+          <KeyboardShortcutsModal open onOpenChange={setShowShortcutsModal} />
+        </Suspense>
+      )}
     </div>
   );
 };

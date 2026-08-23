@@ -116,12 +116,45 @@ async function brandSafe(text: string): Promise<{ safe: boolean; note: string }>
   }
 }
 
-async function reviewOne(supabase: Supa, creative: Record<string, unknown>) {
-  const reasons: string[] = [];
+/**
+ * A URL the reviewer can actually fetch (WEB-LEGAL-011).
+ *
+ * Approved creatives carry a public image_url. Unapproved ones -- which is
+ * every creative this function looks at -- have image_url null and live at
+ * review_path in the private ad-creatives-review bucket, so the URL has to be
+ * signed. This client holds the service-role key, so the signature always
+ * succeeds where the object exists.
+ */
+async function reviewableImageUrl(supabase: Supa, creative: Record<string, unknown>): Promise<string | null> {
+  const publicUrl = creative.image_url as string | null;
+  if (publicUrl) return publicUrl;
+
+  const reviewPath = creative.review_path as string | null;
+  if (!reviewPath) return null;
+
+  const { data, error } = await supabase.storage
+    .from('ad-creatives-review')
+    .createSignedUrl(reviewPath, 300);
+
+  // null propagates to 'Missing creative image', which is the right verdict:
+  // a creative whose file cannot be read is not reviewable.
+  if (error || !data?.signedUrl) return null;
+  return data.signedUrl;
+}
+
+async function reviewOne(supabase: Supa, creative: Record<string, unknown>) {  const reasons: string[] = [];
   const checks: Record<string, unknown> = {};
 
   // 1. Image
-  const imageUrl = creative.image_url as string | null;
+  //
+  // WEB-LEGAL-011: an unapproved creative lives in the PRIVATE
+  // ad-creatives-review bucket and its image_url is null until an admin
+  // approves it. A plain fetch of a private object 400s, so the review read
+  // signs review_path first. Without this the auto-reviewer would report
+  // 'Missing creative image' for every creative it was built to check -- and
+  // it fails toward REJECTION, so it would block the whole ad product rather
+  // than fail quietly.
+  const imageUrl = (await reviewableImageUrl(supabase, creative)) as string | null;
   if (!imageUrl) {
     reasons.push('Missing creative image');
     checks.image = false;

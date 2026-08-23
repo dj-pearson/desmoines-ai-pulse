@@ -118,9 +118,15 @@ async function getUserRole(
   supabaseClient: SupabaseClient,
   userId: string
 ): Promise<UserRole> {
+  // FAILS CLOSED, deliberately: every path that cannot establish a role returns
+  // 'user', the least privileged one. That direction is correct and is left
+  // alone. What was wrong is that it happened SILENTLY - a read failure against
+  // user_roles demoted an admin with no server-side signal at all, and reached
+  // them as an unexplained 403 (WEB-BE-032 AC2). The errors are now captured and
+  // logged; the decision is unchanged.
   try {
     // Check user_roles table
-    const { data: roleData } = await supabaseClient
+    const { data: roleData, error: roleError } = await supabaseClient
       .from('user_roles')
       .select('role')
       .eq('user_id', userId)
@@ -129,23 +135,36 @@ async function getUserRole(
       .limit(1)
       .maybeSingle();
 
+    if (roleError) {
+      console.warn(`[securityLayers] user_roles read failed for ${userId}; treating as 'user':`, roleError.message);
+      return 'user';
+    }
+
     if (roleData?.role) {
       return roleData.role as UserRole;
     }
 
     // Fallback to profiles
-    const { data: profileData } = await supabaseClient
+    const { data: profileData, error: profileError } = await supabaseClient
       .from('profiles')
       .select('user_role')
       .eq('user_id', userId)
       .single();
+
+    // .single() errors when no row matches, which is the ordinary case for a
+    // user with no profile row - so only log what is not that.
+    if (profileError && profileError.code !== 'PGRST116') {
+      console.warn(`[securityLayers] profiles read failed for ${userId}; treating as 'user':`, profileError.message);
+      return 'user';
+    }
 
     if (profileData?.user_role) {
       return profileData.user_role as UserRole;
     }
 
     return 'user';
-  } catch {
+  } catch (err) {
+    console.warn(`[securityLayers] role lookup threw for ${userId}; treating as 'user':`, err instanceof Error ? err.message : String(err));
     return 'user';
   }
 }
@@ -493,7 +512,12 @@ export async function logSecurityEvent(
 // RESPONSE HELPERS
 // =============================================================================
 
-import { corsHeaders } from './cors.ts';
+// cors.ts exports getCorsHeaders(origin?), never a `corsHeaders` binding. This
+// import named something that does not exist, so every function importing
+// securityErrorResponse or withSecurity from here failed to load at all -
+// create-campaign-checkout is one of them. Found by deno check while working
+// on WEB-BE-032.
+import { getCorsHeaders, handleCors } from './cors.ts';
 
 /**
  * Create an error response for security violations
@@ -511,7 +535,7 @@ export function securityErrorResponse(result: SecurityCheckResult): Response {
     }),
     {
       status: statusCode,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...getCorsHeaders(), 'Content-Type': 'application/json' },
     }
   );
 }
@@ -528,10 +552,12 @@ export function withSecurity(
   ) => Promise<Response>
 ): (req: Request) => Promise<Response> {
   return async (req: Request) => {
-    // Handle CORS preflight
-    if (req.method === 'OPTIONS') {
-      return new Response(null, { headers: corsHeaders });
-    }
+    // Handle CORS preflight. Delegated to handleCors rather than building
+    // headers here: it validates the origin against the allowlist and
+    // returns 403 for one that is not on it. getCorsHeaders(origin) echoes
+    // whatever it is given.
+    const preflight = handleCors(req);
+    if (preflight) return preflight;
 
     // Create Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;

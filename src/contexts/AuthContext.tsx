@@ -437,17 +437,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, error: error.message };
       }
 
-      // Check if MFA is required (AAL1 but user has MFA factors)
-      const { data: mfaData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      // Check if MFA is required (AAL1 but user has MFA factors).
+      //
+      // WEB-BE-032: both calls below used to discard their errors, and that
+      // discard FAILED OPEN. On an error `mfaData` is undefined, so both levels
+      // are undefined, the aal1/aal2 condition is false, the whole MFA block is
+      // skipped, and execution falls through to "Login successful" — a
+      // transient error silently bypassed the MFA prompt. There is no
+      // server-side backstop: no RLS policy references aal2, so this branch is
+      // the only thing enforcing MFA.
+      const { data: mfaData, error: mfaError } =
+        await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (mfaError) {
+        log.error('login', 'MFA assurance-level check failed', { message: mfaError.message });
+      }
       const currentLevel = mfaData?.currentLevel;
       const nextLevel = mfaData?.nextLevel;
 
-      // If user has MFA enabled but hasn't verified it yet this session
-      if (currentLevel === 'aal1' && nextLevel === 'aal2' && data.session) {
+      // Enter the MFA path when the session is aal1 and a second factor exists,
+      // OR when the level could not be read at all. The second case is the
+      // fail-closed path: unknown means "might need MFA", not "does not".
+      if ((currentLevel === 'aal1' && nextLevel === 'aal2' && data.session) || (mfaError && data.session)) {
         log.info('login', 'MFA verification required');
 
         // Get the first verified TOTP factor
-        const { data: factorsData } = await supabase.auth.mfa.listFactors();
+        const { data: factorsData, error: factorsError } = await supabase.auth.mfa.listFactors();
+        if (factorsError) {
+          // Both MFA reads failed, so whether this account is protected by a
+          // second factor is unknown. Refuse the sign-in rather than hand out a
+          // session that skipped a gate that may exist. Accounts with no factor
+          // are unaffected: listFactors succeeds and simply returns none.
+          log.error('login', 'MFA factor lookup failed; refusing sign-in', {
+            message: factorsError.message,
+          });
+          await supabase.auth.signOut();
+          return {
+            success: false,
+            error: 'Could not verify two-factor authentication. Please try again.',
+          };
+        }
         const verifiedFactor = factorsData?.totp?.find((f) => f.status === 'verified');
 
         if (verifiedFactor) {

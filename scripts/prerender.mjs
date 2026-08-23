@@ -56,7 +56,7 @@ import http from 'node:http';
 import os from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
-import { stripInjectedPreloads, restoreAsyncFontLinks } from './lazy-preload-patterns.mjs';
+import { stripInjectedPreloads, restoreAsyncFontLinks, dedupeJsonLd } from './lazy-preload-patterns.mjs';
 import { PRERENDER_ROUTES } from './prerender-routes.mjs';
 import process from 'node:process';
 
@@ -350,6 +350,7 @@ async function main() {
   let failed = 0;
   let strippedTotal = 0;
   let restoredFontsTotal = 0;
+let duplicateJsonLdTotal = 0;
 
   // The title vite shipped in the shell. An entity page that still carries this
   // never rendered itself — see the strict gate in renderRoute().
@@ -449,8 +450,14 @@ async function main() {
       // Chromium already fired the font link's onload, flipping rel to
       // "stylesheet" in the live DOM. Serializing that makes the shipped HTML
       // render-block on fonts.googleapis.com. Put it back to preload.
-      const [html, restoredFonts] = restoreAsyncFontLinks(dePreloaded);
+      const [deFonted, restoredFonts] = restoreAsyncFontLinks(dePreloaded);
       if (restoredFonts > 0) restoredFontsTotal += restoredFonts;
+      // Helmet removes its old head tags and inserts new ones, so a snapshot
+      // taken mid-update captures both copies. Four live URLs were serving
+      // FAQPage twice, which Google treats as invalid structured data. See
+      // dedupeJsonLd for why this is fixed after the fact rather than waited out.
+      const [html, dropped] = dedupeJsonLd(deFonted);
+      if (dropped > 0) duplicateJsonLdTotal += dropped;
       if (strippedPreloads > 0) {
         strippedTotal += strippedPreloads;
       }
@@ -620,7 +627,8 @@ async function main() {
     `[prerender] done in ${totalSeconds}s: ${ok} prerendered, ${failed} failed, ` +
       `${entityUnrendered.length} over budget, of ${scope} routes; ` +
       `stripped ${strippedTotal} runtime-injected modulepreload link(s); ` +
-      `restored ${restoredFontsTotal} async font link(s)`,
+      `restored ${restoredFontsTotal} async font link(s); ` +
+      `dropped ${duplicateJsonLdTotal} duplicate JSON-LD block(s)`,
   );
 
   // WEB-OPS-020 AC5. The counts only ever existed in the raw build log, which

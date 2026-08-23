@@ -382,7 +382,7 @@ export default function Playgrounds() {
                   value={selectedAgeRange}
                   onValueChange={setSelectedAgeRange}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger aria-label="Age Range">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -401,7 +401,7 @@ export default function Playgrounds() {
                   Location
                 </label>
                 <Select value={location} onValueChange={setLocation}>
-                  <SelectTrigger>
+                  <SelectTrigger aria-label="Location">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -427,7 +427,7 @@ export default function Playgrounds() {
                   Featured
                 </label>
                 <Select value={featuredOnly} onValueChange={setFeaturedOnly}>
-                  <SelectTrigger>
+                  <SelectTrigger aria-label="Featured">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -480,7 +480,7 @@ export default function Playgrounds() {
           </div>
         ) : error ? (
           <div className="text-center py-16">
-            <TreePine className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+            <TreePine className="h-16 w-16 text-gray-500 mx-auto mb-4" />
             <h3 className="text-xl font-medium mb-2">Error Loading Playgrounds</h3>
             <p className="text-muted-foreground">
               Please try again later.
@@ -488,7 +488,7 @@ export default function Playgrounds() {
           </div>
         ) : filteredPlaygrounds.length === 0 ? (
           <div className="text-center py-16">
-            <TreePine className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+            <TreePine className="h-16 w-16 text-gray-500 mx-auto mb-4" />
             <h3 className="text-xl font-medium mb-2">No playgrounds found</h3>
             <p className="text-muted-foreground mb-6">
               {hasActiveFilters
@@ -612,7 +612,7 @@ export default function Playgrounds() {
                       </span>
                       <span className="block text-xs text-gray-500">{count} playgrounds</span>
                     </div>
-                    <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-[#2D1B69]" />
+                    <ChevronRight className="h-4 w-4 text-gray-500 group-hover:text-[#2D1B69]" />
                   </button>
                 );
               })}
@@ -647,7 +647,7 @@ export default function Playgrounds() {
                   >
                     <Check className="h-3.5 w-3.5 text-emerald-500" />
                     <span className="text-gray-700 group-hover:text-emerald-700">{amenity}</span>
-                    <span className="text-xs text-gray-400">({count})</span>
+                    <span className="text-xs text-gray-500">({count})</span>
                   </button>
                 );
               })}

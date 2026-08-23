@@ -122,6 +122,11 @@ async function loadCard(supabase: ReturnType<typeof createClient>, type: string,
       return "";
     }
   };
+  // BEST-EFFORT BY DESIGN (WEB-BE-032 AC3). Every branch below returns null on a
+  // miss OR a read failure, and the caller renders the generic card - which is
+  // the correct outcome for a social preview: a wrong card is worse than a
+  // generic one, and there is nothing a share sheet can do with an error.
+  // The errors are left uncaptured deliberately rather than by omission.
   if (type === "event") {
     // event_start_utc is the timezone-correct source; `date` is the legacy fallback.
     const { data } = await supabase.from("events").select("title, date, event_start_utc, image_url, category").eq("id", id).maybeSingle();

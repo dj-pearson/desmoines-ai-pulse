@@ -3,8 +3,20 @@ import CryptoKit
 import Supabase
 import AuthenticationServices
 
-/// Handles authentication flows matching the web app's AuthContext.
-/// Supports email/password, Apple Sign-In, and session management.
+/// Handles authentication flows. Supports email/password, Apple Sign-In and
+/// session management.
+///
+/// DOES NOT MATCH the web app's AuthContext, which the first line used to
+/// claim (XPLAT-003 AC4). Web offers Google as well; this file has no Google
+/// Sign-In at all. The three clients offer DIFFERENT provider sets:
+///
+///   web      email + apple + google
+///   Android  email + google
+///   iOS      email + apple
+///
+/// Measured against auth.identities on 2026-08-23: 5 email-only, 3 apple-only,
+/// 2 apple+google, 1 google-only. One user cannot reach their account here, and
+/// three cannot reach theirs on Android. Both gaps are XPLAT-003.
 @MainActor
 @Observable
 final class AuthService {
@@ -26,8 +38,20 @@ final class AuthService {
     /// email before returning it to us).
     var needsEmailVerification: Bool {
         guard let user = currentUser else { return false }
-        if user.emailConfirmedAt != nil { return false }
-        return primaryProvider(for: user) != "apple"
+        return Self.needsEmailVerification(
+            emailConfirmedAt: user.emailConfirmedAt,
+            primaryProvider: primaryProvider(for: user)
+        )
+    }
+
+    /// The decision above with the Supabase `User` removed, so it can be
+    /// tested (IOS-AUDIT-TEST-002). `User` is `private(set)` and not
+    /// constructible here, which is why the Apple carve-out went unasserted --
+    /// and getting it wrong strands every Apple user on the verify-email screen
+    /// with no way off, since Apple never sends them a confirmation mail.
+    static func needsEmailVerification(emailConfirmedAt: Date?, primaryProvider: String?) -> Bool {
+        if emailConfirmedAt != nil { return false }
+        return primaryProvider != "apple"
     }
 
     private func primaryProvider(for user: User) -> String? {
@@ -377,3 +401,30 @@ final class AuthService {
         }
     }
 }
+
+// MARK: - Injection seam
+
+/// The slice of AuthService that AuthViewModel drives.
+///
+/// Added for IOS-AUDIT-TEST-002. AuthViewModel held `AuthService.shared`
+/// directly, so its error routing could only be exercised by reaching the real
+/// Supabase backend: no test could assert that a failed sign-in surfaces as an
+/// error while a successful password reset surfaces as neutral INFO, which is
+/// the exact distinction IOS-AUDIT-UX-017 introduced and the exact thing a
+/// refactor would silently undo.
+///
+/// Deliberately narrow. It lists only what the view model calls, so adding a
+/// method to AuthService does not oblige every fake to grow.
+@MainActor
+protocol AuthProviding: AnyObject {
+    var isAuthenticated: Bool { get }
+    var currentProfile: UserProfile? { get }
+
+    func signIn(email: String, password: String) async throws
+    func signUp(email: String, password: String, firstName: String?, lastName: String?, interests: [String]?) async throws
+    func signInWithApple(credential: ASAuthorizationAppleIDCredential) async throws
+    func signOut() async throws
+    func resetPassword(email: String) async throws
+}
+
+extension AuthService: AuthProviding {}

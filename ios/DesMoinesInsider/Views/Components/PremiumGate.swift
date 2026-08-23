@@ -48,6 +48,7 @@ struct PremiumGate<Content: View>: View {
 
                 Text("\(requiredTier.displayName) Feature")
                     .font(.subheadline.weight(.semibold))
+                    .accessibilityAddTraits(.isHeader)
 
                 Spacer()
             }
@@ -78,6 +79,13 @@ struct PremiumGate<Content: View>: View {
         .sheet(isPresented: $showSubscription) {
             PaywallView(context: context ?? .generic(tier: requiredTier, feature: feature))
         }
+        // IOS-AUDIT-UX-052 AC4. Without this VoiceOver walks four separate
+        // elements - a lock glyph, a tier heading, the feature text, then the
+        // button - and the first three are context for the fourth. `.contain`
+        // rather than `.combine` keeps the button independently focusable and
+        // tappable, which `.combine` would flatten away.
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(requiredTier.displayName) feature: \(feature)")
     }
 }
 

@@ -162,13 +162,13 @@ export default function RestaurantDetails() {
               <div className="h-80 bg-gray-200 rounded-3xl" />
               <div className="grid md:grid-cols-3 gap-4">
                 <div className="h-24 bg-gray-200 rounded-2xl relative">
-                  <span className="absolute inset-0 flex items-center justify-center text-xs text-gray-400 font-medium">Restaurant Info</span>
+                  <span className="absolute inset-0 flex items-center justify-center text-xs text-gray-500 font-medium">Restaurant Info</span>
                 </div>
                 <div className="h-24 bg-gray-200 rounded-2xl relative">
-                  <span className="absolute inset-0 flex items-center justify-center text-xs text-gray-400 font-medium">Hours & Location</span>
+                  <span className="absolute inset-0 flex items-center justify-center text-xs text-gray-500 font-medium">Hours & Location</span>
                 </div>
                 <div className="h-24 bg-gray-200 rounded-2xl relative">
-                  <span className="absolute inset-0 flex items-center justify-center text-xs text-gray-400 font-medium">Reviews & Rating</span>
+                  <span className="absolute inset-0 flex items-center justify-center text-xs text-gray-500 font-medium">Reviews & Rating</span>
                 </div>
               </div>
               <div className="h-48 bg-gray-200 rounded-2xl" />
@@ -191,7 +191,7 @@ export default function RestaurantDetails() {
         <div className="min-h-screen bg-gray-50 flex items-center justify-center">
           <Card className="max-w-md mx-auto text-center shadow-lg rounded-2xl">
             <CardContent className="p-8">
-              <Utensils className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+              <Utensils className="h-16 w-16 text-gray-500 mx-auto mb-4" />
               <h2 className="text-2xl font-bold text-gray-800 mb-2">
                 Restaurant Not Found
               </h2>

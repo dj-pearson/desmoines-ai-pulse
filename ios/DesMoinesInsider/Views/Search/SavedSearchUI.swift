@@ -57,8 +57,20 @@ private struct SaveSearchSheet: View {
     let onSave: (String) async -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @State private var name: String = ""
+    @State private var name: String
     @State private var saving = false
+
+    /// Seeded here rather than in onAppear (IOS-AUDIT-UX-059).
+    ///
+    /// onAppear ran `if name.isEmpty { name = defaultName }`, which fires again
+    /// whenever the sheet reappears - so a user who deliberately cleared the
+    /// field got the default typed back in underneath them. State that belongs
+    /// to a view's identity belongs in its initializer.
+    init(defaultName: String, onSave: @escaping (String) async -> Void) {
+        self.defaultName = defaultName
+        self.onSave = onSave
+        _name = State(initialValue: defaultName)
+    }
 
     var body: some View {
         NavigationStack {
@@ -76,20 +88,28 @@ private struct SaveSearchSheet: View {
             .navigationTitle("Save Search")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                // Cancel is disabled while saving: dismissing mid-write leaves
+                // the save running against a sheet that is gone, so the user
+                // sees neither a success nor the error (IOS-AUDIT-UX-053).
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }.disabled(saving)
+                }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        saving = true
-                        // Trim before saving and block empty/whitespace-only
-                        // names so we don't create an unlabeled search
-                        // (IOS-AUDIT-UX-044).
-                        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-                        Task { await onSave(trimmed); saving = false }
+                    if saving {
+                        ProgressView()
+                    } else {
+                        Button("Save") {
+                            saving = true
+                            // Trim before saving and block empty/whitespace-only
+                            // names so we don't create an unlabeled search
+                            // (IOS-AUDIT-UX-044).
+                            let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+                            Task { await onSave(trimmed); saving = false }
+                        }
+                        .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
-                    .disabled(saving || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
-            .onAppear { if name.isEmpty { name = defaultName } }
         }
     }
 }

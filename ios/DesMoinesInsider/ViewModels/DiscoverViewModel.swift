@@ -160,7 +160,25 @@ final class DiscoverViewModel {
     }
     private(set) var filter: DiscoverFilterContext
     private(set) var deck: [SwipeItem] = []
+
+    /// A liked card could not be saved for a reason that is not the free-tier
+    /// cap. The cap has its own app-level paywall, so surfacing it here too
+    /// would double up (IOS-AUDIT-UX-057).
+    private(set) var favoriteSaveFailed = false
+
+    func acknowledgeFavoriteFailure() {
+        favoriteSaveFailed = false
+    }
     private(set) var isLoading = false
+
+    /// True when the last batch fetch threw (IOS-AUDIT-UX-051 AC3).
+    ///
+    /// Both batch fetchers used to swallow their error and set hasMore... = false,
+    /// so a network failure produced an empty deck and the "You've seen
+    /// everything" screen. That tells the user they have exhausted the content
+    /// when in fact nothing loaded - and the only affordance offered was a Reset
+    /// that would fail the same way, silently.
+    private(set) var lastLoadFailed = false
     private(set) var totalSwipes = 0
     private(set) var likedItems: [SwipeItem] = []
 
@@ -184,13 +202,24 @@ final class DiscoverViewModel {
     /// fetch is still draining.
     private var fetchTask: Task<Void, Never>?
 
-    private let eventsService = EventsService.shared
-    private let restaurantsService = RestaurantsService.shared
+    private let eventsService: EventPageProviding
+    private let restaurantsService: RestaurantPageProviding
     private let swipeService = SwipeInteractionService.shared
 
-    init(mode: DiscoverMode = .mixed, filter: DiscoverFilterContext = .init()) {
+    /// Providers default to the shared services, so no call site changes. They
+    /// exist so a test can hold a fetch open and bump the deck generation while
+    /// it is in flight - the only way the discard behaviour this view model
+    /// depends on can be observed (IOS-AUDIT-TEST-006).
+    init(
+        mode: DiscoverMode = .mixed,
+        filter: DiscoverFilterContext = .init(),
+        eventsService: EventPageProviding = EventsService.shared,
+        restaurantsService: RestaurantPageProviding = RestaurantsService.shared
+    ) {
         self.mode = mode
         self.filter = filter
+        self.eventsService = eventsService
+        self.restaurantsService = restaurantsService
     }
 
     // MARK: - Load
@@ -202,6 +231,7 @@ final class DiscoverViewModel {
 
     func reload() async {
         isLoading = true
+        lastLoadFailed = false
         deck = []
         eventOffset = 0
         restaurantOffset = 0
@@ -311,8 +341,20 @@ final class DiscoverViewModel {
                 }
             }
         } catch {
-            // Hitting the free-tier favorites cap is the realistic failure
-            // here. Swallow silently — DiscoverView surfaces it via toast.
+            // THE CAP IS ALREADY HANDLED, and not by this view. enforceFavoritesCap
+            // posts .favoritesLimitReached, which MainTabView turns into the
+            // app-level upsell paywall - so a toast here would be a second,
+            // redundant message on top of it. That is what
+            // FavoritesService.isLimitReached exists for.
+            //
+            // EVERYTHING ELSE was swallowed with it: a dropped connection or an
+            // expired session meant the card animated away as a save and nothing
+            // was saved, with no output of any kind. The previous comment claimed
+            // DiscoverView surfaced this via toast; DiscoverView declares a toast
+            // and assigns it nowhere (IOS-AUDIT-UX-057).
+            if !FavoritesService.isLimitReached(error) {
+                favoriteSaveFailed = true
+            }
         }
     }
 
@@ -399,6 +441,7 @@ final class DiscoverViewModel {
         } catch {
             guard generation == fetchGeneration else { return }
             hasMoreEvents = false
+            lastLoadFailed = true
         }
     }
 
@@ -430,6 +473,7 @@ final class DiscoverViewModel {
         } catch {
             guard generation == fetchGeneration else { return }
             hasMoreRestaurants = false
+            lastLoadFailed = true
         }
     }
 

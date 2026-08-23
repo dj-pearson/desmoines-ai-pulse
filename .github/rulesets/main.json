@@ -11,13 +11,19 @@
   ],
   "conditions": {
     "ref_name": {
-      "include": ["refs/heads/main"],
+      "include": [
+        "refs/heads/main"
+      ],
       "exclude": []
     }
   },
   "rules": [
-    { "type": "deletion" },
-    { "type": "non_fast_forward" },
+    {
+      "type": "deletion"
+    },
+    {
+      "type": "non_fast_forward"
+    },
     {
       "type": "pull_request",
       "parameters": {
@@ -27,7 +33,10 @@
         "require_last_push_approval": false,
         "required_review_thread_resolution": true,
         "automatic_copilot_code_review_enabled": false,
-        "allowed_merge_methods": ["squash", "merge"]
+        "allowed_merge_methods": [
+          "squash",
+          "merge"
+        ]
       }
     },
     {
@@ -36,9 +45,22 @@
         "strict_required_status_checks_policy": true,
         "do_not_enforce_on_create": false,
         "required_status_checks": [
-          { "context": "Lint, Type Check, Test & Build", "integration_id": 15368 },
-          { "context": "Secret Scanning (gitleaks)", "integration_id": 15368 },
-          { "context": "Smoke (critical journeys, required)", "integration_id": 15368 }
+          {
+            "context": "Lint, Type Check, Test & Build",
+            "integration_id": 15368
+          },
+          {
+            "context": "Secret Scanning (gitleaks)",
+            "integration_id": 15368
+          },
+          {
+            "context": "Smoke (critical journeys, required)",
+            "integration_id": 15368
+          },
+          {
+            "context": "Accessibility (axe, required)",
+            "integration_id": 15368
+          }
         ]
       }
     }

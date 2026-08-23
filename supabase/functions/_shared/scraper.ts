@@ -3,6 +3,8 @@
  * Supports multiple scraping backends: Puppeteer, Playwright, and Firecrawl
  */
 
+import { isCrawlAllowed } from './robots.ts';
+
 export type ScraperBackend = 'browserless' | 'fetch' | 'puppeteer' | 'playwright' | 'firecrawl';
 
 export interface ScraperConfig {
@@ -473,7 +475,28 @@ export async function scrapeUrl(
   const config = { ...defaults, ...overrides } as ScraperConfig;
   
   console.log(`🚀 Starting scrape of ${url} using ${config.backend}`);
-  
+
+  // WEB-SEC-024: ask the site first. Every ingestion path in the project goes
+  // through scrapeUrl, and none of them checked robots.txt, so a site that had
+  // explicitly asked not to be crawled was crawled anyway. Checked here rather
+  // than in each backend because the fallback chain below would otherwise route
+  // straight around it.
+  //
+  // Fail-open by construction (see robots.ts): only an explicit Disallow blocks.
+  // SCRAPER_IGNORE_ROBOTS=true is an escape hatch for an incident, not a default.
+  if (Deno.env.get('SCRAPER_IGNORE_ROBOTS') !== 'true') {
+    const allowed = await isCrawlAllowed(url, config.userAgent || '*');
+    if (!allowed) {
+      console.log(`⛔ ${url} is disallowed by robots.txt — not fetching`);
+      return {
+        success: false,
+        error: 'Disallowed by robots.txt',
+        backend: config.backend,
+        duration: 0,
+      };
+    }
+  }
+
   let result: ScraperResult;
   
   switch (config.backend) {

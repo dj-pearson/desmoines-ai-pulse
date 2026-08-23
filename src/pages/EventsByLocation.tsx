@@ -210,6 +210,16 @@ export default function EventsByLocation() {
     );
   }
 
+  // Two full rows of the lg:grid-cols-3 grid below. This route prerendered
+  // 4,077 elements inside #root against a median of 496 across all 35 routes,
+  // and Lighthouse flags above ~1,500 - a cost paid in HTML parse, DOM memory
+  // and hydration, all main-thread (WEB-PERF-023).
+  //
+  // ONLY THE RENDERED LIST IS CAPPED. Every count on this page - the FAQ answer,
+  // the stat block, the this-week filter - still reads upcomingEvents.length, so
+  // no number a user sees changes.
+  const VISIBLE_EVENTS = 24;
+
   const upcomingEvents =
     events?.filter((event) => {
       try {
@@ -218,6 +228,9 @@ export default function EventsByLocation() {
         return false;
       }
     }) || [];
+
+  const visibleEvents = upcomingEvents.slice(0, VISIBLE_EVENTS);
+  const hiddenEventCount = upcomingEvents.length - visibleEvents.length;
 
   const pageTitle = `${suburbInfo.name} Events - Things To Do | ${BRAND.name}`;
   const pageDescription = `Find events in ${suburbInfo.name}, Iowa. ${suburbInfo.description} See dates, times, locations, and get directions.`;
@@ -250,7 +263,13 @@ export default function EventsByLocation() {
         canonicalUrl={`${BRAND.baseUrl}/events/${slug}`}
         pageType="website"
         breadcrumbs={breadcrumbs}
-        faqData={faqData}
+        // Withheld until the data lands (WEB-SEO-008). Every answer here
+        // interpolates a live count, so the loading render and the loaded
+        // render produce DIFFERENT FAQPage JSON - and react-helmet-async
+        // appends script children that differ rather than replacing them, so
+        // the prerender captured both. Production served two FAQPage blocks
+        // on this page, one saying "0 events" and one saying "8 events".
+        faqData={isLoading ? undefined : faqData}
         suburb={suburbInfo.name}
       />
       <EventListJsonLd
@@ -339,10 +358,19 @@ export default function EventsByLocation() {
               Upcoming Events
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {upcomingEvents.map((event) => (
+              {visibleEvents.map((event) => (
                 <SocialEventCard key={event.id} event={event} onViewDetails={() => {}} />
               ))}
             </div>
+            {hiddenEventCount > 0 && (
+              // Say what is not shown. A list that stops at 36 without saying so
+              // reads as "there are 36 events here", which is how a truncation
+              // becomes a fact (WEB-PERF-023).
+              <p className="mt-6 text-sm text-muted-foreground">
+                Showing the first {VISIBLE_EVENTS} of {upcomingEvents.length} upcoming events in{' '}
+                {suburbInfo.name}.
+              </p>
+            )}
           </div>
         ) : (
           <Card className="mb-8">

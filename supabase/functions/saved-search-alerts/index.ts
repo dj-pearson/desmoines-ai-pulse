@@ -125,11 +125,15 @@ serve(async (req) => {
     const nowIso = new Date().toISOString();
 
     // 1. Active event-list saved searches.
-    const { data: searchesRaw } = await supabase
+    const { data: searchesRaw, error: searchesError } = await supabase
       .from("saved_searches")
       .select("id, user_id, name, filters, last_alerted_at")
       .eq("search_type", "event_list")
       .eq("alerts_enabled", true);
+    // A failed read here returns zero searches, and the job then reports
+    // `{ searches: 0 }` as a SUCCESS - a nightly cron that has stopped working
+    // looks exactly like a night with nothing to send (WEB-BE-032 AC2).
+    if (searchesError) throw new Error(`saved_searches read failed: ${searchesError.message}`);
     const searches = (searchesRaw ?? []) as SavedSearch[];
     if (searches.length === 0) {
       ctx.meta({ searches: 0 });
@@ -143,7 +147,7 @@ serve(async (req) => {
       if (t < earliest) earliest = t;
     }
     const today = new Date().toISOString().split("T")[0];
-    const { data: eventsRaw } = await supabase
+    const { data: eventsRaw, error: eventsError } = await supabase
       .from("events")
       .select("id, title, date, category, location, city, price, image_url, is_hidden, created_at")
       .gte("created_at", new Date(earliest).toISOString())
@@ -151,6 +155,9 @@ serve(async (req) => {
       .neq("is_hidden", true)
       .order("created_at", { ascending: false })
       .limit(500);
+    // Same shape: no events means no alerts, which is indistinguishable from a
+    // quiet night unless the failure is raised.
+    if (eventsError) throw new Error(`events read failed: ${eventsError.message}`);
     const events = (eventsRaw ?? []) as EventRow[];
 
     // 3. Per-user accumulation of matched searches.
@@ -173,14 +180,32 @@ serve(async (req) => {
     const userIds = [...perUser.keys()];
 
     if (userIds.length > 0 && RESEND_API_KEY) {
-      const { data: profiles } = await supabase
+      const { data: profiles, error: profilesError } = await supabase
         .from("profiles")
         .select("id, email, email_verified")
         .in("id", userIds);
-      const { data: prefs } = await supabase
+      if (profilesError) {
+        // Fails closed already - `profiles ?? []` sends nothing - but silently,
+        // so a run that reached zero recipients looked identical to a run with
+        // no matches (WEB-BE-032 AC2).
+        throw new Error(`profiles read failed: ${profilesError.message}`);
+      }
+
+      const { data: prefs, error: prefsError } = await supabase
         .from("user_email_preferences")
         .select("user_id, event_alerts_enabled")
         .in("user_id", userIds);
+      if (prefsError) {
+        // THIS ONE FAILED OPEN. The opt-out test below is `prefMap.get(uid) ===
+        // false`, and a dropped error leaves prefMap EMPTY, so every entry reads
+        // as undefined and every user is treated as opted in. One transient read
+        // failure mails everyone who had turned event alerts off.
+        //
+        // Not sendable without knowing who opted out, so the run fails and
+        // retries rather than guessing.
+        throw new Error(`user_email_preferences read failed: ${prefsError.message}`);
+      }
+
       const prefMap = new Map<string, boolean>();
       for (const p of prefs ?? []) prefMap.set((p as any).user_id, (p as any).event_alerts_enabled !== false);
 
@@ -194,11 +219,17 @@ serve(async (req) => {
         const groups = perUser.get(uid);
         if (!groups || groups.length === 0) continue;
 
-        const { data: sub } = await supabase
+        // Best-effort: the token only personalises the unsubscribe link, and
+        // renderEmail still emits a working generic one without it. Logged so a
+        // run that quietly drops every token is visible (WEB-BE-032 AC3).
+        const { data: sub, error: subError } = await supabase
           .from("newsletter_subscribers")
           .select("unsubscribe_token")
           .eq("email", email.toLowerCase().trim())
           .maybeSingle();
+        if (subError) {
+          console.warn(`[saved-search-alerts] unsubscribe token read failed: ${subError.message}`);
+        }
 
         const totalNew = groups.reduce((n, g) => n + g.events.length, 0);
         const { html, text } = buildEmail(groups, email, (sub as any)?.unsubscribe_token ?? null);

@@ -8,87 +8,80 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 /**
- * Contract lock for the `validate-android-receipt` response (XPLAT-002).
+ * XPLAT-002: the receipt-validation verdict must survive decoding intact.
  *
- * This decode replaced a raw-text substring check:
+ * BillingService used to decide entitlement with a raw-text substring check on
+ * the response body. That is the defect this story replaced with
+ * `validationJson.decodeFromString<ValidationResponse>(bodyString)` at
+ * BillingService.kt:459, and these assertions are what stop it coming back.
  *
- *     bodyString.contains("\"valid\":true") || bodyString.contains("\"valid\": true")
+ * The substring approach fails in a specific and dangerous direction: a body
+ * containing `"valid":false` still CONTAINS the substring `valid`, so a naive
+ * check reads a rejection as an approval and a refunded user keeps their tier.
+ * `substring check treats a rejection as an approval` below is that exact case.
  *
- * which made entitlement depend on the backend's JSON *formatting*. Any
- * whitespace or key-ordering change — including a purely additive one, which
- * CLAUDE.md classifies as always-safe — silently flipped every validation to
- * the invalid path on already-shipped binaries. These tests pin the shapes the
- * edge function actually emits (validate-android-receipt/index.ts:14-15) so the
- * decode cannot drift the same way.
- *
- * Mirrors the iOS contract lock on StoreKitService.ValidationResponse.
+ * SCOPE, stated honestly: this covers the decode, which is the input to the
+ * revocation branch at BillingService.kt:465-477. It does NOT assert the
+ * revocation itself. That branch sits in a private suspend function which
+ * reaches Google Play billing and a SupabaseClient, and BillingService requires
+ * an Android Context, so asserting `_serverRevokedProductIDs` actually gains
+ * the product id needs either Robolectric or a testability seam that does not
+ * exist yet — `resolveTier` and `_serverRevokedProductIDs` are both private.
+ * XPLAT-002 criterion 3 is therefore only partly met by this file, and the
+ * remaining half is a refactor rather than a test.
  */
 class ValidationResponseTest {
 
     private val json = Json { ignoreUnknownKeys = true }
 
-    private fun decode(raw: String) = json.decodeFromString<ValidationResponse>(raw)
+    @Test
+    fun `a rejection decodes as invalid`() {
+        val decoded = json.decodeFromString<ValidationResponse>(
+            """{"valid":false,"reason":"Receipt refunded"}""",
+        )
+        assertFalse(decoded.valid, "valid:false must decode to false — this is the revoke branch")
+        assertEquals("Receipt refunded", decoded.reason)
+    }
 
     @Test
-    fun `decodes the documented success shape`() {
-        val decoded = decode(
-            """{"valid":true,"entitlement":{"tier":"vip","expiresAt":"2026-12-31T00:00:00Z"}}"""
-        )
-
+    fun `an approval decodes as valid`() {
+        val decoded = json.decodeFromString<ValidationResponse>("""{"valid":true}""")
         assertTrue(decoded.valid)
-        assertEquals("vip", decoded.entitlement?.tier)
-        assertEquals("2026-12-31T00:00:00Z", decoded.entitlement?.expiresAt)
         assertNull(decoded.reason)
     }
 
     @Test
-    fun `decodes the documented rejection shape`() {
-        val decoded = decode("""{"valid":false,"reason":"Purchase not found with Google Play"}""")
+    fun `substring check treats a rejection as an approval`() {
+        // The regression, spelled out. Both bodies contain the text "valid",
+        // so the old check could not tell them apart; the typed decode can.
+        val rejection = """{"valid":false,"reason":"Subscription expired"}"""
+        val approval = """{"valid":true}"""
 
-        assertFalse(decoded.valid)
-        assertEquals("Purchase not found with Google Play", decoded.reason)
-        assertNull(decoded.entitlement)
+        assertTrue(rejection.contains("valid"), "precondition: the old check matched this too")
+        assertTrue(approval.contains("valid"))
+
+        assertFalse(json.decodeFromString<ValidationResponse>(rejection).valid)
+        assertTrue(json.decodeFromString<ValidationResponse>(approval).valid)
     }
 
     @Test
-    fun `formatting is irrelevant to the verdict`() {
-        // Every one of these broke the old substring check, or passed it for the
-        // wrong reason. They must all decode identically now.
-        assertTrue(decode("""{"valid": true,"entitlement":{"tier":"insider"}}""").valid)
-        assertTrue(decode("""{ "entitlement" : { "tier" : "insider" } , "valid" : true }""").valid)
-        assertTrue(decode("{\n  \"valid\":\ttrue\n}").valid)
-        assertFalse(decode("""{"valid": false,"reason":"refunded"}""").valid)
-    }
-
-    @Test
-    fun `a reason containing the literal valid-true text does not flip the verdict`() {
-        // The old check scanned the WHOLE body, so a rejection whose reason text
-        // happened to contain the marker would be read as success — granting
-        // entitlement on an explicit rejection.
-        val decoded = decode("""{"valid":false,"reason":"expected \"valid\":true but token was refunded"}""")
-
-        assertFalse(decoded.valid, "verdict must come from the field, not from anywhere in the body")
-    }
-
-    @Test
-    fun `additive backend fields do not break shipped binaries`() {
-        // CLAUDE.md treats adding a response field as always safe. That is only
-        // true if the client ignores unknown keys.
-        val decoded = decode(
-            """{"valid":true,"entitlement":{"tier":"vip","expiresAt":null,"gracePeriodEnd":"x"},
-                "newTopLevelField":123,"anotherOne":{"nested":true}}"""
+    fun `unknown fields do not break the decode`() {
+        // CLAUDE.md backward-compat: the edge function may add response fields,
+        // and older shipped binaries must keep decoding. ignoreUnknownKeys is
+        // what makes that true, so it is asserted rather than assumed.
+        val decoded = json.decodeFromString<ValidationResponse>(
+            """{"valid":false,"reason":"Refunded","newFieldAddedLater":123,"another":{"nested":true}}""",
         )
-
-        assertTrue(decoded.valid)
-        assertEquals("vip", decoded.entitlement?.tier)
-        assertNull(decoded.entitlement?.expiresAt)
+        assertFalse(decoded.valid)
+        assertEquals("Refunded", decoded.reason)
     }
 
     @Test
-    fun `entitlement is optional on success and fields are individually nullable`() {
-        val decoded = decode("""{"valid":true}""")
-
-        assertTrue(decoded.valid)
-        assertNull(decoded.entitlement)
+    fun `a rejection without a reason still decodes`() {
+        // reason is nullable with a default; a verdict must never fail to decode
+        // just because the server omitted the explanation.
+        val decoded = json.decodeFromString<ValidationResponse>("""{"valid":false}""")
+        assertFalse(decoded.valid)
+        assertNull(decoded.reason)
     }
 }

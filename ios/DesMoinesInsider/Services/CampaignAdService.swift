@@ -35,6 +35,24 @@ final class CampaignAdService {
         let ctaText: String?
         var id: String { creativeId }
 
+        /// Trimmed title, or nil when there is nothing to read.
+        var displayTitle: String? {
+            guard let title else { return nil }
+            let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
+
+        /// Enough to draw: something to read or something to look at. Mirrors
+        /// Android's CampaignAd.isRenderable and the web's isRenderable in
+        /// src/hooks/useActiveAds.ts, so the three surfaces agree on what
+        /// counts as an ad (XPLAT-005 AC2). Deliberately an OR - a text-only
+        /// creative is a legitimate ad.
+        var isRenderable: Bool {
+            if displayTitle != nil { return true }
+            guard let imageUrl else { return false }
+            return !imageUrl.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+
         var targetURL: URL? {
             guard let linkUrl, !linkUrl.isEmpty,
                   let url = URL(string: linkUrl),
@@ -82,9 +100,14 @@ final class CampaignAdService {
                 .execute()
                 .value
 
-            let creative: CampaignCreative? = rows.first.flatMap { row in
+            // First RENDERABLE row, not first row (XPLAT-005 AC2). This took
+            // rows.first and required only non-nil ids, so a creative with no
+            // title and no image produced an empty ad slot — space taken, an
+            // impression logged and the advertiser billed for nothing to look
+            // at. Android has filtered on the same rule since it shipped.
+            let creative: CampaignCreative? = rows.lazy.compactMap { row -> CampaignCreative? in
                 guard let cid = row.campaign_id, let crid = row.creative_id else { return nil }
-                return CampaignCreative(
+                let candidate = CampaignCreative(
                     campaignId: cid,
                     creativeId: crid,
                     title: row.title,
@@ -93,7 +116,8 @@ final class CampaignAdService {
                     linkUrl: row.link_url,
                     ctaText: row.cta_text
                 )
-            }
+                return candidate.isRenderable ? candidate : nil
+            }.first
             cache[key] = (creative, Date())
             return creative
         } catch {

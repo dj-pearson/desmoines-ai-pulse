@@ -55,6 +55,11 @@ final class CertificatePinningService: NSObject, URLSessionDelegate {
     /// NOT be the only pin — it is here to tighten the common case, while WE1
     /// carries continuity across leaf reissues.
     ///
+    /// RE-VERIFIED 2026-08-23: all three pins still present in the live chain.
+    /// `scripts/verify-cert-pins.sh` now checks this rather than only printing
+    /// it, and runs in iOS CI, so drift fails a build instead of waiting to be
+    /// noticed. Rotation procedure: docs/CERT_PIN_ROTATION.md.
+    ///
     /// BEFORE FLIPPING `Config.certificatePinningEnforced` (IOS-AUDIT-SEC-013):
     /// re-run the verify script, confirm the leaf hash below still matches or
     /// update it, and confirm at least two pins in this set are present in the
@@ -114,31 +119,121 @@ final class CertificatePinningService: NSObject, URLSessionDelegate {
             return
         }
 
-        // Check if any certificate in the chain matches our pinned SPKI hashes
-        var matched = false
-
         let certificateChain = SecTrustCopyCertificateChain(serverTrust) as? [SecCertificate] ?? []
-        for certificate in certificateChain {
 
-            if let spkiHash = spkiSHA256Hash(of: certificate) {
-                if pinnedSPKIHashes.contains(spkiHash) {
-                    matched = true
-                    break
-                }
+        switch decide(host: host, certificateChain: certificateChain, reportOnly: reportOnly) {
+        case .notAPinnedHost:
+            // Unreachable: the pinnedDomains guard above already returned. Kept
+            // exhaustive so adding a case is a compile error, not a silent allow.
+            completionHandler(.performDefaultHandling, nil)
+        case .pinMatched:
+            completionHandler(.useCredential, URLCredential(trust: serverTrust))
+        case .mismatchAllowedReportOnly:
+            AppLogger.network.warning("Certificate pinning mismatch for \(host) (report-only mode, connection allowed)")
+            noteMismatch(host: host, blocked: false)
+            completionHandler(.useCredential, URLCredential(trust: serverTrust))
+        case .mismatchBlocked:
+            AppLogger.network.error("Certificate pinning failed for \(host) - connection blocked")
+            noteMismatch(host: host, blocked: true)
+            completionHandler(.cancelAuthenticationChallenge, nil)
+        }
+    }
+
+    // MARK: - Decision (testable seam)
+
+    /// The outcome of the pin check for one connection.
+    ///
+    /// Split out of `urlSession(_:didReceive:completionHandler:)` because that
+    /// method cannot be driven from a unit test: `URLAuthenticationChallenge`
+    /// needs a `URLProtectionSpace` carrying a `SecTrust`, and no public
+    /// initializer attaches one. Without this seam, ACs 2 and 3 of
+    /// IOS-AUDIT-SEC-001 - reject a non-pinned cert when enforcing, allow and
+    /// log it when report-only - can only be checked by pointing a real device
+    /// at a MITM proxy, which is why they sat unverified.
+    enum PinDecision: Equatable {
+        case notAPinnedHost
+        case pinMatched
+        case mismatchAllowedReportOnly
+        case mismatchBlocked
+    }
+
+    /// True when this service pins connections to `host`.
+    func pins(host: String) -> Bool {
+        pinnedDomains.contains(where: { host.hasSuffix($0) })
+    }
+
+    /// The pin decision for an already trust-validated certificate chain.
+    ///
+    /// `reportOnly` is a parameter rather than a read of the `reportOnly`
+    /// property so a test can exercise both modes without a Release build.
+    func decide(host: String, certificateChain: [SecCertificate], reportOnly: Bool) -> PinDecision {
+        guard pins(host: host) else { return .notAPinnedHost }
+
+        for certificate in certificateChain {
+            if let spkiHash = spkiSHA256Hash(of: certificate), pinnedSPKIHashes.contains(spkiHash) {
+                return .pinMatched
             }
         }
 
-        if matched {
-            completionHandler(.useCredential, URLCredential(trust: serverTrust))
-        } else if reportOnly {
-            // In debug mode, log the mismatch but allow the connection
-            AppLogger.network.warning("Certificate pinning mismatch for \(host) (report-only mode, connection allowed)")
-            completionHandler(.useCredential, URLCredential(trust: serverTrust))
-        } else {
-            // In production, block the connection
-            AppLogger.network.error("Certificate pinning failed for \(host) — connection blocked")
-            completionHandler(.cancelAuthenticationChallenge, nil)
+        return reportOnly ? .mismatchAllowedReportOnly : .mismatchBlocked
+    }
+
+    // MARK: - Mismatch telemetry (IOS-AUDIT-SEC-013 AC4)
+
+    /// Hosts already reported this process run.
+    ///
+    /// A mismatch does not happen once. It happens on every request for as long
+    /// as the bad chain is presented, which on a busy screen is dozens per
+    /// minute -- and `log-error` is rate-limited to 60/minute per IP, so an
+    /// unthrottled reporter would spend the whole budget on one device and
+    /// starve the crash uploads sharing it. One report per host per run is
+    /// enough to answer the only question the report-only window asks: is any
+    /// real user seeing a chain we do not pin.
+    private let mismatchLock = NSLock()
+    private var reportedMismatchHosts: Set<String> = []
+
+    /// Send one pin mismatch to the backend error sink.
+    ///
+    /// This is the AC4 requirement, and it is what makes flipping enforcement
+    /// (AC2) a decision with evidence rather than a guess: while report-only,
+    /// every mismatch a real device sees lands in `error_events` under
+    /// component `ios-cert-pin`. A window with zero of them is the argument for
+    /// enforcing; a window with any is the reason not to, and names the host.
+    ///
+    /// Deliberately carries no certificate material. The host and whether the
+    /// connection was blocked are what a decision needs; a chain dump would be
+    /// unique per connection, which would give every report its own cluster
+    /// signature and make the count unreadable.
+    func noteMismatch(host: String, blocked: Bool) {
+        mismatchLock.lock()
+        let isFirst = reportedMismatchHosts.insert(host).inserted
+        mismatchLock.unlock()
+        guard isFirst else { return }
+
+        Task.detached {
+            _ = await ErrorSink.send(
+                message: "Certificate pin mismatch for \(host)",
+                component: "ios-cert-pin",
+                action: blocked ? "blocked" : "report_only",
+                route: "ios/\(Config.appVersion)",
+                severity: blocked ? "critical" : "warning"
+            )
         }
+    }
+
+    /// Whether `host` has already been reported this run. Exposed for tests --
+    /// the throttle is the part that silently stops reporting if it is wrong.
+    func hasReportedMismatch(host: String) -> Bool {
+        mismatchLock.lock()
+        defer { mismatchLock.unlock() }
+        return reportedMismatchHosts.contains(host)
+    }
+
+    /// Clear the throttle. Tests only.
+    func resetMismatchThrottle() {
+        mismatchLock.lock()
+        reportedMismatchHosts.removeAll()
+        mismatchLock.unlock()
     }
 
     // MARK: - SPKI Hash Extraction
@@ -197,7 +292,10 @@ final class CertificatePinningService: NSObject, URLSessionDelegate {
     }
 
     /// Computes the base64 SHA-256 of a certificate's DER-encoded SubjectPublicKeyInfo.
-    private func spkiSHA256Hash(of certificate: SecCertificate) -> String? {
+    /// Internal rather than private so CertificatePinningTests can assert the
+    /// header reconstruction below against real certificates. It is the part
+    /// most likely to be silently wrong, and a wrong hash matches nothing.
+    func spkiSHA256Hash(of certificate: SecCertificate) -> String? {
         guard let publicKey = SecCertificateCopyKey(certificate) else { return nil }
 
         var error: Unmanaged<CFError>?

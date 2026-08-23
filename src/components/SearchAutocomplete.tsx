@@ -274,7 +274,7 @@ export function SearchAutocomplete({
             </span>
             <button
               onClick={handleClearRecent}
-              className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-0.5"
+              className="text-xs text-gray-500 hover:text-gray-600 flex items-center gap-0.5"
               aria-label="Clear recent searches"
             >
               <X className="h-3 w-3" />
@@ -299,7 +299,7 @@ export function SearchAutocomplete({
                 onClick={() => handleSelect(search)}
                 onMouseEnter={() => setActiveIndex(idx)}
               >
-                <Clock className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+                <Clock className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" />
                 {search}
               </button>
             );
@@ -337,11 +337,11 @@ export function SearchAutocomplete({
                 onClick={() => handleSelect(suggestion.title)}
                 onMouseEnter={() => setActiveIndex(idx)}
               >
-                <Search className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+                <Search className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" />
                 <div className="min-w-0">
                   <div className="truncate">{suggestion.title}</div>
                   {suggestion.subtitle && (
-                    <div className="text-xs text-gray-400 truncate">
+                    <div className="text-xs text-gray-500 truncate">
                       {suggestion.subtitle}
                     </div>
                   )}

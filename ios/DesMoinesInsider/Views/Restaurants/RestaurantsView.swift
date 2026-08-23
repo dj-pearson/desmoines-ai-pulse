@@ -39,8 +39,18 @@ struct RestaurantsView: View {
                             EmptyStateView(
                                 icon: "fork.knife",
                                 title: "No Restaurants Found",
-                                message: "Try adjusting your filters.",
-                                actionTitle: viewModel.activeFilterCount > 0 ? "Clear Filters" : nil,
+                                // A search with no filters set produced
+                                // activeFilterCount == 0, so the reset button was
+                                // hidden - the one state where the user most needs
+                                // it, because the thing to undo is the text they
+                                // typed (IOS-AUDIT-UX-055). clearFilters() already
+                                // clears searchText; only the condition was wrong.
+                                message: viewModel.searchText.isEmpty
+                                    ? "Try adjusting your filters."
+                                    : "No matches for \"\(viewModel.searchText)\". Try a different search or clear your filters.",
+                                actionTitle: (viewModel.activeFilterCount > 0 || !viewModel.searchText.isEmpty)
+                                    ? "Clear Search & Filters"
+                                    : nil,
                                 action: { viewModel.clearFilters() }
                             )
                             .padding(.top, 40)
@@ -204,6 +214,12 @@ struct RestaurantsView: View {
             ForEach(RestaurantSortOption.allCases) { option in
                 Button {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    // Re-picking the sort a preset already applied is not a
+                    // change, and used to drop the preset highlight anyway - so
+                    // the chip went grey while every filter it set stayed on
+                    // (IOS-AUDIT-UX-055). A DIFFERENT sort does invalidate the
+                    // preset, because presets set sortBy too.
+                    guard viewModel.sortBy != option else { return }
                     viewModel.sortBy = option
                     viewModel.activePreset = nil
                 } label: {

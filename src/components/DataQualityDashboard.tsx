@@ -201,7 +201,7 @@ export function DataQualityDashboard({
                           </div>
                           <p className="text-sm text-gray-600">{issue.issue}</p>
                           {issue.currentValue && (
-                            <p className="text-xs text-gray-400 mt-1">
+                            <p className="text-xs text-gray-500 mt-1">
                               Current: {String(issue.currentValue)}
                             </p>
                           )}

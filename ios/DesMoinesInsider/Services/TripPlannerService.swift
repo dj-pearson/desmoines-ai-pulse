@@ -37,7 +37,10 @@ final class TripPlannerService {
 
     // MARK: - Generate
 
-    private struct GenerateResponse: Decodable {
+    /// The generate-itinerary envelope. Internal rather than private so the
+    /// decode is contract-locked by a test and cannot silently drift when the
+    /// edge function changes shape (IOS-AUDIT-TEST-003).
+    struct GenerateResponse: Decodable {
         let success: Bool
         let tripPlan: TripPlan?
         let error: String?
@@ -152,29 +155,51 @@ final class TripPlannerService {
         }
     }
 
-    /// Persists a new ordering of items within a day by writing each item's
-    /// `order_index`. Returns true only if every write succeeded so the caller
-    /// can reconcile the UI with server truth on failure (IOS-AUDIT-FEAT-023).
+    /// Persists a new ordering of items within a day. Returns true only if the
+    /// write succeeded so the caller can reconcile the UI with server truth on
+    /// failure (IOS-AUDIT-FEAT-023).
+    ///
+    /// ONE REQUEST, NOT N (IOS-AUDIT-PERF-030). This issued one UPDATE per stop
+    /// and swallowed each failure independently, so a dropped connection halfway
+    /// through left the list genuinely half-reordered on the server: some rows
+    /// at their new index, the rest at their old one, and an order_index sequence
+    /// with duplicates in it. Returning false told the caller to re-read, but the
+    /// damage was already written. A single upsert either applies or does not.
+    ///
+    /// Upsert rather than update because PostgREST has no bulk-update-by-id: the
+    /// rows already exist, and every column the table requires is carried in the
+    /// payload, so this is an update in effect. `onConflict: "id"` is what makes
+    /// it one.
     @discardableResult
     func persistOrder(_ items: [TripPlanItem]) async -> Bool {
         guard let client = supabase else { return false }
-        struct OrderUpdate: Encodable { let order_index: Int }
-        var allSucceeded = true
-        for (index, item) in items.enumerated() {
-            do {
-                try await client
-                    .from("trip_plan_items")
-                    .update(OrderUpdate(order_index: index))
-                    .eq("id", value: item.itemId)
-                    .execute()
-            } catch {
-                allSucceeded = false
-                #if DEBUG
-                AppLogger.network.warning("persistOrder failed for \(item.itemId): \(error.localizedDescription)")
-                #endif
-            }
+        guard !items.isEmpty else { return true }
+
+        let rows = Self.orderRows(for: items)
+        do {
+            try await client
+                .from("trip_plan_items")
+                .upsert(rows, onConflict: "id")
+                .execute()
+            return true
+        } catch {
+            #if DEBUG
+            AppLogger.network.warning("persistOrder failed for \(items.count) item(s): \(error.localizedDescription)")
+            #endif
+            return false
         }
-        return allSucceeded
+    }
+
+    /// One row per item, `order_index` set to its position. Pure, so the
+    /// index assignment can be tested without a client - it is the part that
+    /// silently produces a wrong order if it drifts.
+    struct OrderRow: Encodable, Equatable, Sendable {
+        let id: String
+        let order_index: Int
+    }
+
+    static func orderRows(for items: [TripPlanItem]) -> [OrderRow] {
+        items.enumerated().map { OrderRow(id: $1.itemId, order_index: $0) }
     }
 
     /// Makes a trip public and returns its share code (web parity:

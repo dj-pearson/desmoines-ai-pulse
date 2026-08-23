@@ -196,11 +196,23 @@ struct ProfileView: View {
         } message: {
             Text("This will permanently delete your account, favorites, and all associated data. This action cannot be undone.")
         }
-        .alert("Error", isPresented: .init(
-            get: { viewModel.errorMessage != nil },
-            set: { if !$0 { viewModel.clearError() } }
-        )) {
-            Button("OK", role: .cancel) {}
+        // IOS-AUDIT-BUG-018 AC3: a failed deletion gets a retry. Gated on
+        // deletionFailed because this alert is shared with profile-save errors,
+        // so an unconditional Retry would offer to delete the account after a
+        // failed save.
+        .alert(
+            viewModel.deletionFailed ? "Couldn't Delete Account" : "Error",
+            isPresented: .init(
+                get: { viewModel.errorMessage != nil },
+                set: { if !$0 { viewModel.clearError() } }
+            )
+        ) {
+            if viewModel.deletionFailed {
+                Button("Try Again") {
+                    Task { await viewModel.deleteAccount() }
+                }
+            }
+            Button(viewModel.deletionFailed ? "Cancel" : "OK", role: .cancel) {}
         } message: {
             Text(viewModel.errorMessage ?? "")
         }

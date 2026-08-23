@@ -491,7 +491,7 @@ export default function Attractions() {
                   Attraction Type
                 </label>
                 <Select value={selectedType} onValueChange={setSelectedType}>
-                  <SelectTrigger>
+                  <SelectTrigger aria-label="Attraction Type">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -511,7 +511,7 @@ export default function Attractions() {
                   Minimum Rating
                 </label>
                 <Select value={minRating} onValueChange={setMinRating}>
-                  <SelectTrigger>
+                  <SelectTrigger aria-label="Minimum Rating">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -530,7 +530,7 @@ export default function Attractions() {
                   Featured
                 </label>
                 <Select value={featuredOnly} onValueChange={setFeaturedOnly}>
-                  <SelectTrigger>
+                  <SelectTrigger aria-label="Featured">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -861,7 +861,7 @@ export default function Attractions() {
                       </span>
                       <span className="block text-xs text-gray-500">{count} attractions</span>
                     </div>
-                    <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-[#2D1B69]" />
+                    <ChevronRight className="h-4 w-4 text-gray-500 group-hover:text-[#2D1B69]" />
                   </button>
                 );
               })}

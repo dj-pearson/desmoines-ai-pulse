@@ -65,6 +65,10 @@ jobs:
       - run: deno test supabase/functions/_tests/version-check.test.ts
       # Reads the iOS/Android sources as well as the edge function, so the
       # client/server deletion contract can't drift again (XPLAT-001).
+      # XPLAT-011. Asserts docstring, implementation and all three clients agree
+      # on the request contract -- the comparison nobody was making when
+      # XPLAT-001 shipped a two-step docstring against three bodyless clients.
+      - run: deno test --allow-read supabase/functions/_tests/client-contract.test.ts
       - run: deno test --allow-read supabase/functions/_tests/account-deletion-contract.test.ts
       # Erasure has to reach uploaded files, not just table rows. Every upload
       # bucket is public, so anything the purge misses stays fetchable by URL
@@ -74,6 +78,19 @@ jobs:
       # deliberately retained, so erasure coverage cannot drift silently
       # the next time a feature adds a table (WEB-LEGAL-004).
       - run: deno test --allow-read supabase/functions/_tests/user-data-tables.test.ts
+      # XPLAT-007. The right of ACCESS must stay sourced from the same list as
+      # the right of erasure - they had drifted by 57 tables, and the export
+      # named three that do not exist.
+      - run: deno test --allow-read supabase/functions/_tests/export-user-data.test.ts
+      # XPLAT-008. Two admin diagnostics that returned 404 on every press.
+      # test-article-webhook POSTs to a caller-supplied URL, so the SSRF guard
+      # running BEFORE the request is the assertion that matters.
+      - run: deno test --allow-read supabase/functions/_tests/admin-diagnostics.test.ts
+      # WEB-SEC-024. scrapeUrl is the single entry point for every ingestion path
+      # and checked nothing, so a site that had asked not to be crawled was
+      # crawled anyway. Found while drafting the Privacy Policy's sources section:
+      # the ordinary reassurance would have been a false statement in it.
+      - run: deno test --allow-read supabase/functions/_tests/robots.test.ts
       # Crisis floor on the public AI surfaces: pins the matcher in both
       # directions and asserts every surface short-circuits before the model
       # call, which is the whole design (WEB-LEGAL-005).
@@ -84,6 +101,9 @@ jobs:
       - run: deno test --allow-read supabase/functions/_tests/trial-notice.test.ts
       # A bucket created public must say why. Public means anonymous GET on a
       # guessable path with no expiry (WEB-LEGAL-007).
+      # WEB-BE-030 AC4. Asserts the UNIQUE constraint that makes the guard real,
+      # and that both webhooks read the lookup error instead of only its data.
+      - run: deno test --allow-read supabase/functions/_tests/billing-webhook-idempotency.test.ts
       - run: deno test --allow-read supabase/functions/_tests/storage-bucket-posture.test.ts
       - run: deno test supabase/functions/_shared/jsonLdEvents.test.ts
       # IndexNow payload filtering plus the key-file/constant drift check

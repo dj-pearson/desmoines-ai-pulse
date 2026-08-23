@@ -54,13 +54,10 @@ struct AdViewabilityModifier: ViewModifier {
     }
 
     /// The bounds of the foreground-active key window (falls back to any window,
-    /// then the screen). Reflects the app's actual visible region in multi-window
+    /// then the scene). Reflects the app's actual visible region in multi-window
     /// layouts, unlike UIScreen.main.
     private static func activeWindowBounds() -> CGRect {
-        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-        let active = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
-        let window = active?.windows.first { $0.isKeyWindow } ?? active?.windows.first
-        return window?.bounds ?? active?.coordinateSpace.bounds ?? .zero
+        ActiveWindowBounds.current
     }
 
     private func startDwellIfNeeded() {
@@ -77,6 +74,57 @@ struct AdViewabilityModifier: ViewModifier {
     private func cancelDwell() {
         dwellTask?.cancel()
         dwellTask = nil
+    }
+}
+
+/// Caches the window the app is drawing into, so viewability does not walk the
+/// scene graph on every scroll frame (IOS-AUDIT-PERF-028).
+///
+/// THE WINDOW IS CACHED, NOT ITS BOUNDS, and that distinction is the whole
+/// design. Caching a CGRect would be faster still and would quietly break
+/// accuracy: a window resized by iPad Split View or Stage Manager posts no
+/// notification anyone can subscribe to reliably, so a cached rect would stay
+/// wrong until something else invalidated it - and viewability decides which
+/// impressions are billed. Reading `bounds` off a cached window is a property
+/// access that is always current; walking connectedScenes to find that window
+/// is the part that was happening once per ad slot per frame.
+///
+/// The reference is weak and revalidated against `windowScene`, so a window
+/// that is torn down or detached is resolved again rather than returning stale
+/// bounds or keeping a dead window alive.
+/// Deliberately NOT marked @MainActor: the code that calls it - the modifier's
+/// own helpers - is not isolated either, and it already reads
+/// UIApplication.shared from the same place. Adding isolation here alone would
+/// be a compile error at every call site rather than a safety improvement.
+/// All of it runs from SwiftUI layout callbacks, which are on the main actor.
+enum ActiveWindowBounds {
+    nonisolated(unsafe) private static weak var cached: UIWindow?
+
+    static var current: CGRect {
+        if let window = cached, window.windowScene != nil {
+            return window.bounds
+        }
+        let window = resolve()
+        cached = window
+        return window?.bounds ?? fallbackBounds()
+    }
+
+    /// Drops the cached window. For tests, and for any caller that knows the
+    /// scene graph changed under it.
+    static func invalidate() {
+        cached = nil
+    }
+
+    private static func resolve() -> UIWindow? {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        let active = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
+        return active?.windows.first { $0.isKeyWindow } ?? active?.windows.first
+    }
+
+    private static func fallbackBounds() -> CGRect {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        let active = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
+        return active?.coordinateSpace.bounds ?? .zero
     }
 }
 

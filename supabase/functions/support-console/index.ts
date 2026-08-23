@@ -91,8 +91,8 @@ Deno.serve(async (req) => {
       if (ticket.user_id) {
         const [{ data: sub }, favs, reviews] = await Promise.all([
           supabase.from("user_subscriptions").select("status, current_period_end, cancel_at_period_end, plan:subscription_plans(name, tier)").eq("user_id", ticket.user_id).in("status", ["active", "trialing", "past_due"]).maybeSingle(),
-          supabase.from("favorites").select("id", { count: "exact", head: true }).eq("user_id", ticket.user_id),
-          supabase.from("reviews").select("id", { count: "exact", head: true }).eq("user_id", ticket.user_id),
+          supabase.from("content_favorites").select("id", { count: "exact", head: true }).eq("user_id", ticket.user_id),
+          supabase.from("event_reviews").select("id", { count: "exact", head: true }).eq("user_id", ticket.user_id),
         ]);
         context = { authenticated: true, subscription: sub ?? null, favorites: favs.count ?? 0, reviews: reviews.count ?? 0 };
       }

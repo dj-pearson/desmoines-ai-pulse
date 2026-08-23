@@ -1,0 +1,7 @@
+{
+  "$comment": "WEB-PERF-020 AC4. Critical-path gzipped JS. Lower is better; the goal is 200 KB. Re-baseline with: node scripts/check-bundle-budget.mjs --update",
+  "generated": "2026-08-23",
+  "goalKb": 200,
+  "toleranceKb": 5,
+  "criticalPathKb": 279.2
+}

@@ -16,7 +16,7 @@ const getRankIcon = (rank: number) => {
 const getRankColor = (rank: number) => {
   switch (rank) {
     case 1: return 'text-yellow-500';
-    case 2: return 'text-gray-400';
+    case 2: return 'text-gray-500';
     case 3: return 'text-orange-600';
     default: return 'text-muted-foreground';
   }

@@ -85,8 +85,8 @@ Deno.serve(async (req) => {
 
     // Bulk-fetch activity signals (a few queries, aggregated in memory).
     const [favs, revs, subs, logins, unsub] = await Promise.all([
-      supabase.from("favorites").select("user_id, created_at").in("user_id", userIds).gte("created_at", since90),
-      supabase.from("reviews").select("user_id, created_at").in("user_id", userIds).gte("created_at", since90),
+      supabase.from("content_favorites").select("user_id, created_at").in("user_id", userIds).gte("created_at", since90),
+      supabase.from("event_reviews").select("user_id, created_at").in("user_id", userIds).gte("created_at", since90),
       supabase.from("user_subscriptions").select("user_id, status").in("user_id", userIds),
       supabase.from("login_attempts").select("email, attempt_time, success").in("email", emails).eq("success", true).gte("attempt_time", since90),
       supabase.from("newsletter_subscribers").select("email, status").in("email", emails),

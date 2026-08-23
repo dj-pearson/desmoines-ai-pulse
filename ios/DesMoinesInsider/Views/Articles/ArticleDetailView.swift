@@ -26,11 +26,18 @@ struct ArticleDetailView: View {
                     Divider()
 
                     // Body — interactive links open the in-app browser.
-                    ArticleMarkdownView(markdown: article.content)
-                        .environment(\.openURL, OpenURLAction { url in
-                            openLink(url)
-                            return .handled
-                        })
+                    // IOS-AUDIT-BUG-005: an article with no body used to render an
+                    // empty VStack, so the screen looked broken rather than
+                    // explaining itself. Offer the web version instead.
+                    if article.hasContent {
+                        ArticleMarkdownView(markdown: article.content)
+                            .environment(\.openURL, OpenURLAction { url in
+                                openLink(url)
+                                return .handled
+                            })
+                    } else {
+                        emptyBodyFallback
+                    }
 
                     // Free-tier ad slot inside the reader (IOS-ADS-010/012).
                     // AdSlot renders nothing for subscribers.
@@ -79,9 +86,23 @@ struct ArticleDetailView: View {
             RecentlyViewedService.shared.record(
                 type: "article", id: article.id, title: article.title, imageUrl: article.featuredImageUrl
             )
-            await SpotlightService.shared.indexArticles([article])
-            await service.incrementViewCount(id: article.id, current: article.viewCount)
+            // The Spotlight write and the view-count write are side effects the
+            // reader is not waiting for, and both used to be awaited BEFORE the
+            // related-articles fetch even started (IOS-AUDIT-PERF-031). The rail
+            // appeared after a CoreSpotlight index and a network write had both
+            // finished, for no reason the user could see.
+            //
+            // `async let` rather than an unstructured Task: these are scoped to
+            // the view's .task, so leaving the article cancels them, and the
+            // related fetch below still runs alongside rather than behind them.
+            async let indexed: Void = SpotlightService.shared.indexArticles([article])
+            async let counted: Void = service.incrementViewCount(
+                id: article.id,
+                current: article.viewCount
+            )
+
             related = await service.fetchRelated(category: article.category, excludingId: article.id)
+            _ = await (indexed, counted)
         }
     }
 
@@ -102,6 +123,32 @@ struct ArticleDetailView: View {
     }
 
     // MARK: - Header (title + meta)
+
+    /// Shown when an article has no body (IOS-AUDIT-BUG-005).
+    ///
+    /// The article still has a title, an image and a category, so the screen is
+    /// not empty -- what is missing is the text. Saying so and offering the web
+    /// version is better than a blank column that reads as a loading failure the
+    /// user could retry out of.
+    private var emptyBodyFallback: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("This article does not have a readable version yet.")
+                .font(.body)
+                .foregroundStyle(.secondary)
+
+            // Article.webURL already builds this and is covered by a test, so
+            // there is no second place for the /articles/<slug> shape to drift.
+            Button {
+                openLink(article.webURL)
+            } label: {
+                Label("Read on the web", systemImage: "safari")
+            }
+            .buttonStyle(.bordered)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 8)
+    }
+
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 10) {

@@ -31,14 +31,27 @@ final class WeekendViewModel {
         WeekendWindow.Day.allCases.filter { !(eventsByDay[$0]?.isEmpty ?? true) }
     }
 
+    /// Whether a load has completed, successfully or not.
+    ///
+    /// Emptiness cannot answer that question (IOS-AUDIT-UX-059). A weekend with
+    /// genuinely no events looks exactly like a weekend that has not loaded, so
+    /// loadInitialData re-ran the whole fetch on every appearance for anyone
+    /// whose weekend happened to be empty - and the empty state could not tell
+    /// the two apart either.
+    private(set) var hasLoadedOnce = false
+
     func loadInitialData() async {
-        guard eventsByDay.isEmpty, featuredRestaurants.isEmpty, featuredAttractions.isEmpty else { return }
+        guard !hasLoadedOnce else { return }
         await refresh()
     }
 
     func refresh() async {
         isLoading = true
         errorMessage = nil
+        // Set on entry, not on success: a failed load has still been attempted,
+        // and re-running it on every appearance is how a broken weekend screen
+        // becomes a fetch loop.
+        hasLoadedOnce = true
         // Recompute the window so the screen "refreshes by current week".
         window = .current()
 

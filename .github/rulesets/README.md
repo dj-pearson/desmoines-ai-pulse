@@ -41,6 +41,20 @@ The three protected rulesets require the `pr-checks.yml` validation checks to pa
 
 > **First-apply caveat:** GitHub treats a required check that has *never* run on a PR as pending forever. Before re-applying these rulesets, make sure `pr-checks.yml` has run green on at least one PR into each protected branch so the check contexts are "real". This is also the failure mode above — it was live and unnoticed, because a permanently-pending check and a disabled workflow look identical from the PR page.
 
+**`Accessibility (axe, required)`** became required 2026-08-22 (WEB-CI-021). It runs only the axe
+`describe` block from `tests/accessibility.spec.ts`, against a production build, on one project. The
+block reached zero that day -- 20 failed / 28 passed at the start of the work, 48 passed / 0 failed at
+the end -- and axe is deterministic, so it can gate where the rest of that file cannot. The keyboard,
+focus and heading-hierarchy blocks stay in the quarantine lane, because their remaining failures have
+not been shown to be real.
+
+> It runs against `vite build && vite preview`, not the dev server, and that is load-bearing rather than
+> a preference. The first version of the lane reused the dev-server config: 1.2 minutes locally, over 20
+> minutes in CI, killed at the job timeout. Locally `reuseExistingServer` hands the tests a warm server
+> with a populated Vite cache; CI pays on-demand transform on every first page load, and the spec allows
+> 120s per test. It is also the more honest scan -- axe reads the rendered DOM, and the dev server's DOM
+> is not the shipped one.
+
 **`App project type ratchet`** is deliberately **not** required, and that is a decision worth revisiting rather than an oversight. It is the only gate that compiles the app project: `npm run type-check` in the validate job runs bare `tsc --noEmit` against the root tsconfig, which is `"files": []` plus project references and therefore compiles **zero files** (WEB-CI-023). Two P1 crashes shipped straight through it in one week. The ratchet runs `tsc -p tsconfig.app.json` and takes several minutes, which is why it is a separate job. Left advisory because it cannot gate on zero — the app project carries ~395 pre-existing errors and the job passes only if no file gets *worse*. Make it required once you are comfortable that a re-baseline is a deliberate act rather than a routine one.
 
 **iOS/Android CI** (`Android CI`, `iOS CI`) are path-filtered (`ios/**`, `android/**`) and won't run on every PR — deliberately left out of the required set so web-only PRs aren't blocked waiting on a check that never starts. Add them only if you want to force every PR through those builds.

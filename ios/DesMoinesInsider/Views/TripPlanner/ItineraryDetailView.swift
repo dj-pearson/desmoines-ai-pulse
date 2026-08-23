@@ -26,6 +26,11 @@ struct ItineraryDetailView: View {
     @State private var shareErrorMessage: String?
     @State private var toast: ToastMessage?
     @State private var editMode: EditMode = .inactive
+    /// In flight for Add to Calendar. Without it a second tap ran the whole
+    /// EventKit write again and created a duplicate of every stop, because
+    /// nothing in the loop below checks for an event it already added
+    /// (IOS-AUDIT-UX-053).
+    @State private var isAddingToCalendar = false
 
     private var days: [Int] { itemsByDay.keys.sorted() }
     private var allItems: [TripPlanItem] { days.flatMap { itemsByDay[$0] ?? [] } }
@@ -117,7 +122,13 @@ struct ItineraryDetailView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button { Task { await share() } } label: { Label("Share itinerary", systemImage: "square.and.arrow.up") }
-                    Button { Task { await addToCalendar() } } label: { Label("Add to Calendar", systemImage: "calendar.badge.plus") }
+                    Button { Task { await addToCalendar() } } label: {
+                        Label(
+                            isAddingToCalendar ? "Adding to Calendar..." : "Add to Calendar",
+                            systemImage: "calendar.badge.plus"
+                        )
+                    }
+                    .disabled(isAddingToCalendar)
                     Button {
                         let entering = !editMode.isEditing
                         withAnimation(reduceMotion ? nil : .default) {
@@ -274,6 +285,13 @@ struct ItineraryDetailView: View {
     // MARK: - Calendar (EventKit) — adds each timed stop on its day
 
     private func addToCalendar() async {
+        // The permission prompt alone makes this multi-second, and the menu
+        // stays open behind it. The disabled state above is the visible half;
+        // this is the half that holds when the state has not repainted yet.
+        guard !isAddingToCalendar else { return }
+        isAddingToCalendar = true
+        defer { isAddingToCalendar = false }
+
         let fmt = DateFormatter()
         fmt.calendar = Calendar(identifier: .gregorian)
         fmt.locale = Locale(identifier: "en_US_POSIX")
@@ -292,11 +310,20 @@ struct ItineraryDetailView: View {
             }
 
             var added = 0
+            var skipped = 0
             let calendar = Calendar(identifier: .gregorian)
             for item in allItems {
                 guard let startTime = item.startTime,
                       let dayDate = calendar.date(byAdding: .day, value: item.dayNumber - 1, to: tripStart),
-                      let start = combine(day: dayDate, time: startTime) else { continue }
+                      let start = combine(day: dayDate, time: startTime) else {
+                    // A stop with no time, or a time combine() cannot parse, used
+                    // to vanish here without a trace - the summary counted what
+                    // was added and said nothing about the rest, so an itinerary
+                    // half of which had no times reported a cheerful partial
+                    // success (IOS-AUDIT-UX-059).
+                    skipped += 1
+                    continue
+                }
 
                 let calEvent = EKEvent(eventStore: store)
                 calEvent.title = item.title ?? "Itinerary stop"
@@ -309,11 +336,30 @@ struct ItineraryDetailView: View {
                 added += 1
             }
 
-            calendarMessage = added > 0
-                ? "Added \(added) stop\(added == 1 ? "" : "s") to your calendar."
-                : "No timed stops to add."
+            calendarMessage = Self.calendarSummary(added: added, skipped: skipped)
         } catch {
             calendarMessage = error.localizedDescription
+        }
+    }
+
+    /// What the user is told after a calendar write.
+    ///
+    /// Pure, so the counting can be asserted: the interesting cases are the ones
+    /// nobody writes by hand - some added and some skipped, and everything
+    /// skipped, which used to read as "No timed stops to add" whether the stops
+    /// had no times or had times this app could not parse.
+    static func calendarSummary(added: Int, skipped: Int) -> String {
+        let stops = { (n: Int) in "\(n) stop\(n == 1 ? "" : "s")" }
+
+        switch (added, skipped) {
+        case (0, 0):
+            return "This itinerary has no stops to add."
+        case (0, _):
+            return "Couldn't add \(stops(skipped)) - they have no start time."
+        case (_, 0):
+            return "Added \(stops(added)) to your calendar."
+        default:
+            return "Added \(stops(added)). Skipped \(skipped) with no start time."
         }
     }
 
@@ -407,23 +453,52 @@ private struct TripMapPreview: View {
         .mapStyle(.standard)
         .allowsHitTesting(false)
         .accessibilityLabel("Map of \(markers.count) itinerary stops")
-        .task { await geocode() }
+        // Keyed on the stops. A bare `.task` re-runs on every appearance, so
+        // returning to an itinerary re-issued the whole batch (PERF-024).
+        .task(id: locations) { await geocode() }
     }
 
+    /// Stops geocoded per itinerary. CLGeocoder is rate-limited per app, so
+    /// this stays a cap rather than becoming "all of them".
+    private static let maxStops = 8
+
     private func geocode() async {
-        let geocoder = CLGeocoder()
-        // Cap to keep geocoding light and within rate limits.
-        let unique = Array(Set(locations)).prefix(8)
+        // Sorted, not just de-duplicated: Set iteration order varies per run,
+        // so which eight stops survived the cap - and therefore what the map
+        // framed - changed between appearances of the same itinerary.
+        let unique = Array(Set(locations)).sorted().prefix(Self.maxStops)
+
+        // Anything already resolved is painted before a single request goes
+        // out, so a revisit draws immediately instead of rebuilding the map
+        // marker by marker.
         var found: [GeocodedPlace] = []
+        var pending: [String] = []
         for location in unique {
-            let query = location.localizedCaseInsensitiveContains("Des Moines")
-                ? location
-                : "\(location), Des Moines, IA"
-            if let placemarks = try? await geocoder.geocodeAddressString(query),
-               let coord = placemarks.first?.location?.coordinate {
-                found.append(GeocodedPlace(name: location, coordinate: coord))
+            let query = TripGeocodeCache.normalizedQuery(for: location)
+            if let coordinate = TripGeocodeCache.cached(query) {
+                found.append(GeocodedPlace(name: location, coordinate: coordinate))
+            } else {
+                pending.append(location)
             }
         }
         markers = found
+        guard !pending.isEmpty else { return }
+
+        let geocoder = CLGeocoder()
+        for location in pending {
+            // `try?` swallows the CancellationError the geocoder throws, so
+            // without this the loop kept issuing requests for a screen the
+            // user had already left - the exact traffic the rate limit is
+            // counting.
+            guard !Task.isCancelled else { return }
+
+            let query = TripGeocodeCache.normalizedQuery(for: location)
+            guard let placemarks = try? await geocoder.geocodeAddressString(query),
+                  let coordinate = placemarks.first?.location?.coordinate else { continue }
+
+            TripGeocodeCache.store(coordinate, for: query)
+            found.append(GeocodedPlace(name: location, coordinate: coordinate))
+            markers = found
+        }
     }
 }

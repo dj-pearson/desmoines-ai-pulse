@@ -197,7 +197,7 @@ export default function WeekendGuideManager() {
         {guides.length === 0 ? (
           <Card>
             <CardContent className="p-8 text-center">
-              <CalendarDays className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <CalendarDays className="h-12 w-12 text-gray-500 mx-auto mb-4" />
               <p className="text-gray-600 mb-4">No weekend guides found</p>
               <Button onClick={generateGuide} disabled={generating}>
                 {generating ? (

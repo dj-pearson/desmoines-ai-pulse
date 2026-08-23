@@ -84,12 +84,20 @@ Deno.serve(async (req) => {
 
     // ── cancel_subscription (reversible; period-end) ──────────────────────
     if (intent === "cancel_subscription") {
-      const { data: sub } = await supabase
+      const { data: sub, error: subError } = await supabase
         .from("user_subscriptions")
         .select("id, stripe_subscription_id, status")
         .eq("user_id", userId)
         .in("status", ["active", "trialing", "past_due"])
         .maybeSingle();
+      // A read failure here tells the user they have NO ACTIVE SUBSCRIPTION,
+      // which is a false statement about their own billing rather than a
+      // refusal. It still does not cancel, so the direction is safe, but the
+      // two outcomes must not read the same to the caller (WEB-BE-032 AC2).
+      if (subError) {
+        console.error(`[billing-selfservice] subscription read failed for ${userId}: ${subError.message}`);
+        return { intent, ok: false, note: "could not read your subscription; please try again" };
+      }
       if (!sub?.stripe_subscription_id) {
         return { intent, ok: false, note: "no active subscription" };
       }

@@ -161,22 +161,13 @@ actor ArticlesService {
 
     /// Distinct categories present in published articles, for the filter chips.
     /// Fails soft to an empty list so the screen still renders ("All" only).
+    ///
+    /// Server-side since IOS-AUDIT-PERF-025. The trimming and empty-filtering
+    /// that used to happen here now happens in SQL, which is also why the
+    /// Restaurants sheet stopped being the odd one out - it did no trimming at
+    /// all, so a whitespace-only value rendered as a blank chip.
     func fetchCategories() async -> [String] {
         guard let client = try? db() else { return [] }
-        struct CategoryRow: Decodable { let category: String? }
-        do {
-            let rows: [CategoryRow] = try await client
-                .from("articles")
-                .select("category")
-                .eq("status", value: "published")
-                .execute()
-                .value
-            let categories = rows
-                .compactMap { $0.category?.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-            return Array(Set(categories)).sorted()
-        } catch {
-            return []
-        }
+        return (try? await FilterValues.fetch(source: .articleCategory, client: client)) ?? []
     }
 }

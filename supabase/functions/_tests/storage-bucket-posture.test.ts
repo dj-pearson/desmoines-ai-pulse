@@ -27,11 +27,11 @@ const PUBLIC_BY_DESIGN: Record<string, string> = {
   videos: 'Rendered on public pages.',
   sitemaps: 'Fetched by search engines; must be anonymously readable.',
   'ad-creatives':
-    'Approved ads are shown to everyone. Pending and rejected ones should not be public - tracked as WEB-LEGAL-011, which cannot simply flip the bucket because get_active_ads returns the stored public URL to shipped mobile binaries.',
+    'Approved ads are shown to everyone, and get_active_ads returns the stored public URL to shipped mobile binaries, so this bucket must stay public. Since WEB-LEGAL-011 it holds ONLY approved creatives - unapproved ones live in the private ad-creatives-review bucket below and are copied here at approval.',
 };
 
 /** Buckets deliberately closed, so a later migration cannot quietly reopen one. */
-const MUST_NOT_BE_PUBLIC = ['user-uploads'];
+const MUST_NOT_BE_PUBLIC = ['user-uploads', 'ad-creatives-review'];
 
 async function readMigrations(): Promise<{ name: string; sql: string }[]> {
   const out: { name: string; sql: string }[] = [];
@@ -87,24 +87,39 @@ Deno.test('every declared reason is a real reason', () => {
   assertEquals(thin, [], `these need an actual justification: ${thin.join(', ')}`);
 });
 
-Deno.test('buckets closed on purpose are not reopened later', async () => {
-  const closing = migrations.find((m) => m.name.includes('close_unused_public_bucket'));
-  assert(closing, 'the migration that closes user-uploads is missing');
+Deno.test('buckets closed on purpose are not reopened later', () => {
+  // Generalised for WEB-LEGAL-011. This used to require every MUST_NOT_BE_PUBLIC
+  // bucket to appear in the one migration that closes user-uploads, which is
+  // only true of a bucket that was public first. ad-creatives-review was CREATED
+  // private and never public, so the assertion failed on a bucket that was
+  // already in the correct state -- a check reporting a defect where there is
+  // none is as useless as one that misses a real defect.
+  //
+  // The property that actually matters does not care how the bucket got there:
+  // some migration establishes it as private, and nothing after that makes it
+  // public again.
+  const setsPrivate = (bucket: string) =>
+    new RegExp(
+      `'${bucket}'[\\s\\S]{0,300}?public\\s*=\\s*false|public\\s*=\\s*false[\\s\\S]{0,300}?'${bucket}'`,
+      'i',
+    );
+  const setsPublic = (bucket: string) =>
+    new RegExp(
+      `'${bucket}'[\\s\\S]{0,200}?public\\s*=\\s*true|public\\s*=\\s*true[\\s\\S]{0,200}?'${bucket}'`,
+      'i',
+    );
 
   for (const bucket of MUST_NOT_BE_PUBLIC) {
+    // Last, not first: a bucket may be created public and closed later.
+    const establishing = [...migrations].reverse().find((m) => setsPrivate(bucket).test(m.sql));
     assert(
-      closing.sql.includes(bucket),
-      `${bucket} should be closed by ${closing.name}`,
+      establishing,
+      `no migration establishes ${bucket} as private - if the name is right, one is missing`,
     );
-    // Anything after that migration must not set it public again.
-    const later = migrations.filter((m) => m.name > closing.name);
-    for (const m of later) {
-      const reopens = new RegExp(
-        `'${bucket}'[\\s\\S]{0,200}?public\\s*=\\s*true|public\\s*=\\s*true[\\s\\S]{0,200}?'${bucket}'`,
-        'i',
-      );
+
+    for (const m of migrations.filter((x) => x.name > establishing.name)) {
       assert(
-        !reopens.test(m.sql),
+        !setsPublic(bucket).test(m.sql),
         `${m.name} appears to make ${bucket} public again after it was deliberately closed`,
       );
     }

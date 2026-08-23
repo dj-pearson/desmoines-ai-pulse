@@ -129,6 +129,30 @@ the two remaining ungated pushes in `useWebVitals.ts` and `analytics-tracker.ts`
 **2. "No third-party trackers are currently loaded" was false at the time of
 writing.** The GA4 tag had been in `index.html` well before this report.
 
+### What now stops this recurring (WEB-LEGAL-009)
+
+The corrections above say what was wrong. They did not, until now, say how
+anyone would know it stayed fixed - and a document that records a fix without
+recording its guard is the same artefact that produced these two errors.
+
+Two checks, deliberately of different kinds, because neither establishes the
+other:
+
+| Check | Asserts | Runs in |
+|---|---|---|
+| `scripts/check-consent-gate.mjs` | No static `<script src>` to googletagmanager; Consent Mode defaults `analytics_storage`, `ad_storage`, `ad_user_data`, `ad_personalization` to `denied` before the gtag.js URL appears; `__dmiLoadAnalytics` has exactly one caller | `pr-checks.yml`, a REQUIRED lane |
+| `tests/cookie-consent.spec.ts` | Real browser behaviour: no googletagmanager request and no `_ga` cookie with no choice, under GPC, or after rejection - and a load that does happen after opt-in | the smoke lane, which BLOCKS |
+
+The second one existed before this story and ran only in the quarantined broad
+suite, which `e2e.yml` runs non-blocking. It asserted the right thing and could
+not fail a pull request. Moving it into the blocking lane is most of what
+WEB-LEGAL-009 was for.
+
+The source check exists because the Playwright suite cannot see a second caller
+of the loader, and the browser check exists because no amount of source reading
+establishes what a browser actually requested - which is the lesson immediately
+below.
+
 **What generalizes.** Both errors came from reading source for evidence of a fix
 rather than observing behavior. `tests/cookie-consent.spec.ts` now asserts the
 behavior in a real browser: no request to googletagmanager.com and no `_ga`

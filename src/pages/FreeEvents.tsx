@@ -119,7 +119,13 @@ export default function FreeEvents() {
         canonicalUrl={getCanonicalUrl("/events/free")}
         pageType="website"
         breadcrumbs={breadcrumbs}
-        faqData={faqData}
+        // Withheld until the data lands (WEB-SEO-008). Every answer here
+        // interpolates a live count, so the loading render and the loaded
+        // render produce DIFFERENT FAQPage JSON - and react-helmet-async
+        // appends script children that differ rather than replacing them, so
+        // the prerender captured both. Production served two FAQPage blocks
+        // on this page, one saying "0 events" and one saying "8 events".
+        faqData={isLoading ? undefined : faqData}
         keywords={[
           "free events Des Moines",
           "no cost activities Des Moines",
@@ -160,7 +166,7 @@ export default function FreeEvents() {
             <div className="flex items-center gap-1">
               <DollarSign className="h-4 w-4" />
               <span className="line-through">$0.00</span>
-              <span className="font-semibold text-green-600 ml-2">Free Admission</span>
+              <span className="font-semibold text-green-700 ml-2">Free Admission</span>
             </div>
             <div className="flex items-center gap-1">
               <MapPin className="h-4 w-4" />
@@ -202,7 +208,7 @@ export default function FreeEvents() {
                 <div className="text-sm text-muted-foreground">Locations</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-green-600">
+                <div className="text-2xl font-bold text-green-700">
                   100%
                 </div>
                 <div className="text-sm text-muted-foreground">Free Admission</div>
