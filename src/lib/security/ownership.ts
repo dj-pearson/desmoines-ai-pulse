@@ -346,7 +346,20 @@ function getTableName(resourceType: OwnableResource): TableName | null {
     favorite: 'content_favorites',
     discussion: 'event_discussions',
     discussion_reply: 'discussion_replies',
-    photo: 'event_photos',
+    // Photos ARE discussions (WEB-QA-022). Every live path writes and reads
+    // event_discussions with message_type='photo' - EventPhotoUpload:90,
+    // EventPhotoGallery:17, EventSocialHub:188 - and migration 20260718000003
+    // committed the schema to that shape. event_photos exists with a nicer
+    // column set and has never held a row, so pointing ownership at it meant
+    // looking for the owner in a table that will never contain the photo.
+    //
+    // event_discussions carries user_id, which is what OWNERSHIP_COLUMNS
+    // expects, so the check works unchanged.
+    //
+    // NOT REACHABLE TODAY: useResourceOwnership has no component callers, so
+    // nothing exercises this map yet. That is why it is a latent wrong answer
+    // rather than a live denial - and why fixing it now costs nothing.
+    photo: 'event_discussions',
     campaign: 'campaigns',
     profile: 'profiles',
     saved_search: 'saved_searches',
