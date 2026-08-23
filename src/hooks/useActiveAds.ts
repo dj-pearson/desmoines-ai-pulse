@@ -71,11 +71,17 @@ export function useActiveAds(placementType: AdPlacement) {
       // active_ads_overload.sql drops the stray overload; this keeps the call
       // site unambiguous whether or not that migration has been applied yet,
       // and on any older client build that has not been redeployed.
-      const { data, error } = await supabase.rpc('get_active_ads', {
+      // NULL, not undefined, and the cast is why. The regenerated schema types
+      // these optional SQL parameters as `string | undefined`, but supabase-js
+      // JSON-stringifies the args and an undefined key is DROPPED - which
+      // sends the one-argument body again and reinstates the PGRST203
+      // ambiguity described above. Both parameters accept NULL in SQL.
+      const args = {
         p_placement_type: placementType as ServablePlacement,
         p_session_id: null,
         p_user_id: null,
-      });
+      } as unknown as Parameters<typeof supabase.rpc<'get_active_ads'>>[1];
+      const { data, error } = await supabase.rpc('get_active_ads', args);
       if (error) {
         // Log the PostgREST fields, not the bare object — a console-collapsed
         // `Object` hid this failure's actual code for weeks.

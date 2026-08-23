@@ -79,6 +79,7 @@ export type Database = {
       ad_clicks: {
         Row: {
           campaign_id: string
+          client_event_id: string | null
           creative_id: string
           date: string
           id: string
@@ -87,6 +88,7 @@ export type Database = {
         }
         Insert: {
           campaign_id: string
+          client_event_id?: string | null
           creative_id: string
           date?: string
           id?: string
@@ -95,6 +97,7 @@ export type Database = {
         }
         Update: {
           campaign_id?: string
+          client_event_id?: string | null
           creative_id?: string
           date?: string
           id?: string
@@ -129,6 +132,7 @@ export type Database = {
         Row: {
           browser: string | null
           campaign_id: string
+          client_event_id: string | null
           creative_id: string
           date: string
           device_type: string | null
@@ -145,6 +149,7 @@ export type Database = {
         Insert: {
           browser?: string | null
           campaign_id: string
+          client_event_id?: string | null
           creative_id: string
           date?: string
           device_type?: string | null
@@ -161,6 +166,7 @@ export type Database = {
         Update: {
           browser?: string | null
           campaign_id?: string
+          client_event_id?: string | null
           creative_id?: string
           date?: string
           device_type?: string | null
@@ -1009,6 +1015,53 @@ export type Database = {
         }
         Relationships: []
       }
+      apple_notification_log: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          id: string
+          notification_type: string | null
+          notification_uuid: string
+          original_transaction_id: string | null
+          processed_at: string
+          status: string
+          subtype: string | null
+          user_subscription_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          notification_type?: string | null
+          notification_uuid: string
+          original_transaction_id?: string | null
+          processed_at?: string
+          status: string
+          subtype?: string | null
+          user_subscription_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          notification_type?: string | null
+          notification_uuid?: string
+          original_transaction_id?: string | null
+          processed_at?: string
+          status?: string
+          subtype?: string | null
+          user_subscription_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apple_notification_log_user_subscription_id_fkey"
+            columns: ["user_subscription_id"]
+            isOneToOne: false
+            referencedRelation: "user_subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       archived_events: {
         Row: {
           ai_writeup: string | null
@@ -1186,45 +1239,6 @@ export type Database = {
           is_active?: boolean | null
           updated_at?: string | null
           webhook_url?: string
-        }
-        Relationships: []
-      }
-      apple_notification_log: {
-        Row: {
-          created_at: string
-          error_message: string | null
-          id: string
-          notification_type: string | null
-          notification_uuid: string
-          original_transaction_id: string | null
-          processed_at: string
-          status: string
-          subtype: string | null
-          user_subscription_id: string | null
-        }
-        Insert: {
-          created_at?: string
-          error_message?: string | null
-          id?: string
-          notification_type?: string | null
-          notification_uuid: string
-          original_transaction_id?: string | null
-          processed_at?: string
-          status: string
-          subtype?: string | null
-          user_subscription_id?: string | null
-        }
-        Update: {
-          created_at?: string
-          error_message?: string | null
-          id?: string
-          notification_type?: string | null
-          notification_uuid?: string
-          original_transaction_id?: string | null
-          processed_at?: string
-          status?: string
-          subtype?: string | null
-          user_subscription_id?: string | null
         }
         Relationships: []
       }
@@ -3343,6 +3357,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      cron_health_snapshot: {
+        Row: {
+          active: boolean
+          captured_at: string
+          failed: number
+          jobname: string
+          last_error: string | null
+          last_failure: string | null
+          last_success: string | null
+          runs: number
+          schedule: string
+          succeeded: number
+          window_hours: number
+        }
+        Insert: {
+          active: boolean
+          captured_at?: string
+          failed: number
+          jobname: string
+          last_error?: string | null
+          last_failure?: string | null
+          last_success?: string | null
+          runs: number
+          schedule: string
+          succeeded: number
+          window_hours: number
+        }
+        Update: {
+          active?: boolean
+          captured_at?: string
+          failed?: number
+          jobname?: string
+          last_error?: string | null
+          last_failure?: string | null
+          last_success?: string | null
+          runs?: number
+          schedule?: string
+          succeeded?: number
+          window_hours?: number
+        }
+        Relationships: []
       }
       cron_logs: {
         Row: {
@@ -6105,11 +6161,56 @@ export type Database = {
         }
         Relationships: []
       }
+      menu_scrape_attempts: {
+        Row: {
+          confidence: number | null
+          created_at: string
+          detail: string | null
+          id: string
+          items_found: number
+          method: string
+          outcome: string
+          restaurant_id: string
+          url: string
+        }
+        Insert: {
+          confidence?: number | null
+          created_at?: string
+          detail?: string | null
+          id?: string
+          items_found?: number
+          method: string
+          outcome: string
+          restaurant_id: string
+          url: string
+        }
+        Update: {
+          confidence?: number | null
+          created_at?: string
+          detail?: string | null
+          id?: string
+          items_found?: number
+          method?: string
+          outcome?: string
+          restaurant_id?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "menu_scrape_attempts_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       newsletter_campaigns: {
         Row: {
           body_html: string
           bounces: number
           campaign_type: string | null
+          claimed_at: string | null
           clicks: number
           complaints: number
           created_at: string
@@ -6132,6 +6233,7 @@ export type Database = {
           body_html: string
           bounces?: number
           campaign_type?: string | null
+          claimed_at?: string | null
           clicks?: number
           complaints?: number
           created_at?: string
@@ -6154,6 +6256,7 @@ export type Database = {
           body_html?: string
           bounces?: number
           campaign_type?: string | null
+          claimed_at?: string | null
           clicks?: number
           complaints?: number
           created_at?: string
@@ -6730,7 +6833,15 @@ export type Database = {
           subscription_id?: string | null
           user_subscription_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "play_rtdn_log_user_subscription_id_fkey"
+            columns: ["user_subscription_id"]
+            isOneToOne: false
+            referencedRelation: "user_subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       playgrounds: {
         Row: {
@@ -7628,9 +7739,12 @@ export type Database = {
       restaurant_menus: {
         Row: {
           captured_at: string
+          confidence: number | null
           created_at: string
+          extraction_method: string | null
           id: string
           is_current: boolean
+          item_count: number | null
           notes: string | null
           raw_text: string | null
           restaurant_id: string
@@ -7641,9 +7755,12 @@ export type Database = {
         }
         Insert: {
           captured_at?: string
+          confidence?: number | null
           created_at?: string
+          extraction_method?: string | null
           id?: string
           is_current?: boolean
+          item_count?: number | null
           notes?: string | null
           raw_text?: string | null
           restaurant_id: string
@@ -7654,9 +7771,12 @@ export type Database = {
         }
         Update: {
           captured_at?: string
+          confidence?: number | null
           created_at?: string
+          extraction_method?: string | null
           id?: string
           is_current?: boolean
+          item_count?: number | null
           notes?: string | null
           raw_text?: string | null
           restaurant_id?: string
@@ -7764,6 +7884,7 @@ export type Database = {
           sponsored_until: string | null
           status: string | null
           updated_at: string | null
+          view_count: number
           website: string | null
           writeup_generated_at: string | null
           writeup_prompt_used: string | null
@@ -7814,6 +7935,7 @@ export type Database = {
           sponsored_until?: string | null
           status?: string | null
           updated_at?: string | null
+          view_count?: number
           website?: string | null
           writeup_generated_at?: string | null
           writeup_prompt_used?: string | null
@@ -7864,6 +7986,7 @@ export type Database = {
           sponsored_until?: string | null
           status?: string | null
           updated_at?: string | null
+          view_count?: number
           website?: string | null
           writeup_generated_at?: string | null
           writeup_prompt_used?: string | null
@@ -10303,6 +10426,7 @@ export type Database = {
         Row: {
           action: string
           anon_id: string | null
+          client_event_id: string | null
           created_at: string
           id: string
           item_id: string
@@ -10314,6 +10438,7 @@ export type Database = {
         Insert: {
           action: string
           anon_id?: string | null
+          client_event_id?: string | null
           created_at?: string
           id?: string
           item_id: string
@@ -10325,6 +10450,7 @@ export type Database = {
         Update: {
           action?: string
           anon_id?: string | null
+          client_event_id?: string | null
           created_at?: string
           id?: string
           item_id?: string
@@ -10973,7 +11099,7 @@ export type Database = {
       }
       user_analytics: {
         Row: {
-          content_id: string
+          content_id: string | null
           content_type: string
           created_at: string
           device_type: string | null
@@ -10989,7 +11115,7 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
-          content_id: string
+          content_id?: string | null
           content_type: string
           created_at?: string
           device_type?: string | null
@@ -11005,7 +11131,7 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
-          content_id?: string
+          content_id?: string | null
           content_type?: string
           created_at?: string
           device_type?: string | null
@@ -11954,6 +12080,7 @@ export type Database = {
           apple_original_transaction_id: string | null
           apple_product_id: string | null
           apple_transaction_id: string | null
+          billing_interval: string | null
           cancel_at_period_end: boolean | null
           canceled_at: string | null
           created_at: string | null
@@ -11977,6 +12104,7 @@ export type Database = {
           apple_original_transaction_id?: string | null
           apple_product_id?: string | null
           apple_transaction_id?: string | null
+          billing_interval?: string | null
           cancel_at_period_end?: boolean | null
           canceled_at?: string | null
           created_at?: string | null
@@ -12000,6 +12128,7 @@ export type Database = {
           apple_original_transaction_id?: string | null
           apple_product_id?: string | null
           apple_transaction_id?: string | null
+          billing_interval?: string | null
           cancel_at_period_end?: boolean | null
           canceled_at?: string | null
           created_at?: string | null
@@ -12791,28 +12920,6 @@ export type Database = {
       }
     }
     Functions: {
-      // Hand-added with migration 20260822000011 (WEB-QA-019 AC2). Remove when
-      // the generated types are next regenerated against production.
-      batch_increment_views: {
-        Args: { event_ids: string[] }
-        Returns: undefined
-      }
-      get_content_view_stats: {
-        Args: { p_content_id: string; p_content_type: string }
-        Returns: {
-          recent_views_24h: number
-          total_views: number
-          trending_score: number
-        }[]
-      }
-      increment_event_view: {
-        Args: { event_id: string }
-        Returns: undefined
-      }
-      increment_restaurant_view: {
-        Args: { restaurant_id: string }
-        Returns: undefined
-      }
       _postgis_deprecate: {
         Args: { newname: string; oldname: string; version: string }
         Returns: undefined
@@ -12953,6 +13060,55 @@ export type Database = {
         Args: { delete_after_days?: number }
         Returns: Json
       }
+      attractions_within_radius: {
+        Args: {
+          center_lat: number
+          center_lng: number
+          limit_count?: number
+          radius_miles?: number
+        }
+        Returns: {
+          accessibility_notes: string | null
+          address: string | null
+          created_at: string | null
+          description: string | null
+          geo_faq: Json | null
+          geo_key_facts: string[] | null
+          geo_summary: string | null
+          heal_attempts: number
+          hours: Json | null
+          hours_summary: string | null
+          id: string
+          image_checked_at: string | null
+          image_url: string | null
+          is_active: boolean
+          is_featured: boolean | null
+          is_free: boolean | null
+          is_indoor: boolean | null
+          is_kid_friendly: boolean | null
+          is_sponsored: boolean
+          latitude: number | null
+          location: string | null
+          longitude: number | null
+          name: string
+          needs_manual_verification: boolean
+          rating: number | null
+          seo_description: string | null
+          seo_h1: string | null
+          seo_keywords: string[] | null
+          seo_title: string | null
+          sponsored_until: string | null
+          type: string
+          updated_at: string | null
+          website: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "attractions"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       award_user_xp: {
         Args: {
           p_activity_type: string
@@ -12972,34 +13128,27 @@ export type Database = {
           success: boolean
         }[]
       }
+      batch_increment_views: {
+        Args: { event_ids: string[] }
+        Returns: undefined
+      }
       bump_newsletter_campaign_counter: {
         Args: { p_campaign_id: string; p_field: string }
         Returns: undefined
       }
-      calculate_campaign_pricing:
-        | {
-            Args: {
-              p_days_count: number
-              p_placement_type: Database["public"]["Enums"]["placement_type"]
-            }
-            Returns: {
-              base_price: number
-              daily_price: number
-              demand_multiplier: number
-              total_price: number
-              traffic_multiplier: number
-            }[]
-          }
-        | {
-            Args: { p_days_count: number; p_placement_type: string }
-            Returns: {
-              daily_price: number
-              discount_percent: number
-              original_daily_price: number
-              total_price: number
-              traffic_multiplier: number
-            }[]
-          }
+      calculate_campaign_pricing: {
+        Args: {
+          p_days_count: number
+          p_placement_type: Database["public"]["Enums"]["placement_type"]
+        }
+        Returns: {
+          base_price: number
+          daily_price: number
+          demand_multiplier: number
+          total_price: number
+          traffic_multiplier: number
+        }[]
+      }
       calculate_event_popularity_score: {
         Args: {
           days_until_event: number
@@ -13162,6 +13311,22 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      cron_health: {
+        Args: never
+        Returns: {
+          active: boolean
+          captured_at: string
+          failed: number
+          jobname: string
+          last_error: string
+          last_failure: string
+          last_success: string
+          runs: number
+          schedule: string
+          succeeded: number
+          window_hours: number
+        }[]
       }
       current_user_email: { Args: never; Returns: string }
       db_health_report: {
@@ -13345,6 +13510,12 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      filter_values: {
+        Args: { p_source: string }
+        Returns: {
+          value: string
+        }[]
       }
       find_duplicate_events: {
         Args: { p_max?: number; p_threshold?: number }
@@ -13572,35 +13743,22 @@ export type Database = {
         Returns: boolean
       }
       geomfromewkt: { Args: { "": string }; Returns: unknown }
-      get_active_ads:
-        | {
-            Args: {
-              p_placement_type: Database["public"]["Enums"]["placement_type"]
-              p_session_id?: string
-              p_user_id?: string
-            }
-            Returns: {
-              campaign_id: string
-              creative_id: string
-              cta_text: string
-              description: string
-              image_url: string
-              link_url: string
-              title: string
-            }[]
-          }
-        | {
-            Args: { p_placement_type: string }
-            Returns: {
-              campaign_id: string
-              creative_id: string
-              cta_text: string
-              description: string
-              image_url: string
-              link_url: string
-              title: string
-            }[]
-          }
+      get_active_ads: {
+        Args: {
+          p_placement_type: Database["public"]["Enums"]["placement_type"]
+          p_session_id?: string
+          p_user_id?: string
+        }
+        Returns: {
+          campaign_id: string
+          creative_id: string
+          cta_text: string
+          description: string
+          image_url: string
+          link_url: string
+          title: string
+        }[]
+      }
       get_activity_feed: {
         Args: { p_limit?: number; p_user_id?: string }
         Returns: {
@@ -13627,6 +13785,14 @@ export type Database = {
           total_cost: number
           total_impressions: number
           unique_viewers: number
+        }[]
+      }
+      get_content_view_stats: {
+        Args: { p_content_id: string; p_content_type: string }
+        Returns: {
+          recent_views_24h: number
+          total_views: number
+          trending_score: number
         }[]
       }
       get_database_metrics: { Args: never; Returns: Json }
@@ -13913,12 +14079,17 @@ export type Database = {
       }
       gettransactionid: { Args: never; Returns: unknown }
       hide_stale_events: { Args: { hide_after_days?: number }; Returns: Json }
+      increment_event_view: { Args: { event_id: string }; Returns: undefined }
       increment_media_views: {
         Args: { p_media_asset_id: string }
         Returns: undefined
       }
       increment_pseo_page_views: {
         Args: { page_slug: string }
+        Returns: undefined
+      }
+      increment_restaurant_view: {
+        Args: { restaurant_id: string }
         Returns: undefined
       }
       is_account_locked: { Args: { p_email: string }; Returns: boolean }
@@ -13989,6 +14160,21 @@ export type Database = {
           similarity: number
           source: string
           title: string
+        }[]
+      }
+      menu_scrape_health: {
+        Args: { days_back?: number }
+        Returns: {
+          confidence: number
+          current_item_count: number
+          extraction_method: string
+          has_current_menu: boolean
+          last_attempt_at: string
+          last_detail: string
+          last_outcome: string
+          menu_url: string
+          restaurant_id: string
+          restaurant_name: string
         }[]
       }
       merge_duplicate_content: {
@@ -14064,6 +14250,10 @@ export type Database = {
       postgis_wagyu_version: { Args: never; Returns: string }
       process_campaign_lifecycle: { Args: never; Returns: Json }
       purge_old_events: { Args: { retention_months?: number }; Returns: Json }
+      reclaim_stuck_newsletter_campaigns: {
+        Args: { p_older_than_minutes?: number }
+        Returns: number
+      }
       record_login_attempt: {
         Args: {
           p_email: string
@@ -14072,6 +14262,10 @@ export type Database = {
           p_user_agent: string
         }
         Returns: undefined
+      }
+      refresh_cron_health_snapshot: {
+        Args: { window_hours?: number }
+        Returns: number
       }
       refresh_event_promotion_analytics: { Args: never; Returns: undefined }
       refresh_oauth_token: {
@@ -14848,6 +15042,31 @@ export type Database = {
         Returns: {
           error_message: string
           is_valid: boolean
+        }[]
+      }
+      voting_category_tallies: {
+        Args: never
+        Returns: {
+          category_id: string
+          vote_count: number
+        }[]
+      }
+      voting_results: {
+        Args: { p_category_id: string }
+        Returns: {
+          custom_entry: string
+          entity_id: string
+          entity_type: string
+          vote_count: number
+        }[]
+      }
+      voting_winners: {
+        Args: never
+        Returns: {
+          category_id: string
+          category_name: string
+          entity_id: string
+          vote_count: number
         }[]
       }
     }

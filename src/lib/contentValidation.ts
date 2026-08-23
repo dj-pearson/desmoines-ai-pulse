@@ -256,9 +256,11 @@ export function validateEvent(event: EventInput): ContentValidationReport {
 
   // Check for duplicate indicator (if title is too generic)
   const genericWords = ['event', 'show', 'performance', 'concert'];
-  if (event.title && genericWords.some(word =>
-    event.title.toLowerCase().trim() === word
-  )) {
+  // Bound to a local first: narrowing `event.title` does not survive into
+  // the closure, so the check compiled only while the property was typed
+  // loosely enough to hide it.
+  const title = event.title;
+  if (title && genericWords.some(word => title.toLowerCase().trim() === word)) {
     results.push({
       field: 'title',
       isValid: false,
