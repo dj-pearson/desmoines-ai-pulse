@@ -131,6 +131,17 @@ export default function Hotels() {
     [hotels]
   );
 
+  // Two full rows of the xl:grid-cols-3 grid below. /stay prerendered
+  // 3,773 elements inside #root against a median of 496 across all 35
+  // routes, and Lighthouse flags above ~1,500 - paid in HTML parse, DOM
+  // memory and hydration, all main-thread (WEB-PERF-023).
+  //
+  // ONLY THE RENDERED LIST IS CAPPED. totalCount comes from the query and is
+  // what the result counter reads, so no number on the page changes.
+  const VISIBLE_HOTELS = 24;
+  const visibleHotels = hotels.slice(0, VISIBLE_HOTELS);
+  const hiddenHotelCount = hotels.length - visibleHotels.length;
+
   const activeFilterCount =
     selectedAreas.length +
     selectedPriceRanges.length +
@@ -473,11 +484,21 @@ export default function Hotels() {
                 <>
                   {hotels.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                      {hotels.map((hotel) => (
+                      {visibleHotels.map((hotel) => (
                         <HotelCard key={hotel.id} hotel={hotel} />
                       ))}
                     </div>
-                  ) : debouncedSearch || activeFilterCount > 0 ? (
+                  ) : null}
+                  {hiddenHotelCount > 0 && (
+                    // Say what is not shown. A grid that stops at 36 without
+                    // saying so reads as "there are 36 hotels", which is how
+                    // a truncation becomes a fact (WEB-PERF-023).
+                    <p className="mt-6 text-sm text-muted-foreground">
+                      Showing the first {VISIBLE_HOTELS} of {hotels.length} hotels. Use search or
+                      the filters above to narrow the list.{' '}
+                    </p>
+                  )}
+                  {hotels.length === 0 && (debouncedSearch || activeFilterCount > 0) ? (
                     <EmptyState
                       icon={Building2}
                       title="No hotels match your filters"
