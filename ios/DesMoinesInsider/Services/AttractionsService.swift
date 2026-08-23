@@ -222,3 +222,14 @@ actor AttractionsService {
         }
     }
 }
+
+/// What SearchViewModel needs from AttractionsService (IOS-AUDIT-TEST-006).
+///
+/// One method. There is no fuzzy fallback for attractions, which is itself worth
+/// noticing: an attractions search that returns nothing returns nothing, while
+/// events and restaurants get a second, looser attempt.
+protocol AttractionSearchProviding: Sendable {
+    func fetchAttractions(query: AttractionsService.AttractionsQuery) async throws -> AttractionsService.AttractionsResponse
+}
+
+extension AttractionsService: AttractionSearchProviding {}

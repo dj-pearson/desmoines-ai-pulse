@@ -34,6 +34,26 @@ final class SearchViewModel {
         }
     }
 
+    // MARK: - Dependencies
+
+    private let events: EventSearchProviding
+    private let restaurants: RestaurantSearchProviding
+    private let attractions: AttractionSearchProviding
+
+    /// Defaults to the shared services, so no call site changes. The
+    /// parameters exist so a test can hold a search open and observe what is
+    /// on screen while it runs - which is the only way IOS-AUDIT-UX-054's
+    /// "results stay visible" can be asserted (IOS-AUDIT-TEST-006).
+    init(
+        events: EventSearchProviding = EventsService.shared,
+        restaurants: RestaurantSearchProviding = RestaurantsService.shared,
+        attractions: AttractionSearchProviding = AttractionsService.shared
+    ) {
+        self.events = events
+        self.restaurants = restaurants
+        self.attractions = attractions
+    }
+
     // MARK: - Search
 
     private var searchTask: Task<Void, Never>?
@@ -125,11 +145,11 @@ final class SearchViewModel {
 
     private func searchEvents(_ query: String) async -> [Event] {
         do {
-            let response = try await EventsService.shared.fetchEvents(
+            let response = try await events.fetchEvents(
                 query: .init(searchText: query, limit: 20)
             )
             if response.events.isEmpty {
-                return try await EventsService.shared.fuzzySearchEvents(query: query)
+                return try await events.fuzzySearchEvents(query: query)
             }
             return response.events
         } catch {
@@ -139,11 +159,11 @@ final class SearchViewModel {
 
     private func searchRestaurants(_ query: String) async -> [Restaurant] {
         do {
-            let response = try await RestaurantsService.shared.fetchRestaurants(
+            let response = try await restaurants.fetchRestaurants(
                 query: .init(searchText: query, limit: 20)
             )
             if response.restaurants.isEmpty {
-                return try await RestaurantsService.shared.fuzzySearchRestaurants(query: query)
+                return try await restaurants.fuzzySearchRestaurants(query: query)
             }
             return response.restaurants
         } catch {
@@ -153,7 +173,7 @@ final class SearchViewModel {
 
     private func searchAttractions(_ query: String) async -> [Attraction] {
         do {
-            let response = try await AttractionsService.shared.fetchAttractions(
+            let response = try await attractions.fetchAttractions(
                 query: .init(searchText: query, limit: 20)
             )
             return response.attractions

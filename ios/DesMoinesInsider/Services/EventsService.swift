@@ -345,3 +345,21 @@ extension EventDetailProviding {
 }
 
 extension EventsService: EventDetailProviding {}
+
+/// What SearchViewModel needs from EventsService (IOS-AUDIT-TEST-006).
+///
+/// Separate from `EventDetailProviding` on purpose: two screens, two roles, two
+/// small protocols. Merging them would give each fake methods it never uses,
+/// which is how role interfaces turn back into a mirror of the service.
+protocol EventSearchProviding: Sendable {
+    func fetchEvents(query: EventsService.EventsQuery) async throws -> EventsService.EventsResponse
+    func fuzzySearchEvents(query: String, limit: Int) async throws -> [Event]
+}
+
+extension EventSearchProviding {
+    func fuzzySearchEvents(query: String) async throws -> [Event] {
+        try await fuzzySearchEvents(query: query, limit: 20)
+    }
+}
+
+extension EventsService: EventSearchProviding {}

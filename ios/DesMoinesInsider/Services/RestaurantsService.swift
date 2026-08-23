@@ -325,3 +325,17 @@ actor RestaurantsService {
         try await FilterValues.fetch(source: .restaurantLocation, client: db())
     }
 }
+
+/// What SearchViewModel needs from RestaurantsService (IOS-AUDIT-TEST-006).
+protocol RestaurantSearchProviding: Sendable {
+    func fetchRestaurants(query: RestaurantsService.RestaurantsQuery) async throws -> RestaurantsService.RestaurantsResponse
+    func fuzzySearchRestaurants(query: String, limit: Int) async throws -> [Restaurant]
+}
+
+extension RestaurantSearchProviding {
+    func fuzzySearchRestaurants(query: String) async throws -> [Restaurant] {
+        try await fuzzySearchRestaurants(query: query, limit: 20)
+    }
+}
+
+extension RestaurantsService: RestaurantSearchProviding {}
