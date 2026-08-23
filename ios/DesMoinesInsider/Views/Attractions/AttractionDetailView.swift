@@ -167,19 +167,11 @@ struct AttractionDetailView: View {
                 }
             }
 
-            // Website
-            if let url = attraction.websiteURL {
-                Divider()
-                HStack(spacing: 10) {
-                    Image(systemName: "safari")
-                        .font(.title3)
-                        .foregroundStyle(Color.accentColor)
-                        .frame(width: 28)
-
-                    Link("Visit Website", destination: url)
-                        .appText(.bodySmall)
-                }
-            }
+            // The website row that used to sit here was the SECOND link to
+            // the same URL on this screen - actionButtons already renders a
+            // prominent "Website" button. Two controls doing the same thing
+            // make a reader stop and check whether they differ
+            // (IOS-AUDIT-UX-057).
         }
         .padding()
     }

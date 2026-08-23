@@ -160,6 +160,15 @@ final class DiscoverViewModel {
     }
     private(set) var filter: DiscoverFilterContext
     private(set) var deck: [SwipeItem] = []
+
+    /// A liked card could not be saved for a reason that is not the free-tier
+    /// cap. The cap has its own app-level paywall, so surfacing it here too
+    /// would double up (IOS-AUDIT-UX-057).
+    private(set) var favoriteSaveFailed = false
+
+    func acknowledgeFavoriteFailure() {
+        favoriteSaveFailed = false
+    }
     private(set) var isLoading = false
 
     /// True when the last batch fetch threw (IOS-AUDIT-UX-051 AC3).
@@ -332,8 +341,20 @@ final class DiscoverViewModel {
                 }
             }
         } catch {
-            // Hitting the free-tier favorites cap is the realistic failure
-            // here. Swallow silently — DiscoverView surfaces it via toast.
+            // THE CAP IS ALREADY HANDLED, and not by this view. enforceFavoritesCap
+            // posts .favoritesLimitReached, which MainTabView turns into the
+            // app-level upsell paywall - so a toast here would be a second,
+            // redundant message on top of it. That is what
+            // FavoritesService.isLimitReached exists for.
+            //
+            // EVERYTHING ELSE was swallowed with it: a dropped connection or an
+            // expired session meant the card animated away as a save and nothing
+            // was saved, with no output of any kind. The previous comment claimed
+            // DiscoverView surfaced this via toast; DiscoverView declares a toast
+            // and assigns it nowhere (IOS-AUDIT-UX-057).
+            if !FavoritesService.isLimitReached(error) {
+                favoriteSaveFailed = true
+            }
         }
     }
 

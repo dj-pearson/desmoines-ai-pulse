@@ -19,6 +19,9 @@ struct DashboardView: View {
     @State private var isLoading = true
     @State private var detailTarget: DetailTarget?
     @State private var showTripPlanner = false
+    /// Surfaces a failed recently-viewed lookup. Nothing else on this
+    /// screen reports failure to the user (IOS-AUDIT-UX-057).
+    @State private var toast: ToastMessage?
 
     enum DetailTarget: Identifiable, Hashable {
         case event(Event)
@@ -86,6 +89,7 @@ struct DashboardView: View {
             TripPlannerView(showsCloseButton: true)
         }
         .task { await load() }
+        .toastOverlay(message: $toast)
         .refreshable { await load() }
     }
 
@@ -286,6 +290,12 @@ struct DashboardView: View {
                     break
                 }
             } catch {
+                // A recently-viewed row whose listing has since been removed, or
+                // a dropped connection, used to do nothing at all: the tap
+                // registered, the row highlighted, and no screen opened. In
+                // release the log below is compiled out, so there was literally
+                // no output (IOS-AUDIT-UX-057).
+                toast = .error("Couldn't open that. It may have been removed.")
                 #if DEBUG
                 AppLogger.network.warning("Dashboard openRecent failed: \(error.localizedDescription)")
                 #endif

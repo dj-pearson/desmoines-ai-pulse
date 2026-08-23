@@ -160,7 +160,18 @@ struct GroupSessionView: View {
                 .padding(.horizontal, 18)
                 .padding(.vertical, 8)
                 .background(Color.accentColor.opacity(0.15), in: RoundedRectangle(cornerRadius: 12))
+                .textSelection(.enabled)
                 .accessibilityLabel("Session code: \(session.code)")
+            // The code is the entire point of the screen and had to be
+            // transcribed by hand or read aloud (IOS-AUDIT-UX-057).
+            Button {
+                UIPasteboard.general.string = session.code
+                HapticFeedback.shared.selection()
+            } label: {
+                Label("Copy code", systemImage: "doc.on.doc")
+                    .font(.subheadline.weight(.semibold))
+            }
+            .buttonStyle(.bordered)
             Text("Share this code with friends. Sessions expire after 4 hours.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)

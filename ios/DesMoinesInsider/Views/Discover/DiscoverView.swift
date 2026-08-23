@@ -105,6 +105,14 @@ struct DiscoverView: View {
             .navigationDestination(for: Restaurant.self) { RestaurantDetailView(restaurant: $0) }
             .task { await viewModel.loadInitial() }
             .toastOverlay(message: $toast)
+            // The toast state existed and nothing ever assigned it
+            // (IOS-AUDIT-UX-057). A liked card that failed to save animated away
+            // exactly like one that saved.
+            .onChange(of: viewModel.favoriteSaveFailed) { _, failed in
+                guard failed else { return }
+                toast = .error("Couldn't save that one. Check your connection.")
+                viewModel.acknowledgeFavoriteFailure()
+            }
             .sheet(isPresented: Binding(get: { !hasSeenIntro }, set: { hasSeenIntro = !$0 })) {
                 introSheet
                     .presentationDetents([.medium])
