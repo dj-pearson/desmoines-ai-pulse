@@ -82,6 +82,10 @@ jobs:
       # the right of erasure - they had drifted by 57 tables, and the export
       # named three that do not exist.
       - run: deno test --allow-read supabase/functions/_tests/export-user-data.test.ts
+      # XPLAT-008. Two admin diagnostics that returned 404 on every press.
+      # test-article-webhook POSTs to a caller-supplied URL, so the SSRF guard
+      # running BEFORE the request is the assertion that matters.
+      - run: deno test --allow-read supabase/functions/_tests/admin-diagnostics.test.ts
       # WEB-SEC-024. scrapeUrl is the single entry point for every ingestion path
       # and checked nothing, so a site that had asked not to be crawled was
       # crawled anyway. Found while drafting the Privacy Policy's sources section:

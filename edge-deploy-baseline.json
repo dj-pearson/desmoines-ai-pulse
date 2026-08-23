@@ -61,6 +61,8 @@
     "support-kb-embed",
     "support-kb-search",
     "support-ticket-reclassify",
+    "test-ai-model",
+    "test-article-webhook",
     "web-vitals-regression-check",
     "web-vitals-weekly"
   ]
