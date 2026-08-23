@@ -11,3 +11,12 @@
 # CLAUDE.md a public route needs its 301 in place for at least one release
 # cycle before the route itself is removed.
 /weekend  /events/this-weekend  301
+
+# WEB-SEO-019: two restaurants existed twice at the same address. The row that
+# Google had indexed was the one with the -2 slug in both cases - the clean
+# slugs had zero impressions in the whole GSC window - so the duplicate that
+# was removed is the clean-slugged one, and these keep its URL alive.
+# Renaming the survivor instead would have moved a URL that ranks at position
+# 11.9 with 388 impressions, which is the one thing worth not doing here.
+/restaurants/daves-hot-chicken   /restaurants/daves-hot-chicken-2   301
+/restaurants/outback-steakhouse  /restaurants/outback-steakhouse-2  301
