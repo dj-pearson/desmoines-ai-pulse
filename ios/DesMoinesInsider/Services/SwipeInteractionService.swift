@@ -23,7 +23,9 @@ final class SwipeInteractionService {
     private var swipedOrder: [String] = []
 
     /// Retain the most recent N swipes for dedupe; older ones age out.
-    private static let maxSwipedKeys = 1000
+    /// Cap on remembered swipes. Non-private so the ratchet can be asserted
+    /// against the real value rather than a literal copied into a test.
+    nonisolated static let maxSwipedKeys = 1000
 
     private let supabase: SupabaseClient? = SupabaseService.shared.client
     private let localKey = "discover.swipedItems.v1"
@@ -35,8 +37,25 @@ final class SwipeInteractionService {
 
     private init() {
         // Tolerate the legacy unordered array; cap on load.
-        swipedOrder = Self.loadLocalArray(localKey).suffix(Self.maxSwipedKeys)
+        swipedOrder = Self.trimmed(Self.loadLocalArray(localKey), cap: Self.maxSwipedKeys)
         swipedItemKeys = Set(swipedOrder)
+    }
+
+    /// Keep at most `cap` entries, dropping the OLDEST first.
+    ///
+    /// Extracted so the cap can be asserted directly (IOS-AUDIT-TEST-005).
+    /// Recording a swipe used to compute the overflow inline with index
+    /// arithmetic - `prefix(overflow)` to find the stale keys, then
+    /// `removeFirst(overflow)` - which is correct and is the kind of expression
+    /// that goes wrong by one and silently leaks unbounded history into
+    /// UserDefaults, since nothing downstream would notice a list that never
+    /// stops growing.
+    ///
+    /// Dropping the oldest rather than the newest is what makes the cap behave
+    /// like a recency window: the whole point of this list is "have I already
+    /// seen this card", and the answer matters most for what was just swiped.
+    nonisolated static func trimmed(_ order: [String], cap: Int) -> [String] {
+        order.count <= cap ? order : Array(order.suffix(cap))
     }
 
     // MARK: - Public API
@@ -58,13 +77,15 @@ final class SwipeInteractionService {
         sourceContext: [String: [String]]? = nil
     ) async {
         let key = Self.key(itemType: itemType, itemId: itemId)
-        if swipedItemKeys.insert(key).inserted {
-            swipedOrder.append(key)
-            if swipedOrder.count > Self.maxSwipedKeys {
-                let overflow = swipedOrder.count - Self.maxSwipedKeys
-                for stale in swipedOrder.prefix(overflow) { swipedItemKeys.remove(stale) }
-                swipedOrder.removeFirst(overflow)
-            }
+        if !swipedItemKeys.contains(key) {
+            swipedOrder = Self.trimmed(swipedOrder + [key], cap: Self.maxSwipedKeys)
+            // Rebuilt from the trimmed order rather than patched alongside it.
+            // The set and the array are the same list seen two ways, and the
+            // only way they can disagree is if one is updated and the other is
+            // not - which is precisely what the removed index arithmetic was
+            // doing by hand. A thousand-element Set rebuild per swipe is free at
+            // the rate a human swipes.
+            swipedItemKeys = Set(swipedOrder)
             Self.saveLocal(localKey, order: swipedOrder)
         }
 
