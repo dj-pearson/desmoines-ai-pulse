@@ -231,7 +231,9 @@ serve(async (req) => {
     // Fetch restaurants
     const { data: restaurants, error: restaurantsError } = await supabaseClient
       .from('restaurants')
-      .select('id, name, description, cuisine, location, price_range, rating, image_url, hours, latitude, longitude')
+      // `hours` DROPPED: restaurants has no opening-hours column, so asking for it
+      // failed the whole select with 42703 and the planner got zero restaurants.
+      .select('id, name, description, cuisine, location, price_range, rating, image_url, latitude, longitude')
       .order('rating', { ascending: false, nullsFirst: false })
       .limit(50);
 
@@ -240,7 +242,10 @@ serve(async (req) => {
     // Fetch attractions
     const { data: attractions, error: attractionsError } = await supabaseClient
       .from('attractions')
-      .select('id, name, description, category, location, hours, admission, website, image_url, latitude, longitude')
+      // category -> type (attractions stores the kind in `type`), and admission ->
+      // is_free, the only cost signal the table carries. `hours` DOES exist here,
+      // unlike on restaurants, so it stays.
+      .select('id, name, description, type, location, hours, is_free, website, image_url, latitude, longitude')
       .limit(50);
 
     if (attractionsError) console.error('Error fetching attractions:', attractionsError);
@@ -271,9 +276,12 @@ serve(async (req) => {
       id: a.id,
       name: a.name,
       description: (a.description || '').substring(0, 150),
-      category: a.category,
+      category: a.type,
       location: a.location,
-      admission: a.admission,
+      // The model is told free/paid rather than a price string, because that is
+      // what the schema actually knows. Inventing an admission line would be worse
+      // than omitting one in an itinerary the user acts on.
+      admission: a.is_free === true ? 'Free' : a.is_free === false ? 'Paid admission' : null,
     }));
 
     // Build preferences context
