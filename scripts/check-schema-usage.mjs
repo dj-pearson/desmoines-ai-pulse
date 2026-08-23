@@ -283,10 +283,22 @@ function scanFile(file, schema, findings) {
     const line = lineOf(src, m.index);
 
     // `.from()` also exists on the storage client; only flag names we can
-    // attribute to PostgREST. A name absent from the schema that is also
-    // reached via `.storage` on the same line is skipped.
-    const lineText = src.split('\n')[line - 1] ?? '';
-    if (/\.storage\b/.test(lineText)) continue;
+    // attribute to PostgREST.
+    //
+    // THE RECEIVER IS WHAT MATTERS, NOT THE LINE. This used to test whether
+    // `.storage` appeared on the SAME line, and every real storage call in this
+    // repo is formatted across two:
+    //     const { error } = await supabase.storage
+    //       .from("media")
+    // so all of them were reported as missing tables. media, thumbnails and
+    // videos are real buckets - `select id from storage.buckets` lists them -
+    // and they accounted for five baseline entries with no defect behind them.
+    //
+    // Walking back over whitespace to the receiver is exact: it asks "is this
+    // .from() called on .storage?" and cannot hide a genuine supabase.from(),
+    // whose receiver is the client itself.
+    const before = src.slice(0, m.index).trimEnd();
+    if (before.endsWith('.storage')) continue;
 
     if (!schema.tables.has(table)) {
       if (isPending(table)) continue;
