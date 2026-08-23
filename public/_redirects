@@ -20,3 +20,17 @@
 # 11.9 with 388 impressions, which is the one thing worth not doing here.
 /restaurants/daves-hot-chicken   /restaurants/daves-hot-chicken-2   301
 /restaurants/outback-steakhouse  /restaurants/outback-steakhouse-2  301
+
+# WEB-SEO-019: the slug generator used to DELETE accented letters instead of
+# folding them, so "Cafe" with an acute e became "caf". These eight had no
+# Search Console impressions at all, so renaming them costs nothing; the six
+# that DO rank (atlas-caf among them, 7 of the site's 72 clicks) were left
+# alone deliberately - a nicer slug is not worth moving a URL that works.
+/restaurants/brick-street-market-caf       /restaurants/brick-street-market-cafe  301
+/restaurants/caf-madeleine                 /restaurants/cafe-madeleine  301
+/restaurants/chteau-burgers-and-crepes     /restaurants/chateau-burgers-and-crepes  301
+/restaurants/cozy-caf-johnston             /restaurants/cozy-cafe-johnston  301
+/restaurants/crme                          /restaurants/creme  301
+/restaurants/el-fogn                       /restaurants/el-fogon  301
+/restaurants/ritual-caf                    /restaurants/ritual-cafe  301
+/restaurants/trellis-caf                   /restaurants/trellis-cafe  301
