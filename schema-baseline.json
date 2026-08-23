@@ -1,6 +1,6 @@
 {
   "$comment": "Known unresolvable Supabase references, frozen by scripts/check-schema-usage.mjs --update. This list must only ever SHRINK. Each entry is a feature that silently does nothing in production.",
-  "generated": 242,
+  "generated": 240,
   "findings": [
     "column|src/components/cms/ContentQueue.tsx|content_queue.priority",
     "column|src/hooks/useCrmActivities.ts|crm_activities.activity_type",
@@ -30,8 +30,6 @@
     "column|supabase/functions/agent-security-monitor/index.ts|login_attempts.success",
     "column|supabase/functions/agent-weekly-digest/index.ts|events.archived_at",
     "column|supabase/functions/analyze-competitor/index.ts|events.description",
-    "column|supabase/functions/api-events/index.ts|events.event_url",
-    "column|supabase/functions/api-events/index.ts|events.time",
     "column|supabase/functions/firecrawl-scraper/index.ts|competitors.competitor_id",
     "column|supabase/functions/firecrawl-scraper/index.ts|competitors.title",
     "column|supabase/functions/firecrawl-scraper/index.ts|competitors.venue",

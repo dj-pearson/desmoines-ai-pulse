@@ -8,6 +8,25 @@ import { validateQueryParams, sanitizeLikeInput } from "../_shared/validation.ts
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
+
+/**
+ * The wall-clock time an event starts, as HH:MM.
+ *
+ * The response has always carried a `time` key sourced from events.time, and
+ * THAT COLUMN HAS NEVER EXISTED - the list select 42703d on it, so this
+ * endpoint returned an error rather than events. No consumer has ever received
+ * a value for it, which is what makes changing where it comes from safe: there
+ * is no shipped expectation to break (CLAUDE.md response-field rule).
+ *
+ * event_start_local is the timezone-correct wall clock; event_start_utc is
+ * already exposed separately for anyone who wants the instant.
+ */
+function localStartTime(startLocal: string | null | undefined): string | null {
+  if (!startLocal) return null;
+  const m = /T(\d{2}:\d{2})/.exec(startLocal);
+  return m ? m[1] : null;
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   const corsResponse = handleCors(req);
@@ -67,7 +86,7 @@ serve(async (req) => {
       let query = supabase
         .from("events")
         .select(
-          "id, title, date, time, location, venue, price, category, enhanced_description, original_description, image_url, event_url, event_start_utc, city, latitude, longitude, is_featured",
+          "id, title, date, event_start_local, location, venue, price, category, enhanced_description, original_description, image_url, source_url, event_start_utc, city, latitude, longitude, is_featured",
           { count: "exact" }
         )
         .gte("date", params.start_date || today)
@@ -108,7 +127,7 @@ serve(async (req) => {
         id: event.id,
         title: event.title,
         date: event.date,
-        time: event.time,
+        time: localStartTime(event.event_start_local),
         venue: event.venue,
         location: event.location,
         city: event.city,
@@ -116,7 +135,8 @@ serve(async (req) => {
         category: event.category,
         description: event.enhanced_description || event.original_description,
         image_url: event.image_url,
-        event_url: event.event_url,
+        // events has source_url, never event_url. Same story as `time`.
+        event_url: event.source_url,
         coordinates:
           event.latitude && event.longitude
             ? {
@@ -179,7 +199,7 @@ serve(async (req) => {
         id: data.id,
         title: data.title,
         date: data.date,
-        time: data.time,
+        time: localStartTime(data.event_start_local),
         venue: data.venue,
         location: data.location,
         city: data.city,
@@ -187,7 +207,7 @@ serve(async (req) => {
         category: data.category,
         description: data.enhanced_description || data.original_description,
         image_url: data.image_url,
-        event_url: data.event_url,
+        event_url: data.source_url,
         event_start_utc: data.event_start_utc,
         coordinates:
           data.latitude && data.longitude
