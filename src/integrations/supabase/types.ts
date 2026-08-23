@@ -14079,6 +14079,7 @@ export type Database = {
       }
       gettransactionid: { Args: never; Returns: unknown }
       hide_stale_events: { Args: { hide_after_days?: number }; Returns: Json }
+      increment_deal_redemption: { Args: { deal_id: string }; Returns: number }
       increment_event_view: { Args: { event_id: string }; Returns: undefined }
       increment_media_views: {
         Args: { p_media_asset_id: string }

@@ -1,6 +1,6 @@
 {
   "$comment": "Known unresolvable Supabase references, frozen by scripts/check-schema-usage.mjs --update. This list must only ever SHRINK. Each entry is a feature that silently does nothing in production.",
-  "generated": 254,
+  "generated": 252,
   "findings": [
     "column|src/components/cms/ContentQueue.tsx|content_queue.priority",
     "column|src/hooks/useCommunityFeatures.ts|event_photos.is_approved",
@@ -62,7 +62,6 @@
     "rpc|src/hooks/useCrmSegments.ts|add_crm_activity",
     "rpc|src/hooks/useCrmSegments.ts|evaluate_segment_rules",
     "rpc|src/hooks/useCrmTasks.ts|add_crm_activity",
-    "rpc|src/hooks/useDeals.ts|increment_deal_redemption",
     "rpc|src/hooks/useLoginActivity.ts|get_user_login_activity",
     "rpc|src/hooks/useLoginActivity.ts|log_login_activity",
     "rpc|src/hooks/usePasswordPolicy.ts|get_active_password_policy",
@@ -75,7 +74,6 @@
     "rpc|src/hooks/useTripPlanner.ts|get_trip_itinerary",
     "rpc|src/hooks/useUsage.ts|get_current_usage",
     "rpc|src/hooks/useUsage.ts|record_usage_event",
-    "rpc|supabase/functions/dispatch-scheduled-newsletters/index.ts|reclaim_stuck_newsletter_campaigns",
     "rpc|supabase/functions/generate-invoice-pdf/index.ts|generate_invoice_number",
     "rpc|supabase/functions/generate-itinerary/index.ts|generate_trip_share_code",
     "rpc|supabase/functions/generate-itinerary/index.ts|get_trip_itinerary",
