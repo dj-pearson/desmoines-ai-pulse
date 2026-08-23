@@ -10,6 +10,7 @@ import coil3.request.crossfade
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import com.desmoines.aipulse.data.local.CacheManager
 import com.desmoines.aipulse.util.CrashReportingService
+import com.desmoines.aipulse.util.CrashUploader
 import com.desmoines.aipulse.util.LocalNotificationService
 import com.desmoines.aipulse.util.PushNotificationService
 import com.desmoines.aipulse.util.QueryCache
@@ -31,6 +32,7 @@ class DesMoinesInsiderApp : Application(), SingletonImageLoader.Factory {
     @Inject lateinit var localNotificationService: LocalNotificationService
     @Inject lateinit var queryCache: QueryCache
     @Inject lateinit var crashReportingService: CrashReportingService
+    @Inject lateinit var crashUploader: CrashUploader
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -38,6 +40,10 @@ class DesMoinesInsiderApp : Application(), SingletonImageLoader.Factory {
         super.onCreate()
         // Install the crash handler as early as possible.
         crashReportingService.install()
+        // Drain whatever the previous run recorded. Every crash the app has
+        // ever captured stayed on the device until now (XPLAT-004 AC1).
+        // Silent on failure, and records survive a failed attempt.
+        appScope.launch { crashUploader.uploadPending() }
         appScope.launch { cacheManager.pruneExpired() }
         appScope.launch { queryCache.prune() }
         // Clean up reminder IDs for alarms that have already fired
