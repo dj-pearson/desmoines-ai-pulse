@@ -1,6 +1,6 @@
 {
   "$comment": "Known unresolvable Supabase references, frozen by scripts/check-schema-usage.mjs --update. This list must only ever SHRINK. Each entry is a feature that silently does nothing in production.",
-  "generated": 194,
+  "generated": 193,
   "findings": [
     "column|src/hooks/useCrmActivities.ts|crm_activities.activity_type",
     "column|src/hooks/useCrmActivities.ts|crm_activities.contact_id",
@@ -82,7 +82,6 @@
     "table|supabase/functions/agent-fraud-monitor/index.ts|payments",
     "table|supabase/functions/agent-fraud-monitor/index.ts|usage_events",
     "table|supabase/functions/analyze-images/index.ts|seo_image_analysis",
-    "table|supabase/functions/autonomy-overview/index.ts|event_submissions",
     "table|supabase/functions/check-core-web-vitals/index.ts|seo_core_web_vitals",
     "table|supabase/functions/crawl-site/index.ts|seo_crawl_results",
     "table|supabase/functions/generate-invoice-pdf/index.ts|invoices",
