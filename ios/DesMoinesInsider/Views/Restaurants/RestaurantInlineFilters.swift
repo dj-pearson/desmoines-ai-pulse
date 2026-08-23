@@ -524,6 +524,11 @@ private struct FlowChipGrid: View {
                 }
             }
         }
+        // SearchableChipGrid puts a TextField above this grid, and a popover
+        // has no Done button - so without this there is no gesture to put the
+        // keyboard away (IOS-AUDIT-UX-056, closing a gap the search field
+        // introduced in IOS-AUDIT-UX-055).
+        .scrollDismissesKeyboard(.interactively)
     }
 }
 

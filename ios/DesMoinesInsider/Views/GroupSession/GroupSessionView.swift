@@ -16,27 +16,38 @@ struct GroupSessionView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 24) {
-                if let hostedSession {
-                    hostedSessionCard(hostedSession)
-                } else {
-                    introBlurb
-                    hostSection
-                    Divider().padding(.horizontal)
-                    joinSection
-                }
+            // A fixed VStack with a Spacer put the join code field, the Join
+            // button and the error text at the bottom of a non-scrolling screen.
+            // With the keyboard up, or at an accessibility text size, all three
+            // were pushed off and there was no way to reach them - including the
+            // error explaining why the code had been rejected
+            // (IOS-AUDIT-UX-056).
+            ScrollView {
+                VStack(spacing: 24) {
+                    if let hostedSession {
+                        hostedSessionCard(hostedSession)
+                    } else {
+                        introBlurb
+                        hostSection
+                        Divider().padding(.horizontal)
+                        joinSection
+                    }
 
-                Spacer()
-
-                if let errorMessage {
-                    Text(errorMessage)
-                        .font(.footnote)
-                        .foregroundStyle(.red)
-                        .padding(.horizontal)
-                        .accessibilityLabel("Error: \(errorMessage)")
+                    if let errorMessage {
+                        Text(errorMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                            .padding(.horizontal)
+                            .accessibilityLabel("Error: \(errorMessage)")
+                    }
                 }
+                .frame(maxWidth: .infinity)
+                .padding(.top, 24)
+                .padding(.bottom, 32)
             }
-            .padding(.top, 24)
+            // The Spacer that used to push content apart is gone: inside a
+            // ScrollView it would fight the scroll rather than centre anything.
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Group Session")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
