@@ -89,11 +89,19 @@ Deno.serve(async (req) => {
 
   const job = await runJob('ai-article-pipeline', async (ctx) => {
     // --- pause flag ---------------------------------------------------------
-    const { data: flag } = await supabase
+    // The fourth pause flag found failing open today. An unreadable row gave
+    // `flag = null`, the condition below was false, and the pipeline ran -
+    // spending model credits and auto-publishing articles after somebody had
+    // paused it. moderate-content's isPaused makes the opposite trade
+    // deliberately and says so; this one just discarded the error.
+    const { data: flag, error: flagError } = await supabase
       .from('feature_flags')
       .select('enabled')
       .eq('flag_key', PAUSE_FLAG)
       .maybeSingle();
+    if (flagError) {
+      throw new Error(`ai-article-pipeline: could not read the pause flag: ${flagError.message}`);
+    }
     if (flag && flag.enabled === false) {
       ctx.meta({ paused: true });
       return { paused: true, decision: 'paused' };
