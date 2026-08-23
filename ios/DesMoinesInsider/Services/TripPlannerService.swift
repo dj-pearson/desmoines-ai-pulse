@@ -37,7 +37,10 @@ final class TripPlannerService {
 
     // MARK: - Generate
 
-    private struct GenerateResponse: Decodable {
+    /// The generate-itinerary envelope. Internal rather than private so the
+    /// decode is contract-locked by a test and cannot silently drift when the
+    /// edge function changes shape (IOS-AUDIT-TEST-003).
+    struct GenerateResponse: Decodable {
         let success: Bool
         let tripPlan: TripPlan?
         let error: String?
