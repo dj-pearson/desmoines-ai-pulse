@@ -22,7 +22,23 @@ private const val TAG = "AuthRemoteDataSource"
 
 /**
  * Remote data source for authentication operations.
- * Mirrors iOS AuthService.swift — uses Supabase Auth for email/password and Google Sign-In.
+ *
+ * DOES NOT MIRROR iOS, and the line that used to say it did was wrong in both
+ * directions (XPLAT-003 AC4). It read "Mirrors iOS AuthService.swift - uses
+ * Supabase Auth for email/password and Google Sign-In". iOS has NO Google
+ * Sign-In (grep for google across AuthService.swift and Views/Auth returns
+ * nothing), and this file has no Apple Sign-In. The two clients offer
+ * DIFFERENT provider sets:
+ *
+ *   web      email + apple + google
+ *   Android  email + google
+ *   iOS      email + apple
+ *
+ * That is not cosmetic. Measured against auth.identities on 2026-08-23:
+ * 5 email-only, 3 apple-only, 2 apple+google, 1 google-only. So one user
+ * cannot reach their account on iOS, and THREE cannot reach theirs here.
+ * Counting raw_app_meta_data->>'provider' instead overstates the iOS side
+ * 2x, because a linked apple+google user signs in fine on both.
  */
 @Singleton
 class AuthRemoteDataSource @Inject constructor(

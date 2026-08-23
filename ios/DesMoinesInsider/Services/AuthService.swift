@@ -3,8 +3,20 @@ import CryptoKit
 import Supabase
 import AuthenticationServices
 
-/// Handles authentication flows matching the web app's AuthContext.
-/// Supports email/password, Apple Sign-In, and session management.
+/// Handles authentication flows. Supports email/password, Apple Sign-In and
+/// session management.
+///
+/// DOES NOT MATCH the web app's AuthContext, which the first line used to
+/// claim (XPLAT-003 AC4). Web offers Google as well; this file has no Google
+/// Sign-In at all. The three clients offer DIFFERENT provider sets:
+///
+///   web      email + apple + google
+///   Android  email + google
+///   iOS      email + apple
+///
+/// Measured against auth.identities on 2026-08-23: 5 email-only, 3 apple-only,
+/// 2 apple+google, 1 google-only. One user cannot reach their account here, and
+/// three cannot reach theirs on Android. Both gaps are XPLAT-003.
 @MainActor
 @Observable
 final class AuthService {
