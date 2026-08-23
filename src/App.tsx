@@ -16,7 +16,9 @@ import { useStatusBarStyle } from "@/hooks/useStatusBarStyle";
 import { useFocusOnRouteChange } from "@/hooks/useFocusOnRouteChange";
 import { usePageTracking } from "@/hooks/usePageTracking";
 import { useLocation, useNavigationType } from "react-router-dom";
-import { KeyboardShortcutsModal } from "@/components/KeyboardShortcutsModal";
+const KeyboardShortcutsModal = lazyWithRetry(() =>
+  import("@/components/KeyboardShortcutsModal").then((m) => ({ default: m.KeyboardShortcutsModal })),
+);
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import BottomNav from "@/components/BottomNav";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -361,10 +363,13 @@ const KeyboardShortcutsProvider = ({ children }: { children: React.ReactNode }) 
   return (
     <div ref={pageTransitionRef}>
       {children}
-      <KeyboardShortcutsModal
-        open={showShortcutsModal}
-        onOpenChange={setShowShortcutsModal}
-      />
+      {/* WEB-PERF-020 AC3: mounted only while open, so its chunk is fetched the
+          first time someone presses "?" rather than by every visitor. */}
+      {showShortcutsModal && (
+        <Suspense fallback={null}>
+          <KeyboardShortcutsModal open onOpenChange={setShowShortcutsModal} />
+        </Suspense>
+      )}
     </div>
   );
 };
