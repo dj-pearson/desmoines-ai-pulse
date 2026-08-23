@@ -26,6 +26,11 @@ struct ItineraryDetailView: View {
     @State private var shareErrorMessage: String?
     @State private var toast: ToastMessage?
     @State private var editMode: EditMode = .inactive
+    /// In flight for Add to Calendar. Without it a second tap ran the whole
+    /// EventKit write again and created a duplicate of every stop, because
+    /// nothing in the loop below checks for an event it already added
+    /// (IOS-AUDIT-UX-053).
+    @State private var isAddingToCalendar = false
 
     private var days: [Int] { itemsByDay.keys.sorted() }
     private var allItems: [TripPlanItem] { days.flatMap { itemsByDay[$0] ?? [] } }
@@ -117,7 +122,13 @@ struct ItineraryDetailView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button { Task { await share() } } label: { Label("Share itinerary", systemImage: "square.and.arrow.up") }
-                    Button { Task { await addToCalendar() } } label: { Label("Add to Calendar", systemImage: "calendar.badge.plus") }
+                    Button { Task { await addToCalendar() } } label: {
+                        Label(
+                            isAddingToCalendar ? "Adding to Calendar..." : "Add to Calendar",
+                            systemImage: "calendar.badge.plus"
+                        )
+                    }
+                    .disabled(isAddingToCalendar)
                     Button {
                         let entering = !editMode.isEditing
                         withAnimation(reduceMotion ? nil : .default) {
@@ -274,6 +285,13 @@ struct ItineraryDetailView: View {
     // MARK: - Calendar (EventKit) — adds each timed stop on its day
 
     private func addToCalendar() async {
+        // The permission prompt alone makes this multi-second, and the menu
+        // stays open behind it. The disabled state above is the visible half;
+        // this is the half that holds when the state has not repainted yet.
+        guard !isAddingToCalendar else { return }
+        isAddingToCalendar = true
+        defer { isAddingToCalendar = false }
+
         let fmt = DateFormatter()
         fmt.calendar = Calendar(identifier: .gregorian)
         fmt.locale = Locale(identifier: "en_US_POSIX")

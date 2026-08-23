@@ -119,7 +119,10 @@ struct GroupSessionView: View {
             Button {
                 Task { await joinExisting() }
             } label: {
-                Text("Join with code")
+                // Mirrors the Host button above, which has said "Creating..."
+                // since it shipped. Join was already disabled while working and
+                // simply never said so (IOS-AUDIT-UX-053).
+                Text(isWorking ? "Joining..." : "Join with code")
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
                     .background(Color.accentColor.opacity(0.15), in: RoundedRectangle(cornerRadius: 12))

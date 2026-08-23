@@ -76,17 +76,26 @@ private struct SaveSearchSheet: View {
             .navigationTitle("Save Search")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                // Cancel is disabled while saving: dismissing mid-write leaves
+                // the save running against a sheet that is gone, so the user
+                // sees neither a success nor the error (IOS-AUDIT-UX-053).
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }.disabled(saving)
+                }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        saving = true
-                        // Trim before saving and block empty/whitespace-only
-                        // names so we don't create an unlabeled search
-                        // (IOS-AUDIT-UX-044).
-                        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-                        Task { await onSave(trimmed); saving = false }
+                    if saving {
+                        ProgressView()
+                    } else {
+                        Button("Save") {
+                            saving = true
+                            // Trim before saving and block empty/whitespace-only
+                            // names so we don't create an unlabeled search
+                            // (IOS-AUDIT-UX-044).
+                            let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+                            Task { await onSave(trimmed); saving = false }
+                        }
+                        .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
-                    .disabled(saving || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
             .onAppear { if name.isEmpty { name = defaultName } }
