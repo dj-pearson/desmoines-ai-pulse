@@ -168,7 +168,10 @@ final class AdTrackingService {
             session_id: session,
             device_type: "mobile",
             browser: "ios-app",
-            date: todayString
+            date: todayString,
+            // Minted at queue time, not send time - a key generated per
+            // attempt is a different key on the retry (IOS-AUDIT-BUG-017).
+            client_event_id: UUID().uuidString
         )
 
         // Offline → queue and flush later (IOS-ADS-014).
@@ -207,7 +210,8 @@ final class AdTrackingService {
             campaign_id: campaignId,
             creative_id: creativeId,
             impression_id: impressionId,
-            date: todayString
+            date: todayString,
+            client_event_id: UUID().uuidString
         )
 
         guard NetworkMonitor.shared.isConnected else {
@@ -290,6 +294,11 @@ final class AdTrackingService {
         let device_type: String
         let browser: String
         let date: String
+        /// Idempotency key, minted when the row is queued (IOS-AUDIT-BUG-017).
+        /// Optional so a queue written by an earlier build still decodes; the
+        /// queue in UserDefaults is a stored schema and a required field would
+        /// make every existing entry fail to decode and disappear.
+        var client_event_id: String?
     }
 
     private struct ClickRow: Codable {
@@ -297,6 +306,8 @@ final class AdTrackingService {
         let creative_id: String
         let impression_id: String?
         let date: String
+        /// See ImpressionRow.client_event_id.
+        var client_event_id: String?
     }
 
     private struct PendingQueue: Codable {
@@ -352,10 +363,17 @@ final class AdTrackingService {
         }
         guard NetworkMonitor.shared.isConnected, !pending.isEmpty else { return }
 
+        // Upsert on the queued idempotency key, not insert (IOS-AUDIT-BUG-017).
+        // A lost response is indistinguishable from a lost request here, so a
+        // requeued row used to be counted twice - inflating exactly the numbers
+        // advertisers are billed against.
         var remainingImpressions: [ImpressionRow] = []
         for row in pending.impressions {
             do {
-                try await client.from("ad_impressions").insert(row).execute()
+                try await client
+                    .from("ad_impressions")
+                    .upsert(row, onConflict: "client_event_id", ignoreDuplicates: true)
+                    .execute()
             } catch {
                 remainingImpressions.append(row)
             }
@@ -364,7 +382,10 @@ final class AdTrackingService {
         var remainingClicks: [ClickRow] = []
         for row in pending.clicks {
             do {
-                try await client.from("ad_clicks").insert(row).execute()
+                try await client
+                    .from("ad_clicks")
+                    .upsert(row, onConflict: "client_event_id", ignoreDuplicates: true)
+                    .execute()
             } catch {
                 remainingClicks.append(row)
             }
