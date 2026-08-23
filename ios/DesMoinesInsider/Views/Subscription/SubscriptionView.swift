@@ -118,6 +118,48 @@ struct SubscriptionView: View {
     // MARK: - Current Tier Badge
 
     private var currentTierBadge: some View {
+        VStack(spacing: 10) {
+            // The server rejected a receipt this device still holds, so the tier
+            // above has already been lowered (StoreKitService:120 subtracts the
+            // revoked ids before resolving). Without this the user simply drops
+            // from Insider to Free with no explanation and no route to a fix.
+            //
+            // hasServerRevokedEntitlement was written for exactly this - its
+            // docstring says "UI can surface a subscription could not be verified
+            // state" - and nothing read it until now.
+            if storeKit.hasServerRevokedEntitlement {
+                revokedEntitlementNotice
+            }
+
+            tierBadgeRow
+        }
+    }
+
+    private var revokedEntitlementNotice: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("We couldn't verify your subscription")
+                    .font(.subheadline.weight(.semibold))
+                Text("Your purchase could not be confirmed with the App Store, so premium features are paused. Restoring purchases usually fixes it.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Button("Restore Purchases") {
+                    Task { await storeKit.restorePurchases() }
+                }
+                .font(.footnote.weight(.semibold))
+                .padding(.top, 2)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+        .accessibilityElement(children: .combine)
+    }
+
+    private var tierBadgeRow: some View {
         HStack(spacing: 8) {
             Image(systemName: badgeIcon(for: storeKit.currentTier))
                 .foregroundStyle(badgeColor(for: storeKit.currentTier))
