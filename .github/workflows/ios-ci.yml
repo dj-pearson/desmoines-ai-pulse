@@ -424,5 +424,12 @@ jobs:
       - name: Privacy manifest reconciliation
         run: node scripts/check-privacy-manifest.mjs
 
+      # IOS-AUDIT-REL-008: the Snapfile already SAID the three device lists must
+      # match and nothing enforced it. The screenshot lane is workflow_dispatch-
+      # only, so a drift produces no failure at all - the first symptom is a
+      # submission missing a required size. Offline; reads three files.
+      - name: Screenshot device lists agree
+        run: node scripts/check-screenshot-devices.mjs
+
       - name: Verify certificate pins against the live host
         run: bash scripts/verify-cert-pins.sh
