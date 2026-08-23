@@ -125,13 +125,12 @@ struct SettingsView: View {
                     }
 
                     if notificationStatus == .authorized {
-                        // The toggle drives UserDefaults directly via the binding
-                        // below; no separate @AppStorage local (which wouldn't be
-                        // installed as view state anyway) — IOS-AUDIT-UX-029.
-                        Toggle(isOn: Binding(
-                            get: { UserDefaults.standard.bool(forKey: "eventRemindersEnabled") },
-                            set: { UserDefaults.standard.set($0, forKey: "eventRemindersEnabled") }
-                        )) {
+                        // IOS-AUDIT-BUG-012: bound to the service, not straight to
+                        // UserDefaults. The key is the same one, so an existing
+                        // preference survives - what changed is that something now
+                        // READS it: scheduleReminder refuses while this is off, and
+                        // switching it off cancels what is already pending.
+                        Toggle(isOn: $notifications.remindersEnabled) {
                             Label("Event Reminders", systemImage: "calendar.badge.clock")
                         }
 
