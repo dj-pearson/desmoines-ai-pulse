@@ -226,7 +226,7 @@ struct AskPulseView: View {
     @ViewBuilder
     private var quotaLabel: some View {
         if let usage = service.lastUsage {
-            Text(usage.displayString)
+            Text(usage.remaining.displayString)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .trailing)
