@@ -76,17 +76,26 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   }
 
   // ── 3. Mismatched entitlements (active sub, no successful payment) ───────
-  const { data: activeSubs } = await supabase
+  const { data: activeSubs, error: activeSubsError } = await supabase
     .from("user_subscriptions")
     .select("id, user_id, status, trial_end")
     .eq("status", "active")
     .limit(5000);
   // Users who have at least one successful payment ever.
-  const { data: paidRows } = await supabase
+  const { data: paidRows, error: paidRowsError } = await supabase
     .from("payments")
     .select("user_id")
     .eq("status", "succeeded")
     .limit(20000);
+  // RAISE, do not let this fall to an empty set. paidUsers is built from
+  // paidRows, and the loop below flags every active subscriber who is NOT in
+  // it. A dropped error empties the set, so a single failed read against
+  // payments raises a fraud finding against EVERY PAYING CUSTOMER. The
+  // subscriptions read is raised for the same reason: a partial view of one
+  // side of this comparison produces confident wrong answers, not fewer
+  // answers (WEB-BE-032 AC2).
+  if (activeSubsError) throw new Error(`active subscriptions read failed: ${activeSubsError.message}`);
+  if (paidRowsError) throw new Error(`succeeded payments read failed: ${paidRowsError.message}`);
   const paidUsers = new Set<string>((paidRows ?? []).map((p: { user_id: string | null }) => p.user_id).filter(Boolean) as string[]);
   const nowMs = Date.now();
   for (const s of (activeSubs ?? []) as { id: string; user_id: string; trial_end: string | null }[]) {
