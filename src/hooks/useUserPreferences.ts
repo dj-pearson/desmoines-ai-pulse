@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import type { Json } from '@/integrations/supabase/types';
 import { useAuth } from '@/hooks/useAuth';
 import { storage } from '@/lib/safeStorage';
 import { createLogger } from '@/lib/logger';
@@ -48,11 +49,18 @@ async function writeToServer(userId: string, prefs: UserPreferences): Promise<vo
     return;
   }
 
-  const existing = (current?.communication_preferences as Record<string, unknown>) ?? {};
+  const existing = (current?.communication_preferences as Json & object) ?? {};
+
+  // The cast is on `prefs`, not on the whole payload, and it is narrow on
+  // purpose: UserPreferences is an interface, and an interface has no implicit
+  // index signature, so TypeScript will not accept one as `Json` even though
+  // every field in it is JSON-safe. Casting the enclosing object instead would
+  // also silence a genuinely wrong `existing`.
+  const bag: Json = { ...existing, [SERVER_KEY]: prefs as unknown as Json };
 
   const { error } = await supabase
     .from('profiles')
-    .update({ communication_preferences: { ...existing, [SERVER_KEY]: prefs } })
+    .update({ communication_preferences: bag })
     .eq('user_id', userId);
 
   if (error) {
