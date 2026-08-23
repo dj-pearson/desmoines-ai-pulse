@@ -145,7 +145,10 @@ async function execTool(
       const limit = Math.min((input.limit as number | undefined) ?? 10, 20);
       let q = supabase
         .from('events')
-        .select('id, title, description, category, date, end_date, venue, location, image_url')
+        // events has NO `description`. It carries enhanced_description (AI-written)
+        // and original_description (as crawled) - the same pair fuzzy_search_events
+        // was repaired to COALESCE over under WEB-QA-019.
+        .select('id, title, enhanced_description, original_description, category, date, end_date, venue, location, image_url')
         .limit(limit)
         .order('date', { ascending: true });
 
@@ -155,7 +158,11 @@ async function execTool(
       if (input.category) q = q.ilike('category', `%${sanitizePostgrestPattern(input.category as string)}%`);
       if (input.query) {
         const term = sanitizePostgrestPattern(input.query as string);
-        q = q.or(`title.ilike.%${term}%,description.ilike.%${term}%`);
+        // Both description columns are searched, so a query matching only the raw
+        // crawler text still finds the row.
+        q = q.or(
+          `title.ilike.%${term}%,enhanced_description.ilike.%${term}%,original_description.ilike.%${term}%`,
+        );
       }
 
       const { data, error } = await q;
@@ -167,12 +174,14 @@ async function execTool(
       const limit = Math.min((input.limit as number | undefined) ?? 10, 20);
       let q = supabase
         .from('restaurants')
-        .select('id, name, description, cuisine, price_level, hours, location, image_url')
+        // price_level -> price_range, and `hours` is dropped entirely: restaurants
+        // has no opening-hours column, so asking for it failed the whole select.
+        .select('id, name, description, cuisine, price_range, location, image_url')
         .limit(limit)
         .order('rating', { ascending: false });
 
       if (input.cuisine) q = q.ilike('cuisine', `%${sanitizePostgrestPattern(input.cuisine as string)}%`);
-      if (input.priceLevel) q = q.eq('price_level', input.priceLevel as string);
+      if (input.priceLevel) q = q.eq('price_range', input.priceLevel as string);
       if (input.query) {
         const term = sanitizePostgrestPattern(input.query as string);
         q = q.or(`name.ilike.%${term}%,description.ilike.%${term}%`);
@@ -187,11 +196,13 @@ async function execTool(
       const limit = Math.min((input.limit as number | undefined) ?? 10, 20);
       let q = supabase
         .from('attractions')
-        .select('id, name, description, category, location, image_url')
+        // attractions stores the kind in `type`, not `category` - the same rename
+        // the og-image function already documents.
+        .select('id, name, description, type, location, image_url')
         .limit(limit)
         .order('rating', { ascending: false });
 
-      if (input.type) q = q.ilike('category', `%${sanitizePostgrestPattern(input.type as string)}%`);
+      if (input.type) q = q.ilike('type', `%${sanitizePostgrestPattern(input.type as string)}%`);
       if (input.query) {
         const term = sanitizePostgrestPattern(input.query as string);
         q = q.or(`name.ilike.%${term}%,description.ilike.%${term}%`);
