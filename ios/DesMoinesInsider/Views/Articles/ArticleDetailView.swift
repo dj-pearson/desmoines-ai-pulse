@@ -86,9 +86,23 @@ struct ArticleDetailView: View {
             RecentlyViewedService.shared.record(
                 type: "article", id: article.id, title: article.title, imageUrl: article.featuredImageUrl
             )
-            await SpotlightService.shared.indexArticles([article])
-            await service.incrementViewCount(id: article.id, current: article.viewCount)
+            // The Spotlight write and the view-count write are side effects the
+            // reader is not waiting for, and both used to be awaited BEFORE the
+            // related-articles fetch even started (IOS-AUDIT-PERF-031). The rail
+            // appeared after a CoreSpotlight index and a network write had both
+            // finished, for no reason the user could see.
+            //
+            // `async let` rather than an unstructured Task: these are scoped to
+            // the view's .task, so leaving the article cancels them, and the
+            // related fetch below still runs alongside rather than behind them.
+            async let indexed: Void = SpotlightService.shared.indexArticles([article])
+            async let counted: Void = service.incrementViewCount(
+                id: article.id,
+                current: article.viewCount
+            )
+
             related = await service.fetchRelated(category: article.category, excludingId: article.id)
+            _ = await (indexed, counted)
         }
     }
 

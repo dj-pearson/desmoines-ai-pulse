@@ -14,6 +14,15 @@ struct ReviewsSection: View {
     @State private var reportTarget: UserRating?
     @State private var showDeleteConfirmation = false
     @State private var toast: ToastMessage?
+    /// Reviews rendered right now. A non-lazy VStack builds every child the
+    /// moment the section appears, and this section sits at the BOTTOM of a
+    /// detail screen - so on a listing with two hundred reviews the user paid
+    /// to construct all two hundred rows before seeing the top of the page,
+    /// having scrolled to none of them (IOS-AUDIT-PERF-031).
+    @State private var visibleCount = Self.initialVisibleCount
+
+    /// Enough to show the section is populated and worth scrolling into.
+    private static let initialVisibleCount = 5
 
     init(contentType: String, contentId: String) {
         self.contentType = contentType
@@ -36,14 +45,21 @@ struct ReviewsSection: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             } else {
-                ForEach(viewModel.reviews) { review in
+                ForEach(viewModel.reviews.prefix(visibleCount)) { review in
                     reviewRow(review)
+                }
+                if viewModel.reviews.count > visibleCount {
+                    showAllButton(remaining: viewModel.reviews.count - visibleCount)
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
         .task { await viewModel.load() }
+        // A new content id is a different listing, so the cap starts over.
+        // Without this, opening a restaurant with 200 reviews and then one
+        // with 3 leaves the second expanded for no reason the user asked for.
+        .onChange(of: contentId) { _, _ in visibleCount = Self.initialVisibleCount }
         .sheet(isPresented: $showComposer) {
             ReviewComposer(
                 existing: viewModel.userReview,
@@ -154,6 +170,26 @@ struct ReviewsSection: View {
     }
 
     // MARK: - Review row
+
+    /// Reveals the rest in one step rather than paginating.
+    ///
+    /// Paging would mean a page size, a loading state and a "load more"
+    /// nobody can reach with VoiceOver without extra work, to save building
+    /// rows the user has explicitly asked to see. One tap, everything, done.
+    private func showAllButton(remaining: Int) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                visibleCount = viewModel.reviews.count
+            }
+        } label: {
+            Text("Show \(remaining) more review\(remaining == 1 ? "" : "s")")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Color.accentColor)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 4)
+        }
+        .buttonStyle(.plain)
+    }
 
     private func reviewRow(_ review: UserRating) -> some View {
         let isOwn = review.userId == viewModel.currentUserId
