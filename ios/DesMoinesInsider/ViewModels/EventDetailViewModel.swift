@@ -72,11 +72,17 @@ final class EventDetailViewModel {
         }
     }
 
-    /// Re-read the full row and swap it in only if it actually differs.
+    /// Re-read the full row and swap it in only if the CONTENT differs.
     ///
-    /// The equality check is what keeps AC3 honest: assigning an identical
-    /// Event would invalidate every view reading it for no visible reason, and
-    /// the common case is that nothing changed.
+    /// NOT `fresh != event`. Event implements `==` as `lhs.id == rhs.id` for
+    /// SwiftUI navigation identity, so comparing with it is asking "is this the
+    /// same event", which is always true here - the whole refresh silently threw
+    /// its result away. Caught by EventDetailRefreshTests the first time this
+    /// could be tested at all (IOS-AUDIT-TEST-006).
+    ///
+    /// Comparing the encoded bytes asks the question that was meant: did any
+    /// field change. It runs once per detail open, against a struct that is
+    /// already Codable, and it cannot be quietly broken by a change to `==`.
     ///
     /// A failure is silent on purpose. The user is looking at a complete event
     /// already; an error banner over working content would be worse than the
@@ -86,8 +92,20 @@ final class EventDetailViewModel {
         defer { isRefreshing = false }
 
         guard let fresh = try? await service.fetchEvent(id: id) else { return }
-        guard fresh != event else { return }
+        guard Self.contentDiffers(fresh, from: event) else { return }
         event = fresh
+    }
+
+    /// Whether two events differ in any field, rather than in identity.
+    ///
+    /// An encode failure reports "differs", so the refresh is applied. Skipping
+    /// it would mean a comparison problem silently became a staleness problem.
+    static func contentDiffers(_ lhs: Event, from rhs: Event?) -> Bool {
+        guard let rhs else { return true }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        guard let a = try? encoder.encode(lhs), let b = try? encoder.encode(rhs) else { return true }
+        return a != b
     }
 
     // MARK: - Favorites

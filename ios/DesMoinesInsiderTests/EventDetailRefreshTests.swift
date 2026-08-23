@@ -62,11 +62,30 @@ final class EventDetailRefreshTests: XCTestCase {
         await task.value
     }
 
-    // MARK: - It does not churn
+    // MARK: - Content vs identity
 
-    func testAnIdenticalRowIsNotReassigned() async {
-        // Assigning an equal Event would invalidate every view reading it for no
-        // visible reason, and this is the common case.
+    func testTwoRowsDifferingOnlyInAFieldAreSeenAsDifferentContent() {
+        // Event implements == as id equality for navigation identity. Using it
+        // here made the refresh discard every result it fetched, which is what
+        // the failing test above found. This pins the distinction.
+        let a = event(title: "Jazz Night", venue: "TBA")
+        let b = event(title: "Jazz Night", venue: "Noce")
+        XCTAssertEqual(a, b, "same id, so == says equal - that is the trap")
+        XCTAssertTrue(EventDetailViewModel.contentDiffers(b, from: a))
+    }
+
+    func testAnUnchangedRowIsSeenAsUnchanged() {
+        let a = event(title: "Jazz Night", venue: "Noce")
+        XCTAssertFalse(EventDetailViewModel.contentDiffers(a, from: a))
+    }
+
+    func testNoPreviousRowCountsAsDifferent() {
+        XCTAssertTrue(EventDetailViewModel.contentDiffers(event(title: "Jazz Night"), from: nil))
+    }
+
+    func testTheRefreshStillRunsWhenNothingChanged() async {
+        // The skip is an optimisation on the ASSIGNMENT, not a reason to avoid
+        // re-reading - otherwise a stale row would never be corrected.
         let prefetched = event(title: "Jazz Night", venue: "Noce")
         let fake = FakeEvents()
         fake.event = prefetched
@@ -74,8 +93,7 @@ final class EventDetailRefreshTests: XCTestCase {
 
         await vm.loadEvent(prefetched)
 
-        XCTAssertEqual(vm.event, prefetched)
-        XCTAssertEqual(fake.fetchCount, 1, "the refresh should still run - it just must not reassign")
+        XCTAssertEqual(fake.fetchCount, 1)
     }
 
     // MARK: - It fails quietly
