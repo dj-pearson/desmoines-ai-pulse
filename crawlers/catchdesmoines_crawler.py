@@ -26,6 +26,9 @@ from datetime import datetime, timedelta
 from typing import Optional
 from dateutil import parser as date_parser
 from zoneinfo import ZoneInfo
+from urllib.robotparser import RobotFileParser
+from urllib.parse import urlsplit
+from urllib.request import urlopen
 
 # Configure logging
 logging.basicConfig(
@@ -96,6 +99,84 @@ _HREF_RE = re.compile(r'href="([^"]*)"')
 # is the point. It used to be 50,000 applied to the RAW html, where the first
 # event link sat at character 194,134.
 MAX_EXTRACTION_CHARS = 60000
+
+
+# ---------------------------------------------------------------------------
+# robots.txt
+# ---------------------------------------------------------------------------
+#
+# WEB-SEC-024 built this for supabase/functions/_shared/scraper.ts, the entry
+# point every EDGE ingestion path uses. This crawler is the one path that does
+# not go through it - crawl4ai drives a browser directly - so it was still
+# fetching without asking. WEB-LEGAL-008's Privacy Policy draft needs the
+# sentence "we do not crawl a page that asks not to be crawled" to be true of
+# every path, not most of them.
+#
+# FAIL-OPEN, matching robots.ts. No robots.txt, a 404, a 5xx, a timeout or an
+# unparseable file all mean allowed. The other direction turns one flaky fetch
+# into a silent ingestion halt, and this pipeline already reports "0 events" the
+# same way whether it was blocked or broken.
+ROBOTS_TIMEOUT_SECONDS = 5
+ROBOTS_USER_AGENT = "*"  # the crawler presents a browser UA, so it matches the wildcard group
+DEFAULT_LIST_DELAY_SECONDS = 2.0
+DEFAULT_DETAIL_DELAY_SECONDS = 1.0
+
+_robots_cache: dict = {}
+
+
+def parse_robots(text: str) -> RobotFileParser:
+    """Build a parser from robots.txt CONTENT, with no network access."""
+    parser = RobotFileParser()
+    parser.parse(text.splitlines())
+    return parser
+
+
+def _robots_for(origin: str) -> Optional[RobotFileParser]:
+    """Fetch and cache the origin's robots.txt. None means 'could not read'."""
+    if origin in _robots_cache:
+        return _robots_cache[origin]
+
+    parser = None
+    try:
+        with urlopen(f"{origin}/robots.txt", timeout=ROBOTS_TIMEOUT_SECONDS) as response:
+            if response.status == 200:
+                parser = parse_robots(response.read().decode("utf-8", errors="replace"))
+    except Exception as exc:  # noqa: BLE001 - any failure means "allowed", see above
+        logger.info(f"robots.txt unavailable for {origin} ({exc}) - proceeding")
+
+    _robots_cache[origin] = parser
+    return parser
+
+
+def robots_allows(url: str) -> bool:
+    """False only for an explicit Disallow. Anything else is allowed."""
+    parts = urlsplit(url)
+    origin = f"{parts.scheme}://{parts.netloc}"
+    parser = _robots_for(origin)
+    if parser is None:
+        return True
+    try:
+        return parser.can_fetch(ROBOTS_USER_AGENT, url)
+    except Exception:  # noqa: BLE001
+        return True
+
+
+def robots_delay(url: str, default: float) -> float:
+    """The site's requested Crawl-delay, or `default` - whichever is longer.
+
+    The hardcoded 1-second gap between detail-page fetches was BELOW what
+    catchdesmoines.com asks for (Crawl-delay: 2). Reading the number the site
+    publishes is the difference between crawling politely and appearing to.
+    """
+    parts = urlsplit(url)
+    parser = _robots_for(f"{parts.scheme}://{parts.netloc}")
+    if parser is None:
+        return default
+    try:
+        declared = parser.crawl_delay(ROBOTS_USER_AGENT)
+    except Exception:  # noqa: BLE001
+        declared = None
+    return max(default, float(declared)) if declared else default
 
 
 def clean_html_for_extraction(html: str) -> str:
@@ -187,6 +268,10 @@ class CatchDesMoinesCrawler:
 
         logger.info(f"Crawling events list page {page + 1}: {url}")
 
+        if not robots_allows(url):
+            logger.error(f"robots.txt disallows {url} - not fetching")
+            return ""
+
         browser_config = BrowserConfig(
             headless=True,
             verbose=False,
@@ -210,6 +295,10 @@ class CatchDesMoinesCrawler:
     async def crawl_event_detail(self, event_url: str) -> dict:
         """Crawl an individual event detail page to get the 'Visit Website' URL."""
         logger.info(f"Crawling event detail: {event_url}")
+
+        if not robots_allows(event_url):
+            logger.warning(f"robots.txt disallows {event_url} - keeping the listing URL")
+            return {"source_url": event_url}
 
         browser_config = BrowserConfig(
             headless=True,
@@ -537,9 +626,9 @@ Return ONLY the JSON array. No other text."""
             all_events.extend(events)
             logger.info(f"Total events found so far: {len(all_events)}")
 
-            # Small delay between pages
+            # Delay between pages, at least what the site asks for
             if page < self.max_pages - 1:
-                await asyncio.sleep(2)
+                await asyncio.sleep(robots_delay(EVENTS_LIST_URL, DEFAULT_LIST_DELAY_SECONDS))
 
         logger.info(f"Extracted {len(all_events)} total events from {self.max_pages} pages")
 
@@ -563,8 +652,9 @@ Return ONLY the JSON array. No other text."""
                 detail_result = await self.crawl_event_detail(detail_url)
                 event["source_url"] = detail_result.get("source_url", detail_url)
 
-                # Small delay between detail page requests
-                await asyncio.sleep(1)
+                # Delay between detail requests. Was a hardcoded 1s, which is
+                # below the Crawl-delay: 2 catchdesmoines.com publishes.
+                await asyncio.sleep(robots_delay(detail_url, DEFAULT_DETAIL_DELAY_SECONDS))
             else:
                 event["source_url"] = EVENTS_LIST_URL
 

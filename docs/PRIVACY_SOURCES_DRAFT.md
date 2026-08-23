@@ -70,7 +70,8 @@ To sit immediately after **Information We Collect** in `PrivacyPolicy.tsx`.
 > event dates and descriptions, images, and publicly listed business phone numbers and
 > role email addresses such as `info@` or `booking@`. Every listing records the page it
 > came from. We do not collect personal contact details of individuals from these
-> sources, and we do not access anything behind a login or a paywall.
+> sources, we do not access anything behind a login or a paywall, and we do not fetch
+> pages that a site's `robots.txt` tells crawlers not to fetch.
 >
 > **From service providers acting on our behalf.** Payment status from Stripe,
 > deliverability data from our email provider, and authentication details from Google or
@@ -84,11 +85,19 @@ To sit immediately after **Information We Collect** in `PrivacyPolicy.tsx`.
 
 ### Notes on the wording
 
-- The robots.txt clause was **removed from the draft after checking the code**, not
-  omitted by oversight. See section 3a — the crawlers do not honour robots.txt, so
-  promising that they do would put a false statement in the Privacy Policy, which is the
-  exact defect the other WEB-LEGAL stories are about. "Behind a login or a paywall"
-  stays, because nothing in `_shared/scraper.ts` authenticates anywhere.
+- The robots.txt clause was removed from the first draft after checking the code, and is
+  **back as of 2026-08-23 because the code changed** — not because the wording softened.
+  See section 3a. `scrapeUrl` now checks `robots.txt` before any backend runs, and the
+  Python crawler under `crawlers/` — the one ingestion path that does not route through
+  `scrapeUrl` — checks it too. Both fail open, so the sentence promises only what the
+  code does: an explicit `Disallow` stops the fetch.
+  It says "pages that a site's `robots.txt` tells crawlers not to fetch", NOT "we
+  identify ourselves so you can control us". The crawler still presents a browser
+  User-Agent, so it matches the wildcard `*` group and a site cannot write a rule
+  addressed to us specifically. That distinction is the difference between a true
+  sentence and a flattering one, and it is why the wording is shaped this way.
+  "Behind a login or a paywall" stays, because nothing in `_shared/scraper.ts`
+  authenticates anywhere.
 - The last paragraph is the AC4 notice-at-collection. It describes the pipeline in the
   present tense while `prospect_leads` is empty, which is the correct tense for a notice
   that must exist *before* collection starts.
@@ -100,29 +109,45 @@ To sit immediately after **Information We Collect** in `PrivacyPolicy.tsx`.
 
 ---
 
-## 3a. A finding that changes AC3: the crawlers do not identify themselves
+## 3a. Half of this section has been fixed; the other half is still true
 
-Checked in `supabase/functions/_shared/scraper.ts`, which every ingestion path routes
-through via `scrapeUrl` / `scrapeUrls`. It has five backends — browserless, fetch,
-puppeteer, playwright, firecrawl — and:
+**Originally** (2026-08-22) this section reported two findings against
+`supabase/functions/_shared/scraper.ts`, which every EDGE ingestion path routes through
+via `scrapeUrl` / `scrapeUrls`: no robots.txt handling in any of its five backends, and a
+desktop-browser User-Agent rather than a bot identifier.
 
-- **No robots.txt handling anywhere.** No fetch of `/robots.txt`, no allow/deny check,
-  in any backend. (`crawl-site` does read robots META tags, but that function audits our
-  OWN site for SEO and writes to `seo_crawl_results`, a table that does not exist — see
-  WEB-BE-031. It is not a third-party crawler.)
-- **It presents as a desktop browser**, not as a bot:
-  `Mozilla/5.0 (Windows NT 10.0; Win64; x64) ... Chrome/120.0.0.0 Safari/537.36`.
-  A site cannot allow, deny, or rate-limit this crawler specifically, because from the
-  server's side it is indistinguishable from a person using Chrome.
+**The first is fixed** (2026-08-23). `scrapeUrl` calls `isCrawlAllowed()` before any
+backend runs — checked there rather than per backend, because the fallback chain would
+otherwise route around it. It fails open by construction: no robots.txt, a 404, a 5xx, a
+timeout or an unparseable file all mean allowed, and only an explicit `Disallow` blocks.
+`SCRAPER_IGNORE_ROBOTS=true` exists as an incident escape hatch and is not the default.
+See WEB-SEC-024.
 
-This is a factual finding, not a legal conclusion, and it is the owner's call what to do
-with it. But it has two direct consequences for this story:
+`crawlers/catchdesmoines_crawler.py` was the ONE ingestion path that does not go through
+`scrapeUrl` — it drives crawl4ai directly — and it was still fetching without asking.
+It now checks too, with the same fail-open rule, and reads the site's declared
+`Crawl-delay` instead of its own hardcoded gap. That gap was 1 second between detail
+pages against the `Crawl-delay: 2` catchdesmoines.com publishes, so it had been crawling
+at twice the rate the site asked for. Verified against the live file: the events listing
+is allowed, `/plugins/crm/count/` is blocked, and the detail delay rises 1s -> 2s.
+  A disclosure is only as true as its least compliant path, which is why this one
+  mattered more than its size suggests.
 
-1. **The Privacy Policy must not claim we honour robots.txt.** Removed from the draft
-   above.
-2. **It weakens the AC3 defence** rather than strengthening it. The wording below argues
-   the asymmetry is about *what* is collected, which survives this finding. An argument
-   resting on "we crawl politely" would not.
+**The second is unchanged.** The crawler still presents
+`Mozilla/5.0 (Windows NT 10.0; Win64; x64) ... Chrome/120.0.0.0 Safari/537.36`, so from
+the server's side it is indistinguishable from a person using Chrome. A site can stop us
+with a blanket rule and cannot write one addressed to us. That is WEB-SEC-024 AC3, an
+open owner decision — declaring a bot UA is the honest option and will reduce ingestion,
+because sites that block bots will then successfully block us.
+
+Consequences for this story, updated:
+
+1. **The Privacy Policy may now say we honour robots.txt** — worded as "pages that a
+   site's `robots.txt` tells crawlers not to fetch", which is what the code does. It may
+   NOT say we identify ourselves, which is what the code still does not do.
+2. **The AC3 defence rests on what is collected, not on crawling politely.** That was
+   true when politeness was absent and stays true now that it is present; an argument
+   built on the politeness would have had to be rewritten twice.
 
 **Half of this is now fixed** — filed and built as WEB-SEC-024 on the same day. `scrapeUrl`
 checks robots.txt before any backend runs, fail-open on every ambiguity, with 13 offline

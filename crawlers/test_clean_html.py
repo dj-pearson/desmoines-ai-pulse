@@ -27,14 +27,29 @@ import sys
 CRAWLER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "catchdesmoines_crawler.py")
 
 
+# The module-level region between these two markers is pure logic - regexes,
+# the HTML cleaner, the robots helpers - and none of it needs crawl4ai,
+# anthropic or supabase. Exec'ing just that region is what lets these tests run
+# on a bare python with no install step, which is the only reason they can sit
+# in front of the five-minute dependency setup in CI.
+PRELUDE = """
+import logging, re
+from typing import Optional
+from urllib.robotparser import RobotFileParser
+from urllib.parse import urlsplit
+from urllib.request import urlopen
+logger = logging.getLogger("test")
+"""
+
+
 def load_cleaner():
-    """Import the cleaner without importing crawl4ai/anthropic/supabase."""
+    """Import the pure helpers without importing crawl4ai/anthropic/supabase."""
     with open(CRAWLER, encoding="utf-8") as fh:
         source = fh.read()
     start = source.index("EVENT_LINK_RE = re.compile")
     end = source.index("class CatchDesMoinesCrawler:")
     namespace = {}
-    exec("import re\n" + source[start:end], namespace)  # noqa: S102
+    exec(PRELUDE + source[start:end], namespace)  # noqa: S102
     return namespace
 
 
@@ -127,6 +142,35 @@ def main():
         len(link_re.findall(windowed)) > 0,
         "(window landed before the first event link)",
     )
+
+    # --- robots.txt ---------------------------------------------------------
+    # WEB-SEC-024 covers supabase/functions/_shared/scraper.ts. This crawler is
+    # the one ingestion path that does not go through it, so it needed its own
+    # check - and WEB-LEGAL-008's disclosure has to be true of every path.
+    parse_robots = ns["parse_robots"]
+
+    allow_all = parse_robots("User-agent: *\nAllow: /\nCrawl-delay: 2\n")
+    deny_all = parse_robots("User-agent: *\nDisallow: /\n")
+    deny_events = parse_robots("User-agent: *\nDisallow: /events/\n")
+
+    check(
+        "an explicit Disallow blocks",
+        not deny_all.can_fetch("*", "https://example.com/events/"),
+    )
+    check(
+        "a path-scoped Disallow blocks only that path",
+        not deny_events.can_fetch("*", "https://example.com/events/")
+        and deny_events.can_fetch("*", "https://example.com/about"),
+    )
+    check("Allow: / permits", allow_all.can_fetch("*", "https://example.com/events/"))
+    check("the declared Crawl-delay is read", allow_all.crawl_delay("*") == 2)
+
+    # The load-bearing direction. An unparseable or absent file must ALLOW: the
+    # opposite turns one flaky fetch into a silent ingestion halt, and this
+    # pipeline reports "0 events" the same way whether it was blocked or broken.
+    junk = parse_robots("<html>404 not found</html>")
+    check("an unparseable robots.txt does not block", junk.can_fetch("*", "https://example.com/events/"))
+    check("an empty robots.txt does not block", parse_robots("").can_fetch("*", "https://example.com/x"))
 
     print(f"\n{len(failures)} failure(s)")
     return 1 if failures else 0
