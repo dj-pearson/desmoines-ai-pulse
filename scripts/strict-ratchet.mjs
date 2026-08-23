@@ -25,6 +25,18 @@
  * are one-line TS2304/TS2552 errors that `tsc -p tsconfig.app.json` reports and
  * nothing in CI ever ran.
  *
+ * RE-BASELINE ON LINUX ONLY. The `app` baseline is platform-dependent and the
+ * gap is large: the same commit reports 0 errors on Windows and 378 in CI.
+ * TypeScript resolves module paths case-insensitively on a case-insensitive
+ * filesystem, so an import whose case does not match the file on disk
+ * compiles locally and fails on Linux, taking every file downstream of it
+ * with it. A baseline written on Windows therefore records zero and turns
+ * this check permanently red for everyone else - which is exactly what
+ * happened on 2026-08-23 and was reverted.
+ *
+ * If you need to re-baseline, take the numbers from a CI run, or run this
+ * inside WSL/Docker. Do not trust a local Windows count.
+ *
  * NOTE: `include` does not bound what tsc checks — every transitively imported
  * file is checked too. That is why a baseline covers files not listed as roots.
  *
