@@ -37,7 +37,7 @@
     "src/hooks/useContentQueue.ts": 3,
     "src/hooks/useCrmActivities.ts": 10,
     "src/hooks/useCrmCommunications.ts": 17,
-    "src/hooks/useCrmContacts.ts": 31,
+    "src/hooks/useCrmContacts.ts": 32,
     "src/hooks/useCrmDashboard.ts": 33,
     "src/hooks/useCrmDeals.ts": 40,
     "src/hooks/useCrmNotes.ts": 10,
