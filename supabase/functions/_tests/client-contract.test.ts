@@ -90,6 +90,22 @@ const MULTI_CLIENT = [
     ],
   },
   {
+    fn: 'log-error/index.ts',
+    // No action dispatch: log-error has an `action` FIELD in the payload, which
+    // is a label for the failing operation, not a branch selector.
+    documentedActions: [],
+    // The six every client sends. `userId` is deliberately NOT here: web sends
+    // it, and both mobile clients omit it because the id they hold is a 16-char
+    // hash while the handler validates a 36-char UUID and drops anything else -
+    // sending it would look like attribution while attributing nothing.
+    requestFields: ['message', 'component', 'action', 'route', 'severity', 'source'],
+    clients: [
+      'ios/DesMoinesInsider/Services/ErrorSink.swift',
+      'android/app/src/main/java/com/desmoines/aipulse/util/CrashUploader.kt',
+      'src/lib/errorHandler.ts',
+    ],
+  },
+  {
     fn: 'version-check/index.ts',
     documentedActions: [],
     requestFields: ['platform', 'version'],

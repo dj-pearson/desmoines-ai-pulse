@@ -59,7 +59,12 @@ class CrashUploader @Inject constructor(
             // The status is checked rather than relying on the call throwing:
             // deleting a record on a 500 would lose the crash for good.
             val ok = runCatching {
-                supabase.functions(FUNCTION_NAME, body = payload(record)).status.isSuccess()
+                // The function name is written out rather than passed as
+                // FUNCTION_NAME so the cross-platform contract scanner in
+                // _tests/client-contract.test.ts can see this call. It
+                // matches `functions("literal"`, so a constant hides the
+                // call from the guard that exists to catch exactly this.
+                supabase.functions("log-error", body = payload(record)).status.isSuccess()
             }.getOrDefault(false)
             if (!ok) {
                 // One failure almost always means the network is down, not that
@@ -84,8 +89,6 @@ class CrashUploader @Inject constructor(
          * that; the remainder is not dropped, it waits for the next launch.
          */
         const val MAX_PER_LAUNCH = 20
-
-        const val FUNCTION_NAME = "log-error"
 
         /** Longest message log-error stores. */
         private const val MAX_MESSAGE = 2000
