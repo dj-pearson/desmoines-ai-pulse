@@ -30,13 +30,24 @@ const SITE = (Deno.env.get("VITE_SITE_URL") || Deno.env.get("SITE_URL") || "http
 type Client = any;
 
 async function consented(supabase: Client, userId: string): Promise<{ email: string; allowed: boolean } | null> {
-  const { data } = await supabase.from("profiles").select("email, lifecycle_signals").eq("user_id", userId).maybeSingle();
+  const { data, error } = await supabase.from("profiles").select("email, lifecycle_signals").eq("user_id", userId).maybeSingle();
+  // Fails closed already - no email means the caller skips the user - but did
+  // so silently (WEB-BE-032 AC3).
+  if (error) console.warn(`[subscription-nurture] consent read failed for ${userId}: ${error.message}`);
   if (!data?.email) return null;
   return { email: data.email, allowed: (data.lifecycle_signals as { messagingAllowed?: boolean } | null)?.messagingAllowed !== false };
 }
 
 async function cappedRecently(supabase: Client, userId: string, kind: string, gapDays: number): Promise<boolean> {
-  const { data } = await supabase.from("nurture_sends").select("created_at").eq("user_id", userId).eq("kind", kind).order("created_at", { ascending: false }).limit(1);
+  const { data, error } = await supabase.from("nurture_sends").select("created_at").eq("user_id", userId).eq("kind", kind).order("created_at", { ascending: false }).limit(1);
+  // FAIL CLOSED. Returning false means "not messaged recently", which sends -
+  // so a dropped error here bypasses the per-kind frequency cap for every user
+  // in the sweep. Same defect and same direction as nurtureCoordination
+  // (WEB-BE-032 AC2).
+  if (error) {
+    console.warn(`[subscription-nurture] cap read failed for ${userId}/${kind}; suppressing: ${error.message}`);
+    return true;
+  }
   return !!(data?.[0] && Date.now() - new Date(data[0].created_at).getTime() < gapDays * DAY);
 }
 
@@ -67,7 +78,9 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   let trial = 0, dunning = 0, upgrade = 0, converted = 0, recovered = 0;
 
   // ── Conversion / recovery measurement (stamp activated_at) ────────────
-  const { data: openSends } = await supabase
+  // Measurement only: a failed read understates conversions for one run and
+  // sends nothing, so it is logged rather than raised (WEB-BE-032 AC3).
+  const { data: openSends, error: openSendsError } = await supabase
     .from("nurture_sends")
     .select("id, user_id, kind, created_at")
     .eq("agent_key", AGENT_KEY)
@@ -75,11 +88,14 @@ export const run: AgentRun = async (ctx, { supabase }) => {
     .gte("created_at", new Date(now - 45 * DAY).toISOString())
     .lte("created_at", new Date(now - 1 * DAY).toISOString())
     .limit(1000);
+  if (openSendsError) console.warn(`[subscription-nurture] conversion sweep read failed: ${openSendsError.message}`);
   for (const s of (openSends ?? []) as { id: string; user_id: string; kind: string }[]) {
-    const { data: sub } = await supabase.from("user_subscriptions").select("status").eq("user_id", s.user_id).in("status", ["active", "trialing"]).maybeSingle();
+    const { data: sub, error: subReadError } = await supabase.from("user_subscriptions").select("status").eq("user_id", s.user_id).in("status", ["active", "trialing"]).maybeSingle();
+    if (subReadError) console.warn(`[subscription-nurture] conversion status read failed for ${s.user_id}: ${subReadError.message}`);
     const active = sub?.status === "active";
     if (!active) continue;
-    const { data: upd } = await supabase.from("nurture_sends").update({ activated_at: new Date().toISOString() }).eq("id", s.id).is("activated_at", null).select("id");
+    const { data: upd, error: updError } = await supabase.from("nurture_sends").update({ activated_at: new Date().toISOString() }).eq("id", s.id).is("activated_at", null).select("id");
+    if (updError) console.warn(`[subscription-nurture] activation stamp failed for send ${s.id}: ${updError.message}`);
     if (upd && upd.length) { if (s.kind === "dunning") recovered++; else converted++; }
   }
 
@@ -92,13 +108,18 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   // Sent as a transactional notice: no marketing-consent check, no quality
   // gate. It states the amount, the date and how to cancel (WEB-LEGAL-006).
   const trialCutoff = new Date(now + TRIAL_WINDOW_DAYS * DAY).toISOString();
-  const { data: trials } = await supabase
+  const { data: trials, error: trialsError } = await supabase
     .from("user_subscriptions")
     .select("user_id, plan_id, current_period_end, trial_end, billing_interval")
     .eq("status", "trialing")
     .not("current_period_end", "is", null)
     .lte("current_period_end", trialCutoff)
     .limit(300);
+  // RAISE. An empty result reports "0 trial-ending notices" as a successful
+  // run, which is indistinguishable from nobody being in a trial - and this is
+  // the billing disclosure WEB-LEGAL-006 requires, so a silent zero means
+  // people are charged without being told (WEB-BE-032 AC2).
+  if (trialsError) throw new Error(`trialing subscriptions read failed: ${trialsError.message}`);
   for (const t of (trials ?? []) as { user_id: string; plan_id: string | null; current_period_end: string; trial_end: string | null; billing_interval: string | null }[]) {
     // Email address only. The marketing-preference check is deliberately
     // absent here; this is a billing notice. See sendNotice above.
@@ -136,7 +157,10 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   }
 
   // ── 2) Dunning (past_due) ────────────────────────────────────────────
-  const { data: pastDue } = await supabase.from("user_subscriptions").select("user_id").eq("status", "past_due").limit(300);
+  const { data: pastDue, error: pastDueError } = await supabase.from("user_subscriptions").select("user_id").eq("status", "past_due").limit(300);
+  // Same reasoning as the trial sweep: a dunning notice nobody receives looks
+  // exactly like nobody being past due.
+  if (pastDueError) throw new Error(`past_due subscriptions read failed: ${pastDueError.message}`);
   for (const d of (pastDue ?? []) as { user_id: string }[]) {
     const c = await consented(supabase, d.user_id);
     if (!c || !c.allowed) continue;
@@ -146,16 +170,25 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   }
 
   // ── 3) Upgrade prompts (engaged free users) ──────────────────────────
-  const { data: freeEngaged } = await supabase
+  const { data: freeEngaged, error: freeEngagedError } = await supabase
     .from("profiles")
     .select("user_id, email, lifecycle_signals")
     .eq("lifecycle_stage", "active")
     .not("email", "is", null)
     .limit(300);
+  if (freeEngagedError) throw new Error(`engaged free users read failed: ${freeEngagedError.message}`);
   for (const p of (freeEngaged ?? []) as { user_id: string; email: string; lifecycle_signals: { messagingAllowed?: boolean } | null }[]) {
     if (p.lifecycle_signals?.messagingAllowed === false) continue;
     // Only prompt users WITHOUT an active/trialing paid sub (entitlement-safe read).
-    const { data: sub } = await supabase.from("user_subscriptions").select("status").eq("user_id", p.user_id).in("status", ["active", "trialing"]).maybeSingle();
+    // ENTITLEMENT READ, and the comment above already called it entitlement-safe
+    // while it was not: `if (sub) continue` skips paying users, so a dropped
+    // error leaves sub null and mails an UPGRADE PROMPT to someone who already
+    // pays. Skip the user instead (WEB-BE-032 AC2).
+    const { data: sub, error: subError } = await supabase.from("user_subscriptions").select("status").eq("user_id", p.user_id).in("status", ["active", "trialing"]).maybeSingle();
+    if (subError) {
+      console.warn(`[subscription-nurture] entitlement read failed for ${p.user_id}; skipping: ${subError.message}`);
+      continue;
+    }
     if (sub) continue;
     if (await cappedRecently(supabase, p.user_id, "upgrade_prompt", UPGRADE_GAP_DAYS)) continue;
     const html = `<h1>Get more from Des Moines Insider</h1><p>You're clearly enjoying the city — Insider unlocks premium picks and the AI Trip Planner to make every outing easier.</p><p><a href="${SITE}/profile?tab=settings">See Insider →</a></p>`;
