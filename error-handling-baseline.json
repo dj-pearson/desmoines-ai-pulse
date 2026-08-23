@@ -1,6 +1,6 @@
 {
   "scope": "src + supabase/functions; data|count destructures; rule-scoped counting",
-  "total": 295,
+  "total": 287,
   "files": {
     "src/components/admin/AdRateManager.tsx": 1,
     "src/components/admin/BlockedEmailDomainsManager.tsx": 1,
@@ -114,12 +114,10 @@
     "supabase/functions/generate-itinerary/index.ts": 1,
     "supabase/functions/generate-proposal/index.ts": 4,
     "supabase/functions/get-sponsored-pick/index.ts": 3,
-    "supabase/functions/gsc-fetch-properties/index.ts": 4,
     "supabase/functions/job-health-watchdog/index.ts": 2,
     "supabase/functions/manage-subscription/index.ts": 1,
     "supabase/functions/moderate-content/index.ts": 3,
     "supabase/functions/nlp-search/index.ts": 1,
-    "supabase/functions/og-image/index.ts": 4,
     "supabase/functions/outreach-reply/index.ts": 3,
     "supabase/functions/personalized-recommendations/index.ts": 4,
     "supabase/functions/play-rtdn-webhook/index.ts": 3,
