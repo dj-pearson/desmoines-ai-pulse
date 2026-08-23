@@ -66,29 +66,33 @@ still get nothing:
 The `-2` suffix on the first one turned out to be a real defect, and a costly one -- see
 below.
 
-### The `-2` suffix: two of our best search assets compete with themselves
+### The `-2` suffix: corrected
 
-`flipn-jacks-pancake-house-eatery-2` is not a slug collision with an unrelated business. It
-is the SAME restaurant, listed twice, because the two rows spell the name with different
-apostrophes:
+My first pass here claimed `flipn-jacks-pancake-house-eatery-2` was the same restaurant
+listed twice under different apostrophes, and that our two best assets competed with
+themselves. **That was wrong, and checking the addresses is what showed it.**
 
-    Flip’N Jacks Pancake House & Eatery   ->  flipn-jacks-pancake-house-eatery-2
-    Flip'N Jacks Pancake House & Eatery   ->  flipn-jacks-pancake-house-eatery
+    flipn-jacks-pancake-house-eatery     1520 S Dayton Pl, Ames
+    flipn-jacks-pancake-house-eatery-2   3221 Adventureland Dr, Altoona
 
-U+2019 versus U+0027. Seven restaurant names use the curly form, 109 the straight one, and
-two of them have produced a duplicate pair:
+Two different locations. The `-2` suffix is the collision handler working correctly. The
+apostrophes genuinely differ between those two rows (U+2019 vs U+0027, 7 of 116 names use
+the curly form), but they caused nothing — I read a correlation as a cause.
 
-| normalised name | slugs |
-|---|---|
-| daves hot chicken | `daves-hot-chicken`, `daves-hot-chicken-2` |
-| flipn jacks pancake house & eatery | `flipn-jacks-pancake-house-eatery`, `flipn-jacks-pancake-house-eatery-2` |
+What the `-2` slugs did surface is two real defects, now tracked as WEB-SEO-019:
 
-Both are near the top of this report. `flipn-jacks-...-2` is the single highest-impression
-page in the window (800). `dave's hot chicken west des moines` is the second-highest query
-(156 impressions, average position 11.0) and the strongest page-2 opportunity in section 3.
+1. **The slug generator deletes accented letters rather than folding them.** `Atlas Café`
+   became `atlas-caf`, `El Fogón` became `el-fogn`, `Crème` became `crme`. 22 restaurants
+   have a non-ASCII name and 16 of their slugs are wrong. This is not cosmetic —
+   `atlas-caf` earns 7 of the site's 72 clicks in this window. Fixed for new rows in
+   migration `20260822000014`; the 16 existing slugs need a backfill with 301s.
+2. **Exactly two true duplicates**, found by grouping on name *and* address:
+   `daves-hot-chicken` (two rows, same Davenport address, a day apart) and
+   `outback-steakhouse` (two rows, same Clive address, same day).
 
-So the two best-performing entities in the entire dataset are each split across two URLs
-that compete with each other for the same query. Filed as WEB-SEO-019.
+So the highest-impression page in this window, `flipn-jacks-...-2`, is a legitimate URL
+with a genuine snippet problem — 800 impressions at position 10.1 and no clicks — and
+nothing to do with duplication.
 
 Pages that DO convert, for contrast: `/restaurants/jungle-tea` at 16.07%,
 `/restaurants/canopy` at 75% (8 impressions, so treat as noise),
