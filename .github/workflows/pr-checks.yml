@@ -141,6 +141,14 @@ jobs:
       - name: SPA fallback does not claim to be the homepage
         run: node scripts/check-spa-fallback-canonical.mjs
 
+      # WEB-SEO-013 AC7: pseo_pages rows are DATA, so a generated page landing on
+      # a hand-built route is invisible to every static check here - nothing
+      # compares a database row to src/App.tsx. Offline; reads a committed slug
+      # list, and ratchets rather than gating, because each existing collision
+      # needs a per-slug decision.
+      - name: pSEO slugs do not collide with real routes
+        run: node scripts/check-pseo-route-collisions.mjs
+
       - name: Critical-path JS budget
         run: node scripts/check-bundle-budget.mjs
 
