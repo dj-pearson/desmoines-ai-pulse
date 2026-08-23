@@ -209,7 +209,14 @@ async function fetchListings(
       if (range) query = query.gte('date', range.from).lte('date', range.to);
     }
 
-    const { data } = await query;
+    const { data, error } = await query;
+    // The component renders NOTHING when this returns empty - `if (!items?.length)
+    // return null` - so a failed query removes the listing block from the page
+    // entirely and the pSEO page silently becomes prose with no inventory. That
+    // is exactly the doorway-page shape WEB-SEO-013 AC5 exists to prevent, and
+    // an empty listing from a failed read is indistinguishable from a genuinely
+    // empty one. Throwing lets react-query surface it instead.
+    if (error) throw error;
     return (data ?? []).map((e) => ({
       id: e.id,
       name: e.title,
@@ -240,7 +247,8 @@ async function fetchListings(
     // taxonomy generating a dimension the entity does not have, not a bug to fix
     // in this query.
 
-    const { data } = await query;
+    const { data, error } = await query;
+    if (error) throw error;
     return (data ?? []).map((r) => ({
       id: r.id,
       name: r.name,
@@ -265,7 +273,8 @@ async function fetchListings(
     query = query.ilike('location', `%${location.name}%`);
   }
 
-  const { data } = await query;
+  const { data, error } = await query;
+  if (error) throw error;
   return (data ?? []).map((a) => ({
     id: a.id,
     name: a.name,
