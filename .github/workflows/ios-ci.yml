@@ -301,6 +301,36 @@ jobs:
             }
           echo "✅ Unit tests passed"
 
+      # IOS-AUDIT-REL-015: DesMoinesInsiderUITests existed and ran only in the
+      # screenshot lane, which is manual. These are navigation tests that happen
+      # to take screenshots - they tap a tab and wait for content - so they catch
+      # the two failures unit tests structurally cannot: the app not launching at
+      # all, and a tab or screen disappearing.
+      #
+      # Same job as the unit tests on purpose: the simulator is already booted
+      # and the SPM cache is warm, so this costs a UI-test build rather than a
+      # whole extra job.
+      - name: Run UI tests
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project DesMoinesInsider.xcodeproj \
+            -scheme DesMoinesInsiderUITests \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,name=iPhone 16,OS=latest" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cache" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee "$RUNNER_TEMP/xcodebuild-uitest.log" | xcpretty --color --test || {
+              echo ""
+              echo "::error::UI tests failed!"
+              grep -E "(Test Case.*failed|error:)" "$RUNNER_TEMP/xcodebuild-uitest.log" | head -30
+              exit 1
+            }
+          echo "UI tests passed"
+
       - name: Report version
         if: needs.version-bump.outputs.bumped == 'true'
         run: |
