@@ -131,16 +131,32 @@ Deno.serve(async (req) => {
     const deleteCutoffStr = deleteCutoff.toISOString().split('T')[0];
 
     if (dryRun) {
-      const { count: toHide } = await supabase
+      // A dry run is what an operator reads before authorising a destructive
+      // cleanup. `toHide || 0` reported "would hide 0 and archive+delete 0
+      // events" when the count failed, so a broken query looked exactly like
+      // nothing to do. A dry run that could not measure says so and returns 500.
+      const { count: toHide, error: hideCountError } = await supabase
         .from('events')
         .select('id', { count: 'exact', head: true })
         .lt('date', hideCutoffStr)
         .eq('is_hidden', false)
         .is('hidden_at', null);
-      const { count: toDelete } = await supabase
+      const { count: toDelete, error: deleteCountError } = await supabase
         .from('events')
         .select('id', { count: 'exact', head: true })
         .lt('date', deleteCutoffStr);
+
+      if (hideCountError || deleteCountError) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            dryRun: true,
+            error: 'Could not count affected events - the dry run measured nothing.',
+            details: (hideCountError ?? deleteCountError)?.message,
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        );
+      }
 
       return new Response(
         JSON.stringify({

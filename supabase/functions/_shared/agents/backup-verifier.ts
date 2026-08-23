@@ -75,10 +75,25 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   const recency = await fetchBackupRecency();
 
   // 2) Restore-sanity spot check: core tables have live rows.
-  const rowCounts: Record<string, number> = {};
+  //
+  // A COUNT THAT COULD NOT BE READ IS NOT A COUNT OF ZERO, and here the
+  // difference is a page. `count ?? 0` turned a transient read failure into
+  // "this core table is empty", which sets emptyCoreTable, fails the verdict,
+  // and writes ok=false into backup_checks - a restore-sanity alarm raised by a
+  // query that never ran, and a false FAILED row in the history the ops digest
+  // reads back. Unreadable is recorded as unreadable and does not decide the
+  // verdict on its own.
+  const rowCounts: Record<string, number | null> = {};
   let emptyCoreTable = false;
+  const unreadableTables: string[] = [];
   for (const table of CORE_TABLES) {
-    const { count } = await supabase.from(table).select("id", { count: "exact", head: true });
+    const { count, error } = await supabase.from(table).select("id", { count: "exact", head: true });
+    if (error) {
+      rowCounts[table] = null;
+      unreadableTables.push(table);
+      console.error(`[backup-verifier] count(${table}) failed:`, error.message);
+      continue;
+    }
     rowCounts[table] = count ?? 0;
     if ((count ?? 0) === 0) emptyCoreTable = true;
   }
@@ -87,7 +102,10 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   // or a core table unexpectedly empty (restore-sanity failure).
   const stale = recency.available && (recency.ageHours == null || recency.ageHours > STALE_HOURS);
   const method = recency.available ? "management_api" : "row_spotcheck";
-  const ok = !stale && !emptyCoreTable;
+  // Unreadable tables fail the check too - a spot check that could not run has
+  // not verified anything - but they are reported as their own reason rather
+  // than as an empty table, so the alert says what actually happened.
+  const ok = !stale && !emptyCoreTable && unreadableTables.length === 0;
 
   await supabase.from("backup_checks").insert({
     method,
@@ -95,7 +113,7 @@ export const run: AgentRun = async (ctx, { supabase }) => {
     latest_backup_at: recency.latestBackupAt,
     backup_age_hours: recency.ageHours,
     row_counts: rowCounts,
-    details: { staleThresholdHours: STALE_HOURS, recencyAvailable: recency.available, emptyCoreTable },
+    details: { staleThresholdHours: STALE_HOURS, recencyAvailable: recency.available, emptyCoreTable, unreadableTables },
   });
 
   // Missing/stale backup → tier-3 incident + immediate notify.
