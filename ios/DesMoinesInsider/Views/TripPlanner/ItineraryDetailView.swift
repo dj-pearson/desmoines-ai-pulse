@@ -310,11 +310,20 @@ struct ItineraryDetailView: View {
             }
 
             var added = 0
+            var skipped = 0
             let calendar = Calendar(identifier: .gregorian)
             for item in allItems {
                 guard let startTime = item.startTime,
                       let dayDate = calendar.date(byAdding: .day, value: item.dayNumber - 1, to: tripStart),
-                      let start = combine(day: dayDate, time: startTime) else { continue }
+                      let start = combine(day: dayDate, time: startTime) else {
+                    // A stop with no time, or a time combine() cannot parse, used
+                    // to vanish here without a trace - the summary counted what
+                    // was added and said nothing about the rest, so an itinerary
+                    // half of which had no times reported a cheerful partial
+                    // success (IOS-AUDIT-UX-059).
+                    skipped += 1
+                    continue
+                }
 
                 let calEvent = EKEvent(eventStore: store)
                 calEvent.title = item.title ?? "Itinerary stop"
@@ -327,11 +336,30 @@ struct ItineraryDetailView: View {
                 added += 1
             }
 
-            calendarMessage = added > 0
-                ? "Added \(added) stop\(added == 1 ? "" : "s") to your calendar."
-                : "No timed stops to add."
+            calendarMessage = Self.calendarSummary(added: added, skipped: skipped)
         } catch {
             calendarMessage = error.localizedDescription
+        }
+    }
+
+    /// What the user is told after a calendar write.
+    ///
+    /// Pure, so the counting can be asserted: the interesting cases are the ones
+    /// nobody writes by hand - some added and some skipped, and everything
+    /// skipped, which used to read as "No timed stops to add" whether the stops
+    /// had no times or had times this app could not parse.
+    static func calendarSummary(added: Int, skipped: Int) -> String {
+        let stops = { (n: Int) in "\(n) stop\(n == 1 ? "" : "s")" }
+
+        switch (added, skipped) {
+        case (0, 0):
+            return "This itinerary has no stops to add."
+        case (0, _):
+            return "Couldn't add \(stops(skipped)) - they have no start time."
+        case (_, 0):
+            return "Added \(stops(added)) to your calendar."
+        default:
+            return "Added \(stops(added)). Skipped \(skipped) with no start time."
         }
     }
 

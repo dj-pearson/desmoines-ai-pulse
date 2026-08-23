@@ -57,8 +57,20 @@ private struct SaveSearchSheet: View {
     let onSave: (String) async -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @State private var name: String = ""
+    @State private var name: String
     @State private var saving = false
+
+    /// Seeded here rather than in onAppear (IOS-AUDIT-UX-059).
+    ///
+    /// onAppear ran `if name.isEmpty { name = defaultName }`, which fires again
+    /// whenever the sheet reappears - so a user who deliberately cleared the
+    /// field got the default typed back in underneath them. State that belongs
+    /// to a view's identity belongs in its initializer.
+    init(defaultName: String, onSave: @escaping (String) async -> Void) {
+        self.defaultName = defaultName
+        self.onSave = onSave
+        _name = State(initialValue: defaultName)
+    }
 
     var body: some View {
         NavigationStack {
@@ -98,7 +110,6 @@ private struct SaveSearchSheet: View {
                     }
                 }
             }
-            .onAppear { if name.isEmpty { name = defaultName } }
         }
     }
 }
