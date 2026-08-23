@@ -188,7 +188,10 @@ struct SubscriptionView: View {
     /// is worse than no price: the user reads it, decides on it, and is charged
     /// something else. The list still says what the tier includes.
     private func tierHeading(_ name: String, tier: SubscriptionTier) -> String {
-        let product = SubscriptionPeriod.allCases
+        // Qualified: this file imports StoreKit, where a bare
+        // `SubscriptionPeriod` resolves to Product.SubscriptionPeriod rather
+        // than ours.
+        let product = StoreKitService.SubscriptionPeriod.allCases
             .lazy
             .compactMap { storeKit.product(for: tier, period: $0) }
             .first
