@@ -16,8 +16,9 @@ import ImageIO
 enum BlurUpThumbnail {
     /// Generate a tiny thumbnail for blur-up effect (12x12 then scaled up).
     ///
-    /// `nonisolated` so it can run inside the detached decode task. Nothing
-    /// here touches view state - it takes a UIImage and returns a new one.
+    /// Runs inside the detached decode task. Nothing here touches view state:
+    /// it takes a UIImage and returns a new one, and UIGraphicsImageRenderer
+    /// renders to a bitmap off the main thread safely.
     ///
     /// WHAT THIS EFFECT ACTUALLY DOES TODAY, measured rather than assumed: the
     /// thumbnail is derived from the fully decoded image, and `image` is
