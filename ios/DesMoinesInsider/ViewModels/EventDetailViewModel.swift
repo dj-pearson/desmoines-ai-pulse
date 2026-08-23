@@ -16,8 +16,16 @@ final class EventDetailViewModel {
     /// loading flag for work the user was not waiting on (IOS-AUDIT-UX-058).
     private(set) var isRefreshing = false
 
-    private let service = EventsService.shared
+    private let service: EventDetailProviding
     private let favorites = FavoritesService.shared
+
+    /// Defaults to the shared service, so no call site changes and no view is
+    /// touched. The parameter exists so a test can arrange what the fetch
+    /// returns, which is the only way the background-refresh behaviour in
+    /// IOS-AUDIT-UX-058 can be asserted at all (IOS-AUDIT-TEST-006).
+    init(service: EventDetailProviding = EventsService.shared) {
+        self.service = service
+    }
 
     // MARK: - Load Event
 

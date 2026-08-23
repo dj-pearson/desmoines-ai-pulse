@@ -319,3 +319,29 @@ actor EventsService {
         return events
     }
 }
+
+/// What EventDetailViewModel needs from EventsService, and nothing else
+/// (IOS-AUDIT-TEST-006).
+///
+/// A ROLE interface, deliberately. EventsService has around forty methods; a
+/// protocol mirroring it would be unwritable and unmaintainable, and every
+/// caller would have to stub methods it never calls. This declares the two the
+/// event detail screen actually uses, so a fake in a test is a dozen lines.
+///
+/// Same shape as `AuthProviding` (IOS-AUDIT-TEST-002): a protocol beside the
+/// service, a retroactive conformance, and an initialiser defaulting to
+/// `.shared` so no existing call site changes.
+protocol EventDetailProviding: Sendable {
+    func fetchEvent(id: String) async throws -> Event
+    func fetchRelatedEvents(eventId: String, category: String, limit: Int) async throws -> [Event]
+}
+
+extension EventDetailProviding {
+    /// The service's own default limit, kept in one place rather than repeated
+    /// at the call site - a protocol requirement cannot carry a default.
+    func fetchRelatedEvents(eventId: String, category: String) async throws -> [Event] {
+        try await fetchRelatedEvents(eventId: eventId, category: category, limit: 6)
+    }
+}
+
+extension EventsService: EventDetailProviding {}
