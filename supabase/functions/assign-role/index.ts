@@ -88,11 +88,21 @@ serve(async (req) => {
   // 4) Write with the service client. assigned_by = verified caller, so the
   // existing validate_role_assignment trigger re-checks against a trustworthy
   // actor (not a client-supplied value).
-  const { data: existing } = await admin
+  const { data: existing, error: existingErr } = await admin
     .from('user_roles')
     .select('id')
     .eq('user_id', targetUserId)
     .maybeSingle();
+
+  // This read decides UPDATE vs INSERT on the authorization table. A dropped
+  // error reads as "no row yet" and takes the INSERT branch, writing a SECOND
+  // role row for a user who already has one - so which role applies then
+  // depends on read order (WEB-BE-032 AC2). Refuse rather than guess; the
+  // caller can retry.
+  if (existingErr) {
+    console.error('[assign-role] existing-role read failed:', existingErr.message);
+    return json({ error: 'Failed to assign role' }, 500);
+  }
 
   let writeErr;
   if (existing?.id) {
@@ -140,20 +150,26 @@ async function resolveRole(
   admin: ReturnType<typeof createClient>,
   userId: string,
 ): Promise<Role> {
-  const { data: roleRow } = await admin
+  // Both reads below fail closed to 'user', the least privileged role, which
+  // is the right direction and is unchanged. They now log: a read failure used
+  // to demote a caller with no server-side signal, reaching them as a flat 403
+  // indistinguishable from a real denial (WEB-BE-032 AC2).
+  const { data: roleRow, error: roleErr } = await admin
     .from('user_roles')
     .select('role')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
+  if (roleErr) console.warn(`[assign-role] user_roles read failed for ${userId}: ${roleErr.message}`);
   if (roleRow?.role && VALID_ROLES.includes(roleRow.role as Role)) return roleRow.role as Role;
 
-  const { data: profile } = await admin
+  const { data: profile, error: profileErr } = await admin
     .from('profiles')
     .select('user_role')
     .eq('user_id', userId)
     .maybeSingle();
+  if (profileErr) console.warn(`[assign-role] profiles read failed for ${userId}: ${profileErr.message}`);
   if (profile?.user_role && VALID_ROLES.includes(profile.user_role as Role)) {
     return profile.user_role as Role;
   }

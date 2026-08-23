@@ -251,9 +251,6 @@
     "supabase/functions/assemble-weekly-digest/index.ts:141",
     "supabase/functions/assemble-weekly-digest/index.ts:349",
     "supabase/functions/assemble-weekly-digest/index.ts:361",
-    "supabase/functions/assign-role/index.ts:91",
-    "supabase/functions/assign-role/index.ts:143",
-    "supabase/functions/assign-role/index.ts:152",
     "supabase/functions/autonomy-overview/index.ts:63",
     "supabase/functions/autonomy-overview/index.ts:80",
     "supabase/functions/autonomy-overview/index.ts:99",
@@ -345,10 +342,6 @@
     "supabase/functions/support-ticket-reclassify/index.ts:55",
     "supabase/functions/triage-event-submission/index.ts:134",
     "supabase/functions/triage-event-submission/index.ts:138",
-    "supabase/functions/validate-android-receipt/index.ts:437",
-    "supabase/functions/validate-android-receipt/index.ts:462",
-    "supabase/functions/validate-ios-receipt/index.ts:459",
-    "supabase/functions/validate-ios-receipt/index.ts:480",
     "supabase/functions/verify-apple-receipt/index.ts:97",
     "supabase/functions/verify-apple-receipt/index.ts:116"
   ]
