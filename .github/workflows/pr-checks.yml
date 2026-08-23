@@ -134,6 +134,13 @@ jobs:
       - name: Consent gate on third-party tags
         run: node scripts/check-consent-gate.mjs
 
+      # WEB-SEO-006: the SPA fallback serves the prerendered HOMEPAGE for every
+      # unmatched route, so 884 sitemapped URLs answered with the homepage
+      # canonical - an instruction to treat them all as one page. Runs after the
+      # build so it can also confirm the rewrite still has a canonical to target.
+      - name: SPA fallback does not claim to be the homepage
+        run: node scripts/check-spa-fallback-canonical.mjs
+
       - name: Critical-path JS budget
         run: node scripts/check-bundle-budget.mjs
 

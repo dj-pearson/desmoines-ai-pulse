@@ -143,8 +143,59 @@ class TextSetter {
   }
 }
 
+class Remover {
+  element(el: any) {
+    el.remove();
+  }
+}
+
 function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+/**
+ * Stop the SPA fallback from claiming to BE the homepage (WEB-SEO-006).
+ *
+ * The fallback below serves `/` for every unmatched route, and `/` is
+ * prerendered - so an event, restaurant or attraction URL returns the
+ * homepage's HTML verbatim, including:
+ *
+ *   <link rel="canonical" href="https://desmoinesinsider.com/">
+ *   <meta property="og:url" content="https://desmoinesinsider.com/">
+ *   7 ld+json blocks describing the homepage (LocalBusiness, FAQPage, ...)
+ *
+ * Measured in production 2026-08-22: 884 sitemapped URLs each returning a
+ * byte-identical copy of the homepage. That is not "invisible to crawlers",
+ * which is how the story was originally framed - it is an explicit
+ * consolidation directive telling every crawler to treat 884 distinct URLs as
+ * one page, plus structured data asserting the wrong facts about each.
+ *
+ * Three rewrites, all of them removing a wrong assertion rather than inventing
+ * a right one:
+ *   - canonical and og:url point at the requested URL, so the page claims
+ *     itself. Helmet replaces both after hydration for anyone running JS.
+ *   - the homepage's JSON-LD is REMOVED rather than corrected. There is no
+ *     per-entity data at this layer to build the right blocks from, and no
+ *     structured data is strictly better than structured data that says an
+ *     event page is a FAQ about Des Moines Insider.
+ *
+ * This does NOT make entity pages readable without JS - that needs
+ * PRERENDER_ENTITIES on the Pages build, which is the rest of WEB-SEO-006. It
+ * removes the part that is actively harmful while that is pending, and it also
+ * covers the soft-404 surface, where an unknown slug will keep falling through
+ * here even after the flag is on.
+ */
+function withSelfCanonical(shell: Response, pageUrl: string): Response {
+  const rewritten = new HTMLRewriter()
+    .on('link[rel="canonical"]', new AttrSetter("href", pageUrl))
+    .on('meta[property="og:url"]', new AttrSetter("content", pageUrl))
+    .on('script[type="application/ld+json"]', new Remover())
+    .transform(shell);
+
+  return new Response(rewritten.body, {
+    status: shell.status,
+    headers: shell.headers,
+  });
 }
 
 export async function onRequest(context: EventContext) {
@@ -186,7 +237,13 @@ export async function onRequest(context: EventContext) {
             .on('meta[property="og:image:secure_url"]', new AttrSetter("content", ogImage))
             .on('meta[name="twitter:image"]', new AttrSetter("content", ogImage))
             .on('meta[property="og:url"]', new AttrSetter("content", pageUrl))
-            .on('meta[property="og:type"]', new AttrSetter("content", type === "article" ? "article" : "website"));
+            .on('meta[property="og:type"]', new AttrSetter("content", type === "article" ? "article" : "website"))
+            // Same two corrections withSelfCanonical makes on the plain
+            // fallback. This path already rewrote og:url and left the canonical
+            // pointing at "/" beside it, so the card said one thing and the
+            // canonical said another (WEB-SEO-006).
+            .on('link[rel="canonical"]', new AttrSetter("href", pageUrl))
+            .on('script[type="application/ld+json"]', new Remover());
 
           if (title) {
             rewriter = rewriter
@@ -220,9 +277,18 @@ export async function onRequest(context: EventContext) {
   // For all other routes, return index.html (SPA routing).
   const response = await context.next();
 
-  // If it's a 404, serve index.html instead.
+  // If it's a 404, serve index.html instead - with the homepage's canonical,
+  // og:url and JSON-LD corrected so the route does not claim to be the
+  // homepage (WEB-SEO-006). See withSelfCanonical.
   if (response.status === 404 && !pathname.includes(".")) {
-    return context.env.ASSETS.fetch(new URL("/", context.request.url));
+    const shell = await context.env.ASSETS.fetch(new URL("/", context.request.url));
+    try {
+      return withSelfCanonical(shell, `${url.origin}${pathname}`);
+    } catch {
+      // Never fail the page for a meta rewrite. Worst case is the previous
+      // behaviour, which is what shipped for months.
+      return shell;
+    }
   }
 
   return response;
