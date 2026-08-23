@@ -128,6 +128,12 @@ jobs:
       # accessibility lane (WEB-CI-021) and the unit lane (WEB-CI-020) both
       # ended up on continue-on-error. It fails on growth past the baseline and
       # prints the distance to 200 KB every run so the goal stays visible.
+      # WEB-LEGAL-009 AC1: analytics that loads before consent lives in
+      # index.html - not TypeScript, not tested, not linted - which is how
+      # WEB-LEGAL-001 shipped while a document said it was fixed.
+      - name: Consent gate on third-party tags
+        run: node scripts/check-consent-gate.mjs
+
       - name: Critical-path JS budget
         run: node scripts/check-bundle-budget.mjs
 
