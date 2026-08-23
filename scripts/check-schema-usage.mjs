@@ -393,7 +393,15 @@ function scanFile(file, schema, findings) {
         // check above, and returns nothing, so the admin campaign list rendered
         // blank owner emails. A rule that misses the most common spelling of
         // the thing it guards is not a rule.
-        if (!/user_id|\buser\b|\buserId\b|\bauthUser\b|\bsession\b|auth\.uid|\.user\.id/i.test(arg)) continue;
+        // PLURALS COUNT, and missing them is how this rule missed a live one.
+        // saved-search-alerts did `.in("id", userIds)` where userIds comes from
+        // saved_searches.user_id - auth user ids - so it matched zero profiles.
+        // `\buserId\b` cannot match "userIds" (no boundary before the s) and
+        // `\buser\b` cannot match "userIds" either, for the same reason the
+        // comment above gives about "user_id". The rule had been widened once
+        // for the singular and not for the collection, and `.in(...)` is
+        // exactly where a collection appears.
+        if (!/user_?ids?\b|\busers?\b|\buserIds?\b|\bauthUser\b|\bsession\b|auth\.uid|\.user\.id/i.test(arg)) continue;
         findings.push({
           kind: 'profiles-key', file: rel,
           line: lineOf(src, m.index + m[0].length + f.index),

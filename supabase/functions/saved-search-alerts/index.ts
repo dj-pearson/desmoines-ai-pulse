@@ -186,8 +186,14 @@ serve(async (req) => {
         // production - so this select failed and, since WEB-BE-032 made the
         // failure raise, the whole nightly run aborted. Before that it fell to
         // an empty list and sent nothing, silently.
-        .select("id, email")
-        .in("id", userIds);
+        // KEYED ON user_id, NOT id. userIds comes from saved_searches.user_id,
+        // which is the AUTH user id. profiles has both columns and they are
+        // different values - 0 of 6 rows have id = user_id - so `.in("id", ...)`
+        // matched nothing and this run resolved zero recipients even once the
+        // email_verified column error above was fixed. The very next query in
+        // this block already keys on user_id; they disagreed with each other.
+        .select("user_id, email")
+        .in("user_id", userIds);
       if (profilesError) {
         // Fails closed already - `profiles ?? []` sends nothing - but silently,
         // so a run that reached zero recipients looked identical to a run with
@@ -214,7 +220,7 @@ serve(async (req) => {
       for (const p of prefs ?? []) prefMap.set((p as any).user_id, (p as any).event_alerts_enabled !== false);
 
       for (const profile of profiles ?? []) {
-        const uid = (profile as any).id as string;
+        const uid = (profile as any).user_id as string;
         const email = (profile as any).email as string | null;
         // THE VERIFICATION GATE IS GONE BECAUSE IT NEVER EXISTED. Nothing in
         // the schema records whether an address is confirmed, so there is no
