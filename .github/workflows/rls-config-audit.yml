@@ -99,6 +99,13 @@ jobs:
       # 404. A function directory looks identical to a deployed function and
       # there is no deploy step in CI, so nothing surfaced it. Probes with the
       # anon key; sends {} so nothing is executed.
+      # WEB-BE-032 AC4: `{ data }` without `error` cannot tell a missing table
+      # from an empty one, which is why 29 missing tables went unnoticed for
+      # months. Baselined at the existing sites; fails only on new ones.
+      # Offline; no credentials needed.
+      - name: Discarded Supabase errors
+        run: node scripts/check-discarded-supabase-errors.mjs
+
       - name: Edge-function deploy ratchet
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
