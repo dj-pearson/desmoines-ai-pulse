@@ -327,8 +327,13 @@ actor RestaurantsService {
 }
 
 /// What SearchViewModel needs from RestaurantsService (IOS-AUDIT-TEST-006).
-protocol RestaurantSearchProviding: Sendable {
+/// One page of restaurants for a query. All DiscoverViewModel needs.
+protocol RestaurantPageProviding: Sendable {
     func fetchRestaurants(query: RestaurantsService.RestaurantsQuery) async throws -> RestaurantsService.RestaurantsResponse
+}
+
+/// Search additionally needs the fuzzy fallback.
+protocol RestaurantSearchProviding: RestaurantPageProviding {
     func fuzzySearchRestaurants(query: String, limit: Int) async throws -> [Restaurant]
 }
 

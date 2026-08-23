@@ -351,8 +351,16 @@ extension EventsService: EventDetailProviding {}
 /// Separate from `EventDetailProviding` on purpose: two screens, two roles, two
 /// small protocols. Merging them would give each fake methods it never uses,
 /// which is how role interfaces turn back into a mirror of the service.
-protocol EventSearchProviding: Sendable {
+/// One page of events for a query. The narrowest useful role, and the only thing
+/// DiscoverViewModel needs.
+protocol EventPageProviding: Sendable {
     func fetchEvents(query: EventsService.EventsQuery) async throws -> EventsService.EventsResponse
+}
+
+/// Search additionally needs the fuzzy fallback. Inherits rather than repeating
+/// the page method, so a Discover fake stubs one method and a Search fake stubs
+/// two - neither stubs anything it does not use (IOS-AUDIT-TEST-006 AC4).
+protocol EventSearchProviding: EventPageProviding {
     func fuzzySearchEvents(query: String, limit: Int) async throws -> [Event]
 }
 

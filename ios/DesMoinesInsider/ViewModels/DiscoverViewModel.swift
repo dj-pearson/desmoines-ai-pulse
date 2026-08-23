@@ -193,13 +193,24 @@ final class DiscoverViewModel {
     /// fetch is still draining.
     private var fetchTask: Task<Void, Never>?
 
-    private let eventsService = EventsService.shared
-    private let restaurantsService = RestaurantsService.shared
+    private let eventsService: EventPageProviding
+    private let restaurantsService: RestaurantPageProviding
     private let swipeService = SwipeInteractionService.shared
 
-    init(mode: DiscoverMode = .mixed, filter: DiscoverFilterContext = .init()) {
+    /// Providers default to the shared services, so no call site changes. They
+    /// exist so a test can hold a fetch open and bump the deck generation while
+    /// it is in flight - the only way the discard behaviour this view model
+    /// depends on can be observed (IOS-AUDIT-TEST-006).
+    init(
+        mode: DiscoverMode = .mixed,
+        filter: DiscoverFilterContext = .init(),
+        eventsService: EventPageProviding = EventsService.shared,
+        restaurantsService: RestaurantPageProviding = RestaurantsService.shared
+    ) {
         self.mode = mode
         self.filter = filter
+        self.eventsService = eventsService
+        self.restaurantsService = restaurantsService
     }
 
     // MARK: - Load
