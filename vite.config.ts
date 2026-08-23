@@ -217,10 +217,25 @@ export default defineConfig(({ command, mode }) => {
             return "vendor-supabase";
           }
 
-          // UI Framework - Radix UI primitives (heavily used)
-          if (id.includes("@radix-ui/")) {
-            return "vendor-ui";
-          }
+          // Radix primitives are deliberately NOT forced into one chunk.
+          //
+          // They used to be: `if (id.includes("@radix-ui/")) return "vendor-ui"`.
+          // One manual chunk is all-or-nothing - the moment ANY primitive is
+          // reachable from the entry, every other primitive in the app ships with
+          // it. Measured: entry + vendor-ui was 189.6 + 55.1 = 244.7 KB gz; letting
+          // Rollup place each primitive with its importer gives an entry of 152.4
+          // KB and no vendor-ui at all, because the primitives only a lazy page
+          // needs now travel with that page. Critical path 308.8 -> 282.3 KB.
+          //
+          // The cost is chunk count, 120 -> 147. That is a fair trade over HTTP/2,
+          // and the prerenderer already strips runtime-injected modulepreloads so
+          // the extra chunks do not become eager first-paint downloads.
+          //
+          // The risk this could have reintroduced is the circular-chunk crash
+          // described above - a chunk evaluating before React assigns its exports,
+          // giving "Cannot read properties of undefined (reading 'forwardRef')" and
+          // a site stuck on the spinner. Checked rather than assumed: the smoke
+          // suite mounts every public route in App.tsx and is 80 passed.
 
           // Three.js + React Three Fiber - separate chunk so it's only loaded
           // when HeroCityLite renders (lazy-loaded, deferred via requestIdleCallback).
