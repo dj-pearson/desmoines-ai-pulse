@@ -230,7 +230,7 @@ struct AskPulseView: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .trailing)
-                .accessibilityLabel("Pulse messages: \(usage.displayString)")
+                .accessibilityLabel("Pulse messages: \(usage.remaining.displayString)")
         }
     }
 
