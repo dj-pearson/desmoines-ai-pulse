@@ -1,6 +1,6 @@
 {
   "$comment": "Known unresolvable Supabase references, frozen by scripts/check-schema-usage.mjs --update. This list must only ever SHRINK. Each entry is a feature that silently does nothing in production.",
-  "generated": 206,
+  "generated": 194,
   "findings": [
     "column|src/hooks/useCrmActivities.ts|crm_activities.activity_type",
     "column|src/hooks/useCrmActivities.ts|crm_activities.contact_id",
@@ -10,14 +10,6 @@
     "column|src/hooks/useCrmActivities.ts|crm_activities.performed_by",
     "column|src/hooks/useCrmContacts.ts|crm_activities.contact_id",
     "column|src/hooks/useCrmDashboard.ts|crm_activities.performed_at",
-    "column|supabase/functions/_shared/agents/dormant-reengagement.ts|events.archived_at",
-    "column|supabase/functions/_shared/agents/lead-sourcing.ts|events.archived_at",
-    "column|supabase/functions/_shared/agents/link-content-monitor.ts|events.archived_at",
-    "column|supabase/functions/_shared/agents/weekly-digest-personal.ts|events.archived_at",
-    "column|supabase/functions/agent-lead-sourcing/index.ts|events.archived_at",
-    "column|supabase/functions/agent-link-monitor/index.ts|events.archived_at",
-    "column|supabase/functions/agent-reengagement/index.ts|events.archived_at",
-    "column|supabase/functions/agent-weekly-digest/index.ts|events.archived_at",
     "rpc|scripts/run-migration.ts|exec_sql",
     "rpc|src/components/auth/SessionManagementDashboard.tsx|revoke_all_other_sessions",
     "rpc|src/components/auth/SessionManagementDashboard.tsx|revoke_session",
