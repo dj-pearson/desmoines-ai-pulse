@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.desmoines.aipulse.data.repository.AskPulseRepository
 import com.desmoines.aipulse.data.repository.DiscoverChatMessage
 import com.desmoines.aipulse.data.repository.DiscoverPick
+import com.desmoines.aipulse.data.repository.RemainingValue
 import com.desmoines.aipulse.data.repository.QuotaExceededException
 import com.desmoines.aipulse.util.ShortcutDispatcher
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -24,6 +25,12 @@ data class AskPulseUiState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val quotaExceeded: Boolean = false,
+    /**
+     * Messages left today, as last reported by discover-chat. Null until the
+     * first response - the server is the only thing that knows the number, so
+     * there is nothing honest to show before then (XPLAT-009 AC2).
+     */
+    val remaining: RemainingValue? = null,
 ) {
     /** Welcome state: nothing sent yet and not mid-request. */
     val isWelcome: Boolean get() = messages.isEmpty() && !isLoading
@@ -105,6 +112,9 @@ class AskPulseViewModel @Inject constructor(
                             picks = response.picks,
                             followUps = response.followUpSuggestions,
                             isLoading = false,
+                            // Keep the last known count when a response omits
+                            // usage, rather than blanking the label.
+                            remaining = response.usage?.remaining ?: it.remaining,
                         )
                     }
                 }
@@ -114,6 +124,7 @@ class AskPulseViewModel @Inject constructor(
                             it.copy(
                                 isLoading = false,
                                 quotaExceeded = true,
+                                remaining = RemainingValue.Count(0),
                                 errorMessage = "You've hit today's Ask Pulse limit. Upgrade for more queries.",
                             )
                         }

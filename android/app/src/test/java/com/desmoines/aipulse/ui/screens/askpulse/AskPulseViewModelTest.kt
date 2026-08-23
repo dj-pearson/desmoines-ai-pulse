@@ -5,7 +5,9 @@ import com.desmoines.aipulse.data.repository.AskPulseRepository
 import com.desmoines.aipulse.data.repository.DiscoverChatMessage
 import com.desmoines.aipulse.data.repository.DiscoverChatResponse
 import com.desmoines.aipulse.data.repository.DiscoverPick
+import com.desmoines.aipulse.data.repository.AskPulseUsage
 import com.desmoines.aipulse.data.repository.QuotaExceededException
+import com.desmoines.aipulse.data.repository.RemainingValue
 import com.desmoines.aipulse.util.ShortcutDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -139,5 +141,60 @@ class AskPulseViewModelTest {
         assertTrue(state.picks.isEmpty())
         assertTrue(state.isWelcome)
         assertNull(state.errorMessage)
+    }
+
+    @Test
+    fun `send surfaces the remaining quota reported by the server`() = runTest {
+        val repo = FakeAskPulseRepository(
+            Result.success(
+                DiscoverChatResponse(
+                    picks = listOf(DiscoverPick("event", "e1", "x")),
+                    usage = AskPulseUsage(remaining = RemainingValue.Count(4), tier = "free"),
+                ),
+            ),
+        )
+        val vm = AskPulseViewModel(repo, ShortcutDispatcher())
+        vm.sendSuggestion("hi")
+        advanceUntilIdle()
+
+        assertEquals(RemainingValue.Count(4), vm.uiState.value.remaining)
+    }
+
+    @Test
+    fun `nothing is shown before the first response`() = runTest {
+        val repo = FakeAskPulseRepository(Result.success(DiscoverChatResponse()))
+        val vm = AskPulseViewModel(repo, ShortcutDispatcher())
+
+        // No server has stated a number yet, so there is nothing honest to show.
+        assertNull(vm.uiState.value.remaining)
+    }
+
+    @Test
+    fun `a response without usage keeps the last known count`() = runTest {
+        val repo = FakeAskPulseRepository(
+            Result.success(
+                DiscoverChatResponse(usage = AskPulseUsage(RemainingValue.Count(2), "free")),
+            ),
+        )
+        val vm = AskPulseViewModel(repo, ShortcutDispatcher())
+        vm.sendSuggestion("hi")
+        advanceUntilIdle()
+
+        repo.result = Result.success(DiscoverChatResponse())
+        vm.sendSuggestion("again")
+        advanceUntilIdle()
+
+        assertEquals(RemainingValue.Count(2), vm.uiState.value.remaining)
+    }
+
+    @Test
+    fun `hitting the quota sets remaining to zero`() = runTest {
+        val repo = FakeAskPulseRepository(Result.failure(QuotaExceededException()))
+        val vm = AskPulseViewModel(repo, ShortcutDispatcher())
+        vm.sendSuggestion("hi")
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.quotaExceeded)
+        assertEquals(RemainingValue.Count(0), vm.uiState.value.remaining)
     }
 }

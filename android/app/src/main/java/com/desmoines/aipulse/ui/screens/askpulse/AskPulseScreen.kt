@@ -38,9 +38,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.desmoines.aipulse.data.repository.DiscoverPick
+import com.desmoines.aipulse.data.repository.RemainingValue
 import com.desmoines.aipulse.data.remote.SponsoredPickService
 import com.desmoines.aipulse.ui.components.ads.SponsoredPickSlot
 import com.desmoines.aipulse.ui.components.ChatBubble
@@ -116,6 +120,7 @@ fun AskPulseScreen(
             InputBar(
                 value = state.inputText,
                 canSend = state.canSend,
+                remaining = state.remaining,
                 onValueChange = onInputChange,
                 onSend = onSend,
             )
@@ -284,6 +289,44 @@ private fun ErrorBanner(message: String, showUpgrade: Boolean, onUpgrade: () -> 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun InputBar(
+    value: String,
+    canSend: Boolean,
+    remaining: RemainingValue?,
+    onValueChange: (String) -> Unit,
+    onSend: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        QuotaLabel(remaining)
+        Composer(value = value, canSend = canSend, onValueChange = onValueChange, onSend = onSend)
+    }
+}
+
+/**
+ * Messages left today. Matches the iOS quota label added for IOS-AUDIT-UX-060.
+ *
+ * The server has sent this on every response since discover-chat shipped and
+ * Android threw it away, so the 429 was the entire UI for the daily limit
+ * (XPLAT-009 AC2). Nothing renders before the first response - there is no
+ * honest number to show until the server states one.
+ */
+@Composable
+private fun QuotaLabel(remaining: RemainingValue?) {
+    if (remaining == null) return
+    val label = remaining.displayString
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.End,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .semantics { contentDescription = "Pulse messages: $label" },
+    )
+}
+
+@Composable
+private fun Composer(
     value: String,
     canSend: Boolean,
     onValueChange: (String) -> Unit,
