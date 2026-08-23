@@ -129,7 +129,16 @@ struct DashboardView: View {
                 favStat("Guides", favorites.favoriteArticleIds.count, "doc.richtext")
             }
             .padding(.horizontal)
-            if favorites.totalFavoritesCount == 0 && favorites.favoriteArticleIds.isEmpty {
+            // IOS-AUDIT-UX-051 AC4: distinguish "still loading" from "nothing
+            // saved". The counts above read 0 while the fetch is in flight, so an
+            // unqualified empty hint told returning users their saves were gone.
+            if favorites.isLoading {
+                Text("Loading your saved items...")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal)
+                    .accessibilityLabel("Loading your saved items")
+            } else if favorites.totalFavoritesCount == 0 && favorites.favoriteArticleIds.isEmpty {
                 EmptyHint(text: "Tap the heart on any listing to save it here.", actionTitle: nil, action: nil)
             }
         }

@@ -36,6 +36,14 @@ struct SurpriseMeView: View {
                     revealCard(for: pick)
                 } else if let errorMessage {
                     errorState(errorMessage)
+                } else {
+                    // IOS-AUDIT-UX-051 AC1. Reachable whenever service.surprise
+                    // RETURNS nil rather than throwing - a successful call that
+                    // simply found nothing. Without this branch the ZStack renders
+                    // only its gradient, so the screen looks like a failed load the
+                    // user cannot retry, on a feature whose entire purpose is to
+                    // hand them something.
+                    noResultState
                 }
             }
             .navigationTitle("Surprise Me")
@@ -180,6 +188,31 @@ struct SurpriseMeView: View {
                 revealed = true
             }
         }
+    }
+
+    /// Shown when the roll succeeded and found nothing.
+    ///
+    /// Deliberately worded as "nothing right now" rather than as a failure: the
+    /// call worked, and telling the user something broke would be wrong. The
+    /// button matches the error state so a retry is in the same place either way.
+    private var noResultState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 48))
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            Text("Nothing to surprise you with right now.")
+                .font(.headline)
+                .multilineTextAlignment(.center)
+            Text("Try again in a moment, or widen your search radius in Settings.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+            Button("Try again") { Task { await load() } }
+                .buttonStyle(.borderedProminent)
+        }
+        .padding()
     }
 
     private func errorState(_ message: String) -> some View {
