@@ -1,9 +1,8 @@
 {
   "$comment": "Known unresolvable Supabase references, frozen by scripts/check-schema-usage.mjs --update. This list must only ever SHRINK. Each entry is a feature that silently does nothing in production.",
-  "generated": 252,
+  "generated": 251,
   "findings": [
     "column|src/components/cms/ContentQueue.tsx|content_queue.priority",
-    "column|src/hooks/useCommunityFeatures.ts|event_photos.is_approved",
     "column|src/hooks/useCrmActivities.ts|crm_activities.activity_type",
     "column|src/hooks/useCrmActivities.ts|crm_activities.contact_id",
     "column|src/hooks/useCrmActivities.ts|crm_activities.deal_id",
