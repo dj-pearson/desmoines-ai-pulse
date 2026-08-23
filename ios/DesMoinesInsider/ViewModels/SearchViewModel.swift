@@ -86,7 +86,13 @@ final class SearchViewModel {
         guard !query.isEmpty else { return }
 
         isSearching = true
-        let task = Task { [weak self] in await self?.runSearch(query) }
+        // Written out rather than as a one-liner: a single-expression closure
+        // over `self?.runSearch(...)` infers Task<()?, Never>, which does not
+        // match searchTask.
+        let task = Task { [weak self] in
+            guard let self else { return }
+            await self.runSearch(query)
+        }
         searchTask = task
         await task.value
     }
