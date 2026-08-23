@@ -101,9 +101,13 @@ Deno.test('both iOS entry points route through AccountDeletionService', async ()
   // Two call sites invoked the function independently, which is how they drifted.
   for (const path of [IOS_VIEWMODEL, IOS_SETTINGS]) {
     const source = await read(path);
-    assertStringIncludes(
-      source,
-      'AccountDeletionService.shared.deleteAccount()',
+    // Matches the service ENTRY POINT, not one exact call. IOS-AUDIT-BUG-018
+    // moved both sites from deleteAccount() to deleteAccountAndSignOut(), which
+    // satisfies this contract just as well - the assertion was pinned to a
+    // spelling rather than to the thing it cares about, and went red on a change
+    // that made the code better.
+    assert(
+      /AccountDeletionService\.shared\.deleteAccount(AndSignOut)?\(/.test(source),
       `${path} must call the shared service, not invoke the edge function directly`,
     );
     assert(
