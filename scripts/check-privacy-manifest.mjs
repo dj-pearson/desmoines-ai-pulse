@@ -12,12 +12,21 @@
  * expiry, and DiskSpace declared with no disk-space API anywhere in the app or
  * its one dependency.
  *
- * WHY A STATIC CHECK RATHER THAN THE APP STORE LINTER. Apple's privacy report
- * is generated from an ARCHIVE, so it needs a signed macOS build - which this
- * project does not have configured (IOS-AUDIT-REL-006, DEVELOPMENT_TEAM empty).
- * That check belongs in the release lane when signing exists. This one runs
- * everywhere, on every push, and catches the drift that would otherwise be found
- * by a reviewer.
+ * WHY A STATIC CHECK RATHER THAN THE APP STORE LINTER. Apple's privacy report is
+ * generated from an ARCHIVE, so it needs a signed macOS build. This paragraph
+ * used to say the project "does not have that configured (IOS-AUDIT-REL-006,
+ * DEVELOPMENT_TEAM empty)", and that is no longer true - corrected 2026-08-24.
+ * DEVELOPMENT_TEAM is empty in ios/project.yml ON PURPOSE: XcodeGen generates the
+ * project and ios-native-release.yml:304 reads the team out of the provisioning
+ * profile, then seds it into every build config at :382. That workflow builds an
+ * .xcarchive at :449-452 and has succeeded five times, most recently 2026-07-18.
+ *   So the prerequisite this paragraph claimed was missing exists. What is still
+ * open is narrower: Apple documents the privacy report as an Xcode Organizer
+ * action, so whether it can be produced non-interactively in that lane is the
+ * actual question, and aggregating the .xcprivacy files out of the archive is the
+ * fallback that at least verifies what shipped.
+ *   This static check stays regardless. It runs on every push rather than only on
+ * a release, which is where the drift it catches is introduced.
  *
  * WHAT IT CANNOT SEE. A dependency's usage. Third-party SDKs are supposed to
  * ship their own manifest; supabase-swift, the only one here, does NOT - checked
