@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { storage } from '@/lib/safeStorage';
 import { createLogger } from '@/lib/logger';
@@ -35,6 +36,7 @@ interface SystemSettings {
 }
 
 export function useSystemMonitoring() {
+  const queryClient = useQueryClient();
   const [systemStatus, setSystemStatus] = useState<SystemStatus>({
     server: 'healthy',
     database: 'healthy',
@@ -132,18 +134,37 @@ export function useSystemMonitoring() {
     }
   };
 
+  /**
+   * Clears every cache this application actually has (XPLAT-008 AC1).
+   *
+   * IT USED TO POST TO clear-system-cache, WHICH HAS NEVER EXISTED - no
+   * directory in supabase/functions/, and an anon POST to it answers 404. So
+   * "Clear All Cache" reported failure every time it was pressed.
+   *
+   * IMPLEMENTING THAT FUNCTION WOULD HAVE BEEN WORSE THAN REMOVING IT, and the
+   * reason is the useful part: THERE IS NO SERVER-SIDE CACHE FOR IT TO CLEAR.
+   * Nothing in the database caches (no table matches %cache%), and the caches
+   * that do exist are module-scope Maps inside individual edge functions -
+   * _shared/robots.ts's per-origin robots.txt cache, _shared/aiConfig.ts's
+   * config cache. Each edge function runs in its own isolate, so an HTTP call
+   * to one function cannot reach another function's memory. A clear-system-cache
+   * endpoint could only ever have cleared its own isolate and returned 200, and
+   * the button would have reported "All cached data has been cleared
+   * successfully" while clearing nothing. A green light over a no-op is worse
+   * than the red one this replaces.
+   *
+   * What is left is real and is what an admin pressing this wants: drop the
+   * client's query cache so every subsequent read refetches from the server,
+   * and drop the locally cached admin settings so they are re-read too.
+   */
   const clearCache = async () => {
     setIsLoading(true);
     try {
-      // Call edge function to clear caches
-      const { error } = await supabase.functions.invoke('clear-system-cache', {
-        body: { action: 'clear_all' }
-      });
-
-      if (error) throw error;
+      queryClient.clear();
+      storage.remove('adminSystemSettings');
       return { success: true };
     } catch (error) {
-      console.error("Failed to clear cache:", error);
+      log.error('clearCache', 'Failed to clear cache', { error: String(error) });
       return { success: false, error };
     } finally {
       setIsLoading(false);
