@@ -1,0 +1,15 @@
+{
+  "_comment": "WEB-SEO-017. Event rows already sharing title+date+venue. The detector fails on a NEW group, not on these - the crawler created several and merging is a per-group decision. Do not add to this list to make CI pass.",
+  "groups": [
+    "chefgeorgessteakbar|2026-08-24T00:00:00+00:00|chefgeorgessteakbar",
+    "dexterandthemoonrocks|2026-06-12T00:00:00+00:00|woolys",
+    "dmsoremixtriviabrewsbitesbrainpower|2026-03-04T00:30:00+00:00|singlespeed",
+    "georgethorogoodandthedestroyersthebaddestshowonearth|2026-05-20T00:00:00+00:00|vibrantmusichall",
+    "iowabarnstormersvsgreenbayblizzard|2026-04-05T00:00:00+00:00|caseyscenter",
+    "iowabarnstormersvsjacksonvillesharks|2026-05-23T00:00:00+00:00|caseyscenter",
+    "iowabarnstormersvssanantoniogunslingers|2026-07-25T00:00:00+00:00|caseyscenter",
+    "iowabarnstormersvstulsaoilers|2026-06-28T00:00:00+00:00|caseyscenter",
+    "outlanderinconcert|2026-11-03T01:00:00+00:00|civiccenterofgreaterdesmoines",
+    "wwemondaynightraw|2026-08-03T23:30:00+00:00|caseyscenter"
+  ]
+}
