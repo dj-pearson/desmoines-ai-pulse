@@ -266,6 +266,15 @@ jobs:
       - name: No new unimported module in src/lib
         run: node scripts/check-dead-lib-modules.mjs
 
+      # WEB-CI-027: a workflow that fails to PARSE does not skip - it produces a
+      # startup_failure on every push regardless of its triggers, with no failing
+      # step to read. release-notes.yml did exactly that for three days in August
+      # after a bare `---` at column 1 (from an inlined PR body) split it into two
+      # YAML documents. The column-0 separator check is dependency-free; the full
+      # parse runs only when js-yaml resolves, since it is transitive here.
+      - name: Workflows are single parseable YAML documents
+        run: node scripts/check-workflow-yaml.mjs
+
       # WEB-QA-017: catch a migration recorded as applied that produced nothing.
       # The ledger row is what stops `supabase db push` from ever re-running the
       # file, so a bad row makes the miss permanent and silent - 144 of the 147
