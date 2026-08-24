@@ -1,19 +1,31 @@
 {
-  "_comment": "Modules in src/lib nothing imports. Several are dead TWINS of a live feature - see the script header. Do not add to this list to make CI pass; delete the module or wire it up.",
-  "modules": [
-    "conversionTracking",
-    "deferredLoader",
-    "email-integration",
-    "errorTracking",
-    "eventSubmissionService",
-    "guestFavoriteMigration",
-    "lazyLoad",
-    "queryKeys",
-    "sitemap",
-    "sitemapEnhanced",
-    "sitemapGenerator",
-    "sponsoredTracking",
-    "styleUtils",
-    "webVitalsRum"
+  "_comment": "Modules production code does not import. Several are dead TWINS of a live feature - see the script header. testOnly is worse than unimported: the suite is green on code nothing runs. Do not add entries to make CI pass; delete the module or wire it up.",
+  "unimported": [
+    "src/hooks/use-long-press.tsx",
+    "src/hooks/use-touch-ripple.tsx",
+    "src/hooks/useGoogleIndexing.ts",
+    "src/hooks/useReducedMotion.ts",
+    "src/hooks/useResourceOwnership.ts",
+    "src/hooks/useVirtualList.ts",
+    "src/lib/conversionTracking.ts",
+    "src/lib/csrf.tsx",
+    "src/lib/deferredLoader.ts",
+    "src/lib/email-integration.ts",
+    "src/lib/errorTracking.ts",
+    "src/lib/eventSubmissionService.ts",
+    "src/lib/guestFavoriteMigration.ts",
+    "src/lib/lazyLoad.ts",
+    "src/lib/queryKeys.ts",
+    "src/lib/sitemap.ts",
+    "src/lib/sitemapEnhanced.ts",
+    "src/lib/sitemapGenerator.ts",
+    "src/lib/sponsoredTracking.ts",
+    "src/lib/styleUtils.ts",
+    "src/lib/webVitalsRum.ts"
+  ],
+  "testOnly": [
+    "src/hooks/useUrlFilterState.ts",
+    "src/lib/fetchWithRetry.ts",
+    "src/lib/geo.ts"
   ]
 }
