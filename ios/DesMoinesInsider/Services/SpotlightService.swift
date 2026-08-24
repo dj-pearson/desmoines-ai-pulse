@@ -35,10 +35,10 @@ actor SpotlightService {
     private func changedOnly(_ items: [CSSearchableItem]) -> [CSSearchableItem] {
         var changed: [CSSearchableItem] = []
         for item in items {
-            guard let identifier = item.uniqueIdentifier else {
-                changed.append(item)
-                continue
-            }
+            // CSSearchableItem.uniqueIdentifier is NON-optional. The first
+            // version of this used `guard let` and did not compile - iOS CI
+            // caught it, this machine has no Swift compiler.
+            let identifier = item.uniqueIdentifier
             let signature = [
                 item.attributeSet.title ?? "",
                 item.attributeSet.contentDescription ?? "",
