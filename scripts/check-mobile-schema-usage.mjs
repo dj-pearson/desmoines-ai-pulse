@@ -61,7 +61,8 @@ if (!existsSync(SNAPSHOT)) {
   console.error(`[mobile-schema] ${SNAPSHOT} is missing. See check-migration-drift.mjs for the refresh command.`);
   process.exit(1);
 }
-const relations = new Set(JSON.parse(readFileSync(SNAPSHOT, 'utf8')).relations ?? []);
+const snapshot = JSON.parse(readFileSync(SNAPSHOT, 'utf8'));
+const relations = new Set(snapshot.relations ?? []);
 if (relations.size === 0) {
   console.error('[mobile-schema] snapshot lists no relations - refusing to pass.');
   process.exit(1);
@@ -121,7 +122,7 @@ const fresh = missing.filter(([t]) => !known.has(t));
 
 console.log(
   `[mobile-schema] ${files.length} mobile source file(s), ${referenced.size} distinct table(s) referenced, ` +
-    `${missing.length} absent from production (${known.size} baselined).`
+    `${missing.length} absent from a schema snapshot from ${snapshot.capturedAt} (${known.size} baselined).`
 );
 
 for (const [table, sites] of missing.sort((a, b) => b[1].length - a[1].length)) {
