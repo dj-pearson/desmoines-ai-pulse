@@ -20,6 +20,7 @@ import { format } from "date-fns";
 import { useFavorites } from "@/hooks/useFavorites";
 import { Badge } from "@/components/ui/badge";
 import { createSlug } from "@/lib/slug";
+import { favoritedListQueryKey } from "@/hooks/useContentFavorites";
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('FavoritesView');
@@ -53,7 +54,7 @@ export function FavoritesView() {
   // `user_restaurant_interactions`, which nothing writes to, so saved
   // restaurants never appeared here (WEB-QA-010).
   const { data: favoritedRestaurants = [], isLoading: restaurantsLoading } = useQuery({
-    queryKey: ["favorited-restaurants", user?.id],
+    queryKey: [favoritedListQueryKey("restaurant"), user?.id],
     queryFn: async () => {
       if (!user) return [];
 
@@ -99,7 +100,7 @@ export function FavoritesView() {
   // previously read `user_attraction_interactions`, which does not exist in the
   // schema at all, so the query always errored and the block always returned [].
   const { data: favoritedAttractions = [], isLoading: attractionsLoading } = useQuery({
-    queryKey: ["favorited-attractions", user?.id],
+    queryKey: [favoritedListQueryKey("attraction"), user?.id],
     queryFn: async () => {
       if (!user) return [];
 
@@ -155,7 +156,7 @@ export function FavoritesView() {
   // to appear in the favorites list. The unused `Play` icon imported at the top
   // of this file is what is left of the tab that was meant to go with it.
   const { data: favoritedPlaygrounds = [], isLoading: playgroundsLoading } = useQuery({
-    queryKey: ["favorited-playgrounds", user?.id],
+    queryKey: [favoritedListQueryKey("playground"), user?.id],
     queryFn: async () => {
       if (!user) return [];
 
@@ -203,7 +204,7 @@ export function FavoritesView() {
   // `hotels` is the one content table here with a real `slug` column, so the
   // link below does not need lib/slug the way the playground one does.
   const { data: favoritedHotels = [], isLoading: hotelsLoading } = useQuery({
-    queryKey: ["favorited-hotels", user?.id],
+    queryKey: [favoritedListQueryKey("hotel"), user?.id],
     queryFn: async () => {
       if (!user) return [];
 
