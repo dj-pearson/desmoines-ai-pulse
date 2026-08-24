@@ -206,6 +206,16 @@ jobs:
         with:
           node-version: 20
 
+      # WEB-QA-017: catch a migration recorded as applied that produced nothing.
+      # The ledger row is what stops `supabase db push` from ever re-running the
+      # file, so a bad row makes the miss permanent and silent - 144 of the 147
+      # dead table references in the schema-usage baseline trace to 29 such rows.
+      # Offline; reads scripts/db-snapshot.json. Ratchets against
+      # .github/migration-drift-baseline.json, because each known one needs its
+      # own decision (WEB-QA-018).
+      - name: Ledgered migrations produced what they define
+        run: node scripts/check-migration-drift.mjs
+
       # WEB-DB-008: block destructive single-release migration changes. Attach the
       # `migration-override` label to the PR to bypass when the change is genuinely safe.
       - name: Check new migrations for destructive changes
