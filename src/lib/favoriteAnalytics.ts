@@ -34,7 +34,19 @@ export function logFavoriteFunnelEvent(
 ): void {
   void (async () => {
     try {
-      await supabase.from("user_analytics").insert({
+      // CAPTURE THE ERROR. PostgREST returns RLS and schema failures IN THE
+      // RESULT rather than throwing, so the catch below never saw them and this
+      // whole funnel could be writing nothing at all without a single log line
+      // (WEB-FEAT-006 AC5, WEB-BE-032).
+      //
+      // The specific thing this makes visible: the two GUEST events pass
+      // userId null by design, and the live INSERT policy on user_analytics is
+      // named "Users can insert their own analytics". If its WITH CHECK is
+      // auth.uid() = user_id, an anonymous insert fails it - null = null is not
+      // true - and the guest half of the funnel, which is the half this story
+      // exists to measure, is silently discarded. Settling that needs a
+      // privileged read of the policy; logging it means runtime answers instead.
+      const { error } = await supabase.from("user_analytics").insert({
         event_type: event,
         content_type: contentType,
         content_id: contentId,
@@ -43,6 +55,16 @@ export function logFavoriteFunnelEvent(
         page_url: typeof window !== "undefined" ? window.location.pathname : null,
         filters_used: details ? JSON.parse(JSON.stringify(details)) : null,
       });
+
+      if (error) {
+        log.warn("logFavoriteFunnelEvent", "insert rejected", {
+          event,
+          anonymous: !userId,
+          code: error.code,
+          message: error.message,
+          hint: error.hint,
+        });
+      }
     } catch (err) {
       log.warn("logFavoriteFunnelEvent", "failed", { error: String(err) });
     }
