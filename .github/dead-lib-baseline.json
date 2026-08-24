@@ -1,0 +1,19 @@
+{
+  "_comment": "Modules in src/lib nothing imports. Several are dead TWINS of a live feature - see the script header. Do not add to this list to make CI pass; delete the module or wire it up.",
+  "modules": [
+    "conversionTracking",
+    "deferredLoader",
+    "email-integration",
+    "errorTracking",
+    "eventSubmissionService",
+    "guestFavoriteMigration",
+    "lazyLoad",
+    "queryKeys",
+    "sitemap",
+    "sitemapEnhanced",
+    "sitemapGenerator",
+    "sponsoredTracking",
+    "styleUtils",
+    "webVitalsRum"
+  ]
+}

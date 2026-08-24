@@ -255,6 +255,17 @@ jobs:
       - name: AASA matches the iOS project
         run: node scripts/check-aasa.mjs
 
+      # WEB-PERF-007 / WEB-FEAT-006: a module in src/lib that nothing imports is
+      # usually a DEAD TWIN - a second implementation of a live feature, writing
+      # the same table, that no longer runs. Four of the fourteen baselined are
+      # exactly that, and two cost real debugging time on 2026-08-24: the better
+      # written copy of the favourites funnel was the dead one, so reading it
+      # suggested errors were handled when the live copy discarded them. Fails on
+      # a NEW one, which is the moment a replacement was written and the old copy
+      # left behind.
+      - name: No new unimported module in src/lib
+        run: node scripts/check-dead-lib-modules.mjs
+
       # WEB-QA-017: catch a migration recorded as applied that produced nothing.
       # The ledger row is what stops `supabase db push` from ever re-running the
       # file, so a bad row makes the miss permanent and silent - 144 of the 147
