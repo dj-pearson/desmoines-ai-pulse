@@ -26,6 +26,9 @@ from datetime import datetime, timedelta
 from typing import Optional
 from dateutil import parser as date_parser
 from zoneinfo import ZoneInfo
+from urllib.robotparser import RobotFileParser
+from urllib.parse import urlsplit
+from urllib.request import urlopen
 
 # Configure logging
 logging.basicConfig(
@@ -65,6 +68,164 @@ CENTRAL_TZ = ZoneInfo("America/Chicago")
 
 # Claude 4.5 Sonnet model
 CLAUDE_MODEL = "claude-sonnet-4-5-20250929"
+
+# Event detail links on the listing page: /event/<slug>/<id>. Used both to build
+# the extraction window and to tell "the listing did not render" apart from
+# "there are no events today" - two outcomes that used to look identical.
+EVENT_LINK_RE = re.compile(r"/event/[a-z0-9-]+/\d+")
+
+# Blocks that carry no event information and most of the bytes.
+_DROP_BLOCKS = [
+    re.compile(r"<script[^>]*>[\s\S]*?</script>", re.IGNORECASE),
+    re.compile(r"<style[^>]*>[\s\S]*?</style>", re.IGNORECASE),
+    re.compile(r"<head[\s\S]*?</head>", re.IGNORECASE),
+    re.compile(r"<svg[\s\S]*?</svg>", re.IGNORECASE),
+    re.compile(r"<noscript[\s\S]*?</noscript>", re.IGNORECASE),
+    re.compile(r"<!--[\s\S]*?-->"),
+]
+
+# Tags that only ever carry attributes we are dropping anyway.
+_VOID_TAGS = {
+    "img", "source", "input", "link", "meta", "br", "hr",
+    "path", "use", "picture", "iframe", "form", "button", "svg",
+}
+
+_TAG_RE = re.compile(r"<([a-zA-Z][a-zA-Z0-9]*)\b[^>]*>")
+_CLOSE_VOID_RE = re.compile(r"</(?:%s)>" % "|".join(_VOID_TAGS), re.IGNORECASE)
+_HREF_RE = re.compile(r'href="([^"]*)"')
+
+# Safety net, not the mechanism. Measured 2026-08-23: the rendered listing is
+# ~431,000 chars and cleans to ~34,000, so this never fires in practice - which
+# is the point. It used to be 50,000 applied to the RAW html, where the first
+# event link sat at character 194,134.
+MAX_EXTRACTION_CHARS = 60000
+
+
+# ---------------------------------------------------------------------------
+# robots.txt
+# ---------------------------------------------------------------------------
+#
+# WEB-SEC-024 built this for supabase/functions/_shared/scraper.ts, the entry
+# point every EDGE ingestion path uses. This crawler is the one path that does
+# not go through it - crawl4ai drives a browser directly - so it was still
+# fetching without asking. WEB-LEGAL-008's Privacy Policy draft needs the
+# sentence "we do not crawl a page that asks not to be crawled" to be true of
+# every path, not most of them.
+#
+# FAIL-OPEN, matching robots.ts. No robots.txt, a 404, a 5xx, a timeout or an
+# unparseable file all mean allowed. The other direction turns one flaky fetch
+# into a silent ingestion halt, and this pipeline already reports "0 events" the
+# same way whether it was blocked or broken.
+ROBOTS_TIMEOUT_SECONDS = 5
+ROBOTS_USER_AGENT = "*"  # the crawler presents a browser UA, so it matches the wildcard group
+DEFAULT_LIST_DELAY_SECONDS = 2.0
+DEFAULT_DETAIL_DELAY_SECONDS = 1.0
+
+_robots_cache: dict = {}
+
+
+def parse_robots(text: str) -> RobotFileParser:
+    """Build a parser from robots.txt CONTENT, with no network access."""
+    parser = RobotFileParser()
+    parser.parse(text.splitlines())
+    return parser
+
+
+def _robots_for(origin: str) -> Optional[RobotFileParser]:
+    """Fetch and cache the origin's robots.txt. None means 'could not read'."""
+    if origin in _robots_cache:
+        return _robots_cache[origin]
+
+    parser = None
+    try:
+        with urlopen(f"{origin}/robots.txt", timeout=ROBOTS_TIMEOUT_SECONDS) as response:
+            if response.status == 200:
+                parser = parse_robots(response.read().decode("utf-8", errors="replace"))
+    except Exception as exc:  # noqa: BLE001 - any failure means "allowed", see above
+        logger.info(f"robots.txt unavailable for {origin} ({exc}) - proceeding")
+
+    _robots_cache[origin] = parser
+    return parser
+
+
+def robots_allows(url: str) -> bool:
+    """False only for an explicit Disallow. Anything else is allowed."""
+    parts = urlsplit(url)
+    origin = f"{parts.scheme}://{parts.netloc}"
+    parser = _robots_for(origin)
+    if parser is None:
+        return True
+    try:
+        return parser.can_fetch(ROBOTS_USER_AGENT, url)
+    except Exception:  # noqa: BLE001
+        return True
+
+
+def robots_delay(url: str, default: float) -> float:
+    """The site's requested Crawl-delay, or `default` - whichever is longer.
+
+    The hardcoded 1-second gap between detail-page fetches was BELOW what
+    catchdesmoines.com asks for (Crawl-delay: 2). Reading the number the site
+    publishes is the difference between crawling politely and appearing to.
+    """
+    parts = urlsplit(url)
+    parser = _robots_for(f"{parts.scheme}://{parts.netloc}")
+    if parser is None:
+        return default
+    try:
+        declared = parser.crawl_delay(ROBOTS_USER_AGENT)
+    except Exception:  # noqa: BLE001
+        declared = None
+    return max(default, float(declared)) if declared else default
+
+
+def clean_html_for_extraction(html: str) -> str:
+    """Reduce a rendered listing page to the markup that carries event data.
+
+    THE BUG THIS REPLACES, measured against the live page on 2026-08-23. The old
+    version stripped <script> and <style> and then took `html[:50000]`. The
+    rendered page is 430,862 characters; after that strip it is 259,164; and the
+    FIRST /event/ link sits at character 194,134. So the model was handed 50,000
+    characters that ended 144,134 characters before the first event, and
+    correctly returned an empty array. The run logged "Extraction errors: 0" and
+    exited green, because nothing had actually gone wrong - the crawler simply
+    never showed Claude an event.
+
+    The fix is not a bigger window. 194,134 characters of preamble hold 13,900
+    characters of visible text; the rest is class lists, srcset, data attributes
+    and inline SVG. Dropping the markup nobody needs takes the whole page from
+    259,164 to about 34,000 characters, which fits with room to spare, so the
+    model sees every event on the page instead of a prefix of the navigation.
+
+    href is the one attribute kept: the prompt asks for detail_url, and that
+    lives nowhere else.
+    """
+    cleaned = html
+    for pattern in _DROP_BLOCKS:
+        cleaned = pattern.sub("", cleaned)
+
+    def _strip_attrs(match: "re.Match") -> str:
+        tag = match.group(1).lower()
+        if tag in _VOID_TAGS:
+            return ""
+        if tag == "a":
+            href = _HREF_RE.search(match.group(0))
+            return '<a href="%s">' % href.group(1) if href else "<a>"
+        return "<%s>" % tag
+
+    cleaned = _TAG_RE.sub(_strip_attrs, cleaned)
+    cleaned = _CLOSE_VOID_RE.sub("", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+
+    if len(cleaned) > MAX_EXTRACTION_CHARS:
+        # Anchor the window on the events, never on the head of the document -
+        # that is the mistake being fixed. Keep a little context before the first
+        # link so the surrounding card markup comes along.
+        first = EVENT_LINK_RE.search(cleaned)
+        start = max(0, first.start() - 2000) if first else 0
+        cleaned = cleaned[start:start + MAX_EXTRACTION_CHARS]
+
+    return cleaned
 
 
 class CatchDesMoinesCrawler:
@@ -107,6 +268,10 @@ class CatchDesMoinesCrawler:
 
         logger.info(f"Crawling events list page {page + 1}: {url}")
 
+        if not robots_allows(url):
+            logger.error(f"robots.txt disallows {url} - not fetching")
+            return ""
+
         browser_config = BrowserConfig(
             headless=True,
             verbose=False,
@@ -130,6 +295,10 @@ class CatchDesMoinesCrawler:
     async def crawl_event_detail(self, event_url: str) -> dict:
         """Crawl an individual event detail page to get the 'Visit Website' URL."""
         logger.info(f"Crawling event detail: {event_url}")
+
+        if not robots_allows(event_url):
+            logger.warning(f"robots.txt disallows {event_url} - keeping the listing URL")
+            return {"source_url": event_url}
 
         browser_config = BrowserConfig(
             headless=True,
@@ -212,10 +381,25 @@ class CatchDesMoinesCrawler:
         """Use Claude 4.5 Sonnet to extract events from HTML."""
         logger.info(f"Extracting events from {page_url} using Claude {CLAUDE_MODEL}")
 
-        # Clean HTML for Claude (limit size)
-        clean_html = re.sub(r'<script[^>]*>[\s\S]*?</script>', '', html, flags=re.IGNORECASE)
-        clean_html = re.sub(r'<style[^>]*>[\s\S]*?</style>', '', clean_html, flags=re.IGNORECASE)
-        clean_html = clean_html[:50000]  # Limit to 50k chars
+        clean_html = clean_html_for_extraction(html)
+        link_count = len(EVENT_LINK_RE.findall(clean_html))
+        logger.info(
+            f"Cleaned {len(html)} chars to {len(clean_html)} for extraction; "
+            f"{link_count} event link(s) visible to the model"
+        )
+
+        # No links means the listing did not render or its URL shape changed -
+        # a crawler failure. An empty result from a page that DID carry links is
+        # a quiet day. Conflating the two is how six months of green runs
+        # ingested nothing.
+        if link_count == 0:
+            self.extraction_errors += 1
+            logger.error(
+                "No /event/<slug>/<id> links in the cleaned listing HTML - "
+                "the page did not render or its markup changed. Not calling the "
+                "model; there is nothing on this page to extract."
+            )
+            return []
 
         today = datetime.now(CENTRAL_TZ).strftime("%Y-%m-%d")
 
@@ -442,9 +626,9 @@ Return ONLY the JSON array. No other text."""
             all_events.extend(events)
             logger.info(f"Total events found so far: {len(all_events)}")
 
-            # Small delay between pages
+            # Delay between pages, at least what the site asks for
             if page < self.max_pages - 1:
-                await asyncio.sleep(2)
+                await asyncio.sleep(robots_delay(EVENTS_LIST_URL, DEFAULT_LIST_DELAY_SECONDS))
 
         logger.info(f"Extracted {len(all_events)} total events from {self.max_pages} pages")
 
@@ -468,8 +652,9 @@ Return ONLY the JSON array. No other text."""
                 detail_result = await self.crawl_event_detail(detail_url)
                 event["source_url"] = detail_result.get("source_url", detail_url)
 
-                # Small delay between detail page requests
-                await asyncio.sleep(1)
+                # Delay between detail requests. Was a hardcoded 1s, which is
+                # below the Crawl-delay: 2 catchdesmoines.com publishes.
+                await asyncio.sleep(robots_delay(detail_url, DEFAULT_DETAIL_DELAY_SECONDS))
             else:
                 event["source_url"] = EVENTS_LIST_URL
 

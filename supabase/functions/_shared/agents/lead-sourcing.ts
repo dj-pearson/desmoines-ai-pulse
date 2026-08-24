@@ -38,13 +38,20 @@ function slug(s: string): string {
 
 export const run: AgentRun = async (ctx, { supabase }) => {
   const candidates: Lead[] = [];
+  // A source that failed contributed nothing, exactly like a source with no
+  // rows. "N candidates" is reported either way, so which sources actually
+  // answered has to travel with the number.
+  const unreadableSources: string[] = [];
 
   // ── Restaurants (not already advertising = not sponsored) ─────────────
-  const { data: rests } = await supabase
+  const { data: rests, error: restsError } = await supabase
     .from("restaurants")
     .select("id, name, city, website, rating, popularity_score, is_sponsored, is_merged")
     .or("is_sponsored.is.null,is_sponsored.eq.false")
     .limit(PER_SOURCE);
+  if (restsError) {
+    unreadableSources.push(`restaurants: ${restsError.message}`);
+  }
   for (const r of (rests ?? []) as { id: string; name: string | null; city: string | null; website: string | null; rating: number | null; popularity_score: number | null; is_merged: boolean | null }[]) {
     if (!r.name || r.is_merged) continue;
     const rating = Number(r.rating) || 0;
@@ -59,11 +66,14 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   }
 
   // ── Attractions (not sponsored) ───────────────────────────────────────
-  const { data: attrs } = await supabase
+  const { data: attrs, error: attrsError } = await supabase
     .from("attractions")
     .select("id, name, website, rating, is_sponsored, is_active")
     .or("is_sponsored.is.null,is_sponsored.eq.false")
     .limit(PER_SOURCE);
+  if (attrsError) {
+    unreadableSources.push(`attractions: ${attrsError.message}`);
+  }
   for (const a of (attrs ?? []) as { id: string; name: string | null; website: string | null; rating: number | null; is_active: boolean | null }[]) {
     if (!a.name || a.is_active === false) continue;
     const rating = Number(a.rating) || 0;
@@ -77,13 +87,16 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   }
 
   // ── Event organizers (venues of upcoming events) ──────────────────────
-  const { data: evs } = await supabase
+  const { data: evs, error: evsError } = await supabase
     .from("events")
     .select("id, title, venue, city")
     .gte("date", new Date().toISOString())
     .not("venue", "is", null)
     .is("archived_at", null)
     .limit(PER_SOURCE);
+  if (evsError) {
+    unreadableSources.push(`events: ${evsError.message}`);
+  }
   const seenVenues = new Set<string>();
   for (const e of (evs ?? []) as { id: string; title: string | null; venue: string | null; city: string | null }[]) {
     if (!e.venue) continue;
@@ -119,10 +132,18 @@ export const run: AgentRun = async (ctx, { supabase }) => {
     fresh.push(c);
   }
 
+  // THE INSERT IS THE ONLY OUTPUT THIS AGENT HAS. Its error was discarded, so a
+  // failed batch contributed 0 to `created` and the run finished reporting
+  // "0 new leads (deduped)" - offering DEDUPLICATION as the explanation for a
+  // number that came from a failure. A prospecting job that created nothing
+  // because it could not write has not deduplicated anything.
   let created = 0;
   for (let i = 0; i < fresh.length; i += 200) {
     const batch = fresh.slice(i, i + 200);
-    const { data } = await supabase.from("prospect_leads").insert(batch).select("id");
+    const { data, error } = await supabase.from("prospect_leads").insert(batch).select("id");
+    if (error) {
+      throw new Error(`lead-sourcing: could not insert a batch of ${batch.length} leads: ${error.message}`);
+    }
     created += (data ?? []).length;
   }
   if (created > 0) {
@@ -130,7 +151,10 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   }
 
   ctx.processed(candidates.length);
-  ctx.summary(`lead sourcing: ${candidates.length} candidates, ${created} new leads (deduped)`);
-  ctx.meta({ candidates: candidates.length, created });
-  return { candidates: candidates.length, created };
+  ctx.summary(
+    `lead sourcing: ${candidates.length} candidates, ${created} new leads (deduped)` +
+      (unreadableSources.length ? `; ${unreadableSources.length} source(s) UNREADABLE` : ""),
+  );
+  ctx.meta({ candidates: candidates.length, created, unreadableSources });
+  return { candidates: candidates.length, created, unreadableSources };
 };

@@ -2,6 +2,9 @@ import { useQuery } from '@tanstack/react-query';
 import { STALE_TIME, GC_TIME, shouldRetry } from '@/lib/queryConfig';
 import { supabase } from '@/integrations/supabase/client';
 import { EVENT_LIST_COLUMNS, RESTAURANT_LIST_COLUMNS, ATTRACTION_LIST_COLUMNS } from '@/lib/listColumns';
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('useTrending');
 
 interface TrendingItem {
   id: string;
@@ -9,9 +12,16 @@ interface TrendingItem {
   contentId: string;
   score: number;
   rank: number;
-  views24h: number;
-  views7d: number;
-  velocityScore: number;
+  // OPTIONAL BECAUSE THEY ARE NOT ALWAYS KNOWN. The fallback path below has
+  // no view data of any kind, and these used to be filled with numbers derived
+  // from the item's position in a featured list - 50, 42, 34 "views today" for
+  // items nobody had measured. The only thing keeping them off the screen was
+  // one `hasRealData &&` in MostSearched.tsx, which is a convention, not a
+  // guarantee: any future consumer that forgot it would ship invented social
+  // proof. Undefined renders as nothing; a plausible number renders as a fact.
+  views24h?: number;
+  views7d?: number;
+  velocityScore?: number;
   content?: Record<string, unknown>; // The actual content data
 }
 
@@ -49,12 +59,19 @@ export function useTrending(config: FallbackConfig = { useRealData: true, minIte
     try {
       if (config.useRealData) {
         // Fetch real trending data
-        const { data: trendingScores } = await supabase
+        const { data: trendingScores, error: scoresError } = await supabase
           .from('trending_scores')
           .select('*')
           .eq('date', new Date().toISOString().split('T')[0])
           .order('rank')
           .limit(10);
+
+        if (scoresError) {
+          // Falling back is right; doing it silently is not. An unreadable
+          // trending_scores and an empty one both land here, and only one of
+          // them is a problem somebody should know about.
+          logger.error('fetchTrendingData', 'Could not read trending scores', { error: scoresError });
+        }
 
         if (trendingScores && trendingScores.length > 0) {
           // We have real data! Fetch the actual content
@@ -182,7 +199,7 @@ export function useTrending(config: FallbackConfig = { useRealData: true, minIte
       // Measured on the homepage against production: these two responses were
       // 21,106 and 13,160 bytes; the same six rows under the projection are
       // 6,183 bytes — a 71% reduction (WEB-PERF-025).
-      const { data: featuredEvents } = await supabase
+      const { data: featuredEvents, error: featuredEventsError } = await supabase
         .from('events')
         .select(EVENT_LIST_COLUMNS)
         .eq('is_featured', true)
@@ -190,7 +207,7 @@ export function useTrending(config: FallbackConfig = { useRealData: true, minIte
         .order('created_at', { ascending: false })
         .limit(6);
 
-      const { data: recentEvents } = await supabase
+      const { data: recentEvents, error: recentEventsError } = await supabase
         .from('events')
         .select(EVENT_LIST_COLUMNS)
         .gte('date', new Date().toISOString())
@@ -210,14 +227,15 @@ export function useTrending(config: FallbackConfig = { useRealData: true, minIte
         contentId: event.id,
         score: 100 - (index * 15), // Decreasing scores
         rank: index + 1,
-        views24h: Math.max(50 - (index * 8), 5),
-        views7d: Math.max(200 - (index * 30), 20),
-        velocityScore: Math.max(20 - (index * 3), 2),
+        // No view data exists on this path - see the TrendingItem comment.
+        views24h: undefined,
+        views7d: undefined,
+        velocityScore: undefined,
         content: event
       }));
 
       // Similar for restaurants (using featured)
-      const { data: restaurants } = await supabase
+      const { data: restaurants, error: restaurantsError } = await supabase
         .from('restaurants')
         .select('*')
         .eq('is_featured', true)
@@ -230,14 +248,15 @@ export function useTrending(config: FallbackConfig = { useRealData: true, minIte
         contentId: restaurant.id,
         score: 80 - (index * 12),
         rank: index + 1,
-        views24h: Math.max(30 - (index * 5), 3),
-        views7d: Math.max(150 - (index * 20), 15),
-        velocityScore: Math.max(15 - (index * 2), 1),
+        // No view data exists on this path - see the TrendingItem comment.
+        views24h: undefined,
+        views7d: undefined,
+        velocityScore: undefined,
         content: restaurant
       }));
 
       // Similar for attractions
-      const { data: attractions } = await supabase
+      const { data: attractions, error: attractionsError } = await supabase
         .from('attractions')
         .select('*')
         .eq('is_featured', true)
@@ -250,14 +269,15 @@ export function useTrending(config: FallbackConfig = { useRealData: true, minIte
         contentId: attraction.id,
         score: 70 - (index * 10),
         rank: index + 1,
-        views24h: Math.max(25 - (index * 4), 2),
-        views7d: Math.max(120 - (index * 15), 12),
-        velocityScore: Math.max(12 - (index * 2), 1),
+        // No view data exists on this path - see the TrendingItem comment.
+        views24h: undefined,
+        views7d: undefined,
+        velocityScore: undefined,
         content: attraction
       }));
 
       // Similar for playgrounds
-      const { data: playgrounds } = await supabase
+      const { data: playgrounds, error: playgroundsError } = await supabase
         .from('playgrounds')
         .select('*')
         .eq('is_featured', true)
@@ -270,14 +290,28 @@ export function useTrending(config: FallbackConfig = { useRealData: true, minIte
         contentId: playground.id,
         score: 60 - (index * 8),
         rank: index + 1,
-        views24h: Math.max(20 - (index * 3), 1),
-        views7d: Math.max(100 - (index * 12), 10),
-        velocityScore: Math.max(10 - (index * 1), 1),
+        // No view data exists on this path - see the TrendingItem comment.
+        views24h: undefined,
+        views7d: undefined,
+        velocityScore: undefined,
         content: playground
       }));
 
+      // The fallback is itself a set of reads, and each one silently discarded
+      // its error. A trending section that is empty because five queries failed
+      // and one that is empty because nothing is featured render identically.
+      const fallbackErrors = [
+        featuredEventsError && `featured events: ${featuredEventsError.message}`,
+        recentEventsError && `recent events: ${recentEventsError.message}`,
+        restaurantsError && `restaurants: ${restaurantsError.message}`,
+        attractionsError && `attractions: ${attractionsError.message}`,
+        playgroundsError && `playgrounds: ${playgroundsError.message}`,
+      ].filter(Boolean);
+      if (fallbackErrors.length > 0) {
+        logger.error('generateFallbackTrending', 'Some fallback reads failed', { fallbackErrors });
+      }
     } catch (error) {
-      console.error('Error generating fallback trending:', error);
+      logger.error('generateFallbackTrending', 'Error generating fallback trending', { error });
     }
 
     return fallback;

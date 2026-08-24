@@ -42,7 +42,12 @@ Deno.serve(async (req) => {
   // ---- Queues (feature-tolerant) -------------------------------------------
   const [eventSubmissions, pendingReviews, pendingContacts, mergeReview, creativeApprovals] =
     await Promise.all([
-      safeCount(supabase.from('event_submissions').select('id', COUNT).eq('status', 'pending')),
+      // public.event_submissions does not exist; the table is user_submitted_events.
+      // Verified against the catalog with to_regclass, not through an anon read.
+      // safeCount returns null on error, which is the RIGHT handling - it keeps
+      // "unknown" distinct from zero - and it is also why this went unnoticed:
+      // the queue simply rendered as unavailable rather than as wrong.
+      safeCount(supabase.from('user_submitted_events').select('id', COUNT).eq('status', 'pending')),
       safeCount(supabase.from('user_ratings').select('id', COUNT).eq('moderation_status', 'pending')),
       safeCount(supabase.from('contact_submissions').select('id', COUNT).eq('moderation_status', 'pending')),
       safeCount(supabase.from('content_merge_candidates').select('id', COUNT).eq('status', 'pending')),

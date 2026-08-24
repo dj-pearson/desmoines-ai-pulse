@@ -1,7 +1,10 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { User, Session, AuthChangeEvent } from "@supabase/supabase-js";
-import { SecurityUtils } from "@/lib/securityUtils";
+// Only the redirect validator is needed here, and it lives in a file with no
+// imports. Reaching it through the SecurityUtils class pulled zod and
+// dompurify onto the critical path (WEB-PERF-020).
+import { isValidRedirectUrl } from "@/lib/redirectSafety";
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('AuthContext');
@@ -650,7 +653,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const callbackUrl = new URL(`${window.location.origin}/auth/callback`);
       // Validate redirect URL to prevent open redirect attacks
-      if (redirectTo && SecurityUtils.isValidRedirectUrl(redirectTo)) {
+      if (redirectTo && isValidRedirectUrl(redirectTo)) {
         callbackUrl.searchParams.set("redirect", redirectTo);
       }
 
@@ -683,7 +686,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const callbackUrl = new URL(`${window.location.origin}/auth/callback`);
       // Validate redirect URL to prevent open redirect attacks
-      if (redirectTo && SecurityUtils.isValidRedirectUrl(redirectTo)) {
+      if (redirectTo && isValidRedirectUrl(redirectTo)) {
         callbackUrl.searchParams.set("redirect", redirectTo);
       }
 

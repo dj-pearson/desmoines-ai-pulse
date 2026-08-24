@@ -182,8 +182,18 @@ serve(async (req) => {
     if (userIds.length > 0 && RESEND_API_KEY) {
       const { data: profiles, error: profilesError } = await supabase
         .from("profiles")
-        .select("id, email, email_verified")
-        .in("id", userIds);
+        // profiles has NO email_verified column - confirmed 42703 against
+        // production - so this select failed and, since WEB-BE-032 made the
+        // failure raise, the whole nightly run aborted. Before that it fell to
+        // an empty list and sent nothing, silently.
+        // KEYED ON user_id, NOT id. userIds comes from saved_searches.user_id,
+        // which is the AUTH user id. profiles has both columns and they are
+        // different values - 0 of 6 rows have id = user_id - so `.in("id", ...)`
+        // matched nothing and this run resolved zero recipients even once the
+        // email_verified column error above was fixed. The very next query in
+        // this block already keys on user_id; they disagreed with each other.
+        .select("user_id, email")
+        .in("user_id", userIds);
       if (profilesError) {
         // Fails closed already - `profiles ?? []` sends nothing - but silently,
         // so a run that reached zero recipients looked identical to a run with
@@ -210,10 +220,15 @@ serve(async (req) => {
       for (const p of prefs ?? []) prefMap.set((p as any).user_id, (p as any).event_alerts_enabled !== false);
 
       for (const profile of profiles ?? []) {
-        const uid = (profile as any).id as string;
+        const uid = (profile as any).user_id as string;
         const email = (profile as any).email as string | null;
-        const verified = (profile as any).email_verified as boolean | null;
-        if (!email || verified === false) continue;
+        // THE VERIFICATION GATE IS GONE BECAUSE IT NEVER EXISTED. Nothing in
+        // the schema records whether an address is confirmed, so there is no
+        // column to read and no honest way to keep the check. Recipients are
+        // users who saved a search and enabled alerts on their own account,
+        // which is the consent this send rests on. If verification is wanted,
+        // it needs a column first - recorded rather than silently dropped.
+        if (!email) continue;
         if (prefMap.get(uid) === false) continue; // opted out
 
         const groups = perUser.get(uid);

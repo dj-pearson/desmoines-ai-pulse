@@ -62,7 +62,7 @@
     "check-schema:all": "node scripts/check-schema-usage.mjs --all",
     "check-schema:update": "node scripts/check-schema-usage.mjs --update",
     "test:smoke": "playwright test --config=playwright.smoke.config.ts",
-    "validate": "npm run type-check && npm run check-imports && npm run check-schema && npm run check-error-handling && npm run check-seo-routes && npm run check-schema-dupes && npm run lint",
+    "validate": "npm run type-check && npm run check-imports && npm run check-schema && npm run check-error-handling && npm run check-seo-routes && npm run check-schema-dupes && npm run check-icon-sprite && npm run lint",
     "validate:strict": "npm run type-check:strict && npm run lint",
     "setup:stripe": "node scripts/setup-stripe-products.js",
     "setup:stripe:dry-run": "node scripts/setup-stripe-products.js --dry-run",
@@ -75,6 +75,9 @@
     "ralph:android": "node scripts/ralph/ralph.mjs --tool claude --prd prd-android.json --instructions scripts/ralph/CLAUDE-android.md",
     "ralph:android:resume": "node scripts/ralph/ralph.mjs --tool claude --prd prd-android.json --instructions scripts/ralph/CLAUDE-android.md --resume",
     "check-seo-routes": "node scripts/check-seo-route-parity.mjs",
+    "icons:sprite": "node scripts/generate-icon-sprite.mjs",
+    "check-pseo-inventory": "tsx scripts/check-pseo-inventory.ts",
+    "check-icon-sprite": "node scripts/generate-icon-sprite.mjs --check",
     "check-schema-dupes": "node scripts/check-duplicate-schema.mjs",
     "audit:seo-head": "node scripts/audit-prerendered-seo.mjs"
   },

@@ -116,12 +116,17 @@ export function useSmartRecommendations() {
       if (userLikes.length === 0) return [];
 
       // Get users who liked similar events
-      const { data: similarUsers } = await supabase
+      const { data: similarUsers, error: similarUsersError } = await supabase
         .from('user_event_feedback')
         .select('user_id, event_id')
         .in('event_id', userLikes)
         .eq('feedback_type', 'thumbs_up')
         .neq('user_id', user!.id);
+      // A strategy that FAILED contributes nothing, exactly like a strategy
+      // with no matches - and the user just sees fewer recommendations. One
+      // broken strategy must not take the whole rail down, so this logs
+      // rather than throwing; a permanently dead strategy is then visible.
+      if (similarUsersError) logger.error('recommendations', 'A recommendation query failed', { error: similarUsersError });
 
       if (!similarUsers || similarUsers.length === 0) return [];
 
@@ -135,7 +140,7 @@ export function useSmartRecommendations() {
         .map(([userId]) => userId);
 
       // Get events liked by similar users that current user hasn't seen
-      const { data: recommendedEvents } = await supabase
+      const { data: recommendedEvents, error: recommendedEventsError } = await supabase
         .from('user_event_feedback')
         .select(`
           event_id,
@@ -145,6 +150,11 @@ export function useSmartRecommendations() {
         .eq('feedback_type', 'thumbs_up')
         .not('event_id', 'in', `(${userLikes.join(',')})`)
         .limit(limit);
+      // A strategy that FAILED contributes nothing, exactly like a strategy
+      // with no matches - and the user just sees fewer recommendations. One
+      // broken strategy must not take the whole rail down, so this logs
+      // rather than throwing; a permanently dead strategy is then visible.
+      if (recommendedEventsError) logger.error('recommendations', 'A recommendation query failed', { error: recommendedEventsError });
 
       if (!recommendedEvents) return [];
 
@@ -185,7 +195,12 @@ export function useSmartRecommendations() {
         }
       }
 
-      const { data: events } = await query.limit(limit);
+      const { data: events, error: eventsError } = await query.limit(limit);
+      // A strategy that FAILED contributes nothing, exactly like a strategy
+      // with no matches - and the user just sees fewer recommendations. One
+      // broken strategy must not take the whole rail down, so this logs
+      // rather than throwing; a permanently dead strategy is then visible.
+      if (eventsError) logger.error('recommendations', 'A recommendation query failed', { error: eventsError });
 
       if (!events) return [];
 
@@ -206,7 +221,7 @@ export function useSmartRecommendations() {
   // Trending recommendations with velocity scoring
   const generateTrendingRecommendations = async (limit: number): Promise<SmartRecommendation[]> => {
     try {
-      const { data: trendingScores } = await supabase
+      const { data: trendingScores, error: trendingScoresError } = await supabase
         .from('trending_scores')
         .select(`
           *,
@@ -216,6 +231,11 @@ export function useSmartRecommendations() {
         .eq('date', new Date().toISOString().split('T')[0])
         .order('score', { ascending: false })
         .limit(limit);
+      // A strategy that FAILED contributes nothing, exactly like a strategy
+      // with no matches - and the user just sees fewer recommendations. One
+      // broken strategy must not take the whole rail down, so this logs
+      // rather than throwing; a permanently dead strategy is then visible.
+      if (trendingScoresError) logger.error('recommendations', 'A recommendation query failed', { error: trendingScoresError });
 
       if (!trendingScores) return [];
 
@@ -223,12 +243,17 @@ export function useSmartRecommendations() {
       const eventsToRecommend: SmartRecommendation[] = [];
       
       for (const trendingScore of trendingScores) {
-        const { data: event } = await supabase
+        const { data: event, error: eventError } = await supabase
           .from('events')
           .select('*')
           .eq('id', trendingScore.content_id)
           .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
           .maybeSingle();
+        // A strategy that FAILED contributes nothing, exactly like a strategy
+        // with no matches - and the user just sees fewer recommendations. One
+        // broken strategy must not take the whole rail down, so this logs
+        // rather than throwing; a permanently dead strategy is then visible.
+        if (eventError) logger.error('recommendations', 'A recommendation query failed', { error: eventError });
 
         if (event) {
           eventsToRecommend.push({

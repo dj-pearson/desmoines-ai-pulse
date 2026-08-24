@@ -1,6 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("useForYouRail");
 
 /**
  * Wraps the get_personalized_recommendations / get_trending_events RPCs
@@ -40,13 +43,19 @@ export function useForYouRail(limit = 12): UseForYouRailResult {
       if (user?.id) {
         const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
         // @ts-ignore -- Supabase SDK strict mode noise
-        const { count } = await supabase
+        const { count, error } = await supabase
           .from("swipe_interactions")
           .select("*", { count: "exact", head: true })
           // @ts-ignore
           .eq("user_id", user.id)
           // @ts-ignore
           .gte("created_at", ninetyDaysAgo);
+        // A failed read is not a cold start. Treating it as zero swipes sends a
+        // user with a full history down the generic path silently; logging it
+        // keeps the degradation visible while still degrading gracefully.
+        if (error) {
+          log.error("useForYouRail", "Could not count recent swipes", { error });
+        }
         swipeCount = count ?? 0;
       }
 

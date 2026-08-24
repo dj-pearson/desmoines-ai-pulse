@@ -50,7 +50,19 @@ while IFS= read -r hit; do
   # formatted across lines in all three languages.
   window="$(sed -n "${line},$((line + 8))p" "$file")"
 
-  if grep -qE "user_id|userId" <<< "$window" \
+  # user_id must be the FILTER argument, not merely present in the window. The
+  # old test matched any mention of user_id or userId - including a
+  # .select(...) that RETURNS the column, which is the leak this guard exists
+  # to stop rather than evidence against it. Negative-controlled: a tally read
+  # selecting entity_id and user_id, filtered only by category_id, was reported
+  # "ok" before this change.
+  #
+  # The pattern deliberately avoids embedding quote characters - the three
+  # client dialects quote differently and a bash string carrying both quote
+  # kinds is how this script broke while being fixed. Requiring user_id right
+  # after eq( covers all three:
+  #   web      .eq(user_id...   iOS  .eq(user_id...   Android  eq(user_id...
+  if grep -qE "eq\(\s*.?user_id" <<< "$window" \
      || grep -qE "\.(insert|upsert|delete)\(" <<< "$window"; then
     echo "  ok    ${file}:${line}"
   else

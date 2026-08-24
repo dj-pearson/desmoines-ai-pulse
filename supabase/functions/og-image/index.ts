@@ -126,10 +126,18 @@ async function loadCard(supabase: ReturnType<typeof createClient>, type: string,
   // miss OR a read failure, and the caller renders the generic card - which is
   // the correct outcome for a social preview: a wrong card is worse than a
   // generic one, and there is nothing a share sheet can do with an error.
-  // The errors are left uncaptured deliberately rather than by omission.
+  //
+  // THE OUTCOME IS UNCHANGED; THE SILENCE IS NOT. The errors used to be left
+  // undestructured entirely, which conflated two decisions: what to RENDER on
+  // failure, and whether to RECORD it. The first is settled - generic card. The
+  // second was never argued for, and it costs nothing to get right: a renamed
+  // column here degrades every shared link to a generic card, forever, with no
+  // signal anywhere. moderate-content's isPaused makes exactly this split -
+  // permissive return value, captured error - and it is the right shape.
   if (type === "event") {
     // event_start_utc is the timezone-correct source; `date` is the legacy fallback.
-    const { data } = await supabase.from("events").select("title, date, event_start_utc, image_url, category").eq("id", id).maybeSingle();
+    const { data, error } = await supabase.from("events").select("title, date, event_start_utc, image_url, category").eq("id", id).maybeSingle();
+    if (error) console.error(`[og-image] events read failed for ${id}; falling back to the generic card:`, error.message);
     if (!data) return null;
     const when = (data as any).event_start_utc || (data as any).date;
     let immutable = false;
@@ -141,14 +149,16 @@ async function loadCard(supabase: ReturnType<typeof createClient>, type: string,
     return { title: (data as any).title, badge: (when && central(when)) || (data as any).category || "Event", imageUrl: (data as any).image_url, immutable };
   }
   if (type === "restaurant") {
-    const { data } = await supabase.from("restaurants").select("name, cuisine, rating, image_url").eq("id", id).maybeSingle();
+    const { data, error } = await supabase.from("restaurants").select("name, cuisine, rating, image_url").eq("id", id).maybeSingle();
+    if (error) console.error(`[og-image] restaurants read failed for ${id}; falling back to the generic card:`, error.message);
     if (!data) return null;
     const r = (data as any).rating;
     return { title: (data as any).name, badge: r ? `★ ${Number(r).toFixed(1)} · ${(data as any).cuisine || "Restaurant"}` : ((data as any).cuisine || "Restaurant"), imageUrl: (data as any).image_url };
   }
   if (type === "attraction") {
     // attractions store the kind in `type` (not `category`); image in `image_url`.
-    const { data } = await supabase.from("attractions").select("name, type, rating, image_url").eq("id", id).maybeSingle();
+    const { data, error } = await supabase.from("attractions").select("name, type, rating, image_url").eq("id", id).maybeSingle();
+    if (error) console.error(`[og-image] attractions read failed for ${id}; falling back to the generic card:`, error.message);
     if (!data) return null;
     const r = (data as any).rating;
     const kind = (data as any).type || "Attraction";
@@ -156,7 +166,8 @@ async function loadCard(supabase: ReturnType<typeof createClient>, type: string,
   }
   if (type === "article") {
     // articles store the hero image in `featured_image_url` (not `image_url`).
-    const { data } = await supabase.from("articles").select("title, featured_image_url, category").eq("id", id).maybeSingle();
+    const { data, error } = await supabase.from("articles").select("title, featured_image_url, category").eq("id", id).maybeSingle();
+    if (error) console.error(`[og-image] articles read failed for ${id}; falling back to the generic card:`, error.message);
     if (!data) return null;
     return { title: (data as any).title, badge: (data as any).category || "Article", imageUrl: (data as any).featured_image_url };
   }

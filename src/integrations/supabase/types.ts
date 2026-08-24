@@ -2991,6 +2991,7 @@ export type Database = {
           content_type: string
           created_at: string | null
           id: string
+          priority: number
           rejection_reason: string | null
           reviewed_at: string | null
           reviewed_by: string | null
@@ -3007,6 +3008,7 @@ export type Database = {
           content_type: string
           created_at?: string | null
           id?: string
+          priority?: number
           rejection_reason?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -3023,6 +3025,7 @@ export type Database = {
           content_type?: string
           created_at?: string | null
           id?: string
+          priority?: number
           rejection_reason?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -4669,6 +4672,7 @@ export type Database = {
       events: {
         Row: {
           ai_writeup: string | null
+          archived_at: string | null
           category: string
           city: string | null
           created_at: string | null
@@ -4728,6 +4732,7 @@ export type Database = {
         }
         Insert: {
           ai_writeup?: string | null
+          archived_at?: string | null
           category?: string
           city?: string | null
           created_at?: string | null
@@ -4787,6 +4792,7 @@ export type Database = {
         }
         Update: {
           ai_writeup?: string | null
+          archived_at?: string | null
           category?: string
           city?: string | null
           created_at?: string | null

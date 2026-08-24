@@ -36,8 +36,18 @@ interface GapRow {
   missing: string[];
 }
 
-async function countMissing(supabase: Client, table: Table, orFilter: string): Promise<number> {
-  const { count } = await supabase.from(table).select("id", { count: "exact", head: true }).or(orFilter);
+/**
+ * null means "could not read". fill_rate is computed as 1 - missing/total and
+ * published to data_quality_snapshots, which the ops digest reads back. With
+ * `count ?? 0` a failed missing-count published a PERFECT fill rate and a
+ * failed total published a division by zero - both from a query that never ran.
+ */
+async function countMissing(supabase: Client, table: Table, orFilter: string): Promise<number | null> {
+  const { count, error } = await supabase.from(table).select("id", { count: "exact", head: true }).or(orFilter);
+  if (error) {
+    console.error(`[data-quality-sweeper] countMissing(${table}) failed:`, error.message);
+    return null;
+  }
   return count ?? 0;
 }
 
@@ -90,6 +100,7 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   let resolved = 0;
   const perTable: Record<string, unknown> = {};
   const fillErrors: string[] = [];
+  const unmeasured: string[] = [];
 
   for (const table of TABLES) {
     // ── 1) Reconcile issue tracker against current gaps ──────────────────
@@ -171,7 +182,11 @@ export const run: AgentRun = async (ctx, { supabase }) => {
     // ── 3) Fill-rate snapshot ────────────────────────────────────────────
     const [total, missImage, missCoords, missSeo, missGeo] = await Promise.all([
       (async () => {
-        const { count } = await supabase.from(table).select("id", { count: "exact", head: true });
+        const { count, error } = await supabase.from(table).select("id", { count: "exact", head: true });
+        if (error) {
+          console.error(`[data-quality-sweeper] total(${table}) failed:`, error.message);
+          return null;
+        }
         return count ?? 0;
       })(),
       countMissing(supabase, table, "image_url.is.null"),
@@ -180,6 +195,21 @@ export const run: AgentRun = async (ctx, { supabase }) => {
       countMissing(supabase, table, "geo_summary.is.null"),
     ]);
     const gappedNow = gaps.length; // rows with any gap (bounded to DETECT_LIMIT)
+
+    // A SNAPSHOT NOBODY COULD MEASURE IS NOT WRITTEN. The old code took
+    // `count ?? 0` for all five numbers and then computed
+    //     total > 0 ? 1 - gapped/total : 1
+    // so a failed total published fill_rate 1.000 - a PERFECT score - and a
+    // failed missing-count published a perfect one too. data_quality_snapshots
+    // feeds the ops digest's "fill rate" line, so a broken read became a
+    // published claim that the data is complete. A gap in the series is
+    // legible; a fabricated 100% is not.
+    if (total === null || missImage === null || missCoords === null || missSeo === null || missGeo === null) {
+      unmeasured.push(table);
+      console.error(`[data-quality-sweeper] skipping ${table} snapshot - one or more counts unreadable`);
+      continue;
+    }
+
     const fillRate = total > 0 ? Math.max(0, 1 - Math.min(total, gappedNow) / total) : 1;
     await supabase.from("data_quality_snapshots").insert({
       table_name: table,
@@ -198,7 +228,10 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   if (coordErr) fillErrors.push(coordErr);
 
   ctx.processed(TABLES.length);
-  ctx.summary(`data-quality sweep: ${resolved} resolved, ${escalated} escalated; ${fillErrors.length} fill error(s)`);
-  ctx.meta({ perTable, resolved, escalated, fillErrors });
-  return { resolved, escalated, perTable };
+  ctx.summary(
+    `data-quality sweep: ${resolved} resolved, ${escalated} escalated; ${fillErrors.length} fill error(s)` +
+      (unmeasured.length ? `; ${unmeasured.length} table(s) UNMEASURED (${unmeasured.join(", ")})` : ""),
+  );
+  ctx.meta({ perTable, resolved, escalated, fillErrors, unmeasured });
+  return { resolved, escalated, perTable, unmeasured };
 };

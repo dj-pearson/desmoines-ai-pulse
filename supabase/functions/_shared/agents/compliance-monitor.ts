@@ -29,9 +29,23 @@ const RETENTION: Array<{ table: string; col: string; days: number }> = [
 // deno-lint-ignore no-explicit-any
 type Client = any;
 
-async function count(supabase: Client, table: string, apply: (q: Client) => Client): Promise<number> {
-  const { count } = await apply(supabase.from(table).select("id", { count: "exact", head: true }));
+/**
+ * null means "could not read". Every finding in this agent is gated on a count
+ * being above a threshold, so `count ?? 0` meant a failed query reported
+ * compliance. The one direction a compliance check must never fail in.
+ */
+async function count(supabase: Client, table: string, apply: (q: Client) => Client): Promise<number | null> {
+  const { count, error } = await apply(supabase.from(table).select("id", { count: "exact", head: true }));
+  if (error) {
+    console.error(`[compliance-monitor] count(${table}) failed:`, error.message);
+    return null;
+  }
   return count ?? 0;
+}
+
+/** A gate that treats an unreadable count as "needs a human", never as a pass. */
+function exceeds(value: number | null, threshold: number): boolean {
+  return value === null || value > threshold;
 }
 
 interface Finding { key: string; title: string; evidence: Record<string, unknown>; }
@@ -43,21 +57,25 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   // ── 1. Deletion SLA ─────────────────────────────────────────────────────
   const deletionCutoff = new Date(nowMs - DELETION_SLA_DAYS * 86400_000).toISOString();
   const staleDeletions = await count(supabase, "account_deletion_tokens", (q) => q.lt("created_at", deletionCutoff));
-  if (staleDeletions > 0) {
+  if (exceeds(staleDeletions, 0)) {
     findings.push({
       key: "deletion_sla",
-      title: `${staleDeletions} deletion request(s) past the ${DELETION_SLA_DAYS}-day SLA`,
-      evidence: { staleDeletions, slaDays: DELETION_SLA_DAYS },
+      title: staleDeletions === null
+        ? `Deletion SLA UNVERIFIED - account_deletion_tokens could not be counted`
+        : `${staleDeletions} deletion request(s) past the ${DELETION_SLA_DAYS}-day SLA`,
+      evidence: { staleDeletions, slaDays: DELETION_SLA_DAYS, unreadable: staleDeletions === null },
     });
   }
 
   // ── 2. Retention (flag for review — never hard-delete) ──────────────────
-  const retentionOverages: Record<string, number> = {};
+  const retentionOverages: Record<string, number | null> = {};
   for (const r of RETENTION) {
     const cutoff = new Date(nowMs - r.days * 86400_000).toISOString();
     try {
       const n = await count(supabase, r.table, (q) => q.lt(r.col, cutoff));
-      if (n > 0) retentionOverages[r.table] = n;
+      // null (unreadable) is recorded too - an unchecked retention policy is a
+      // finding, not a pass.
+      if (exceeds(n, 0)) retentionOverages[r.table] = n;
     } catch (_e) { /* table may not exist in this env — skip */ }
   }
   if (Object.keys(retentionOverages).length > 0) {
@@ -73,7 +91,9 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   for (const ctype of REQUIRED_CONSENT_TYPES) {
     try {
       const n = await count(supabase, "consent_records", (q) => q.eq("consent_type", ctype).eq("granted", true));
-      if (n === 0) missingConsent.push(ctype);
+      // null is treated as missing: an unreadable consent count has not shown
+      // that consent exists, and this is the one gate that must not fail open.
+      if (n === null || n === 0) missingConsent.push(ctype);
     } catch (_e) { /* skip */ }
   }
   if (missingConsent.length > 0) {

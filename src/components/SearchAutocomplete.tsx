@@ -4,6 +4,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { storage } from '@/lib/safeStorage';
 import { Search, Clock, TrendingUp, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('SearchAutocomplete');
 
 type ContentType = 'events' | 'restaurants' | 'attractions';
 
@@ -68,13 +71,17 @@ export function SearchAutocomplete({
       const searchTerm = `%${debouncedValue}%`;
 
       if (contentType === 'events') {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('events')
           .select('id, title, venue')
           .ilike('title', searchTerm)
           .gte('date', new Date().toISOString())
           .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
           .limit(5);
+        // A search that FAILED and a search with no matches both render as
+        // "no suggestions", so a user typing a restaurant that exists is told it
+        // is not listed. The empty result is still the right UI; the silence was not.
+        if (error) log.error('suggestions', 'Suggestion query failed', { contentType, error });
         return (data || []).map((e) => ({
           id: e.id,
           title: e.title,
@@ -83,11 +90,15 @@ export function SearchAutocomplete({
       }
 
       if (contentType === 'restaurants') {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('restaurants')
           .select('id, name, cuisine')
           .ilike('name', searchTerm)
           .limit(5);
+        // A search that FAILED and a search with no matches both render as
+        // "no suggestions", so a user typing a restaurant that exists is told it
+        // is not listed. The empty result is still the right UI; the silence was not.
+        if (error) log.error('suggestions', 'Suggestion query failed', { contentType, error });
         return (data || []).map((r) => ({
           id: r.id,
           title: r.name,
@@ -96,11 +107,15 @@ export function SearchAutocomplete({
       }
 
       if (contentType === 'attractions') {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('attractions')
           .select('id, name, type')
           .ilike('name', searchTerm)
           .limit(5);
+        // A search that FAILED and a search with no matches both render as
+        // "no suggestions", so a user typing a restaurant that exists is told it
+        // is not listed. The empty result is still the right UI; the silence was not.
+        if (error) log.error('suggestions', 'Suggestion query failed', { contentType, error });
         return (data || []).map((a) => ({
           id: a.id,
           title: a.name,

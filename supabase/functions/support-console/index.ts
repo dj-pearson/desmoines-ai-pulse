@@ -82,9 +82,17 @@ Deno.serve(async (req) => {
 
     if (action === "thread") {
       const id = String(body.id ?? "");
-      const { data: ticket } = await supabase.from("support_tickets").select("*").eq("id", id).maybeSingle();
+      // A 404 tells a support agent the ticket does not exist. That has to mean
+      // the ticket does not exist, not that the query failed - the agent's next
+      // move is to tell the customer their ticket is gone.
+      const { data: ticket, error: ticketError } = await supabase.from("support_tickets").select("*").eq("id", id).maybeSingle();
+      if (ticketError) return j({ error: `Could not read the ticket: ${ticketError.message}` }, 500, corsHeaders);
       if (!ticket) return j({ error: "not found" }, 404, corsHeaders);
-      const { data: messages } = await supabase.from("support_messages").select("id, sender, body, metadata, created_at").eq("ticket_id", id).order("created_at", { ascending: true });
+
+      // An empty thread is read as "the customer has not said anything", and the
+      // agent replies on that basis.
+      const { data: messages, error: messagesError } = await supabase.from("support_messages").select("id, sender, body, metadata, created_at").eq("ticket_id", id).order("created_at", { ascending: true });
+      if (messagesError) return j({ error: `Could not read the conversation: ${messagesError.message}` }, 500, corsHeaders);
 
       // User context: subscription + light activity.
       let context: Record<string, unknown> = { authenticated: !!ticket.user_id };
@@ -101,8 +109,16 @@ Deno.serve(async (req) => {
 
     if (action === "suggest_reply") {
       const id = String(body.id ?? "");
-      const { data: messages } = await supabase.from("support_messages").select("sender, body").eq("ticket_id", id).order("created_at", { ascending: true });
+      // THE WORST PLACE FOR AN EMPTY RESULT TO PASS AS A FACT. A failed read
+      // gave the model an EMPTY conversation and it still produced a confident
+      // draft reply, which an agent then sends to a customer whose actual
+      // message nobody read. Empty context must stop the draft, not shape it.
+      const { data: messages, error: messagesError } = await supabase.from("support_messages").select("sender, body").eq("ticket_id", id).order("created_at", { ascending: true });
+      if (messagesError) return j({ error: `Could not read the conversation: ${messagesError.message}` }, 500, corsHeaders);
       const thread = (messages ?? []) as { sender: string; body: string }[];
+      if (thread.length === 0) {
+        return j({ error: "no messages on this ticket to draft a reply from" }, 400, corsHeaders);
+      }
       const lastUser = [...thread].reverse().find((m) => m.sender === "user")?.body ?? thread[0]?.body ?? "";
       let passages: { title: string; content: string; source: string | null }[] = [];
       try { passages = (await retrieveKb(supabase, lastUser, { matchCount: 5, threshold: 0.5 })).passages; } catch { /* KB down */ }
@@ -151,7 +167,10 @@ Deno.serve(async (req) => {
     }
 
     if (action === "canned") {
-      const { data } = await supabase.from("support_canned_responses").select("id, title, body, category").eq("is_active", true).order("title");
+      const { data, error } = await supabase.from("support_canned_responses").select("id, title, body, category").eq("is_active", true).order("title");
+      // An empty list reads as "no canned responses are configured", which sends
+      // an agent off to write one by hand.
+      if (error) return j({ error: `Could not read canned responses: ${error.message}` }, 500, corsHeaders);
       return j({ ok: true, canned: data ?? [] }, 200, corsHeaders);
     }
 

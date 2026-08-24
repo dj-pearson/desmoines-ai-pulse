@@ -36,7 +36,7 @@ export function useBatchEventSocial(eventIds: string[]) {
 
       try {
         // Batch Query 1: Fetch all attendees for all events in one query
-        const { data: attendeesData } = await supabase
+        const { data: attendeesData, error: attendeesDataError } = await supabase
           .from('event_attendees')
           .select('*')
           .in('event_id', eventIds)
@@ -44,17 +44,33 @@ export function useBatchEventSocial(eventIds: string[]) {
           .order('created_at', { ascending: false });
 
         // Batch Query 2: Fetch all discussions for all events in one query
-        const { data: discussionsData } = await supabase
+        const { data: discussionsData, error: discussionsDataError } = await supabase
           .from('event_discussions')
           .select('*')
           .in('event_id', eventIds)
           .order('created_at', { ascending: false });
 
         // Batch Query 3: Fetch all live stats for all events in one query
-        const { data: statsData } = await supabase
+        const { data: statsData, error: statsDataError } = await supabase
           .from('event_live_stats')
           .select('*')
           .in('event_id', eventIds);
+
+        // A BATCH THAT FAILED IS NOT A BATCH WITH NOTHING IN IT, and here the
+        // difference is measurable. SocialEventCard takes socialData from this
+        // hook and falls back to its own per-event fetch when the batch has
+        // nothing for an event - which on /events meant 40 cards issuing 113
+        // REST requests (WEB-PERF-024). So a silently failed batch does not
+        // just lose the social counts, it reinstates the N+1 the batch exists
+        // to remove, and looks identical to a quiet page.
+        const batchErrors = [
+          attendeesDataError && `attendees: ${attendeesDataError.message}`,
+          discussionsDataError && `discussions: ${discussionsDataError.message}`,
+          statsDataError && `live stats: ${statsDataError.message}`,
+        ].filter(Boolean);
+        if (batchErrors.length > 0) {
+          log.error('useBatchEventSocial', 'Batch social query failed', { eventCount: eventIds.length, batchErrors });
+        }
 
         // Group data by event_id for efficient lookup
         const result: BatchEventSocialResult = {};

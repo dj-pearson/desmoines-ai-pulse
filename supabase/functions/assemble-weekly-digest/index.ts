@@ -116,7 +116,7 @@ async function gatherContent(supabase: SupabaseClient): Promise<DigestContent> {
     .slice(0, 10);
 
   // Top upcoming events in the next 7 days (featured first, then soonest).
-  const { data: events } = await supabase
+  const { data: events, error: eventsError } = await supabase
     .from('events')
     .select('id, title, date, location, venue, category')
     .gte('date', todayStr)
@@ -129,7 +129,7 @@ async function gatherContent(supabase: SupabaseClient): Promise<DigestContent> {
 
   // Top-rated / featured restaurants (no live "trending" metric exists; rating
   // + featured is the best available signal).
-  const { data: restaurants } = await supabase
+  const { data: restaurants, error: restaurantsError } = await supabase
     .from('restaurants')
     .select('id, name, slug, cuisine, location, rating')
     .neq('is_merged', true)
@@ -138,13 +138,26 @@ async function gatherContent(supabase: SupabaseClient): Promise<DigestContent> {
     .limit(MAX_RESTAURANTS);
 
   // Newest published article.
-  const { data: article } = await supabase
+  const { data: article, error: articleError } = await supabase
     .from('articles')
     .select('title, slug, excerpt, published_at')
     .eq('status', 'published')
     .order('published_at', { ascending: false, nullsFirst: false })
     .limit(1)
     .maybeSingle();
+
+  // The pre-send gate below aborts on "no content to send", which already
+  // stops an empty digest from going out - but it cannot tell an empty week
+  // from three failed queries, and those need different responses from whoever
+  // reads the alert.
+  const contentErrors = [
+    eventsError && `events: ${eventsError.message}`,
+    restaurantsError && `restaurants: ${restaurantsError.message}`,
+    articleError && `article: ${articleError.message}`,
+  ].filter(Boolean);
+  if (contentErrors.length > 0) {
+    throw new Error(`assemble-weekly-digest: could not read digest content - ${contentErrors.join('; ')}`);
+  }
 
   return {
     events: (events ?? []) as unknown as EventRow[],
@@ -269,11 +282,21 @@ function linksResolve(content: DigestContent): boolean {
   });
 }
 
+/**
+ * -1 means "could not read", which the pre-send gate below treats as a failure
+ * exactly like zero. Returning 0 for an unreadable count happened to land on
+ * the safe side of that gate, but it also told the PREVIEW that the newsletter
+ * has no subscribers - a number an operator reads and believes.
+ */
 async function activeSubscriberCount(supabase: SupabaseClient): Promise<number> {
-  const { count } = await supabase
+  const { count, error } = await supabase
     .from('newsletter_subscribers')
     .select('email', { count: 'exact', head: true })
     .eq('status', 'active');
+  if (error) {
+    console.error('[assemble-weekly-digest] subscriber count failed:', error.message);
+    return -1;
+  }
   return count ?? 0;
 }
 
@@ -346,11 +369,18 @@ Deno.serve(async (req) => {
   // --- assemble: full pipeline, jobRunner-wrapped ---------------------------
   const job = await runJob('assemble-weekly-digest', async (ctx) => {
     // 1) pause flag
-    const { data: flag } = await supabase
+    // THE PAUSE FLAG FAILED OPEN. The error was discarded, so an unreadable
+    // feature_flags row produced `flag = null`, the condition below was false,
+    // and the digest went out to every subscriber - after somebody had paused
+    // it. A job that cannot read its own kill switch has not been told to run.
+    const { data: flag, error: flagError } = await supabase
       .from('feature_flags')
       .select('enabled')
       .eq('flag_key', PAUSE_FLAG)
       .maybeSingle();
+    if (flagError) {
+      throw new Error(`assemble-weekly-digest: could not read the pause flag: ${flagError.message}`);
+    }
     if (flag && flag.enabled === false) {
       ctx.meta({ paused: true });
       return { paused: true };
@@ -358,12 +388,19 @@ Deno.serve(async (req) => {
 
     // 2) idempotency — already created a digest this week?
     const since = new Date(Date.now() - DEDUPE_DAYS * 24 * 60 * 60 * 1000).toISOString();
-    const { data: recent } = await supabase
+    // Same direction, same reason. An unreadable result meant "no digest yet
+    // this week", so a failed query would have assembled and sent a SECOND
+    // weekly newsletter to the whole list. An idempotency check that cannot
+    // read is not an idempotency check.
+    const { data: recent, error: recentError } = await supabase
       .from('newsletter_campaigns')
       .select('id, created_at')
       .eq('campaign_type', 'weekly_digest')
       .gte('created_at', since)
       .limit(1);
+    if (recentError) {
+      throw new Error(`assemble-weekly-digest: could not check for this week's digest: ${recentError.message}`);
+    }
     if (recent && recent.length > 0) {
       ctx.meta({ skipped: 'already_created_this_week' });
       return { skipped: true, existing: recent[0].id };
@@ -377,7 +414,8 @@ Deno.serve(async (req) => {
     // 4) pre-send validation gates — any failure throws (aborts + alerts).
     const recipientCount = await activeSubscriberCount(supabase);
     const gateFailures: string[] = [];
-    if (recipientCount <= 0) gateFailures.push('no active subscribers');
+    if (recipientCount < 0) gateFailures.push('subscriber count could not be read');
+    else if (recipientCount === 0) gateFailures.push('no active subscribers');
     if (totalItems <= 0) gateFailures.push('no content to send (events/restaurants/article all empty)');
     if (subject.length === 0 || subject.length > SUBJECT_MAX) {
       gateFailures.push(`subject length ${subject.length} outside 1..${SUBJECT_MAX}`);

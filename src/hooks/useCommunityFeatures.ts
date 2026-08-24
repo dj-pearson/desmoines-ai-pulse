@@ -139,13 +139,30 @@ export function useCommunityFeatures() {
     }
   };
 
+  /**
+   * Photos for an event, from the event_photos table (WEB-QA-022 "Option B").
+   *
+   * THIS USED TO FILTER ON is_approved, WHICH DOES NOT EXIST. event_photos has
+   * id, event_id, user_id, photo_url, caption, likes_count, is_featured and
+   * created_at - no moderation column - so PostgREST answered 42703 on every
+   * call and the catch below turned that into an empty array. A moderation gate
+   * that always failed closed looked exactly like an event with no photos.
+   *
+   * THE FILTER IS REMOVED RATHER THAN REPAIRED, and the intent behind it is
+   * recorded here instead of being silently dropped: whoever settles WEB-QA-022
+   * in favour of this table needs to add an approval column and put the filter
+   * back. Until then this returns every photo for the event, which is what the
+   * upload path above already assumes - it writes no approval flag either.
+   *
+   * Both photo implementations hold ZERO rows (verified against production
+   * 2026-08-23), so nothing has ever been shown or hidden by this.
+   */
   const getEventPhotos = async (eventId: string): Promise<PhotoUpload[]> => {
     try {
       const { data, error } = await supabase
         .from('event_photos')
         .select('*')
         .eq('event_id', eventId)
-        .eq('is_approved', true)
         .order('created_at', { ascending: false });
 
       if (error) throw error;

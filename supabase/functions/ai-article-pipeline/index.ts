@@ -89,11 +89,19 @@ Deno.serve(async (req) => {
 
   const job = await runJob('ai-article-pipeline', async (ctx) => {
     // --- pause flag ---------------------------------------------------------
-    const { data: flag } = await supabase
+    // The fourth pause flag found failing open today. An unreadable row gave
+    // `flag = null`, the condition below was false, and the pipeline ran -
+    // spending model credits and auto-publishing articles after somebody had
+    // paused it. moderate-content's isPaused makes the opposite trade
+    // deliberately and says so; this one just discarded the error.
+    const { data: flag, error: flagError } = await supabase
       .from('feature_flags')
       .select('enabled')
       .eq('flag_key', PAUSE_FLAG)
       .maybeSingle();
+    if (flagError) {
+      throw new Error(`ai-article-pipeline: could not read the pause flag: ${flagError.message}`);
+    }
     if (flag && flag.enabled === false) {
       ctx.meta({ paused: true });
       return { paused: true, decision: 'paused' };
@@ -102,11 +110,20 @@ Deno.serve(async (req) => {
     // --- daily cap (auto-published only) ------------------------------------
     const startOfDay = new Date();
     startOfDay.setUTCHours(0, 0, 0, 0);
-    const { count: publishedToday } = await supabase
+    // The cap fails CLOSED. `publishedToday ?? 0` meant an unreadable count
+    // read as "nothing published today", so the daily limit on auto-published
+    // articles - and the model spend behind each one - simply never applied
+    // while the read was broken.
+    const { count: publishedToday, error: capError } = await supabase
       .from('articles')
       .select('id', { count: 'exact', head: true })
       .eq('is_auto_published', true)
       .gte('published_at', startOfDay.toISOString());
+    if (capError) {
+      console.error('[ai-article-pipeline] daily-cap count failed:', capError.message);
+      ctx.meta({ capped: true, capUnreadable: true });
+      return { capped: true, decision: 'capped', reason: 'daily cap could not be verified' };
+    }
     if ((publishedToday ?? 0) >= DAILY_CAP) {
       ctx.meta({ capped: true, publishedToday });
       return { capped: true, decision: 'capped', publishedToday };

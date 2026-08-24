@@ -151,11 +151,28 @@ export default defineConfig(({ command, mode }) => {
       },
     }),
     command === "serve" && componentTagger(),
-    // Bundle analyzer - run with ANALYZE=true npm run build
+    // Bundle analyzer - run with ANALYZE=true npm run build.
+    //
+    // `open` is opt-out rather than hardcoded true: an analyzer that always
+    // launches a browser cannot be run from CI, from a container, or by an
+    // agent, which means the measurement behind WEB-PERF-020's budget was only
+    // ever available to someone sitting at the machine. ANALYZE_OPEN=false
+    // keeps the report and skips the browser.
     process.env.ANALYZE === "true" &&
       visualizer({
-        open: true,
+        open: process.env.ANALYZE_OPEN !== "false",
         filename: "dist/stats.html",
+        gzipSize: true,
+        brotliSize: true,
+      }),
+    // Machine-readable twin of the same report. The HTML is for reading; this
+    // is what lets a script answer "what is actually in the entry chunk"
+    // without a human scrubbing a treemap.
+    process.env.ANALYZE === "true" &&
+      visualizer({
+        open: false,
+        filename: "dist/stats.json",
+        template: "raw-data",
         gzipSize: true,
         brotliSize: true,
       }),
@@ -308,8 +325,32 @@ export default defineConfig(({ command, mode }) => {
         assetFileNames: "assets/[name]-[hash][extname]",
         chunkFileNames: "assets/[name]-[hash].js",
         entryFileNames: "assets/[name]-[hash].js",
-        // Prevent preloading of lazy-loaded chunks like maps
-        experimentalMinChunkSize: 20000, // 20KB minimum - prevents tiny preloaded chunks
+        // Rollup merges any chunk smaller than this into its importer. At the
+        // 20000 it used to carry, every small lazy module landed in the ENTRY:
+        // src/pages/AdminGscCallback.tsx - an admin OAuth callback - was in the
+        // first paint of every visitor, along with useMediaUpload, useMFA,
+        // useArticles, useCampaigns, useCampaignNotifications, useSocialFeatures,
+        // useProximitySearch and usePushNotifications. All of them are lazy at
+        // the source; the bundler put them back.
+        //
+        // The comment that used to sit here read "prevents tiny preloaded
+        // chunks", and that reason no longer holds: scripts/prerender.mjs strips
+        // the runtime-injected modulepreload links - 1,110 of them in the last
+        // build - so the prerendered HTML carries 4 preloads per route either
+        // way. The setting was paying for a problem something else already
+        // solves.
+        //
+        // MEASURED, and it is NOT a smooth curve, so do not "tune" this - test
+        // the values you would actually ship:
+        //     20000 -> 227.5 KB gz critical path, 149 chunks   (was here)
+        //     10000 -> 230.0 KB                 , 186
+        //      5000 -> 237.0 KB across SIX chunks, 222
+        //      1000 -> 219.3 KB                 , 281          (here now)
+        // The trade is explicit: 8.2 KB off every first paint for 132 more
+        // chunk files, which a visitor pays for only when they navigate to a
+        // route that needs one. Six routes verified in a browser against the
+        // built output - no chunk failures, no page errors.
+        experimentalMinChunkSize: 1000,
       },
     },
     chunkSizeWarningLimit: 500, // Stricter limit due to better splitting

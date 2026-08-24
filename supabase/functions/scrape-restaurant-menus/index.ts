@@ -472,12 +472,28 @@ async function scrapeRestaurantMenu(
 
   // ── Freshness check ──
   if (!options.forceUpdate) {
-    const { data: existing } = await supabase
+    const { data: existing, error: existingError } = await supabase
       .from("restaurant_menus")
       .select("id, captured_at")
       .eq("restaurant_id", restaurant.id)
       .eq("is_current", true)
       .maybeSingle();
+
+    // SKIPS RATHER THAN RE-SCRAPING. The error was discarded, so a failed read
+    // produced `existing = null`, which reads as "no current menu" and sends us
+    // back to fetch somebody else's website - a request to a third party made
+    // because OUR query failed. Not knowing whether the menu is fresh is a
+    // reason to leave it alone, and the skip is reported with its real cause so
+    // a persistent failure shows up as unmeasurable rather than as quiet churn.
+    if (existingError) {
+      return {
+        success: false,
+        items_count: 0,
+        skipped: true,
+        error: `Could not check menu freshness: ${existingError.message}`,
+        attempts: [],
+      };
+    }
 
     if (existing?.captured_at) {
       const ageDays = (Date.now() - new Date(existing.captured_at).getTime()) / 86_400_000;
@@ -984,16 +1000,20 @@ async function selectRestaurants(params: {
   const columns = "id, name, website, menu_url";
 
   if (params.restaurant_id) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("restaurants")
       .select(columns)
       .eq("id", params.restaurant_id)
       .maybeSingle();
+    // Returning [] means "this restaurant has no scrapeable URL", which is a
+    // statement about the row, not about our ability to read it.
+    if (error) throw new Error(`Could not read restaurant ${params.restaurant_id}: ${error.message}`);
     return data && (data.website || data.menu_url) ? [data as RestaurantRow] : [];
   }
 
   if (params.restaurant_ids?.length) {
-    const { data } = await supabase.from("restaurants").select(columns).in("id", params.restaurant_ids);
+    const { data, error } = await supabase.from("restaurants").select(columns).in("id", params.restaurant_ids);
+    if (error) throw new Error(`Could not read the requested restaurants: ${error.message}`);
     return ((data ?? []) as RestaurantRow[]).filter((r) => r.website || r.menu_url);
   }
 
@@ -1006,11 +1026,20 @@ async function selectRestaurants(params: {
 
   if (!params.force_update) {
     const cutoff = new Date(Date.now() - params.max_age_days * 86_400_000).toISOString();
-    const { data: recent } = await supabase
+    const { data: recent, error: recentError } = await supabase
       .from("restaurant_menus")
       .select("restaurant_id")
       .eq("is_current", true)
       .gte("captured_at", cutoff);
+
+    // THE EXCLUSION LIST IS THE WHOLE POINT OF THIS BRANCH. An empty list means
+    // "nothing has been scraped recently", so a failed read removed the filter
+    // entirely and the batch went back out to every restaurant's website inside
+    // the freshness window. That is a large, outward-facing side effect caused
+    // by an internal query failing, so it stops the run instead.
+    if (recentError) {
+      throw new Error(`Could not read recently scraped menus: ${recentError.message}`);
+    }
 
     const excludeIds = (recent ?? []).map((m) => m.restaurant_id);
     if (excludeIds.length > 0) {
@@ -1018,7 +1047,8 @@ async function selectRestaurants(params: {
     }
   }
 
-  const { data } = await query;
+  const { data, error } = await query;
+  if (error) throw new Error(`Could not read restaurants to scrape: ${error.message}`);
   return ((data ?? []) as RestaurantRow[]).filter((r) => r.website || r.menu_url);
 }
 

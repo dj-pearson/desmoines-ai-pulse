@@ -41,12 +41,22 @@ const BASELINE = join(ROOT, 'error-handling-baseline.json');
 const UPDATE = process.argv.includes('--update');
 
 /**
- * An awaited call destructured with `data` and no `error`. Written as an AST
- * selector rather than a regex so multi-line destructures and renamed bindings
- * (`data: rows`) are handled by the parser instead of by guesswork.
+ * An awaited call destructured with `data` or `count` and no `error`. Written as
+ * an AST selector rather than a regex so multi-line destructures and renamed
+ * bindings (`data: rows`) are handled by the parser instead of by guesswork.
+ *
+ * `count` WAS ADDED 2026-08-23 AND IT MATTERED. The selector used to look for
+ * `data` only, so `const { count } = await supabase...select(..., { count })`
+ * was invisible - and that is the shape of the single worst instance found so
+ * far. agent-ops-digest counted every headline metric through a helper ending
+ * `return count ?? 0`, so a digest that could read nothing printed "Overdue
+ * tasks: 0", "Agent failures (24h): 0", "Open dependency CVEs: 0" - identical
+ * to a system with nothing wrong. The guard for silent Supabase failures could
+ * not see the most consequential silent Supabase failure in the repo, because
+ * that one destructured a different property name.
  */
 const SELECTOR =
-  'VariableDeclarator[init.type="AwaitExpression"] > ObjectPattern:has(Property[key.name="data"]):not(:has(Property[key.name="error"]))';
+  'VariableDeclarator[init.type="AwaitExpression"] > ObjectPattern:has(Property[key.name=/^(data|count)$/]):not(:has(Property[key.name="error"]))';
 
 const eslint = new ESLint({
   overrideConfigFile: true,
@@ -81,12 +91,46 @@ const results = await eslint.lintFiles([
 ]);
 
 const current = {};
+/**
+ * COUNT ONLY THIS RULE'S MESSAGES.
+ *
+ * This counted `r.messages.length`, every message ESLint produced. With
+ * `overrideConfigFile: true` the config defines exactly one rule, so any
+ * `// eslint-disable-next-line some-other-rule` comment in a scanned file
+ * produces "Definition for rule 'X' was not found" - and that was counted as a
+ * discarded Supabase error. Measured on 2026-08-23: 46 of the 404 baselined
+ * sites, 11% of the ratchet, across 38 files. src/lib/security/ownership.ts was
+ * carrying two of them, both from disable comments for
+ * @typescript-eslint/no-explicit-any, and neither had anything to do with an
+ * error being discarded.
+ *
+ * The failure direction is the bad one for a ratchet: adding an unrelated
+ * disable comment to a file RAISES its count and fails CI with a message about
+ * discarded errors, which teaches people to re-baseline past it.
+ */
 let total = 0;
+const parseFailures = [];
 for (const r of results) {
-  if (!r.messages.length) continue;
   const rel = relative(ROOT, r.filePath).replace(/\\/g, '/');
-  current[rel] = r.messages.length;
-  total += r.messages.length;
+  // A file that does not parse is not being checked at all, and would otherwise
+  // report zero findings - the quietest possible way for coverage to disappear.
+  if (r.messages.some((m) => m.fatal)) {
+    parseFailures.push(rel);
+    continue;
+  }
+  const hits = r.messages.filter((m) => m.ruleId === 'no-restricted-syntax').length;
+  if (!hits) continue;
+  current[rel] = hits;
+  total += hits;
+}
+
+if (parseFailures.length) {
+  console.error(
+    `\n[error-handling] ${parseFailures.length} file(s) failed to parse and were NOT checked:\n` +
+      parseFailures.map((f) => `  ${f}`).join('\n') +
+      '\nA file that cannot be parsed reports no findings, which is indistinguishable from a clean one.\n'
+  );
+  process.exit(1);
 }
 
 /**
@@ -95,7 +139,7 @@ for (const r of results) {
  * identical to someone discarding 339 more errors, and the only way past the
  * shrink-only guard would be to disable it.
  */
-const SCOPE = 'src + supabase/functions';
+const SCOPE = 'src + supabase/functions; data|count destructures; rule-scoped counting';
 
 if (UPDATE) {
   const prev = existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, 'utf8')) : null;

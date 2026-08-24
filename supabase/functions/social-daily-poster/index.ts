@@ -35,14 +35,27 @@ interface PosterConfig {
 
 type Supa = ReturnType<typeof createClient>;
 
+/**
+ * THROWS RATHER THAN DEFAULTING. This reads the kill switch, and it used to
+ * discard the error and fall back to `{}` - which resolves to enabled: true,
+ * pause_events: false, pause_restaurants: false. So an unreadable settings row
+ * turned the poster ON and un-paused both content types. An operator who had
+ * paused posting would have found it posting anyway, and the run would have
+ * reported success.
+ *
+ * A job that cannot read its own configuration has not been told to run.
+ */
 async function loadConfig(supabase: Supa): Promise<PosterConfig> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("system_settings")
     .select("settings")
     .eq("setting_type", "social_daily_poster")
     .order("updated_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+  if (error) {
+    throw new Error(`social-daily-poster: could not read its configuration: ${error.message}`);
+  }
   const s = (data?.settings ?? {}) as Partial<PosterConfig>;
   return {
     enabled: s.enabled !== false, // default on
@@ -51,22 +64,32 @@ async function loadConfig(supabase: Supa): Promise<PosterConfig> {
   };
 }
 
+/**
+ * Also throws. An empty set means "nothing has been posted recently", and an
+ * unreadable query produced exactly that - so the no-repeat window silently
+ * stopped applying and the poster could re-feature the same event or
+ * restaurant. Posting nothing today is recoverable; posting the same thing
+ * twice to a public account is not.
+ */
 /** content_ids posted (status='posted') within the no-repeat window. */
 async function recentlyPostedIds(supabase: Supa, contentType: string): Promise<Set<string>> {
   const since = new Date(Date.now() - NO_REPEAT_DAYS * 24 * 60 * 60 * 1000).toISOString();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("social_media_posts")
     .select("content_id")
     .eq("content_type", contentType)
     .eq("status", "posted")
     .gte("posted_at", since);
+  if (error) {
+    throw new Error(`social-daily-poster: could not read recent posts for ${contentType}: ${error.message}`);
+  }
   const set = new Set<string>();
   for (const r of data ?? []) if ((r as any).content_id) set.add((r as any).content_id);
   return set;
 }
 
 async function pickEvent(supabase: Supa): Promise<string | null> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("events")
     .select("id, title, date, is_featured")
     .gte("date", new Date().toISOString())
@@ -74,6 +97,11 @@ async function pickEvent(supabase: Supa): Promise<string | null> {
     .order("is_featured", { ascending: false, nullsFirst: false })
     .order("date", { ascending: true })
     .limit(50);
+  // Returning null here means "nothing to post", which is a legitimate
+  // outcome; it must not also be what an unreadable event list looks like.
+  if (error) {
+    throw new Error(`social-daily-poster: could not read events to pick from: ${error.message}`);
+  }
   const posted = await recentlyPostedIds(supabase, "event");
   for (const ev of data ?? []) {
     if (!posted.has((ev as any).id)) return (ev as any).id;
@@ -82,12 +110,17 @@ async function pickEvent(supabase: Supa): Promise<string | null> {
 }
 
 async function pickRestaurant(supabase: Supa): Promise<string | null> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("restaurants")
     .select("id, name, is_featured, popularity_score")
     .order("is_featured", { ascending: false, nullsFirst: false })
     .order("popularity_score", { ascending: false, nullsFirst: false })
     .limit(50);
+  // Returning null here means "nothing to post", which is a legitimate
+  // outcome; it must not also be what an unreadable restaurant list looks like.
+  if (error) {
+    throw new Error(`social-daily-poster: could not read restaurants to pick from: ${error.message}`);
+  }
   const posted = await recentlyPostedIds(supabase, "restaurant");
   for (const r of data ?? []) {
     if (!posted.has((r as any).id)) return (r as any).id;

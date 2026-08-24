@@ -15,6 +15,7 @@ import { handleCors, getCorsHeaders } from "../_shared/cors.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { runJob } from "../_shared/jobRunner.ts";
 import { notifyOps } from "../_shared/notifyOps.ts";
+import { composeDigest, renderCount, unavailable, type Counted } from "../_shared/digestFormat.ts";
 
 // deno-lint-ignore no-explicit-any
 type Client = any;
@@ -23,10 +24,30 @@ function json(body: unknown, status = 200, headers: Record<string, string> = {})
   return new Response(JSON.stringify(body), { status, headers: { ...headers, "Content-Type": "application/json" } });
 }
 
-async function count(supabase: Client, table: string, apply: (q: Client) => Client): Promise<number> {
-  const { count } = await apply(supabase.from(table).select("id", { count: "exact", head: true }));
+/**
+ * null means "could not read", which is NOT the same as zero.
+ *
+ * This returned `count ?? 0` and discarded the error, so a failed query
+ * reported the most reassuring possible number. Every headline metric in this
+ * digest runs through here: a broken read printed "Open human tasks: 0",
+ * "Overdue tasks: 0", "Agent failures (24h): 0", "Open dependency CVEs: 0" -
+ * a totally blind digest and a perfectly healthy-looking one are the same
+ * eleven lines. The whole point of this function is telling ops what is
+ * happening, and its failure mode was to say nothing is.
+ *
+ * The lint that flags discarded Supabase errors cannot see this: it looks for a
+ * destructured `data` without `error`, and this destructures `count`.
+ */
+async function count(supabase: Client, table: string, apply: (q: Client) => Client): Promise<Counted> {
+  const { count, error } = await apply(supabase.from(table).select("id", { count: "exact", head: true }));
+  if (error) {
+    console.error(`[ops-digest] count(${table}) failed:`, error.message);
+    return null;
+  }
   return count ?? 0;
 }
+
+const n = renderCount;
 
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -68,19 +89,21 @@ Deno.serve(async (req) => {
     ]);
 
     // Backup status: the most recent verification (AOS-MAINT-003).
-    const { data: lastBackup } = await supabase
+    const { data: lastBackup, error: backupError } = await supabase
       .from("backup_checks")
       .select("ok, method, backup_age_hours, checked_at")
       .order("checked_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-    const backupLine = lastBackup
+    const backupLine = backupError
+      ? unavailable("Backups", backupError)
+      : lastBackup
       ? `Backups — last check ${lastBackup.ok ? "OK" : "FAILED"} (${lastBackup.method}` +
         `${lastBackup.backup_age_hours != null ? `, ${lastBackup.backup_age_hours}h old` : ""}) at ${String(lastBackup.checked_at).slice(0, 16)}`
       : `Backups — no verification recorded yet`;
 
     // Data-quality fill-rate trend: latest snapshot per table (AOS-MAINT-004).
-    const { data: dqSnaps } = await supabase
+    const { data: dqSnaps, error: dqError } = await supabase
       .from("data_quality_snapshots")
       .select("table_name, fill_rate, captured_at")
       .order("captured_at", { ascending: false })
@@ -89,12 +112,14 @@ Deno.serve(async (req) => {
     for (const s of (dqSnaps ?? []) as { table_name: string; fill_rate: number }[]) {
       if (!latestByTable.has(s.table_name)) latestByTable.set(s.table_name, s.fill_rate);
     }
-    const dqLine = latestByTable.size
+    const dqLine = dqError
+      ? unavailable("Data quality", dqError)
+      : latestByTable.size
       ? `Data quality — fill rate: ${[...latestByTable].map(([t, r]) => `${t} ${Math.round(r * 100)}%`).join(", ")}`
       : `Data quality — no snapshot yet`;
 
     // Noisiest edge functions by 5xx count over 24h (AOS-MAINT-007).
-    const { data: edgeErrs } = await supabase
+    const { data: edgeErrs, error: edgeError } = await supabase
       .from("edge_function_metrics")
       .select("function_name")
       .eq("status_class", "5xx")
@@ -105,13 +130,17 @@ Deno.serve(async (req) => {
       noisyCounts.set(e.function_name, (noisyCounts.get(e.function_name) ?? 0) + 1);
     }
     const noisiest = [...noisyCounts].sort((a, b) => b[1] - a[1]).slice(0, 3);
-    const edgeLine = noisiest.length
+    // The sharpest of these: a failed read used to print "no 5xx in 24h",
+    // reporting the system healthy on the strength of a query that never ran.
+    const edgeLine = edgeError
+      ? unavailable("Edge functions", edgeError)
+      : noisiest.length
       ? `Edge functions — noisiest (5xx/24h): ${noisiest.map(([f, c]) => `${f} ${c}`).join(", ")}`
       : `Edge functions — no 5xx in 24h`;
 
     // CSAT trend (30d) by channel and by auto-vs-human resolution (AOS-CS-007).
     const csatSince = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const { data: csatRows } = await supabase
+    const { data: csatRows, error: csatError } = await supabase
       .from("support_csat")
       .select("score, channel, resolved_by")
       .gte("created_at", csatSince)
@@ -126,13 +155,15 @@ Deno.serve(async (req) => {
       }
       return [...acc].map(([k, a]) => `${k} ${(a.sum / a.n).toFixed(1)}★ (n=${a.n})`).join(", ");
     };
-    const csatLine = csat.length
+    const csatLine = csatError
+      ? unavailable("CSAT (30d)", csatError)
+      : csat.length
       ? `CSAT (30d) — by channel: ${avgBy("channel")}; by resolution: ${avgBy("resolved_by")}`
       : `CSAT (30d) — no responses yet`;
 
     // Nurture: onboarding sends + activation over 7d (AOS-NURTURE-002).
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    const { data: nurtureRows } = await supabase
+    const { data: nurtureRows, error: nurtureError } = await supabase
       .from("nurture_sends")
       .select("status, activated_at, opened_at, clicked_at")
       .eq("agent_key", "onboarding-drip")
@@ -140,70 +171,81 @@ Deno.serve(async (req) => {
       .limit(5000);
     const nur = (nurtureRows ?? []) as { status: string; activated_at: string | null; opened_at: string | null; clicked_at: string | null }[];
     const nurSent = nur.filter((r) => r.status !== "skipped" && r.status !== "failed").length;
-    const nurLine = nur.length
+    const nurLine = nurtureError
+      ? unavailable("Onboarding (7d)", nurtureError)
+      : nur.length
       ? `Onboarding (7d) — ${nurSent} sent, ${nur.filter((r) => r.opened_at).length} opened, ${nur.filter((r) => r.clicked_at).length} clicked, ${nur.filter((r) => r.activated_at).length} activated`
       : `Onboarding (7d) — no sends`;
 
     // Weekly digest engagement (AOS-NURTURE-004).
-    const { data: wdRows } = await supabase.from("nurture_sends").select("status, opened_at, clicked_at").eq("agent_key", "weekly-digest-personal").gte("created_at", weekAgo).limit(5000);
+    const { data: wdRows, error: wdError } = await supabase.from("nurture_sends").select("status, opened_at, clicked_at").eq("agent_key", "weekly-digest-personal").gte("created_at", weekAgo).limit(5000);
     const wd = (wdRows ?? []) as { status: string; opened_at: string | null; clicked_at: string | null }[];
     const wdSent = wd.filter((r) => r.status !== "skipped" && r.status !== "failed").length;
-    const wdLine = wd.length
+    const wdLine = wdError
+      ? unavailable("Weekly digest (7d)", wdError)
+      : wd.length
       ? `Weekly digest (7d) — ${wdSent} sent, ${wd.filter((r) => r.opened_at).length} opened, ${wd.filter((r) => r.clicked_at).length} clicked`
       : `Weekly digest (7d) — no sends`;
 
     // Milestone recognition (AOS-NURTURE-006).
-    const { count: msRecognized } = await supabase.from("user_milestones").select("id", { count: "exact", head: true }).gte("created_at", weekAgo);
-    const { count: msEmailed } = await supabase.from("user_milestones").select("id", { count: "exact", head: true }).eq("emailed", true).gte("created_at", weekAgo);
-    const msLine = `Milestones (7d) — ${msRecognized ?? 0} recognized, ${msEmailed ?? 0} emailed`;
+    const msRecognized = await count(supabase, "user_milestones", (q) => q.gte("created_at", weekAgo));
+    const msEmailed = await count(supabase, "user_milestones", (q) => q.eq("emailed", true).gte("created_at", weekAgo));
+    const msLine = `Milestones (7d) — ${n(msRecognized)} recognized, ${n(msEmailed)} emailed`;
 
     // Prospecting: new leads (AOS-PROSPECT-001).
-    const { count: newLeads } = await supabase.from("prospect_leads").select("id", { count: "exact", head: true }).gte("created_at", weekAgo);
-    const { count: openLeads } = await supabase.from("prospect_leads").select("id", { count: "exact", head: true }).eq("status", "new");
-    const leadLine = `Prospecting — ${newLeads ?? 0} new leads (7d), ${openLeads ?? 0} open`;
+    const newLeads = await count(supabase, "prospect_leads", (q) => q.gte("created_at", weekAgo));
+    const openLeads = await count(supabase, "prospect_leads", (q) => q.eq("status", "new"));
+    const leadLine = `Prospecting — ${n(newLeads)} new leads (7d), ${n(openLeads)} open`;
 
     // Subscription nurture (AOS-NURTURE-007).
-    const { data: subRows } = await supabase.from("nurture_sends").select("kind, status, activated_at").eq("agent_key", "subscription-nurture").gte("created_at", weekAgo).limit(5000);
+    const { data: subRows, error: subError } = await supabase.from("nurture_sends").select("kind, status, activated_at").eq("agent_key", "subscription-nurture").gte("created_at", weekAgo).limit(5000);
     const subN = (subRows ?? []) as { kind: string; status: string; activated_at: string | null }[];
     const subSent = subN.filter((r) => r.status !== "skipped" && r.status !== "failed").length;
     const subConv = subN.filter((r) => r.activated_at).length;
-    const subLine = subN.length
+    const subLine = subError
+      ? unavailable("Subscription nurture (7d)", subError)
+      : subN.length
       ? `Subscription nurture (7d) — ${subSent} sent, ${subConv} converted/recovered`
       : `Subscription nurture (7d) — no sends`;
 
     // Re-engagement (AOS-NURTURE-005).
-    const { data: reRows } = await supabase.from("nurture_sends").select("status, activated_at").eq("agent_key", "dormant-reengagement").gte("created_at", weekAgo).limit(5000);
+    const { data: reRows, error: reError } = await supabase.from("nurture_sends").select("status, activated_at").eq("agent_key", "dormant-reengagement").gte("created_at", weekAgo).limit(5000);
     const re = (reRows ?? []) as { status: string; activated_at: string | null }[];
     const reSent = re.filter((r) => r.status !== "skipped" && r.status !== "failed").length;
-    const reLine = re.length
+    const reLine = reError
+      ? unavailable("Re-engagement (7d)", reError)
+      : re.length
       ? `Re-engagement (7d) — ${reSent} sent, ${re.filter((r) => r.activated_at).length} reactivated`
       : `Re-engagement (7d) — no sends`;
 
     // Win-back effectiveness (AOS-NURTURE-003).
-    const { data: wbRows } = await supabase.from("winback_interventions").select("status").gte("created_at", new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString()).limit(5000);
+    const { data: wbRows, error: wbError } = await supabase.from("winback_interventions").select("status").gte("created_at", new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString()).limit(5000);
     const wb = (wbRows ?? []) as { status: string }[];
     const wbRetained = wb.filter((r) => r.status === "retained").length;
     const wbChurned = wb.filter((r) => r.status === "churned").length;
     const wbDecided = wbRetained + wbChurned;
-    const wbLine = wb.length
+    const wbLine = wbError
+      ? unavailable("Win-back (60d)", wbError)
+      : wb.length
       ? `Win-back (60d) — ${wb.length} interventions, ${wb.filter((r) => r.status === "approval_pending").length} awaiting approval; retained ${wbRetained}/${wbDecided}${wbDecided ? ` (${Math.round((wbRetained / wbDecided) * 100)}%)` : ""}`
       : `Win-back (60d) — none`;
 
-    const openHuman = openTier2 + openTier3;
-    const body = [
-      `Tier-1 auto-resolutions (24h): ${autoResolved}`,
-      `Open human tasks: ${openHuman} (tier-2 ${openTier2}, tier-3 ${openTier3})`,
-      `Open tier-1 (in-flight): ${openTier1}`,
-      `Overdue tasks: ${overdue}`,
-      `Agent failures (24h): ${failures24h}`,
-      `Open dependency CVEs: ${openCves}`,
-      `Compliance — open review items: ${openCompliance}`,
-      `CI health — open flaky/slow tasks: ${openFlaky}`,
-      `DB health — open suggestions (slow query/index/bloat): ${openDbHealth}`,
-      `Uptime — open outage incidents: ${openOutages}`,
+    const openHuman = openTier2 === null || openTier3 === null ? null : openTier2 + openTier3;
+
+    const lines = [
+      `Tier-1 auto-resolutions (24h): ${n(autoResolved)}`,
+      `Open human tasks: ${n(openHuman)} (tier-2 ${n(openTier2)}, tier-3 ${n(openTier3)})`,
+      `Open tier-1 (in-flight): ${n(openTier1)}`,
+      `Overdue tasks: ${n(overdue)}`,
+      `Agent failures (24h): ${n(failures24h)}`,
+      `Open dependency CVEs: ${n(openCves)}`,
+      `Compliance — open review items: ${n(openCompliance)}`,
+      `CI health — open flaky/slow tasks: ${n(openFlaky)}`,
+      `DB health — open suggestions (slow query/index/bloat): ${n(openDbHealth)}`,
+      `Uptime — open outage incidents: ${n(openOutages)}`,
       backupLine,
       dqLine,
-      `Link health — dead links: ${deadLinks}`,
+      `Link health — dead links: ${n(deadLinks)}`,
       edgeLine,
       csatLine,
       nurLine,
@@ -213,7 +255,9 @@ Deno.serve(async (req) => {
       subLine,
       leadLine,
       wbLine,
-    ].join("\n");
+    ];
+
+    const { body, degraded } = composeDigest(lines);
 
     // Date-keyed dedupe so a re-run same day coalesces instead of double-sending.
     const dayKey = nowIso.slice(0, 10);
@@ -225,9 +269,9 @@ Deno.serve(async (req) => {
       capWindowMs: 20 * 60 * 60 * 1000, // ~one per day
     });
 
-    ctx.meta({ autoResolved, openHuman, overdue, failures24h, openCves, openCompliance, openFlaky, openDbHealth, openOutages, deadLinks, notify });
+    ctx.meta({ autoResolved, openHuman, overdue, failures24h, openCves, openCompliance, openFlaky, openDbHealth, openOutages, deadLinks, degraded, notify });
     ctx.processed(1);
-    return { autoResolved, openHuman, openTier1, overdue, failures24h, openCves, openCompliance, openFlaky, openDbHealth, openOutages, deadLinks, notify };
+    return { autoResolved, openHuman, openTier1, overdue, failures24h, openCves, openCompliance, openFlaky, openDbHealth, openOutages, deadLinks, degraded, notify };
   });
 
   return json({ ok: result.ok, ...(result.result ?? {}), status: result.status }, result.ok ? 200 : 500, corsHeaders);

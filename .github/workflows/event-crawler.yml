@@ -47,6 +47,13 @@ jobs:
           cache: 'pip'
           cache-dependency-path: 'crawlers/requirements.txt'
 
+      # Before the ~5 minutes of crawl4ai and Playwright setup, because this
+      # catches the failure mode that cost six months: the extraction window
+      # landing on the navigation instead of the events, which produces a green
+      # run with zero events and no error (WEB-SEO-017). Needs no dependencies.
+      - name: Check the extraction window still lands on the events
+        run: python crawlers/test_clean_html.py
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip

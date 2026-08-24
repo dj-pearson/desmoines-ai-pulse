@@ -30,12 +30,17 @@ export const run: AgentRun = async (ctx, { supabase, body }) => {
 
   // ── plan_info (read-only) ─────────────────────────────────────────────
   if (intent === "plan_info") {
-    const { data: sub } = await supabase
+    const { data: sub, error: subError } = await supabase
       .from("user_subscriptions")
       .select("status, current_period_end, cancel_at_period_end, plan:subscription_plans(name, tier)")
       .eq("user_id", userId)
       .in("status", ["active", "trialing", "past_due"])
       .maybeSingle();
+    // `found: false` is a claim about this customer's account. It must not also
+    // be what a failed query looks like.
+    if (subError) {
+      return { intent, error: `Could not read the subscription: ${subError.message}` };
+    }
     await writeAgentAudit(supabase, { agentKey: AGENT_KEY, actionType: "billing_plan_info", targetRef: `user:${userId}`, after: { found: !!sub } });
     ctx.summary(`plan_info for ${userId}`);
     return { intent, subscription: sub ?? null };
@@ -43,7 +48,7 @@ export const run: AgentRun = async (ctx, { supabase, body }) => {
 
   // ── resend_receipt (read-only + record intent) ────────────────────────
   if (intent === "resend_receipt") {
-    const { data: pay } = await supabase
+    const { data: pay, error: payError } = await supabase
       .from("payments")
       .select("id, amount, stripe_invoice_id, created_at")
       .eq("user_id", userId)
@@ -51,6 +56,11 @@ export const run: AgentRun = async (ctx, { supabase, body }) => {
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+    // "no succeeded payment found" is told to a paying customer. Saying it
+    // because the table could not be read is worse than saying nothing.
+    if (payError) {
+      return { intent, error: `Could not read payment history: ${payError.message}` };
+    }
     await writeAgentAudit(supabase, { agentKey: AGENT_KEY, actionType: "resend_receipt", targetRef: `user:${userId}`, after: { paymentId: pay?.id ?? null } });
     ctx.summary(`resend_receipt for ${userId}`);
     return { intent, receipt: pay ?? null, note: pay ? "receipt located; delivery queued" : "no succeeded payment found" };
@@ -93,12 +103,26 @@ export const run: AgentRun = async (ctx, { supabase, body }) => {
     const reason = String(body.reason ?? "requested_by_customer");
     // Locate the target payment (explicit or latest succeeded).
     let pay: { id: string; stripe_payment_intent_id: string | null; amount: number; refunded_amount: number | null; created_at: string } | null = null;
+    let payLookupError: string | null = null;
     if (body.paymentId) {
-      const { data } = await supabase.from("payments").select("id, stripe_payment_intent_id, amount, refunded_amount, created_at").eq("id", String(body.paymentId)).maybeSingle();
+      const { data, error } = await supabase.from("payments").select("id, stripe_payment_intent_id, amount, refunded_amount, created_at").eq("id", String(body.paymentId)).maybeSingle();
       pay = data ?? null;
+      payLookupError = error?.message ?? null;
     } else {
-      const { data } = await supabase.from("payments").select("id, stripe_payment_intent_id, amount, refunded_amount, created_at").eq("user_id", userId).eq("status", "succeeded").order("created_at", { ascending: false }).limit(1).maybeSingle();
+      const { data, error } = await supabase.from("payments").select("id, stripe_payment_intent_id, amount, refunded_amount, created_at").eq("user_id", userId).eq("status", "succeeded").order("created_at", { ascending: false }).limit(1).maybeSingle();
       pay = data ?? null;
+      payLookupError = error?.message ?? null;
+    }
+
+    // "NO REFUNDABLE PAYMENT FOUND" IS A STATEMENT ABOUT A CUSTOMER'S MONEY.
+    // Both lookups discarded their error, so a failed query produced pay = null
+    // and this agent told the customer they have nothing to refund. Measured on
+    // 2026-08-23: public.payments does not exist (42P01), so that is not a
+    // hypothetical - every refund request has always been answered with a
+    // falsehood, and nothing recorded that a query had failed. See WEB-QA-018,
+    // which owns the build-or-delete decision on the billing tables.
+    if (payLookupError) {
+      return { intent, ok: false, error: `Could not read payment history: ${payLookupError}` };
     }
     if (!pay?.stripe_payment_intent_id) {
       return { intent, ok: false, note: "no refundable payment found" };

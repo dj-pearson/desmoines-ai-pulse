@@ -129,7 +129,7 @@ serve(async (req) => {
     
     console.log(`Checking for posts between ${centralStartUTC.toISOString()} and ${centralEndUTC.toISOString()}`);
     
-    const { data: todayPosts } = await supabase
+    const { data: todayPosts, error: todayPostsError } = await supabase
       .from("social_media_posts")
       .select("id, created_at")
       .eq("content_type", contentType)
@@ -137,6 +137,17 @@ serve(async (req) => {
       .lte("created_at", centralEndUTC.toISOString())
       .eq("status", "posted");
     
+    // FAILS CLOSED. This is the "have we already posted today?" guard, and it
+    // read `(todayPosts?.length || 0) > 0` with the error discarded - so a
+    // failed query meant "nothing posted yet" and the job posted again. The
+    // output is a PUBLIC social post, so the permissive branch duplicates
+    // something the audience can see and nobody can unsee. Skipping a day is
+    // recoverable; double-posting is not.
+    if (todayPostsError) {
+      console.error(`hasPostedToday(${contentType}): read failed, assuming posted -`, todayPostsError.message);
+      return true;
+    }
+
     const hasPosted = (todayPosts?.length || 0) > 0;
     console.log(`Already posted ${contentType} today: ${hasPosted} (found ${todayPosts?.length || 0} posts)`);
     if (todayPosts && todayPosts.length > 0) {
@@ -164,7 +175,7 @@ serve(async (req) => {
     
     console.log(`Checking for generated posts between ${centralStartUTC.toISOString()} and ${centralEndUTC.toISOString()}`);
     
-    const { data: todayPosts } = await supabase
+    const { data: todayPosts, error: todayPostsError } = await supabase
       .from("social_media_posts")
       .select("id, created_at, status")
       .eq("content_type", contentType)
@@ -172,6 +183,13 @@ serve(async (req) => {
       .lte("created_at", centralEndUTC.toISOString())
       .in("status", ["draft", "posted"]);
     
+    // Same guard, same direction: an unreadable result is treated as "already
+    // generated" rather than as a licence to generate another.
+    if (todayPostsError) {
+      console.error(`hasGeneratedToday(${contentType}): read failed, assuming generated -`, todayPostsError.message);
+      return true;
+    }
+
     const hasGenerated = (todayPosts?.length || 0) > 0;
     console.log(`Already generated ${contentType} today: ${hasGenerated} (found ${todayPosts?.length || 0} posts)`);
     if (todayPosts && todayPosts.length > 0) {
@@ -428,7 +446,11 @@ serve(async (req) => {
       // Debug endpoint to check available content
       const { data: events, error: eventsError } = await supabase
         .from("events")
-        .select("id, title, name, date")
+        // `name` is a restaurants column; events have `title`. Asking for it
+        // 42703d, so this debug endpoint returned an error instead of events.
+        // The consumers already read `title || name` because they handle both
+        // entity types, so dropping it here changes nothing downstream.
+        .select("id, title, date")
         .gte("date", new Date().toISOString())
         .order("date", { ascending: true })
         .limit(5);
@@ -619,7 +641,7 @@ async function generateAndPublishPost(
   console.log(`Starting generation for ${contentType} with auto-publish: ${autoPublish}${targetContentId ? ` (target ${targetContentId})` : ""}`);
   
   // Get recent posts to avoid repetition
-  const { data: recentPosts } = await supabase
+  const { data: recentPosts, error: recentPostsError } = await supabase
     .from("social_media_posts")
     .select("content_id, content_type, subject_type, created_at")
     .gte(
@@ -629,6 +651,12 @@ async function generateAndPublishPost(
     .order("created_at", { ascending: false })
     .limit(50);
 
+  // An empty avoid-list because the read failed looks exactly like an empty
+  // one because nothing has been posted, and the consequence is featuring the
+  // same restaurant twice in a week.
+  if (recentPostsError) {
+    console.error("Could not read recent posts - repetition avoidance is off for this run:", recentPostsError.message);
+  }
   const recentContentIds = recentPosts?.map((p) => p.content_id).filter((id) => id) || [];
   console.log(`Found ${recentContentIds.length} recent content IDs to avoid`);
 
@@ -640,11 +668,18 @@ async function generateAndPublishPost(
   // orchestrator), feature exactly that row and skip random selection.
   if (targetContentId) {
     const table = contentType === "event" ? "events" : "restaurants";
-    const { data: target } = await supabase
+    const { data: target, error: targetError } = await supabase
       .from(table)
       .select("*")
       .eq("id", targetContentId)
       .maybeSingle();
+    // A failed read is NOT "not found". Falling through to random selection
+    // would post a different thing than the orchestrator asked for and report
+    // success for it, so the caller believes a specific item was featured
+    // when something else was.
+    if (targetError) {
+      throw new Error(`Could not read ${table} ${targetContentId}: ${targetError.message}`);
+    }
     if (target) {
       selectedContent = target;
       contentUrl = generateContentUrl(contentType, target);
@@ -655,13 +690,16 @@ async function generateAndPublishPost(
   }
 
   if (!selectedContent && contentType === "event") {
-    const { data: allEvents } = await supabase
+    const { data: allEvents, error: allEventsError } = await supabase
       .from("events")
       .select("*")
       .gte("date", new Date().toISOString())
       .order("date", { ascending: true })
       .limit(50);
 
+    if (allEventsError) {
+      throw new Error(`Could not read events to feature: ${allEventsError.message}`);
+    }
     if (allEvents && allEvents.length > 0) {
       // Filter out recently posted events
       let availableEvents = allEvents.filter(
@@ -692,12 +730,15 @@ async function generateAndPublishPost(
       }
     }
   } else if (!selectedContent && contentType === "restaurant") {
-    const { data: allRestaurants } = await supabase
+    const { data: allRestaurants, error: allRestaurantsError } = await supabase
       .from("restaurants")
       .select("*")
       .order("created_at", { ascending: false })
       .limit(50);
 
+    if (allRestaurantsError) {
+      throw new Error(`Could not read restaurants to feature: ${allRestaurantsError.message}`);
+    }
     if (allRestaurants && allRestaurants.length > 0) {
       // Filter out recently posted restaurants
       let availableRestaurants = allRestaurants.filter(
@@ -841,11 +882,17 @@ Make it detailed and engaging for Facebook/LinkedIn. Include compelling details,
   const longContent = longExtracted.text;
 
   // Get active webhooks
-  const { data: webhooks } = await supabase
+  const { data: webhooks, error: webhooksError } = await supabase
     .from("social_media_webhooks")
     .select("*")
     .eq("is_active", true);
 
+  // No webhooks means the post is written to the table and delivered NOWHERE,
+  // while the run still reports success. A failed read produced exactly that
+  // and looked identical to a deliberately empty webhook list.
+  if (webhooksError) {
+    throw new Error(`Could not read social webhooks: ${webhooksError.message}`);
+  }
   const webhookUrls = webhooks?.map((w) => w.webhook_url) || [];
   console.log(`Found ${webhookUrls.length} active webhooks`);
 

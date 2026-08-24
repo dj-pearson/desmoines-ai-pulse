@@ -7,17 +7,7 @@ import ShareDialog from '@/components/ShareDialog';
 import { useEventSocial } from '@/hooks/useEventSocial';
 import { BatchEventSocialData } from '@/hooks/useBatchEventSocial';
 import { Event } from '@/lib/types';
-import {
-  Users,
-  MapPin,
-  Calendar,
-  Clock,
-  TrendingUp,
-  Ticket,
-  ArrowRight,
-  ImageOff,
-  Sparkles,
-} from 'lucide-react';
+import { SpriteIcon } from '@/components/ui/SpriteIcon';
 import {
   createEventSlugWithCentralTime,
   formatInCentralTime,
@@ -154,7 +144,7 @@ function SocialEventCardComponent({
               <div
                 className={`relative rounded-2xl px-3 py-3 ${categoryStyle.bg} shadow-sm`}
               >
-                <Calendar className="h-7 w-7 text-white" />
+                <SpriteIcon name="calendar" className="h-7 w-7 text-white" />
               </div>
               <span
                 className={`relative text-sm font-semibold uppercase tracking-wider ${categoryStyle.text}`}
@@ -184,19 +174,19 @@ function SocialEventCardComponent({
               {sponsoredActive && <SponsoredBadge className="shadow-lg" />}
               {isLive && (
                 <Badge className="bg-green-500 text-white border-0 shadow-lg text-[10px] px-2 animate-pulse">
-                  <TrendingUp className="h-3 w-3 mr-1" />
+                  <SpriteIcon name="trending-up" className="h-3 w-3 mr-1" />
                   LIVE
                 </Badge>
               )}
               {!sponsoredActive && event.is_featured && (
                 <Badge className={`${STATUS_BADGE.featured} border-0 shadow-lg text-[10px] px-2`}>
-                  <Sparkles className="h-3 w-3 mr-1" />
+                  <SpriteIcon name="sparkles" className="h-3 w-3 mr-1" />
                   Featured
                 </Badge>
               )}
               {(event as any).distance_meters && (
                 <Badge className="bg-white/90 text-slate-800 border-0 shadow-lg text-[10px] px-2">
-                  <MapPin className="h-3 w-3 mr-1" />
+                  <SpriteIcon name="map-pin" className="h-3 w-3 mr-1" />
                   {((event as any).distance_meters * 0.000621371).toFixed(1)} mi
                 </Badge>
               )}
@@ -214,7 +204,7 @@ function SocialEventCardComponent({
                   </Badge>
                 ) : event.price ? (
                   <Badge className="bg-white/20 text-white border-0 backdrop-blur-sm text-[11px]">
-                    <Ticket className="h-3 w-3 mr-1" />
+                    <SpriteIcon name="ticket" className="h-3 w-3 mr-1" />
                     {event.price}
                   </Badge>
                 ) : null}
@@ -230,12 +220,12 @@ function SocialEventCardComponent({
             {/* Event Meta Info */}
             <div className="space-y-1.5">
               <div className="flex items-center text-sm text-muted-foreground">
-                <Clock className="h-3.5 w-3.5 mr-2 flex-shrink-0" />
+                <SpriteIcon name="clock" className="h-3.5 w-3.5 mr-2 flex-shrink-0" />
                 <span>{dateParts.timeLabel}</span>
               </div>
               {(event.venue || event.location) && (
                 <div className="flex items-center text-sm text-muted-foreground">
-                  <MapPin className="h-3.5 w-3.5 mr-2 flex-shrink-0" />
+                  <SpriteIcon name="map-pin" className="h-3.5 w-3.5 mr-2 flex-shrink-0" />
                   <span className="truncate">{event.venue || event.location}</span>
                   {event.city && event.city !== 'Des Moines' && (
                     <span className="ml-1 text-xs text-muted-foreground/70">
@@ -257,7 +247,7 @@ function SocialEventCardComponent({
             {showSocialPreview && attendeeCount > 0 && (
               <div className="flex items-center gap-3 text-xs text-muted-foreground pt-1 border-t">
                 <div className="flex items-center gap-1">
-                  <Users className="h-3.5 w-3.5" />
+                  <SpriteIcon name="users" className="h-3.5 w-3.5" />
                   <span className="font-medium">{attendeeCount}</span>
                   <span>interested</span>
                 </div>
@@ -276,7 +266,7 @@ function SocialEventCardComponent({
                 className={`inline-flex items-center text-sm font-semibold ${categoryStyle.text} group-hover:gap-2 transition-all`}
               >
                 View Details
-                <ArrowRight className="h-4 w-4 ml-1 transition-transform group-hover:translate-x-1" />
+                <SpriteIcon name="arrow-right" className="h-4 w-4 ml-1 transition-transform group-hover:translate-x-1" />
               </span>
               <div className="flex items-center gap-1" onClick={(e) => e.preventDefault()}>
                 <FavoriteButton eventId={event.id} itemName={event.title} variant="ghost" size="icon" />

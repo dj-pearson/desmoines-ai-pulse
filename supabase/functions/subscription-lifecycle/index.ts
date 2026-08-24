@@ -48,7 +48,20 @@ async function sendEmail(
   }
 }
 
-/** True if an event of this type was already logged for the user since `since`. */
+/**
+ * True if an event of this type was already logged for the user since `since`.
+ *
+ * FAILS CLOSED, and this is the whole point of the function. It returned
+ * `(count ?? 0) > 0` with the error discarded, and its catch returned false, so
+ * an unreadable count meant "not yet sent" - the permissive branch of an
+ * idempotency guard. This gates three emails: renewal_reminder, payment_failed
+ * and a `winback` MARKETING send. The job is scheduled, so a persistent read
+ * failure re-sent the same email to the same person every single run.
+ *
+ * Suppressing one cycle costs a delayed email that the next successful run will
+ * send. The other direction mails somebody repeatedly, including marketing they
+ * may have opted out of.
+ */
 async function alreadyLogged(
   supabase: Supa,
   userId: string,
@@ -56,15 +69,20 @@ async function alreadyLogged(
   since: string,
 ): Promise<boolean> {
   try {
-    const { count } = await supabase
+    const { count, error } = await supabase
       .from('subscription_events')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', userId)
       .eq('event_type', eventType)
       .gte('created_at', since);
+    if (error) {
+      console.error(`[subscription-lifecycle] alreadyLogged(${eventType}) failed:`, error.message);
+      return true; // cannot prove it was not sent - do not send
+    }
     return (count ?? 0) > 0;
-  } catch {
-    return false;
+  } catch (err) {
+    console.error(`[subscription-lifecycle] alreadyLogged(${eventType}) threw:`, String(err));
+    return true;
   }
 }
 

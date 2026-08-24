@@ -349,7 +349,10 @@ async function generateContentSuggestions(supabaseClient: any, claudeApiKey: str
 
   const { data: ourContent } = await supabaseClient
     .from('events')
-    .select('title, category, description')
+    // events has enhanced_description / original_description, never `description`.
+    // This select 42703d, so "our content" was always empty and every suggestion
+    // was generated from competitor content alone (WEB-QA-017).
+    .select('title, category, enhanced_description, original_description')
     .limit(10);
 
   if (!competitorContent?.length) {

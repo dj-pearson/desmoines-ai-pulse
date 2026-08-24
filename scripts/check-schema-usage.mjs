@@ -283,10 +283,22 @@ function scanFile(file, schema, findings) {
     const line = lineOf(src, m.index);
 
     // `.from()` also exists on the storage client; only flag names we can
-    // attribute to PostgREST. A name absent from the schema that is also
-    // reached via `.storage` on the same line is skipped.
-    const lineText = src.split('\n')[line - 1] ?? '';
-    if (/\.storage\b/.test(lineText)) continue;
+    // attribute to PostgREST.
+    //
+    // THE RECEIVER IS WHAT MATTERS, NOT THE LINE. This used to test whether
+    // `.storage` appeared on the SAME line, and every real storage call in this
+    // repo is formatted across two:
+    //     const { error } = await supabase.storage
+    //       .from("media")
+    // so all of them were reported as missing tables. media, thumbnails and
+    // videos are real buckets - `select id from storage.buckets` lists them -
+    // and they accounted for five baseline entries with no defect behind them.
+    //
+    // Walking back over whitespace to the receiver is exact: it asks "is this
+    // .from() called on .storage?" and cannot hide a genuine supabase.from(),
+    // whose receiver is the client itself.
+    const before = src.slice(0, m.index).trimEnd();
+    if (before.endsWith('.storage')) continue;
 
     if (!schema.tables.has(table)) {
       if (isPending(table)) continue;
@@ -303,9 +315,38 @@ function scanFile(file, schema, findings) {
     // Inspect the chained call segment following this `.from()`. Bounded to
     // the next `.from(` or end of statement-ish region to avoid bleeding into
     // an adjacent query.
+    //
+    // THE BOUND ACCEPTS ANY `.from(`, NOT ONLY A QUOTED ONE. It used to require
+    // a literal table name, so `.from(tableName)` — a variable — did not stop
+    // the segment and this query absorbed the columns of every dynamic-table
+    // query within 2000 characters after it. Two verified cases:
+    //   firecrawl-scraper  `.from('competitors').select('id')` then, further
+    //     down, an insert into `.from(tableName)`. competitor_id / title / venue
+    //     were reported against competitors; they belong to competitor_content,
+    //     which has them.
+    //   generate-proposal  `.from("ad_price_list")` then
+    //     `count(supabase, "profiles", q => q.eq("lifecycle_stage", ...))`.
+    //     lifecycle_stage / status / date / archived_at were reported against
+    //     ad_price_list; their real tables are profiles, newsletter_subscribers
+    //     and events.
+    //
+    // Widening the terminator only ever SHRINKS a segment, so it cannot hide a
+    // column belonging to this table: that chain ends before the next `.from(`
+    // by definition, and PostgREST-js has no nested `.from()`.
+    // A HELPER THAT TAKES THE CLIENT ALSO ENDS THE CHAIN. generate-proposal has
+    //     count(supabase, "profiles", (q) => q.eq("lifecycle_stage", "active"))
+    // after a `.from("ad_price_list")` query. There is no `.from(` inside it, so
+    // the segment ran straight through and lifecycle_stage, status, date and
+    // archived_at were all reported against ad_price_list. Their real tables are
+    // profiles, newsletter_subscribers and events.
+    //
+    // `name(supabase,` is the signature of that shape and nothing else: a
+    // PostgREST chain never passes the client to itself. Like the `.from(`
+    // bound, this only ever shrinks a segment.
     const rest = src.slice(m.index + m[0].length);
-    const nextFrom = rest.search(/\.from\(\s*['"`]/);
-    const segment = nextFrom === -1 ? rest.slice(0, 2000) : rest.slice(0, Math.min(nextFrom, 2000));
+    const stops = [rest.search(/\.from\(/), rest.search(/\b\w+\(\s*supabase\s*,/)].filter((i) => i !== -1);
+    const cut = stops.length > 0 ? Math.min(...stops) : -1;
+    const segment = cut === -1 ? rest.slice(0, 2000) : rest.slice(0, Math.min(cut, 2000));
 
     const report = (col, at, api, error) => {
       if (columns.has(col)) return;
@@ -352,7 +393,15 @@ function scanFile(file, schema, findings) {
         // check above, and returns nothing, so the admin campaign list rendered
         // blank owner emails. A rule that misses the most common spelling of
         // the thing it guards is not a rule.
-        if (!/user_id|\buser\b|\buserId\b|\bauthUser\b|\bsession\b|auth\.uid|\.user\.id/i.test(arg)) continue;
+        // PLURALS COUNT, and missing them is how this rule missed a live one.
+        // saved-search-alerts did `.in("id", userIds)` where userIds comes from
+        // saved_searches.user_id - auth user ids - so it matched zero profiles.
+        // `\buserId\b` cannot match "userIds" (no boundary before the s) and
+        // `\buser\b` cannot match "userIds" either, for the same reason the
+        // comment above gives about "user_id". The rule had been widened once
+        // for the singular and not for the collection, and `.in(...)` is
+        // exactly where a collection appears.
+        if (!/user_?ids?\b|\busers?\b|\buserIds?\b|\bauthUser\b|\bsession\b|auth\.uid|\.user\.id/i.test(arg)) continue;
         findings.push({
           kind: 'profiles-key', file: rel,
           line: lineOf(src, m.index + m[0].length + f.index),

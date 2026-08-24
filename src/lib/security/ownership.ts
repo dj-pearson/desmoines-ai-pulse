@@ -150,22 +150,43 @@ async function checkTeamAccess(
         return false;
       }
 
-      // Check if the campaign belongs to a team member's owner
+      // Check if the campaign belongs to a team member's owner.
+      //
+      // Both reads discarded their error. That direction is fail-CLOSED here -
+      // an unreadable row denies access, which is the right answer for an
+      // authorization check - but it was also SILENT, so a legitimate team
+      // member locked out by a transient read failure produced no signal
+      // anywhere and looked identical to someone who simply has no access.
+      // The verdict is unchanged; only the silence is.
       if (data && data.length > 0) {
-        const { data: campaign } = await supabase
+        const { data: campaign, error: campaignError } = await supabase
           .from('campaigns')
           .select('user_id')
           .eq('id', resourceId)
           .single();
 
+        if (campaignError && campaignError.code !== 'PGRST116') {
+          logger.error('checkTeamAccess', 'Could not read the campaign - denying access', {
+            resourceId,
+            error: String(campaignError),
+          });
+        }
+
         if (campaign) {
-          const { data: teamMembership } = await supabase
+          const { data: teamMembership, error: membershipError } = await supabase
             .from('campaign_team_members')
             .select('id')
             .eq('team_member_id', context.userId)
             .eq('campaign_owner_id', campaign.user_id)
             .eq('invitation_status', 'accepted')
             .single();
+
+          if (membershipError && membershipError.code !== 'PGRST116') {
+            logger.error('checkTeamAccess', 'Could not read team membership - denying access', {
+              resourceId,
+              error: String(membershipError),
+            });
+          }
 
           return !!teamMembership;
         }
@@ -346,7 +367,20 @@ function getTableName(resourceType: OwnableResource): TableName | null {
     favorite: 'content_favorites',
     discussion: 'event_discussions',
     discussion_reply: 'discussion_replies',
-    photo: 'event_photos',
+    // Photos ARE discussions (WEB-QA-022). Every live path writes and reads
+    // event_discussions with message_type='photo' - EventPhotoUpload:90,
+    // EventPhotoGallery:17, EventSocialHub:188 - and migration 20260718000003
+    // committed the schema to that shape. event_photos exists with a nicer
+    // column set and has never held a row, so pointing ownership at it meant
+    // looking for the owner in a table that will never contain the photo.
+    //
+    // event_discussions carries user_id, which is what OWNERSHIP_COLUMNS
+    // expects, so the check works unchanged.
+    //
+    // NOT REACHABLE TODAY: useResourceOwnership has no component callers, so
+    // nothing exercises this map yet. That is why it is a latent wrong answer
+    // rather than a live denial - and why fixing it now costs nothing.
+    photo: 'event_discussions',
     campaign: 'campaigns',
     profile: 'profiles',
     saved_search: 'saved_searches',

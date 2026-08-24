@@ -60,13 +60,29 @@ Deno.serve(async (req) => {
         supabase.from("crm_accounts").select("id, name, category, city, website, advertiser_user_id").order("created_at", { ascending: false }).limit(300),
         supabase.from("proposals").select("id, opportunity_id, status, created_at").order("created_at", { ascending: false }).limit(300),
       ]);
+      // An empty CRM and an unreadable one rendered identically: every arm
+      // fell back to `?? []` and the response still said ok: true. A sales
+      // console showing no pipeline is a claim about the business.
+      const listErrors = [
+        leads.error && `leads: ${leads.error.message}`,
+        opps.error && `opportunities: ${opps.error.message}`,
+        accounts.error && `accounts: ${accounts.error.message}`,
+        proposals.error && `proposals: ${proposals.error.message}`,
+      ].filter(Boolean);
+      if (listErrors.length > 0) {
+        return j({ error: "Could not load the CRM", details: listErrors }, 500, corsHeaders);
+      }
+
       // Attach the agent-suggested next action per opportunity.
       const opportunities = ((opps.data ?? []) as Record<string, unknown>[]).map((o) => ({ ...o, suggested_next_action: STAGE_SUGGESTION[String(o.stage)] ?? null }));
       return j({ ok: true, leads: leads.data ?? [], opportunities, accounts: accounts.data ?? [], proposals: proposals.data ?? [] }, 200, corsHeaders);
     }
 
     if (action === "activities") {
-      const { data } = await supabase.from("crm_activities").select("id, type, note, actor, created_at").eq("opportunity_id", String(body.id)).order("created_at", { ascending: false }).limit(100);
+      const { data, error } = await supabase.from("crm_activities").select("id, type, note, actor, created_at").eq("opportunity_id", String(body.id)).order("created_at", { ascending: false }).limit(100);
+      // "no activity on this opportunity" is a meaningful sales fact. Returning
+      // it for a failed read invents that fact.
+      if (error) return j({ error: "Could not load activity", details: error.message }, 500, corsHeaders);
       return j({ ok: true, activities: data ?? [] }, 200, corsHeaders);
     }
 
@@ -82,7 +98,10 @@ Deno.serve(async (req) => {
 
     if (action === "accept_suggestion") {
       const oppId = String(body.id ?? "");
-      const { data: opp } = await supabase.from("crm_opportunities").select("stage").eq("id", oppId).maybeSingle();
+      const { data: opp, error: oppError } = await supabase.from("crm_opportunities").select("stage").eq("id", oppId).maybeSingle();
+      // Without this an unreadable opportunity produced "no suggestion for
+      // stage" - a 400 blaming the data for a failure to read it.
+      if (oppError) return j({ error: "Could not read the opportunity", details: oppError.message }, 500, corsHeaders);
       const suggestion = STAGE_SUGGESTION[String(opp?.stage)] ?? null;
       if (!suggestion) return j({ error: "no suggestion for stage" }, 400, corsHeaders);
       await supabase.from("crm_opportunities").update({ next_action: suggestion }).eq("id", oppId);
@@ -108,13 +127,39 @@ Deno.serve(async (req) => {
     // Promote a discovered prospect_lead into a crm_account + crm_lead.
     if (action === "promote_prospect") {
       const prospectId = String(body.prospectId ?? "");
-      const { data: pl } = await supabase.from("prospect_leads").select("*").eq("id", prospectId).maybeSingle();
+      // A THREE-STEP PROMOTION THAT REPORTED SUCCESS AFTER FAILING PART WAY.
+      // Every step discarded its error, so a failed account insert left
+      // `acct` null, created the lead with account_id: null - an orphan - then
+      // marked the prospect `qualified` and returned ok: true with
+      // accountId: undefined. The prospect is no longer `new`, so it can never
+      // be promoted again, and nothing anywhere recorded that it half-happened.
+      // Each step now stops the request, and the prospect is only marked
+      // qualified once both inserts have actually landed.
+      const { data: pl, error: plError } = await supabase.from("prospect_leads").select("*").eq("id", prospectId).maybeSingle();
+      if (plError) return j({ error: "Could not read the prospect", details: plError.message }, 500, corsHeaders);
       if (!pl) return j({ error: "prospect not found" }, 404, corsHeaders);
-      const { data: acct } = await supabase.from("crm_accounts").insert({ name: pl.business_name, category: pl.category, city: pl.city, website: pl.website, business_ref: pl.source_ref, owner: actor === "admin" ? null : actor }).select("id").single();
-      const { data: lead } = await supabase.from("crm_leads").insert({ prospect_lead_id: pl.id, account_id: acct?.id, business_name: pl.business_name, category: pl.category, fit_score: pl.fit_score, status: "new" }).select("id").single();
-      await supabase.from("prospect_leads").update({ status: "qualified" }).eq("id", pl.id);
-      await audit("crm_promote_prospect", `crm_leads:${lead?.id}`, { prospectId, accountId: acct?.id });
-      return j({ ok: true, leadId: lead?.id, accountId: acct?.id }, 200, corsHeaders);
+
+      const { data: acct, error: acctError } = await supabase.from("crm_accounts").insert({ name: pl.business_name, category: pl.category, city: pl.city, website: pl.website, business_ref: pl.source_ref, owner: actor === "admin" ? null : actor }).select("id").single();
+      if (acctError || !acct) {
+        return j({ error: "Could not create the account", details: acctError?.message }, 500, corsHeaders);
+      }
+
+      const { data: lead, error: leadError } = await supabase.from("crm_leads").insert({ prospect_lead_id: pl.id, account_id: acct.id, business_name: pl.business_name, category: pl.category, fit_score: pl.fit_score, status: "new" }).select("id").single();
+      if (leadError || !lead) {
+        // The account row is left in place deliberately: deleting it here would
+        // be a second unchecked write on a path that just proved it can fail.
+        // An orphan account is visible in the console; a silently qualified
+        // prospect with no lead is not.
+        return j({ error: "Could not create the lead", details: leadError?.message, accountId: acct.id }, 500, corsHeaders);
+      }
+
+      const { error: statusError } = await supabase.from("prospect_leads").update({ status: "qualified" }).eq("id", pl.id);
+      if (statusError) {
+        return j({ error: "Promoted, but the prospect status did not update", details: statusError.message, leadId: lead.id, accountId: acct.id }, 500, corsHeaders);
+      }
+
+      await audit("crm_promote_prospect", `crm_leads:${lead.id}`, { prospectId, accountId: acct.id });
+      return j({ ok: true, leadId: lead.id, accountId: acct.id }, 200, corsHeaders);
     }
 
     if (action === "upsert_lead") {
