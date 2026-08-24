@@ -1,6 +1,6 @@
 {
   "scope": "src + supabase/functions; data|count destructures; rule-scoped counting",
-  "total": 287,
+  "total": 281,
   "files": {
     "src/components/admin/AdRateManager.tsx": 1,
     "src/components/admin/BlockedEmailDomainsManager.tsx": 1,
@@ -32,7 +32,6 @@
     "src/hooks/useBusinessPartnership.ts": 1,
     "src/hooks/useCampaignNotifications.ts": 1,
     "src/hooks/useCommunityFeatures.ts": 1,
-    "src/hooks/useCrmContacts.ts": 6,
     "src/hooks/useCrmNotes.ts": 1,
     "src/hooks/useEmailPreferences.ts": 1,
     "src/hooks/useGoogleIndexing.ts": 1,
