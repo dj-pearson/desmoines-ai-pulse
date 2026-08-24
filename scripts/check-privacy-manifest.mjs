@@ -184,6 +184,147 @@ for (const target of TARGETS) {
   }
 }
 
+/*
+ * COLLECTED-DATA PURPOSES (IOS-AUDIT-FEAT-030).
+ *
+ * Everything above reconciles NSPrivacyAccessedAPITypes. The OTHER section of the
+ * same file - NSPrivacyCollectedDataTypes, which says what is collected and WHY -
+ * was checked by nobody, and it carries the same two failure directions.
+ *
+ * The live case: ProductInteraction declares an Analytics purpose while
+ * AnalyticsService emits nothing at all, because every vendor call in it is
+ * commented out. A purpose that became false when a feature was deferred looks
+ * exactly like one that was always true, which is why this needs a machine to
+ * notice. Its AppFunctionality half is honest and stays - Supabase really does
+ * receive interactions - so this checks the PURPOSE, not the data type.
+ *
+ * Both directions fail: declaring Analytics while emitting none is the false
+ * statement this file's header argues against, and emitting analytics without
+ * declaring it is the direction that gets a submission rejected.
+ *
+ * WHAT COUNTS AS EMITTING: a call into a third-party analytics SDK, not this
+ * app's own AnalyticsService wrapper. The wrapper IS the stub, so matching it
+ * would leave the check permanently satisfied by the very thing it exists to
+ * catch.
+ *
+ * COMMENT HANDLING is deliberately conservative - only whole-line `//` comments
+ * and block comments are stripped, never a trailing `//` mid-line, because that
+ * would truncate any line containing a URL. Commented-out code, which is the
+ * actual case here, is always whole-line, so nothing is missed by being careful.
+ */
+const ANALYTICS_SDKS = [
+  {
+    name: 'Firebase Analytics',
+    pattern: /\bAnalytics\s*\.\s*(?:logEvent|setUserProperty|setUserID)\b|import\s+FirebaseAnalytics\b/,
+  },
+  { name: 'Mixpanel', pattern: /\bMixpanel\s*\.|import\s+Mixpanel\b/ },
+  { name: 'Amplitude', pattern: /\bAmplitude\s*\.|import\s+Amplitude\b/ },
+  { name: 'PostHog', pattern: /\bPostHog\s*\.|import\s+PostHog\b/ },
+  { name: 'TelemetryDeck', pattern: /\bTelemetryDeck\s*\.|import\s+TelemetryDeck\b/ },
+  { name: 'Segment', pattern: /import\s+Segment\b/ },
+];
+
+const BACKSLASH = String.fromCharCode(92);
+
+/*
+ * ONE ACKNOWLEDGED MISMATCH, and it is deliberately not a JSON baseline file.
+ *
+ * DesMoinesInsider declares an Analytics purpose on ProductInteraction while no
+ * analytics is emitted. That is a REAL over-declaration, it is IOS-AUDIT-FEAT-030,
+ * and it is not fixed here because fixing it is a vendor decision: AC1 and AC2 of
+ * that story may ship analytics, in which case the purpose is correct and removing
+ * it now would mean removing and re-adding a declaration across two App Store
+ * submissions.
+ *
+ * Gating on it would make ios-ci.yml red on every push forever, which is how a
+ * check stops being read (WEB-CI-027). It is printed on every run instead, so it
+ * stays visible without crying wolf - the same call made for the AASA team id in
+ * scripts/check-aasa.mjs.
+ *
+ * A list rather than a file on purpose: there is one entry, and a JSON baseline
+ * invites appending to it to make CI pass. Adding a line here requires saying why.
+ */
+const ACKNOWLEDGED_ANALYTICS_OVERDECLARATION = new Set(['DesMoinesInsider:ProductInteraction']);
+const ANALYTICS_PURPOSE = 'NSPrivacyCollectedDataTypePurposeAnalytics';
+
+/** Strip block comments and whole-line `//` comments only. See the note above. */
+function stripComments(src) {
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n')
+    .filter((line) => !/^\s*\/\//.test(line))
+    .join('\n');
+}
+
+/** Collected data types that carry the Analytics purpose. */
+function typesWithAnalyticsPurpose(manifestPath) {
+  const xml = readFileSync(manifestPath, 'utf8');
+  const start = xml.indexOf('<key>NSPrivacyCollectedDataTypes</key>');
+  if (start === -1) return [];
+  const out = [];
+  // Each <dict> inside the array is one collected type plus its purposes.
+  for (const block of xml.slice(start).split('<dict>').slice(1)) {
+    const body = block.split('</dict>')[0];
+    if (!body.includes(ANALYTICS_PURPOSE)) continue;
+    const type = /<key>NSPrivacyCollectedDataType<\/key>\s*<string>\s*([A-Za-z]+)\s*<\/string>/.exec(body);
+    out.push(type ? type[1].replace(/^NSPrivacyCollectedDataType/, '') : '(unnamed)');
+  }
+  return out;
+}
+
+console.log('\nCollected-data purposes');
+for (const target of TARGETS) {
+  const manifestPath = join(ROOT, target.manifest);
+  const emitters = [];
+  for (const file of swiftFiles(join(ROOT, target.sources))) {
+    const src = stripComments(readFileSync(file, 'utf8'));
+    for (const sdk of ANALYTICS_SDKS) {
+      if (sdk.pattern.test(src)) {
+        const rel = file.slice(ROOT.length + 1).split(BACKSLASH).join('/');
+        emitters.push(`${sdk.name} in ${rel}`);
+      }
+    }
+  }
+
+  const declaredFor = typesWithAnalyticsPurpose(manifestPath);
+  const emits = emitters.length > 0;
+  const declares = declaredFor.length > 0;
+
+  console.log(
+    `  ${emits === declares ? 'ok      ' : 'MISMATCH'} ${target.label.padEnd(24)} ` +
+      `analyticsEmitted=${String(emits).padEnd(5)} analyticsPurposeDeclared=${declares}` +
+      `${declares ? ` on ${declaredFor.join(', ')}` : ''}`,
+  );
+
+  const unacknowledged = declaredFor.filter(
+    (t) => !ACKNOWLEDGED_ANALYTICS_OVERDECLARATION.has(`${target.label}:${t}`),
+  );
+
+  if (declares && !emits && unacknowledged.length === 0) {
+    console.log(`          known: the Analytics purpose on ${declaredFor.join(', ')} is over-declared`);
+    console.log('          and accepted for now - no analytics is emitted. IOS-AUDIT-FEAT-030');
+    console.log('          owns the decision to ship analytics or drop the purpose.');
+  }
+
+  if (declares && !emits && unacknowledged.length > 0) {
+    console.error(
+      `\n  X OVER-DECLARED: ${target.manifest} claims an Analytics purpose on ` +
+        `${declaredFor.join(', ')},\n    and no analytics SDK is called from ${target.label} - every vendor call in\n` +
+        '    AnalyticsService is commented out, so nothing is sent. Either ship analytics or\n' +
+        '    drop the Analytics purpose. A manifest exists to be true. See IOS-AUDIT-FEAT-030.\n',
+    );
+    failed++;
+  }
+  if (emits && !declares) {
+    console.error(
+      `\n  X UNDER-DECLARED: ${target.label} calls an analytics SDK but ${target.manifest}\n` +
+        '    declares no Analytics purpose on any collected type. This is the direction that\n' +
+        `    gets a submission rejected. Found:\n      ${emitters.slice(0, 3).join('\n      ')}\n`,
+    );
+    failed++;
+  }
+}
+
 if (failed > 0) {
   console.error(`\n${failed} manifest mismatch(es). See IOS-AUDIT-REL-014.`);
   process.exit(1);
