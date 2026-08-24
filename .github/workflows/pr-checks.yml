@@ -236,6 +236,14 @@ jobs:
       - name: Ballot reads stay own-row
         run: bash scripts/check-ballot-reads.sh
 
+      # XPLAT-013: check-schema-usage.mjs scans src/ and supabase/functions/ and
+      # compares against the GENERATED TYPES. Swift and Kotlin have no generated
+      # types, so nothing had ever checked what the two shipped mobile clients
+      # query - 18 call sites across 4 nonexistent tables had accumulated. Offline;
+      # reads scripts/db-snapshot.json.
+      - name: Mobile clients query tables that exist
+        run: node scripts/check-mobile-schema-usage.mjs
+
       # WEB-QA-017: catch a migration recorded as applied that produced nothing.
       # The ledger row is what stops `supabase db push` from ever re-running the
       # file, so a bad row makes the miss permanent and silent - 144 of the 147

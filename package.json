@@ -61,6 +61,7 @@
     "check-error-handling:update": "node scripts/check-error-handling.mjs --update",
     "check-schema:all": "node scripts/check-schema-usage.mjs --all",
     "check-schema:update": "node scripts/check-schema-usage.mjs --update",
+    "check-mobile-schema": "node scripts/check-mobile-schema-usage.mjs",
     "check-migration-drift": "node scripts/check-migration-drift.mjs",
     "check-migration-drift:all": "node scripts/check-migration-drift.mjs --all",
     "test:smoke": "playwright test --config=playwright.smoke.config.ts",
