@@ -45,6 +45,8 @@ const UPDATE = process.argv.includes('--update');
 const FLAG = 1500;
 /** Room for one extra card row plus ordinary data movement. */
 const TOLERANCE = 0.2;
+/** Below this share of baseline a route has probably shipped its loading state. */
+const COLLAPSE = 0.5;
 
 if (!existsSync(DIST)) {
   console.error('[dom-budget] dist/ is missing. Run `npm run build` first.');
@@ -93,6 +95,7 @@ if (!existsSync(BASELINE)) {
 
 const baseline = JSON.parse(readFileSync(BASELINE, 'utf8')).routes ?? {};
 const regressions = [];
+const collapses = [];
 const fresh = [];
 for (const [route, count] of sorted) {
   const before = baseline[route];
@@ -102,6 +105,20 @@ for (const [route, count] of sorted) {
   }
   const ceiling = Math.round(before * (1 + TOLERANCE));
   if (count > ceiling) regressions.push({ route, before, count, ceiling });
+  // A COLLAPSE IS THE MORE DANGEROUS DIRECTION, and only this check can see it.
+  // prerender.mjs waits for Helmet to commit head tags and then captures. Helmet
+  // commits on the FIRST render, before TanStack Query resolves, so a route can
+  // be snapshotted showing its loading skeleton - correct title, correct
+  // canonical, and no content. Production serves exactly that on /events/today,
+  // /events/free, /events/ankeny and /restaurants/dietary: 0 Event and 0
+  // ItemList JSON-LD nodes where their siblings carry 30 and 40 (WEB-SEO-006).
+  //
+  // Nothing else catches it. The page is 200, the head is right, and the shell
+  // looks like a page - it just has nothing in it. A route that loses more than
+  // half its elements has either had its list capped on purpose, in which case
+  // re-baseline, or shipped a loading state, which is worse than not
+  // prerendering it at all.
+  if (count < Math.round(before * COLLAPSE)) collapses.push({ route, before, count });
 }
 
 console.log(
@@ -120,12 +137,21 @@ if (regressions.length) {
   }
   console.log('\nCap the list this route renders, or re-baseline deliberately with --update.');
 }
+if (collapses.length) {
+  console.log(`\nCOLLAPSED (${collapses.length}) - lost more than ${Math.round((1 - COLLAPSE) * 100)}% of baseline:`);
+  for (const c of collapses) console.log(`  ${c.route}: ${c.before} -> ${c.count}`);
+  console.log(
+    '\nEither the list was capped on purpose - re-baseline with --update - or the prerender\n' +
+      'captured a loading state, which ships a 200 with a correct head and no content.'
+  );
+}
+
 if (fresh.length) {
   console.log(`\nNEW ROUTE OVER THE FLAG (${fresh.length}):`);
   for (const f of fresh) console.log(`  ${f.route}: ${f.count}`);
   console.log(`\nA new prerendered route should not ship more than ${FLAG} elements. Cap its list.`);
 }
 
-if (regressions.length || fresh.length) process.exit(1);
+if (regressions.length || fresh.length || collapses.length) process.exit(1);
 console.log('\nNo DOM-size regressions.');
 process.exit(0);
