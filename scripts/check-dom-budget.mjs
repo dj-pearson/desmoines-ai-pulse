@@ -21,19 +21,16 @@
  * grows past its baseline by more than TOLERANCE, which is wide enough to
  * absorb a full extra card row and narrow enough to catch an uncapped list.
  *
- * IT DOES NOT GATE ON THE LIGHTHOUSE FLAG. Eight routes are over 1,500 today and
- * a check that is red from the first run teaches people to ignore it. The
- * distance to the flag is printed on every run so the target does not disappear,
- * which is the same shape as check-bundle-budget.mjs.
+ * IT GATES NOTHING. It reports. Every threshold below is a reporting threshold,
+ * and the reasoning for that is at the bottom of the file next to the exit -
+ * short version: I tried gating twice, on growth and on collapse, and each
+ * failed CI on a build that had changed nothing relevant. The numbers move with
+ * live data and with capture timing by more than any tolerance worth setting.
  *
- * NOR DOES IT GATE ON A COLLAPSE, and that is a correction. A route far BELOW
- * its baseline has usually shipped a loading state (see the comment on COLLAPSE),
- * and gating on it was wrong for a reason I should have seen first: the thin
- * capture is a RACE, so the gate is non-deterministic by construction. Its first
- * CI run went red on /restaurants/dietary and /playgrounds - correctly, they had
- * collapsed - which is a true positive and still the wrong thing to fail a PR on.
- * The cause is fixed where it belongs, in prerender.mjs's settle condition; this
- * reports collapses so a regression there is visible without blocking anyone.
+ * The Lighthouse flag is printed rather than enforced for the ordinary reason as
+ * well: nine routes are over 1,500 today, and a check that is red from its first
+ * run teaches people to ignore it. Same shape as check-bundle-budget.mjs, which
+ * prints its distance to the 200 KB goal on every run.
  *
  *   node scripts/check-dom-budget.mjs            # check
  *   node scripts/check-dom-budget.mjs --update   # re-baseline
@@ -161,6 +158,27 @@ if (fresh.length) {
   console.log(`\nA new prerendered route should not ship more than ${FLAG} elements. Cap its list.`);
 }
 
-if (regressions.length || fresh.length) process.exit(1);
-console.log('\nNo DOM-size regressions.');
+// REPORT-ONLY, and this is the third revision of that decision rather than a
+// first instinct. I gated on growth and on collapse in turn, and each failed CI
+// on a build that had changed nothing relevant:
+//   collapse  /restaurants/dietary 2163 -> 556, a real thin capture - but the
+//             thin capture is a race, so the gate was non-deterministic.
+//   growth    /events/kids 549 -> 1046, because the settle fix captured content
+//             the baseline run had missed. Also real, also not a regression.
+// The metric moves with live data and with capture timing by more than any
+// tolerance worth setting - 2x on one route between two builds of the same
+// commit. check-bundle-budget.mjs's header explains why a per-item baseline
+// churns where a total does not; the difference here is that even the total
+// moves, because the underlying rows move.
+//
+// So it measures and prints on every build, and gates nothing. That is worth
+// more than it sounds. Before this script there was no number at all:
+// WEB-PERF-023 was working from hand measurements four fixes out of date, and a
+// route collapsing to a loading shell was invisible. A number in the build log
+// that someone can read is the deliverable. A red PR that nobody caused is not.
+if (regressions.length || collapses.length || fresh.length) {
+  console.log('\nNothing above fails the build. See the header for why.');
+} else {
+  console.log('\nNo DOM-size regressions.');
+}
 process.exit(0);
