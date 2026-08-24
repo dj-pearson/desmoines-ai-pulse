@@ -40,10 +40,11 @@ import {
   ImageOff,
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useState, useEffect, memo, useCallback } from "react";
+import { useState, useEffect, memo, useCallback, useRef } from "react";
 import { OptimizedImage } from "@/components/OptimizedImage";
 import { SponsoredBadge } from "@/components/SponsoredBadge";
-import { isSponsoredActive } from "@/lib/sponsored";
+import { isSponsoredActive, logSponsoredClick } from "@/lib/sponsored";
+import { useSponsoredImpression } from "@/hooks/useSponsoredImpression";
 import { getEventCategoryBadgeClass } from "@/lib/categoryStyles";
 
 const createSlug = (name: string): string => {
@@ -78,7 +79,24 @@ function EventCardComponent({ event, onViewDetails }: EventCardProps) {
   // Determine if trending based on view data
   const isTrending = viewData.trending_score > 70 || viewData.recent_views > 100;
 
+  // EXPIRY IS PART OF BEING SPONSORED. This card read `event.is_sponsored`
+  // directly in three places, so an event whose sponsored_until had already
+  // passed kept the amber ring and the "Sponsored" label until somebody flipped
+  // the boolean by hand. RestaurantCard has always gone through this helper
+  // (RestaurantCard.tsx:105); EventCard was the one display path that did not.
+  // isSponsoredActive treats a null sponsored_until as open-ended, so rows
+  // without an end date behave exactly as before. (WEB-FEAT-005)
+  const sponsoredActive = isSponsoredActive(event);
+
+  // Sponsored telemetry, matching RestaurantCard (:107, :116). EventCard had the
+  // boost and the badge and reported NOTHING - an advertiser buying an event
+  // listing got no impression or click record while a restaurant listing did.
+  const cardRef = useRef<HTMLDivElement>(null);
+  useSponsoredImpression(cardRef, "event", event.id, sponsoredActive);
+
   const handleViewDetails = useCallback(() => {
+    if (sponsoredActive) logSponsoredClick("event", event.id);
+
     // Track interaction
     if (isAuthenticated) {
       trackInteraction(event.id, "view");
@@ -91,19 +109,12 @@ function EventCardComponent({ event, onViewDetails }: EventCardProps) {
     trackView();
 
     onViewDetails(event);
-  }, [isAuthenticated, trackInteraction, event, addToRecentlyViewed, trackView, onViewDetails]);
+  }, [isAuthenticated, trackInteraction, event, addToRecentlyViewed, trackView, onViewDetails, sponsoredActive]);
 
-  // EXPIRY IS PART OF BEING SPONSORED. This card read `event.is_sponsored`
-  // directly in three places, so an event whose sponsored_until had already
-  // passed kept the amber ring and the "Sponsored" label until somebody flipped
-  // the boolean by hand. RestaurantCard has always gone through this helper
-  // (RestaurantCard.tsx:105); EventCard was the one display path that did not.
-  // isSponsoredActive treats a null sponsored_until as open-ended, so rows
-  // without an end date behave exactly as before. (WEB-FEAT-005)
-  const sponsoredActive = isSponsoredActive(event);
+
 
   return (
-    <Card className={`overflow-hidden hover:shadow-lg transition-all duration-200 hover:scale-[1.02] card-interactive group focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2 ${sponsoredActive ? 'ring-2 ring-amber-400/60' : ''}`}>
+    <Card ref={cardRef} className={`overflow-hidden hover:shadow-lg transition-all duration-200 hover:scale-[1.02] card-interactive group focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2 ${sponsoredActive ? 'ring-2 ring-amber-400/60' : ''}`}>
       {/* Image with overlay badges */}
       <div className="relative overflow-hidden">
         {event.image_url && !imageError ? (
