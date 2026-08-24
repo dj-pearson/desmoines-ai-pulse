@@ -116,7 +116,10 @@ done <<< "$PINS"
 
 echo
 if [ "$MATCHED" -lt 2 ]; then
-  echo "FAIL: only ${MATCHED} of ${PIN_COUNT} declared pin(s) appear in the live chain." >&2
+  echo "FAIL: ${MATCHED} of ${PIN_COUNT} declared pin(s) appear in the live chain; the floor is 2." >&2
+  echo "      A pin that is ABSENT above is fine on its own - a backup pin is SUPPOSED" >&2
+  echo "      to be outside the current chain (IOS-AUDIT-SEC-013 AC3). What fails here is" >&2
+  echo "      having fewer than two pins that DO match." >&2
   echo "      Two is the floor - with one, the next rotation locks out every" >&2
   echo "      enforcing client and there is no remote fix." >&2
   echo "      See docs/CERT_PIN_ROTATION.md: add the new hash alongside the old" >&2
