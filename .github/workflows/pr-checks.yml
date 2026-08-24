@@ -206,6 +206,26 @@ jobs:
         with:
           node-version: 20
 
+      # THESE TWO WERE WRITTEN TO BLOCK A REGRESSION AT REVIEW TIME AND COULD NOT.
+      # Both live in rls-config-audit.yml, which runs on a daily cron and on
+      # workflow_dispatch only - never on a pull request. So the guard for
+      # WEB-BE-032 and the guard for WEB-SEC-025 both reported the morning AFTER
+      # the change they exist to stop had already merged. Both are offline and
+      # take seconds, so they run here too; the nightly copies stay, because
+      # neither surface should lose coverage over this.
+      #
+      # WEB-BE-032 AC4: `const { data } = await supabase...` cannot tell 42P01
+      # from an empty table, which is how 33 dead tables stayed invisible.
+      - name: No new discarded Supabase errors
+        run: node scripts/check-discarded-supabase-errors.mjs
+
+      # WEB-SEC-025 step 3 replaces the USING (true) SELECT policy on votes. A
+      # read that is not scoped to the caller returns ballots today and an empty
+      # array after - silently, because a denied SELECT under RLS is an empty
+      # result, not an error.
+      - name: Ballot reads stay own-row
+        run: bash scripts/check-ballot-reads.sh
+
       # WEB-QA-017: catch a migration recorded as applied that produced nothing.
       # The ledger row is what stops `supabase db push` from ever re-running the
       # file, so a bad row makes the miss permanent and silent - 144 of the 147
