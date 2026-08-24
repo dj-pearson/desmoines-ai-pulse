@@ -314,8 +314,21 @@ jobs:
       # 30 minutes and taking the already-passed unit-test result down with it.
       # A UI test that waits on an element which never appears does not fail on
       # its own - it waits until something outside kills it.
+      #
+      # 12 WAS TOO TIGHT AND COST A RED MAIN. Run 32651998578 on main failed with
+      # "The action 'Run UI tests' has timed out after 12 minutes" - not an
+      # assertion, just the cap. Measured across the four most recent successes
+      # this step takes 6, 7, 8 and 9 minutes, so 12 left three minutes of
+      # headroom against a simulator suite whose runtime varies with runner
+      # performance and simulator boot. That is not enough margin to be a hang
+      # detector; it is a coin flip.
+      #
+      # 20 KEEPS THE ORIGINAL INTENT AND STILL BOUNDS A HANG. The job's own
+      # numbers: total 14 minutes, of which build 2 and unit tests 3, against a
+      # 30-minute job cap. So 5 + 20 = 25 leaves the job timeout as a real
+      # backstop, and 20 is over twice the slowest observed run.
       - name: Run UI tests
-        timeout-minutes: 12
+        timeout-minutes: 20
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
           set -o pipefail
