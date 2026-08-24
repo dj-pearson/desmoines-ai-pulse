@@ -55,7 +55,11 @@ final class CertificatePinningService: NSObject, URLSessionDelegate {
     /// NOT be the only pin — it is here to tighten the common case, while WE1
     /// carries continuity across leaf reissues.
     ///
-    /// RE-VERIFIED 2026-08-23: all three pins still present in the live chain.
+    /// RE-VERIFIED 2026-08-24: all three pins still present in the live chain, and
+    /// iOS CI verified the same chain on run 32698174510. The per-pin dates below
+    /// are the date of the LAST live check, not of the pin - they said 2026-07-18
+    /// while two re-verifications had happened since, which is the wrong way for a
+    /// date on a security control to drift.
     /// `scripts/verify-cert-pins.sh` now checks this rather than only printing
     /// it, and runs in iOS CI, so drift fails a build instead of waiting to be
     /// noticed. Rotation procedure: docs/CERT_PIN_ROTATION.md.
@@ -65,11 +69,11 @@ final class CertificatePinningService: NSObject, URLSessionDelegate {
     /// update it, and confirm at least two pins in this set are present in the
     /// live chain so a single rotation cannot lock every client out.
     private let pinnedSPKIHashes: Set<String> = [
-        // Supabase leaf, CN=supabase.co — verified live 2026-07-18. Rotates ~90d.
+        // Supabase leaf, CN=supabase.co — verified live 2026-08-24. Rotates ~90d.
         "ZcJbApTb7wyllleAjHw2vYAskqdT+DhMY9aPDFwAtf4=",
-        // Google Trust Services WE1 intermediate (current Supabase issuer) — verified live 2026-07-18.
+        // Google Trust Services WE1 intermediate (current Supabase issuer) — verified live 2026-08-24.
         "kIdp6NNEd8wsugYyyIYFsi1ylMCED3hZbSR8ZFsa/A4=",
-        // GTS Root R4 (current Supabase root) — verified live 2026-07-18. Rotation backup; see note above.
+        // GTS Root R4 (current Supabase root) — verified live 2026-08-24. Rotation backup; see note above.
         "mEflZT5enoR1FuXLgYYGqnVEoZvmf9c2bVBpiOjYQ0c=",
     ]
 

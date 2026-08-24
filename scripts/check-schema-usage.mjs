@@ -436,6 +436,53 @@ function loadBaseline() {
   }
 }
 
+/**
+ * WEB-QA-017: most findings here are not 193 independent decisions. A name is
+ * "missing" from the generated types because the migration that defines it is
+ * recorded in supabase_migrations.schema_migrations as applied and produced
+ * nothing (see scripts/check-migration-drift.mjs). Naming the migration next to
+ * the finding is the difference between a build-or-delete decision per call site
+ * and one decision per migration.
+ *
+ * Reads the drift baseline only; no DB access, no extra failure mode. Returns a
+ * Map of lowercased object name -> migration filename.
+ */
+function loadDriftAttribution() {
+  const BASELINE = '.github/migration-drift-baseline.json';
+  const MIGRATIONS = 'supabase/migrations';
+  const attribution = new Map();
+  let migrations;
+  try {
+    migrations = JSON.parse(readFileSync(BASELINE, 'utf8')).migrations ?? [];
+  } catch {
+    return attribution; // baseline absent is not an error - the checker still works
+  }
+  const stripComments = (sql) => sql.replace(/--[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  const NOT_A_NAME = new Set(['if', 'not', 'exists', 'only', 'public', 'for', 'is', 'as', 'temp', 'temporary', 'unlogged']);
+  const PATTERNS = [
+    /CREATE\s+(?:UNLOGGED\s+|GLOBAL\s+|LOCAL\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:public\s*\.\s*)?"?([a-zA-Z_][a-zA-Z0-9_]*)"?/gi,
+    /CREATE\s+(?:OR\s+REPLACE\s+)?(?:MATERIALIZED\s+)?VIEW\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:public\s*\.\s*)?"?([a-zA-Z_][a-zA-Z0-9_]*)"?/gi,
+    /CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:public\s*\.\s*)?"?([a-zA-Z_][a-zA-Z0-9_]*)"?\s*\(/gi,
+  ];
+  for (const file of migrations) {
+    let sql;
+    try {
+      sql = stripComments(readFileSync(join(MIGRATIONS, file), 'utf8'));
+    } catch {
+      continue; // migration deleted since the baseline was captured
+    }
+    for (const pattern of PATTERNS) {
+      const re = new RegExp(pattern.source, 'gi');
+      let m;
+      while ((m = re.exec(sql)) !== null) {
+        const name = m[1].toLowerCase();
+        if (!NOT_A_NAME.has(name) && !attribution.has(name)) attribution.set(name, file);
+      }
+    }
+  }
+  return attribution;
+}
+
 function main() {
   const asJson = process.argv.includes('--json');
   const showAll = process.argv.includes('--all');
@@ -497,6 +544,9 @@ function main() {
     process.exit(0);
   }
 
+  const drift = loadDriftAttribution();
+  const driftOf = (f) => drift.get((f.kind === 'column' ? f.name.split('.')[0] : f.name).toLowerCase());
+
   for (const kind of ['table', 'rpc', 'column', 'profiles-key']) {
     const group = findings.filter((f) => f.kind === kind);
     if (!group.length) continue;
@@ -511,6 +561,8 @@ function main() {
       console.log(`  ${f.file}:${f.line}`);
       console.log(`    ${f.detail}`);
       console.log(`    -> ${f.error}`);
+      const from = driftOf(f);
+      if (from) console.log(`    -> defined by ${from}, which is ledgered as applied and never ran`);
     }
     console.log('');
   }
@@ -524,6 +576,15 @@ function main() {
     `${tables.size} distinct table(s), ${rpcs.size} function(s), ${cols.size} column(s)` +
     `${keys ? `, ${keys} wrong-key query(ies)` : ''}.`
   );
+  const attributed = findings.filter((f) => driftOf(f));
+  if (attributed.length) {
+    const migrations = new Set(attributed.map((f) => driftOf(f)));
+    console.log(
+      `${attributed.length} of them share one cause: the ${migrations.size} migration(s) that define those ` +
+      `objects are recorded in supabase_migrations.schema_migrations as applied and produced nothing. ` +
+      `Run: npm run check-migration-drift:all. The decision is WEB-QA-018's, taken per migration.`
+    );
+  }
   console.log('Each one fails silently at runtime. See the header of this script.');
   process.exit(1);
 }

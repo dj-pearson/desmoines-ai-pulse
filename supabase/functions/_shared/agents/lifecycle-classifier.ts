@@ -96,10 +96,30 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   for (const p of rows) {
     const signupT = new Date(p.created_at).getTime();
     const lastActivity = lastActiveByUser.get(p.user_id) ?? 0;
-    const commPref = (p.communication_preferences ?? {}) as { marketing?: boolean; email?: boolean };
+    // WEB-LEGAL-012: read the keys the clients actually write. Signup
+    // (src/pages/Auth.tsx:462) and PreferencesManager.tsx:146 both store
+    // { email_notifications, sms_notifications, event_recommendations }. Nothing in
+    // this repo has ever written `marketing` or `email`, so both keys this used to
+    // read were undefined on every profile and `undefined !== false` made every user
+    // permanently opted in - which is why the consent gates downstream have never
+    // skipped anyone. Measured against production 2026-08-24: 6 of 6 profiles carry
+    // email_notifications, 0 carry marketing, 0 carry email.
+    //
+    // The old keys stay in the expression so a future writer using them still works,
+    // and absence still means opted IN (AC5) - only an explicit false stops mail.
+    // event_recommendations is deliberately NOT read: it selects a content type, and
+    // treating it as consent would stop churn and milestone mail for a user who only
+    // turned off event suggestions.
+    const commPref = (p.communication_preferences ?? {}) as {
+      marketing?: boolean;
+      email?: boolean;
+      email_notifications?: boolean;
+    };
     const messagingAllowed =
       (p.email ? unsubByEmail.get(p.email) !== "unsubscribed" : true) &&
-      commPref.marketing !== false && commPref.email !== false;
+      commPref.marketing !== false &&
+      commPref.email !== false &&
+      commPref.email_notifications !== false;
 
     const signals: Signals = {
       daysSinceSignup: Math.floor((now - signupT) / DAY),

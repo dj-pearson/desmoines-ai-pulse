@@ -126,6 +126,8 @@ if (files.length === 0 || useFiles.length === 0) {
 const sources = new Map(files.map((f) => [f, readFileSync(f, 'utf8')]));
 const allSource = useFiles.map((f) => readFileSync(f, 'utf8')).join(String.fromCharCode(10));
 
+const BACKSLASH = String.fromCharCode(92);
+const slash = (p) => p.split(BACKSLASH).join('/');
 const unused = [];
 for (const [file, source] of sources) {
   const lines = source.split(/\r?\n/);
@@ -138,10 +140,17 @@ for (const [file, source] of sources) {
     const onDeclLine = ((lines[line - 1] || '').match(pattern) || []).length;
     if (total - onDeclLine > 0) continue;
 
-    unused.push(`${file.slice(ROOT.length + 1).replace(/\\/g, '/')}:${line} ${name}`);
+    const rel = slash(file.slice(ROOT.length + 1));
+    // KEYED BY FILE + MEMBER, NOT BY LINE. The baseline used to hold
+    // `file:line name`, so inserting anything above a declaration moved it and
+    // the same member was reported as BOTH 'no longer unused' and 'new' - which
+    // is what turned iOS CI red on 2026-08-24 after an unrelated AuthView edit
+    // shifted roundedInput from :288 to :313. Same defect as the discarded-error
+    // baseline fixed in PR #372; the line is display only.
+    unused.push({ key: `${rel} ${name}`, display: `${rel}:${line} ${name}` });
   }
 }
-unused.sort();
+unused.sort((a, b) => a.key.localeCompare(b.key));
 
 console.log(
   `[unused-members] ${files.length} declaring file(s), ${useFiles.length} searched, ` +
@@ -149,7 +158,7 @@ console.log(
 );
 
 if (process.argv.includes('--write')) {
-  writeFileSync(BASELINE, `${JSON.stringify({ unused }, null, 2)}\n`);
+  writeFileSync(BASELINE, `${JSON.stringify({ unused: unused.map((u) => u.key) }, null, 2)}\n`);
   console.log(`Wrote ${unused.length} entries to ios-unused-members-baseline.json.`);
   process.exit(0);
 }
@@ -160,8 +169,9 @@ if (!existsSync(BASELINE)) {
 }
 
 const baseline = new Set(JSON.parse(readFileSync(BASELINE, 'utf8')).unused ?? []);
-const fresh = unused.filter((entry) => !baseline.has(entry));
-const gone = [...baseline].filter((entry) => !unused.includes(entry));
+const fresh = unused.filter((entry) => !baseline.has(entry.key));
+const seen = new Set(unused.map((u) => u.key));
+const gone = [...baseline].filter((entry) => !seen.has(entry));
 
 if (gone.length > 0) {
   console.log(`\nNo longer unused (${gone.length}):`);
@@ -171,7 +181,7 @@ if (gone.length > 0) {
 
 if (fresh.length > 0) {
   console.error(`\nX ${fresh.length} new member(s) that nothing reads:`);
-  for (const entry of fresh) console.error(`  ${entry}`);
+  for (const entry of fresh) console.error(`  ${entry.display}`);
   console.error(
     '\n  Every one of these found so far was a MISSING SURFACE, not dead code:\n' +
       '  the state a screen needed already existed and no screen read it. Decide\n' +

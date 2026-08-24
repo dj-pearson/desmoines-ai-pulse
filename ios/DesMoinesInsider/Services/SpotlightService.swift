@@ -9,6 +9,55 @@ actor SpotlightService {
 
     private init() {}
 
+    // MARK: - Re-index suppression (IOS-AUDIT-FEAT-026 AC3)
+
+    /// Identifier -> a signature of what was last written for it this session.
+    ///
+    /// Both callers index on a RESET load, which is every first appear, every
+    /// pull-to-refresh, every filter change and every search. Each one handed
+    /// the whole first page to CSSearchableIndex again. That is correct -
+    /// indexing is idempotent by uniqueIdentifier, so nothing duplicates - but
+    /// it rewrites tens of unchanged items to a disk-backed index every time a
+    /// user taps a filter chip, which is what AC3 asks not to happen.
+    ///
+    /// Session-scoped on purpose. The Spotlight index itself persists across
+    /// launches, so a cold start re-indexing once is cheap and also repairs
+    /// anything the system evicted while the app was closed. Persisting these
+    /// signatures would trade that repair for very little.
+    private var indexedSignatures: [String: String] = [:]
+
+    /// The subset whose indexed content differs from what this session last wrote.
+    ///
+    /// The signature covers exactly the fields written into the attribute set,
+    /// so an edited title or description re-indexes while an unchanged row does
+    /// not. Building the items is cheap; `indexSearchableItems` is the disk work
+    /// being avoided.
+    private func changedOnly(_ items: [CSSearchableItem]) -> [CSSearchableItem] {
+        var changed: [CSSearchableItem] = []
+        for item in items {
+            // CSSearchableItem.uniqueIdentifier is NON-optional. The first
+            // version of this used `guard let` and did not compile - iOS CI
+            // caught it, this machine has no Swift compiler.
+            let identifier = item.uniqueIdentifier
+            let signature = [
+                item.attributeSet.title ?? "",
+                item.attributeSet.contentDescription ?? "",
+                (item.attributeSet.keywords ?? []).joined(separator: ","),
+                item.expirationDate.map { String($0.timeIntervalSince1970) } ?? "",
+            ].joined(separator: "|")
+            if indexedSignatures[identifier] == signature { continue }
+            indexedSignatures[identifier] = signature
+            changed.append(item)
+        }
+        return changed
+    }
+
+    /// Forget signatures for identifiers removed from the index, so a row that
+    /// comes back is written again rather than being suppressed as unchanged.
+    private func forgetSignatures(_ identifiers: [String]) {
+        for identifier in identifiers { indexedSignatures.removeValue(forKey: identifier) }
+    }
+
     // MARK: - Index Events
 
     /// Index events, expire them at their end, and remove any already-past
@@ -37,6 +86,7 @@ actor SpotlightService {
             do {
                 try await CSSearchableIndex.default()
                     .deleteSearchableItems(withIdentifiers: expiredIdentifiers)
+                forgetSignatures(expiredIdentifiers)
             } catch {
                 AppLogger.general.error("Spotlight prune error (events): \(error.localizedDescription)")
             }
@@ -88,8 +138,11 @@ actor SpotlightService {
             return item
         }
 
+        let changed = changedOnly(items)
+        guard !changed.isEmpty else { return }
+
         do {
-            try await CSSearchableIndex.default().indexSearchableItems(items)
+            try await CSSearchableIndex.default().indexSearchableItems(changed)
         } catch {
             AppLogger.general.error("Spotlight indexing error (events): \(error.localizedDescription)")
         }
@@ -169,8 +222,11 @@ actor SpotlightService {
             )
         }
 
+        let changed = changedOnly(items)
+        guard !changed.isEmpty else { return }
+
         do {
-            try await CSSearchableIndex.default().indexSearchableItems(items)
+            try await CSSearchableIndex.default().indexSearchableItems(changed)
         } catch {
             AppLogger.general.error("Spotlight indexing error (restaurants): \(error.localizedDescription)")
         }

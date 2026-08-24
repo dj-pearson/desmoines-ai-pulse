@@ -46,4 +46,31 @@ final class URLSafetyTests: XCTestCase {
         XCTAssertNil("".safeWebURL)
         XCTAssertNil("   ".safeWebURL)
     }
+
+    // MARK: - AdTarget (IOS-AUDIT-SEC-012 AC4)
+
+    // Everything above tests the isSafeWebLink EXTENSION. The clickout paths do
+    // not call it directly - AdBannerView:105, InterstitialAdView:117,
+    // SponsoredPickCard:26, ArticleDetailView:230 and HotelDetailView:257 all go
+    // through AdTarget's failable init, which is where the guard actually lives.
+    //
+    // So the guard protecting production was untested: delete
+    // `guard url.isSafeWebLink` from AdTarget.init and every test above still
+    // passes. These three cover the initialiser itself.
+
+    func testAdTargetAcceptsHTTPS() {
+        XCTAssertNotNil(AdTarget(url: URL(string: "https://example.com/campaign")!))
+    }
+
+    func testAdTargetRejectsNonWebSchemesFromACreativeRow() {
+        XCTAssertNil(AdTarget(url: URL(string: "javascript:alert(1)")!))
+        XCTAssertNil(AdTarget(url: URL(string: "file:///etc/passwd")!))
+        XCTAssertNil(AdTarget(url: URL(string: "data:text/html,<script>")!))
+    }
+
+    func testAdTargetRejectsACustomSchemeDeepLink() {
+        // A campaign row supplying an app scheme would otherwise reach
+        // SFSafariViewController, which is the IOS-AUDIT-SEC-012 concern.
+        XCTAssertNil(AdTarget(url: URL(string: "desmoinesinsider://admin")!))
+    }
 }

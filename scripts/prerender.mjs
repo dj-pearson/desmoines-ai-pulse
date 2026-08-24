@@ -437,6 +437,36 @@ let duplicateJsonLdTotal = 0;
         .catch(() => {});
       await new Promise((r) => setTimeout(r, 250));
 
+      // THE HELMET SIGNAL PROVES THE PAGE MOUNTED, NOT THAT IT HAS DATA, and
+      // that is a different thing. Helmet commits head tags on the FIRST render;
+      // TanStack Query resolves later. So the wait above can be satisfied while
+      // the body is still a loading skeleton, and the capture ships a 200 with a
+      // correct title, a correct canonical and no content.
+      //
+      // MEASURED, not theorised. Production served /events/today with 0 Event and
+      // 0 ItemList JSON-LD and 5 <h3> where its sibling /events/date-night served
+      // 40 and 56; a local build of the same commit had 7 and 12. CI's own build
+      // collapsed /restaurants/dietary from 2163 elements to 556 and /playgrounds
+      // from 2388 to 494 (WEB-SEO-006).
+      //
+      // WAITING FOR #root TO STOP GROWING is route-agnostic, which matters
+      // because the alternative is a per-route content selector and this repo
+      // keeps finding that hand-maintained route lists go stale. Two consecutive
+      // equal samples is the settle; the cap means a page that legitimately
+      // renders nothing still proceeds, exactly as before.
+      const SAMPLE_MS = 150;
+      const SETTLE_CAP_MS = 4000;
+      let previous = -1;
+      for (let waited = 0; waited < SETTLE_CAP_MS; waited += SAMPLE_MS) {
+        const count = await page
+          .evaluate(() => document.getElementById('root')?.querySelectorAll('*').length ?? 0)
+          .catch(() => -1);
+        if (count === -1) break; // page gone; the existing error handling owns it
+        if (count > 0 && count === previous) break;
+        previous = count;
+        await new Promise((r) => setTimeout(r, SAMPLE_MS));
+      }
+
       const captured = await page.content();
 
       // Chromium ran the app, so Vite's runtime __vitePreload helper injected

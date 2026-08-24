@@ -114,6 +114,22 @@
   Cache-Control: public, max-age=2592000
   Accept-Ranges: bytes
 
+# Apple's associated-domains file. It has no extension, so Cloudflare Pages
+# serves it as application/octet-stream, and Apple requires application/json.
+# Measured: a GET of https://desmoinesinsider.com/.well-known/apple-app-site-association
+# answers 200 with content-type application/octet-stream, and the global
+# X-Content-Type-Options: nosniff above tells any client not to look past that
+# (IOS-AUDIT-REL-007 AC1).
+#
+# THE FILE IS ALSO STILL A TEMPLATE, and this header does not fix that: its
+# appID reads "TEAM_ID_HERE.com.desmoines.aipulse". Universal links cannot work
+# until the real Team ID is substituted, which needs IOS-AUDIT-REL-006 first -
+# ios/project.yml has DEVELOPMENT_TEAM: "" at :35 and :84, so the value does not
+# exist anywhere in this repo to substitute.
+/.well-known/apple-app-site-association
+  Content-Type: application/json
+  Cache-Control: public, max-age=3600
+
 # Manifest and other meta files
 /manifest.json
   Cache-Control: public, max-age=86400

@@ -44,9 +44,39 @@ import {
 
 const VALID_PLATFORMS: MobilePlatform[] = ["ios", "android"];
 
+/**
+ * The App Store numeric id, or the sentinel while App Store Connect has not
+ * assigned one. TODO(REL): set this and the copy in
+ * ios/DesMoinesInsiderClip/ClipRootView.swift together - they hold the same
+ * fact and there is no link between them.
+ */
+const IOS_APP_STORE_ID = "0000000000";
+const UNASSIGNED_APP_STORE_ID = "0000000000";
+const WEBSITE_URL = "https://desmoinesinsider.com";
+
+/**
+ * GUARD THE SENTINEL RATHER THAN SHIPPING IT INSIDE A URL.
+ *
+ * This used to be the literal string
+ * "https://apps.apple.com/app/des-moines-insider/id0000000000", which is a
+ * well-formed URL pointing at a listing that does not exist. It is returned as
+ * `storeUrl` and is the button on ForceUpdateView - the screen shown to a user
+ * whose binary is below MIN_SUPPORTED_APP_VERSION and can do nothing else. So
+ * the one escape from a blocking screen led nowhere.
+ *
+ * ClipRootView.swift:16-20 already holds the same sentinel and already handles
+ * it: it compares against "0000000000" and falls back to the website so the CTA
+ * always resolves. Same missing fact, two surfaces, and only one of them
+ * degraded honestly. This is that check, applied here (IOS-AUDIT-FEAT-031).
+ *
+ * A website fallback is not as good as the listing. It is much better than a
+ * dead link, and unlike a dead link it is obvious when the id is still unset.
+ */
 const STORE_URL: Record<MobilePlatform, string> = {
-  // TODO(REL): replace the iOS numeric id once App Store Connect assigns it.
-  ios: "https://apps.apple.com/app/des-moines-insider/id0000000000",
+  ios:
+    IOS_APP_STORE_ID === UNASSIGNED_APP_STORE_ID
+      ? WEBSITE_URL
+      : `https://apps.apple.com/app/des-moines-insider/id${IOS_APP_STORE_ID}`,
   android: "https://play.google.com/store/apps/details?id=com.desmoines.aipulse",
 };
 
