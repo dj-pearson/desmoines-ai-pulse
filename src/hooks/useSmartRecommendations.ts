@@ -126,7 +126,7 @@ export function useSmartRecommendations() {
       // with no matches - and the user just sees fewer recommendations. One
       // broken strategy must not take the whole rail down, so this logs
       // rather than throwing; a permanently dead strategy is then visible.
-      if (similarUsersError) log.error('recommendations', 'A recommendation query failed', { error: similarUsersError });
+      if (similarUsersError) logger.error('recommendations', 'A recommendation query failed', { error: similarUsersError });
 
       if (!similarUsers || similarUsers.length === 0) return [];
 
@@ -154,7 +154,7 @@ export function useSmartRecommendations() {
       // with no matches - and the user just sees fewer recommendations. One
       // broken strategy must not take the whole rail down, so this logs
       // rather than throwing; a permanently dead strategy is then visible.
-      if (recommendedEventsError) log.error('recommendations', 'A recommendation query failed', { error: recommendedEventsError });
+      if (recommendedEventsError) logger.error('recommendations', 'A recommendation query failed', { error: recommendedEventsError });
 
       if (!recommendedEvents) return [];
 
@@ -200,7 +200,7 @@ export function useSmartRecommendations() {
       // with no matches - and the user just sees fewer recommendations. One
       // broken strategy must not take the whole rail down, so this logs
       // rather than throwing; a permanently dead strategy is then visible.
-      if (eventsError) log.error('recommendations', 'A recommendation query failed', { error: eventsError });
+      if (eventsError) logger.error('recommendations', 'A recommendation query failed', { error: eventsError });
 
       if (!events) return [];
 
@@ -235,7 +235,7 @@ export function useSmartRecommendations() {
       // with no matches - and the user just sees fewer recommendations. One
       // broken strategy must not take the whole rail down, so this logs
       // rather than throwing; a permanently dead strategy is then visible.
-      if (trendingScoresError) log.error('recommendations', 'A recommendation query failed', { error: trendingScoresError });
+      if (trendingScoresError) logger.error('recommendations', 'A recommendation query failed', { error: trendingScoresError });
 
       if (!trendingScores) return [];
 
@@ -253,7 +253,7 @@ export function useSmartRecommendations() {
         // with no matches - and the user just sees fewer recommendations. One
         // broken strategy must not take the whole rail down, so this logs
         // rather than throwing; a permanently dead strategy is then visible.
-        if (eventError) log.error('recommendations', 'A recommendation query failed', { error: eventError });
+        if (eventError) logger.error('recommendations', 'A recommendation query failed', { error: eventError });
 
         if (event) {
           eventsToRecommend.push({

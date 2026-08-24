@@ -83,7 +83,7 @@ export function usePersonalizedRecommendations() {
       // with no matches - and the user just sees fewer recommendations. One
       // broken strategy must not take the whole rail down, so this logs
       // rather than throwing; a permanently dead strategy is then visible.
-      if (searchesError) log.error('recommendations', 'A recommendation query failed', { error: searchesError });
+      if (searchesError) logger.error('recommendations', 'A recommendation query failed', { error: searchesError });
 
       if (!searches || searches.length === 0) return null;
 
@@ -314,7 +314,7 @@ export function usePersonalizedRecommendations() {
           // with no matches - and the user just sees fewer recommendations. One
           // broken strategy must not take the whole rail down, so this logs
           // rather than throwing; a permanently dead strategy is then visible.
-          if (contentError) log.error('recommendations', 'A recommendation query failed', { error: contentError });
+          if (contentError) logger.error('recommendations', 'A recommendation query failed', { error: contentError });
 
           if (content) {
             trendingItems.push({
@@ -347,7 +347,7 @@ export function usePersonalizedRecommendations() {
       // with no matches - and the user just sees fewer recommendations. One
       // broken strategy must not take the whole rail down, so this logs
       // rather than throwing; a permanently dead strategy is then visible.
-      if (featuredEventsError) log.error('recommendations', 'A recommendation query failed', { error: featuredEventsError });
+      if (featuredEventsError) logger.error('recommendations', 'A recommendation query failed', { error: featuredEventsError });
 
       return (featuredEvents || []).map(event => ({
         id: `trending-event-${event.id}`,
@@ -385,7 +385,7 @@ export function usePersonalizedRecommendations() {
       // with no matches - and the user just sees fewer recommendations. One
       // broken strategy must not take the whole rail down, so this logs
       // rather than throwing; a permanently dead strategy is then visible.
-      if (attractionsError) log.error('recommendations', 'A recommendation query failed', { error: attractionsError });
+      if (attractionsError) logger.error('recommendations', 'A recommendation query failed', { error: attractionsError });
 
       const attractionRecommendations = (attractions || []).map(attraction => ({
         id: `attraction-${attraction.id}`,
