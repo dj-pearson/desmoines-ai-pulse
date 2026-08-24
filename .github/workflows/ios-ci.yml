@@ -22,17 +22,25 @@
 
 name: iOS CI
 
+# The workflow file is in its own paths list so that editing THIS FILE runs it.
+# Without that line an edit to the CI definition gets no feedback until some
+# unrelated ios/** change lands - which is how a too-tight timeout on the UI-test
+# step went unnoticed until it turned main red (run 32651998578), and how the fix
+# for it could not be verified by the PR that made it. android-ci.yml and
+# subscription-sync-tests.yml already do this; ios-ci was the odd one out.
 on:
   push:
     branches: [main]
     paths:
       - 'ios/**'
+      - '.github/workflows/ios-ci.yml'
       - '!ios/README.md'
       - '!ios/fastlane/metadata/**'
   pull_request:
     branches: [main]
     paths:
       - 'ios/**'
+      - '.github/workflows/ios-ci.yml'
       - '!ios/README.md'
       - '!ios/fastlane/metadata/**'
   workflow_dispatch:
