@@ -244,6 +244,17 @@ jobs:
       - name: Mobile clients query tables that exist
         run: node scripts/check-mobile-schema-usage.mjs
 
+      # IOS-AUDIT-REL-007: universal links, Sign in with Apple webcredentials and
+      # App Clip invocation all fail SILENTLY when the AASA disagrees with the
+      # app - no build error, no test, the link just opens Safari and you find
+      # out at review. Nothing compared them, so the file shipped with no
+      # appclips section while the Clip declared appclip:<domain> and handled
+      # invocation URLs. Offline. The placeholder team id is reported, not
+      # gated: the real value is not in the repo (IOS-AUDIT-REL-006), and a
+      # permanently red check is the failure mode WEB-CI-027 collects.
+      - name: AASA matches the iOS project
+        run: node scripts/check-aasa.mjs
+
       # WEB-QA-017: catch a migration recorded as applied that produced nothing.
       # The ledger row is what stops `supabase db push` from ever re-running the
       # file, so a bad row makes the miss permanent and silent - 144 of the 147
