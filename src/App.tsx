@@ -405,11 +405,21 @@ const App = () => (
                 it on mount, so a toast dispatched before this mounts is still
                 rendered when it does.
 
-                SAFE FOR SONNER BECAUSE NOTHING ON THE CRITICAL PATH CALLS IT.
-                Its toast() lives in the sonner module, so any page that raises
-                one has already loaded sonner; and handleError does not toast at
-                all today (see showErrorToUser). Suspense fallback is null: a
-                toaster that has not arrived should render nothing, not a
+                SONNER IS SAFE ONLY WHILE NOTHING ON THE CRITICAL PATH IMPORTS
+                IT, and that had already stopped being true. This comment used to
+                assert it flatly; the build disagreed - sonner was back in the
+                entry chunk, put there by one static import in
+                useGuestFavoriteMigration, which GuestFavoriteMigrator mounts at
+                the root a few lines above. Making a component lazy does not keep
+                its library out of the entry if anything eager still imports the
+                library. That import is now dynamic, worth 9.2 KB gz.
+                  The check is `grep -l sonner dist/assets/index-*.js` after a
+                  build, not reading this comment. A root-mounted headless
+                  component is the easy way to reintroduce it.
+                Its toast() otherwise lives in the sonner module, so any page that
+                raises one has already loaded sonner; and handleError does not
+                toast at all today (see showErrorToUser). Suspense fallback is
+                null: a toaster that has not arrived should render nothing, not a
                 placeholder. */}
             <Suspense fallback={null}>
               <Toaster />
