@@ -56,13 +56,27 @@ final class AuthTests: XCTestCase {
     }
 
     func testNonceCharsetCoversFullUppercaseAlphabet() {
-        // Guards the SEC-015 regression directly: across many draws every A–Z
-        // letter (including 'W') must be reachable. 64 chars / 2000 draws makes a
+        // Guards the SEC-015 regression directly: across many draws every A-Z
+        // letter (including 'W') must be reachable. 65 chars / 2000 draws makes a
         // missing letter astronomically unlikely if the charset is complete.
         var seen = Set<Character>()
         for _ in 0..<2000 { seen.formUnion(AuthService.shared.generateNonce()) }
         for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" {
             XCTAssertTrue(seen.contains(letter), "Charset never produced '\(letter)'")
+        }
+    }
+
+    func testNonceCharsetCoversEveryCharacterIncludingTheTail() {
+        // The uppercase test above cannot catch a rejection-sampling bug, because
+        // A-Z sits at indices 10-35 and survives any plausible off-by-one in the
+        // acceptance threshold. The four characters at the END of the alphabet -
+        // 'z', '-', '.', '_' at indices 61-64 - are the ones a wrong `maxUnbiased`
+        // silently drops, and they are also the exact four the old `% count`
+        // mapping under-produced by a third. So assert the whole alphabet.
+        var seen = Set<Character>()
+        for _ in 0..<2000 { seen.formUnion(AuthService.shared.generateNonce()) }
+        for character in "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-._" {
+            XCTAssertTrue(seen.contains(character), "Charset never produced '\(character)'")
         }
     }
 

@@ -2,9 +2,19 @@ import Foundation
 import Supabase
 
 /// CRUD for saved searches + alerts (IOS-PARITY-008) against the `saved_searches`
-/// table (RLS: each user sees/writes only their own rows). The scheduled
-/// new-match alert delivery is a server-side job + push; the app stores the
-/// saved search and its alert flag and registers for push.
+/// table (RLS: each user sees/writes only their own rows). The app stores the
+/// saved search and its alert flag; delivery is a server-side job.
+///
+/// DELIVERY IS EMAIL, NOT PUSH, and this line used to say "a server-side job +
+/// push ... and registers for push" (IOS-AUDIT-FEAT-012). The job is
+/// supabase/functions/saved-search-alerts, whose own header reads "ONE
+/// consolidated email per user with deep links back to the filtered /events",
+/// sent through Resend. Nothing in this project can send a push at all: apns,
+/// fcm and firebase messaging appear in none of the 157 edge functions.
+///
+/// The same wrong claim is still live in PaywallView.swift:115, which sells
+/// "Push notifications for new matching events" - that one is user-facing copy
+/// and changing it is a product call, so it is recorded rather than edited.
 actor SavedSearchService {
     static let shared = SavedSearchService()
 

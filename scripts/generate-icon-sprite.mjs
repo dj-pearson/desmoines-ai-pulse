@@ -152,9 +152,21 @@ ${symbols}
 }
 `;
 
+// Compare content, not bytes. git runs with core.autocrlf=true on Windows, so
+// the committed file is checked out with CRLF while this generator always
+// writes LF - a raw `!==` therefore reported "out of date" on every Windows
+// checkout no matter what the icons were, and blamed the lucide version in the
+// message while that version was identical on both sides. The suggested fix
+// made it worse: `npm run icons:sprite` rewrote all 84 lines to LF, git showed
+// a full-file diff, and committing that moved the same failure to the next
+// machine. Nothing caught it in CI because no PR workflow runs `npm run
+// validate` - the command CLAUDE.md tells contributors to run (WEB-UX-010).
+const CR = String.fromCharCode(13);
+const normalize = (s) => s.split(CR).join('');
+
 if (process.argv.includes('--check')) {
   const current = existsSync(OUT) ? readFileSync(OUT, 'utf8') : '';
-  if (current !== out) {
+  if (normalize(current) !== normalize(out)) {
     console.error(
       `${path.relative(ROOT, OUT)} is out of date with lucide-react ${version}.\n` +
         'Run: npm run icons:sprite',

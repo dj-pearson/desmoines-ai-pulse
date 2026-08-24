@@ -25,6 +25,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { LazyLocationMap } from "@/components/LazyLocationMap";
 import { getDirectionsUrl } from "@/lib/directions";
+import { FavoriteButton } from "@/components/FavoriteButton";
 import { OpenStatusChip } from "@/components/OpenStatusChip";
 import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
@@ -246,6 +247,24 @@ export default function HotelDetails() {
                 {hotel.hotel_type && (
                   <Badge variant="secondary" className="mb-4">{hotel.hotel_type}</Badge>
                 )}
+
+                {/*
+                  WEB-UX-010 AC1 names HotelDetails explicitly ("and HotelDetails
+                  if present") and it is present - routed at /stay/:slug - but it
+                  shipped with no save control of any kind, not even the dead
+                  static button the other three detail pages had. "hotel" was
+                  already a first-class content type in useContentFavorites and
+                  lib/guestFavorites, so the type existed with no way to reach it.
+                */}
+                <FavoriteButton
+                  contentType="hotel"
+                  contentId={hotel.id}
+                  variant="outline"
+                  size="sm"
+                  showText
+                  itemName={hotel.name}
+                  className="rounded-xl"
+                />
               </div>
 
               {/* Description */}

@@ -87,6 +87,13 @@ struct SearchView: View {
             .task {
                 applyIntent(dispatcher.pending)
             }
+            .onDisappear {
+                // Navigating away mid-dictation left the recogniser running and
+                // the audio session active - the mic indicator stayed on and other
+                // apps stayed ducked until the app was killed (IOS-AUDIT-PERF-016
+                // AC3, 'and on view dismissal'). stop() is idempotent.
+                dictation.stop()
+            }
             .alert("Microphone access needed", isPresented: $showDictationDeniedAlert) {
                 Button("Open Settings") { SpeechDictationService.openSettings() }
                 Button("Cancel", role: .cancel) {}

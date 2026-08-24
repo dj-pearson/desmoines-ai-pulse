@@ -61,6 +61,9 @@
     "check-error-handling:update": "node scripts/check-error-handling.mjs --update",
     "check-schema:all": "node scripts/check-schema-usage.mjs --all",
     "check-schema:update": "node scripts/check-schema-usage.mjs --update",
+    "check-mobile-schema": "node scripts/check-mobile-schema-usage.mjs",
+    "check-migration-drift": "node scripts/check-migration-drift.mjs",
+    "check-migration-drift:all": "node scripts/check-migration-drift.mjs --all",
     "test:smoke": "playwright test --config=playwright.smoke.config.ts",
     "validate": "npm run type-check && npm run check-imports && npm run check-schema && npm run check-error-handling && npm run check-seo-routes && npm run check-schema-dupes && npm run check-icon-sprite && npm run lint",
     "validate:strict": "npm run type-check:strict && npm run lint",
@@ -79,7 +82,9 @@
     "check-pseo-inventory": "tsx scripts/check-pseo-inventory.ts",
     "check-icon-sprite": "node scripts/generate-icon-sprite.mjs --check",
     "check-schema-dupes": "node scripts/check-duplicate-schema.mjs",
-    "audit:seo-head": "node scripts/audit-prerendered-seo.mjs"
+    "audit:seo-head": "node scripts/audit-prerendered-seo.mjs",
+    "check-dom-budget": "node scripts/check-dom-budget.mjs",
+    "check-dom-budget:update": "node scripts/check-dom-budget.mjs --update"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

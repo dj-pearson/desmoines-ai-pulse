@@ -268,6 +268,7 @@ for (const page of pages) {
   results.push({
     slug: page.slug,
     entityType,
+    hasTemporal: Boolean(dims.temporal),
     rendered: rendered.total,
     error: rendered.error,
     attainable: att.length,
@@ -317,6 +318,51 @@ for (const slugs of dupes.slice(0, 6)) {
   for (const s of slugs) console.log(`      ${s}`);
 }
 if (dupes.length > 6) console.log(`  ... and ${dupes.length - 6} more group(s)`);
+// AC4 asks for a cap on the initial release, and neither number above is the
+// one to cap. The floor says 122 pages have inventory; the fingerprint says 144
+// share a listing with another URL; the two sets overlap and nothing combined
+// them. A page is worth publishing only when it clears the floor AND is the one
+// URL for its listing - ship the other members of its group and they are
+// doorway pages by the ordinary definition, several URLs rendering identical
+// content to catch different queries.
+//
+// CANONICAL PREFERS AN EVERGREEN URL, then the shortest slug, ties broken
+// lexicographically. Shortest alone was wrong and the output said so: it picked
+// /asian/fall over /restaurants/asian. If every season renders the same
+// restaurants then the season is not a dimension of that listing, and putting a
+// month in the canonical URL for content that does not change with the month is
+// the doorway pattern with a tidier name. It is a rule rather than a judgement
+// so the number is reproducible between runs.
+const passSlugs = new Set(pass.map((r) => r.slug));
+const canonical = [];
+const shadowed = [];
+for (const slugs of groups.values()) {
+  const passing = slugs.filter((s) => passSlugs.has(s));
+  if (passing.length === 0) continue;
+  const temporal = new Map(results.map((r) => [r.slug, r.hasTemporal]));
+  const [head, ...rest] = passing
+    .slice()
+    .sort(
+      (a, b) =>
+        Number(temporal.get(a)) - Number(temporal.get(b)) ||
+        a.length - b.length ||
+        a.localeCompare(b),
+    );
+  canonical.push(head);
+  shadowed.push(...rest);
+}
+canonical.sort();
+console.log('');
+console.log(`SHIPPABLE  (${canonical.length} of ${results.length} published)`);
+console.log('  Clears the floor and is the only URL rendering its listing.');
+for (const s of canonical.slice(0, 25)) console.log(`      ${s}`);
+if (canonical.length > 25) console.log(`  ... and ${canonical.length - 25} more`);
+if (shadowed.length) {
+  console.log('');
+  console.log(`  ${shadowed.length} page(s) clear the floor and duplicate a shippable page's listing:`);
+  for (const s of shadowed.slice(0, 15)) console.log(`      ${s}`);
+  if (shadowed.length > 15) console.log(`  ... and ${shadowed.length - 15} more`);
+}
 
 console.log(
   `\n[pseo-inventory] ${pass.length} pass, ${thin.length} thin, ${empties.length} empty ` +

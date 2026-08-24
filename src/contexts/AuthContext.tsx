@@ -873,7 +873,30 @@ export function useAuthActions(): AuthActions {
   return context;
 }
 
-/** Combined auth state + actions (backward compatible) */
+/**
+ * Combined auth state + actions (backward compatible).
+ *
+ * THIS RE-RENDERS ON EVERY TOKEN REFRESH, and that is the whole reason the three
+ * hooks above exist. `combined` is memoized on [authState, actions], and
+ * authState carries `session` and `user` - objects Supabase swaps on each
+ * refresh tick - so its identity changes even when nothing a component reads
+ * changed (WEB-PERF-005).
+ *
+ * It is kept, unchanged, so the split needed zero call-site churn: 108 files
+ * still use it and are meant to. But a component in a hot path - anything
+ * rendered on every route, inside a list, or above a large tree - should reach
+ * for the narrower hook instead:
+ *
+ *   useAuthFlags()    isAuthenticated / isAdmin / isLoading / requiresMFA only.
+ *                     Identity changes only when a boolean flips, which is why
+ *                     Header and BottomNav stopped re-rendering on refresh ticks.
+ *   useAuthState()    the full state object, without the action identities.
+ *   useAuthActions()  login / logout / etc. Stable across state changes.
+ *
+ * `useAuth` is the obvious name, so it is what a new component reaches for by
+ * default and it will silently forfeit the benefit. Current adoption: 4 files on
+ * useAuthFlags, 2 on useAuthState, 2 on useAuthActions.
+ */
 export function useAuth(): AuthContextType {
   const context = useContext(AuthContext);
   if (context === undefined) {

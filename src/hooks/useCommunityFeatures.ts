@@ -6,14 +6,26 @@ import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('useCommunityFeatures');
 
+/**
+ * A row of `event_photos`, typed to what that table ACTUALLY has (WEB-QA-022).
+ *
+ * `helpful_votes: number` and `is_approved: boolean` used to be declared here and
+ * neither column exists - both answer 42703 when selected. Nothing read them, so
+ * this was a type that lied rather than a crash, which is the same shape that let
+ * getEventPhotos filter on is_approved for months: it type-checked, it compiled,
+ * and PostgREST turned it into an empty array that looked like an event with no
+ * photos. Removed rather than repaired, because adding a moderation column is
+ * WEB-QA-022's Option-B decision and not a typing question.
+ *
+ * The real columns are id, event_id, user_id, photo_url, caption, likes_count,
+ * is_featured and created_at.
+ */
 interface PhotoUpload {
   id: string;
   photo_url: string;
   caption?: string;
   event_id: string;
   user_id: string;
-  helpful_votes: number;
-  is_approved: boolean;
   created_at: string;
   user_profile?: {
     first_name?: string;

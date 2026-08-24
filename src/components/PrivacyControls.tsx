@@ -73,13 +73,32 @@ export function PrivacyControls() {
       // can only read their own rows, so this is safe without extra filters.
       // We query each table independently so that a missing table or permission
       // error on one doesn't block the whole export.
+      //
+      // THREE OF THESE NAMES WERE WRONG AND THE INDEPENDENT-QUERY DESIGN HID IT
+      // (XPLAT-007). `favorites`, `ratings` and `reviews` do not exist - all
+      // three answer 42P01 - so a user exercising their right of access received
+      // an export with three error strings where their favourites, ratings and
+      // reviews should have been. The real tables are content_favorites,
+      // user_ratings and event_reviews, and all three are in the erasure path's
+      // PURGE_TABLES, so we were deleting that data and declining to show it.
+      // A right of access is not a right of erasure; data we hold is data the
+      // user is entitled to see.
+      //
+      // THIS LIST IS STILL THE WRONG MECHANISM. It is eight names maintained by
+      // hand against a schema that has renamed three of them already, while
+      // supabase/functions/export-user-data walks all 62 entries of
+      // PURGE_TABLES and is covered by user-data-tables.test.ts, which fails
+      // when a table carrying user_id appears in neither list. That function is
+      // built and NOT DEPLOYED (an anon POST answers 404), so this client-side
+      // list is what a user actually gets. Point this at the function once it is
+      // deployed and delete the list - do not grow the list.
       const tables = [
         "profiles",
         "user_event_interactions",
         "user_restaurant_interactions",
-        "favorites",
-        "ratings",
-        "reviews",
+        "content_favorites",
+        "user_ratings",
+        "event_reviews",
         "user_subscriptions",
         "user_analytics",
       ];

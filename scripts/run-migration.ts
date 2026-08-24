@@ -67,36 +67,45 @@ async function runMigration(migrationFile?: string) {
   console.log("\n🎉 All migrations completed successfully!");
 }
 
-// Check if exec_sql function exists, if not create it
+/**
+ * REFUSE EARLY RATHER THAN FAIL AT THE FIRST MIGRATION.
+ *
+ * This script executes migration SQL through `supabase.rpc("exec_sql", ...)`.
+ * That function DOES NOT EXIST in this project's database - probed 2026-08-24,
+ * PGRST202, and absent from all 785 functions in scripts/db-snapshot.json. So
+ * `npm run migrate` (package.json:28) could only ever print a PGRST202 and exit,
+ * and it has been able to do nothing else for as long as the function has been
+ * missing.
+ *
+ * The previous version of this function looked like it handled that: it probed
+ * exec_sql, and on failure held a CREATE OR REPLACE FUNCTION exec_sql(...) string
+ * ready to run. That string was assigned to a local and never used. The fallback
+ * path instead did `.from("dummy").select("*")` - a table that does not exist
+ * either - logged "Setting up migration helper function..." and returned, having
+ * created nothing.
+ *
+ * Migrations are applied with `supabase db push` (CLAUDE.md, PRODUCTION_RUNBOOK).
+ * This matters more than a broken convenience script usually would: 31 migrations
+ * are recorded in supabase_migrations.schema_migrations as applied while having
+ * produced nothing (WEB-QA-017), and a documented command that fails halfway
+ * through a manual workaround is one plausible way to arrive at that state.
+ */
 async function ensureExecSqlFunction() {
-  const createFunctionSQL = `
-    CREATE OR REPLACE FUNCTION exec_sql(query text)
-    RETURNS void
-    LANGUAGE plpgsql
-    SECURITY DEFINER
-    AS $$
-    BEGIN
-      EXECUTE query;
-    END;
-    $$;
-  `;
+  const { error } = await supabase.rpc("exec_sql", { query: "SELECT 1" });
+  if (!error) return;
 
-  try {
-    const { error } = await supabase.rpc("exec_sql", { query: "SELECT 1" });
-    if (error && error.message.includes("function exec_sql")) {
-      // Function doesn't exist, create it
-      console.log("Creating exec_sql function...");
-      const { error: createError } = await supabase
-        .from("dummy")
-        .select("*")
-        .limit(0);
-
-      // Use direct SQL execution if available
-      console.log("Setting up migration helper function...");
-    }
-  } catch (error) {
-    console.log("Setting up migration environment...");
-  }
+  console.error("This script cannot run migrations against this database.");
+  console.error("");
+  console.error(`  rpc("exec_sql") -> ${error.code ?? "error"}: ${error.message}`);
+  console.error("");
+  console.error("exec_sql does not exist here, and nothing in this repo creates it.");
+  console.error("Apply migrations with the Supabase CLI instead:");
+  console.error("");
+  console.error("    supabase db push                    # apply pending migrations");
+  console.error("    supabase migration new <name>       # create a new one");
+  console.error("");
+  console.error("See CLAUDE.md and docs/PRODUCTION_RUNBOOK.md.");
+  process.exit(1);
 }
 
 // CLI interface

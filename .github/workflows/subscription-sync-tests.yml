@@ -78,6 +78,11 @@ jobs:
       # deliberately retained, so erasure coverage cannot drift silently
       # the next time a feature adds a table (WEB-LEGAL-004).
       - run: deno test --allow-read supabase/functions/_tests/user-data-tables.test.ts
+      # The marketing opt-out has to be read from the key the clients write.
+      # The classifier read communication_preferences.marketing/.email; the clients
+      # write email_notifications, so a stored opt-out was invisible to every sender
+      # and nothing typed, compiled or tested said so (WEB-LEGAL-012).
+      - run: deno test --allow-read supabase/functions/_tests/marketing-consent-contract.test.ts
       # XPLAT-007. The right of ACCESS must stay sourced from the same list as
       # the right of erasure - they had drifted by 57 tables, and the export
       # named three that do not exist.

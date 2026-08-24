@@ -25,36 +25,81 @@ const LAYER_CONFIG = [
   { key: 'attraction' as const, label: 'Attractions', Icon: Star },
 ];
 
-function useMapEntities() {
+/**
+ * Map rows for the applied viewport (WEB-FEAT-009 AC1).
+ *
+ * THE CAPS BITE, measured against production 2026-08-24: 314 future events
+ * carry coordinates against a limit of 200, and 465 restaurants against 300.
+ * So a third of each never reached the map, and because none of the three
+ * queries had an .order(), WHICH third was whatever Postgres happened to
+ * return - not the soonest events or the nearest venues, and not necessarily
+ * the same set twice.
+ *
+ * That also made the "N in view" counter wrong. The comment below it claimed
+ * those counters "already report the true total"; they reported the true total
+ * OF THE CAPPED FETCH. Pan into a dense block and the UI would state a
+ * confident number that silently omitted a third of what is there.
+ *
+ * Bounds now reach the SERVER instead of only filtering what was already
+ * downloaded, which is what AC1 asked for and is why the counts can be trusted:
+ * the limit applies to rows in view rather than to the city. The client-side
+ * withinBounds filter stays as the precise pass over what came back.
+ *
+ * Longitude is only constrained when west <= east. Des Moines cannot straddle
+ * the antimeridian, but a wrapped viewport would otherwise produce
+ * `lng >= 179 AND lng <= -179` and silently return nothing.
+ */
+function useMapEntities(bounds: MapBounds | null) {
   return useQuery({
-    queryKey: ['map-entities'],
+    queryKey: ['map-entities', bounds?.north, bounds?.south, bounds?.east, bounds?.west],
     queryFn: async (): Promise<MapEntity[]> => {
       const results: MapEntity[] = [];
 
+      const inBounds = <T extends { gte: (c: string, v: number) => T; lte: (c: string, v: number) => T }>(
+        query: T,
+      ): T => {
+        if (!bounds) return query;
+        let scoped = query.gte('latitude', bounds.south).lte('latitude', bounds.north);
+        if (bounds.west <= bounds.east) {
+          scoped = scoped.gte('longitude', bounds.west).lte('longitude', bounds.east);
+        }
+        return scoped;
+      };
+
       const [eventsRes, restaurantsRes, attractionsRes] = await Promise.all([
-        supabase
-          .from('events')
+        inBounds(
+          supabase
+            .from('events')
           // public.events has no `description` — it carries enhanced_description
           // and original_description. Selecting `description` failed the whole
           // query with 42703, so the map showed no events at all.
           .select('id, title, latitude, longitude, enhanced_description, original_description, category, date')
           .not('latitude', 'is', null)
           .not('longitude', 'is', null)
-          .gte('date', new Date().toISOString())
-          .limit(200),
-        supabase
-          .from('restaurants')
-          .select('id, name, latitude, longitude, description, cuisine, rating')
-          .not('latitude', 'is', null)
-          .not('longitude', 'is', null)
-          .limit(300),
-        supabase
-          .from('attractions')
+            .gte('date', new Date().toISOString())
+            // Soonest first: without an order the 200 kept were arbitrary.
+            .order('date', { ascending: true })
+            .limit(200),
+        ),
+        inBounds(
+          supabase
+            .from('restaurants')
+            .select('id, name, latitude, longitude, description, cuisine, rating')
+            .not('latitude', 'is', null)
+            .not('longitude', 'is', null)
+            .order('name', { ascending: true })
+            .limit(300),
+        ),
+        inBounds(
+          supabase
+            .from('attractions')
           // public.attractions classifies with `type`, not `category`.
-          .select('id, name, latitude, longitude, description, type')
-          .not('latitude', 'is', null)
-          .not('longitude', 'is', null)
-          .limit(200),
+            .select('id, name, latitude, longitude, description, type')
+            .not('latitude', 'is', null)
+            .not('longitude', 'is', null)
+            .order('name', { ascending: true })
+            .limit(200),
+        ),
       ]);
 
       if (eventsRes.data) {
@@ -108,14 +153,15 @@ const detailPath = (e: MapEntity) =>
   `/${e.type === 'event' ? 'events' : e.type === 'restaurant' ? 'restaurants' : 'attractions'}/${e.id}`;
 
 export default function DiscoverMap() {
-  const { data: entities, isLoading } = useMapEntities();
-  const [activeLayers, setActiveLayers] = useState<Set<string>>(
-    new Set(['event', 'restaurant', 'attraction'])
-  );
   // Bounds the map currently shows (updated on moveend) vs. the bounds the list
   // is filtered to ("Search this area" promotes pending -> applied).
   const [pendingBounds, setPendingBounds] = useState<MapBounds | null>(null);
   const [appliedBounds, setAppliedBounds] = useState<MapBounds | null>(null);
+
+  const { data: entities, isLoading } = useMapEntities(appliedBounds);
+  const [activeLayers, setActiveLayers] = useState<Set<string>>(
+    new Set(['event', 'restaurant', 'attraction'])
+  );
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [flyTo, setFlyTo] = useState<{ lat: number; lng: number; key: number } | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -153,8 +199,14 @@ export default function DiscoverMap() {
   // main-thread, all on the route most likely to be opened on a phone.
   //
   // Only the LIST is capped. Markers are untouched, so the map still plots
-  // everything, and the "N in view" counters below already report the true
-  // total — the number a user reads does not change.
+  // everything, and the "N in view" counters below report the true total for
+  // the viewport - the number a user reads does not change.
+  //
+  // That claim used to read "already report the true total" and was not true:
+  // the fetch was capped at 200/300/200 with no bounds and no ordering, so the
+  // counter reported the total of an arbitrary subset. It holds now only
+  // because useMapEntities scopes the query to the applied bounds, which is
+  // what makes the limits generous rather than binding (WEB-FEAT-009 AC1).
   const VISIBLE_RESULTS = 60;
   const visibleResults = inView.slice(0, VISIBLE_RESULTS);
   const hiddenResults = inView.length - visibleResults.length;

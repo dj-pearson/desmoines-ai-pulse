@@ -1,0 +1,9 @@
+{
+  "_comment": "XPLAT-013. Tables the mobile clients query that do not exist in production. Each needs its own decision - do not add to this list to make CI pass.",
+  "tables": [
+    "trip_plan_items",
+    "trip_plans",
+    "user_article_interactions",
+    "user_attraction_interactions"
+  ]
+}

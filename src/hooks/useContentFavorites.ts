@@ -20,6 +20,24 @@ export type FavoriteContentType =
   | "hotel"
   | "playground";
 
+/**
+ * The query key FavoritesView uses for the hydrated list of one content type.
+ *
+ * FavoritesView reads ["favorited-restaurants", userId] and friends, while the
+ * mutations below own ["content-favorites", type, userId]. Those are different
+ * caches over the same fact, so invalidating only the second left the favorites
+ * LIST showing an item the user had just removed until it went stale on its own
+ * (WEB-PERF-006 AC4). Both are now invalidated together.
+ *
+ * Exported and used on BOTH sides on purpose. The mapping is a plural "s" today
+ * and deriving it inline in two files is how they drift - the next content type
+ * with an irregular plural would break the link silently, and a stale favorites
+ * list looks like a failed unfavourite rather than a cache bug.
+ */
+export function favoritedListQueryKey(contentType: FavoriteContentType): string {
+  return `favorited-${contentType}s`;
+}
+
 export function useContentFavorites(contentType: FavoriteContentType) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -74,7 +92,10 @@ export function useContentFavorites(contentType: FavoriteContentType) {
         variant: "destructive",
       });
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey }),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey });
+      queryClient.invalidateQueries({ queryKey: [favoritedListQueryKey(contentType)] });
+    },
   });
 
   const removeMutation = useMutation({
@@ -106,7 +127,10 @@ export function useContentFavorites(contentType: FavoriteContentType) {
         variant: "destructive",
       });
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey }),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey });
+      queryClient.invalidateQueries({ queryKey: [favoritedListQueryKey(contentType)] });
+    },
   });
 
   const isFavorited = (contentId: string) => favoritedIds.includes(contentId);

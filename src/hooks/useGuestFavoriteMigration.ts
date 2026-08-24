@@ -1,6 +1,5 @@
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -94,6 +93,16 @@ export function useGuestFavoriteMigration() {
         );
 
         // Dashboard/welcome acknowledgement.
+        //
+        // IMPORTED HERE RATHER THAN AT MODULE SCOPE (WEB-PERF-020). This hook
+        // is mounted at the app root by GuestFavoriteMigrator, and a static
+        // module-scope import of sonner made it the ONE path from App.tsx
+        // into sonner - which put the whole sonner runtime back into the entry
+        // chunk that App.tsx:407 says it is not in. Every return above this
+        // point fires for the ordinary visitor: no user, already migrated, or
+        // nothing pending. Only a signed-in user with guest favourites reaches
+        // the toast, so only they pay for it.
+        const { toast } = await import("sonner");
         toast.success(
           `We saved your ${pending.length} favorite${
             pending.length === 1 ? "" : "s"

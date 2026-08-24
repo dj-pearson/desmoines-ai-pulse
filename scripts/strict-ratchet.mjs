@@ -172,10 +172,33 @@ if (regressions.length) {
 }
 
 if (currentTotal < baseline.total) {
-  console.log(
-    `\n✅ Improved by ${baseline.total - currentTotal}. Re-baseline to lock it in:\n` +
-      `  ${REBASELINE_CMD}`
-  );
+  // THE WARNING BELONGS IN THE OUTPUT, NOT ONLY IN THE HEADER. The `app`
+  // baseline is platform-dependent - TypeScript resolves module paths
+  // case-insensitively on Windows and macOS, so an import whose case does not
+  // match the file on disk compiles there and fails on Linux, taking every file
+  // downstream with it. The same commit reports 0 here and 375 in CI.
+  //
+  // So on a case-insensitive filesystem this check ALWAYS reports a large
+  // improvement, and printing "Re-baseline to lock it in" under it is an
+  // instruction to write a baseline CI can never meet. That is not
+  // hypothetical: it was done on 2026-08-23 and had to be reverted. The header
+  // said not to; the header is not what anyone reads at the moment they are
+  // being told to run a command.
+  const caseInsensitive = process.platform === 'win32' || process.platform === 'darwin';
+  if (projectName === 'app' && caseInsensitive) {
+    console.log(
+      `\n⚠️  Reports ${baseline.total - currentTotal} fewer than baseline, and on ${process.platform} that number is not real.\n` +
+        '   tsc matches import casing loosely here and strictly on Linux, so this count is\n' +
+        '   an undercount, not an improvement. DO NOT run the re-baseline command.\n' +
+        `   To re-baseline: take the per-file counts from a CI run of "${LABEL}", or run\n` +
+        '   this inside WSL or Docker. See the header of this script.'
+    );
+  } else {
+    console.log(
+      `\n✅ Improved by ${baseline.total - currentTotal}. Re-baseline to lock it in:\n` +
+        `  ${REBASELINE_CMD}`
+    );
+  }
 } else {
   console.log(`\n✅ ${LABEL}: no regressions.`);
 }

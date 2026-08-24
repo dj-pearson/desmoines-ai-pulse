@@ -17,6 +17,14 @@
  * already emits thousands and would be read by nobody. A baseline fails only on
  * NEW ones, which is what the AC actually asks for.
  *
+ * THE BASELINE IS PER FILE, NOT PER LINE, and that is a correction. It used to
+ * hold `path:line` strings, so any edit above a recorded site re-keyed it and
+ * the checker reported one fix and one new violation for a change that touched
+ * neither. That is not theoretical: on origin/main it produced 124 "fixed" and
+ * 25 "new", all 25 a few lines from a baselined entry in the same file, and the
+ * check had been red for a while with nobody watching - it ran only in
+ * rls-config-audit.yml, on a nightly cron. It now runs in pr-checks.yml too.
+ *
  * WHY NOT AN ESLint RULE, which the AC suggests first: eslint only covers src/,
  * and AC1 says the 335 EDGE-FUNCTION sites matter most, because server-side
  * there is no UI and no browser console - a swallowed error there produces no
@@ -107,8 +115,15 @@ console.log(
 );
 
 if (process.argv.includes('--write')) {
-  writeFileSync(BASELINE, `${JSON.stringify({ sites: found }, null, 2)}\n`);
-  console.log(`Wrote ${found.length} entries to supabase-error-baseline.json.`);
+  const counts = {};
+  for (const site of found) {
+    const file = site.slice(0, site.lastIndexOf(':'));
+    counts[file] = (counts[file] ?? 0) + 1;
+  }
+  writeFileSync(BASELINE, `${JSON.stringify({ files: counts }, null, 2)}\n`);
+  console.log(
+    `Wrote ${Object.keys(counts).length} file(s), ${found.length} site(s) to supabase-error-baseline.json.`
+  );
   process.exit(0);
 }
 
@@ -117,17 +132,62 @@ if (!existsSync(BASELINE)) {
   process.exit(1);
 }
 
-const baseline = new Set(JSON.parse(readFileSync(BASELINE, 'utf8')).sites ?? []);
-const fresh = found.filter((site) => !baseline.has(site));
-const fixed = [...baseline].filter((site) => !found.includes(site));
-
-if (fixed.length > 0) {
-  console.log(`\n${fixed.length} site(s) no longer discard the error. Re-baseline to lock it in.`);
+// KEYED BY FILE, NOT BY FILE:LINE, and that is a correction rather than a
+// preference. The baseline used to hold 337 `path:line` strings, so ANY edit
+// above a recorded site re-keyed it: the site at :175 became :178 and the
+// checker reported one fix and one new violation for a change that touched
+// neither. On origin/main today that produced 124 "fixed" and 25 "new", every
+// one of the 25 sitting a few lines from a baselined entry in the same file.
+// The check was therefore red, and had been for a while, and nobody saw it -
+// it only ran in rls-config-audit.yml, on a nightly cron.
+//
+// check-bundle-budget.mjs's header already makes this argument for chunk names:
+// "rollup renames and re-splits shared chunks between builds, so a per-chunk
+// baseline churns constantly and reports regressions that are only chunk-
+// boundary movement". Line numbers churn the same way and for the same reason.
+//
+// THE COST, stated because it is real: a per-file count cannot tell that one
+// site was fixed and another added in the same file on the same commit. That
+// trade buys a check that is green when nothing got worse, which is the only
+// kind anyone reads. The current line numbers are printed for any file that
+// regresses, so a reviewer still gets the location.
+const byFile = new Map();
+for (const site of found) {
+  const [file, line] = [site.slice(0, site.lastIndexOf(':')), site.slice(site.lastIndexOf(':') + 1)];
+  if (!byFile.has(file)) byFile.set(file, []);
+  byFile.get(file).push(Number(line));
 }
 
-if (fresh.length > 0) {
-  console.error(`\nX ${fresh.length} NEW site(s) discarding a Supabase error:`);
-  for (const site of fresh) console.error(`  ${site}`);
+const rawBaseline = JSON.parse(readFileSync(BASELINE, 'utf8'));
+// Accept the old `sites: ["path:line"]` shape so an un-migrated checkout still
+// runs; collapse it to per-file counts on read.
+const baseFiles = rawBaseline.files ?? (rawBaseline.sites ?? []).reduce((acc, s) => {
+  const f = s.slice(0, s.lastIndexOf(':'));
+  acc[f] = (acc[f] ?? 0) + 1;
+  return acc;
+}, {});
+
+const regressions = [];
+for (const [file, lines] of byFile) {
+  const before = baseFiles[file] ?? 0;
+  if (lines.length > before) regressions.push({ file, before, after: lines.length, lines });
+}
+const improvements = [];
+for (const [file, before] of Object.entries(baseFiles)) {
+  const after = byFile.get(file)?.length ?? 0;
+  if (after < before) improvements.push({ file, before, after });
+}
+
+if (improvements.length > 0) {
+  const total = improvements.reduce((n, i) => n + (i.before - i.after), 0);
+  console.log(`\n${total} site(s) across ${improvements.length} file(s) no longer discard the error. Re-baseline to lock it in.`);
+}
+
+if (regressions.length > 0) {
+  console.error(`\nX ${regressions.length} file(s) gained a Supabase call that discards the error:`);
+  for (const r of regressions) {
+    console.error(`  ${r.file}: ${r.before} -> ${r.after}  (lines ${r.lines.join(', ')})`);
+  }
   console.error(
     '\n  `{ data }` without `error` cannot tell a missing table from an empty one -\n' +
       '  PostgREST returns data:null+error for 42P01 and data:[]+null for no rows,\n' +
@@ -137,4 +197,4 @@ if (fresh.length > 0) {
   process.exit(1);
 }
 
-console.log('\nOK No new sites discarding a Supabase error.');
+console.log('\nOK No file gained a Supabase call that discards the error.');

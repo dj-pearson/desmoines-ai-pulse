@@ -107,6 +107,18 @@ final class SpeechDictationService {
             }
         } catch {
             status = .error(error.localizedDescription)
+            // The session was already activated above, so a throw from
+            // audioEngine.start() - route contention, an interruption, another
+            // app holding the mic - would otherwise leave .record + .duckOthers
+            // engaged with a tap still installed: the exact symptom this story
+            // is about, on the one path stop() was never reached from
+            // (IOS-AUDIT-PERF-016 AC3).
+            //
+            // Safe to call here: stop() only resets status when it is
+            // .listening, so the error set on the line above survives, and both
+            // removing an uninstalled tap and stopping an unstarted engine are
+            // no-ops.
+            stop()
         }
     }
 
