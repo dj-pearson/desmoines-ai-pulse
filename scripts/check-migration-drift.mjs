@@ -13,6 +13,15 @@
  * at all (a `timestamp` column name unquoted; TG_OP inside a CREATE TRIGGER WHEN
  * clause), which proves the rows were written without the files executing.
  *
+ * IT CHECKS THREE KINDS OF OBJECT, and the third was added because the first two
+ * missed a whole shape: a migration that only ever runs ALTER TABLE ... ADD
+ * COLUMN creates no relation and no function, so a checker looking for those
+ * finds nothing to report and calls the migration clean. Two such migrations
+ * were drifted and invisible until columns were checked
+ * (20251220200000_add_user_behavior_tracking,
+ * 20251220200001_enhance_recommendation_metadata). That is the WEB-BE-034 defect
+ * exactly: a column several call sites use, that is not there.
+ *
  * OFFLINE. It reads scripts/db-snapshot.json, so CI needs no credentials.
  * Refresh that file when production schema changes:
  *
@@ -25,7 +34,9 @@
  *                       from pg_class c join pg_namespace n on n.oid=c.relnamespace
  *                      where n.nspname='public' and c.relkind in ('r','v','m','p','f')),
  *       'functions', (select coalesce(json_agg(distinct p.proname),'[]'::json)
- *                       from pg_proc p where p.pronamespace='public'::regnamespace))"
+ *                       from pg_proc p where p.pronamespace='public'::regnamespace),
+ *       'columns',   (select coalesce(json_agg(distinct table_name||'.'||column_name),'[]'::json)
+ *                       from information_schema.columns where table_schema='public'))"
  *
  * A stale snapshot under-reports, which is why capturedAt is printed every run.
  *
@@ -54,6 +65,7 @@ const snapshot = JSON.parse(readFileSync(SNAPSHOT_PATH, 'utf8'));
 const ledger = new Set(snapshot.ledger);
 const relations = new Set(snapshot.relations);
 const functions = new Set(snapshot.functions);
+const columns = new Set(snapshot.columns ?? []);
 const baseline = existsSync(BASELINE_PATH)
   ? new Set(JSON.parse(readFileSync(BASELINE_PATH, 'utf8')).migrations)
   : new Set();
@@ -93,6 +105,42 @@ const removedLaterBy = (name, afterFile) => {
   return files.some((f) => f > afterFile && re.test(sources.get(f)));
 };
 
+// ADD COLUMN drift is a separate question from CREATE drift and needs asking
+// separately. Two of the migrations below create no table and no function at
+// all - they only add columns to tables that already exist - so a check that
+// looks for missing relations and missing functions cannot see them, and did
+// not. A ledgered migration whose ALTER TABLE never ran leaves exactly the
+// defect WEB-BE-034 was: a column several call sites use, that is not there.
+//
+// Only columns on a table that DOES exist are considered. Where the table is
+// missing too, the table is the finding and repeating every one of its columns
+// would bury it.
+const columnsAddedBy = (sql) => {
+  const added = [];
+  const alter = /ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?(?:public\s*\.\s*)?"?([a-zA-Z_][a-zA-Z0-9_]*)"?([\s\S]*?);/gi;
+  let m;
+  while ((m = alter.exec(sql)) !== null) {
+    const table = m[1].toLowerCase();
+    if (NOT_A_NAME.has(table)) continue;
+    const add = /ADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?"?([a-zA-Z_][a-zA-Z0-9_]*)"?/gi;
+    let c;
+    while ((c = add.exec(m[2])) !== null) {
+      const col = c[1].toLowerCase();
+      if (!NOT_A_NAME.has(col)) added.push([table, col]);
+    }
+  }
+  return added;
+};
+
+const columnRemovedLaterBy = (table, column, afterFile) => {
+  const re = new RegExp(
+    String.raw`ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?(?:public\s*\.\s*)?"?${table}"?[\s\S]*?\bDROP\s+COLUMN\s+(?:IF\s+EXISTS\s+)?"?${column}"?\b` +
+      String.raw`|\bRENAME\s+COLUMN\s+"?${column}"?\b`,
+    'i'
+  );
+  return files.some((f) => f > afterFile && re.test(sources.get(f)));
+};
+
 const drifted = [];
 for (const file of files) {
   const version = file.split('_')[0];
@@ -102,8 +150,11 @@ for (const file of files) {
     .filter((t) => !relations.has(t) && !removedLaterBy(t, file));
   const missingFunctions = [...collect(sql, new RegExp(FUNC_RE.source, 'gi'))]
     .filter((f) => !functions.has(f) && !removedLaterBy(f, file));
-  if (missingTables.length || missingFunctions.length) {
-    drifted.push({ file, version, missingTables, missingFunctions, known: baseline.has(file) });
+  const missingColumns = columnsAddedBy(sql)
+    .filter(([t, c]) => relations.has(t) && !columns.has(`${t}.${c}`) && !columnRemovedLaterBy(t, c, file))
+    .map(([t, c]) => `${t}.${c}`);
+  if (missingTables.length || missingFunctions.length || missingColumns.length) {
+    drifted.push({ file, version, missingTables, missingFunctions, missingColumns, known: baseline.has(file) });
   }
 }
 
@@ -119,6 +170,7 @@ const report = (d) => {
   console.log(`  ${d.file}`);
   if (d.missingTables.length) console.log(`    tables never created:    ${d.missingTables.join(', ')}`);
   if (d.missingFunctions.length) console.log(`    functions never created: ${d.missingFunctions.join(', ')}`);
+  if (d.missingColumns?.length) console.log(`    columns never added:     ${d.missingColumns.join(", ")}`);
 };
 
 if (fresh.length) {

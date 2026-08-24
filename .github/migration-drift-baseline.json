@@ -27,6 +27,8 @@
     "20251203000004_add_location_tracking.sql",
     "20251204000000_security_features.sql",
     "20251209000000_crm_infrastructure.sql",
+    "20251220200000_add_user_behavior_tracking.sql",
+    "20251220200001_enhance_recommendation_metadata.sql",
     "20251225000000_stripe_payment_enhancements.sql",
     "20260110000000_add_payments_and_invoices.sql",
     "20260110000001_add_usage_tracking.sql",
