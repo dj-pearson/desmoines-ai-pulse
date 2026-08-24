@@ -20,8 +20,15 @@
  * iOS extrapolated the naming pattern of user_event_interactions and
  * user_restaurant_interactions, which do exist, while web solved the same problem
  * with a single generic content_favorites table (useContentFavorites.ts:10-11,
- * WEB-UX-010). So attraction and article favourites silently fail on iOS, and
- * always have.
+ * WEB-UX-010).
+ *
+ * WHAT THAT COSTS IS SYNC, NOT DATA, and this line is a correction: it first read
+ * "attraction and article favourites silently fail on iOS", which is wrong.
+ * FavoritesService has a deliberate UserDefaults fallback on every path - :347
+ * documents it as "Table may not exist yet - fall back to local storage", and
+ * :370, :404, :423, :483 and :503 implement it. So the favourite persists on the
+ * handset that made it and nowhere else. Read the file, not the table list.
+ * XPLAT-013 owns that decision.
  *
  * WHY THIS CHECK IS SAFE TO GATE, unlike some others in this repo: it compares
  * source text to a committed snapshot. No live data, no capture timing, no
