@@ -4515,7 +4515,7 @@
       ],
       "priority": 70,
       "passes": false,
-      "notes": ""
+      "notes": "FIRST LOOK AT THIS BLOCK 2026-08-24 (claude/prd-p1-loop-3). All nine open AOS stories - PROSPECT-007/008 and\nMANAGE-001 through 007 - carry NO NOTES AT ALL, so nothing had ever been checked against the code. Surveyed\nrather than assumed, and the result is mixed enough that \"unbuilt feature\" is the wrong default for the block.\n\nDO NOT MAP THESE BY NAME. supabase/functions/agent-ops-digest looks like this story and is NOT it: its own\nheader says AOS-CORE-010, and what it sends is an OPS digest - tier-1 auto-resolutions in 24h, open task counts\nby tier, overdue tasks, agent failures. That is agent-fleet health, not the business KPI roll-up MANAGE-001\ndescribes. A name match would have closed the wrong story.\n\nWHAT EXISTS, PROBED THROUGH THE ANON HTTP PATH:\n    moderate-content        401  DEPLOYED. Scores toxicity/spam, writes one content_moderation row per item\n                                 with verdict + admin override, and the per-table moderation_status column is\n                                 the visibility gate. Called from ModerationQueuePanel, JobHealthPanel,\n                                 useRatings and agent-control, and swept by cron moderate-content-sweep.\n    log-content-metrics     200  DEPLOYED, deliberately unauthenticated to accept page metrics from visitors.\n    agent-ops-digest        404  UNDEPLOYED, cron ops-digest-daily fires 13:00 daily into nothing.\n    agent-edge-metrics      404  UNDEPLOYED, cron edge-metrics-monitor fires every 6h into nothing.\n    agent-weekly-digest     404  UNDEPLOYED, cron weekly-digest-personal fires weekly into nothing.\n\nSO THE BLOCK SPLITS THREE WAYS, and each way implies different work:\n  1. MANAGE-003 (unified moderation orchestration) is not a green field. A working, deployed, called,\n     cron-swept moderation seam already exists. The story is orchestration ON TOP of it, which is a much\n     smaller thing than building moderation.\n  2. MANAGE-004 (metrics warehouse) has a live ingest point in log-content-metrics and a dead reader in\n     agent-edge-metrics. Half the pipe exists.\n  3. MANAGE-001, -002, -005, -006, -007 and PROSPECT-007/008 had no function I could match to them at all,\n     which is the honest answer for those seven: nothing found, rather than nothing there.\n\nAND THREE MORE CRON-INTO-404s, which is WEB-OPS-007's population growing rather than a new problem. Every one\nof these fires on schedule against a function that returns 404, and has since it was created.\n\nWHAT I DID NOT DO: read the seven stories' acceptance criteria against the schema. This is a survey of what\nCODE exists, not a judgement on whether each story is worth doing. The point is only that \"no notes\" was\nhiding a moderation subsystem that is already live."
     },
     {
       "id": "AOS-MANAGE-002",
@@ -4545,7 +4545,7 @@
       ],
       "priority": 72,
       "passes": false,
-      "notes": ""
+      "notes": "NOT A GREEN FIELD, checked 2026-08-24 (claude/prd-p1-loop-3). supabase/functions/moderate-content is\nDEPLOYED (anon POST 401), scores toxicity and spam, writes a content_moderation row per item with verdict and\nadmin override, and gates visibility through each table moderation_status column. It is called from\nModerationQueuePanel.tsx, JobHealthPanel.tsx, useRatings.ts and agent-control, and swept by cron\nmoderate-content-sweep. So this story is orchestration on top of a working seam, not building moderation. Full\nsurvey of the AOS block in AOS-MANAGE-001 notes."
     },
     {
       "id": "AOS-MANAGE-004",
@@ -4560,7 +4560,7 @@
       ],
       "priority": 73,
       "passes": false,
-      "notes": ""
+      "notes": "HALF THE PIPE EXISTS, checked 2026-08-24 (claude/prd-p1-loop-3). log-content-metrics is DEPLOYED (200,\ndeliberately unauthenticated so visitors can post page metrics); agent-edge-metrics is UNDEPLOYED (404) while\nits cron edge-metrics-monitor fires every 6 hours into nothing. So there is a live ingest point and a dead\nreader. Full survey of the AOS block in AOS-MANAGE-001 notes."
     },
     {
       "id": "AOS-MANAGE-005",
