@@ -107,7 +107,6 @@ async function ensureExecSqlFunction() {
   console.error("See CLAUDE.md and docs/PRODUCTION_RUNBOOK.md.");
   process.exit(1);
 }
-}
 
 // CLI interface
 async function main() {
