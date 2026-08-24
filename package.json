@@ -81,7 +81,9 @@
     "check-pseo-inventory": "tsx scripts/check-pseo-inventory.ts",
     "check-icon-sprite": "node scripts/generate-icon-sprite.mjs --check",
     "check-schema-dupes": "node scripts/check-duplicate-schema.mjs",
-    "audit:seo-head": "node scripts/audit-prerendered-seo.mjs"
+    "audit:seo-head": "node scripts/audit-prerendered-seo.mjs",
+    "check-dom-budget": "node scripts/check-dom-budget.mjs",
+    "check-dom-budget:update": "node scripts/check-dom-budget.mjs --update"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

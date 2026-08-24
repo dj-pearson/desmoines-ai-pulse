@@ -152,6 +152,16 @@ jobs:
       - name: Critical-path JS budget
         run: node scripts/check-bundle-budget.mjs
 
+      # WEB-PERF-023 AC1. The prerenderer has a "budget" and it is a TIME budget,
+      # so nothing in this repo has ever counted an element - the numbers in that
+      # story were measured by hand once and went stale immediately. This counts
+      # #root descendants with jsdom, which is Lighthouse's own definition, and
+      # ratchets per route with a wide tolerance: these pages render live data,
+      # so a tight gate on a data-driven number is a flake, and a flaky gate gets
+      # switched off (see WEB-CI-020, WEB-CI-021).
+      - name: Prerendered DOM size
+        run: node scripts/check-dom-budget.mjs
+
       # WEB-LEGAL-009 AC2. Also runs after the build, because Vite rewrites
       # index.html and the CSP has to match what is SERVED, not the source.
       # Guards the pinning WEB-LEGAL-001 depends on: editing the inline consent
