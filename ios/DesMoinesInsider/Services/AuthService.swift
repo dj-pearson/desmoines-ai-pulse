@@ -246,14 +246,40 @@ final class AuthService {
         return hash.compactMap { String(format: "%02x", $0) }.joined()
     }
 
-    /// Generates a random 32-byte nonce string (URL-safe base64).
+    /// Generates a random 32-character nonce drawn uniformly from a 65-character
+    /// URL-safe alphabet.
+    ///
+    /// REJECTION SAMPLING, NOT `% charset.count`. The alphabet holds 65
+    /// characters and 256 is not a multiple of 65, so folding a uniform byte
+    /// with `%` gives the first 61 characters a 4/256 chance and the last four -
+    /// 'z', '-', '.', '_' - only 3/256, a 1.33x skew. Apple's own sample avoids
+    /// this by DISCARDING bytes above the largest usable multiple rather than
+    /// folding them; the version that fixed the missing 'W' folded them instead.
+    /// Same species of defect as the one this routine is named for
+    /// (IOS-AUDIT-SEC-015): the security cost is negligible because the result
+    /// is SHA-256 hashed and still carries ~190 bits, but a nonce generator that
+    /// is not uniform is wrong in the way that invites downstream assumptions.
+    ///
+    /// The docstring here previously said "(URL-safe base64)". It is not base64:
+    /// base64url is 64 characters and has no '.', while this alphabet has 65.
     private func randomNonceString(length: Int = 32) -> String {
-        var randomBytes = [UInt8](repeating: 0, count: length)
-        let status = SecRandomCopyBytes(kSecRandomDefault, randomBytes.count, &randomBytes)
-        precondition(status == errSecSuccess, "Failed to generate random bytes")
-        // Full A-Z (the previous literal skipped 'W' between V and X) — IOS-AUDIT-SEC-015.
+        // Full A-Z (an earlier literal skipped 'W' between V and X) - IOS-AUDIT-SEC-015.
         let charset: [Character] = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-._")
-        return String(randomBytes.map { charset[Int($0) % charset.count] })
+        // Largest byte that keeps the mapping uniform: (256 / 65) * 65 - 1 = 194.
+        let maxUnbiased = UInt8((256 / charset.count) * charset.count - 1)
+
+        var result: [Character] = []
+        result.reserveCapacity(length)
+        while result.count < length {
+            var randomBytes = [UInt8](repeating: 0, count: length)
+            let status = SecRandomCopyBytes(kSecRandomDefault, randomBytes.count, &randomBytes)
+            precondition(status == errSecSuccess, "Failed to generate random bytes")
+            for byte in randomBytes where byte <= maxUnbiased {
+                if result.count == length { break }
+                result.append(charset[Int(byte) % charset.count])
+            }
+        }
+        return String(result)
     }
 
     // MARK: - Apple Sign-In
