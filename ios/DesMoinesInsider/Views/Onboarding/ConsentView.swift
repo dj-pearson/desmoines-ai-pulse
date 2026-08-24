@@ -78,9 +78,20 @@ struct ConsentView: View {
                         // declining persists a minimal-consent state and dismisses.
                         HStack(spacing: 12) {
                             Button {
-                                consent.locationConsent = false
-                                consent.emailConsent = false
-                                consent.analyticsConsent = false
+                                // ConsentService.revokeAll() rather than three
+                                // inline assignments: it does exactly this and is
+                                // the only version with tests, but until now its
+                                // only callers were those tests. Two copies of
+                                // "clear every consent" meant a fourth consent
+                                // type would have to be remembered in both places,
+                                // and the test suite would keep passing while the
+                                // Decline button quietly missed it.
+                                //
+                                // revokeAll deliberately leaves hasCompletedConsent
+                                // alone so revoking in Settings does not re-prompt
+                                // (ConsentServiceTests:84); saveAndComplete below
+                                // sets it, which is what the inline version did.
+                                consent.revokeAll()
                                 consent.saveAndComplete()
                                 onComplete()
                             } label: {
