@@ -70,6 +70,21 @@ struct RightNowRibbon: View {
         isLoading = true
         defer { isLoading = false }
 
+        // The in-app location toggle gates the THIRD-PARTY call, on top of the OS
+        // permission checked below (IOS-AUDIT-SEC-010 AC3). This is the only
+        // request that leaves coordinates with a host that is not ours -
+        // api.open-meteo.com - so a user who turned the toggle off in Settings
+        // should stop it even while iOS permission remains granted.
+        //
+        // `hasCompletedConsent` is load-bearing, not belt-and-braces.
+        // UserDefaults.bool returns false for "never asked" exactly as it does
+        // for "declined", so gating on locationConsent alone would silently kill
+        // the ribbon for every user who installed before the consent flow existed
+        // or has not reached it yet. Only an explicit decline blocks.
+        if ConsentService.shared.hasCompletedConsent && !ConsentService.shared.locationConsent {
+            return
+        }
+
         // Bail silently if the user denied location — we don't want a broken
         // ribbon that says "78° in cupertino" when the user is in Iowa.
         guard location.authorizationStatus == .authorizedWhenInUse
