@@ -77,11 +77,47 @@ function generateSrcSet(src: string, widths: number[]): string {
 }
 
 /**
- * Can this URL be server-side resized? Only Supabase Storage public objects can
- * (WEB-PERF-004). Everything else has to serve at its original size.
+ * Is this a URL on our OWN /media/ route (functions/media/[[path]].ts)?
+ *
+ * WHY THE ORIGIN CHECK IS NOT OPTIONAL. `/media/` is an ordinary path segment
+ * and plenty of sites use it, so matching the path alone would call an external
+ * `https://example.com/media/photo.jpg` transformable. That does not produce a
+ * broken image — it produces a srcset of seven identical URLs under seven
+ * different `w` descriptors, which the comment on generateTransformedSrcSet
+ * below explains is WORSE than emitting none: the browser believes it has a
+ * choice of sizes and confidently downloads the full-size original.
+ *
+ * A relative `/media/...` is unambiguously ours. An absolute one has to match
+ * the origin we are being served from, which is exactly what MEDIA_CDN_BASE is
+ * set to — so this needs no new env var and cannot drift away from one.
+ */
+function isOwnMediaRoute(src: string): boolean {
+  if (src.startsWith("/media/")) return true;
+  if (typeof window === "undefined") return false;
+  try {
+    const url = new URL(src, window.location.origin);
+    return url.origin === window.location.origin && url.pathname.startsWith("/media/");
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Can this URL be server-side resized? Two kinds can (WEB-PERF-004): a Supabase
+ * Storage public object, and our own /media/ route, which forwards width,
+ * quality and format on to Supabase's render endpoint for exactly this reason.
+ * Everything else has to serve at its original size.
+ *
+ * THE SECOND CASE IS NOT COSMETIC. repoint-media-urls.ts moved 674 rows onto
+ * /media/ URLs, and until this function recognised them every one of those
+ * images served its full-size original again — the same bytes WEB-PERF-004 was
+ * written to stop, reached by a different road. The route half and this half
+ * only work together: teaching the route to resize while this still returns
+ * false changes nothing, because nothing would ever ask it to.
  */
 export function canTransform(src: string): boolean {
-  return typeof src === "string" && SUPABASE_STORAGE_PATTERN.test(src);
+  if (typeof src !== "string") return false;
+  return SUPABASE_STORAGE_PATTERN.test(src) || isOwnMediaRoute(src);
 }
 
 /**
@@ -114,11 +150,20 @@ export function getTransformedUrl(
   if (!canTransform(src)) return src;
 
   const { width, format, quality } = options;
-  const url = new URL(src.replace(STORAGE_OBJECT_PATH, STORAGE_RENDER_PATH));
+
+  // Our own /media/ route needs no path surgery: it decides between
+  // /object/public/ and /render/image/public/ from these very params, so all it
+  // wants is the params. Doing the Supabase replace here as well would be a
+  // no-op on the string and a lie in the reading.
+  const ownRoute = isOwnMediaRoute(src);
+  const base = ownRoute ? src : src.replace(STORAGE_OBJECT_PATH, STORAGE_RENDER_PATH);
+
+  // A relative src has no origin to parse, and only our own route produces one.
+  const url = new URL(base, typeof window === "undefined" ? "http://local" : window.location.origin);
   if (width) url.searchParams.set("width", String(width));
   if (format) url.searchParams.set("format", format);
   if (quality) url.searchParams.set("quality", String(quality));
-  return url.toString();
+  return src.startsWith("/") ? `${url.pathname}${url.search}` : url.toString();
 }
 
 /**

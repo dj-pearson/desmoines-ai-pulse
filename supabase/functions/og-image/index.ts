@@ -27,10 +27,32 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resvg, initWasm } from "https://esm.sh/@resvg/resvg-wasm@2.6.2";
+// resvg only emits PNG, which is the wrong container for a card that is mostly
+// photograph. imagescript is pure TS (no wasm to initialise) and only has to
+// re-encode an already-rasterised 1200x630 buffer, so it is cheap here.
+import { Image } from "https://deno.land/x/imagescript@1.2.17/mod.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
 
 const SITE_URL = Deno.env.get("SITE_URL") || Deno.env.get("VITE_SITE_URL") || "https://desmoinesinsider.com";
 const DEFAULT_OG = `${SITE_URL}/og-image.png`;
+/**
+ * JPEG quality for the rendered card.
+ *
+ * These cards are a photo behind a scrim behind text, so PNG stores them
+ * losslessly and enormously. Measured on a real card, 2026-08-27:
+ *
+ *   PNG (what shipped)   749,160 B
+ *   JPEG q90              91,757 B   -88%, 26 ms to encode
+ *   JPEG q82              67,520 B   -91%
+ *
+ * That mattered because og:image points at supabase.co, which is outside the
+ * Cloudflare zone: CF-Cache-Status is DYNAMIC, so every crawler re-scrape paid
+ * full Supabase egress. At the observed 501 calls/day the PNG was ~11 GB/month
+ * against a 5 GB free-plan cap. q90 brings it to ~1.4 GB and is visually
+ * indistinguishable at card size.
+ */
+const JPEG_QUALITY = 90;
+
 const WIDTH = 1200;
 const HEIGHT = 630;
 // A regular TTF (resvg needs TTF/OTF, not woff2). Inter via the Vercel demo CDN.
@@ -243,16 +265,27 @@ serve(async (req) => {
     });
     const png = resvg.render().asPng();
 
+    // Fall back to the PNG rather than the default card if re-encoding fails:
+    // an oversized correct card beats a generic one.
+    let body: Uint8Array = png;
+    let contentType = "image/png";
+    try {
+      body = await (await Image.decode(png)).encodeJPEG(JPEG_QUALITY);
+      contentType = "image/jpeg";
+    } catch (e) {
+      console.error("[og-image] jpeg re-encode failed, serving png:", e);
+    }
+
     // Past events are content-frozen → cache for a year and mark immutable so CDNs
     // and clients never re-fetch; everything else refreshes hourly.
     const cacheControl = card.immutable
       ? "public, max-age=31536000, s-maxage=31536000, immutable"
       : "public, max-age=3600, s-maxage=3600";
 
-    return new Response(png, {
+    return new Response(body, {
       status: 200,
       headers: {
-        "Content-Type": "image/png",
+        "Content-Type": contentType,
         "Cache-Control": cacheControl,
       },
     });

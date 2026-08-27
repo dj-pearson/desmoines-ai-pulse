@@ -185,6 +185,22 @@ function escapeHtml(s: string): string {
  * covers the soft-404 surface, where an unknown slug will keep falling through
  * here even after the flag is on.
  */
+/**
+ * True when this HTML is the prerendered homepage being served as the SPA
+ * fallback for some other URL.
+ *
+ * The homepage declares itself canonical, so a root canonical on a non-root
+ * path is exactly the fallback case and nothing else. Matching on the tag
+ * rather than on the status keeps this correct under Pages' SPA mode, which
+ * answers 200, and makes it inert for genuinely prerendered pages.
+ */
+export function isHomepageShell(html: string, origin: string): boolean {
+  const canonical = html.match(/<link[^>]+rel=["']canonical["'][^>]*>/i)?.[0];
+  if (!canonical) return false;
+  const href = canonical.match(/href=["']([^"']+)["']/i)?.[1];
+  return href === `${origin}/` || href === origin;
+}
+
 function withSelfCanonical(shell: Response, pageUrl: string): Response {
   const rewritten = new HTMLRewriter()
     .on('link[rel="canonical"]', new AttrSetter("href", pageUrl))
@@ -277,17 +293,33 @@ export async function onRequest(context: EventContext) {
   // For all other routes, return index.html (SPA routing).
   const response = await context.next();
 
-  // If it's a 404, serve index.html instead - with the homepage's canonical,
-  // og:url and JSON-LD corrected so the route does not claim to be the
-  // homepage (WEB-SEO-006). See withSelfCanonical.
-  if (response.status === 404 && !pathname.includes(".")) {
-    const shell = await context.env.ASSETS.fetch(new URL("/", context.request.url));
+  // WEB-SEO-006, second half. withSelfCanonical was gated on a 404 and so has
+  // never run: this project ships public/_routes.json with include ["/*"] and
+  // Pages is in single-page-app mode, which serves the fallback at 200. Every
+  // unmatched route therefore returned the homepage with status 200, the 404
+  // branch was dead code, and the 884 URLs the comment above describes kept
+  // claiming to be the homepage. Verified against production 2026-08-27:
+  // /events/rodney-carrington-2026-11-05 returns 200, canonical
+  // "https://desmoinesinsider.com/", and six homepage ld+json blocks.
+  //
+  // Status is the wrong thing to key on. The defect is "homepage HTML served at
+  // a URL that is not the homepage", so test for that instead. It is exact, and
+  // it stops applying by itself once PRERENDER_ENTITIES puts a real page at the
+  // path: a prerendered entity page carries its own canonical, fails the check
+  // and passes through untouched with its JSON-LD intact.
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("text/html") && pathname !== "/" && !pathname.includes(".")) {
     try {
-      return withSelfCanonical(shell, `${url.origin}${pathname}`);
+      const html = await response.text();
+      const passthrough = new Response(html, { status: response.status, headers: response.headers });
+      if (isHomepageShell(html, url.origin)) {
+        return withSelfCanonical(passthrough, `${url.origin}${pathname}`);
+      }
+      return passthrough;
     } catch {
       // Never fail the page for a meta rewrite. Worst case is the previous
       // behaviour, which is what shipped for months.
-      return shell;
+      return response;
     }
   }
 
