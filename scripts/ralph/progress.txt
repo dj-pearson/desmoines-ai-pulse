@@ -763,3 +763,38 @@ Evidence:
   - Record spend at the point the provider bills, not at the point the request succeeds. Those are
     different lines, and the gap between them is where the unexplained invoice lives.
 ---
+
+## 2026-08-27 - WEB-SEC-025: the last blocking tally read on event_attendance is cleared
+- The guard's ALLOWED_TALLY_READS held exactly one entry and it is now EMPTY. getEventCheckIns
+  selected `status` for every attendee of an event and counted them in the browser, which meant the
+  anon key could enumerate who is going to which event - while the UI it feeds (EventCheckIn.tsx)
+  renders four numbers and never a name.
+- New migration 20260827000002: event_attendance_tallies(uuid), SECURITY DEFINER, per-status counts,
+  no user_id and no row ids. Same shape as voting_category_tallies(), which cleared votes.
+- Grouped by the raw `status` text rather than a fixed four-column return, because the column is
+  plain text with no CHECK. An unrecognised status still comes back and still counts toward the
+  total instead of being dropped by the aggregate.
+- THE POLICY TIGHTENING IS NOT IN THE MIGRATION, and the reason is the ordering: a migration applies
+  when it is pushed, Cloudflare Pages deploys separately, so tightening in the same file opens a
+  window where the live bundle still reads the raw table and every event shows one attendee. The
+  exact follow-up SQL is in the migration header. Unlike the votes half of this story it needs no
+  mobile release - neither shipped binary references event_attendance - it needs one web deploy.
+- Every reader was enumerated before deciding that: ProfilePage.tsx:42 and :148 are own-row,
+  getUserEventCheckIn is own-row, updateEventCheckIn is a write, userDataTables.ts is service role,
+  ios/ and android/ have zero references.
+- check-schema-usage.mjs gained an RPC case for PENDING_MIGRATIONS. It already had the concept for
+  tables and columns; without it a function defined by an unapplied migration had to go into
+  schema-baseline.json, a file whose own header says it must only ever shrink.
+- Negative-controlled three ways: removing the pending entry re-reports the RPC, a bogus .rpc() name
+  is still caught, and a re-added raw .from('event_attendance').select('status') fails the ballot
+  guard. 7 new vitest cases, one of which fails if the bigint-as-string coercion is removed - "4"
+  plus "5" is "45", and the tile would show 45 attendees.
+- **Learnings for future iterations:**
+  - An allowlist that reaches empty is worth saying out loud in the file. An empty string looks like
+    a dead variable to the next reader, and deleting it removes the thing that makes a new entry
+    visible.
+  - PostgREST returns bigint as a JSON string. Any count() aggregate read straight into arithmetic
+    concatenates instead of adding, and the result looks like a plausible number.
+  - When a checker already models "pending migration" for one kind of object, extend it rather than
+    baselining the new kind. The baseline is the wrong home for something that resolves next push.
+---

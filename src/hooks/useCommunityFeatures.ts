@@ -126,26 +126,38 @@ export function useCommunityFeatures() {
     }
   };
 
+  // WEB-SEC-025: counts come from a SECURITY DEFINER aggregate, not from the raw
+  // table. This used to select `status` for every attendee of the event and
+  // count them here, which meant the anon key could enumerate who is going to
+  // which event - while this very UI renders four numbers and never a name.
+  //
+  // It is also what was blocking the policy fix. Restricting event_attendance to
+  // a user's own rows would have turned this read into "1 attendee" with no
+  // error at all, because a denied SELECT under RLS is an empty result. See the
+  // migration header for the tightening that follows this deploy.
   const getEventCheckIns = async (eventId: string) => {
     try {
       const { data, error } = await supabase
-        .from('event_attendance')
-        .select('status')
-        .eq('event_id', eventId);
+        .rpc('event_attendance_tallies', { p_event_id: eventId });
 
       if (error) throw error;
 
-      const counts = data?.reduce((acc, item) => {
-        acc[item.status] = (acc[item.status] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>) || {};
+      const rows = (data ?? []) as { status: string; attendee_count: number }[];
+      const counts: Record<string, number> = {};
+      let total = 0;
+      for (const row of rows) {
+        const n = Number(row.attendee_count) || 0;
+        counts[row.status] = (counts[row.status] || 0) + n;
+        total += n;
+      }
 
       return {
         going: counts.going || 0,
         interested: counts.interested || 0,
         maybe: counts.maybe || 0,
         not_going: counts.not_going || 0,
-        total: data?.length || 0
+        // Every status, as before - the old `data.length` counted not_going too.
+        total,
       };
     } catch (error) {
       logger.error('getEventCheckIns', 'Failed to fetch check-ins', { error });

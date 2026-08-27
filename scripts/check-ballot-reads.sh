@@ -52,7 +52,15 @@ rating_helpful_votes"
 # policy tightens. Clearing one means giving that table a SECURITY DEFINER
 # aggregate, the way voting_category_tallies() cleared votes. Do not add to this
 # list to make a new feature pass.
-ALLOWED_TALLY_READS="src/hooks/useCommunityFeatures.ts:event_attendance"
+#
+# EMPTY as of 2026-08-27. Its only entry was
+#   src/hooks/useCommunityFeatures.ts:event_attendance
+# and it is cleared: getEventCheckIns now calls event_attendance_tallies(uuid)
+# (migration 20260827000002) instead of selecting `status` for every attendee.
+# So no client read of any of these nine tables depends on the permissive policy
+# any more. An empty list is not a dead variable - it is the state the guard was
+# built to reach, and a new entry appearing here means the defect came back.
+ALLOWED_TALLY_READS=""
 
 TABLE_RE="$(echo "$TABLES" | tr -s ' \n' '|' | sed 's/|$//')"
 
@@ -113,7 +121,9 @@ if [ "$BAD" -gt 0 ]; then
   echo "      own row and are not writes. They return ballots today and will return" >&2
   echo "      an empty array once WEB-SEC-025 step 3 lands - silently, because a" >&2
   echo "      denied SELECT under RLS is an empty result, not an error." >&2
-  echo "      Use voting_category_tallies(), voting_results(uuid) or voting_winners()." >&2
+  echo "      Aggregates that exist: voting_category_tallies(), voting_results(uuid)," >&2
+  echo "      voting_winners(), event_attendance_tallies(uuid). A table with no" >&2
+  echo "      aggregate yet needs one written before it can be read for a count." >&2
   exit 1
 fi
 

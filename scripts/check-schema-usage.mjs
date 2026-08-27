@@ -83,7 +83,11 @@ const EXTENSIONS = ['.ts', '.tsx', '.mjs'];
  * that migration is applied to production — a stale allowlist silently
  * re-opens the exact bug class this script exists to catch.
  *
- * Omit `column` to allowlist a whole table that the migration creates.
+ * Omit `column` to allowlist a whole table that the migration creates. Use
+ * `{ rpc: '<name>', migration: '...' }` for a function the migration defines -
+ * an RPC lands in the generated types the same way a column does, and leaving
+ * that case out pushed new functions into schema-baseline.json instead, a file
+ * whose own header says it must only ever shrink.
  */
 const PENDING_MIGRATIONS = [
   { table: 'event_discussions', column: 'message_type', migration: '20260718000003' },
@@ -96,12 +100,17 @@ const PENDING_MIGRATIONS = [
   // amount (WEB-LEGAL-006). Additive nullable column; readers must treat NULL
   // as "unknown" rather than assuming monthly.
   { table: 'user_subscriptions', column: 'billing_interval', migration: '20260817000001' },
+  // Per-status attendance counts without the attendee list, so the SELECT policy
+  // on event_attendance can be restricted to a user's own rows (WEB-SEC-025).
+  { rpc: 'event_attendance_tallies', migration: '20260827000002' },
 ];
 
 const isPending = (table, column) =>
   PENDING_MIGRATIONS.some(
     (p) => p.table === table && (p.column === undefined || p.column === column),
   );
+
+const isPendingRpc = (fn) => PENDING_MIGRATIONS.some((p) => p.rpc === fn);
 
 // ---------------------------------------------------------------------------
 // Schema extraction
@@ -268,7 +277,7 @@ function scanFile(file, schema, findings) {
   // --- RPCs -------------------------------------------------------------
   for (const m of src.matchAll(/\.rpc[<(]\s*[<(]?\s*['"`](\w+)['"`]/g)) {
     const fn = m[1];
-    if (!schema.functions.has(fn)) {
+    if (!schema.functions.has(fn) && !isPendingRpc(fn)) {
       findings.push({
         kind: 'rpc', file: rel, line: lineOf(src, m.index),
         name: fn, error: 'PGRST202 (function not found)',
