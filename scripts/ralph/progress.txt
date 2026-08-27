@@ -310,3 +310,34 @@ Evidence:
   - Lazy-loading a dialog opens a gap before its own event listeners attach. Check whether the
     parent hook already covers those events before assuming the split is behaviour-neutral.
 ---
+
+## 2026-08-27 - WEB-BE-032 (8 sites, both payment webhooks)
+- 239 -> 231 discarded-error sites, 176 -> 170 in edge functions. All eight are AC2 control
+  decisions; two of them were the previous sessions' fixes sitting unbaselined.
+- stripe-webhook: the existingSubscription lookup decides UPDATE vs INSERT (a dropped error sent a
+  paying customer down INSERT - duplicate row or constraint failure after the charge); the invoice
+  lookup used .single() so PGRST116 and a real failure were the same non-result; the
+  .update({status:'active'}) beside it is the entitlement write and was silent. All three throw now.
+  The campaigns lookup does NOT throw but is no longer silent - campaign?.user_id gates the
+  advertiser's payment-confirmation notification.
+- play-rtdn-webhook: the voided-purchase lookup dropped its error, so a failure left a refunded user
+  entitled AND wrote play_rtdn_log status 'no_match' - an affirmative false claim in the audit trail.
+  Throws before the log is written. Same for the revocation update and the main subscription lookup.
+  The subscription_plans tier lookup stays non-fatal but now logs.
+- Files: supabase/functions/stripe-webhook/index.ts,
+  supabase/functions/play-rtdn-webhook/index.ts, supabase-error-baseline.json, prd.json.
+- **Learnings for future iterations:**
+  - THERE IS NO TYPE CHECK ON EDGE FUNCTIONS. subscription-sync-tests.yml runs `deno test` on ten
+    files in _tests/ and no `deno check` on any function; tsconfig excludes supabase/. Deno cannot be
+    installed in this container - deno.land is 403 through the agent proxy. Parse-only verification
+    via the TypeScript compiler API's parseDiagnostics is the most that is available here, and it
+    catches syntax, not types. Do not wire a `deno check` step you cannot run.
+  - Throwing is right in the two payment webhooks and wrong in most of the remaining 231. Both are
+    at-least-once webhooks with a working idempotency guard whose id is recorded only after success,
+    so a 500 costs one redelivery. The agent files (agent-subscription-nurture has 9) would abort a
+    batch instead.
+  - Re-baseline in the same commit as the fix. Two sites sat "fixed but unbaselined" for two
+    sessions, and whoever next runs --write locks in whatever the tree happens to hold.
+  - Check ratchet exit codes WITHOUT a pipe (`cmd > file 2>&1; echo $?`), and negative-control by
+    adding a violating file, not by trusting the green.
+---
