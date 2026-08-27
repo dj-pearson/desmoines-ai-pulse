@@ -711,3 +711,20 @@ Evidence:
   - `public/_headers` only governs what Cloudflare Pages serves. A Cache-Control rule there for
     /*.jpg looks like it covers your images and does not if they live on another origin.
 ---
+
+## 2026-08-27 - WEB-QA-022 CLOSED: the dead event-photo path is deleted
+- AC1 asked to decide "BEFORE applying 20260718000003". That migration is applied AND effective, so
+  AC1's outcome is a fact, not a preference: Option A shipped. AC4 is not itself a decision, it is an
+  instruction conditional on that outcome - "DELETE the losing path rather than leaving it dormant".
+- Re-verified before deleting: zero consumers for uploadEventPhoto/getEventPhotos across src/, and
+  BOTH paths shared the `event-photos` storage bucket, so nothing was orphaned. That last check
+  mattered - deleting an upload path that owned its own bucket would have stranded bytes.
+- 108 lines gone. A comment at the same spot records which implementation won and that adopting
+  event_photos later needs a moderation column first (`is_approved` has never existed).
+- No bundle change: 196.7 KB before and after. Dead code with no importer was already tree-shaken.
+- **Learnings for future iterations:**
+  - "Decide X before Y" expires when Y happens. Re-read a reserved decision against what has since
+    shipped; the reservation may be protecting a choice that no longer exists.
+  - Before deleting an upload path, check whether it shares its storage bucket with the surviving one.
+    A bucket only the dead path wrote to leaves objects nothing can reach.
+---
