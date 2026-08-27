@@ -73,6 +73,15 @@ jobs:
       - name: Edge functions gained no type errors
         run: npm run check-edge-types
 
+      # The offline suites for the edge/script helpers that have no other
+      # coverage: the venue-image reclaim, the /media route, the image_url
+      # rewrite and the provider-spend pricing. Each one decides a number or a
+      # deletion against a database this repo's CI cannot reach, so unit-testing
+      # the pure part is the only check they get. They were written and then not
+      # wired up, which is the same as not having them.
+      - name: Offline helper suites
+        run: npm run test:offline
+
       # Named-import integrity: a named import with no matching export is not a
       # type error, and esbuild strips types without checking, so it reaches
       # production as an undefined component (React #130). See WEB-QA-001.

@@ -32,6 +32,7 @@ import { extractEventsFromJsonLd } from "../_shared/jsonLdEvents.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { isHostAllowed } from "../_shared/fetchGuard.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { recordAnthropicUsage } from "../_shared/providerUsage.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -965,6 +966,18 @@ Return empty array [] if no attractions found.`,
 
     if (claudeResponse.ok) {
       const claudeData = await claudeResponse.json();
+
+      // AOS-MANAGE-005: a crawl calls this once per source per category, so it
+      // is the largest non-agent Anthropic spender in the project and until now
+      // recorded none of it. Recorded here, on the success path only - the
+      // failure branch below never parses a body and has no usage to read.
+      await recordAnthropicUsage(createClient(supabaseUrl, supabaseKey), {
+        source: "ai-crawler",
+        model: String(requestBody.model ?? config.default_model),
+        usage: claudeData?.usage ?? {},
+        extra: { category, url },
+      });
+
       const responseText = claudeData.content?.[0]?.text?.trim();
 
       console.log(`🔍 Claude API response status: ${claudeResponse.status}`);

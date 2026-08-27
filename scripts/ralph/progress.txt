@@ -728,3 +728,38 @@ Evidence:
   - Before deleting an upload path, check whether it shares its storage bucket with the surviving one.
     A bucket only the dead path wrote to leaves objects nothing can reach.
 ---
+
+## 2026-08-27 - AOS-MANAGE-005: the missing write, not the missing dashboard
+- The dashboard already exists. ProviderCostTile is mounted in AgentControlPlane:400 and reads
+  provider_spend_mtd, which sums a ledger half (automation_job_runs, written by agentRun.ts) and a
+  reported half (provider_usage). The reported half had NO WRITER since the table was created in
+  20260709000033 - not one insert anywhere in supabase/ or src/. Every non-agent Claude call landed
+  in that column, so it landed nowhere.
+- New _shared/providerUsage.ts writes it, and is now called from the four functions that spend
+  outside the agent runtime: generate-itinerary, discover-chat, ai-crawler, test-ai-model.
+- Two placement rules are load-bearing and both are commented in the code:
+  - NOT inside runToolLoop. runAgent wraps it and already books the same tokens into the LEDGER half.
+    Recording there would put every agent run in both halves of a view that ADDS them, and the
+    watchdog would pause agents at half the real spend.
+  - In generate-itinerary, BEFORE extractClaudeText and before the trip_plans insert. Everything
+    after that point can throw, and all of it throws after Anthropic has already billed. The runs
+    that cost money and delivered nothing are precisely the ones worth seeing.
+- Pricing moved out of agentRuntime.ts into the shared table. What it replaced had opus at $15/$75
+  and haiku at $0.80/$4 - both stale since the 4.6 generation - and folded cache reads into
+  input_tokens at the full input rate. discover-chat caches its system prompt and tool schemas and
+  re-reads them on all six steps, so that overstated its cost by ~10x on the cached portion.
+- Unknown model ids price at the most expensive member of their family, deliberately. A watchdog
+  throttling early is recoverable; a watchdog that never fires is what this story exists because of.
+- 37 offline checks in scripts/__tests__/provider-usage.test.mjs, including that a failed insert
+  returns false rather than throwing - the money is spent by then, and failing the user's request
+  over a bookkeeping error trades something they paid for against nothing.
+- Also wired the four offline suites into pr-checks.yml. test:venue-images, test:media-route and
+  test:media-urls had been written across earlier iterations and never run by CI.
+- **Learnings for future iterations:**
+  - "Build the dashboard" can mean "the dashboard is built and reads a column nothing writes". Check
+    for the writer before adding a view; an all-zeroes panel looks like good news.
+  - When a view SUMS two sources, where you record decides whether you double-count. Find the other
+    writer before adding one.
+  - Record spend at the point the provider bills, not at the point the request succeeds. Those are
+    different lines, and the gap between them is where the unexplained invoice lives.
+---

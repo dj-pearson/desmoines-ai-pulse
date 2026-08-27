@@ -32,8 +32,9 @@ import { conversationHasCrisisIntent, crisisPayload } from '../_shared/crisisSup
 import { checkRateLimitPersistent, addRateLimitHeaders } from '../_shared/rateLimit.ts';
 import { getAIConfig, getAnthropicApiKey } from '../_shared/aiConfig.ts';
 import { sanitizePostgrestPattern } from '../_shared/validation.ts';
-import { runToolLoop, type ToolSchema } from '../_shared/agentRuntime.ts';
+import { runToolLoop, type ToolSchema, type RunToolLoopResult } from '../_shared/agentRuntime.ts';
 import { resolveEntitledTier } from '../_shared/entitlements.ts';
+import { recordProviderUsage } from '../_shared/providerUsage.ts';
 
 // ---------------------------------------------------------------------------
 // Tier-gated daily quotas — mirror web /trip-planner gating
@@ -273,7 +274,10 @@ async function runClaudeLoop(
   anthropicVersion: string,
   messages: Array<{ role: string; content: unknown }>,
   supabase: SupabaseLike,
-): Promise<{ picks: unknown[]; followUpSuggestions: string[] } | { error: string }> {
+): Promise<
+  ({ picks: unknown[]; followUpSuggestions: string[] } | { error: string })
+  & { spend?: { costUsd: number; usage: RunToolLoopResult['usage']['raw'] } }
+> {
   // Delegate to the shared runtime harness (AOS-CORE-003) instead of a bespoke
   // copy-pasted loop. Behavior is preserved: same tools, prompt caching, up to
   // 6 turns, and the return_picks terminating tool. This is user-facing chat,
@@ -293,15 +297,21 @@ async function runClaudeLoop(
     dispatch: (name, input) => execTool(supabase, name, input),
   });
 
+  // Attached to every branch, including the failures. A loop that burned six
+  // steps and then gave up still cost money, and a cost recorder that only sees
+  // the happy path under-reports exactly when spend is worst.
+  const spend = { costUsd: loop.usage.costUsd, usage: loop.usage.raw };
+
   if (loop.stopReason === 'final_tool' && loop.finalToolInput) {
     return {
       picks: (loop.finalToolInput.picks as unknown[]) ?? [],
       followUpSuggestions: (loop.finalToolInput.followUpSuggestions as string[]) ?? [],
+      spend,
     };
   }
-  if (!loop.ok) return { error: loop.error ?? 'Claude API error' };
-  if (loop.stopReason === 'max_steps') return { error: 'Conversation exceeded turn limit' };
-  return { error: 'Model finished without returning picks' };
+  if (!loop.ok) return { error: loop.error ?? 'Claude API error', spend };
+  if (loop.stopReason === 'max_steps') return { error: 'Conversation exceeded turn limit', spend };
+  return { error: 'Model finished without returning picks', spend };
 }
 
 // ---------------------------------------------------------------------------
@@ -446,6 +456,21 @@ serve(async (req) => {
     conversation,
     supabase,
   );
+
+  // AOS-MANAGE-005: this function calls Claude without going through runAgent,
+  // so nothing else books what it spends. Awaited rather than fired and
+  // forgotten - Deno kills the isolate when the response resolves, and a
+  // detached insert would be dropped mid-flight most of the time.
+  if (result.spend && result.spend.costUsd > 0) {
+    await recordProviderUsage(supabase, {
+      provider: 'anthropic',
+      costUsd: result.spend.costUsd,
+      source: 'discover-chat',
+      model,
+      usage: result.spend.usage,
+      extra: { tier, outcome: 'error' in result ? 'error' : 'ok' },
+    });
+  }
 
   if ('error' in result) {
     console.error('discover-chat error:', result.error);
