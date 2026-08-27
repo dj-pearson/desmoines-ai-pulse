@@ -53,11 +53,14 @@ async function countMissing(supabase: Client, table: Table, orFilter: string): P
 
 // Rows with any content gap (bounded). Returns each row's missing-field list.
 async function detectGaps(supabase: Client, table: Table): Promise<GapRow[]> {
-  const { data } = await supabase
+  const { data, error: gapsError } = await supabase
     .from(table)
     .select("id, image_url, latitude, longitude, seo_title, geo_summary")
     .or("image_url.is.null,latitude.is.null,longitude.is.null,seo_title.is.null,geo_summary.is.null")
     .limit(DETECT_LIMIT);
+  // WEB-BE-032. THE work list: rows with a gap to repair. A dropped error
+  // found no gaps and reported a clean sweep.
+  if (gapsError) throw new Error(`data-quality: gap scan of ${table} failed: ${gapsError.message}`);
   const rows = (data ?? []) as {
     id: string;
     image_url: string | null;
@@ -107,11 +110,20 @@ export const run: AgentRun = async (ctx, { supabase }) => {
     const gaps = await detectGaps(supabase, table);
     const gapById = new Map(gaps.map((g) => [g.id, g]));
 
-    const { data: openIssues } = await supabase
+    const { data: openIssues, error: openIssuesError } = await supabase
       .from("data_quality_issues")
       .select("id, row_id, attempts, status")
       .eq("target_table", table)
       .in("status", ["open", "escalated"]);
+    // DEDUPE GUARD, so it fails CLOSED. openByRow is what stops a row that
+    // already has an open issue getting another one, and what carries its
+    // attempt count. A dropped error emptied the map, so every gap looked new:
+    // duplicate data_quality_issues rows and an attempt counter reset to zero,
+    // which is how a row retries forever. Skip the table this run instead.
+    if (openIssuesError) {
+      console.error(`data-quality: open-issue read failed for ${table}; skipping to avoid duplicates: ${openIssuesError.message}`);
+      continue;
+    }
     const open = (openIssues ?? []) as { id: string; row_id: string; attempts: number; status: string }[];
     const openByRow = new Map(open.map((i) => [i.row_id, i]));
 

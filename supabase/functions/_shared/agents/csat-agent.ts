@@ -17,13 +17,16 @@ const BATCH = 50;
 export const run: AgentRun = async (ctx, { supabase }) => {
   const siteUrl = (Deno.env.get("VITE_SITE_URL") || Deno.env.get("SITE_URL") || "").replace(/\/+$/, "");
 
-  const { data: resolved } = await supabase
+  const { data: resolved, error: resolvedError } = await supabase
     .from("support_tickets")
     .select("id, channel, assigned_to, sla_escalated_at, resolved_by")
     .eq("status", "resolved")
     .is("csat_prompt_sent_at", null)
     .not("resolved_at", "is", null)
     .limit(BATCH);
+  // WEB-BE-032. THE work list. A dropped error processed nothing and reported a
+  // successful run, indistinguishable from an empty resolved-ticket queue.
+  if (resolvedError) throw new Error(`csat: resolved-ticket queue read failed: ${resolvedError.message}`);
   const tickets = (resolved ?? []) as { id: string; channel: string; assigned_to: string | null; sla_escalated_at: string | null; resolved_by: string | null }[];
 
   let sent = 0;

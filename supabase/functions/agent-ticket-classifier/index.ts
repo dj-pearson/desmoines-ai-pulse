@@ -108,13 +108,16 @@ Deno.serve(async (req) => {
     let cost = 0;
 
     // ── 1) Classify unclassified tickets ─────────────────────────────────
-    const { data: unclassified } = await supabase
+    const { data: unclassified, error: unclassifiedError } = await supabase
       .from("support_tickets")
       .select("id, subject, body")
       .is("classified_at", null)
       .not("status", "in", "(resolved,closed)")
       .order("created_at", { ascending: true })
       .limit(BATCH);
+    // WEB-BE-032. THE work list. A dropped error classified no tickets and
+    // reported success, indistinguishable from an empty queue.
+    if (unclassifiedError) throw new Error(`ticket-classifier: unclassified read failed: ${unclassifiedError.message}`);
 
     for (const t of (unclassified ?? []) as { id: string; subject: string | null; body: string }[]) {
       const result = await classify(supabaseUrl, supabaseKey, t.subject ?? "", t.body);
@@ -142,7 +145,7 @@ Deno.serve(async (req) => {
 
     // ── 2) SLA-breach guard: pre-escalate unhandled fast-track tickets ────
     const breachSoon = new Date(nowMs + PRE_ESCALATE_BUFFER_MS).toISOString();
-    const { data: atRisk } = await supabase
+    const { data: atRisk, error: atRiskError } = await supabase
       .from("support_tickets")
       .select("id, subject, priority, sla_due_at, sentiment, urgency")
       .not("sla_due_at", "is", null)
@@ -150,6 +153,9 @@ Deno.serve(async (req) => {
       .is("sla_escalated_at", null)
       .in("status", ["new", "ai_handling", "awaiting_user"])
       .limit(BATCH);
+    // The SLA-breach sweep. A dropped error escalates nobody and says so as a
+    // clean run, which is the worst version of a missed SLA.
+    if (atRiskError) throw new Error(`ticket-classifier: SLA sweep read failed: ${atRiskError.message}`);
 
     for (const t of (atRisk ?? []) as { id: string; subject: string | null; priority: string; sla_due_at: string; sentiment: string | null; urgency: string | null }[]) {
       const task = await createAgentTask(supabase, {

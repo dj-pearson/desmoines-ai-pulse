@@ -62,13 +62,18 @@ Deno.serve(async (req) => {
     ctx.processed(findings.length);
     if (findings.length === 0) {
       // Nothing found this run — auto-close any open leak incident.
-      const { data: open } = await supabase
+      const { data: open, error: openError } = await supabase
         .from("agent_tasks")
         .select("id")
         .eq("agent_key", AGENT_KEY)
         .eq("dedupe_key", "secret_leak")
         .in("status", ["open", "escalated", "assigned"])
         .limit(5);
+      // DEDUPE GUARD. `open secret_leak task` is what stops this agent opening a second task for
+      // something it has already filed. A dropped error emptied it, so every finding
+      // looked new and the queue filled with duplicates of one problem. Logged, not
+      // thrown - a duplicate task is noise, and refusing to run at all is worse.
+      if (openError) console.error(`open secret_leak task read failed; duplicate tasks are possible this run: ${openError.message}`);
       for (const t of (open ?? []) as { id: string }[]) {
         await supabase.from("agent_tasks").update({
           status: "resolved",

@@ -28,12 +28,17 @@ export async function findExistingVenueRecord(
   const storageBase = `${supabaseUrl}/storage/v1/object/public/media/`;
 
   for (const table of tables) {
-    const { data: exact } = await supabase
+    const { data: exact, error: exactError } = await supabase
       .from(table)
       .select("image_url, website, latitude, longitude")
       .ilike("name", trimmed)
       .limit(1)
       .maybeSingle();
+    // WEB-BE-032. Best-effort by design - a miss falls through to the next
+    // fallback - but a FAILED read is not a miss, and the next fallback is a
+    // paid Google Places call. Silently paying for a lookup because a local
+    // read broke is worth a log line.
+    if (exactError) console.warn(`[imageFallbacks] exact venue lookup on ${table} failed: ${exactError.message}`);
 
     if (exact) {
       const hasGoodImage =
@@ -47,12 +52,14 @@ export async function findExistingVenueRecord(
     }
 
     // Looser match — venue strings often include suffixes like "Des Moines Civic Center"
-    const { data: fuzzy } = await supabase
+    const { data: fuzzy, error: fuzzyError } = await supabase
       .from(table)
       .select("image_url, website, latitude, longitude")
       .ilike("name", `%${trimmed}%`)
       .limit(1)
       .maybeSingle();
+    // Same for the looser match.
+    if (fuzzyError) console.warn(`[imageFallbacks] fuzzy venue lookup on ${table} failed: ${fuzzyError.message}`);
 
     if (fuzzy) {
       const hasGoodImage =

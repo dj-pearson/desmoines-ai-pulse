@@ -673,3 +673,24 @@ Evidence:
   - `^import [^\n]*\n` matches the OPENING line of a multi-line import. That broke two files this
     session. Anchor on the last line ending in `";` instead.
 ---
+
+## 2026-08-27 - WEB-BE-032 CLOSED: the scheduled path is at zero
+- 30 more sites across two batches. 162 -> 127 overall. Every _shared/agents module agent-runner
+  dispatches, and every _shared middleware they run through, now surfaces its read failures.
+- Remaining: 64 in admin/API-key-invoked edge functions (a caller sees the response) and 63 in src/
+  (a browser console surfaces them). AC5 says this is a cleanup PATTERN not a bug list, and the
+  ratchet gates new ones, so those shrink as people touch the files.
+- The last batch's real find: imageStorage.ts discarded the error on the media_assets INSERT that runs
+  AFTER the upload. A failure left the file in the bucket with nothing pointing at it - invisible to
+  consumers AND to reclaim-venue-images.ts, which finds files through media_assets. A storage leak
+  with no record, in the same week as a story about reclaiming storage.
+- imageFallbacks: a failed local venue lookup looked like "no match" and fell through to a PAID Google
+  Places call.
+- check-edge-types caught `ctx` out of scope in agent-test-gen - a real error I introduced by porting a
+  shared-module fix into a standalone whose wrapper differs. The ratchet paid for itself on my own diff.
+- **Learnings for future iterations:**
+  - Porting a fix between an agent's two copies is not mechanical: the shared module has `ctx` from the
+    AgentRun signature, the standalone builds it inside runAgent. Check scope, do not assume symmetry.
+  - A discarded error on a write that follows an upload is a RESOURCE LEAK, not a lost message. Look
+    for what was already spent before the failing call.
+---

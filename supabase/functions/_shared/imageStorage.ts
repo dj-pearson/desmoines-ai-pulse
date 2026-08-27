@@ -621,7 +621,7 @@ export async function fetchAndStoreImage(
 
     const cdnUrl = cdnUrlFor(filePath);
 
-    const { data: insertedAsset } = await supabase
+    const { data: insertedAsset, error: insertedAssetError } = await supabase
       .from("media_assets")
       .insert({
         file_name: `hero.${ext}`,
@@ -638,6 +638,18 @@ export async function fetchAndStoreImage(
       })
       .select("id")
       .single();
+    // WEB-BE-032, and this one LEAKS STORAGE. The bytes are already uploaded by
+    // the time this runs. A dropped error left the file in the bucket with no
+    // media_assets row pointing at it: invisible to every consumer, and invisible
+    // to scripts/reclaim-venue-images.ts too, which finds files THROUGH
+    // media_assets and so can never reclaim an orphan. Logged with the path,
+    // because that log is the only record anyone would have of it.
+    if (insertedAssetError) {
+      console.error(
+        `[imageStorage] ORPHANED FILE: uploaded ${filePath} but the media_assets ` +
+          `insert failed, so nothing references it: ${insertedAssetError.message}`,
+      );
+    }
 
     if (insertedAsset?.id) {
       await supabase.from("image_optimization_queue").insert({
