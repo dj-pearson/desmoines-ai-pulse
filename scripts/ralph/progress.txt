@@ -552,3 +552,20 @@ Evidence:
     is left on the path cron actually reaches. 32 sites in 20 files now, none above 4 - the rest is
     long rather than deep.
 ---
+
+## 2026-08-27 - WEB-BE-032: lead-enrichment + outreach-sequencer (12 sites)
+- 188 -> 176 overall; scheduled path 32 -> 26.
+- outreach-sequencer's template guardrail already failed SAFE and did so silently: a dropped error
+  left step1 undefined, so the sequence stopped and queued an approval - indistinguishable from the
+  template genuinely not being approved. It still stops; it now says which happened.
+- lead-enrichment's per-item lookups return `empty` on error, whose nulls are written as the
+  enrichment RESULT and scored. "We looked and there is nothing" and "we could not look" are
+  different claims about a lead.
+- Two more work lists throw (new crm_leads, qualified leads).
+- **Learnings for future iterations:**
+  - A guard that fails safe is not the same as a guard that is working, and the ratchet cannot tell
+    them apart - both are a site with no `error` binding. Read the failure path before assuming a
+    fail-safe site is low value; the silent version costs someone a debugging session.
+  - Where a helper returns a neutral-looking default on error (`empty`, `{}`, `0`), check what
+    CONSUMES it. If the default gets persisted or scored, it is an assertion, not an absence.
+---

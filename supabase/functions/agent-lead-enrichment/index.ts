@@ -63,11 +63,17 @@ async function sizeSignals(supabase: Client, sourceRef: string | null): Promise<
   const [table, id] = sourceRef.split(":");
   if (!table || !id) return empty;
   if (table === "restaurants") {
-    const { data } = await supabase.from("restaurants").select("rating, popularity_score, website, city").eq("id", id).maybeSingle();
+    const { data, error } = await supabase.from("restaurants").select("rating, popularity_score, website, city").eq("id", id).maybeSingle();
+      // WEB-BE-032. Per-item, so it returns `empty` and the batch continues - but
+      // `empty` is not neutral here: nulls are written as the enrichment result and
+      // then scored as "we looked and there is nothing", which is a different claim
+      // from "we could not look".
+      if (error) console.warn(`[lead-enrichment] restaurants lookup failed for ${id}: ${error.message}`);
     return data ? { rating: data.rating, popularity: data.popularity_score, website: data.website, city: data.city } : empty;
   }
   if (table === "attractions") {
-    const { data } = await supabase.from("attractions").select("rating, website").eq("id", id).maybeSingle();
+    const { data, error } = await supabase.from("attractions").select("rating, website").eq("id", id).maybeSingle();
+      if (error) console.warn(`[lead-enrichment] attractions lookup failed for ${id}: ${error.message}`);
     return data ? { rating: data.rating, popularity: null, website: data.website, city: null } : empty;
   }
   return empty;
@@ -88,12 +94,15 @@ Deno.serve(async (req) => {
   );
 
   const ledger = await runAgent(AGENT_KEY, async (ctx) => {
-    const { data: leads } = await supabase
+    const { data: leads, error: leadsError } = await supabase
       .from("crm_leads")
       .select("id, business_name, category, prospect_lead_id, enriched_at")
       .eq("status", "new")
       .is("enriched_at", null)
       .limit(BATCH);
+    // THE work list. A dropped error enriched nothing and reported success,
+    // indistinguishable from having no new leads. runAgent records the throw.
+    if (leadsError) throw new Error(`lead-enrichment: could not read new crm_leads: ${leadsError.message}`);
     const rows = (leads ?? []) as { id: string; business_name: string; category: string | null; prospect_lead_id: string | null }[];
 
     let enriched = 0, qualified = 0, queued = 0, disqualified = 0;
@@ -102,7 +111,8 @@ Deno.serve(async (req) => {
       let sourceRef: string | null = null;
       let website: string | null = null;
       if (l.prospect_lead_id) {
-        const { data: pl } = await supabase.from("prospect_leads").select("source_ref, website").eq("id", l.prospect_lead_id).maybeSingle();
+        const { data: pl, error: plError } = await supabase.from("prospect_leads").select("source_ref, website").eq("id", l.prospect_lead_id).maybeSingle();
+        if (plError) console.warn(`[lead-enrichment] prospect_leads lookup failed for ${l.prospect_lead_id}: ${plError.message}`);
         sourceRef = pl?.source_ref ?? null;
         website = pl?.website ?? null;
       }
