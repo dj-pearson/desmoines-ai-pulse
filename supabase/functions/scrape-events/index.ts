@@ -2230,30 +2230,16 @@ serve(async (req) => {
       }
     );
 
-    if (insertError) {
-      console.error("Database insert error:", insertError);
-      throw insertError;
-    }
-
-    console.log(`Successfully processed ${insertedEvents?.length || 0} events`);
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: `Successfully scraped and processed ${enhancedEvents.length} new events`,
-        events_processed: enhancedEvents.length,
-        events_enhanced: enhancedCount,
-        duplicates_skipped: totalDuplicatesSkipped,
-        jobs_processed: jobsToProcess.length,
-        jobs_skipped: skippedJobs.length,
-        skipped_jobs: skippedJobs,
-        claude_available: !!claudeApiKey,
-      }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      }
-    );
+    // A second return block used to sit here, unreachable behind the return
+    // above and referencing five identifiers that are not in scope -
+    // insertError, insertedEvents, enhancedEvents, enhancedCount and
+    // totalDuplicatesSkipped. Left over from an earlier shape of this function.
+    //
+    // It never ran, so nothing was broken by it, and that is the problem: it
+    // read as if this function checks its insert error and reports
+    // duplicates_skipped and events_enhanced. It does neither. Whoever needs
+    // those numbers should add them to the response above rather than restoring
+    // this (found by the edge type check, 2026-08-27).
   } catch (error) {
     console.error("Error in scrape-events function:", error);
 

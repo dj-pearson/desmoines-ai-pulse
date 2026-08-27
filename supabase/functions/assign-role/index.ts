@@ -17,12 +17,12 @@
  */
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-import { corsHeaders } from '../_shared/cors.ts';
+import { getCorsHeaders, handleCors } from '../_shared/cors.ts';
 
 type Role = 'user' | 'moderator' | 'admin' | 'root_admin';
 const VALID_ROLES: Role[] = ['user', 'moderator', 'admin', 'root_admin'];
 
-function json(body: unknown, status = 200): Response {
+function json(body: unknown, status = 200, corsHeaders: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -30,32 +30,43 @@ function json(body: unknown, status = 200): Response {
 }
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
+  // This function imported `corsHeaders`, which _shared/cors.ts has never
+  // exported - it exports getCorsHeaders(origin) and handleCors(req), because
+  // the allowed origin is decided per request. Deno throws
+  // "The requested module does not provide an export named 'corsHeaders'" at
+  // MODULE LOAD, so assign-role could not start at all and every role
+  // assignment through it failed. It is a deployed function, so this was live.
+  //
+  // Nothing caught it: tsconfig excludes supabase/, eslint runs no type-aware
+  // rules, and npm run check-imports covers src/ only. The edge type check
+  // added today is what surfaced it (WEB-QA-001's defect class, in the
+  // directory that guard does not reach).
+  const corsResponse = handleCors(req);
+  if (corsResponse) return corsResponse;
+  const corsHeaders = getCorsHeaders(req.headers.get('origin') || undefined);
   if (req.method !== 'POST') {
-    return json({ error: 'Method not allowed' }, 405);
+    return json({ error: 'Method not allowed' }, 405, corsHeaders);
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   if (!supabaseUrl || !serviceKey) {
-    return json({ error: 'Server not configured' }, 500);
+    return json({ error: 'Server not configured' }, 500, corsHeaders);
   }
   const admin = createClient(supabaseUrl, serviceKey);
 
   // 1) Verify caller JWT
   const bearer = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
-  if (!bearer) return json({ error: 'Authentication required' }, 401);
+  if (!bearer) return json({ error: 'Authentication required' }, 401, corsHeaders);
 
   const { data: callerRes, error: callerErr } = await admin.auth.getUser(bearer);
-  if (callerErr || !callerRes?.user) return json({ error: 'Invalid or expired token' }, 401);
+  if (callerErr || !callerRes?.user) return json({ error: 'Invalid or expired token' }, 401, corsHeaders);
   const callerId = callerRes.user.id;
 
   // 2) Confirm caller is admin/root_admin server-side (user_roles then profiles)
   const callerRole = await resolveRole(admin, callerId);
   if (callerRole !== 'admin' && callerRole !== 'root_admin') {
-    return json({ error: 'Admin role required' }, 403);
+    return json({ error: 'Admin role required' }, 403, corsHeaders);
   }
 
   // Parse + validate input
@@ -63,23 +74,23 @@ serve(async (req) => {
   try {
     payload = await req.json();
   } catch {
-    return json({ error: 'Invalid JSON body' }, 400);
+    return json({ error: 'Invalid JSON body' }, 400, corsHeaders);
   }
   const targetUserId = payload.targetUserId?.trim();
   const role = payload.role as Role | undefined;
 
-  if (!targetUserId) return json({ error: 'targetUserId is required' }, 400);
+  if (!targetUserId) return json({ error: 'targetUserId is required' }, 400, corsHeaders);
   if (!role || !VALID_ROLES.includes(role)) {
-    return json({ error: `role must be one of: ${VALID_ROLES.join(', ')}` }, 400);
+    return json({ error: `role must be one of: ${VALID_ROLES.join(', ')}` }, 400, corsHeaders);
   }
 
   // 3) Hierarchy: only root_admin may grant admin/root_admin.
   if ((role === 'root_admin' || role === 'admin') && callerRole !== 'root_admin') {
-    return json({ error: 'Only a root_admin can assign admin or root_admin roles' }, 403);
+    return json({ error: 'Only a root_admin can assign admin or root_admin roles' }, 403, corsHeaders);
   }
   // Nobody can change their OWN role (no self-escalation / self-lockout).
   if (targetUserId === callerId) {
-    return json({ error: 'You cannot change your own role' }, 403);
+    return json({ error: 'You cannot change your own role' }, 403, corsHeaders);
   }
 
   // Capture the previous role for the audit trail.
@@ -101,7 +112,7 @@ serve(async (req) => {
   // caller can retry.
   if (existingErr) {
     console.error('[assign-role] existing-role read failed:', existingErr.message);
-    return json({ error: 'Failed to assign role' }, 500);
+    return json({ error: 'Failed to assign role' }, 500, corsHeaders);
   }
 
   let writeErr;
@@ -118,7 +129,7 @@ serve(async (req) => {
 
   if (writeErr) {
     console.error('[assign-role] write failed:', writeErr.message);
-    return json({ error: 'Failed to assign role' }, 500);
+    return json({ error: 'Failed to assign role' }, 500, corsHeaders);
   }
 
   // 5) Immutable audit row (actor, target, old_role, new_role, timestamp).
@@ -142,7 +153,7 @@ serve(async (req) => {
     console.error('[assign-role] audit log failed:', auditErr.message);
   }
 
-  return json({ success: true, targetUserId, role, previousRole: oldRole });
+  return json({ success: true, targetUserId, role, previousRole: oldRole }, 200, corsHeaders);
 });
 
 /** Resolve a user's effective role from user_roles, falling back to profiles. */

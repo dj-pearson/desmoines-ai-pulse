@@ -591,3 +591,25 @@ Evidence:
   - Measure the wide scope before choosing it. _shared/ was clean at zero and the full tree was not
     close - that measurement, not a preference, is what set the scope.
 ---
+
+## 2026-08-27 - the new edge type check, run wide, found a dead deployed function
+- assign-role/index.ts imported `corsHeaders` from _shared/cors.ts, which exports getCorsHeaders and
+  handleCors and never exported that name. Deno throws "does not provide an export named" at MODULE
+  LOAD, so this DEPLOYED function could not start at all and every role assignment through it failed.
+  Fixed to handleCors + getCorsHeaders with the per-request headers threaded through json().
+- WHY NOTHING CAUGHT IT: `npm run check-imports` is WEB-QA-001's own answer to this exact defect and
+  its ROOTS are src/ only; tsconfig excludes supabase/; eslint runs no type-aware rules there.
+- scrape-events had a second return block, unreachable behind the return above it, referencing five
+  out-of-scope identifiers. Never ran, and read as if the function checks its insert error and
+  reports duplicates_skipped. Deleted.
+- NOT fixed, checked first: six of eight extractors omit source_url from a return type that requires
+  it, but the insert compensates with `eventData.source_url || job.config.url`. Type inaccuracy, no
+  runtime consequence; churning eight signatures for no behaviour change is worse than a note.
+- **Learnings for future iterations:**
+  - Run a new check WIDE as a measurement even when you gate it narrow. The gate covers _shared/
+    only; assign-role is in a function directory and would never have been found by the wired check.
+  - `Cannot find name 'x'` in a long function usually means unreachable code after a return, not a
+    typo. Read the surrounding control flow before "fixing" the identifier.
+  - Before writing up a type error as a defect, find what CONSUMES the value. source_url looked like
+    six broken extractors and is one deliberate fallback at the insert.
+---
