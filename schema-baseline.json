@@ -1,7 +1,8 @@
 {
   "$comment": "Known unresolvable Supabase references, frozen by scripts/check-schema-usage.mjs --update. This list must only ever SHRINK. Each entry is a feature that silently does nothing in production.",
-  "generated": 193,
+  "generated": 195,
   "findings": [
+    "column|scripts/reclaim-venue-images.ts|known_venues.image_url",
     "column|src/hooks/useCrmActivities.ts|crm_activities.activity_type",
     "column|src/hooks/useCrmActivities.ts|crm_activities.contact_id",
     "column|src/hooks/useCrmActivities.ts|crm_activities.deal_id",
@@ -10,6 +11,7 @@
     "column|src/hooks/useCrmActivities.ts|crm_activities.performed_by",
     "column|src/hooks/useCrmContacts.ts|crm_activities.contact_id",
     "column|src/hooks/useCrmDashboard.ts|crm_activities.performed_at",
+    "column|supabase/functions/_shared/venueImage.ts|known_venues.image_url",
     "rpc|scripts/run-migration.ts|exec_sql",
     "rpc|src/components/auth/SessionManagementDashboard.tsx|revoke_all_other_sessions",
     "rpc|src/components/auth/SessionManagementDashboard.tsx|revoke_session",
@@ -37,7 +39,6 @@
     "rpc|supabase/functions/generate-invoice-pdf/index.ts|generate_invoice_number",
     "rpc|supabase/functions/generate-itinerary/index.ts|generate_trip_share_code",
     "rpc|supabase/functions/generate-itinerary/index.ts|get_trip_itinerary",
-    "table|scripts/run-migration.ts|dummy",
     "table|src/components/auth/SessionManagementDashboard.tsx|user_sessions",
     "table|src/components/cms/AuthorManager.tsx|author_profiles",
     "table|src/components/cms/CategoryTagManager.tsx|article_categories",

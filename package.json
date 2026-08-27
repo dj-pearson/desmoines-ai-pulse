@@ -57,6 +57,8 @@
     "test:export:json": "node export-test-results.cjs json",
     "check-imports": "node scripts/check-import-exports.mjs",
     "type-check:edge": "tsc -p tsconfig.edge.json",
+    "reclaim-venue-images": "tsx scripts/reclaim-venue-images.ts",
+    "test:venue-images": "tsx scripts/__tests__/reclaim-venue-images.test.mjs",
     "check-edge-types": "node scripts/check-edge-types.mjs",
     "check-agent-drift": "node scripts/check-agent-pair-drift.mjs",
     "check-schema": "node scripts/check-schema-usage.mjs",

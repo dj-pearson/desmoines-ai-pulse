@@ -26,6 +26,7 @@ import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts
 import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey } from "../_shared/aiConfig.ts";
 import { scrapeUrl, scrapeUrls } from "../_shared/scraper.ts";
 import { fetchAndStoreImage as _fetchAndStoreImageShared } from "../_shared/imageStorage.ts";
+import { resolveEventImage } from "../_shared/venueImage.ts";
 import { tryDomainAdapter } from "../_shared/domain-adapters/index.ts";
 import { extractEventsFromJsonLd } from "../_shared/jsonLdEvents.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
@@ -1394,12 +1395,26 @@ async function insertData(
         _assignedId: crypto.randomUUID(),
       }));
 
+      // A single-venue source (Hoyt Sherman, Wooly's, Vibrant, the Wells Fargo
+      // Arena teams, Principal Park...) reuses the SAME venue image for every
+      // event, so there is nothing to gain by downloading and storing a
+      // near-duplicate per event. resolveEventImage returns skipFetch for those
+      // and fetchAndStoreImage is never called: no egress, no storage object, no
+      // media_assets row. Aggregators - Catch Des Moines, SeatGeek, Eventbrite -
+      // have no declared venue and keep the per-event path unchanged.
       const imageResults = await Promise.all(
-        batchWithIds.map((item) =>
-          item.image_url
-            ? fetchAndStoreImage(supabase, item.image_url, category, item._assignedId)
-            : Promise.resolve(null)
-        )
+        batchWithIds.map(async (item) => {
+          const resolved = await resolveEventImage(supabase, {
+            sourceUrl: item.source_url || "",
+            scrapedImageUrl: item.image_url,
+          });
+          if (resolved.skipFetch) {
+            console.log(`\u{1F3DB}\uFE0F Venue image for ${resolved.venueName}: skipped per-event fetch`);
+            return resolved.imageUrl;
+          }
+          if (!resolved.imageUrl) return null;
+          return fetchAndStoreImage(supabase, resolved.imageUrl, category, item._assignedId);
+        })
       );
 
       // Transform data for database schema
