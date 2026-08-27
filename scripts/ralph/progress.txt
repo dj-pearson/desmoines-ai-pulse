@@ -375,3 +375,27 @@ Evidence:
   `deno check`, and eslint runs without type-aware rules - so a wrong property on a Supabase response
   passes everything. The ask is `deno check` on changed functions, not lint coverage.
 ---
+
+## 2026-08-27 - WEB-BE-032 (21 sites; the duplicated-agent finding)
+- 231 -> 210 sites, 170 -> 149 in edge functions.
+- STRUCTURAL: 40 agent-* edge functions, 36 _shared/agents modules, 12 names in BOTH, and both are
+  live - pg_cron posts to the standalone, agent-runner dispatches the shared one via registry.ts.
+  Each standalone carries its own full inline implementation, not a wrapper. Earlier WEB-BE-032 work
+  fixed the SHARED copies of subscription-nurture, churn-winback, billing-selfservice and
+  lead-sourcing and left the standalones. All 12 pairs now agree; re-measured from source, 0 diverge.
+- Two sites reached a user, both in subscription-nurture: cappedRecently returned false on error
+  ("not capped", so mail sends) and the entitlement check returned null ("not subscribed", so a
+  paying customer got an upgrade prompt under a comment calling it entitlement-safe). Both fail
+  closed now.
+- Files: the four agent-*/index.ts, supabase-error-baseline.json, prd.json.
+- **Learnings for future iterations:**
+  - BEFORE fixing an agent, check for a twin: `ls supabase/functions/_shared/agents/` against
+    `ls -d supabase/functions/agent-*`. Twelve names exist in both and both run. Fixing one is half
+    a fix, and the ratchet cannot see it because it counts per file.
+  - The treatment convention, taken from the shared copies: work-list read THROWS (runAgent records
+    status failure in automation_job_runs); per-item read LOGS and continues; cap and entitlement
+    reads FAIL CLOSED, because both read as permission to send when they fail; a multi-source sweep
+    collects into unreadableSources and names the count in ctx.summary.
+  - runAgent turns a throw into a recorded failure rather than an aborted batch with no trace, which
+    is why "never throw in an agent" was too blunt a rule - it is right per-item and wrong per-batch.
+---

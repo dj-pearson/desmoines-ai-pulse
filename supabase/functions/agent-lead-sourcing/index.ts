@@ -65,13 +65,23 @@ Deno.serve(async (req) => {
 
   const ledger = await runAgent(AGENT_KEY, async (ctx) => {
     const candidates: Lead[] = [];
+    // WEB-BE-032, ported from _shared/agents/lead-sourcing.ts, which is the same
+    // agent and was fixed while this copy was not. Three independent sources are
+    // swept, so one failing must not abandon the other two - but a sweep that
+    // read two of three sources and reported a candidate count as though it had
+    // read all three is the silent-zero shape this story is about. Collected
+    // here and named in the summary instead.
+    const unreadableSources: string[] = [];
 
     // ── Restaurants (not already advertising = not sponsored) ─────────────
-    const { data: rests } = await supabase
+    const { data: rests, error: restsError } = await supabase
       .from("restaurants")
       .select("id, name, city, website, rating, popularity_score, is_sponsored, is_merged")
       .or("is_sponsored.is.null,is_sponsored.eq.false")
       .limit(PER_SOURCE);
+    if (restsError) {
+      unreadableSources.push(`restaurants: ${restsError.message}`);
+    }
     for (const r of (rests ?? []) as { id: string; name: string | null; city: string | null; website: string | null; rating: number | null; popularity_score: number | null; is_merged: boolean | null }[]) {
       if (!r.name || r.is_merged) continue;
       const rating = Number(r.rating) || 0;
@@ -86,11 +96,14 @@ Deno.serve(async (req) => {
     }
 
     // ── Attractions (not sponsored) ───────────────────────────────────────
-    const { data: attrs } = await supabase
+    const { data: attrs, error: attrsError } = await supabase
       .from("attractions")
       .select("id, name, website, rating, is_sponsored, is_active")
       .or("is_sponsored.is.null,is_sponsored.eq.false")
       .limit(PER_SOURCE);
+    if (attrsError) {
+      unreadableSources.push(`attractions: ${attrsError.message}`);
+    }
     for (const a of (attrs ?? []) as { id: string; name: string | null; website: string | null; rating: number | null; is_active: boolean | null }[]) {
       if (!a.name || a.is_active === false) continue;
       const rating = Number(a.rating) || 0;
@@ -104,13 +117,16 @@ Deno.serve(async (req) => {
     }
 
     // ── Event organizers (venues of upcoming events) ──────────────────────
-    const { data: evs } = await supabase
+    const { data: evs, error: evsError } = await supabase
       .from("events")
       .select("id, title, venue, city")
       .gte("date", new Date().toISOString())
       .not("venue", "is", null)
       .is("archived_at", null)
       .limit(PER_SOURCE);
+    if (evsError) {
+      unreadableSources.push(`events: ${evsError.message}`);
+    }
     const seenVenues = new Set<string>();
     for (const e of (evs ?? []) as { id: string; title: string | null; venue: string | null; city: string | null }[]) {
       if (!e.venue) continue;
@@ -149,7 +165,12 @@ Deno.serve(async (req) => {
     let created = 0;
     for (let i = 0; i < fresh.length; i += 200) {
       const batch = fresh.slice(i, i + 200);
-      const { data } = await supabase.from("prospect_leads").insert(batch).select("id");
+      const { data, error } = await supabase.from("prospect_leads").insert(batch).select("id");
+      // RAISE. Silently creating 0 leads from a full candidate list is the
+      // shape that made this agent look like it had nothing to find.
+      if (error) {
+        throw new Error(`lead-sourcing: could not insert a batch of ${batch.length} leads: ${error.message}`);
+      }
       created += (data ?? []).length;
     }
     if (created > 0) {
@@ -157,9 +178,12 @@ Deno.serve(async (req) => {
     }
 
     ctx.processed(candidates.length);
-    ctx.summary(`lead sourcing: ${candidates.length} candidates, ${created} new leads (deduped)`);
-    ctx.meta({ candidates: candidates.length, created });
-    return { candidates: candidates.length, created };
+    ctx.summary(
+      `lead sourcing: ${candidates.length} candidates, ${created} new leads (deduped)` +
+        (unreadableSources.length ? `; ${unreadableSources.length} source(s) UNREADABLE` : ""),
+    );
+    ctx.meta({ candidates: candidates.length, created, unreadableSources });
+    return { candidates: candidates.length, created, unreadableSources };
   });
 
   return json({ ok: ledger.ok, status: ledger.status, ...(ledger.result ?? {}) }, ledger.ok ? 200 : 500, corsHeaders);

@@ -73,15 +73,30 @@ Deno.serve(async (req) => {
 
     // ── 3) Effectiveness pass first (interventions ≥ 14d old, no outcome) ──
     const outcomeCutoff = new Date(now - OUTCOME_AFTER_DAYS * DAY).toISOString();
-    const { data: pending } = await supabase
+    const { data: pending, error: pendingError } = await supabase
       .from("winback_interventions")
       .select("id, user_id")
       .in("status", ["sent"])
       .lte("created_at", outcomeCutoff)
       .limit(500);
+    // WEB-BE-032, ported from _shared/agents/churn-winback.ts, which is the same
+    // agent and was fixed while this copy was not. A batch job that cannot read
+    // its work list has not done zero work, it has not run - and runAgent turns
+    // a throw into status "failure" rather than a healthy run over an empty
+    // result.
+    if (pendingError) {
+      throw new Error(`churn-winback: could not read pending interventions: ${pendingError.message}`);
+    }
     let retained = 0, churnedOut = 0;
     for (const iv of (pending ?? []) as { id: string; user_id: string }[]) {
-      const { data: prof } = await supabase.from("profiles").select("lifecycle_stage").eq("user_id", iv.user_id).maybeSingle();
+      const { data: prof, error: profError } = await supabase.from("profiles").select("lifecycle_stage").eq("user_id", iv.user_id).maybeSingle();
+      // Per-item, so logged rather than thrown: one unreadable profile must not
+      // abandon the rest of the batch. The cost is that this user's win-back is
+      // never scored and sits in `sent` forever, quietly excluded from the
+      // retention numbers below.
+      if (profError) {
+        console.error(`churn-winback: could not read profile ${iv.user_id} for outcome:`, profError.message);
+      }
       const stage = prof?.lifecycle_stage as string | undefined;
       const outcome = stage === "active" || stage === "reactivated" ? "retained" : (stage === "churned" || stage === "dormant" ? "churned" : null);
       if (outcome) {
@@ -91,12 +106,17 @@ Deno.serve(async (req) => {
     }
 
     // ── 1) Score churn + move high-risk to at_risk ────────────────────────
-    const { data: profiles } = await supabase
+    const { data: profiles, error: profilesError } = await supabase
       .from("profiles")
       .select("user_id, email, lifecycle_stage, lifecycle_signals")
       .in("lifecycle_stage", ["active", "at_risk", "dormant"])
       .not("email", "is", null)
       .limit(BATCH);
+    // Same reasoning as the work list above: no profiles because the query
+    // failed is not the same as no profiles to score.
+    if (profilesError) {
+      throw new Error(`churn-winback: could not read profiles to score: ${profilesError.message}`);
+    }
     const rows = (profiles ?? []) as { user_id: string; email: string; lifecycle_stage: string; lifecycle_signals: Signals | null }[];
 
     let scored = 0, movedAtRisk = 0, valueReminders = 0, offers = 0, approvalsQueued = 0, gated = 0, skipped = 0;
@@ -156,7 +176,16 @@ Deno.serve(async (req) => {
       if (!gate.passed) { gated++; continue; }
 
       const res = await sendNurtureEmail(supabase, { agentKey: AGENT_KEY, kind: `winback_${play}`, userId: p.user_id, email: p.email, subject, bodyHtml: html, bodyText: text, qualityScore: gate.score });
-      const { data: ivRow } = await supabase.from("winback_interventions").insert({ user_id: p.user_id, churn_score: score, play, offer_pct: offerPct, status: "sent", send_id: res.sendId ?? null }).select("id").single();
+      const { data: ivRow, error: ivError } = await supabase.from("winback_interventions").insert({ user_id: p.user_id, churn_score: score, play, offer_pct: offerPct, status: "sent", send_id: res.sendId ?? null }).select("id").single();
+      // The mail has already gone out at this point, so throwing would abandon
+      // the remaining users without un-sending anything. Logged loudly instead:
+      // an unrecorded intervention is one that can never be scored.
+      if (ivError) {
+        console.error(
+          `churn-winback: SENT ${play} to ${p.user_id} but failed to record the intervention; it will never be scored:`,
+          ivError.message,
+        );
+      }
       await writeAgentAudit(supabase, { agentKey: AGENT_KEY, actionType: play === "offer" ? "winback_offer_sent" : "winback_reminder_sent", targetRef: `user:${p.user_id}`, after: { churnScore: score, offerPct, interventionId: ivRow?.id } });
       if (wantsOffer) offers++; else valueReminders++;
     }
