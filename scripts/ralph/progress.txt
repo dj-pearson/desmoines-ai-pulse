@@ -478,3 +478,29 @@ Evidence:
   - The check cannot see a guard that adds no import and no function - an inlined `if (x) continue`
     or a flipped comparison. cappedRecently's fail-closed fix would have slipped through it.
 ---
+
+## 2026-08-27 - WEB-SEC-025 AC7: the guard now covers all nine tally tables
+- check-ballot-reads.sh watched `votes` alone. It now watches votes plus the eight AC7 found with the
+  same shape (a count rendered, a user identity exposed). Authored-content tables from the same sweep
+  are deliberately excluded.
+- WINDOW BUG fixed first: the guard read 8 lines after each .from() looking for an own-row filter,
+  which is enough for a chained .eq() and not for a multi-line .select(`...`) template.
+  ProfilePage.tsx:42 and :148 put .eq('user_id', ...) eleven lines down, so widening the list without
+  this would have reported two correct reads as leaks. Now reads to the statement's semicolon,
+  capped at 40 lines.
+- 18 references classified across web, iOS and Android; exactly one is a real tally read
+  (useCommunityFeatures.ts:217, event_attendance). Recorded in ALLOWED_TALLY_READS keyed on FILE and
+  TABLE, not on a line number.
+- Negative-controlled both ways: a new unfiltered read on photo_likes exits 1; emptying the allowlist
+  exits 1 naming :217.
+- Files: scripts/check-ballot-reads.sh, prd.json.
+- **Learnings for future iterations:**
+  - Before widening a guard's INPUT, check its DETECTION on the new inputs. The 8-line window had been
+    correct for every votes query ever written and was wrong for the first event_attendance one.
+  - `git checkout -- <file>` to undo a one-line test edit throws away every other edit in that file.
+    I lost the whole patch that way and had to reapply it. Undo the line, not the file.
+  - Reachability from this container, measured: the agent proxy allows package registries, GitHub and
+    api.anthropic.com. desmoinesinsider.com and deno.land both answer 403 to CONNECT. So no live
+    verification of SEO claims, no Supabase, no Deno - `curl -sS "$HTTPS_PROXY/__agentproxy/status"`
+    lists the policy and the recent denials.
+---
