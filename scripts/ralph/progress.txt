@@ -453,3 +453,28 @@ Evidence:
   - The ratchet's own exclusions are assumptions. "`{ count }` alone is usually deliberate" was
     written into the code and was wrong in the single worst place it could have been.
 ---
+
+## 2026-08-27 - WEB-BE-032 AC4: a check for duplicated-agent drift
+- scripts/check-agent-pair-drift.mjs. Pairs come from the VALUES table in migration 20260710000000,
+  not from name matching. Compares two exact sets per pair - imported modules, and top-level
+  function/SCREAMING_CASE names - rather than a similarity percentage.
+- Rejected the percentage-overlap ratchet: the pairs sit at 78-98% for ordinary reasons, so any
+  tolerance wide enough not to fire on an unrelated edit is wider than a three-line safety guard.
+- Negative-controlled in git worktrees at fe1ae39 and b6e458d: flags all three real divergences, each
+  named by the artefact that carried the fix (trialNotice/sendNotice, crisisSupport, exceeds).
+- First run found fetchWithTimeout in two standalones and not their shared copies. NOT a defect - the
+  shared calls already passed AbortSignal.timeout, which binds before the wrapper's outer bound.
+  Converged the shared copies rather than adding an exemption.
+- Wired into pr-checks.yml (node builtins, no npm ci) and `npm run check-agent-drift`.
+- Files: scripts/check-agent-pair-drift.mjs, .github/workflows/pr-checks.yml, package.json,
+  _shared/agents/support-responder.ts, _shared/agents/ticket-classifier.ts, prd.json.
+- **Learnings for future iterations:**
+  - To prove a check would have caught a past defect, run it in a git worktree at the commit before
+    the fix: `git worktree add -q --detach <dir> <sha>` then copy the script in. Asserting it "would
+    have" without that is the same as not testing it.
+  - When a new check flags something real but harmless, converge the code rather than exempting it.
+    Every exemption is a place the check has been told not to look, and this repo already has one
+    that hid the worst instance of the defect its own script was written for.
+  - The check cannot see a guard that adds no import and no function - an inlined `if (x) continue`
+    or a flipped comparison. cappedRecently's fail-closed fix would have slipped through it.
+---

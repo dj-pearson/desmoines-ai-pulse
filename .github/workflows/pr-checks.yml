@@ -229,6 +229,17 @@ jobs:
       - name: No new discarded Supabase errors
         run: node scripts/check-discarded-supabase-errors.mjs
 
+      # Every AOS agent exists twice - as an agent-* edge function and as a
+      # _shared/agents module - and both are deployable. Three fixes landed on
+      # one copy only, two of them in stories marked done: WEB-LEGAL-005's
+      # crisis floor, WEB-LEGAL-006's trial-conversion notice, and
+      # compliance-monitor's null-count gate. In each case the story's AC, the
+      # fix and the test all named the same single file, so the second
+      # implementation was invisible from every angle at once. Node builtins
+      # only, like the check above, so this job needs no npm ci.
+      - name: Duplicated agents have not drifted apart
+        run: node scripts/check-agent-pair-drift.mjs
+
       # WEB-SEC-025 step 3 replaces the USING (true) SELECT policy on votes. A
       # read that is not scoped to the caller returns ballots today and an empty
       # array after - silently, because a denied SELECT under RLS is an empty
