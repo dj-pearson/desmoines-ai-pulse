@@ -1,0 +1,177 @@
+# Deploy edge functions (WEB-OPS-024)
+#
+# There was no deploy step for edge functions. rls-config-audit.yml runs
+# scripts/check-edge-deploys.ts, which DETECTS undeployed functions and writes
+# them to edge-deploy-baseline.json - so drift was measured every day and then
+# baselined as accepted. Measured 2026-08-27: of 160 functions in the repo, 71
+# matched production, 24 were stale and 65 had never been deployed at all.
+#
+# The concrete cost of that: production's backfill-images was six days behind
+# and predated the image_checked_at column entirely, so it never stamped an
+# attempt - count(image_checked_at) was 0 of 1302 events. Failed rows were
+# therefore never retired from the working set and the same four events were
+# re-attempted every hour while 931 events stayed imageless.
+#
+# WHAT THIS DOES NOT DO: deploy the 65 that have never shipped. 51 of them are
+# pinned verify_jwt = false in config.toml, so deploying the set would put
+# agent-control, agent-runner, crm-console and support-console live as
+# gateway-unauthenticated endpoints in one go. They have in-function guards, but
+# "51 new public endpoints" is a review, not a side effect of merging. Ship them
+# deliberately with the workflow_dispatch input below, a few at a time.
+
+name: Deploy Edge Functions
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/**'
+      - 'supabase/config.toml'
+  workflow_dispatch:
+    inputs:
+      functions:
+        description: 'Space-separated function names to deploy. Empty = whatever the last commit changed.'
+        required: false
+        default: ''
+
+concurrency:
+  # Two deploys racing on the same function is a coin flip over which bundle
+  # wins. Queue instead of cancelling: a cancelled deploy still leaves the
+  # earlier half-applied set live.
+  group: deploy-edge-functions
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # SUPABASE_ACCESS_TOKEN is scoped to this environment, matching how
+    # rls-config-audit.yml scopes SUPABASE_SERVICE_ROLE_KEY. A job without this
+    # line receives an empty string and every deploy fails on auth.
+    environment: Scrape
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Need the previous commit to diff against for push events.
+          fetch-depth: 2
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # SUPABASE_ACCESS_TOKEN is a NEW secret this workflow introduces - the repo
+      # had no edge-function deploy, so nothing needed it before. Without this
+      # check the run gets to the deploy step and fails per function on an
+      # opaque auth error, which reads like a broken function rather than a
+      # missing secret.
+      - name: Check required secrets
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        run: |
+          missing=0
+          for v in SUPABASE_ACCESS_TOKEN SUPABASE_URL; do
+            if [ -z "${!v:-}" ]; then
+              echo "::error title=Missing secret::$v is not set on the 'Scrape' environment"
+              missing=1
+            fi
+          done
+          if [ "$missing" = "1" ]; then
+            echo "Create a personal access token at https://supabase.com/dashboard/account/tokens"
+            echo "and add it as SUPABASE_ACCESS_TOKEN under Settings > Environments > Scrape."
+            exit 1
+          fi
+
+      - name: Work out what to deploy
+        id: plan
+        env:
+          INPUT_FUNCTIONS: ${{ github.event.inputs.functions }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        run: |
+          set -euo pipefail
+          REF=$(printf '%s' "$SUPABASE_URL" | sed -E 's#https://([^.]+)\..*#\1#')
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+
+          if [ -n "${INPUT_FUNCTIONS// /}" ]; then
+            echo "Explicit list from workflow_dispatch."
+            printf '%s\n' $INPUT_FUNCTIONS > to_deploy.txt
+          else
+            BASE="${{ github.event.before }}"
+            # First push to a branch reports an all-zero before-SHA.
+            if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+              BASE="HEAD~1"
+            fi
+            PLAN=$(node scripts/list-edge-deploys.mjs "$BASE" HEAD)
+            echo "plan: $PLAN"
+            SHARED=$(printf '%s' "$PLAN" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>process.stdout.write(String(JSON.parse(d).sharedChanged)))")
+            # console.log per line, not join(): join leaves no trailing newline, so
+            # the widening append below lands on the same line as the last entry
+            # and both names are lost to a bogus concatenation.
+            printf '%s' "$PLAN" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>JSON.parse(d).functions.forEach(f=>console.log(f)))" > to_deploy.txt
+
+            if [ "$SHARED" = "true" ]; then
+              # _shared/ is bundled into each function, so a change there is a
+              # change to every function that imports it. Widen to what is
+              # ALREADY deployed - never to the never-deployed set, per the note
+              # at the top of this file.
+              echo "_shared or config.toml changed - widening to all currently deployed functions."
+              curl -sS -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+                "https://api.supabase.com/v1/projects/$REF/functions" \
+                | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{JSON.parse(d).filter(f=>f.status==='ACTIVE').forEach(f=>console.log(f.slug))})" \
+                >> to_deploy.txt
+            fi
+          fi
+
+          # Drop blanks, support directories, duplicates, and anything without a
+          # directory in this checkout (deleted or renamed functions).
+          sort -u to_deploy.txt | grep -v '^$' | grep -v '^_' > candidates.txt || true
+          : > final.txt
+          while read -r fn; do
+            if [ -d "supabase/functions/$fn" ]; then
+              echo "$fn" >> final.txt
+            else
+              echo "skip $fn - no supabase/functions/$fn in this commit"
+            fi
+          done < candidates.txt
+          echo "count=$(wc -l < final.txt | tr -d ' ')" >> "$GITHUB_OUTPUT"
+          echo "Deploying $(wc -l < final.txt | tr -d ' ') function(s):"
+          cat final.txt
+
+      - name: Deploy
+        if: steps.plan.outputs.count != '0'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -uo pipefail
+          failed=0
+          while read -r fn; do
+            # config.toml pins verify_jwt per function and deploy reads it, so
+            # print the posture being applied - a function silently flipping to
+            # gateway-authenticated breaks every cron that calls it, and that is
+            # invisible in an exit code.
+            jwt=$(awk -v f="[functions.$fn]" '$0==f{found=1;next} /^\[/{found=0} found&&/verify_jwt/{print $3}' supabase/config.toml)
+            echo "::group::$fn (verify_jwt=${jwt:-default})"
+            if supabase functions deploy "$fn" --project-ref "${{ steps.plan.outputs.ref }}"; then
+              echo "deployed $fn"
+            else
+              echo "::error title=Deploy failed::$fn"
+              failed=$((failed + 1))
+            fi
+            echo "::endgroup::"
+          done < final.txt
+          # Report every failure rather than stopping at the first: a partial
+          # deploy is the state that needs the full list to recover from.
+          if [ "$failed" -gt 0 ]; then
+            echo "$failed function(s) failed to deploy"
+            exit 1
+          fi
+
+      - name: Refresh the deploy baseline
+        if: always() && steps.plan.outputs.count != '0'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        # Keeps edge-deploy-baseline.json honest, so rls-config-audit.yml
+        # reports the drift that is left rather than the drift we just fixed.
+        run: npx tsx scripts/check-edge-deploys.ts || true
