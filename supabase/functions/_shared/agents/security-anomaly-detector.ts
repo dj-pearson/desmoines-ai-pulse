@@ -37,12 +37,38 @@ interface Incident {
   evidence: Record<string, unknown>;
 }
 
+/**
+ * WEB-BE-032. All three detector reads below dropped their error, and for a
+ * DETECTOR that is the worst direction available: an unreadable table yields an
+ * empty array, no incident is raised, and the run reports "all clear". The
+ * comment on the login_attempts query records that this exact query used to
+ * 42703, so "the credential-stuffing detector has never seen an attempt" is
+ * measured history, not a hypothetical.
+ *
+ * It does NOT throw, unlike the work-list reads in the nurture and win-back
+ * agents. Three independent detectors run here and one unreadable table must
+ * not stop the other two. Instead the failure is raised through the SAME
+ * channel as a real finding, which is where someone is already looking, and
+ * createAgentTask/notifyOps dedupe on the key so a persistent failure opens one
+ * task rather than one every fifteen minutes.
+ */
+function unreadable(table: string, error: { message?: string } | null): Incident | null {
+  if (!error) return null;
+  console.error(`[security-anomaly-detector] ${table} unreadable:`, error.message);
+  return {
+    key: `detector_source_unreadable:${table}`,
+    severity: "high",
+    title: `Security detector BLIND - ${table} could not be read`,
+    evidence: { table, error: error.message ?? String(error) },
+  };
+}
+
 export const run: AgentRun = async (ctx, { supabase }) => {
   const sinceIso = new Date(Date.now() - WINDOW_MIN * 60 * 1000).toISOString();
   const incidents: Incident[] = [];
 
   // ── 1. Credential stuffing (failed logins) ──────────────────────────────
-  const { data: fails } = await supabase
+  const { data: fails, error: failsError } = await supabase
     .from("login_attempts")
     // Real columns are client_ip and attempted_at; ip_address / attempt_time
     // belong to failed_login_attempts, a SEPARATE table with 0 rows and no
@@ -57,6 +83,8 @@ export const run: AgentRun = async (ctx, { supabase }) => {
     .select("email, client_ip")
     .gte("attempted_at", sinceIso)
     .limit(5000);
+  const login_attemptsBlind = unreadable("login_attempts", failsError);
+  if (login_attemptsBlind) incidents.push(login_attemptsBlind);
 
   const byIp = new Map<string, number>();
   const byEmailIps = new Map<string, Set<string>>();
@@ -88,11 +116,13 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   }
 
   // ── 2. Quota abuse (rate-limit pressure) ────────────────────────────────
-  const { data: rl } = await supabase
+  const { data: rl, error: rlError } = await supabase
     .from("rate_limit_entries")
     .select("client_id, endpoint, request_count")
     .gte("window_start", sinceIso)
     .limit(5000);
+  const rate_limit_entriesBlind = unreadable("rate_limit_entries", rlError);
+  if (rate_limit_entriesBlind) incidents.push(rate_limit_entriesBlind);
   const byClient = new Map<string, number>();
   for (const r of (rl ?? []) as { client_id: string; request_count: number }[]) {
     byClient.set(r.client_id, (byClient.get(r.client_id) ?? 0) + (r.request_count ?? 0));
@@ -109,11 +139,13 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   }
 
   // ── 3. Unusual admin activity / high-severity security events ───────────
-  const { data: audit } = await supabase
+  const { data: audit, error: auditError } = await supabase
     .from("security_audit_logs")
     .select("event_type, severity, identifier, action")
     .gte("created_at", sinceIso)
     .limit(5000);
+  const security_audit_logsBlind = unreadable("security_audit_logs", auditError);
+  if (security_audit_logsBlind) incidents.push(security_audit_logsBlind);
   const rows = (audit ?? []) as { event_type: string; severity: string; identifier: string; action: string | null }[];
   const highSev = rows.filter((r) => r.severity === "high");
   const adminActions = rows.filter((r) => r.event_type === "admin_action");
@@ -133,6 +165,12 @@ export const run: AgentRun = async (ctx, { supabase }) => {
       evidence: { count: adminActions.length },
     });
   }
+
+  // A run that could not read a source has not scanned it, and the summary
+  // is what a human reads first.
+  const blindSources = incidents
+    .filter((i) => i.key.startsWith("detector_source_unreadable:"))
+    .map((i) => i.key.split(":")[1]);
 
   // ── Open incident tasks (idempotent via dedupe key) ─────────────────────
   let opened = 0;
@@ -162,7 +200,9 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   }
 
   ctx.processed(rows.length + (fails?.length ?? 0) + (rl?.length ?? 0));
-  ctx.summary(`scanned ${rows.length} audit + ${fails?.length ?? 0} logins + ${rl?.length ?? 0} rl rows; ${opened} incident(s)`);
+  ctx.summary(`scanned ${rows.length} audit + ${fails?.length ?? 0} logins + ${rl?.length ?? 0} rl rows; ` +
+    `${opened} incident(s)` +
+    (blindSources.length ? ` - BLIND on ${blindSources.join(", ")}` : ""));
   ctx.meta({ incidents: incidents.map((i) => i.key), opened });
   return { incidents: incidents.length, opened };
 };

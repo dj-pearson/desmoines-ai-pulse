@@ -504,3 +504,27 @@ Evidence:
     verification of SEO claims, no Supabase, no Deno - `curl -sS "$HTTPS_PROXY/__agentproxy/status"`
     lists the policy and the recent denials.
 ---
+
+## 2026-08-27 - WEB-BE-032: the security and fraud detectors report their own blindness
+- 231 -> 206 sites. 10 fixed across four files (two agents, both copies each).
+- Prioritised by what actually runs: 46 of the remaining sites were in _shared/agents modules, the
+  path agent-runner dispatches and pg_cron reaches. Sort the baseline by that prefix.
+- security-anomaly-detector: all three reads are detector work lists. A dropped error yields an empty
+  array, no incident, and an "all clear" run. Its own comment records that the login_attempts query
+  used to 42703, so the credential-stuffing detector has never seen an attempt.
+- fraud-abuse-detector: both tables (payments, usage_events) are 42P01 today, so both detectors have
+  always reported nothing.
+- Neither throws. Independent detectors run in one pass and one unreadable table must not stop the
+  others; the failure is raised as a highest-tier finding through the same channel as a real one,
+  deduped on `detector_source_unreadable:<table>`, and named in ctx.summary.
+- Files: _shared/agents/{security-anomaly-detector,fraud-abuse-detector}.ts,
+  agent-{security-monitor,fraud-monitor}/index.ts, supabase-error-baseline.json, prd.json.
+- **Learnings for future iterations:**
+  - The treatment convention has FOUR cases, not three: work-list THROW, per-item LOG,
+    cap/entitlement FAIL CLOSED, detector-source RAISE AS A FINDING. A detector that throws stops
+    its siblings; a detector that logs is invisible in the surface people actually read.
+  - Prioritise WEB-BE-032 sites by `supabase/functions/_shared/` prefix. Those are the ones cron
+    reaches; the agent-* standalones are admin-reachable only.
+  - check-agent-pair-drift.mjs now binds real work: both fixes added a top-level function, so
+    forgetting the twin would have failed CI rather than becoming next week's finding.
+---
