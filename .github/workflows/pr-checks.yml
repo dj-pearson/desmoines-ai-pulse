@@ -49,6 +49,21 @@ jobs:
       - name: Run TypeScript type check
         run: npm run type-check
 
+      # Edge functions are excluded from tsconfig.json, and no workflow runs
+      # `deno check`, so until now NOTHING type-checked supabase/functions -
+      # eslint parses them and runs no type-aware rules. A wrong property on a
+      # locally-typed object reached production unchallenged, which is exactly
+      # the class of edit WEB-BE-032's fixes have been making by the dozen.
+      #
+      # Scoped to _shared/ deliberately. That is where every agent module, the
+      # crisis floor, the trial notice and the consent classifier live, and it
+      # comes back CLEAN at zero errors. The other ~120 function directories
+      # report 132 errors that are overwhelmingly shim imprecision rather than
+      # defects, so gating on them would be red from the first run - the trap
+      # WEB-CI-020 and WEB-CI-021 already taught this repo twice.
+      - name: Type-check the shared edge modules
+        run: npm run type-check:edge
+
       # Named-import integrity: a named import with no matching export is not a
       # type error, and esbuild strips types without checking, so it reaches
       # production as an undefined component (React #130). See WEB-QA-001.

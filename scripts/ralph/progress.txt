@@ -569,3 +569,25 @@ Evidence:
   - Where a helper returns a neutral-looking default on error (`empty`, `{}`, `0`), check what
     CONSUMES it. If the default gets persisted or scored, it is an assertion, not an absence.
 ---
+
+## 2026-08-27 - the edge functions are type-checked now (partly), without Deno
+- `npm run type-check:edge` -> tsconfig.edge.json, wired into pr-checks.yml. Two shims in
+  supabase/functions/_typecheck/: remote.d.ts declares the eleven names imported from https
+  specifiers as `any` (mapped via paths: {"https://*": [...]}), deno.d.ts declares the Deno globals
+  actually used. No safety at the boundary; full checking inside our own modules.
+- SCOPED TO _shared/ deliberately. Measured: supabase/functions/** is 132 errors loose / 181 with
+  strictNullChecks, overwhelmingly shim imprecision; _shared/** is ZERO. A wide gate would be red on
+  day one - the WEB-CI-020/021 trap.
+- Negative-controlled with a wrong property on a locally-typed object in _shared/crisisSupport.ts:
+  exit 2 naming file, line and property, in 2.1s.
+- **Learnings for future iterations:**
+  - A type check configured with strictNullChecks:false does not just find fewer bugs, it INVENTS a
+    class of them. The first wide run flagged 67 "Property 'reason' does not exist on ClaudeTextResult"
+    across nine functions; the code is correct, and narrowing a `ok: true | false` discriminated union
+    needs strictNullChecks. I had the finding half written before checking the definition. Check a
+    flagged union against the compiler options before believing it.
+  - tsc CAN check Deno code: map the https specifiers with `paths` to a loose .d.ts and declare the
+    Deno globals. `moduleResolution: Bundler` + `allowImportingTsExtensions` handles the .ts imports.
+  - Measure the wide scope before choosing it. _shared/ was clean at zero and the full tree was not
+    close - that measurement, not a preference, is what set the scope.
+---
