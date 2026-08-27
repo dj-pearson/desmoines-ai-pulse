@@ -86,12 +86,17 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   let ambiguousLinks = 0;
 
   // ── 1) Expired events ────────────────────────────────────────────────
-  const { data: past } = await supabase
+  const { data: past, error: pastError } = await supabase
     .from("events")
     .select("id, title, date, source_url")
     .lt("date", nowIso)
     .is("archived_at", null)
     .limit(ARCHIVE_LIMIT);
+  // WEB-BE-032. THE work list for the expired-event archive sweep. A dropped
+  // error archived nothing and reported a successful run, indistinguishable
+  // from there being no past events - which is exactly the outcome WEB-BE-034
+  // AC4 asks to verify, and it could not be verified while this was silent.
+  if (pastError) throw new Error(`link-monitor: expired-event read failed: ${pastError.message}`);
   const pastEvents = (past ?? []) as { id: string; title: string | null; date: string; source_url: string | null }[];
 
   for (const ev of pastEvents) {
@@ -140,13 +145,17 @@ export const run: AgentRun = async (ctx, { supabase }) => {
     candidates.push({ table, rowId, url });
   };
 
-  const { data: failing } = await supabase
+  const { data: failing, error: failingError } = await supabase
     .from("content_link_checks")
     .select("target_table, row_id, url")
     .eq("marked_dead", false)
     .gt("consecutive_failures", 0)
     .order("last_checked_at", { ascending: true })
     .limit(Math.floor(LINK_BUDGET / 2));
+  // The re-check queue. A dropped error silently drops every known-failing
+  // link from this run, so a dead link stops being re-checked and never
+  // reaches marked_dead.
+  if (failingError) throw new Error(`link-monitor: content_link_checks read failed: ${failingError.message}`);
   for (const f of (failing ?? []) as { target_table: string; row_id: string; url: string }[]) {
     pushCand(f.target_table, f.row_id, f.url);
   }

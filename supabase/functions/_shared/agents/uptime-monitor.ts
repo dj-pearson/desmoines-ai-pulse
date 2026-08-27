@@ -147,6 +147,9 @@ export const run: AgentRun = async (ctx, { supabase }) => {
     })),
   );
 
+  // Targets whose probe history could not be read this run. Reported in the
+  // summary because "0 failing" and "could not check" are different answers.
+  const blindTargets: string[] = [];
   let incidents = 0;
   let recovered = 0;
   const downNow: string[] = [];
@@ -156,12 +159,21 @@ export const run: AgentRun = async (ctx, { supabase }) => {
     if (!r.ok) {
       // Sustained? Look at the last CONSEC_FAIL_THRESHOLD probes (which now
       // include the one we just inserted) — all failing ⇒ sustained outage.
-      const { data: recent } = await supabase
+      const { data: recent, error: recentError } = await supabase
         .from("uptime_probes")
         .select("ok")
         .eq("target_key", r.target.key)
         .order("checked_at", { ascending: false })
         .limit(CONSEC_FAIL_THRESHOLD);
+      // WEB-BE-032. Per-target, so it logs rather than throwing - one unreadable
+      // probe history must not stop the other targets being checked. But the
+      // direction is the bad one: an empty result makes `sustained` false, so a
+      // target that IS down reports as up and no incident is raised. Named in the
+      // summary below so a run that could not check a target says so.
+      if (recentError) {
+        console.error(`[uptime-monitor] probe history unreadable for ${r.target.key}: ${recentError.message}`);
+        blindTargets.push(r.target.key);
+      }
       const rows = (recent ?? []) as { ok: boolean }[];
       const sustained = rows.length >= CONSEC_FAIL_THRESHOLD && rows.every((x) => !x.ok);
       if (sustained) {
@@ -182,13 +194,16 @@ export const run: AgentRun = async (ctx, { supabase }) => {
       }
     } else {
       // Recovery: if an incident task is open for this target, resolve it.
-      const { data: open } = await supabase
+      const { data: open, error: openError } = await supabase
         .from("agent_tasks")
         .select("id")
         .eq("agent_key", AGENT_KEY)
         .eq("dedupe_key", dedupeKey)
         .in("status", ["open", "escalated", "assigned", "auto_resolving"])
         .limit(1);
+      // Recovery read: is there an open task to resolve. A dropped error leaves a
+      // resolved outage's task open, which is noise rather than a missed alert.
+      if (openError) console.warn(`[uptime-monitor] open-task read failed for ${dedupeKey}: ${openError.message}`);
       const openRows = (open ?? []) as { id: string }[];
       if (openRows.length > 0) {
         await supabase
@@ -223,7 +238,11 @@ export const run: AgentRun = async (ctx, { supabase }) => {
 
   const upCount = results.filter((r) => r.ok).length;
   ctx.processed(results.length);
-  ctx.summary(`probed ${results.length} targets — ${upCount} up, ${results.length - upCount} failing; ${incidents} incident(s), ${recovered} recovered`);
+  ctx.summary(
+    `probed ${results.length} targets \u2014 ${upCount} up, ${results.length - upCount} failing; ` +
+      `${incidents} incident(s), ${recovered} recovered` +
+      (blindTargets.length ? ` \u2014 UNCHECKED: ${blindTargets.join(", ")}` : ""),
+  );
   ctx.meta({ up: upCount, down: results.length - upCount, incidents, recovered, downNow });
   return { probed: results.length, up: upCount, incidents, recovered };
 };

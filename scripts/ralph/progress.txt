@@ -652,3 +652,24 @@ Evidence:
   - Three deployed functions in two days were broken by a name that was never right. Each needed only
     a type checker, and none of them had one.
 ---
+
+## 2026-08-27 - WEB-OPS-022 recorded, and WEB-BE-032's four monitors (14 sites)
+- Added WEB-OPS-022 for the venue-default-image work (commit ea1b737) so the pivot is tracked in
+  prd.json rather than living as loose commits. AC1-AC4 done; AC5-AC8 are the owner's.
+- 176 -> 162 discarded-error sites; scheduled path 26 -> 19.
+- edge-metrics-monitor and ci-health-watcher: work lists, now THROW. edge-metrics compared an EMPTY
+  current window against an empty baseline and reported healthy, so an error spike and an unreadable
+  metrics table were the same output.
+- link-content-monitor: both work lists throw. The first is the expired-event archive sweep, so a
+  dropped error archived nothing and reported success - the exact outcome WEB-BE-034 AC4 asks someone
+  to verify, unverifiable while the read was silent.
+- uptime-monitor: LOG, not throw - both reads are per-target. An empty result makes `sustained` false
+  so a down target reports as up, which is why unreadable targets are now named in ctx.summary as
+  "UNCHECKED: ...". "0 failing" and "could not check" are different answers.
+- **Learnings for future iterations:**
+  - When inserting after a multi-line Supabase call, find the statement's terminating token by INDEX
+    from the anchor and derive the indent from the anchor's line. Guessing the indent literal failed
+    on the first try; a helper that computes it did not.
+  - `^import [^\n]*\n` matches the OPENING line of a multi-line import. That broke two files this
+    session. Anchor on the last line ending in `";` instead.
+---

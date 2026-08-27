@@ -55,11 +55,16 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   };
 
   // ── edge_function_metrics (instrumented HTTP functions) ──────────────
-  const { data: metrics } = await supabase
+  const { data: metrics, error: metricsError } = await supabase
     .from("edge_function_metrics")
     .select("function_name, status_class, duration_ms, created_at")
     .gte("created_at", base0)
     .limit(20000);
+  // WEB-BE-032. THE work list. A dropped error compared an EMPTY current
+  // window against an empty baseline, found no anomaly and reported a healthy
+  // run - so an edge-function error spike and an unreadable metrics table
+  // looked identical. runAgent records the throw as status failure.
+  if (metricsError) throw new Error(`edge-metrics: edge_function_metrics read failed: ${metricsError.message}`);
   for (const r of (metrics ?? []) as { function_name: string; status_class: string; duration_ms: number | null; created_at: string }[]) {
     const m = r.created_at >= cur0 ? current : baseline;
     const a = bump(m, r.function_name);
@@ -70,11 +75,13 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   }
 
   // ── automation_job_runs (internal agent/cron functions) ──────────────
-  const { data: runs } = await supabase
+  const { data: runs, error: runsError } = await supabase
     .from("automation_job_runs")
     .select("agent_key, job_name, status, started_at, finished_at")
     .gte("started_at", base0)
     .limit(20000);
+  // Same shape for the agent-run half of the comparison.
+  if (runsError) throw new Error(`edge-metrics: automation_job_runs read failed: ${runsError.message}`);
   for (const r of (runs ?? []) as { agent_key: string | null; job_name: string | null; status: string; started_at: string; finished_at: string | null }[]) {
     const name = r.agent_key || r.job_name || "unknown";
     const m = r.started_at >= cur0 ? current : baseline;
