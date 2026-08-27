@@ -244,3 +244,35 @@ Evidence:
   - npm run lint cannot run in a fresh remote container - @eslint/js is declared in package.json
     but node_modules/@eslint is absent. npm run type-check works.
 ---
+
+## 2026-08-27 - WEB-LEGAL-012 (partial: the web read/write path)
+- Corrected the story's premise. It records that the web UI "cannot write" event_alerts_enabled
+  because useEmailPreferences' interface omits it. It can: useSavedSearchAlerts upserts the column
+  and SavedSearchesTab renders it as the dashboard master switch. Different hook owns it.
+- The real defect was the READ next to it. alertsPrefQuery discarded its error, so any failure gave
+  `undefined !== false` -> true -> the switch renders ON for a user who had turned alerts OFF. Now
+  throws; the hook exposes alertsPrefUnavailable/alertsPrefLoading and the switch is DISABLED with
+  explanatory copy rather than defaulting to a value it does not have.
+- setAlertsPref had onSuccess and no onError, so a failed write was silent - the controlled switch
+  just snapped back. Added the error toast.
+- useEmailPreferences' existence check used .single() with the error discarded. .single() raises
+  PGRST116 for "no row", so it could not tell "no preferences yet" from a network/RLS failure; both
+  took the INSERT branch and a real existing row then failed the unique constraint. Now .maybeSingle()
+  with the error checked. Its console.error also moved to @/lib/logger.
+- Files: src/hooks/useSavedSearchAlerts.ts, src/hooks/useEmailPreferences.ts,
+  src/components/dashboard/SavedSearchesTab.tsx, prd.json (notes only).
+- Story stays passes:false. AC3 (iOS writes only UserDefaults), AC4 (no Android surface), AC6
+  (per-agent tests) and AC2's convergence decision are all untouched.
+- **Learnings for future iterations:**
+  - RUN `npm ci` FIRST in a fresh remote container. node_modules did not exist, so `npm run
+    type-check` and `npm run lint` ran off npx-fetched binaries and reported nothing about the
+    source: tsc resolved to 6.0.2 against the `^5.5.3` pin and died on `ignoreDeprecations: "5.0"`
+    before reading a file, and eslint died on a missing @eslint/js. Both look like repo breakage and
+    are not. After npm ci both are clean.
+  - `undefined !== false` is this repo's signature consent bug and it appears on BOTH sides. A
+    discarded read error plus a `!== false` default means the UI asserts consent it never read. When
+    fixing one, check whether the same expression guards the sender too.
+  - Before "the web has no surface for X", grep the column name across src/ rather than reading the
+    one hook whose name matches. event_alerts_enabled is written by useSavedSearchAlerts, not by
+    useEmailPreferences.
+---

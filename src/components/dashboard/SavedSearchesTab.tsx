@@ -28,6 +28,8 @@ export default function SavedSearchesTab() {
     searches,
     isLoading,
     alertsEnabledGlobally,
+    alertsPrefUnavailable,
+    alertsPrefLoading,
     toggleAlerts,
     deleteSearch,
     setAlertsPref,
@@ -53,16 +55,30 @@ export default function SavedSearchesTab() {
               Email me about new matches
             </Label>
             <p className="text-xs text-muted-foreground">
-              Master switch for all saved-search alert emails.
+              {alertsPrefUnavailable
+                ? "We couldn't load your setting. Reload the page before changing it."
+                : "Master switch for all saved-search alert emails."}
             </p>
           </div>
           <Switch
             id="global-alerts"
+            // Disabled rather than defaulted when the read failed. A switch that
+            // renders ON because the query errored tells the user their alerts
+            // are on when they may have turned them off (WEB-LEGAL-012).
+            disabled={alertsPrefUnavailable || alertsPrefLoading || setAlertsPref.isPending}
             checked={alertsEnabledGlobally}
             onCheckedChange={(v) =>
               setAlertsPref.mutate(v, {
                 onSuccess: () =>
                   toast({ title: v ? "Alerts on" : "Alerts paused" }),
+                // Without this the switch silently snaps back and the user is
+                // left believing a preference they never saved.
+                onError: () =>
+                  toast({
+                    title: "Couldn't save that",
+                    description: "Your alert setting is unchanged. Please try again.",
+                    variant: "destructive",
+                  }),
               })
             }
           />
