@@ -416,7 +416,29 @@ async function sha256Hex(data: ArrayBuffer): Promise<string> {
 /**
  * Build the public CDN URL for a stored file_path.
  */
+/**
+ * The public URL written into events.image_url and the other content tables.
+ *
+ * WEB-OPS-023. This used to return the supabase.co storage URL unconditionally,
+ * which meant every card image on every page view was billed as SUPABASE
+ * EGRESS - once per viewer, forever, for an object that was downloaded once.
+ * public/_headers' immutable cache rules did not help: they apply to files
+ * Cloudflare Pages serves out of dist/, not to a URL on another origin.
+ *
+ * With MEDIA_CDN_BASE set, this emits our own domain instead and
+ * functions/media/[[path]].ts serves the bytes through the Cloudflare edge
+ * cache. The first request per object still costs Supabase egress; nothing
+ * after it does.
+ *
+ * UNSET IS THE OLD BEHAVIOUR, on purpose. This is a value that goes into a
+ * column all three clients read, so the switch is an environment variable
+ * somebody sets deliberately rather than a deploy that silently changes what
+ * gets written. Rows written before the switch keep their supabase.co URLs and
+ * keep resolving; scripts/repoint-media-urls.ts moves them when you are ready.
+ */
 function cdnUrlFor(filePath: string): string {
+  const cdnBase = Deno.env.get("MEDIA_CDN_BASE");
+  if (cdnBase) return `${cdnBase.replace(/\/+$/, "")}/media/${filePath}`;
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   return `${supabaseUrl}/storage/v1/object/public/media/${filePath}`;
 }

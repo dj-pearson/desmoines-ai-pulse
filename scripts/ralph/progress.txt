@@ -694,3 +694,20 @@ Evidence:
   - A discarded error on a write that follows an upload is a RESOURCE LEAK, not a lost message. Look
     for what was already spent before the failing call.
 ---
+
+## 2026-08-27 - WEB-OPS-023: serve-time egress, the other half of the image work
+- cdnUrlFor wrote a supabase.co storage URL into every image_url and NOTHING cached it. public/_headers'
+  immutable rules apply to files Cloudflare Pages serves out of dist/, not to another origin. So every
+  card image was billed as Supabase egress once per VIEWER - ingest downloads an image once ever,
+  serving downloads it once per visitor.
+- Built and inert: functions/media/[[path]].ts (Cloudflare edge cache in front of storage), an
+  env-gated switch in cdnUrlFor (MEDIA_CDN_BASE), and scripts/repoint-media-urls.ts for existing rows.
+  Nothing changes until the variable is set.
+- 27 offline checks, weighted toward the refusals: the path guard is an ALLOWLIST because the route
+  forwards a caller-supplied path to a storage origin, and the rewrite must leave external URLs alone.
+- **Learnings for future iterations:**
+  - When someone asks about egress from scraping, check the SERVE path too. Ingest is O(images),
+    serving is O(images x viewers), and the second one had no cache at all.
+  - `public/_headers` only governs what Cloudflare Pages serves. A Cache-Control rule there for
+    /*.jpg looks like it covers your images and does not if they live on another origin.
+---
