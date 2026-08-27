@@ -23,20 +23,3 @@ declare const Deno: {
   exit(code?: number): never;
   [k: string]: any;
 };
-
-/**
- * Deno's node: compatibility layer. A test that must run without a route to
- * deno.land imports node:assert instead of the std assert module, and tsc has
- * no idea what a `node:` specifier is. Same rule as remote.d.ts: `any`, because
- * a hand-written approximation would be wrong somewhere nobody would look.
- */
-declare module 'node:assert' {
-  const strict: any;
-  export { strict };
-  const _default: any;
-  export default _default;
-}
-declare module 'node:assert/strict' {
-  const _default: any;
-  export default _default;
-}

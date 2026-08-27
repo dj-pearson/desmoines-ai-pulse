@@ -32,11 +32,36 @@
  * runner that happens to hold RESEND_API_KEY cannot turn this suite into real
  * outbound mail.
  *
- * Offline: no credentials, no network. Uses node:assert rather than
- * deno.land/std so the file runs in a container with no route to deno.land.
+ * Offline: no credentials, no network, and no imports beyond the modules under
+ * test - see the note on the assertions below.
  */
-import { strict as assert } from "node:assert";
 import type { AgentRunContext } from "../_shared/agentRun.ts";
+
+// ── Assertions, hand-rolled, and the reason is not preference ────────────────
+//
+// The sibling suites import the std assert from deno.land. That module is
+// unreachable from the container this was written in (the agent proxy answers
+// 403 to CONNECT for deno.land), so the file used node:assert instead - which CI
+// then refused, because type-checking a `node:` specifier needs @types/node in a
+// node_modules directory and the deno lane has none:
+//     error: Could not find "@types/node" in a node_modules folder.
+// Putting --no-check on that step would have fixed it by turning off type
+// checking for the whole file. Two functions with no imports fixes it without
+// giving anything up, and keeps this step type-checked like its fifteen
+// siblings.
+
+function equal(actual: unknown, expected: unknown, message?: string): void {
+  if (Object.is(actual, expected)) return;
+  throw new Error(
+    `${message ?? "values differ"}\n  expected: ${JSON.stringify(expected)}\n  actual:   ${JSON.stringify(actual)}`,
+  );
+}
+
+/** Names what leaked, rather than only failing a length check. */
+function noneOf(rows: Array<{ table: string; rows: unknown }>, message: string): void {
+  if (rows.length === 0) return;
+  throw new Error(`${message}\n  ${rows.length} row(s): ${rows.map((r) => r.table).join(", ")}`);
+}
 
 // Before importing anything that reads them. sendNurtureEmail POSTs to Resend
 // when RESEND_API_KEY is set, and scoreOutput POSTs to Anthropic.
@@ -158,10 +183,10 @@ Deno.test("nurture: onboarding-drip does not mail an opted-out user", async () =
   const { ctx, read } = makeCtx();
   const out = await onboardingDrip(ctx, { supabase: client, req: new Request("http://x"), body: {} }) as Row;
 
-  assert.equal(out.sent, 0);
-  assert.equal(out.skipped, 1, "the profile should be counted as skipped for consent");
-  assert.deepEqual(sendLedgerInserts(rec), [], "an opted-out user reached the send ledger");
-  assert.equal(read().meta.sent, 0);
+  equal(out.sent, 0);
+  equal(out.skipped, 1, "the profile should be counted as skipped for consent");
+  noneOf(sendLedgerInserts(rec), "an opted-out user reached the send ledger");
+  equal(read().meta.sent, 0);
 });
 
 Deno.test("nurture: onboarding-drip DOES reach the send path for an opted-in user", async () => {
@@ -169,8 +194,8 @@ Deno.test("nurture: onboarding-drip DOES reach the send path for an opted-in use
   const { ctx } = makeCtx();
   const out = await onboardingDrip(ctx, { supabase: client, req: new Request("http://x"), body: {} }) as Row;
 
-  assert.equal(out.skipped, 0, "an opted-in user must not be skipped");
-  assert.equal(out.gated, 1, "should have reached the quality gate; if not, the fixture stopped it earlier and the negative test above proves nothing");
+  equal(out.skipped, 0, "an opted-in user must not be skipped");
+  equal(out.gated, 1, "should have reached the quality gate; if not, the fixture stopped it earlier and the negative test above proves nothing");
 });
 
 // ─── re-engagement: dormant-reengagement ─────────────────────────────────────
@@ -193,9 +218,9 @@ Deno.test("re-engagement: dormant-reengagement does not mail an opted-out user",
   const { ctx, read } = makeCtx();
   const out = await dormantReengagement(ctx, { supabase: client, req: new Request("http://x"), body: {} }) as Row;
 
-  assert.equal(out.sent, 0);
-  assert.equal(read().meta.noConsent, 1);
-  assert.deepEqual(sendLedgerInserts(rec), [], "an opted-out user reached the send ledger");
+  equal(out.sent, 0);
+  equal(read().meta.noConsent, 1);
+  noneOf(sendLedgerInserts(rec), "an opted-out user reached the send ledger");
 });
 
 Deno.test("re-engagement: dormant-reengagement DOES reach the send path for an opted-in user", async () => {
@@ -203,8 +228,8 @@ Deno.test("re-engagement: dormant-reengagement DOES reach the send path for an o
   const { ctx, read } = makeCtx();
   await dormantReengagement(ctx, { supabase: client, req: new Request("http://x"), body: {} });
 
-  assert.equal(read().meta.noConsent, 0);
-  assert.equal(read().meta.gated, 1, "should have reached the quality gate");
+  equal(read().meta.noConsent, 0);
+  equal(read().meta.gated, 1, "should have reached the quality gate");
 });
 
 // ─── churn: churn-winback ────────────────────────────────────────────────────
@@ -230,8 +255,8 @@ Deno.test("churn: churn-winback does not mail an opted-out user", async () => {
   const { ctx, read } = makeCtx();
   await churnWinback(ctx, { supabase: client, req: new Request("http://x"), body: {} });
 
-  assert.equal(read().meta.skipped, 1, "the profile should be counted as skipped for consent");
-  assert.deepEqual(sendLedgerInserts(rec), [], "an opted-out user reached the send ledger");
+  equal(read().meta.skipped, 1, "the profile should be counted as skipped for consent");
+  noneOf(sendLedgerInserts(rec), "an opted-out user reached the send ledger");
 });
 
 Deno.test("churn: churn-winback DOES reach the send path for an opted-in user", async () => {
@@ -239,8 +264,8 @@ Deno.test("churn: churn-winback DOES reach the send path for an opted-in user", 
   const { ctx, read } = makeCtx();
   await churnWinback(ctx, { supabase: client, req: new Request("http://x"), body: {} });
 
-  assert.equal(read().meta.skipped, 0, "an opted-in user must not be skipped");
-  assert.equal(read().meta.gated, 1, "should have reached the quality gate");
+  equal(read().meta.skipped, 0, "an opted-in user must not be skipped");
+  equal(read().meta.gated, 1, "should have reached the quality gate");
 });
 
 // ─── milestone: milestone-recognition ────────────────────────────────────────
@@ -263,15 +288,15 @@ Deno.test("milestone: milestone-recognition does not mail an opted-out user", as
   const { ctx, read } = makeCtx();
   const out = await milestoneRecognition(ctx, { supabase: client, req: new Request("http://x"), body: {} }) as Row;
 
-  assert.equal(out.recognized, 1, "the milestone itself is in-app and is NOT gated on email consent");
-  assert.equal(out.emailed, 0, "an opted-out user must not be emailed about it");
-  assert.deepEqual(sendLedgerInserts(rec), [], "an opted-out user reached the send ledger");
+  equal(out.recognized, 1, "the milestone itself is in-app and is NOT gated on email consent");
+  equal(out.emailed, 0, "an opted-out user must not be emailed about it");
+  noneOf(sendLedgerInserts(rec), "an opted-out user reached the send ledger");
   // `emailed === 0` alone does NOT prove this: the quality gate also holds at
   // zero, so forcing consent true still left the count at 0 and the test passed
   // - measured, by removing the gate and re-running. `gated === 0` is the
   // assertion that discriminates, because an opted-out user must never reach the
   // gate at all.
-  assert.equal(out.gated, 0, "an opted-out user reached the quality gate, so consent was not checked first");
+  equal(out.gated, 0, "an opted-out user reached the quality gate, so consent was not checked first");
 });
 
 Deno.test("milestone: milestone-recognition DOES reach the send path for an opted-in user", async () => {
@@ -279,8 +304,8 @@ Deno.test("milestone: milestone-recognition DOES reach the send path for an opte
   const { ctx } = makeCtx();
   const out = await milestoneRecognition(ctx, { supabase: client, req: new Request("http://x"), body: {} }) as Row;
 
-  assert.equal(out.recognized, 1);
-  assert.equal(out.gated, 1, "should have reached the quality gate");
+  equal(out.recognized, 1);
+  equal(out.gated, 1, "should have reached the quality gate");
 });
 
 // ─── outreach: outreach-sequencer ────────────────────────────────────────────
@@ -302,9 +327,9 @@ Deno.test("outreach: outreach-sequencer does not mail a suppressed address", asy
   const { ctx } = makeCtx();
   const out = await outreachSequencer(ctx, { supabase: client, req: new Request("http://x"), body: {} }) as Row;
 
-  assert.equal(out.sent, 0);
-  assert.equal(out.skipped, 1);
-  assert.deepEqual(sendLedgerInserts(rec), [], "a suppressed address reached the send ledger");
+  equal(out.sent, 0);
+  equal(out.skipped, 1);
+  noneOf(sendLedgerInserts(rec), "a suppressed address reached the send ledger");
 });
 
 Deno.test("outreach: outreach-sequencer DOES reach the send path for an unsuppressed address", async () => {
@@ -312,6 +337,6 @@ Deno.test("outreach: outreach-sequencer DOES reach the send path for an unsuppre
   const { ctx } = makeCtx();
   const out = await outreachSequencer(ctx, { supabase: client, req: new Request("http://x"), body: {} }) as Row;
 
-  assert.equal(out.skipped, 0, "an unsuppressed lead must not be skipped");
-  assert.equal(out.gated, 1, "should have reached the quality gate");
+  equal(out.skipped, 0, "an unsuppressed lead must not be skipped");
+  equal(out.gated, 1, "should have reached the quality gate");
 });
