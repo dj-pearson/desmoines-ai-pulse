@@ -28,6 +28,7 @@ import { scoreOutput } from "../_shared/scoreOutput.ts";
 import { retrieveKb, type KbPassage } from "../_shared/kbRetrieve.ts";
 import { getAIConfig, getAnthropicApiKey } from "../_shared/aiConfig.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { crisisMessageText, detectCrisisIntent } from "../_shared/crisisSupport.ts";
 
 const AGENT_KEY = "support-responder";
 const BATCH = 10;
@@ -161,6 +162,29 @@ Deno.serve(async (req) => {
       }
 
       const question = `${t.subject ?? ""}\n${last?.sender === "user" ? last.body : t.body}`.trim();
+
+      // Crisis takes precedence over every other route (WEB-LEGAL-005). Not an
+      // escalation: escalating means a person picks this up when they next work
+      // the queue, which could be hours. Post the resources immediately AND flag
+      // for a human, rather than choosing between them. No model call, no KB
+      // retrieval, no quality gate - the reply is static.
+      //
+      // Ported from _shared/agents/support-responder.ts. WEB-LEGAL-005 named
+      // that file in AC6 and its fix landed there only; this copy is the same
+      // agent and had no crisis handling at all.
+      if (detectCrisisIntent(question)) {
+        await supabase.from("support_messages").insert({
+          ticket_id: t.id,
+          sender: "agent",
+          body: crisisMessageText(),
+          metadata: { auto: true, crisisResources: true },
+        });
+        await escalate(supabase, t, null, "crisis resources sent; needs a human", ctx);
+        escalated++;
+        ctx.processed(1);
+        continue;
+      }
+
       const forcedHuman = HUMAN_RE.test(question);
       const sensitive = SENSITIVE_RE.test(question) || ["billing", "account", "legal"].includes((t.category ?? "").toLowerCase());
 

@@ -156,6 +156,18 @@ const SURFACES: { file: string; check: RegExp; model: RegExp; label: string }[] 
     check: /detectCrisisIntent\(/,
     model: /retrieveKb\(/,
   },
+  // The same agent exists a second time as a standalone edge function. pg_cron
+  // was repointed to agent-runner (and so to the _shared copy) by migration
+  // 20260710000000, but this one is still deployable and still callable by an
+  // admin or an API key - and it had NO crisis handling at all until 2026-08-27,
+  // because AC6 named the shared file and this table followed it. A safety floor
+  // that covers one of two implementations is not a floor.
+  {
+    label: 'support-responder (standalone edge function)',
+    file: '../agent-support-responder/index.ts',
+    check: /detectCrisisIntent\(/,
+    model: /retrieveKb\(/,
+  },
 ];
 
 for (const s of SURFACES) {

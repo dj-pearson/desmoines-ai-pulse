@@ -422,3 +422,34 @@ Evidence:
     against .github/migration-drift-baseline.json. In this repo "the migration exists" and "the
     migration ran" are different facts.
 ---
+
+## 2026-08-27 - WEB-LEGAL-005 second code path, compliance-monitor, ratchet blind spot
+- CORRECTION: there are 34 duplicated agent pairs, not 12. I matched by name equality; 22 pairs have
+  different names on each side (agent-backup-verify <-> backup-verifier.ts). The authoritative
+  mapping is the VALUES table in 20260710000000_repoint_agent_crons_to_runner.sql. Overlap runs
+  78-98%.
+- WEB-LEGAL-005 (crisis response, marked done): agent-support-responder had NO crisis handling at
+  all. Ported detectCrisisIntent + crisisMessageText before retrieveKb. crisis-support.test.ts drives
+  off a SURFACES table that listed the shared file only; added the standalone as a fifth surface,
+  negative-controlled against HEAD.
+- agent-compliance-monitor's count() did `const { count } = ...; return count ?? 0` with the error
+  dropped, so an unreadable table counted as zero and every compliance gate read as "no violations".
+  Ported the shared null-returning count() and its exceeds() helper.
+- Same shape in agent-backup-verify (failed safe but reported "a core table returned 0 rows" when the
+  count could not run). Ported, and closed a gap present in BOTH copies: unreadableTables set
+  ok=false but was missing from the incident condition, so it reported failure to nobody.
+- check-discarded-supabase-errors.mjs skipped destructures without `data`. It now matches data OR
+  count; 7 new sites surfaced, 2 fixed, 5 baselined.
+- Files: agent-support-responder, agent-compliance-monitor, agent-backup-verify,
+  _shared/agents/backup-verifier, _tests/crisis-support.test.ts,
+  scripts/check-discarded-supabase-errors.mjs, supabase-error-baseline.json, prd.json.
+- **Learnings for future iterations:**
+  - Pair agent files by the migration's mapping table, NOT by name. Name equality finds 12 of 34.
+  - A story marked done means done on the path someone checked. In both WEB-LEGAL-005 and -006 the
+    AC, the fix and the test all named the same single file, so the second copy was invisible from
+    every angle at once. When a story names a file, grep the repo for a second implementation.
+  - `count ?? 0` with the error dropped is the same defect as `data ?? []` and reads worse: an empty
+    result at least renders as an empty state, a zero count renders as a passing check.
+  - The ratchet's own exclusions are assumptions. "`{ count }` alone is usually deliberate" was
+    written into the code and was wrong in the single worst place it could have been.
+---

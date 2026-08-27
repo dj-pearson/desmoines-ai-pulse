@@ -102,10 +102,24 @@ Deno.serve(async (req) => {
     const recency = await fetchBackupRecency();
 
     // 2) Restore-sanity spot check: core tables have live rows.
-    const rowCounts: Record<string, number> = {};
+    // WEB-BE-032, ported from _shared/agents/backup-verifier.ts, which is the
+    // same agent and was fixed while this copy was not. The error was discarded
+    // and `count ?? 0` turned an unreadable table into a count of zero, which
+    // this loop then read as "this core table is empty". The verdict still
+    // failed, so nothing was missed - but it failed with the wrong reason, and
+    // "restore-sanity failure: events is empty" sends someone to check the data
+    // when the actual problem is that the check could not run.
+    const rowCounts: Record<string, number | null> = {};
     let emptyCoreTable = false;
+    const unreadableTables: string[] = [];
     for (const table of CORE_TABLES) {
-      const { count } = await supabase.from(table).select("id", { count: "exact", head: true });
+      const { count, error } = await supabase.from(table).select("id", { count: "exact", head: true });
+      if (error) {
+        rowCounts[table] = null;
+        unreadableTables.push(table);
+        console.error(`[backup-verifier] count(${table}) failed:`, error.message);
+        continue;
+      }
       rowCounts[table] = count ?? 0;
       if ((count ?? 0) === 0) emptyCoreTable = true;
     }
@@ -114,7 +128,10 @@ Deno.serve(async (req) => {
     // or a core table unexpectedly empty (restore-sanity failure).
     const stale = recency.available && (recency.ageHours == null || recency.ageHours > STALE_HOURS);
     const method = recency.available ? "management_api" : "row_spotcheck";
-    const ok = !stale && !emptyCoreTable;
+    // Unreadable tables fail the verdict too: a spot check that could not read
+    // its tables has not verified anything. Reported as their own reason rather
+    // than folded into "empty".
+    const ok = !stale && !emptyCoreTable && unreadableTables.length === 0;
 
     await supabase.from("backup_checks").insert({
       method,
@@ -122,13 +139,18 @@ Deno.serve(async (req) => {
       latest_backup_at: recency.latestBackupAt,
       backup_age_hours: recency.ageHours,
       row_counts: rowCounts,
-      details: { staleThresholdHours: STALE_HOURS, recencyAvailable: recency.available, emptyCoreTable },
+      details: { staleThresholdHours: STALE_HOURS, recencyAvailable: recency.available, emptyCoreTable, unreadableTables },
     });
 
     // Missing/stale backup → tier-3 incident + immediate notify.
     let incident = false;
-    if (stale || emptyCoreTable) {
-      const reason = emptyCoreTable
+    // unreadableTables is in the condition as well as the verdict: without it
+    // `ok` went false and NO incident was filed, so a check that could not
+    // read its tables reported failure to nobody.
+    if (stale || emptyCoreTable || unreadableTables.length > 0) {
+      const reason = unreadableTables.length > 0
+        ? `restore-sanity UNVERIFIED - could not count ${unreadableTables.join(", ")}`
+        : emptyCoreTable
         ? `restore-sanity failed — a core table returned 0 rows (${JSON.stringify(rowCounts)})`
         : recency.ageHours == null
           ? `no backup found via Management API`
