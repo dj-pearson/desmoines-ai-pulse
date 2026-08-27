@@ -528,3 +528,27 @@ Evidence:
   - check-agent-pair-drift.mjs now binds real work: both fixes added a top-level function, so
     forgetting the twin would have failed CI rather than becoming next week's finding.
 ---
+
+## 2026-08-27 - WEB-BE-032: the three messaging agents (18 sites)
+- 206 -> 188 overall; scheduled path 46 -> 32. dormant-reengagement, onboarding-drip and
+  weekly-digest-personal, each on both copies.
+- Two work lists now throw: onboarding-drip's new-profile read and weekly-digest's recipient read.
+  Both sent NO mail on a failed read and still reported success, so either campaign could stop
+  entirely without anyone seeing it stop.
+- The digest's tier read is DELIBERATELY not fail-closed. A failed read drops `tier` to "free", so a
+  paying subscriber gets the free digest; failing closed would send them nothing, which is the worse
+  harm for a digest they asked for. Logged instead.
+- Files: _shared/agents/{dormant-reengagement,onboarding-drip,weekly-digest-personal}.ts and
+  agent-{reengagement,onboarding-drip,weekly-digest}/index.ts, supabase-error-baseline.json, prd.json.
+- **Learnings for future iterations:**
+  - "Fail closed" is NOT a rule about entitlement reads. It is a rule about which direction reaches a
+    user with something they did not ask for. subscription-nurture's upgrade prompt fails closed
+    because not knowing whether someone pays is a reason to say nothing; the weekly digest's tier read
+    must NOT, because failing closed there withholds a send the user asked for. Ask what the failure
+    SENDS, not what it reads.
+  - An activation stamp guarded by `activated_at IS NULL` is always safe to log-and-continue: the row
+    stays eligible and the next run retries it.
+  - After each burn-down, re-sort the baseline by the `supabase/functions/_shared/` prefix to see what
+    is left on the path cron actually reaches. 32 sites in 20 files now, none above 4 - the rest is
+    long rather than deep.
+---

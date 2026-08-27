@@ -32,7 +32,7 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   // Measure reactivations from prior re-engagement sends (7–60d old, no outcome
   // yet) whose user is now active/reactivated.
   let reactivations = 0;
-  const { data: prior } = await supabase
+  const { data: prior, error: priorError } = await supabase
     .from("nurture_sends")
     .select("id, user_id, created_at")
     .eq("agent_key", AGENT_KEY)
@@ -40,10 +40,20 @@ export const run: AgentRun = async (ctx, { supabase }) => {
     .gte("created_at", new Date(now - 60 * DAY).toISOString())
     .lte("created_at", new Date(now - 3 * DAY).toISOString())
     .limit(500);
+  // WEB-BE-032. Measurement, not the send path: a failure here reports 0
+  // reactivations, which reads as "re-engagement does not work" rather than
+  // as an outage. Logged, not thrown - the sends below still matter.
+  if (priorError) console.warn(`[dormant-reengagement] reactivation sweep read failed: ${priorError.message}`);
   for (const s of (prior ?? []) as { id: string; user_id: string }[]) {
-    const { data: prof } = await supabase.from("profiles").select("lifecycle_stage").eq("user_id", s.user_id).maybeSingle();
+    const { data: prof, error: profError } = await supabase.from("profiles").select("lifecycle_stage").eq("user_id", s.user_id).maybeSingle();
+    // Per-item: one unreadable profile must not abandon the sweep. The cost is
+    // that this user's reactivation is never counted.
+    if (profError) console.warn(`[dormant-reengagement] outcome profile read failed for ${s.user_id}: ${profError.message}`);
     if (prof?.lifecycle_stage === "active" || prof?.lifecycle_stage === "reactivated") {
-      const { data: upd } = await supabase.from("nurture_sends").update({ activated_at: new Date().toISOString() }).eq("id", s.id).is("activated_at", null).select("id");
+      const { data: upd, error: updError } = await supabase.from("nurture_sends").update({ activated_at: new Date().toISOString() }).eq("id", s.id).is("activated_at", null).select("id");
+      // Safe to leave unstamped: the row stays eligible and the next run retries,
+      // because the update is guarded by activated_at IS NULL.
+      if (updError) console.warn(`[dormant-reengagement] activation stamp failed for send ${s.id}: ${updError.message}`);
       if (upd && upd.length) reactivations++;
     }
   }

@@ -87,12 +87,16 @@ Deno.serve(async (req) => {
 
   const ledger = await runAgent(AGENT_KEY, async (ctx) => {
     const now = Date.now();
-    const { data: profiles } = await supabase
+    const { data: profiles, error: profilesError } = await supabase
       .from("profiles")
       .select("user_id, email, interests, communication_preferences, lifecycle_signals")
       .in("lifecycle_stage", ["new", "onboarding"])
       .not("email", "is", null)
       .limit(BATCH);
+    // WEB-BE-032. THE work list. A dropped error sent no onboarding mail at all
+    // and still reported success, so the drip could stop without anyone seeing
+    // it stop. runAgent turns this throw into status "failure".
+    if (profilesError) throw new Error(`onboarding-drip: could not read new profiles: ${profilesError.message}`);
     const rows = (profiles ?? []) as { user_id: string; email: string; interests: unknown; communication_preferences: unknown; lifecycle_signals: unknown }[];
 
     let sent = 0, skipped = 0, gated = 0, activations = 0;
@@ -122,11 +126,14 @@ Deno.serve(async (req) => {
       // Activation stamping: if a first-value send exists without activation and
       // the user now has a favorite created after it, record activation.
       const fvSend = prior.find((s) => s.kind === "onboarding_first_value");
-      const { data: favs } = await supabase.from("content_favorites").select("created_at").eq("user_id", p.user_id).order("created_at", { ascending: false }).limit(1);
+      const { data: favs, error: favsError } = await supabase.from("content_favorites").select("created_at").eq("user_id", p.user_id).order("created_at", { ascending: false }).limit(1);
+      // Per-item measurement: a failure under-counts activations, nothing more.
+      if (favsError) console.warn(`[onboarding-drip] favourite read failed for ${p.user_id}: ${favsError.message}`);
       const lastFav = (favs?.[0]?.created_at as string | undefined) ?? null;
       const hasFavorite = !!lastFav;
       if (fvSend && lastFav && new Date(lastFav).getTime() > new Date(fvSend.created_at).getTime()) {
-        const { data: upd } = await supabase.from("nurture_sends").update({ activated_at: new Date().toISOString() }).eq("id", fvSend.id).is("activated_at", null).select("id");
+        const { data: upd, error: updError } = await supabase.from("nurture_sends").update({ activated_at: new Date().toISOString() }).eq("id", fvSend.id).is("activated_at", null).select("id");
+        if (updError) console.warn(`[onboarding-drip] activation stamp failed for send ${fvSend.id}: ${updError.message}`);
         if (upd && upd.length) activations++;
       }
 

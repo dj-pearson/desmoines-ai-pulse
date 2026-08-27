@@ -70,12 +70,16 @@ Deno.serve(async (req) => {
     const restaurants = (rests ?? []) as PlaceItem[];
     const attractions = (attrs ?? []) as PlaceItem[];
 
-    const { data: profiles } = await supabase
+    const { data: profiles, error: profilesError } = await supabase
       .from("profiles")
       .select("user_id, email, interests, lifecycle_signals")
       .in("lifecycle_stage", ["active", "onboarding", "reactivated", "at_risk"])
       .not("email", "is", null)
       .limit(BATCH);
+    // WEB-BE-032. THE work list. A dropped error sent no digest at all and still
+    // reported success - a weekly send that silently stops is the shape this
+    // story exists to make visible. runAgent records the throw as a failure.
+    if (profilesError) throw new Error(`weekly-digest: could not read digest recipients: ${profilesError.message}`);
     const rows = (profiles ?? []) as { user_id: string; email: string; interests: unknown; lifecycle_signals: { messagingAllowed?: boolean } | null }[];
 
     let sent = 0, skippedEmpty = 0, skippedCap = 0, gated = 0, skippedConsent = 0;
@@ -96,7 +100,14 @@ Deno.serve(async (req) => {
       if (recent?.[0] && now - new Date(recent[0].created_at).getTime() < GAP_DAYS * DAY) { skippedCap++; continue; }
 
       // Tier (premium picks gated).
-      const { data: sub } = await supabase.from("user_subscriptions").select("plan:subscription_plans(tier)").eq("user_id", p.user_id).in("status", ["active", "trialing"]).maybeSingle();
+      const { data: sub, error: subError } = await supabase.from("user_subscriptions").select("plan:subscription_plans(tier)").eq("user_id", p.user_id).in("status", ["active", "trialing"]).maybeSingle();
+      // Entitlement read, and DELIBERATELY NOT fail-closed. On a failure `tier`
+      // falls back to "free", so a paying subscriber gets the free digest instead
+      // of the premium one. Failing closed here would mean sending them nothing,
+      // which is the worse harm for a digest they asked for - unlike the upgrade
+      // prompt in subscription-nurture, where not knowing is a reason to say
+      // nothing. Logged so the degradation is visible instead of silent.
+      if (subError) console.warn(`[weekly-digest] tier read failed for ${p.user_id}; sending the free digest: ${subError.message}`);
       const planObj = Array.isArray(sub?.plan) ? sub?.plan[0] : sub?.plan;
       const tier = (planObj?.tier as string | undefined) ?? "free";
       const isPremium = tier === "insider" || tier === "vip";
@@ -113,7 +124,9 @@ Deno.serve(async (req) => {
       const pickedAttr = (isPremium ? attractions : attractions.filter((a) => !a.is_sponsored)).slice(0, 2);
 
       // Saved-search matches (light): count upcoming events matching a saved search's category filter.
-      const { data: searches } = await supabase.from("saved_searches").select("name, filters").eq("user_id", p.user_id).eq("alerts_enabled", true).limit(5);
+      const { data: searches, error: searchesError } = await supabase.from("saved_searches").select("name, filters").eq("user_id", p.user_id).eq("alerts_enabled", true).limit(5);
+      // Per-item: the digest still sends, without its saved-search section.
+      if (searchesError) console.warn(`[weekly-digest] saved-search read failed for ${p.user_id}: ${searchesError.message}`);
       const savedMatches: { name: string; count: number }[] = [];
       for (const s of (searches ?? []) as { name: string; filters: { category?: string } | null }[]) {
         const cat = s.filters?.category?.toLowerCase();
