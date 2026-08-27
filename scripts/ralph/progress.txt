@@ -399,3 +399,26 @@ Evidence:
   - runAgent turns a throw into a recorded failure rather than an aborted batch with no trace, which
     is why "never throw in an agent" was too blunt a rule - it is right per-item and wrong per-batch.
 ---
+
+## 2026-08-27 - WEB-LEGAL-006 second code path + correction to yesterday's entry
+- CORRECTION to the entry above: pg_cron does NOT post to the standalone agent-* functions. Migration
+  20260710000000_repoint_agent_crons_to_runner.sql repointed all 34 agent crons to
+  /functions/v1/agent-runner/<key>, and it is not in the drift baseline, so it applied. The scheduler
+  runs the _shared copy. The standalones are admin/API-key reachable only, and have been drifting
+  unscheduled since 2026-07-10.
+- WEB-LEGAL-006 is marked done and its fix was on the shared copy only. The standalone still gated the
+  trial notice on consented() (AC1) and scoreOutput() (AC2) and sent "Keep your Insider perks" with no
+  amount, date or cancel path (AC3). Ported the shared implementation; pair overlap 70% -> 88%.
+- _tests/trial-notice.test.ts read one of the two files, which is why nothing caught it. It now loops
+  over both. Negative-controlled against git HEAD's standalone: all five assertions fail on it.
+- Files: supabase/functions/agent-subscription-nurture/index.ts,
+  supabase/functions/_tests/trial-notice.test.ts, prd.json.
+- **Learnings for future iterations:**
+  - difflib.SequenceMatcher defaults to autojunk=True and is USELESS on file-sized strings - it reported
+    two 90%-identical files as 20% similar. Compare normalized-line overlap instead.
+  - A source-contract test that names one file is a guarantee about that file, not about the behaviour.
+    When an agent or module exists twice, the test must loop over both paths.
+  - Before claiming which code path production runs, find the migration that wired it and check it
+    against .github/migration-drift-baseline.json. In this repo "the migration exists" and "the
+    migration ran" are different facts.
+---
