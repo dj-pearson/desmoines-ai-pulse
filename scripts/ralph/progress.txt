@@ -365,3 +365,13 @@ Evidence:
     reaches the UI if the caller reads error.context.json(). useTripPlanner.ts:170-185 is the
     reference implementation in this repo.
 ---
+
+## 2026-08-27 - correction to the WEB-BE-032 entry above
+- eslint DOES cover supabase/functions. eslint.config.js matches **/*.{ts,tsx}, ignores only dist and
+  tools, `npm run lint` is `eslint .`, and pr-checks.yml runs it. A syntax error in an edge function
+  fails a PR today. The parse check I ran was redundant; `npx eslint --quiet` on the three edited
+  functions is zero errors.
+- The real gap is narrower and still real: no TYPE check. tsconfig excludes supabase/, no workflow runs
+  `deno check`, and eslint runs without type-aware rules - so a wrong property on a Supabase response
+  passes everything. The ask is `deno check` on changed functions, not lint coverage.
+---
