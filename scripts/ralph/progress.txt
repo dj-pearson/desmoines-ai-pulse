@@ -276,3 +276,37 @@ Evidence:
     one hook whose name matches. event_alerts_enabled is written by useSavedSearchAlerts, not by
     useEmailPreferences.
 ---
+
+## 2026-08-27 - WEB-PERF-020 (AC1 met; AC5 open)
+- Critical-path JS 206.4 -> 196.7 KB gz, inside the 200 KB CLAUDE.md budget for the first time.
+  Entry chunk 76.5 -> 66.8 KB gz. Baseline locked at 196.7.
+- Cause: SessionManager is mounted at the app root and statically imported SessionTimeoutWarning,
+  so the whole Radix AlertDialog stack (dialog, alert-dialog, focus-scope, dismissable-layer,
+  presence, react-remove-scroll, react-remove-scroll-bar, aria-hidden) rode into the
+  render-blocking entry for a dialog that shows after 25 minutes of inactivity. Now lazy, and
+  rendered only while isWarning rather than mounted with open={false}.
+- No behaviour change: the dialog's own activity listener is redundant with useSessionTimeout's,
+  which listens on window for the whole session and dismisses the warning itself.
+- Fixed check-bundle-budget.mjs printing "still -3.3 KB over" now that the goal is met.
+- Files: src/components/auth/SessionManager.tsx, scripts/check-bundle-budget.mjs,
+  bundle-budget-baseline.json, prd.json (notes only).
+- Story stays passes:false on AC5 alone (re-measure LCP), which needs a deployment with real data.
+- **Learnings for future iterations:**
+  - `npm ci` first, then build with placeholder env vars - vite.config's
+    assert-html-env-placeholders plugin hard-fails without VITE_SUPABASE_URL, and the values do not
+    affect bundle shape:
+      VITE_SUPABASE_URL=https://placeholder.supabase.co VITE_SUPABASE_ANON_KEY=x \
+      VITE_SITE_URL=https://desmoinesinsider.com npx vite build
+    Use `npx vite build` alone, not `npm run build`, which also runs generate-sitemaps and prerender
+    (both need a database).
+  - To find WHAT is in the entry chunk, attribute its sourcemap rather than guessing: decode
+    .mappings, sum generated-column spans per source index, aggregate by module. It named
+    tailwind-merge, react-helmet-async and the tooltip/floating-ui graph in one pass and is how the
+    AlertDialog stack was spotted.
+  - The root-mounted headless component is this repo's recurring bundle defect - sonner via
+    GuestFavoriteMigrator, AccessibilityWidget's panel, now SessionManager's dialog. Check
+    SessionManager, GuestFavoriteMigrator, GlobalUpgradeModal, OfflineBanner and CookieConsentBanner
+    first whenever the entry chunk grows.
+  - Lazy-loading a dialog opens a gap before its own event listeners attach. Check whether the
+    parent hook already covers those events before assuming the split is behaviour-neutral.
+---

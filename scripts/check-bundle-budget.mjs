@@ -1,9 +1,10 @@
 /**
  * Critical-path JS budget ratchet (WEB-PERF-020 AC4).
  *
- * CLAUDE.md sets a 200 KB gzipped budget for the critical path. The measured
- * figure is 369.9 KB, so a gate that enforced 200 KB outright would be red on
- * day one -- and this repo has already learned twice what that produces:
+ * CLAUDE.md sets a 200 KB gzipped budget for the critical path. When this was
+ * written the measured figure was 369.9 KB, so a gate that enforced 200 KB
+ * outright would have been red on day one -- and this repo has already learned
+ * twice what that produces:
  * WEB-CI-021's accessibility lane and WEB-CI-020's unit lane were both left
  * on continue-on-error precisely because they failed from the start, and
  * scripts/strict-ratchet.mjs's own header puts it plainly: "a gate that always
@@ -26,6 +27,12 @@
  * regressions that are only chunk-boundary movement. WEB-PERF-020 recorded
  * exactly that false alarm -- a "+23 KB regression" that turned out to be a
  * shared chunk changing names. The total is stable across that churn.
+ *
+ * THE GOAL IS NOW MET (196.7 KB, 2026-08-27), so the ratchet's job has changed:
+ * it is no longer closing a gap, it is holding a budget that is finally inside
+ * its limit. It stays a ratchet rather than becoming a hard 200 KB gate because
+ * the baseline is the tighter of the two numbers, and a gate at 200 would
+ * silently permit 3.3 KB of regression.
  *
  *   node scripts/check-bundle-budget.mjs            # check
  *   node scripts/check-bundle-budget.mjs --update   # re-baseline
@@ -107,7 +114,10 @@ function main() {
 
   console.log(
     `[bundle-budget] baseline ${base.criticalPathKb} KB, now ${round(totalKb)} KB ` +
-      `(${delta >= 0 ? '+' : ''}${round(delta)} KB). Goal ${GOAL_KB} KB, still ${round(overGoal)} KB over.`,
+      `(${delta >= 0 ? '+' : ''}${round(delta)} KB). ` +
+      (overGoal > 0
+        ? `Goal ${GOAL_KB} KB, still ${round(overGoal)} KB over.`
+        : `Goal ${GOAL_KB} KB, met with ${round(-overGoal)} KB to spare.`),
   );
 
   if (delta > TOLERANCE_KB) {
