@@ -20,6 +20,8 @@ import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts"
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { recordAnthropicUsage } from "../_shared/providerUsage.ts";
 
 /** Long enough for a slow first token, short enough that a hung model reports. */
 const TIMEOUT_MS = 30_000;
@@ -87,6 +89,14 @@ Deno.serve(async (req) => {
       const detail = payload?.error?.message ?? `HTTP ${response.status}`;
       return json({ success: false, error: detail, elapsedMs });
     }
+
+    // AOS-MANAGE-005: a diagnostic spends real credits too, and this endpoint is
+    // reachable with an API key, so "somebody is looping the Test button" is a
+    // thing the budget watchdog should be able to see.
+    await recordAnthropicUsage(
+      createClient(Deno.env.get("SUPABASE_URL") ?? "", Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""),
+      { source: "test-ai-model", model, usage: payload?.usage ?? {} },
+    );
 
     const extracted = extractClaudeText(payload);
     const generatedText = typeof extracted === "string" ? extracted : (extracted as { text?: string })?.text;

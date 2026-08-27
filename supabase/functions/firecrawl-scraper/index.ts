@@ -23,6 +23,7 @@ import {
   prepareContentForExtraction,
   SPORTS_CONTENT_BUDGET,
 } from "../_shared/htmlContentWindow.ts";
+import { resolveEventImage } from "../_shared/venueImage.ts";
 
 // Marker time for events without specific times (7:31:58 PM Central)
 const NO_TIME_MARKER = "19:31:58";
@@ -1179,7 +1180,13 @@ Return empty array [] if no competitive content found.`
             }
 
             // Check for duplicates
-            let existingItems = [];
+            // Annotated because `let x = []` infers never[], which made every
+            // property read off existingItem below a "does not exist on type
+            // 'never'" error - six of them were baselined in
+            // .github/edge-type-baseline.json as benign noise. They are noise,
+            // and one annotation is cheaper than carrying them.
+            // deno-lint-ignore no-explicit-any
+            let existingItems: any[] = [];
             if (category === 'events') {
               const { data, error } = await supabase
                 .from(tableName)
@@ -1218,16 +1225,29 @@ Return empty array [] if no competitive content found.`
                 // (respect human-entered / earlier data). Idempotent: once healed
                 // the row has an image, so subsequent duplicate hits skip this and
                 // fetchAndStoreImage itself no-ops on an already-stored media asset.
+                //
+                // The heal path takes the venue default too, and here it is a
+                // strictly better heal than the fetch: an event at a venue with a
+                // default image gets that image with no download at all, where
+                // before it got whatever the re-scrape happened to carry.
                 const existingHasImage = !!(existingItem.image_url && String(existingItem.image_url).trim());
-                if (!existingHasImage && item.image_url && CONTENT_TYPE_MAP[category]) {
-                  const healedImageUrl = await fetchAndStoreImage(
-                    supabase,
-                    item.image_url,
-                    category,
-                    existingItem.id,
-                  );
-                  if (healedImageUrl) {
-                    updates.image_url = healedImageUrl;
+                if (!existingHasImage) {
+                  const healResolved = await resolveEventImage(supabase, {
+                    sourceUrl: existingItem.source_url || item.source_url || "",
+                    scrapedImageUrl: item.image_url,
+                  });
+                  if (healResolved.skipFetch && healResolved.imageUrl) {
+                    updates.image_url = healResolved.imageUrl;
+                  } else if (healResolved.imageUrl && CONTENT_TYPE_MAP[category]) {
+                    const healedImageUrl = await fetchAndStoreImage(
+                      supabase,
+                      healResolved.imageUrl,
+                      category,
+                      existingItem.id,
+                    );
+                    if (healedImageUrl) {
+                      updates.image_url = healedImageUrl;
+                    }
                   }
                 }
 
@@ -1286,13 +1306,25 @@ Return empty array [] if no competitive content found.`
               // the adapter actually provided one — adapters that return image_url:null
               // (barnstormers, milb, sports-schedule) keep the prior behavior. A
               // fetch/validation failure leaves image_url NULL, so the row still inserts.
-              if (item.image_url && CONTENT_TYPE_MAP[category]) {
+              // A single-venue source reuses one venue image for every event, so
+              // there is nothing to gain from downloading a near-duplicate per
+              // event: skipFetch means no egress, no storage object and no
+              // media_assets row. Aggregators (Catch Des Moines, SeatGeek,
+              // Eventbrite) declare no venue and keep the per-event path.
+              const resolvedImage = await resolveEventImage(supabase, {
+                sourceUrl: item.source_url || "",
+                scrapedImageUrl: item.image_url,
+              });
+              if (resolvedImage.skipFetch) {
+                transformedData.image_url = resolvedImage.imageUrl;
+                console.log(`\u{1F3DB}\uFE0F Venue image for ${resolvedImage.venueName}: skipped per-event fetch`);
+              } else if (resolvedImage.imageUrl && CONTENT_TYPE_MAP[category]) {
                 // Pre-assign the row id so the stored media_asset is keyed to this record.
                 const contentId = crypto.randomUUID();
                 transformedData.id = contentId;
                 transformedData.image_url = await fetchAndStoreImage(
                   supabase,
-                  item.image_url,
+                  resolvedImage.imageUrl,
                   category,
                   contentId,
                 );

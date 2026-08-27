@@ -49,12 +49,16 @@ export const run: AgentRun = async (ctx, env) => {
   }
 
   if (mode === "analyze") {
-    const { data: rows } = await supabase
+    const { data: rows, error: rowsError } = await supabase
       .from("ci_runs")
       .select("workflow, conclusion, duration_s, flaky_count, created_at")
       .gte("created_at", new Date(Date.now() - 14 * 86400_000).toISOString())
       .order("created_at", { ascending: false })
       .limit(2000);
+    // WEB-BE-032. THE work list. A dropped error reported every workflow as
+    // healthy because there was nothing to judge, which is what a CI health
+    // watcher must never do quietly.
+    if (rowsError) throw new Error(`ci-health: ci_runs read failed: ${rowsError.message}`);
 
     // Group by workflow (most-recent first).
     const byWf = new Map<string, Run[]>();

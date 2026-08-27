@@ -24,6 +24,7 @@ import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { runAgent } from "../_shared/agentRun.ts";
 import { scoreOutput } from "../_shared/scoreOutput.ts";
 import { sendNurtureEmail } from "../_shared/sendNurtureEmail.ts";
+import { buildTrialNotice, planAmount } from "../_shared/trialNotice.ts";
 
 const AGENT_KEY = "subscription-nurture";
 const TRIAL_WINDOW_DAYS = 3;
@@ -39,15 +40,62 @@ function json(body: unknown, status = 200, headers: Record<string, string> = {})
   return new Response(JSON.stringify(body), { status, headers: { ...headers, "Content-Type": "application/json" } });
 }
 
+/**
+ * WEB-BE-032. Every read below used to drop its error, and the failure
+ * DIRECTIONS are not uniform, so the treatment is not uniform either. The
+ * convention is _shared/agents/subscription-nurture.ts's, because that copy was
+ * fixed first and this one is the same agent:
+ *
+ *   work-list read    THROW. runAgent records status "failure" in
+ *                     automation_job_runs. A batch that cannot read its work
+ *                     list has not done zero work, it has not run.
+ *   per-item read     LOG and continue. One unreadable row must not abandon
+ *                     the rest of the batch.
+ *   cap / entitlement FAIL CLOSED. Both read as permission to send when they
+ *                     fail, which is the only direction that reaches a user.
+ */
+// deno-lint-ignore no-explicit-any
+function logErr(where: string, error: any, consequence: string): void {
+  if (!error) return;
+  console.error(`[${AGENT_KEY}] ${where} failed (${consequence}): ${error.message ?? error}`);
+}
+
 async function consented(supabase: Client, userId: string): Promise<{ email: string; allowed: boolean } | null> {
-  const { data } = await supabase.from("profiles").select("email, lifecycle_signals").eq("user_id", userId).maybeSingle();
+  const { data, error } = await supabase.from("profiles").select("email, lifecycle_signals").eq("user_id", userId).maybeSingle();
+  // Fails closed already - a null result skips the user - but silently, so a
+  // broken profiles read looks exactly like nobody having consented.
+  logErr(`consented(${userId})`, error, "user skipped, no mail sent");
   if (!data?.email) return null;
   return { email: data.email, allowed: (data.lifecycle_signals as { messagingAllowed?: boolean } | null)?.messagingAllowed !== false };
 }
 
 async function cappedRecently(supabase: Client, userId: string, kind: string, gapDays: number): Promise<boolean> {
-  const { data } = await supabase.from("nurture_sends").select("created_at").eq("user_id", userId).eq("kind", kind).order("created_at", { ascending: false }).limit(1);
+  const { data, error } = await supabase.from("nurture_sends").select("created_at").eq("user_id", userId).eq("kind", kind).order("created_at", { ascending: false }).limit(1);
+  // FAILS CLOSED, and this is a behaviour change. With the error dropped, a
+  // failed read returned false - "not capped" - so the frequency cap silently
+  // stopped existing and the same user could be mailed on consecutive runs.
+  // Treating an unreadable history as capped costs one skipped nurture email;
+  // the other direction repeatedly mails a paying customer.
+  if (error) {
+    logErr(`cappedRecently(${userId}, ${kind})`, error, "treated as capped, mail skipped");
+    return true;
+  }
   return !!(data?.[0] && Date.now() - new Date(data[0].created_at).getTime() < gapDays * DAY);
+}
+
+/**
+ * Transactional sender for notices the recipient cannot opt out of, because
+ * they concern their own billing (WEB-LEGAL-006). Unlike sendStep below it does
+ * NOT consult messagingAllowed and does NOT run scoreOutput: both of those fail
+ * closed and silently, which for a required disclosure means the people most
+ * likely to be surprised by a charge are the ones least likely to be told.
+ */
+async function sendNotice(supabase: Client, userId: string, email: string, kind: string, subject: string, html: string, text: string): Promise<boolean> {
+  const res = await sendNurtureEmail(supabase, {
+    agentKey: AGENT_KEY, kind, userId, email, subject,
+    bodyHtml: html, bodyText: text, category: "transactional",
+  });
+  return res.ok;
 }
 
 async function sendStep(supabase: Client, userId: string, email: string, kind: string, subject: string, html: string, text: string): Promise<boolean> {
@@ -76,7 +124,7 @@ Deno.serve(async (req) => {
     let trial = 0, dunning = 0, upgrade = 0, converted = 0, recovered = 0;
 
     // ── Conversion / recovery measurement (stamp activated_at) ────────────
-    const { data: openSends } = await supabase
+    const { data: openSends, error: openSendsError } = await supabase
       .from("nurture_sends")
       .select("id, user_id, kind, created_at")
       .eq("agent_key", AGENT_KEY)
@@ -84,33 +132,84 @@ Deno.serve(async (req) => {
       .gte("created_at", new Date(now - 45 * DAY).toISOString())
       .lte("created_at", new Date(now - 1 * DAY).toISOString())
       .limit(1000);
+    // Measurement only. A failure here reports 0 converted and 0 recovered,
+    // which reads as "the nurture does not convert" rather than as an outage.
+    logErr("conversion sweep", openSendsError, "converted/recovered report 0");
     for (const s of (openSends ?? []) as { id: string; user_id: string; kind: string }[]) {
-      const { data: sub } = await supabase.from("user_subscriptions").select("status").eq("user_id", s.user_id).in("status", ["active", "trialing"]).maybeSingle();
+      const { data: sub, error: subError } = await supabase.from("user_subscriptions").select("status").eq("user_id", s.user_id).in("status", ["active", "trialing"]).maybeSingle();
+      logErr(`conversion check(${s.user_id})`, subError, "conversion not counted");
       const active = sub?.status === "active";
       if (!active) continue;
-      const { data: upd } = await supabase.from("nurture_sends").update({ activated_at: new Date().toISOString() }).eq("id", s.id).is("activated_at", null).select("id");
+      // Safe to leave unstamped on failure: the row stays eligible and the next
+      // run re-checks it, because the update is guarded by activated_at IS NULL.
+      const { data: upd, error: updError } = await supabase.from("nurture_sends").update({ activated_at: new Date().toISOString() }).eq("id", s.id).is("activated_at", null).select("id");
+      logErr(`activation stamp(${s.id})`, updError, "will retry next run");
       if (upd && upd.length) { if (s.kind === "dunning") recovered++; else converted++; }
     }
 
     // ── 1) Trial ending ──────────────────────────────────────────────────
+    //
+    // WEB-LEGAL-006, ported from _shared/agents/subscription-nurture.ts. That
+    // story is marked done and its fix landed on the shared copy only, so this
+    // one still sent retention copy ("Keep your Insider perks") with no amount,
+    // no charge date and no cancel path, gated on marketing consent AND on an
+    // LLM quality score - violating all three of its first ACs on a code path
+    // that is still deployable and still invocable by an admin or an API key.
+    //
+    // Sent as a transactional notice: no marketing-consent check, no quality
+    // gate. It states the amount, the date and how to cancel.
     const trialCutoff = new Date(now + TRIAL_WINDOW_DAYS * DAY).toISOString();
-    const { data: trials } = await supabase
+    const { data: trials, error: trialsError } = await supabase
       .from("user_subscriptions")
-      .select("user_id, current_period_end")
+      .select("user_id, plan_id, current_period_end, trial_end, billing_interval")
       .eq("status", "trialing")
       .not("current_period_end", "is", null)
       .lte("current_period_end", trialCutoff)
       .limit(300);
-    for (const t of (trials ?? []) as { user_id: string; current_period_end: string }[]) {
-      const c = await consented(supabase, t.user_id);
-      if (!c || !c.allowed) continue;
+    // RAISE. An empty result reports "0 trial-ending notices" as a successful
+    // run, indistinguishable from nobody being in a trial - and for a required
+    // billing disclosure a silent zero means people are charged without being
+    // told (WEB-BE-032 AC2). runAgent turns the throw into status "failure".
+    if (trialsError) throw new Error(`trialing subscriptions read failed: ${trialsError.message}`);
+    for (const t of (trials ?? []) as { user_id: string; plan_id: string | null; current_period_end: string; trial_end: string | null; billing_interval: string | null }[]) {
+      // Email address only. The marketing-preference check is deliberately
+      // absent here; this is a billing notice. See sendNotice above.
+      const { data: profile, error: profileError } = await supabase.from("profiles").select("email").eq("user_id", t.user_id).maybeSingle();
+      if (profileError) {
+        console.error(`trial notice: profile lookup failed for ${t.user_id}:`, profileError.message);
+        continue;
+      }
+      const email = (profile as { email?: string } | null)?.email;
+      if (!email) continue;
       if (await cappedRecently(supabase, t.user_id, "trial_ending", TRIAL_WINDOW_DAYS + 1)) continue;
-      const html = `<h1>Your trial ends soon</h1><p>Keep your Insider perks — premium picks, the AI Trip Planner, and more — without interruption.</p><p><a href="${SITE}/profile?tab=settings">Manage your plan →</a></p>`;
-      if (await sendStep(supabase, t.user_id, c.email, "trial_ending", "Your Des Moines Insider trial ends soon", html, "Your trial ends soon — keep your Insider perks. Manage your plan.")) trial++;
+
+      // Best-effort: without it the notice still sends, naming no amount.
+      const { data: plan, error: planError } = await supabase
+        .from("subscription_plans")
+        .select("display_name, price_monthly, price_yearly")
+        .eq("id", t.plan_id)
+        .maybeSingle();
+      if (planError) {
+        console.warn(`trial notice: plan lookup failed for ${t.user_id}, omitting amount:`, planError.message);
+      }
+
+      const notice = buildTrialNotice({
+        planName: (plan as { display_name?: string } | null)?.display_name ?? "subscription",
+        amount: planAmount(plan as { price_monthly?: number | null; price_yearly?: number | null } | null, t.billing_interval),
+        interval: t.billing_interval,
+        // trial_end is the charge date; current_period_end only coincides with it.
+        chargeAt: t.trial_end ?? t.current_period_end,
+        siteUrl: SITE,
+      });
+
+      if (await sendNotice(supabase, t.user_id, email, "trial_ending", notice.subject, notice.html, notice.text)) trial++;
     }
 
     // ── 2) Dunning (past_due) ────────────────────────────────────────────
-    const { data: pastDue } = await supabase.from("user_subscriptions").select("user_id").eq("status", "past_due").limit(300);
+    const { data: pastDue, error: pastDueError } = await supabase.from("user_subscriptions").select("user_id").eq("status", "past_due").limit(300);
+    // Same reasoning: a dunning notice nobody receives looks exactly like
+    // nobody being past due.
+    if (pastDueError) throw new Error(`past_due subscriptions read failed: ${pastDueError.message}`);
     for (const d of (pastDue ?? []) as { user_id: string }[]) {
       const c = await consented(supabase, d.user_id);
       if (!c || !c.allowed) continue;
@@ -120,16 +219,27 @@ Deno.serve(async (req) => {
     }
 
     // ── 3) Upgrade prompts (engaged free users) ──────────────────────────
-    const { data: freeEngaged } = await supabase
+    const { data: freeEngaged, error: freeEngagedError } = await supabase
       .from("profiles")
       .select("user_id, email, lifecycle_signals")
       .eq("lifecycle_stage", "active")
       .not("email", "is", null)
       .limit(300);
+    if (freeEngagedError) throw new Error(`engaged free users read failed: ${freeEngagedError.message}`);
     for (const p of (freeEngaged ?? []) as { user_id: string; email: string; lifecycle_signals: { messagingAllowed?: boolean } | null }[]) {
       if (p.lifecycle_signals?.messagingAllowed === false) continue;
-      // Only prompt users WITHOUT an active/trialing paid sub (entitlement-safe read).
-      const { data: sub } = await supabase.from("user_subscriptions").select("status").eq("user_id", p.user_id).in("status", ["active", "trialing"]).maybeSingle();
+      // Only prompt users WITHOUT an active/trialing paid sub.
+      //
+      // FAILS CLOSED, and this is the second behaviour change. The comment here
+      // used to call this an "entitlement-safe read" while dropping the error:
+      // on any failure `sub` was null, the guard did not fire, and an active
+      // paying subscriber was sent "Unlock more of Des Moines with Insider".
+      // Not knowing whether someone already pays is a reason to say nothing.
+      const { data: sub, error: subError } = await supabase.from("user_subscriptions").select("status").eq("user_id", p.user_id).in("status", ["active", "trialing"]).maybeSingle();
+      if (subError) {
+        logErr(`entitlement check(${p.user_id})`, subError, "upgrade prompt skipped");
+        continue;
+      }
       if (sub) continue;
       if (await cappedRecently(supabase, p.user_id, "upgrade_prompt", UPGRADE_GAP_DAYS)) continue;
       const html = `<h1>Get more from Des Moines Insider</h1><p>You're clearly enjoying the city — Insider unlocks premium picks and the AI Trip Planner to make every outing easier.</p><p><a href="${SITE}/profile?tab=settings">See Insider →</a></p>`;

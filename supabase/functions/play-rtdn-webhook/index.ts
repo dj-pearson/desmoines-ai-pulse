@@ -591,15 +591,33 @@ serve(async (req) => {
   // -------------------------------------------------------------------------
   if (vn) {
     const purchaseToken = vn.purchaseToken;
-    const { data: subRow } = await supabase
+    // WEB-BE-032. Unlike the idempotency guard above, this one IS fatal, and the
+    // reason is what the play_rtdn_log row says afterwards: with the error
+    // discarded, a failed lookup produced subRow === null, the refund was never
+    // applied, and the log recorded status 'no_match' - an affirmative claim
+    // that we looked and there was no such subscription. A refunded user keeps
+    // their entitlement and the audit trail says that was correct.
+    //
+    // Throwing returns 500 before anything is written to play_rtdn_log, so Play
+    // redelivers and the retry reprocesses cleanly.
+    const { data: subRow, error: subLookupError } = await supabase
       .from('user_subscriptions')
       .select('id, user_id')
       .eq('platform', 'android')
       .eq('google_purchase_token', purchaseToken)
       .maybeSingle();
 
+    if (subLookupError) {
+      console.error(
+        `Voided-purchase subscription lookup failed for token=${purchaseToken}: ${subLookupError.message}`,
+      );
+      throw subLookupError;
+    }
+
     if (subRow) {
-      await supabase
+      // The revocation itself. A silent failure here leaves a refunded customer
+      // entitled, so it throws for the same reason.
+      const { error: revokeError } = await supabase
         .from('user_subscriptions')
         .update({
           status: 'canceled',
@@ -607,6 +625,11 @@ serve(async (req) => {
           updated_at: new Date().toISOString(),
         })
         .eq('id', subRow.id);
+
+      if (revokeError) {
+        console.error(`Failed to revoke refunded subscription id=${subRow.id}:`, revokeError.message);
+        throw revokeError;
+      }
     }
 
     await supabase.from('play_rtdn_log').insert({
@@ -686,13 +709,26 @@ serve(async (req) => {
     );
   }
 
-  // Resolve the user_subscriptions row (Android, by purchaseToken)
-  const { data: subRow } = await supabase
+  // Resolve the user_subscriptions row (Android, by purchaseToken).
+  //
+  // WEB-BE-032: with the error discarded, a failed lookup fell into the `else`
+  // branch below, which warns "no matching subscription" and logs the
+  // notification as handled. Every state change Play sent - renewal, cancel,
+  // grace period, hold - was then dropped on a database hiccup and recorded as
+  // if there had been nothing to apply. Throws so Play redelivers.
+  const { data: subRow, error: subRowError } = await supabase
     .from('user_subscriptions')
     .select('id, user_id, plan_id')
     .eq('platform', 'android')
     .eq('google_purchase_token', subNotif.purchaseToken)
     .maybeSingle();
+
+  if (subRowError) {
+    console.error(
+      `Subscription lookup failed for token=${subNotif.purchaseToken}: ${subRowError.message}`,
+    );
+    throw subRowError;
+  }
 
   const { status: nextStatus, cancelAtPeriodEnd } = statusForNotificationType(typeName);
 
@@ -708,12 +744,24 @@ serve(async (req) => {
 
     const tier = resolveProductTier(subNotif.subscriptionId);
     if (tier) {
-      const { data: plan } = await supabase
+      // WEB-BE-032: genuinely optional - the rest of the update still applies
+      // without it - so this one does NOT throw. But it is not silent either:
+      // .single() raised PGRST116 whenever no plan matched the tier name, which
+      // is indistinguishable from a real failure with the error dropped, and the
+      // consequence is a row left on its previous plan_id after a tier change.
+      const { data: plan, error: planError } = await supabase
         .from('subscription_plans')
         .select('id')
         .ilike('name', `%${tier}%`)
         .limit(1)
-        .single();
+        .maybeSingle();
+
+      if (planError) {
+        console.error(`subscription_plans lookup failed for tier=${tier}:`, planError.message);
+      } else if (!plan) {
+        console.warn(`No subscription_plans row matches tier=${tier}; plan_id left unchanged.`);
+      }
+
       if (plan?.id) update.plan_id = plan.id;
     }
 

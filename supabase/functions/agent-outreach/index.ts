@@ -78,7 +78,14 @@ Deno.serve(async (req) => {
     const now = Date.now();
 
     // ── Guardrail: step-1 template must be approved before ANY auto-run. ──
-    const { data: templates } = await supabase.from("outreach_templates").select("step, subject, body, approved").order("step");
+    const { data: templates, error: templatesError } = await supabase.from("outreach_templates").select("step, subject, body, approved").order("step");
+    // WEB-BE-032. This one already failed in the SAFE direction and did so
+    // silently: a dropped error left tByStep empty, step1 undefined, and the
+    // guardrail below stopped the sequence - which is right, and is
+    // indistinguishable from the template genuinely not being approved. Someone
+    // chasing "why is outreach not sending" would have gone looking for an
+    // approval that was already granted.
+    if (templatesError) console.error(`[outreach-sequencer] outreach_templates read failed; treating step 1 as unapproved: ${templatesError.message}`);
     const tByStep = new Map<number, { subject: string; body: string; approved: boolean }>();
     for (const t of (templates ?? []) as { step: number; subject: string; body: string; approved: boolean }[]) tByStep.set(t.step, t);
     const step1 = tByStep.get(1);
@@ -90,13 +97,16 @@ Deno.serve(async (req) => {
     }
 
     // ── Qualified leads with a contact email, sequence not stopped. ───────
-    const { data: leads } = await supabase
+    const { data: leads, error: leadsError } = await supabase
       .from("crm_leads")
       .select("id, business_name, contact_email")
       .eq("status", "qualified")
       .eq("outreach_stopped", false)
       .not("contact_email", "is", null)
       .limit(BATCH);
+    // THE work list. A dropped error sent no outreach at all and reported
+    // success, indistinguishable from having no qualified leads.
+    if (leadsError) throw new Error(`outreach-sequencer: could not read qualified leads: ${leadsError.message}`);
     const rows = (leads ?? []) as { id: string; business_name: string; contact_email: string }[];
 
     let sent = 0, skipped = 0, gated = 0, done = 0;

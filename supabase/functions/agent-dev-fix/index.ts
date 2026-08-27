@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
   try {
     if (mode === "claim") {
       // Next open tier-1 dev task not already at the attempt cap.
-      const { data: candidates } = await supabase
+      const { data: candidates, error: candidatesError } = await supabase
         .from("agent_tasks")
         .select("id, title, payload, tier")
         .eq("category", "dev")
@@ -59,6 +59,8 @@ Deno.serve(async (req) => {
         .in("status", ["open", "auto_resolving", "escalated"])
         .order("created_at", { ascending: true })
         .limit(20);
+      // WEB-BE-032. THE work list.
+      if (candidatesError) throw new Error(`dev-fix: candidate task read failed: ${candidatesError.message}`);
       const task = ((candidates ?? []) as Array<{ id: string; title: string; payload: Record<string, unknown> | null }>)
         .find((t) => Number((t.payload ?? {}).fixAttempts ?? 0) < MAX_ATTEMPTS);
       if (!task) return json({ ok: true, task: null, message: "no eligible tier-1 dev task" }, 200, corsHeaders);
@@ -86,11 +88,18 @@ Deno.serve(async (req) => {
       if (!taskId || !outcome) return json({ error: "taskId and outcome required" }, 400, corsHeaders);
 
       const ledger = await runAgent(AGENT_KEY, async (ctx) => {
-        const { data: task } = await supabase
+        const { data: task, error: taskError } = await supabase
           .from("agent_tasks")
           .select("id, payload")
           .eq("id", taskId)
           .maybeSingle();
+        // Per-item. It already fails closed - a null task returns early - but it
+        // reported "task not found" for a database failure, which sends whoever
+        // reads that to look for a task that exists.
+        if (taskError) {
+          console.error(`dev-fix: task read failed for ${taskId}: ${taskError.message}`);
+          return { error: "task read failed" };
+        }
         if (!task) return { error: "task not found" };
         const payload = (task.payload ?? {}) as Record<string, unknown>;
         const attempts = Number(payload.fixAttempts ?? 0);

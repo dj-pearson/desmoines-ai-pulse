@@ -44,11 +44,14 @@ function classify(s: Signals, prior: string | null): string {
 export const run: AgentRun = async (ctx, { supabase }) => {
   const now = Date.now();
   // Process the stalest profiles first (nulls first via the index).
-  const { data: profiles } = await supabase
+  const { data: profiles, error: profilesError } = await supabase
     .from("profiles")
     .select("user_id, email, created_at, communication_preferences, lifecycle_stage")
     .order("lifecycle_updated_at", { ascending: true, nullsFirst: true })
     .limit(BATCH);
+  // WEB-BE-032. THE work list. A dropped error processed nothing and reported a
+  // successful run, indistinguishable from an empty profile batch.
+  if (profilesError) throw new Error(`lifecycle-classifier: profile batch read failed: ${profilesError.message}`);
   const rows = (profiles ?? []) as { user_id: string; email: string | null; created_at: string; communication_preferences: unknown; lifecycle_stage: string | null }[];
   if (rows.length === 0) { ctx.summary("no profiles"); return { classified: 0, transitions: 0 }; }
 

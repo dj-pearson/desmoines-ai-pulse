@@ -25,17 +25,39 @@ interface Finding {
   evidence: Record<string, unknown>;
 }
 
+/**
+ * WEB-BE-032. Both reads below dropped their error, and both tables are among
+ * the ones WEB-QA-018 confirmed absent (payments, usage_events are 42P01), so
+ * these two detectors have never seen a row and have always reported nothing.
+ * The failure is raised as a finding rather than thrown, for the reason the
+ * security detector gives: independent detectors run here, one unreadable table
+ * must not stop the others, and createAgentTask dedupes on the key so a
+ * persistent failure opens one task rather than one per run.
+ */
+function blindSource(table: string, error: { message?: string } | null): Finding | null {
+  if (!error) return null;
+  console.error(`[fraud-abuse-detector] ${table} unreadable:`, error.message);
+  return {
+    key: `detector_source_unreadable:${table}`,
+    tier: 3,
+    title: `Fraud detector BLIND - ${table} could not be read`,
+    evidence: { table, error: error.message ?? String(error) },
+  };
+}
+
 export const run: AgentRun = async (ctx, { supabase }) => {
   const sinceIso = new Date(Date.now() - WINDOW_H * 60 * 60 * 1000).toISOString();
   const findings: Finding[] = [];
 
   // ── 1. Refund / chargeback risk (rapid signup + refund) ─────────────────
-  const { data: refunds } = await supabase
+  const { data: refunds, error: refundsError } = await supabase
     .from("payments")
     .select("user_id, amount, status, refunded_amount, created_at")
     .or("status.eq.refunded,status.eq.partially_refunded,refunded_amount.gt.0")
     .gte("created_at", sinceIso)
     .limit(2000);
+  const refundsBlind = blindSource("payments", refundsError);
+  if (refundsBlind) findings.push(refundsBlind);
   const byUserRefunds = new Map<string, { count: number; total: number }>();
   for (const p of (refunds ?? []) as { user_id: string | null; refunded_amount: number; amount: number }[]) {
     if (!p.user_id) continue;
@@ -54,11 +76,13 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   }
 
   // ── 2. Per-user AI quota abuse ──────────────────────────────────────────
-  const { data: usage } = await supabase
+  const { data: usage, error: usageError } = await supabase
     .from("usage_events")
     .select("user_id, quantity")
     .gte("created_at", sinceIso)
     .limit(20000);
+  const usageBlind = blindSource("usage_events", usageError);
+  if (usageBlind) findings.push(usageBlind);
   const byUserUsage = new Map<string, number>();
   for (const u of (usage ?? []) as { user_id: string | null; quantity: number }[]) {
     if (!u.user_id) continue;

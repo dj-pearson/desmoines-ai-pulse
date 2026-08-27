@@ -59,23 +59,33 @@ Deno.serve(async (req) => {
   try {
     if (mode === "target") {
       // Areas that already have an open test-gen task — skip them.
-      const { data: openTests } = await supabase
+      const { data: openTests, error: openTestsError } = await supabase
         .from("agent_tasks")
         .select("dedupe_key")
         .eq("agent_key", AGENT_KEY)
         .in("status", ["open", "escalated", "assigned", "auto_resolving"])
         .like("dedupe_key", "test:%")
         .limit(200);
+      // DEDUPE GUARD, fails CLOSED. `taken` is the only thing stopping a second
+      // test-gen task for an area that already has one open; an empty set on a
+      // failed read proposes them all again.
+      if (openTestsError) {
+        console.error(`test-coverage: open-task read failed; proposing nothing this run: ${openTestsError.message}`);
+        return { proposed: 0, blocked: "open_task_read_failed" };
+      }
       const taken = new Set((openTests ?? []).map((r: { dedupe_key: string }) => r.dedupe_key.slice("test:".length)));
 
       // Error-cluster components (AOS-DEV-001) are the top priority.
-      const { data: errClusters } = await supabase
+      const { data: errClusters, error: errClustersError } = await supabase
         .from("agent_tasks")
         .select("payload")
         .eq("agent_key", "error-triage")
         .in("status", ["open", "escalated", "assigned"])
         .order("created_at", { ascending: false })
         .limit(20);
+      // Supplementary prioritisation signal only - the run still proposes tests
+      // without it, just less well targeted. Logged, not fatal.
+      if (errClustersError) console.warn(`test-coverage: error-cluster read failed, prioritising without it: ${errClustersError.message}`);
       const errAreas = (errClusters ?? [])
         .map((t: { payload: Record<string, unknown> | null }) => String((t.payload ?? {}).component ?? "").trim())
         .filter((c: string) => c && !taken.has(`err-${c}`))

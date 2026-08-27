@@ -83,6 +83,17 @@ jobs:
       # write email_notifications, so a stored opt-out was invisible to every sender
       # and nothing typed, compiled or tested said so (WEB-LEGAL-012).
       - run: deno test --allow-read supabase/functions/_tests/marketing-consent-contract.test.ts
+      # WEB-LEGAL-012 AC6, the other half of the same defect. The contract test
+      # above compares the key the clients write against the key the classifier
+      # reads, which catches a rename and cannot catch a sender that reads the
+      # right key and mails anyway. These RUN one agent from each family -
+      # nurture, re-engagement, churn, milestone, outreach - against an opted-out
+      # profile and assert no send is attempted, each paired with an opted-in run
+      # that proves the fixture drives the agent that far.
+      # --allow-env because the suite DELETES RESEND_API_KEY and the Anthropic
+      # keys before importing anything: without that, a runner holding them would
+      # turn this into real outbound mail.
+      - run: deno test --allow-read --allow-env supabase/functions/_tests/marketing-optout-agents.test.ts
       # XPLAT-007. The right of ACCESS must stay sourced from the same list as
       # the right of erasure - they had drifted by 57 tables, and the export
       # named three that do not exist.

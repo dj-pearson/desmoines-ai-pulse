@@ -118,8 +118,13 @@ export const run: AgentRun = async (ctx, { supabase }) => {
 
   // Missing/stale backup → tier-3 incident + immediate notify.
   let incident = false;
-  if (stale || emptyCoreTable) {
-    const reason = emptyCoreTable
+  // unreadableTables is in the condition as well as the verdict: without it
+  // `ok` went false and NO incident was filed, so a check that could not
+  // read its tables reported failure to nobody.
+  if (stale || emptyCoreTable || unreadableTables.length > 0) {
+    const reason = unreadableTables.length > 0
+      ? `restore-sanity UNVERIFIED - could not count ${unreadableTables.join(", ")}`
+      : emptyCoreTable
       ? `restore-sanity failed — a core table returned 0 rows (${JSON.stringify(rowCounts)})`
       : recency.ageHours == null
         ? `no backup found via Management API`
@@ -146,13 +151,17 @@ export const run: AgentRun = async (ctx, { supabase }) => {
     });
   } else {
     // Recovery: resolve any open backup incident once verification passes.
-    const { data: open } = await supabase
+    const { data: open, error: openError } = await supabase
       .from("agent_tasks")
       .select("id")
       .eq("agent_key", AGENT_KEY)
       .eq("dedupe_key", "backup-verification-failed")
       .in("status", ["open", "escalated", "assigned", "auto_resolving"])
       .limit(1);
+    // Recovery read: is there an open backup incident to resolve. A dropped
+    // error leaves a resolved incident open, which is noise rather than a
+    // missed alert - the verification itself already passed to get here.
+    if (openError) console.warn(`[backup-verifier] open-incident read failed: ${openError.message}`);
     const openRows = (open ?? []) as { id: string }[];
     if (openRows.length > 0) {
       await supabase

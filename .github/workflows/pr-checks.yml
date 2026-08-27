@@ -49,6 +49,39 @@ jobs:
       - name: Run TypeScript type check
         run: npm run type-check
 
+      # Edge functions are excluded from tsconfig.json, and no workflow runs
+      # `deno check`, so until now NOTHING type-checked supabase/functions -
+      # eslint parses them and runs no type-aware rules. A wrong property on a
+      # locally-typed object reached production unchallenged, which is exactly
+      # the class of edit WEB-BE-032's fixes have been making by the dozen.
+      #
+      # Scoped to _shared/ deliberately. That is where every agent module, the
+      # crisis floor, the trial notice and the consent classifier live, and it
+      # comes back CLEAN at zero errors. The other ~120 function directories
+      # report 132 errors that are overwhelmingly shim imprecision rather than
+      # defects, so gating on them would be red from the first run - the trap
+      # WEB-CI-020 and WEB-CI-021 already taught this repo twice.
+      - name: Type-check the shared edge modules
+        run: npm run type-check:edge
+
+      # The other half: the same compiler over ALL of supabase/functions, as a
+      # per-file ratchet. The ~120 individual function directories cannot reach
+      # zero today (166 errors, many of them shim artifacts), so this fails only
+      # when a file GAINS an error. That is what catches the assign-role shape:
+      # a named import with no matching export, which Deno throws on at module
+      # load, in the one directory npm run check-imports does not cover.
+      - name: Edge functions gained no type errors
+        run: npm run check-edge-types
+
+      # The offline suites for the edge/script helpers that have no other
+      # coverage: the venue-image reclaim, the /media route, the image_url
+      # rewrite and the provider-spend pricing. Each one decides a number or a
+      # deletion against a database this repo's CI cannot reach, so unit-testing
+      # the pure part is the only check they get. They were written and then not
+      # wired up, which is the same as not having them.
+      - name: Offline helper suites
+        run: npm run test:offline
+
       # Named-import integrity: a named import with no matching export is not a
       # type error, and esbuild strips types without checking, so it reaches
       # production as an undefined component (React #130). See WEB-QA-001.
@@ -228,6 +261,17 @@ jobs:
       # from an empty table, which is how 33 dead tables stayed invisible.
       - name: No new discarded Supabase errors
         run: node scripts/check-discarded-supabase-errors.mjs
+
+      # Every AOS agent exists twice - as an agent-* edge function and as a
+      # _shared/agents module - and both are deployable. Three fixes landed on
+      # one copy only, two of them in stories marked done: WEB-LEGAL-005's
+      # crisis floor, WEB-LEGAL-006's trial-conversion notice, and
+      # compliance-monitor's null-count gate. In each case the story's AC, the
+      # fix and the test all named the same single file, so the second
+      # implementation was invisible from every angle at once. Node builtins
+      # only, like the check above, so this job needs no npm ci.
+      - name: Duplicated agents have not drifted apart
+        run: node scripts/check-agent-pair-drift.mjs
 
       # WEB-SEC-025 step 3 replaces the USING (true) SELECT policy on votes. A
       # read that is not scoped to the caller returns ballots today and an empty

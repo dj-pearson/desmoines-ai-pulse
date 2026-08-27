@@ -239,6 +239,12 @@ class CatchDesMoinesCrawler:
         self.events_found: list = []
         self.events_inserted: int = 0
         self.duplicates_skipped: int = 0
+        # Keys of events already inserted during THIS run. _check_duplicate only
+        # ever asked the database, so two extractions of one event inside one
+        # batch both passed when neither was in the table at check time - the
+        # same shape scripts/check-duplicate-entities.ts was written for on
+        # restaurants (WEB-SEO-017).
+        self._seen_keys: set = set()
         # Extraction failures are counted, not swallowed. A run that extracts
         # nothing because the API call blew up must not exit 0 looking healthy.
         self.extraction_errors: int = 0
@@ -511,17 +517,65 @@ Return ONLY the JSON array. No other text."""
             logger.warning(f"Could not parse date '{date_str}': {e}")
             return None
 
+    @staticmethod
+    def _record_title(event: dict) -> str:
+        """The title as it is written to public.events."""
+        return (event.get("title") or "Untitled Event")[:200]
+
+    @staticmethod
+    def _record_venue(event: dict) -> str:
+        """The venue as it is written to public.events.
+
+        The insert falls back to location when the extraction carries no venue.
+        The duplicate check used to read event["venue"] raw, so every event
+        without a venue was compared against "" - which matches no stored row,
+        so it was never a duplicate no matter how many times it was crawled.
+        Both paths now derive the value the same way.
+        """
+        return (event.get("venue") or event.get("location") or "TBD")[:100]
+
+    def _dedupe_key(self, event: dict, parsed_dt: Optional[datetime]) -> Optional[tuple]:
+        """title + calendar date + venue, the key where a match is genuinely one
+        event stored twice. Title alone collapses a weekly trivia night."""
+        if not parsed_dt:
+            return None
+        return (
+            self._record_title(event).strip().lower(),
+            parsed_dt.date().isoformat(),
+            self._record_venue(event).strip().lower(),
+        )
+
     async def _check_duplicate(self, event: dict) -> bool:
-        """Check if event already exists in database."""
+        """Check if the event was already inserted, in this batch or earlier."""
+        parsed_dt = self._parse_event_datetime(event.get("date", ""))
+        key = self._dedupe_key(event, parsed_dt)
+
+        # An unparseable date cannot be keyed. _insert_event drops it anyway.
+        if key is None:
+            return False
+
+        if key in self._seen_keys:
+            logger.info(
+                f"Already inserted in this run: {self._record_title(event)}"
+            )
+            return True
+
         if self.dry_run or not self.supabase:
             return False
 
         try:
-            # Query for existing event with same title and venue
+            # Same calendar day in UTC, matching how `date` is stored.
+            day_start = parsed_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+            day_end = day_start + timedelta(days=1)
+
             result = self.supabase.table("events").select("id").ilike(
-                "title", event.get("title", "").strip()
+                "title", self._record_title(event).strip()
             ).ilike(
-                "venue", event.get("venue", "").strip()
+                "venue", self._record_venue(event).strip()
+            ).gte(
+                "date", day_start.isoformat()
+            ).lt(
+                "date", day_end.isoformat()
             ).execute()
 
             return len(result.data) > 0
@@ -533,6 +587,11 @@ Return ONLY the JSON array. No other text."""
     async def _insert_event(self, event: dict) -> bool:
         """Insert event into Supabase."""
         if self.dry_run:
+            # Record the key here too, or a dry run reports duplicates it would
+            # not actually have created - which is the number the run is for.
+            key = self._dedupe_key(event, self._parse_event_datetime(event.get("date", "")))
+            if key:
+                self._seen_keys.add(key)
             logger.info(f"[DRY RUN] Would insert: {event.get('title')}")
             return True
 
@@ -555,7 +614,7 @@ Return ONLY the JSON array. No other text."""
             # Build event record
             now = datetime.now(ZoneInfo("UTC")).isoformat()
             event_record = {
-                "title": event.get("title", "Untitled Event")[:200],
+                "title": self._record_title(event),
                 "original_description": event.get("description", "")[:500],
                 "enhanced_description": event.get("description", "")[:500],
                 "date": parsed_dt.isoformat(),
@@ -563,7 +622,7 @@ Return ONLY the JSON array. No other text."""
                 "event_timezone": "America/Chicago",
                 "event_start_utc": parsed_dt.isoformat(),
                 "location": event.get("location", "Des Moines, IA")[:100],
-                "venue": event.get("venue", event.get("location", "TBD"))[:100],
+                "venue": self._record_venue(event),
                 "category": event.get("category", "General")[:50],
                 "price": event.get("price", "See website")[:50],
                 "source_url": event.get("source_url", ""),
@@ -576,6 +635,9 @@ Return ONLY the JSON array. No other text."""
             result = self.supabase.table("events").insert(event_record).execute()
 
             if result.data:
+                key = self._dedupe_key(event, parsed_dt)
+                if key:
+                    self._seen_keys.add(key)
                 logger.info(f"Inserted event: {event.get('title')}")
                 return True
             else:

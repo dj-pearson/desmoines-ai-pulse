@@ -26,11 +26,13 @@ import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts
 import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey } from "../_shared/aiConfig.ts";
 import { scrapeUrl, scrapeUrls } from "../_shared/scraper.ts";
 import { fetchAndStoreImage as _fetchAndStoreImageShared } from "../_shared/imageStorage.ts";
+import { resolveEventImage } from "../_shared/venueImage.ts";
 import { tryDomainAdapter } from "../_shared/domain-adapters/index.ts";
 import { extractEventsFromJsonLd } from "../_shared/jsonLdEvents.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { isHostAllowed } from "../_shared/fetchGuard.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { recordAnthropicUsage } from "../_shared/providerUsage.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -964,6 +966,18 @@ Return empty array [] if no attractions found.`,
 
     if (claudeResponse.ok) {
       const claudeData = await claudeResponse.json();
+
+      // AOS-MANAGE-005: a crawl calls this once per source per category, so it
+      // is the largest non-agent Anthropic spender in the project and until now
+      // recorded none of it. Recorded here, on the success path only - the
+      // failure branch below never parses a body and has no usage to read.
+      await recordAnthropicUsage(createClient(supabaseUrl, supabaseKey), {
+        source: "ai-crawler",
+        model: String(requestBody.model ?? config.default_model),
+        usage: claudeData?.usage ?? {},
+        extra: { category, url },
+      });
+
       const responseText = claudeData.content?.[0]?.text?.trim();
 
       console.log(`🔍 Claude API response status: ${claudeResponse.status}`);
@@ -1394,12 +1408,26 @@ async function insertData(
         _assignedId: crypto.randomUUID(),
       }));
 
+      // A single-venue source (Hoyt Sherman, Wooly's, Vibrant, the Wells Fargo
+      // Arena teams, Principal Park...) reuses the SAME venue image for every
+      // event, so there is nothing to gain by downloading and storing a
+      // near-duplicate per event. resolveEventImage returns skipFetch for those
+      // and fetchAndStoreImage is never called: no egress, no storage object, no
+      // media_assets row. Aggregators - Catch Des Moines, SeatGeek, Eventbrite -
+      // have no declared venue and keep the per-event path unchanged.
       const imageResults = await Promise.all(
-        batchWithIds.map((item) =>
-          item.image_url
-            ? fetchAndStoreImage(supabase, item.image_url, category, item._assignedId)
-            : Promise.resolve(null)
-        )
+        batchWithIds.map(async (item) => {
+          const resolved = await resolveEventImage(supabase, {
+            sourceUrl: item.source_url || "",
+            scrapedImageUrl: item.image_url,
+          });
+          if (resolved.skipFetch) {
+            console.log(`\u{1F3DB}\uFE0F Venue image for ${resolved.venueName}: skipped per-event fetch`);
+            return resolved.imageUrl;
+          }
+          if (!resolved.imageUrl) return null;
+          return fetchAndStoreImage(supabase, resolved.imageUrl, category, item._assignedId);
+        })
       );
 
       // Transform data for database schema
@@ -1471,9 +1499,17 @@ async function insertData(
                 website: item.website?.substring(0, 200) || null,
                 price_range: item.price_range?.substring(0, 20) || null,
                 rating: item.rating || null,
+                // WEB-BE-032: this called .toISOString() on whichever branch
+                // won, and parseEventDateTime returns ParsedDateTime | null -
+                // an object of { event_start_local, event_timezone,
+                // event_start_utc }, not a Date. So the SUCCESS path threw
+                // "toISOString is not a function" and only an unparseable date
+                // reached the working fallback. Inverted, in a deployed
+                // function, on the restaurant-opening ingest path. Nothing
+                // type-checked supabase/functions until 2026-08-27.
                 opening_date: item.opening_date
                   ? (
-                      parseEventDateTime(item.opening_date) ||
+                      parseEventDateTime(item.opening_date)?.event_start_utc ??
                       new Date(item.opening_date)
                     )
                       .toISOString()

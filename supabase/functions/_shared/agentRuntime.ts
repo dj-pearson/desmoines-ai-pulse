@@ -29,6 +29,7 @@ import { createAgentTask } from "./agentTasks.ts";
 import { notifyOps } from "./notifyOps.ts";
 import { writeAgentAudit } from "./auditLog.ts";
 import { isActionAllowed, policyRequiresApproval } from "./agentPolicy.ts";
+import { anthropicCostUsd, type AnthropicUsage } from "./providerUsage.ts";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 
@@ -54,15 +55,12 @@ export interface ActionRecord {
   outputSummary: string;
 }
 
-// ─── Rough per-model pricing (USD per 1M tokens) for the cost cap ────────────
-// Approximate; used only to enforce costCapUsd, not for billing.
-function priceFor(model: string): { inPerM: number; outPerM: number } {
-  const m = model.toLowerCase();
-  if (m.includes("opus")) return { inPerM: 15, outPerM: 75 };
-  if (m.includes("haiku")) return { inPerM: 0.8, outPerM: 4 };
-  // sonnet / fable / default
-  return { inPerM: 3, outPerM: 15 };
-}
+// ─── Per-model pricing ───────────────────────────────────────────────────────
+// Moved to _shared/providerUsage.ts (AOS-MANAGE-005) so the cost cap here and
+// the provider_usage rows written by non-agent functions price the same call
+// the same way. The table this replaced had opus at $15/$75 and haiku at
+// $0.80/$4, both wrong since the 4.6 generation, and it folded cache reads in
+// at the full input rate.
 
 // ─── The pure tool-calling loop ──────────────────────────────────────────────
 
@@ -102,7 +100,13 @@ export interface RunToolLoopResult {
   finalToolInput?: Record<string, unknown>;
   text: string;
   steps: number;
-  usage: { inputTokens: number; outputTokens: number; costUsd: number };
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+    costUsd: number;
+    /** The four counts unsummed, for callers recording provider_usage.meta. */
+    raw: Required<AnthropicUsage>;
+  };
   messages: ChatMessage[];
   error?: string;
 }
@@ -129,9 +133,16 @@ export async function runToolLoop(p: RunToolLoopParams): Promise<RunToolLoopResu
     onAction,
   } = p;
 
-  const price = priceFor(model);
   const conversation: ChatMessage[] = [...p.messages];
   const startedAt = Date.now();
+  // Kept separate rather than summed, because cache reads and cache writes are
+  // not priced like fresh input tokens.
+  const totals: Required<AnthropicUsage> = {
+    input_tokens: 0,
+    output_tokens: 0,
+    cache_read_input_tokens: 0,
+    cache_creation_input_tokens: 0,
+  };
   let inputTokens = 0;
   let outputTokens = 0;
   let costUsd = 0;
@@ -199,9 +210,16 @@ export async function runToolLoop(p: RunToolLoopParams): Promise<RunToolLoopResu
 
     // Accumulate usage → cost.
     const u = reply.usage ?? {};
-    inputTokens += (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0);
-    outputTokens += u.output_tokens ?? 0;
-    costUsd = (inputTokens / 1_000_000) * price.inPerM + (outputTokens / 1_000_000) * price.outPerM;
+    totals.input_tokens += u.input_tokens ?? 0;
+    totals.cache_read_input_tokens += u.cache_read_input_tokens ?? 0;
+    totals.cache_creation_input_tokens += u.cache_creation_input_tokens ?? 0;
+    totals.output_tokens += u.output_tokens ?? 0;
+    // inputTokens stays the all-in total: it is what callers report as "tokens
+    // used" and what agentRun books, and narrowing it would drop the cached
+    // portion out of every ledger row.
+    inputTokens = totals.input_tokens + totals.cache_read_input_tokens + totals.cache_creation_input_tokens;
+    outputTokens = totals.output_tokens;
+    costUsd = anthropicCostUsd(model, totals);
 
     conversation.push({ role: "assistant", content: reply.content });
     for (const b of reply.content) {
@@ -258,7 +276,7 @@ export async function runToolLoop(p: RunToolLoopParams): Promise<RunToolLoopResu
       finalToolInput,
       text,
       steps: step,
-      usage: { inputTokens, outputTokens, costUsd },
+      usage: { inputTokens, outputTokens, costUsd, raw: { ...totals } },
       messages: conversation,
     };
   }
@@ -268,7 +286,7 @@ export async function runToolLoop(p: RunToolLoopParams): Promise<RunToolLoopResu
       stopReason: "error",
       text,
       steps: step,
-      usage: { inputTokens, outputTokens, costUsd },
+      usage: { inputTokens, outputTokens, costUsd, raw: { ...totals } },
       messages: conversation,
       error,
     };

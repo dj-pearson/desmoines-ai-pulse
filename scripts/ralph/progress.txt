@@ -215,3 +215,617 @@ Evidence:
 - 20260817000002_close_unused_public_bucket.sql is pending and it TIGHTENS access (storage bucket user-uploads -> private). Its filename asserts the bucket is unused and that assertion is unverified. Audit readers before applying it; it is the one pending migration that can actually break something.
 - The event crawler's remaining problem is extraction quality, not plumbing: it now calls the API successfully and Claude returns an empty array from ~429k characters of the events page. Worth its own story - likely JS-rendered markup or a prompt that no longer matches the page structure.
 ---
+
+## 2026-08-27 - WEB-SEO-017 (partial: the ingest path)
+- Fixed the crawler's duplicate detection. Two stacked defects, and the first is the one that
+  produced the 2026-08-23 "Chef George's Steak Bar" triple with "Duplicates skipped: 0":
+  _check_duplicate read event["venue"] raw while _insert_event wrote venue-or-location, so every
+  venueless catchdesmoines row compared against "" and could never match a stored row. Both paths
+  now share _record_title/_record_venue. Second: the check only ever asked the database and
+  returned False under --dry-run, so nothing tracked what this run had already inserted; added
+  _seen_keys, populated on both the real and the dry-run insert.
+- Key moved from title+venue to title+calendar-date+venue, matching check-duplicate-entities.ts.
+  This dedupes LESS on purpose - title+venue collapses a weekly trivia night into one row.
+- Files: crawlers/catchdesmoines_crawler.py, crawlers/test_dedupe.py (new, 15 cases),
+  .github/workflows/event-crawler.yml, prd.json (notes only).
+- Story stays passes:false. AC2 needs a run whose sitemap/prerendered output demonstrably changes,
+  and AC4 (why it was switched off) is not recoverable - GitHub purged the February logs.
+- **Learnings for future iterations:**
+  - A duplicate check must derive its key from the same code the INSERT uses. Any read of the raw
+    extraction dict where the write applies a fallback is a permanent dedupe hole, not a race.
+  - Assert the harness works before asserting the behaviour. Three cases in test_dedupe.py passed
+    green while every _parse_event_datetime call was failing on an unbound CENTRAL_TZ - the
+    function swallows its exceptions and returns None, and None == None. The first check in that
+    section now proves a date parses at all.
+  - crawlers/test_*.py exec a source region of catchdesmoines_crawler.py with the heavy imports
+    stubbed, so they run on a bare python BEFORE the ~5min crawl4ai install in CI. test_clean_html
+    starts the region at EVENT_LINK_RE; anything needing CENTRAL_TZ must start at
+    CATCHDESMOINES_BASE_URL instead.
+  - npm run lint cannot run in a fresh remote container - @eslint/js is declared in package.json
+    but node_modules/@eslint is absent. npm run type-check works.
+---
+
+## 2026-08-27 - WEB-LEGAL-012 (partial: the web read/write path)
+- Corrected the story's premise. It records that the web UI "cannot write" event_alerts_enabled
+  because useEmailPreferences' interface omits it. It can: useSavedSearchAlerts upserts the column
+  and SavedSearchesTab renders it as the dashboard master switch. Different hook owns it.
+- The real defect was the READ next to it. alertsPrefQuery discarded its error, so any failure gave
+  `undefined !== false` -> true -> the switch renders ON for a user who had turned alerts OFF. Now
+  throws; the hook exposes alertsPrefUnavailable/alertsPrefLoading and the switch is DISABLED with
+  explanatory copy rather than defaulting to a value it does not have.
+- setAlertsPref had onSuccess and no onError, so a failed write was silent - the controlled switch
+  just snapped back. Added the error toast.
+- useEmailPreferences' existence check used .single() with the error discarded. .single() raises
+  PGRST116 for "no row", so it could not tell "no preferences yet" from a network/RLS failure; both
+  took the INSERT branch and a real existing row then failed the unique constraint. Now .maybeSingle()
+  with the error checked. Its console.error also moved to @/lib/logger.
+- Files: src/hooks/useSavedSearchAlerts.ts, src/hooks/useEmailPreferences.ts,
+  src/components/dashboard/SavedSearchesTab.tsx, prd.json (notes only).
+- Story stays passes:false. AC3 (iOS writes only UserDefaults), AC4 (no Android surface), AC6
+  (per-agent tests) and AC2's convergence decision are all untouched.
+- **Learnings for future iterations:**
+  - RUN `npm ci` FIRST in a fresh remote container. node_modules did not exist, so `npm run
+    type-check` and `npm run lint` ran off npx-fetched binaries and reported nothing about the
+    source: tsc resolved to 6.0.2 against the `^5.5.3` pin and died on `ignoreDeprecations: "5.0"`
+    before reading a file, and eslint died on a missing @eslint/js. Both look like repo breakage and
+    are not. After npm ci both are clean.
+  - `undefined !== false` is this repo's signature consent bug and it appears on BOTH sides. A
+    discarded read error plus a `!== false` default means the UI asserts consent it never read. When
+    fixing one, check whether the same expression guards the sender too.
+  - Before "the web has no surface for X", grep the column name across src/ rather than reading the
+    one hook whose name matches. event_alerts_enabled is written by useSavedSearchAlerts, not by
+    useEmailPreferences.
+---
+
+## 2026-08-27 - WEB-PERF-020 (AC1 met; AC5 open)
+- Critical-path JS 206.4 -> 196.7 KB gz, inside the 200 KB CLAUDE.md budget for the first time.
+  Entry chunk 76.5 -> 66.8 KB gz. Baseline locked at 196.7.
+- Cause: SessionManager is mounted at the app root and statically imported SessionTimeoutWarning,
+  so the whole Radix AlertDialog stack (dialog, alert-dialog, focus-scope, dismissable-layer,
+  presence, react-remove-scroll, react-remove-scroll-bar, aria-hidden) rode into the
+  render-blocking entry for a dialog that shows after 25 minutes of inactivity. Now lazy, and
+  rendered only while isWarning rather than mounted with open={false}.
+- No behaviour change: the dialog's own activity listener is redundant with useSessionTimeout's,
+  which listens on window for the whole session and dismisses the warning itself.
+- Fixed check-bundle-budget.mjs printing "still -3.3 KB over" now that the goal is met.
+- Files: src/components/auth/SessionManager.tsx, scripts/check-bundle-budget.mjs,
+  bundle-budget-baseline.json, prd.json (notes only).
+- Story stays passes:false on AC5 alone (re-measure LCP), which needs a deployment with real data.
+- **Learnings for future iterations:**
+  - `npm ci` first, then build with placeholder env vars - vite.config's
+    assert-html-env-placeholders plugin hard-fails without VITE_SUPABASE_URL, and the values do not
+    affect bundle shape:
+      VITE_SUPABASE_URL=https://placeholder.supabase.co VITE_SUPABASE_ANON_KEY=x \
+      VITE_SITE_URL=https://desmoinesinsider.com npx vite build
+    Use `npx vite build` alone, not `npm run build`, which also runs generate-sitemaps and prerender
+    (both need a database).
+  - To find WHAT is in the entry chunk, attribute its sourcemap rather than guessing: decode
+    .mappings, sum generated-column spans per source index, aggregate by module. It named
+    tailwind-merge, react-helmet-async and the tooltip/floating-ui graph in one pass and is how the
+    AlertDialog stack was spotted.
+  - The root-mounted headless component is this repo's recurring bundle defect - sonner via
+    GuestFavoriteMigrator, AccessibilityWidget's panel, now SessionManager's dialog. Check
+    SessionManager, GuestFavoriteMigrator, GlobalUpgradeModal, OfflineBanner and CookieConsentBanner
+    first whenever the entry chunk grows.
+  - Lazy-loading a dialog opens a gap before its own event listeners attach. Check whether the
+    parent hook already covers those events before assuming the split is behaviour-neutral.
+---
+
+## 2026-08-27 - WEB-BE-032 (8 sites, both payment webhooks)
+- 239 -> 231 discarded-error sites, 176 -> 170 in edge functions. All eight are AC2 control
+  decisions; two of them were the previous sessions' fixes sitting unbaselined.
+- stripe-webhook: the existingSubscription lookup decides UPDATE vs INSERT (a dropped error sent a
+  paying customer down INSERT - duplicate row or constraint failure after the charge); the invoice
+  lookup used .single() so PGRST116 and a real failure were the same non-result; the
+  .update({status:'active'}) beside it is the entitlement write and was silent. All three throw now.
+  The campaigns lookup does NOT throw but is no longer silent - campaign?.user_id gates the
+  advertiser's payment-confirmation notification.
+- play-rtdn-webhook: the voided-purchase lookup dropped its error, so a failure left a refunded user
+  entitled AND wrote play_rtdn_log status 'no_match' - an affirmative false claim in the audit trail.
+  Throws before the log is written. Same for the revocation update and the main subscription lookup.
+  The subscription_plans tier lookup stays non-fatal but now logs.
+- Files: supabase/functions/stripe-webhook/index.ts,
+  supabase/functions/play-rtdn-webhook/index.ts, supabase-error-baseline.json, prd.json.
+- **Learnings for future iterations:**
+  - THERE IS NO TYPE CHECK ON EDGE FUNCTIONS. subscription-sync-tests.yml runs `deno test` on ten
+    files in _tests/ and no `deno check` on any function; tsconfig excludes supabase/. Deno cannot be
+    installed in this container - deno.land is 403 through the agent proxy. Parse-only verification
+    via the TypeScript compiler API's parseDiagnostics is the most that is available here, and it
+    catches syntax, not types. Do not wire a `deno check` step you cannot run.
+  - Throwing is right in the two payment webhooks and wrong in most of the remaining 231. Both are
+    at-least-once webhooks with a working idempotency guard whose id is recorded only after success,
+    so a 500 costs one redelivery. The agent files (agent-subscription-nurture has 9) would abort a
+    batch instead.
+  - Re-baseline in the same commit as the fix. Two sites sat "fixed but unbaselined" for two
+    sessions, and whoever next runs --write locks in whatever the tree happens to hold.
+  - Check ratchet exit codes WITHOUT a pipe (`cmd > file 2>&1; echo $?`), and negative-control by
+    adding a violating file, not by trusting the green.
+---
+
+## 2026-08-27 - WEB-QA-005 (the spend, not the funnel decision)
+- generate-itinerary now probes trip_plans before the Claude call and refuses on 42P01/PGRST205 only.
+  Stops the recorded sequence where a paying Insider passes the paywall, is billed for a full
+  itinerary, and is then shown "Failed to save trip plan" because the table does not exist.
+- Fail-open on every OTHER error is preserved deliberately - it is the right rule for a transient
+  failure. The only case closed is the one where continuing is guaranteed to cost money and fail.
+- No contract change (AC4): same 500 and same { success, error } envelope the catch block already
+  returned for this failure. `code: 'trip_storage_unavailable'` is additive.
+- The web client needed no change - useTripPlanner already reads the structured body off
+  FunctionsHttpError's context, which is how 403 upgrade_required and 429 quota_exceeded reach the UI.
+- Files: supabase/functions/generate-itinerary/index.ts, prd.json (notes only).
+- Story stays passes:false: AC1's funnel decision and AC2's homepage CTA copy are untouched.
+- **Learnings for future iterations:**
+  - "Fail open, never block a paying user on our bug" is right for transient errors and wrong for
+    42P01. Separate the two by error CODE rather than by whether the read succeeded - the same
+    distinction .single() vs .maybeSingle() forces elsewhere in this repo.
+  - Put the cheap existence probe BEFORE the expensive call, not in the error handler after it.
+    The quota count here was already reading trip_plans and already had the error in hand; it just
+    failed open on it, three hundred lines before the insert that would fail.
+  - supabase.functions.invoke sets `error` and null `data` on any non-2xx, so a structured body only
+    reaches the UI if the caller reads error.context.json(). useTripPlanner.ts:170-185 is the
+    reference implementation in this repo.
+---
+
+## 2026-08-27 - correction to the WEB-BE-032 entry above
+- eslint DOES cover supabase/functions. eslint.config.js matches **/*.{ts,tsx}, ignores only dist and
+  tools, `npm run lint` is `eslint .`, and pr-checks.yml runs it. A syntax error in an edge function
+  fails a PR today. The parse check I ran was redundant; `npx eslint --quiet` on the three edited
+  functions is zero errors.
+- The real gap is narrower and still real: no TYPE check. tsconfig excludes supabase/, no workflow runs
+  `deno check`, and eslint runs without type-aware rules - so a wrong property on a Supabase response
+  passes everything. The ask is `deno check` on changed functions, not lint coverage.
+---
+
+## 2026-08-27 - WEB-BE-032 (21 sites; the duplicated-agent finding)
+- 231 -> 210 sites, 170 -> 149 in edge functions.
+- STRUCTURAL: 40 agent-* edge functions, 36 _shared/agents modules, 12 names in BOTH, and both are
+  live - pg_cron posts to the standalone, agent-runner dispatches the shared one via registry.ts.
+  Each standalone carries its own full inline implementation, not a wrapper. Earlier WEB-BE-032 work
+  fixed the SHARED copies of subscription-nurture, churn-winback, billing-selfservice and
+  lead-sourcing and left the standalones. All 12 pairs now agree; re-measured from source, 0 diverge.
+- Two sites reached a user, both in subscription-nurture: cappedRecently returned false on error
+  ("not capped", so mail sends) and the entitlement check returned null ("not subscribed", so a
+  paying customer got an upgrade prompt under a comment calling it entitlement-safe). Both fail
+  closed now.
+- Files: the four agent-*/index.ts, supabase-error-baseline.json, prd.json.
+- **Learnings for future iterations:**
+  - BEFORE fixing an agent, check for a twin: `ls supabase/functions/_shared/agents/` against
+    `ls -d supabase/functions/agent-*`. Twelve names exist in both and both run. Fixing one is half
+    a fix, and the ratchet cannot see it because it counts per file.
+  - The treatment convention, taken from the shared copies: work-list read THROWS (runAgent records
+    status failure in automation_job_runs); per-item read LOGS and continues; cap and entitlement
+    reads FAIL CLOSED, because both read as permission to send when they fail; a multi-source sweep
+    collects into unreadableSources and names the count in ctx.summary.
+  - runAgent turns a throw into a recorded failure rather than an aborted batch with no trace, which
+    is why "never throw in an agent" was too blunt a rule - it is right per-item and wrong per-batch.
+---
+
+## 2026-08-27 - WEB-LEGAL-006 second code path + correction to yesterday's entry
+- CORRECTION to the entry above: pg_cron does NOT post to the standalone agent-* functions. Migration
+  20260710000000_repoint_agent_crons_to_runner.sql repointed all 34 agent crons to
+  /functions/v1/agent-runner/<key>, and it is not in the drift baseline, so it applied. The scheduler
+  runs the _shared copy. The standalones are admin/API-key reachable only, and have been drifting
+  unscheduled since 2026-07-10.
+- WEB-LEGAL-006 is marked done and its fix was on the shared copy only. The standalone still gated the
+  trial notice on consented() (AC1) and scoreOutput() (AC2) and sent "Keep your Insider perks" with no
+  amount, date or cancel path (AC3). Ported the shared implementation; pair overlap 70% -> 88%.
+- _tests/trial-notice.test.ts read one of the two files, which is why nothing caught it. It now loops
+  over both. Negative-controlled against git HEAD's standalone: all five assertions fail on it.
+- Files: supabase/functions/agent-subscription-nurture/index.ts,
+  supabase/functions/_tests/trial-notice.test.ts, prd.json.
+- **Learnings for future iterations:**
+  - difflib.SequenceMatcher defaults to autojunk=True and is USELESS on file-sized strings - it reported
+    two 90%-identical files as 20% similar. Compare normalized-line overlap instead.
+  - A source-contract test that names one file is a guarantee about that file, not about the behaviour.
+    When an agent or module exists twice, the test must loop over both paths.
+  - Before claiming which code path production runs, find the migration that wired it and check it
+    against .github/migration-drift-baseline.json. In this repo "the migration exists" and "the
+    migration ran" are different facts.
+---
+
+## 2026-08-27 - WEB-LEGAL-005 second code path, compliance-monitor, ratchet blind spot
+- CORRECTION: there are 34 duplicated agent pairs, not 12. I matched by name equality; 22 pairs have
+  different names on each side (agent-backup-verify <-> backup-verifier.ts). The authoritative
+  mapping is the VALUES table in 20260710000000_repoint_agent_crons_to_runner.sql. Overlap runs
+  78-98%.
+- WEB-LEGAL-005 (crisis response, marked done): agent-support-responder had NO crisis handling at
+  all. Ported detectCrisisIntent + crisisMessageText before retrieveKb. crisis-support.test.ts drives
+  off a SURFACES table that listed the shared file only; added the standalone as a fifth surface,
+  negative-controlled against HEAD.
+- agent-compliance-monitor's count() did `const { count } = ...; return count ?? 0` with the error
+  dropped, so an unreadable table counted as zero and every compliance gate read as "no violations".
+  Ported the shared null-returning count() and its exceeds() helper.
+- Same shape in agent-backup-verify (failed safe but reported "a core table returned 0 rows" when the
+  count could not run). Ported, and closed a gap present in BOTH copies: unreadableTables set
+  ok=false but was missing from the incident condition, so it reported failure to nobody.
+- check-discarded-supabase-errors.mjs skipped destructures without `data`. It now matches data OR
+  count; 7 new sites surfaced, 2 fixed, 5 baselined.
+- Files: agent-support-responder, agent-compliance-monitor, agent-backup-verify,
+  _shared/agents/backup-verifier, _tests/crisis-support.test.ts,
+  scripts/check-discarded-supabase-errors.mjs, supabase-error-baseline.json, prd.json.
+- **Learnings for future iterations:**
+  - Pair agent files by the migration's mapping table, NOT by name. Name equality finds 12 of 34.
+  - A story marked done means done on the path someone checked. In both WEB-LEGAL-005 and -006 the
+    AC, the fix and the test all named the same single file, so the second copy was invisible from
+    every angle at once. When a story names a file, grep the repo for a second implementation.
+  - `count ?? 0` with the error dropped is the same defect as `data ?? []` and reads worse: an empty
+    result at least renders as an empty state, a zero count renders as a passing check.
+  - The ratchet's own exclusions are assumptions. "`{ count }` alone is usually deliberate" was
+    written into the code and was wrong in the single worst place it could have been.
+---
+
+## 2026-08-27 - WEB-BE-032 AC4: a check for duplicated-agent drift
+- scripts/check-agent-pair-drift.mjs. Pairs come from the VALUES table in migration 20260710000000,
+  not from name matching. Compares two exact sets per pair - imported modules, and top-level
+  function/SCREAMING_CASE names - rather than a similarity percentage.
+- Rejected the percentage-overlap ratchet: the pairs sit at 78-98% for ordinary reasons, so any
+  tolerance wide enough not to fire on an unrelated edit is wider than a three-line safety guard.
+- Negative-controlled in git worktrees at fe1ae39 and b6e458d: flags all three real divergences, each
+  named by the artefact that carried the fix (trialNotice/sendNotice, crisisSupport, exceeds).
+- First run found fetchWithTimeout in two standalones and not their shared copies. NOT a defect - the
+  shared calls already passed AbortSignal.timeout, which binds before the wrapper's outer bound.
+  Converged the shared copies rather than adding an exemption.
+- Wired into pr-checks.yml (node builtins, no npm ci) and `npm run check-agent-drift`.
+- Files: scripts/check-agent-pair-drift.mjs, .github/workflows/pr-checks.yml, package.json,
+  _shared/agents/support-responder.ts, _shared/agents/ticket-classifier.ts, prd.json.
+- **Learnings for future iterations:**
+  - To prove a check would have caught a past defect, run it in a git worktree at the commit before
+    the fix: `git worktree add -q --detach <dir> <sha>` then copy the script in. Asserting it "would
+    have" without that is the same as not testing it.
+  - When a new check flags something real but harmless, converge the code rather than exempting it.
+    Every exemption is a place the check has been told not to look, and this repo already has one
+    that hid the worst instance of the defect its own script was written for.
+  - The check cannot see a guard that adds no import and no function - an inlined `if (x) continue`
+    or a flipped comparison. cappedRecently's fail-closed fix would have slipped through it.
+---
+
+## 2026-08-27 - WEB-SEC-025 AC7: the guard now covers all nine tally tables
+- check-ballot-reads.sh watched `votes` alone. It now watches votes plus the eight AC7 found with the
+  same shape (a count rendered, a user identity exposed). Authored-content tables from the same sweep
+  are deliberately excluded.
+- WINDOW BUG fixed first: the guard read 8 lines after each .from() looking for an own-row filter,
+  which is enough for a chained .eq() and not for a multi-line .select(`...`) template.
+  ProfilePage.tsx:42 and :148 put .eq('user_id', ...) eleven lines down, so widening the list without
+  this would have reported two correct reads as leaks. Now reads to the statement's semicolon,
+  capped at 40 lines.
+- 18 references classified across web, iOS and Android; exactly one is a real tally read
+  (useCommunityFeatures.ts:217, event_attendance). Recorded in ALLOWED_TALLY_READS keyed on FILE and
+  TABLE, not on a line number.
+- Negative-controlled both ways: a new unfiltered read on photo_likes exits 1; emptying the allowlist
+  exits 1 naming :217.
+- Files: scripts/check-ballot-reads.sh, prd.json.
+- **Learnings for future iterations:**
+  - Before widening a guard's INPUT, check its DETECTION on the new inputs. The 8-line window had been
+    correct for every votes query ever written and was wrong for the first event_attendance one.
+  - `git checkout -- <file>` to undo a one-line test edit throws away every other edit in that file.
+    I lost the whole patch that way and had to reapply it. Undo the line, not the file.
+  - Reachability from this container, measured: the agent proxy allows package registries, GitHub and
+    api.anthropic.com. desmoinesinsider.com and deno.land both answer 403 to CONNECT. So no live
+    verification of SEO claims, no Supabase, no Deno - `curl -sS "$HTTPS_PROXY/__agentproxy/status"`
+    lists the policy and the recent denials.
+---
+
+## 2026-08-27 - WEB-BE-032: the security and fraud detectors report their own blindness
+- 231 -> 206 sites. 10 fixed across four files (two agents, both copies each).
+- Prioritised by what actually runs: 46 of the remaining sites were in _shared/agents modules, the
+  path agent-runner dispatches and pg_cron reaches. Sort the baseline by that prefix.
+- security-anomaly-detector: all three reads are detector work lists. A dropped error yields an empty
+  array, no incident, and an "all clear" run. Its own comment records that the login_attempts query
+  used to 42703, so the credential-stuffing detector has never seen an attempt.
+- fraud-abuse-detector: both tables (payments, usage_events) are 42P01 today, so both detectors have
+  always reported nothing.
+- Neither throws. Independent detectors run in one pass and one unreadable table must not stop the
+  others; the failure is raised as a highest-tier finding through the same channel as a real one,
+  deduped on `detector_source_unreadable:<table>`, and named in ctx.summary.
+- Files: _shared/agents/{security-anomaly-detector,fraud-abuse-detector}.ts,
+  agent-{security-monitor,fraud-monitor}/index.ts, supabase-error-baseline.json, prd.json.
+- **Learnings for future iterations:**
+  - The treatment convention has FOUR cases, not three: work-list THROW, per-item LOG,
+    cap/entitlement FAIL CLOSED, detector-source RAISE AS A FINDING. A detector that throws stops
+    its siblings; a detector that logs is invisible in the surface people actually read.
+  - Prioritise WEB-BE-032 sites by `supabase/functions/_shared/` prefix. Those are the ones cron
+    reaches; the agent-* standalones are admin-reachable only.
+  - check-agent-pair-drift.mjs now binds real work: both fixes added a top-level function, so
+    forgetting the twin would have failed CI rather than becoming next week's finding.
+---
+
+## 2026-08-27 - WEB-BE-032: the three messaging agents (18 sites)
+- 206 -> 188 overall; scheduled path 46 -> 32. dormant-reengagement, onboarding-drip and
+  weekly-digest-personal, each on both copies.
+- Two work lists now throw: onboarding-drip's new-profile read and weekly-digest's recipient read.
+  Both sent NO mail on a failed read and still reported success, so either campaign could stop
+  entirely without anyone seeing it stop.
+- The digest's tier read is DELIBERATELY not fail-closed. A failed read drops `tier` to "free", so a
+  paying subscriber gets the free digest; failing closed would send them nothing, which is the worse
+  harm for a digest they asked for. Logged instead.
+- Files: _shared/agents/{dormant-reengagement,onboarding-drip,weekly-digest-personal}.ts and
+  agent-{reengagement,onboarding-drip,weekly-digest}/index.ts, supabase-error-baseline.json, prd.json.
+- **Learnings for future iterations:**
+  - "Fail closed" is NOT a rule about entitlement reads. It is a rule about which direction reaches a
+    user with something they did not ask for. subscription-nurture's upgrade prompt fails closed
+    because not knowing whether someone pays is a reason to say nothing; the weekly digest's tier read
+    must NOT, because failing closed there withholds a send the user asked for. Ask what the failure
+    SENDS, not what it reads.
+  - An activation stamp guarded by `activated_at IS NULL` is always safe to log-and-continue: the row
+    stays eligible and the next run retries it.
+  - After each burn-down, re-sort the baseline by the `supabase/functions/_shared/` prefix to see what
+    is left on the path cron actually reaches. 32 sites in 20 files now, none above 4 - the rest is
+    long rather than deep.
+---
+
+## 2026-08-27 - WEB-BE-032: lead-enrichment + outreach-sequencer (12 sites)
+- 188 -> 176 overall; scheduled path 32 -> 26.
+- outreach-sequencer's template guardrail already failed SAFE and did so silently: a dropped error
+  left step1 undefined, so the sequence stopped and queued an approval - indistinguishable from the
+  template genuinely not being approved. It still stops; it now says which happened.
+- lead-enrichment's per-item lookups return `empty` on error, whose nulls are written as the
+  enrichment RESULT and scored. "We looked and there is nothing" and "we could not look" are
+  different claims about a lead.
+- Two more work lists throw (new crm_leads, qualified leads).
+- **Learnings for future iterations:**
+  - A guard that fails safe is not the same as a guard that is working, and the ratchet cannot tell
+    them apart - both are a site with no `error` binding. Read the failure path before assuming a
+    fail-safe site is low value; the silent version costs someone a debugging session.
+  - Where a helper returns a neutral-looking default on error (`empty`, `{}`, `0`), check what
+    CONSUMES it. If the default gets persisted or scored, it is an assertion, not an absence.
+---
+
+## 2026-08-27 - the edge functions are type-checked now (partly), without Deno
+- `npm run type-check:edge` -> tsconfig.edge.json, wired into pr-checks.yml. Two shims in
+  supabase/functions/_typecheck/: remote.d.ts declares the eleven names imported from https
+  specifiers as `any` (mapped via paths: {"https://*": [...]}), deno.d.ts declares the Deno globals
+  actually used. No safety at the boundary; full checking inside our own modules.
+- SCOPED TO _shared/ deliberately. Measured: supabase/functions/** is 132 errors loose / 181 with
+  strictNullChecks, overwhelmingly shim imprecision; _shared/** is ZERO. A wide gate would be red on
+  day one - the WEB-CI-020/021 trap.
+- Negative-controlled with a wrong property on a locally-typed object in _shared/crisisSupport.ts:
+  exit 2 naming file, line and property, in 2.1s.
+- **Learnings for future iterations:**
+  - A type check configured with strictNullChecks:false does not just find fewer bugs, it INVENTS a
+    class of them. The first wide run flagged 67 "Property 'reason' does not exist on ClaudeTextResult"
+    across nine functions; the code is correct, and narrowing a `ok: true | false` discriminated union
+    needs strictNullChecks. I had the finding half written before checking the definition. Check a
+    flagged union against the compiler options before believing it.
+  - tsc CAN check Deno code: map the https specifiers with `paths` to a loose .d.ts and declare the
+    Deno globals. `moduleResolution: Bundler` + `allowImportingTsExtensions` handles the .ts imports.
+  - Measure the wide scope before choosing it. _shared/ was clean at zero and the full tree was not
+    close - that measurement, not a preference, is what set the scope.
+---
+
+## 2026-08-27 - the new edge type check, run wide, found a dead deployed function
+- assign-role/index.ts imported `corsHeaders` from _shared/cors.ts, which exports getCorsHeaders and
+  handleCors and never exported that name. Deno throws "does not provide an export named" at MODULE
+  LOAD, so this DEPLOYED function could not start at all and every role assignment through it failed.
+  Fixed to handleCors + getCorsHeaders with the per-request headers threaded through json().
+- WHY NOTHING CAUGHT IT: `npm run check-imports` is WEB-QA-001's own answer to this exact defect and
+  its ROOTS are src/ only; tsconfig excludes supabase/; eslint runs no type-aware rules there.
+- scrape-events had a second return block, unreachable behind the return above it, referencing five
+  out-of-scope identifiers. Never ran, and read as if the function checks its insert error and
+  reports duplicates_skipped. Deleted.
+- NOT fixed, checked first: six of eight extractors omit source_url from a return type that requires
+  it, but the insert compensates with `eventData.source_url || job.config.url`. Type inaccuracy, no
+  runtime consequence; churning eight signatures for no behaviour change is worse than a note.
+- **Learnings for future iterations:**
+  - Run a new check WIDE as a measurement even when you gate it narrow. The gate covers _shared/
+    only; assign-role is in a function directory and would never have been found by the wired check.
+  - `Cannot find name 'x'` in a long function usually means unreachable code after a return, not a
+    typo. Read the surrounding control flow before "fixing" the identifier.
+  - Before writing up a type error as a defect, find what CONSUMES the value. source_url looked like
+    six broken extractors and is one deliberate fallback at the insert.
+---
+
+## 2026-08-27 - the wide edge type check is a gate now (as a ratchet)
+- scripts/check-edge-types.mjs, npm run check-edge-types, wired into pr-checks.yml. Per-FILE counts,
+  fails only when a file gains an error. 166 errors across 32 files baselined; runs in 4s.
+- Needed separately from type-check:edge: assign-role was found by running that gate wide as a one-off,
+  not by the gate. Negative-controlled with the same shape (a named import of a symbol cors.ts does
+  not export) - exits 1 naming file, line, TS code and message.
+- strictNullChecks ON here, OFF in tsconfig.edge.json. With it off, 57 correct uses of
+  ClaudeTextResult report as errors because a `ok: true | false` union cannot narrow. A baseline over
+  a third fabricated is one people learn to ignore. Price: 18 real "possibly null" findings baselined.
+- ~34 of the 166 are shim artifacts (TS2503/TS2688/TS2614/TS2347) and the script header says so.
+- **Learnings for future iterations:**
+  - A relocated tsconfig relocates EVERY path inside it. I made `include` absolute and left `paths`
+    relative, so the https://* mapping stopped resolving and the count came back 423 across 195 files
+    instead of 166 across 32. That reads as a worse codebase, not a broken harness, and I nearly
+    baselined it. Check a new measurement against the number you already had.
+  - When a ratchet's baseline contains known non-defects, name the TS codes in the header. Otherwise
+    the next reader treats the whole baseline as a bug list and stops trusting it.
+---
+
+## 2026-08-27 - the edge type ratchet's first burn-down: two more broken deployed functions
+- 166 -> 163 errors.
+- publish-article-webhook read `ssrfResult.safe` / `.reason`; validateURLForSSRF returns
+  { valid, error, url }. `.safe` was always undefined, so this DEPLOYED function rejected every
+  webhook URL with "Invalid webhook URL: undefined". Fail-closed, so NOT an SSRF hole - article
+  publishing through it has simply never worked. Seven other callers read `.valid`. Also switched to
+  https-only + blockPrivateIPs to match test-article-webhook.
+- ai-crawler called .toISOString() on `parseEventDateTime(x) || new Date(x)`. That function returns an
+  OBJECT, not a Date, so the SUCCESS path threw and only an unparseable date reached the fallback.
+  Fixed to `?.event_start_utc ?? new Date(x)`, which is what the two sibling call sites already do.
+- **Learnings for future iterations:**
+  - "Property 'x' does not exist on type 'never'" is `const a = []` inferred as never[], not a defect.
+    Triage the baseline by message, not by count: the two real finds were a wrong property on a
+    LOCALLY-DEFINED interface, which is the shape worth chasing.
+  - When one call site disagrees with seven others, the seven are the spec. Both fixes here were
+    confirmed against sibling call sites rather than reasoned out.
+  - Three deployed functions in two days were broken by a name that was never right. Each needed only
+    a type checker, and none of them had one.
+---
+
+## 2026-08-27 - WEB-OPS-022 recorded, and WEB-BE-032's four monitors (14 sites)
+- Added WEB-OPS-022 for the venue-default-image work (commit ea1b737) so the pivot is tracked in
+  prd.json rather than living as loose commits. AC1-AC4 done; AC5-AC8 are the owner's.
+- 176 -> 162 discarded-error sites; scheduled path 26 -> 19.
+- edge-metrics-monitor and ci-health-watcher: work lists, now THROW. edge-metrics compared an EMPTY
+  current window against an empty baseline and reported healthy, so an error spike and an unreadable
+  metrics table were the same output.
+- link-content-monitor: both work lists throw. The first is the expired-event archive sweep, so a
+  dropped error archived nothing and reported success - the exact outcome WEB-BE-034 AC4 asks someone
+  to verify, unverifiable while the read was silent.
+- uptime-monitor: LOG, not throw - both reads are per-target. An empty result makes `sustained` false
+  so a down target reports as up, which is why unreadable targets are now named in ctx.summary as
+  "UNCHECKED: ...". "0 failing" and "could not check" are different answers.
+- **Learnings for future iterations:**
+  - When inserting after a multi-line Supabase call, find the statement's terminating token by INDEX
+    from the anchor and derive the indent from the anchor's line. Guessing the indent literal failed
+    on the first try; a helper that computes it did not.
+  - `^import [^\n]*\n` matches the OPENING line of a multi-line import. That broke two files this
+    session. Anchor on the last line ending in `";` instead.
+---
+
+## 2026-08-27 - WEB-BE-032 CLOSED: the scheduled path is at zero
+- 30 more sites across two batches. 162 -> 127 overall. Every _shared/agents module agent-runner
+  dispatches, and every _shared middleware they run through, now surfaces its read failures.
+- Remaining: 64 in admin/API-key-invoked edge functions (a caller sees the response) and 63 in src/
+  (a browser console surfaces them). AC5 says this is a cleanup PATTERN not a bug list, and the
+  ratchet gates new ones, so those shrink as people touch the files.
+- The last batch's real find: imageStorage.ts discarded the error on the media_assets INSERT that runs
+  AFTER the upload. A failure left the file in the bucket with nothing pointing at it - invisible to
+  consumers AND to reclaim-venue-images.ts, which finds files through media_assets. A storage leak
+  with no record, in the same week as a story about reclaiming storage.
+- imageFallbacks: a failed local venue lookup looked like "no match" and fell through to a PAID Google
+  Places call.
+- check-edge-types caught `ctx` out of scope in agent-test-gen - a real error I introduced by porting a
+  shared-module fix into a standalone whose wrapper differs. The ratchet paid for itself on my own diff.
+- **Learnings for future iterations:**
+  - Porting a fix between an agent's two copies is not mechanical: the shared module has `ctx` from the
+    AgentRun signature, the standalone builds it inside runAgent. Check scope, do not assume symmetry.
+  - A discarded error on a write that follows an upload is a RESOURCE LEAK, not a lost message. Look
+    for what was already spent before the failing call.
+---
+
+## 2026-08-27 - WEB-OPS-023: serve-time egress, the other half of the image work
+- cdnUrlFor wrote a supabase.co storage URL into every image_url and NOTHING cached it. public/_headers'
+  immutable rules apply to files Cloudflare Pages serves out of dist/, not to another origin. So every
+  card image was billed as Supabase egress once per VIEWER - ingest downloads an image once ever,
+  serving downloads it once per visitor.
+- Built and inert: functions/media/[[path]].ts (Cloudflare edge cache in front of storage), an
+  env-gated switch in cdnUrlFor (MEDIA_CDN_BASE), and scripts/repoint-media-urls.ts for existing rows.
+  Nothing changes until the variable is set.
+- 27 offline checks, weighted toward the refusals: the path guard is an ALLOWLIST because the route
+  forwards a caller-supplied path to a storage origin, and the rewrite must leave external URLs alone.
+- **Learnings for future iterations:**
+  - When someone asks about egress from scraping, check the SERVE path too. Ingest is O(images),
+    serving is O(images x viewers), and the second one had no cache at all.
+  - `public/_headers` only governs what Cloudflare Pages serves. A Cache-Control rule there for
+    /*.jpg looks like it covers your images and does not if they live on another origin.
+---
+
+## 2026-08-27 - WEB-QA-022 CLOSED: the dead event-photo path is deleted
+- AC1 asked to decide "BEFORE applying 20260718000003". That migration is applied AND effective, so
+  AC1's outcome is a fact, not a preference: Option A shipped. AC4 is not itself a decision, it is an
+  instruction conditional on that outcome - "DELETE the losing path rather than leaving it dormant".
+- Re-verified before deleting: zero consumers for uploadEventPhoto/getEventPhotos across src/, and
+  BOTH paths shared the `event-photos` storage bucket, so nothing was orphaned. That last check
+  mattered - deleting an upload path that owned its own bucket would have stranded bytes.
+- 108 lines gone. A comment at the same spot records which implementation won and that adopting
+  event_photos later needs a moderation column first (`is_approved` has never existed).
+- No bundle change: 196.7 KB before and after. Dead code with no importer was already tree-shaken.
+- **Learnings for future iterations:**
+  - "Decide X before Y" expires when Y happens. Re-read a reserved decision against what has since
+    shipped; the reservation may be protecting a choice that no longer exists.
+  - Before deleting an upload path, check whether it shares its storage bucket with the surviving one.
+    A bucket only the dead path wrote to leaves objects nothing can reach.
+---
+
+## 2026-08-27 - AOS-MANAGE-005: the missing write, not the missing dashboard
+- The dashboard already exists. ProviderCostTile is mounted in AgentControlPlane:400 and reads
+  provider_spend_mtd, which sums a ledger half (automation_job_runs, written by agentRun.ts) and a
+  reported half (provider_usage). The reported half had NO WRITER since the table was created in
+  20260709000033 - not one insert anywhere in supabase/ or src/. Every non-agent Claude call landed
+  in that column, so it landed nowhere.
+- New _shared/providerUsage.ts writes it, and is now called from the four functions that spend
+  outside the agent runtime: generate-itinerary, discover-chat, ai-crawler, test-ai-model.
+- Two placement rules are load-bearing and both are commented in the code:
+  - NOT inside runToolLoop. runAgent wraps it and already books the same tokens into the LEDGER half.
+    Recording there would put every agent run in both halves of a view that ADDS them, and the
+    watchdog would pause agents at half the real spend.
+  - In generate-itinerary, BEFORE extractClaudeText and before the trip_plans insert. Everything
+    after that point can throw, and all of it throws after Anthropic has already billed. The runs
+    that cost money and delivered nothing are precisely the ones worth seeing.
+- Pricing moved out of agentRuntime.ts into the shared table. What it replaced had opus at $15/$75
+  and haiku at $0.80/$4 - both stale since the 4.6 generation - and folded cache reads into
+  input_tokens at the full input rate. discover-chat caches its system prompt and tool schemas and
+  re-reads them on all six steps, so that overstated its cost by ~10x on the cached portion.
+- Unknown model ids price at the most expensive member of their family, deliberately. A watchdog
+  throttling early is recoverable; a watchdog that never fires is what this story exists because of.
+- 37 offline checks in scripts/__tests__/provider-usage.test.mjs, including that a failed insert
+  returns false rather than throwing - the money is spent by then, and failing the user's request
+  over a bookkeeping error trades something they paid for against nothing.
+- Also wired the four offline suites into pr-checks.yml. test:venue-images, test:media-route and
+  test:media-urls had been written across earlier iterations and never run by CI.
+- **Learnings for future iterations:**
+  - "Build the dashboard" can mean "the dashboard is built and reads a column nothing writes". Check
+    for the writer before adding a view; an all-zeroes panel looks like good news.
+  - When a view SUMS two sources, where you record decides whether you double-count. Find the other
+    writer before adding one.
+  - Record spend at the point the provider bills, not at the point the request succeeds. Those are
+    different lines, and the gap between them is where the unexplained invoice lives.
+---
+
+## 2026-08-27 - WEB-SEC-025: the last blocking tally read on event_attendance is cleared
+- The guard's ALLOWED_TALLY_READS held exactly one entry and it is now EMPTY. getEventCheckIns
+  selected `status` for every attendee of an event and counted them in the browser, which meant the
+  anon key could enumerate who is going to which event - while the UI it feeds (EventCheckIn.tsx)
+  renders four numbers and never a name.
+- New migration 20260827000002: event_attendance_tallies(uuid), SECURITY DEFINER, per-status counts,
+  no user_id and no row ids. Same shape as voting_category_tallies(), which cleared votes.
+- Grouped by the raw `status` text rather than a fixed four-column return, because the column is
+  plain text with no CHECK. An unrecognised status still comes back and still counts toward the
+  total instead of being dropped by the aggregate.
+- THE POLICY TIGHTENING IS NOT IN THE MIGRATION, and the reason is the ordering: a migration applies
+  when it is pushed, Cloudflare Pages deploys separately, so tightening in the same file opens a
+  window where the live bundle still reads the raw table and every event shows one attendee. The
+  exact follow-up SQL is in the migration header. Unlike the votes half of this story it needs no
+  mobile release - neither shipped binary references event_attendance - it needs one web deploy.
+- Every reader was enumerated before deciding that: ProfilePage.tsx:42 and :148 are own-row,
+  getUserEventCheckIn is own-row, updateEventCheckIn is a write, userDataTables.ts is service role,
+  ios/ and android/ have zero references.
+- check-schema-usage.mjs gained an RPC case for PENDING_MIGRATIONS. It already had the concept for
+  tables and columns; without it a function defined by an unapplied migration had to go into
+  schema-baseline.json, a file whose own header says it must only ever shrink.
+- Negative-controlled three ways: removing the pending entry re-reports the RPC, a bogus .rpc() name
+  is still caught, and a re-added raw .from('event_attendance').select('status') fails the ballot
+  guard. 7 new vitest cases, one of which fails if the bigint-as-string coercion is removed - "4"
+  plus "5" is "45", and the tile would show 45 attendees.
+- **Learnings for future iterations:**
+  - An allowlist that reaches empty is worth saying out loud in the file. An empty string looks like
+    a dead variable to the next reader, and deleting it removes the thing that makes a new entry
+    visible.
+  - PostgREST returns bigint as a JSON string. Any count() aggregate read straight into arithmetic
+    concatenates instead of adding, and the result looks like a plausible number.
+  - When a checker already models "pending migration" for one kind of object, extend it rather than
+    baselining the new kind. The baseline is the wrong home for something that resolves next push.
+---
+
+## 2026-08-27 - WEB-LEGAL-012 AC6: the opt-out is now tested by running the senders
+- marketing-consent-contract.test.ts compares the key the clients WRITE against the key the
+  classifier READS. That catches a rename and cannot catch a sender that reads the right key and
+  mails anyway, or one added later that never checks. The new suite RUNS the agents.
+- One per family, as AC6 asks: onboarding-drip (nurture), dormant-reengagement (re-engagement),
+  churn-winback (churn), milestone-recognition (milestone), outreach-sequencer (outreach).
+- outreach-sequencer does NOT check messagingAllowed and should not. It mails business contacts from
+  crm_leads, not users, so its opt-out is the outreach_suppression list. A naive reading of AC6 would
+  have added the wrong control to it.
+- EVERY TEST IS PAIRED. A mock that returns nothing everywhere makes "no email was sent" true for
+  reasons unrelated to consent, so each family also has an opted-IN run asserting it reaches the
+  quality gate. Without that half the negative tests prove nothing.
+- ALL FIVE NEGATIVE CONTROLS RUN AND ONE FAILED THE FIRST TIME. Forcing consent true in each agent
+  made four tests fail; milestone-recognition's still PASSED. `emailed === 0` was true for the wrong
+  reason - the quality gate also holds at zero. Fixed by asserting gated === 0, because an opted-out
+  user must never reach the gate at all. The other four discriminate on their own.
+- The suite DELETES RESEND_API_KEY and the Anthropic keys before importing anything. A CI runner that
+  holds them would otherwise have turned this into real outbound mail to example.com addresses.
+- check-edge-types caught two shim gaps in my own diff: Deno.env.delete and node:assert were both
+  absent from _typecheck/deno.d.ts. Fixed there rather than in the test.
+- **Learnings for future iterations:**
+  - Deno is reachable here via `npx deno@2` even though deno.land and esm.sh both 403 through the
+    proxy. Run the agent suites with --no-check and an --import-map stubbing
+    https://esm.sh/@supabase/supabase-js@2, which is only ever imported for createClient and never
+    called under test. CI has the network and needs neither flag.
+  - Run the negative control for EVERY case, not one representative. Four of five discriminated and
+    the fifth did not, and nothing in the passing run said which was which.
+  - A test that deletes an API key before importing the module under test is not tidiness. These
+    modules POST on the happy path, and the test fixtures carry email addresses.
+---

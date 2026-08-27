@@ -58,15 +58,22 @@ export function useSavedSearchAlerts() {
     },
   });
 
+  // WEB-BE-032 / WEB-LEGAL-012: the error used to be discarded here, and the
+  // direction it failed in is the problem. On any failure `data` is undefined,
+  // `undefined !== false` is true, and the master switch renders ON - so a user
+  // who had turned alerts OFF is shown a UI asserting they are on. Surfacing
+  // the error lets the switch say it does not know instead of guessing, and
+  // absence of a row still means opted IN, which is what every sender assumes.
   const alertsPrefQuery = useQuery({
     queryKey: ["event-alerts-pref", userId],
     enabled: !!userId,
     queryFn: async (): Promise<boolean> => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("user_email_preferences")
         .select("event_alerts_enabled")
         .eq("user_id", userId!)
         .maybeSingle();
+      if (error) throw error;
       return data?.event_alerts_enabled !== false;
     },
   });
@@ -124,6 +131,10 @@ export function useSavedSearchAlerts() {
     searches: searchesQuery.data ?? [],
     isLoading: searchesQuery.isLoading,
     alertsEnabledGlobally: alertsPrefQuery.data ?? true,
+    /** True while the stored preference could not be read. The switch above is
+     *  showing a default, not the user's choice - do not present it as theirs. */
+    alertsPrefUnavailable: alertsPrefQuery.isError,
+    alertsPrefLoading: alertsPrefQuery.isLoading,
     saveSearch,
     toggleAlerts,
     deleteSearch,

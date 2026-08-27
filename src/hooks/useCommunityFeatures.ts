@@ -6,33 +6,6 @@ import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('useCommunityFeatures');
 
-/**
- * A row of `event_photos`, typed to what that table ACTUALLY has (WEB-QA-022).
- *
- * `helpful_votes: number` and `is_approved: boolean` used to be declared here and
- * neither column exists - both answer 42703 when selected. Nothing read them, so
- * this was a type that lied rather than a crash, which is the same shape that let
- * getEventPhotos filter on is_approved for months: it type-checked, it compiled,
- * and PostgREST turned it into an empty array that looked like an event with no
- * photos. Removed rather than repaired, because adding a moderation column is
- * WEB-QA-022's Option-B decision and not a typing question.
- *
- * The real columns are id, event_id, user_id, photo_url, caption, likes_count,
- * is_featured and created_at.
- */
-interface PhotoUpload {
-  id: string;
-  photo_url: string;
-  caption?: string;
-  event_id: string;
-  user_id: string;
-  created_at: string;
-  user_profile?: {
-    first_name?: string;
-    last_name?: string;
-  };
-}
-
 interface CheckIn {
   id: string;
   event_id: string;
@@ -104,86 +77,28 @@ export function useCommunityFeatures() {
   const [forums, setForums] = useState<Forum[]>([]);
   const [friends, setFriends] = useState<Friend[]>([]);
 
-  // Photo Upload Functions
-  const uploadEventPhoto = async (eventId: string, file: File, caption?: string) => {
-    if (!user) return null;
-
-    try {
-      setLoading(true);
-      
-      // Upload file to storage
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
-      
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('event-photos')
-        .upload(fileName, file);
-
-      if (uploadError) throw uploadError;
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('event-photos')
-        .getPublicUrl(fileName);
-
-      // Insert photo record
-      const { data, error } = await supabase
-        .from('event_photos')
-        .insert({
-          event_id: eventId,
-          photo_url: publicUrl,
-          caption,
-          user_id: user.id
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      toast.success('Photo uploaded successfully!');
-      return data;
-    } catch (error) {
-      logger.error('uploadEventPhoto', 'Failed to upload photo', { error });
-      toast.error('Failed to upload photo');
-      return null;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  /**
-   * Photos for an event, from the event_photos table (WEB-QA-022 "Option B").
-   *
-   * THIS USED TO FILTER ON is_approved, WHICH DOES NOT EXIST. event_photos has
-   * id, event_id, user_id, photo_url, caption, likes_count, is_featured and
-   * created_at - no moderation column - so PostgREST answered 42703 on every
-   * call and the catch below turned that into an empty array. A moderation gate
-   * that always failed closed looked exactly like an event with no photos.
-   *
-   * THE FILTER IS REMOVED RATHER THAN REPAIRED, and the intent behind it is
-   * recorded here instead of being silently dropped: whoever settles WEB-QA-022
-   * in favour of this table needs to add an approval column and put the filter
-   * back. Until then this returns every photo for the event, which is what the
-   * upload path above already assumes - it writes no approval flag either.
-   *
-   * Both photo implementations hold ZERO rows (verified against production
-   * 2026-08-23), so nothing has ever been shown or hidden by this.
-   */
-  const getEventPhotos = async (eventId: string): Promise<PhotoUpload[]> => {
-    try {
-      const { data, error } = await supabase
-        .from('event_photos')
-        .select('*')
-        .eq('event_id', eventId)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      return data || [];
-    } catch (error) {
-      logger.error('getEventPhotos', 'Failed to fetch event photos', { error });
-      return [];
-    }
-  };
+  // WEB-QA-022 AC4. uploadEventPhoto and getEventPhotos lived here: the
+  // Option-B path, writing to and reading from `event_photos`. They are gone,
+  // and the reason is the whole point of that story - "DELETE the losing path
+  // rather than leaving it dormant, the dead path is what produced this
+  // ambiguity".
+  //
+  // Option A is what shipped. Migration 20260718000003 is applied AND effective
+  // (it is not in .github/migration-drift-baseline.json, which after WEB-QA-017
+  // is a separate fact from being ledgered), so event photos are
+  // event_discussions rows with message_type='photo' and media_url.
+  // EventPhotoUpload.tsx:90 writes that shape, EventPhotoGallery.tsx:17 reads
+  // it, EventSocialHub.tsx:188 counts it, and ownership.ts maps `photo` to it.
+  //
+  // Deleting cost nothing and risked nothing: both tables held ZERO rows, so
+  // there was no data on either side, and neither function had a single
+  // consumer - six components import this hook and not one destructured either.
+  // Both paths already shared the `event-photos` storage bucket, so no object
+  // was orphaned by this.
+  //
+  // If event_photos is ever adopted after all, it needs a moderation column
+  // before the approval filter that used to sit in getEventPhotos can come
+  // back; that filter named `is_approved`, which has never existed.
 
   // Check-in Functions
   const updateEventCheckIn = async (eventId: string, status: 'interested' | 'going' | 'maybe' | 'not_going') => {
@@ -211,26 +126,38 @@ export function useCommunityFeatures() {
     }
   };
 
+  // WEB-SEC-025: counts come from a SECURITY DEFINER aggregate, not from the raw
+  // table. This used to select `status` for every attendee of the event and
+  // count them here, which meant the anon key could enumerate who is going to
+  // which event - while this very UI renders four numbers and never a name.
+  //
+  // It is also what was blocking the policy fix. Restricting event_attendance to
+  // a user's own rows would have turned this read into "1 attendee" with no
+  // error at all, because a denied SELECT under RLS is an empty result. See the
+  // migration header for the tightening that follows this deploy.
   const getEventCheckIns = async (eventId: string) => {
     try {
       const { data, error } = await supabase
-        .from('event_attendance')
-        .select('status')
-        .eq('event_id', eventId);
+        .rpc('event_attendance_tallies', { p_event_id: eventId });
 
       if (error) throw error;
 
-      const counts = data?.reduce((acc, item) => {
-        acc[item.status] = (acc[item.status] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>) || {};
+      const rows = (data ?? []) as { status: string; attendee_count: number }[];
+      const counts: Record<string, number> = {};
+      let total = 0;
+      for (const row of rows) {
+        const n = Number(row.attendee_count) || 0;
+        counts[row.status] = (counts[row.status] || 0) + n;
+        total += n;
+      }
 
       return {
         going: counts.going || 0,
         interested: counts.interested || 0,
         maybe: counts.maybe || 0,
         not_going: counts.not_going || 0,
-        total: data?.length || 0
+        // Every status, as before - the old `data.length` counted not_going too.
+        total,
       };
     } catch (error) {
       logger.error('getEventCheckIns', 'Failed to fetch check-ins', { error });
@@ -478,8 +405,6 @@ export function useCommunityFeatures() {
     friends,
 
     // Photo functions
-    uploadEventPhoto,
-    getEventPhotos,
 
     // Check-in functions
     updateEventCheckIn,

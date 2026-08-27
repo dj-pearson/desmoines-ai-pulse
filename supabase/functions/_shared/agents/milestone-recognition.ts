@@ -50,12 +50,15 @@ interface Candidate { type: string; value: number; label: string; }
 
 export const run: AgentRun = async (ctx, { supabase }) => {
   const now = Date.now();
-  const { data: profiles } = await supabase
+  const { data: profiles, error: profilesError } = await supabase
     .from("profiles")
     .select("user_id, email, created_at, lifecycle_signals")
     .in("lifecycle_stage", ["active", "onboarding", "reactivated"])
     .not("email", "is", null)
     .limit(BATCH);
+  // WEB-BE-032. THE work list. A dropped error processed nothing and reported a
+  // successful run, indistinguishable from an empty profile batch.
+  if (profilesError) throw new Error(`milestone-recognition: profile batch read failed: ${profilesError.message}`);
   const rows = (profiles ?? []) as { user_id: string; email: string; created_at: string; lifecycle_signals: { messagingAllowed?: boolean } | null }[];
   if (rows.length === 0) { ctx.summary("no engaged users"); return { recognized: 0, emailed: 0 }; }
 

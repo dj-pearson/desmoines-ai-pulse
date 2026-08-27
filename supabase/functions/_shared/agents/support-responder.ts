@@ -20,6 +20,7 @@ import { scoreOutput } from "../scoreOutput.ts";
 import { retrieveKb, type KbPassage } from "../kbRetrieve.ts";
 import { getAIConfig } from "../aiConfig.ts";
 import { crisisMessageText, detectCrisisIntent } from "../crisisSupport.ts";
+import { fetchWithTimeout } from "../fetchWithTimeout.ts";
 import type { AgentRun } from "./types.ts";
 
 const AGENT_KEY = "support-responder";
@@ -60,12 +61,18 @@ async function draftAnswer(
     `KNOWLEDGE BASE:\n${context || "(no passages retrieved)"}\n\nUSER QUESTION:\n${question.slice(0, 1500)}`;
 
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    // fetchWithTimeout rather than bare fetch, matching the standalone copy of
+    // this agent. The inner AbortSignal already bounds the request, so this is
+    // convergence rather than a behaviour change - and convergence is the point:
+    // scripts/check-agent-pair-drift.mjs flagged the difference, and exempting it
+    // would have been the first widening of a check written because an exemption
+    // hid the defect it was looking for (WEB-BE-032).
+    const res = await fetchWithTimeout("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": config.anthropic_version },
       body: JSON.stringify({ model: config.default_model, max_tokens: 700, temperature: 0.2, messages: [{ role: "user", content: prompt }] }),
       signal: AbortSignal.timeout(30_000),
-    });
+    }, 60_000);
     if (!res.ok) return null;
     const data = await res.json();
     const text: string = (data.content ?? []).map((b: { text?: string }) => b.text ?? "").join("");

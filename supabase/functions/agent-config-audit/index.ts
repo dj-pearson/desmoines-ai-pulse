@@ -53,13 +53,18 @@ Deno.serve(async (req) => {
 
     if (drift.length === 0) {
       // Clean: close any open drift task.
-      const { data: open } = await supabase
+      const { data: open, error: openError } = await supabase
         .from("agent_tasks")
         .select("id")
         .eq("agent_key", AGENT_KEY)
         .eq("dedupe_key", "config_drift")
         .in("status", ["open", "escalated", "assigned"])
         .limit(5);
+      // DEDUPE GUARD. `open config_drift task` is what stops this agent opening a second task for
+      // something it has already filed. A dropped error emptied it, so every finding
+      // looked new and the queue filled with duplicates of one problem. Logged, not
+      // thrown - a duplicate task is noise, and refusing to run at all is worse.
+      if (openError) console.error(`open config_drift task read failed; duplicate tasks are possible this run: ${openError.message}`);
       for (const t of (open ?? []) as { id: string }[]) {
         await supabase.from("agent_tasks").update({
           status: "resolved",

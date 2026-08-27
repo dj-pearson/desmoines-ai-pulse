@@ -74,9 +74,14 @@ function discardedErrors(source) {
     const bound = m[1];
     // `error` in any form - renamed (`error: err`), or plain.
     if (/\berror\b/.test(bound)) continue;
-    // Only care when `data` is actually taken; `{ count }` alone is a different
-    // shape and usually deliberate.
-    if (!/\bdata\b/.test(bound)) continue;
+    // `data` OR `count`. The exclusion of `{ count }` here used to read "a
+    // different shape and usually deliberate", and that assumption was wrong in
+    // the worst possible place: agent-compliance-monitor's count() helper did
+    // `const { count } = await ...; return count ?? 0`, so an unreadable table
+    // counted as zero and every compliance gate below it read as "no
+    // violations". A monitor reporting a clean bill of health because it could
+    // not see the data is exactly what this ratchet exists to find (2026-08-27).
+    if (!/\b(?:data|count)\b/.test(bound)) continue;
 
     const end = source.indexOf(';', m.index);
     const statement = source.slice(m.index, end === -1 ? source.length : end);

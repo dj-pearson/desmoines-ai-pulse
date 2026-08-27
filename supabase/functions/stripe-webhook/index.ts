@@ -226,12 +226,31 @@ async function handleCampaignPayment(
 ) {
   console.log("Processing campaign payment:", campaignId);
 
-  // Get campaign details for payment logging
-  const { data: campaign } = await supabase
+  // Get campaign details for payment logging.
+  //
+  // WEB-BE-032: the error was discarded, and this is NOT the best-effort read it
+  // looks like. campaign?.user_id gates the advertiser's "Payment Confirmed"
+  // notification below, so a failed lookup means someone paid and was never told
+  // it went through - and it also puts user_id: null on the payment row, which
+  // is the column any refund or revenue query joins on.
+  //
+  // It does not THROW, because that would return non-2xx and make Stripe retry
+  // an event whose campaign row may genuinely be gone. maybeSingle so a missing
+  // row is not reported as an error, and a real failure is logged as one.
+  const { data: campaign, error: campaignError } = await supabase
     .from("campaigns")
     .select("user_id, name, total_cost")
     .eq("id", campaignId)
-    .single();
+    .maybeSingle();
+
+  if (campaignError) {
+    console.error(
+      `Campaign lookup failed for ${campaignId} - payment will be logged without a user_id ` +
+        `and the advertiser will NOT be notified: ${campaignError.message}`,
+    );
+  } else if (!campaign) {
+    console.error(`Campaign ${campaignId} not found while processing its payment.`);
+  }
 
   const { error } = await supabase
     .from("campaigns")
@@ -328,12 +347,24 @@ async function handleSubscriptionPayment(
 
   // Check if user already has a web/Stripe subscription (upgrade/downgrade scenario).
   // Scoped to platform='web' so iOS/Android rows for the same user aren't touched.
-  const { data: existingSubscription } = await supabase
+  //
+  // WEB-BE-032: this read decides UPDATE vs INSERT, so discarding its error made
+  // a transient failure look like "no existing subscription" and sent a paying
+  // customer down the INSERT branch - a duplicate web subscription row for a user
+  // who already had one, or a unique-constraint failure after Stripe had already
+  // charged them. It throws: the handler returns 500, Stripe retries, and the
+  // idempotency id is only recorded after success, so the retry is safe.
+  const { data: existingSubscription, error: existingSubscriptionError } = await supabase
     .from("user_subscriptions")
     .select("id")
     .eq("user_id", userId)
     .eq("platform", "web")
     .maybeSingle();
+
+  if (existingSubscriptionError) {
+    console.error("Failed to look up existing subscription:", existingSubscriptionError);
+    throw existingSubscriptionError;
+  }
 
   const subscriptionData = {
     user_id: userId,
@@ -467,24 +498,47 @@ async function handleInvoicePaymentSucceeded(
 
   if (invoice.subscription) {
     // Get user from subscription
-    const { data: subscription } = await supabase
+    // WEB-BE-032. Two problems here, and .single() was the second one: it raises
+    // PGRST116 when no row matches, so with the error discarded a genuinely
+    // missing subscription and a database failure were the same non-result.
+    // maybeSingle separates them - an absent row is logged and processing
+    // continues (the payment is still worth recording), a real error throws so
+    // Stripe retries rather than filing the renewal against user_id: null.
+    const { data: subscription, error: subscriptionLookupError } = await supabase
       .from("user_subscriptions")
       .select("id, user_id")
       .eq("stripe_subscription_id", invoice.subscription as string)
-      .single();
+      .maybeSingle();
+
+    if (subscriptionLookupError) {
+      console.error("Failed to look up subscription for invoice:", subscriptionLookupError);
+      throw subscriptionLookupError;
+    }
 
     if (subscription) {
       userId = subscription.user_id;
       subscriptionId = subscription.id;
+    } else {
+      console.error(
+        `No user_subscriptions row for stripe_subscription_id ${invoice.subscription} - ` +
+          "logging this payment without a user_id.",
+      );
     }
 
-    // Update subscription status to active
-    await supabase
+    // Update subscription status to active. This is the entitlement write: if it
+    // fails silently the customer has paid and stays locked out, which is the
+    // worst outcome in this file, so it throws.
+    const { error: activateError } = await supabase
       .from("user_subscriptions")
       .update({
         status: "active",
       })
       .eq("stripe_subscription_id", invoice.subscription as string);
+
+    if (activateError) {
+      console.error("Failed to activate subscription after payment:", activateError);
+      throw activateError;
+    }
   }
 
   // Log payment to payments table

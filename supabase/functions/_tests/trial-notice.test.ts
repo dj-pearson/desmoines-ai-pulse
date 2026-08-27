@@ -84,30 +84,44 @@ Deno.test('the notice identifies itself as billing, not marketing', () => {
 // The gating. These are the regression guards.
 // -----------------------------------------------------------------------------
 
-Deno.test('the cron trial path does not consult marketing consent', async () => {
-  const src = await read('../_shared/agents/subscription-nurture.ts');
-  const start = src.indexOf('// ── 1) Trial ending');
-  const end = src.indexOf('// ── 2) Dunning');
-  assert(start !== -1 && end > start, 'trial block not found; update this test');
-  const block = src.slice(start, end);
-  assert(
-    !block.includes('consented('),
-    'the trial notice must not be gated on messagingAllowed: a billing disclosure ' +
-      'withheld from people who opted out of marketing reaches nobody who needs it',
-  );
-  assert(block.includes('sendNotice('), 'must use the transactional sender');
-  assert(!block.includes('sendStep('), 'sendStep runs the LLM quality gate');
-});
+// This agent exists TWICE and both copies are deployable: agent-runner
+// dispatches the _shared module (pg_cron was repointed to it by migration
+// 20260710000000), and the standalone agent-* edge function remains callable by
+// an admin or an API key. The WEB-LEGAL-006 fix originally landed on the shared
+// copy only, so the standalone kept sending retention copy with no amount, no
+// date and no cancel path, gated on marketing consent AND on the quality score.
+// Nothing caught it because this file only ever read one of the two. Both now.
+const NURTURE_COPIES = [
+  '../_shared/agents/subscription-nurture.ts',
+  '../agent-subscription-nurture/index.ts',
+];
 
-Deno.test('the transactional sender skips the quality gate', async () => {
-  const src = await read('../_shared/agents/subscription-nurture.ts');
-  const start = src.indexOf('async function sendNotice(');
-  const end = src.indexOf('async function sendStep(');
-  assert(start !== -1 && end > start);
-  const body = src.slice(start, end);
-  assert(!body.includes('scoreOutput('), 'a required notice must not depend on a model score');
-  assert(body.includes('category: "transactional"'));
-});
+for (const path of NURTURE_COPIES) {
+  Deno.test(`the cron trial path does not consult marketing consent (${path})`, async () => {
+    const src = await read(path);
+    const start = src.indexOf('// ── 1) Trial ending');
+    const end = src.indexOf('// ── 2) Dunning');
+    assert(start !== -1 && end > start, 'trial block not found; update this test');
+    const block = src.slice(start, end);
+    assert(
+      !block.includes('consented('),
+      'the trial notice must not be gated on messagingAllowed: a billing disclosure ' +
+        'withheld from people who opted out of marketing reaches nobody who needs it',
+    );
+    assert(block.includes('sendNotice('), 'must use the transactional sender');
+    assert(!block.includes('sendStep('), 'sendStep runs the LLM quality gate');
+  });
+
+  Deno.test(`the transactional sender skips the quality gate (${path})`, async () => {
+    const src = await read(path);
+    const start = src.indexOf('async function sendNotice(');
+    const end = src.indexOf('async function sendStep(');
+    assert(start !== -1 && end > start);
+    const body = src.slice(start, end);
+    assert(!body.includes('scoreOutput('), 'a required notice must not depend on a model score');
+    assert(body.includes('category: "transactional"'));
+  });
+}
 
 Deno.test('the webhook handles trial_will_end and dedupes against the sweep', async () => {
   const src = await read('../stripe-webhook/index.ts');

@@ -7,6 +7,7 @@ import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
 import { resolveEntitledTier, hasFeatureAccess } from "../_shared/entitlements.ts";
 import { getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { recordAnthropicUsage } from "../_shared/providerUsage.ts";
 
 // Monthly trip-planner quota per tier (matches the web useSubscription copy /
 // WEB-FEAT-011). -1 = unlimited. Enforced server-side so the client gate can't
@@ -141,6 +142,45 @@ serve(async (req) => {
       message: 'AI itinerary rate limit exceeded. Please try again later.',
     });
     if (!burst.success) return burst.response!;
+
+    // PREFLIGHT: trip_plans must be reachable before we spend a model call.
+    //
+    // WEB-QA-005 / WEB-QA-018. The failure order used to be: quota count on
+    // trip_plans errors and FAILS OPEN by design, the Claude call goes out and
+    // is paid for, the insert at the end hits 42P01, and the user is shown
+    // "Failed to save trip plan". trip_plans is one of the tables whose
+    // migration is ledgered as applied and produced nothing, so on production
+    // that is EVERY attempt: a real API bill and an error page, every time.
+    //
+    // Fail-open on a transient error is still right - never block a paying user
+    // on our own bug - so this closes exactly one case and leaves that intact:
+    // the table not existing, where continuing is guaranteed to cost money and
+    // end in the same error. head:true so it costs a count and no rows.
+    const { error: storageProbeError } = await supabaseClient
+      .from('trip_plans')
+      .select('id', { count: 'exact', head: true })
+      .limit(1);
+
+    // 42P01 is Postgres; PGRST205 is PostgREST's schema-cache equivalent. Both
+    // mean "no such relation" as opposed to "the database is briefly unhappy".
+    if (storageProbeError && ['42P01', 'PGRST205'].includes(storageProbeError.code ?? '')) {
+      console.error(
+        '[generate-itinerary] trip_plans is missing (' + storageProbeError.code +
+          ') - refusing before the model call so the request is not billed.',
+      );
+      // Same 500 and the same { success, error } envelope the catch block
+      // already returns, so no shipped client sees a status or shape it does
+      // not handle. `code` is additive; older clients ignore unknown keys.
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error:
+            'Trip planning is temporarily unavailable. No plan was used from your monthly allowance.',
+          code: 'trip_storage_unavailable',
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
 
     // Monthly quota per tier (Insider 5 / VIP unlimited). Counts itineraries
     // this calendar month from trip_plans (no new table needed). Returns a
@@ -423,6 +463,22 @@ Return ONLY the JSON object, no additional text.`;
     }
 
     const aiResult = await aiResponse.json();
+
+    // AOS-MANAGE-005: record the spend BEFORE anything that can throw.
+    //
+    // Everything below here can fail - an unusable response, unparseable JSON, a
+    // trip_plans insert - and every one of those failures happens AFTER
+    // Anthropic has billed for this call. Recording later would mean the runs
+    // that cost money and delivered nothing are exactly the ones the budget
+    // watchdog never sees. That is the WEB-QA-005 case: billed, thrown away,
+    // invisible.
+    await recordAnthropicUsage(supabaseClient, {
+      source: "generate-itinerary",
+      model: String(requestBody.model ?? config.default_model),
+      usage: aiResult?.usage ?? {},
+      extra: { tier, days: numDays },
+    });
+
     const extracted = extractClaudeText(aiResult);
     if (!extracted.ok) {
       console.error("Claude response not usable:", extracted.reason, extracted.detail);

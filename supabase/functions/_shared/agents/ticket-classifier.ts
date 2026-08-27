@@ -13,6 +13,7 @@
  */
 import { createAgentTask } from "../agentTasks.ts";
 import { getAIConfig } from "../aiConfig.ts";
+import { fetchWithTimeout } from "../fetchWithTimeout.ts";
 import type { AgentRun } from "./types.ts";
 
 const AGENT_KEY = "ticket-classifier";
@@ -50,12 +51,18 @@ async function classify(supabaseUrl: string, supabaseKey: string, subject: strin
     `{"sentiment":"positive|neutral|negative","urgency":"low|medium|high|critical","category":"billing|account|content|technical|feedback|general","confidence":0..1}.\n\n` +
     `SUBJECT: ${subject}\nBODY: ${bodyText.slice(0, 1500)}`;
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    // fetchWithTimeout rather than bare fetch, matching the standalone copy of
+    // this agent. The inner AbortSignal already bounds the request, so this is
+    // convergence rather than a behaviour change - and convergence is the point:
+    // scripts/check-agent-pair-drift.mjs flagged the difference, and exempting it
+    // would have been the first widening of a check written because an exemption
+    // hid the defect it was looking for (WEB-BE-032).
+    const res = await fetchWithTimeout("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": config.anthropic_version },
       body: JSON.stringify({ model: config.lightweight_model, max_tokens: 200, temperature: 0, messages: [{ role: "user", content: prompt }] }),
       signal: AbortSignal.timeout(20_000),
-    });
+    }, 60_000);
     if (!res.ok) return null;
     const data = await res.json();
     const text: string = (data.content ?? []).map((b: { text?: string }) => b.text ?? "").join("");
@@ -84,13 +91,16 @@ export const run: AgentRun = async (ctx, { supabase }) => {
   let cost = 0;
 
   // ── 1) Classify unclassified tickets ─────────────────────────────────
-  const { data: unclassified } = await supabase
+  const { data: unclassified, error: unclassifiedError } = await supabase
     .from("support_tickets")
     .select("id, subject, body")
     .is("classified_at", null)
     .not("status", "in", "(resolved,closed)")
     .order("created_at", { ascending: true })
     .limit(BATCH);
+  // WEB-BE-032. THE work list. A dropped error classified no tickets and
+  // reported success, indistinguishable from an empty queue.
+  if (unclassifiedError) throw new Error(`ticket-classifier: unclassified read failed: ${unclassifiedError.message}`);
 
   for (const t of (unclassified ?? []) as { id: string; subject: string | null; body: string }[]) {
     const result = await classify(supabaseUrl, supabaseKey, t.subject ?? "", t.body);
@@ -118,7 +128,7 @@ export const run: AgentRun = async (ctx, { supabase }) => {
 
   // ── 2) SLA-breach guard: pre-escalate unhandled fast-track tickets ────
   const breachSoon = new Date(nowMs + PRE_ESCALATE_BUFFER_MS).toISOString();
-  const { data: atRisk } = await supabase
+  const { data: atRisk, error: atRiskError } = await supabase
     .from("support_tickets")
     .select("id, subject, priority, sla_due_at, sentiment, urgency")
     .not("sla_due_at", "is", null)
@@ -126,6 +136,9 @@ export const run: AgentRun = async (ctx, { supabase }) => {
     .is("sla_escalated_at", null)
     .in("status", ["new", "ai_handling", "awaiting_user"])
     .limit(BATCH);
+  // The SLA-breach sweep. A dropped error escalates nobody and says so as a
+  // clean run, which is the worst version of a missed SLA.
+  if (atRiskError) throw new Error(`ticket-classifier: SLA sweep read failed: ${atRiskError.message}`);
 
   for (const t of (atRisk ?? []) as { id: string; subject: string | null; priority: string; sla_due_at: string; sentiment: string | null; urgency: string | null }[]) {
     const task = await createAgentTask(supabase, {

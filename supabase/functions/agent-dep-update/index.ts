@@ -48,13 +48,18 @@ Deno.serve(async (req) => {
   try {
     // Security-priority packages: those with an open CVE task (AOS-SEC-002).
     if (mode === "priority") {
-      const { data } = await supabase
+      const { data, error: openCveError } = await supabase
         .from("agent_tasks")
         .select("dedupe_key")
         .eq("agent_key", "dependency-cve-scanner")
         .in("status", ["open", "escalated", "assigned", "auto_resolving"])
         .like("dedupe_key", "cve:%")
         .limit(500);
+      // DEDUPE GUARD. `open cve: task` is what stops this agent opening a second task for
+      // something it has already filed. A dropped error emptied it, so every finding
+      // looked new and the queue filled with duplicates of one problem. Logged, not
+      // thrown - a duplicate task is noise, and refusing to run at all is worse.
+      if (openCveError) console.error(`open cve: task read failed; duplicate tasks are possible this run: ${openCveError.message}`);
       const packages = Array.from(
         new Set((data ?? []).map((r: { dedupe_key: string }) => r.dedupe_key.slice("cve:".length))),
       );
