@@ -1,12 +1,12 @@
 {
   "$comment": "WEB-BE-032. Per-FILE type-error counts for supabase/functions under tsconfig.edge.json + strictNullChecks. Lower is better. Many entries are shim artifacts, not defects - see the header of scripts/check-edge-types.mjs. Re-baseline with: node scripts/check-edge-types.mjs --write",
   "generated": "2026-08-27",
-  "total": 166,
+  "total": 163,
   "files": {
     "supabase/functions/_tests/cross-platform-sync.test.ts": 1,
     "supabase/functions/_tests/indexnow.test.ts": 8,
     "supabase/functions/_tests/storage-bucket-posture.test.ts": 2,
-    "supabase/functions/ai-crawler/index.ts": 26,
+    "supabase/functions/ai-crawler/index.ts": 25,
     "supabase/functions/analyze-competitor/index.ts": 6,
     "supabase/functions/apply-image/index.ts": 1,
     "supabase/functions/appstore-server-notifications-v2/index.ts": 3,
@@ -25,7 +25,6 @@
     "supabase/functions/nlp-search/index.ts": 3,
     "supabase/functions/og-image/index.ts": 1,
     "supabase/functions/play-rtdn-webhook/index.ts": 1,
-    "supabase/functions/publish-article-webhook/index.ts": 2,
     "supabase/functions/restaurant-opening-scraper/index.ts": 13,
     "supabase/functions/run-scheduled-audit/index.ts": 12,
     "supabase/functions/scrape-events/index.ts": 10,

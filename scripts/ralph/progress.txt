@@ -632,3 +632,23 @@ Evidence:
   - When a ratchet's baseline contains known non-defects, name the TS codes in the header. Otherwise
     the next reader treats the whole baseline as a bug list and stops trusting it.
 ---
+
+## 2026-08-27 - the edge type ratchet's first burn-down: two more broken deployed functions
+- 166 -> 163 errors.
+- publish-article-webhook read `ssrfResult.safe` / `.reason`; validateURLForSSRF returns
+  { valid, error, url }. `.safe` was always undefined, so this DEPLOYED function rejected every
+  webhook URL with "Invalid webhook URL: undefined". Fail-closed, so NOT an SSRF hole - article
+  publishing through it has simply never worked. Seven other callers read `.valid`. Also switched to
+  https-only + blockPrivateIPs to match test-article-webhook.
+- ai-crawler called .toISOString() on `parseEventDateTime(x) || new Date(x)`. That function returns an
+  OBJECT, not a Date, so the SUCCESS path threw and only an unparseable date reached the fallback.
+  Fixed to `?.event_start_utc ?? new Date(x)`, which is what the two sibling call sites already do.
+- **Learnings for future iterations:**
+  - "Property 'x' does not exist on type 'never'" is `const a = []` inferred as never[], not a defect.
+    Triage the baseline by message, not by count: the two real finds were a wrong property on a
+    LOCALLY-DEFINED interface, which is the shape worth chasing.
+  - When one call site disagrees with seven others, the seven are the spec. Both fixes here were
+    confirmed against sibling call sites rather than reasoned out.
+  - Three deployed functions in two days were broken by a name that was never right. Each needed only
+    a type checker, and none of them had one.
+---

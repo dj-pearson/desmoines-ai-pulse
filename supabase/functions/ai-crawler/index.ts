@@ -1471,9 +1471,17 @@ async function insertData(
                 website: item.website?.substring(0, 200) || null,
                 price_range: item.price_range?.substring(0, 20) || null,
                 rating: item.rating || null,
+                // WEB-BE-032: this called .toISOString() on whichever branch
+                // won, and parseEventDateTime returns ParsedDateTime | null -
+                // an object of { event_start_local, event_timezone,
+                // event_start_utc }, not a Date. So the SUCCESS path threw
+                // "toISOString is not a function" and only an unparseable date
+                // reached the working fallback. Inverted, in a deployed
+                // function, on the restaurant-opening ingest path. Nothing
+                // type-checked supabase/functions until 2026-08-27.
                 opening_date: item.opening_date
                   ? (
-                      parseEventDateTime(item.opening_date) ||
+                      parseEventDateTime(item.opening_date)?.event_start_utc ??
                       new Date(item.opening_date)
                     )
                       .toISOString()

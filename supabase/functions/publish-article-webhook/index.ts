@@ -85,10 +85,26 @@ serve(async (req) => {
       );
     }
 
-    const ssrfResult = validateURLForSSRF(webhookUrl);
-    if (!ssrfResult.safe) {
+    // WEB-QA-001 / WEB-BE-032. This read `ssrfResult.safe` and `.reason`.
+    // validateURLForSSRF returns { valid, error, url } and has never returned
+    // either of those names, so `.safe` was always undefined, `!undefined` was
+    // always true, and this DEPLOYED function rejected every webhook URL with
+    // the message "Invalid webhook URL: undefined". Fail-closed, so not an SSRF
+    // hole - but it means article publishing through this endpoint has never
+    // worked. Every other caller of validateURLForSSRF in this repo reads
+    // `.valid`; only this one did not, and nothing type-checked it.
+    //
+    // The options now match test-article-webhook's, which is the sibling that
+    // got this right: https only, private IPs blocked. That is a tightening on
+    // paper and a loosening in practice, since the previous behaviour was to
+    // reject everything.
+    const ssrfResult = validateURLForSSRF(webhookUrl, {
+      allowedProtocols: ['https:'],
+      blockPrivateIPs: true,
+    });
+    if (!ssrfResult.valid) {
       return new Response(
-        JSON.stringify({ error: `Invalid webhook URL: ${ssrfResult.reason}` }),
+        JSON.stringify({ error: `Invalid webhook URL: ${ssrfResult.error}` }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
