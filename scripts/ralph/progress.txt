@@ -613,3 +613,22 @@ Evidence:
   - Before writing up a type error as a defect, find what CONSUMES the value. source_url looked like
     six broken extractors and is one deliberate fallback at the insert.
 ---
+
+## 2026-08-27 - the wide edge type check is a gate now (as a ratchet)
+- scripts/check-edge-types.mjs, npm run check-edge-types, wired into pr-checks.yml. Per-FILE counts,
+  fails only when a file gains an error. 166 errors across 32 files baselined; runs in 4s.
+- Needed separately from type-check:edge: assign-role was found by running that gate wide as a one-off,
+  not by the gate. Negative-controlled with the same shape (a named import of a symbol cors.ts does
+  not export) - exits 1 naming file, line, TS code and message.
+- strictNullChecks ON here, OFF in tsconfig.edge.json. With it off, 57 correct uses of
+  ClaudeTextResult report as errors because a `ok: true | false` union cannot narrow. A baseline over
+  a third fabricated is one people learn to ignore. Price: 18 real "possibly null" findings baselined.
+- ~34 of the 166 are shim artifacts (TS2503/TS2688/TS2614/TS2347) and the script header says so.
+- **Learnings for future iterations:**
+  - A relocated tsconfig relocates EVERY path inside it. I made `include` absolute and left `paths`
+    relative, so the https://* mapping stopped resolving and the count came back 423 across 195 files
+    instead of 166 across 32. That reads as a worse codebase, not a broken harness, and I nearly
+    baselined it. Check a new measurement against the number you already had.
+  - When a ratchet's baseline contains known non-defects, name the TS codes in the header. Otherwise
+    the next reader treats the whole baseline as a bug list and stops trusting it.
+---

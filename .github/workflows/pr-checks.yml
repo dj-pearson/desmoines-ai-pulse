@@ -64,6 +64,15 @@ jobs:
       - name: Type-check the shared edge modules
         run: npm run type-check:edge
 
+      # The other half: the same compiler over ALL of supabase/functions, as a
+      # per-file ratchet. The ~120 individual function directories cannot reach
+      # zero today (166 errors, many of them shim artifacts), so this fails only
+      # when a file GAINS an error. That is what catches the assign-role shape:
+      # a named import with no matching export, which Deno throws on at module
+      # load, in the one directory npm run check-imports does not cover.
+      - name: Edge functions gained no type errors
+        run: npm run check-edge-types
+
       # Named-import integrity: a named import with no matching export is not a
       # type error, and esbuild strips types without checking, so it reaches
       # production as an undefined component (React #130). See WEB-QA-001.
