@@ -798,3 +798,34 @@ Evidence:
   - When a checker already models "pending migration" for one kind of object, extend it rather than
     baselining the new kind. The baseline is the wrong home for something that resolves next push.
 ---
+
+## 2026-08-27 - WEB-LEGAL-012 AC6: the opt-out is now tested by running the senders
+- marketing-consent-contract.test.ts compares the key the clients WRITE against the key the
+  classifier READS. That catches a rename and cannot catch a sender that reads the right key and
+  mails anyway, or one added later that never checks. The new suite RUNS the agents.
+- One per family, as AC6 asks: onboarding-drip (nurture), dormant-reengagement (re-engagement),
+  churn-winback (churn), milestone-recognition (milestone), outreach-sequencer (outreach).
+- outreach-sequencer does NOT check messagingAllowed and should not. It mails business contacts from
+  crm_leads, not users, so its opt-out is the outreach_suppression list. A naive reading of AC6 would
+  have added the wrong control to it.
+- EVERY TEST IS PAIRED. A mock that returns nothing everywhere makes "no email was sent" true for
+  reasons unrelated to consent, so each family also has an opted-IN run asserting it reaches the
+  quality gate. Without that half the negative tests prove nothing.
+- ALL FIVE NEGATIVE CONTROLS RUN AND ONE FAILED THE FIRST TIME. Forcing consent true in each agent
+  made four tests fail; milestone-recognition's still PASSED. `emailed === 0` was true for the wrong
+  reason - the quality gate also holds at zero. Fixed by asserting gated === 0, because an opted-out
+  user must never reach the gate at all. The other four discriminate on their own.
+- The suite DELETES RESEND_API_KEY and the Anthropic keys before importing anything. A CI runner that
+  holds them would otherwise have turned this into real outbound mail to example.com addresses.
+- check-edge-types caught two shim gaps in my own diff: Deno.env.delete and node:assert were both
+  absent from _typecheck/deno.d.ts. Fixed there rather than in the test.
+- **Learnings for future iterations:**
+  - Deno is reachable here via `npx deno@2` even though deno.land and esm.sh both 403 through the
+    proxy. Run the agent suites with --no-check and an --import-map stubbing
+    https://esm.sh/@supabase/supabase-js@2, which is only ever imported for createClient and never
+    called under test. CI has the network and needs neither flag.
+  - Run the negative control for EVERY case, not one representative. Four of five discriminated and
+    the fifth did not, and nothing in the passing run said which was which.
+  - A test that deletes an API key before importing the module under test is not tidiness. These
+    modules POST on the happy path, and the test fixtures carry email addresses.
+---
