@@ -341,3 +341,27 @@ Evidence:
   - Check ratchet exit codes WITHOUT a pipe (`cmd > file 2>&1; echo $?`), and negative-control by
     adding a violating file, not by trusting the green.
 ---
+
+## 2026-08-27 - WEB-QA-005 (the spend, not the funnel decision)
+- generate-itinerary now probes trip_plans before the Claude call and refuses on 42P01/PGRST205 only.
+  Stops the recorded sequence where a paying Insider passes the paywall, is billed for a full
+  itinerary, and is then shown "Failed to save trip plan" because the table does not exist.
+- Fail-open on every OTHER error is preserved deliberately - it is the right rule for a transient
+  failure. The only case closed is the one where continuing is guaranteed to cost money and fail.
+- No contract change (AC4): same 500 and same { success, error } envelope the catch block already
+  returned for this failure. `code: 'trip_storage_unavailable'` is additive.
+- The web client needed no change - useTripPlanner already reads the structured body off
+  FunctionsHttpError's context, which is how 403 upgrade_required and 429 quota_exceeded reach the UI.
+- Files: supabase/functions/generate-itinerary/index.ts, prd.json (notes only).
+- Story stays passes:false: AC1's funnel decision and AC2's homepage CTA copy are untouched.
+- **Learnings for future iterations:**
+  - "Fail open, never block a paying user on our bug" is right for transient errors and wrong for
+    42P01. Separate the two by error CODE rather than by whether the read succeeded - the same
+    distinction .single() vs .maybeSingle() forces elsewhere in this repo.
+  - Put the cheap existence probe BEFORE the expensive call, not in the error handler after it.
+    The quota count here was already reading trip_plans and already had the error in hand; it just
+    failed open on it, three hundred lines before the insert that would fail.
+  - supabase.functions.invoke sets `error` and null `data` on any non-2xx, so a structured body only
+    reaches the UI if the caller reads error.context.json(). useTripPlanner.ts:170-185 is the
+    reference implementation in this repo.
+---

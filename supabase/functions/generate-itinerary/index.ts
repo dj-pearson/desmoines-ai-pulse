@@ -142,6 +142,45 @@ serve(async (req) => {
     });
     if (!burst.success) return burst.response!;
 
+    // PREFLIGHT: trip_plans must be reachable before we spend a model call.
+    //
+    // WEB-QA-005 / WEB-QA-018. The failure order used to be: quota count on
+    // trip_plans errors and FAILS OPEN by design, the Claude call goes out and
+    // is paid for, the insert at the end hits 42P01, and the user is shown
+    // "Failed to save trip plan". trip_plans is one of the tables whose
+    // migration is ledgered as applied and produced nothing, so on production
+    // that is EVERY attempt: a real API bill and an error page, every time.
+    //
+    // Fail-open on a transient error is still right - never block a paying user
+    // on our own bug - so this closes exactly one case and leaves that intact:
+    // the table not existing, where continuing is guaranteed to cost money and
+    // end in the same error. head:true so it costs a count and no rows.
+    const { error: storageProbeError } = await supabaseClient
+      .from('trip_plans')
+      .select('id', { count: 'exact', head: true })
+      .limit(1);
+
+    // 42P01 is Postgres; PGRST205 is PostgREST's schema-cache equivalent. Both
+    // mean "no such relation" as opposed to "the database is briefly unhappy".
+    if (storageProbeError && ['42P01', 'PGRST205'].includes(storageProbeError.code ?? '')) {
+      console.error(
+        '[generate-itinerary] trip_plans is missing (' + storageProbeError.code +
+          ') - refusing before the model call so the request is not billed.',
+      );
+      // Same 500 and the same { success, error } envelope the catch block
+      // already returns, so no shipped client sees a status or shape it does
+      // not handle. `code` is additive; older clients ignore unknown keys.
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error:
+            'Trip planning is temporarily unavailable. No plan was used from your monthly allowance.',
+          code: 'trip_storage_unavailable',
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
     // Monthly quota per tier (Insider 5 / VIP unlimited). Counts itineraries
     // this calendar month from trip_plans (no new table needed). Returns a
     // structured 429 the web client surfaces as an upgrade prompt.
