@@ -215,3 +215,32 @@ Evidence:
 - 20260817000002_close_unused_public_bucket.sql is pending and it TIGHTENS access (storage bucket user-uploads -> private). Its filename asserts the bucket is unused and that assertion is unverified. Audit readers before applying it; it is the one pending migration that can actually break something.
 - The event crawler's remaining problem is extraction quality, not plumbing: it now calls the API successfully and Claude returns an empty array from ~429k characters of the events page. Worth its own story - likely JS-rendered markup or a prompt that no longer matches the page structure.
 ---
+
+## 2026-08-27 - WEB-SEO-017 (partial: the ingest path)
+- Fixed the crawler's duplicate detection. Two stacked defects, and the first is the one that
+  produced the 2026-08-23 "Chef George's Steak Bar" triple with "Duplicates skipped: 0":
+  _check_duplicate read event["venue"] raw while _insert_event wrote venue-or-location, so every
+  venueless catchdesmoines row compared against "" and could never match a stored row. Both paths
+  now share _record_title/_record_venue. Second: the check only ever asked the database and
+  returned False under --dry-run, so nothing tracked what this run had already inserted; added
+  _seen_keys, populated on both the real and the dry-run insert.
+- Key moved from title+venue to title+calendar-date+venue, matching check-duplicate-entities.ts.
+  This dedupes LESS on purpose - title+venue collapses a weekly trivia night into one row.
+- Files: crawlers/catchdesmoines_crawler.py, crawlers/test_dedupe.py (new, 15 cases),
+  .github/workflows/event-crawler.yml, prd.json (notes only).
+- Story stays passes:false. AC2 needs a run whose sitemap/prerendered output demonstrably changes,
+  and AC4 (why it was switched off) is not recoverable - GitHub purged the February logs.
+- **Learnings for future iterations:**
+  - A duplicate check must derive its key from the same code the INSERT uses. Any read of the raw
+    extraction dict where the write applies a fallback is a permanent dedupe hole, not a race.
+  - Assert the harness works before asserting the behaviour. Three cases in test_dedupe.py passed
+    green while every _parse_event_datetime call was failing on an unbound CENTRAL_TZ - the
+    function swallows its exceptions and returns None, and None == None. The first check in that
+    section now proves a date parses at all.
+  - crawlers/test_*.py exec a source region of catchdesmoines_crawler.py with the heavy imports
+    stubbed, so they run on a bare python BEFORE the ~5min crawl4ai install in CI. test_clean_html
+    starts the region at EVENT_LINK_RE; anything needing CENTRAL_TZ must start at
+    CATCHDESMOINES_BASE_URL instead.
+  - npm run lint cannot run in a fresh remote container - @eslint/js is declared in package.json
+    but node_modules/@eslint is absent. npm run type-check works.
+---

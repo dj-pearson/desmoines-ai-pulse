@@ -54,6 +54,14 @@ jobs:
       - name: Check the extraction window still lands on the events
         run: python crawlers/test_clean_html.py
 
+      # Also before the dependency install, and for the same reason: the
+      # 2026-08-23 run inserted one venue three times and reported
+      # "Duplicates skipped: 0" (WEB-SEO-017). The dedupe decision is pure
+      # logic over dicts, so it is checked here rather than by reading the
+      # table afterwards.
+      - name: Check the duplicate detection
+        run: python crawlers/test_dedupe.py
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
