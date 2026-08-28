@@ -206,12 +206,17 @@ export default function Index() {
     "alternateName": BRAND.shortName,
     "url": BRAND.baseUrl,
     "description": BRAND.description,
-    "applicationCategory": "City Guide, AI Assistant, Event Discovery",
-    "keywords": `conversational AI, semantic search, multi-channel city guide, predictive analytics, behavioral intelligence, AI trip planner, context-aware recommendations, ${BRAND.city} events`,
+    // NO applicationCategory. It said "City Guide, AI Assistant, Event
+    // Discovery" and was wrong twice over: it is a property of
+    // SoftwareApplication, not WebSite, so it is invalid on this node and
+    // contributes nothing - and it told crawlers this site is an AI assistant.
+    // Ask Pulse ships on iOS and Android and has never been built for web
+    // (XPLAT-009). Structured data is the one place a claim is machine-read.
+    "keywords": `semantic search, multi-channel city guide, predictive analytics, behavioral intelligence, AI trip planner, context-aware recommendations, ${BRAND.city} events`,
     "publisher": {
       "@type": "Organization",
       "name": BRAND.name,
-      "description": "AI-powered conversational city guide platform",
+      "description": "AI-powered city guide platform",
       "logo": {
         "@type": "ImageObject",
         "url": `${BRAND.baseUrl}${BRAND.logo}`
