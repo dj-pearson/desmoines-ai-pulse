@@ -863,3 +863,38 @@ Evidence:
   - Make the aggregation a pure function taking a now argument. It removes the need to mock the
     client entirely, and freshness assertions are untestable without a pinned clock.
 ---
+
+## 2026-08-27 - WEB-SEO-013: sitemap-pseo.xml submits the shippable set, not every published row
+- 244 URLs -> 18. The sitemap selected is_published + quality_score >= 0.6, capped at 300. AC1/AC2
+  were built; the SELECTION was not, and that is the half AC5 exists for.
+- quality_score scores the generated PROSE. The floor counts the ENTITIES the page lists. A page can
+  be well written about nothing, which is this story's whole failure mode, so it is out of the
+  selection rather than kept beside the new filters.
+- THE FINDING: a claimed slug does not render the pSEO page AT ALL. React Router ranks a static
+  segment above a dynamic one, so /restaurants/asian resolves to /restaurants/:slug
+  (RestaurantDetails, looking for a restaurant called "asian"), not to the pSEO catch-all. My first
+  version selected 22 URLs and 13 were claimed - submitted soft-404s. AC7 had already counted all 75;
+  nothing had connected that list to what the sitemap submits.
+- Extracted scripts/lib/pseoShippable.ts and scripts/lib/pseoRouteClaims.mjs so the audit and the
+  generator cannot disagree. Verified the refactor by running the old and new check side by side:
+  identical 123 pass / 43 thin / 78 empty, and the collision check byte-identical.
+- The old comment said the gate could not live in the sitemap step "without N queries". The N queries
+  cost 19 seconds for 244 pages. The gate it deferred to never arrived.
+- 17 offline checks, 3 negative controls. One control did NOT fire at first and the reason is the
+  lesson: my fixture declared the literal route before the parameterised one, so literal-first and
+  first-match-wins agreed and the test passed under both. A fixture that cannot distinguish the two
+  behaviours proves nothing even when green.
+- **Learnings for future iterations:**
+  - A SITEMAP IS A STRONGER SIGNAL THAN REACHABILITY. Leaving a thin page reachable is not the same
+    as telling Google to crawl it. Any "which pages are good" rule must be shared with whatever
+    submits them, or the audit reports a clean surface while the generator publishes the opposite.
+  - Before trusting a per-page measurement, check that the URL actually routes to the page you
+    measured. Replaying a component's query says nothing about a URL that component never renders.
+  - A failed measurement that reads as zero is indistinguishable from a real zero. Where a shrink is
+    the ACTION (fewer sitemap URLs), count the errors separately and refuse to act on a partial run -
+    otherwise a flaky request publishes a smaller file and looks like a clean one.
+  - Filter before electing a group representative, not after. Post-filtering elects the excluded
+    member and then drops the whole group.
+  - vitest here only includes src/**; scripts/__tests__ use a hand-rolled check() harness run with
+    tsx and a `test:*` npm script. Follow that rather than fighting the include.
+---
