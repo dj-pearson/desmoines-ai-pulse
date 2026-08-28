@@ -5,7 +5,6 @@ import com.desmoines.aipulse.data.remote.HotelSort
 import com.desmoines.aipulse.data.remote.HotelsQuery
 import com.desmoines.aipulse.data.remote.HotelsResponse
 import com.desmoines.aipulse.data.repository.HotelsRepository
-import com.desmoines.aipulse.util.AppSearchService
 import io.mockk.coEvery
 import io.mockk.mockk
 import io.mockk.slot
@@ -29,13 +28,11 @@ class HotelsViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
     private lateinit var repository: HotelsRepository
-    private lateinit var appSearchService: AppSearchService
 
     @BeforeEach
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         repository = mockk(relaxed = true)
-        appSearchService = mockk(relaxed = true)
         // Relaxed MockK can't synthesize kotlin.Result; stub the Result-returning calls.
         coEvery { repository.fetchAreas() } returns Result.success(listOf("Downtown", "West Des Moines"))
         coEvery { repository.fetchHotels(any()) } returns Result.success(
@@ -48,7 +45,7 @@ class HotelsViewModelTest {
 
     private fun hotel(id: String) = Hotel(id = id, name = "Hotel $id", address = "1 Main St")
 
-    private fun vm() = HotelsViewModel(repository, appSearchService)
+    private fun vm() = HotelsViewModel(repository)
 
     @Test
     fun `load populates hotels and areas`() = runTest(testDispatcher) {

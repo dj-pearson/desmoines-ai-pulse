@@ -2,10 +2,13 @@ package com.desmoines.aipulse
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.AlertDialog
@@ -37,12 +40,15 @@ import com.desmoines.aipulse.util.BiometricAuthService
 import com.desmoines.aipulse.util.DeepLinkHandler
 import com.desmoines.aipulse.util.NetworkMonitor
 import com.desmoines.aipulse.util.OnboardingPreferences
+import com.desmoines.aipulse.util.PushNotificationService
 import com.desmoines.aipulse.util.RootDetector
 import com.desmoines.aipulse.util.ShortcutDispatcher
 import com.desmoines.aipulse.util.VersionCheckService
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -94,9 +100,6 @@ class MainActivity : FragmentActivity() {
                     return@ThemeCrossfadeContainer
                 }
 
-                val hasCompletedOnboarding by onboardingPreferences.hasCompletedOnboarding
-                    .collectAsState(initial = true) // default true to avoid flash
-
                 var isCheckingOnboarding by remember { mutableStateOf(true) }
                 var showOnboarding by remember { mutableStateOf(false) }
 
@@ -114,8 +117,11 @@ class MainActivity : FragmentActivity() {
                     showOnboarding = !completed
                     isCheckingOnboarding = false
 
-                    // Root detection (non-blocking warning)
-                    if (RootDetector.isRooted) {
+                    // Root detection (non-blocking warning). ~30 File.exists()
+                    // and canWrite() probes, so it runs off the main thread --
+                    // LaunchedEffect dispatches on Main and this sits directly
+                    // in the cold-start path.
+                    if (withContext(Dispatchers.IO) { RootDetector.isRooted }) {
                         showRootWarning = true
                     }
 
@@ -134,6 +140,26 @@ class MainActivity : FragmentActivity() {
                         // which returns false but we keep locked state for retry
                     }
                     biometricChecked = true
+                }
+
+                // Ask for POST_NOTIFICATIONS once the user is past onboarding.
+                // Nothing requested it before, so on API 33+ the permission
+                // could never be granted and every event reminder and push was
+                // dropped by the permission check inside the notification code.
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    val notificationPermission = rememberLauncherForActivityResult(
+                        ActivityResultContracts.RequestPermission()
+                    ) { /* Declining is fine; reminders stay off until enabled in Settings. */ }
+
+                    LaunchedEffect(isCheckingOnboarding, showOnboarding) {
+                        if (!isCheckingOnboarding && !showOnboarding &&
+                            !PushNotificationService.hasNotificationPermission(this@MainActivity)
+                        ) {
+                            notificationPermission.launch(
+                                android.Manifest.permission.POST_NOTIFICATIONS
+                            )
+                        }
+                    }
                 }
 
                 // Root detection warning dialog (non-blocking)

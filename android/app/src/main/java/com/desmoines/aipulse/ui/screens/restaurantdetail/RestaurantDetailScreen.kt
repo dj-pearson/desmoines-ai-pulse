@@ -85,6 +85,7 @@ import com.desmoines.aipulse.ui.theme.BrandOrange
 import com.desmoines.aipulse.ui.theme.CategoryFood
 import com.desmoines.aipulse.ui.theme.DesMoinesInsiderTheme
 import com.desmoines.aipulse.ui.theme.StatusSuccess
+import java.util.Locale
 
 /**
  * Restaurant Detail screen matching iOS RestaurantDetailView.swift.
@@ -369,7 +370,7 @@ private fun RestaurantDetailInfo(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.semantics {
-                        contentDescription = "${String.format("%.1f", rating)} out of 5 stars"
+                        contentDescription = "${String.format(Locale.US, "%.1f", rating)} out of 5 stars"
                     }
                 ) {
                     // Star icons
@@ -394,7 +395,7 @@ private fun RestaurantDetailInfo(
                         }
                     }
                     Text(
-                        text = String.format("%.1f", rating),
+                        text = String.format(Locale.US, "%.1f", rating),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold
                     )

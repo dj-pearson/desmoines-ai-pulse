@@ -71,6 +71,7 @@ class FavoritesRepositoryImpl @Inject constructor(
         userId: String,
         eventId: String,
         currentIds: Set<String>,
+        tier: SubscriptionTier,
     ): Result<Boolean> = runCatching {
         eventMutex(eventId).withLock {
             // The caller's snapshot decides the intended direction; the authoritative
@@ -82,7 +83,7 @@ class FavoritesRepositoryImpl @Inject constructor(
 
             if (wantFavorite) {
                 val totalFavorites = _favoriteEventIds.size + _favoriteRestaurantIds.size
-                val maxFavorites = SubscriptionTier.FREE.maxFavorites
+                val maxFavorites = tier.maxFavorites
                 if (maxFavorites > 0 && totalFavorites >= maxFavorites) {
                     throw FavoritesException.LimitReached(maxFavorites)
                 }
@@ -104,6 +105,7 @@ class FavoritesRepositoryImpl @Inject constructor(
         userId: String,
         restaurantId: String,
         currentIds: Set<String>,
+        tier: SubscriptionTier,
     ): Result<Boolean> = runCatching {
         restaurantMutex(restaurantId).withLock {
             val wantFavorite = !currentIds.contains(restaurantId)
@@ -112,7 +114,7 @@ class FavoritesRepositoryImpl @Inject constructor(
 
             if (wantFavorite) {
                 val totalFavorites = _favoriteEventIds.size + _favoriteRestaurantIds.size
-                val maxFavorites = SubscriptionTier.FREE.maxFavorites
+                val maxFavorites = tier.maxFavorites
                 if (maxFavorites > 0 && totalFavorites >= maxFavorites) {
                     throw FavoritesException.LimitReached(maxFavorites)
                 }
@@ -147,6 +149,14 @@ class FavoritesRepositoryImpl @Inject constructor(
     override fun isEventFavorited(eventId: String): Boolean = eventId in _favoriteEventIds
 
     override fun isRestaurantFavorited(restaurantId: String): Boolean = restaurantId in _favoriteRestaurantIds
+
+    override fun clearLocalState() {
+        _favoriteEventIds = emptySet()
+        _favoriteRestaurantIds = emptySet()
+        eventMutexes.clear()
+        restaurantMutexes.clear()
+        getPrefs().edit().remove(LOCAL_RESTAURANT_KEY).apply()
+    }
 
     // ================================================================
     // Local Storage Fallback (Restaurant Favorites)

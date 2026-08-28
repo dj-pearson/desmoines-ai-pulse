@@ -29,6 +29,7 @@ import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
+import java.util.Locale
 
 /**
  * Location service matching iOS LocationService.swift.
@@ -230,7 +231,7 @@ class LocationService @Inject constructor(
             return when {
                 miles < 0.1 -> "Nearby"
                 miles < 1.0 -> "${(miles * 5280).roundToInt()} ft away"
-                else -> String.format("%.1f mi", miles)
+                else -> String.format(Locale.US, "%.1f mi", miles)
             }
         }
     }

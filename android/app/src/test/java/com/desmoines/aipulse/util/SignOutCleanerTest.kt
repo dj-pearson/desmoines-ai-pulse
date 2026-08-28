@@ -3,8 +3,10 @@ package com.desmoines.aipulse.util
 import android.content.Context
 import com.desmoines.aipulse.data.remote.AdTrackingService
 import com.desmoines.aipulse.data.remote.CampaignAdService
+import com.desmoines.aipulse.data.repository.FavoritesRepository
 import com.desmoines.aipulse.data.repository.GroupSessionManager
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -25,11 +27,12 @@ class SignOutCleanerTest {
     private val groupSessionManager: GroupSessionManager = mockk(relaxed = true)
     private val softPaywallService: SoftPaywallService = mockk(relaxed = true)
     private val queryCache: QueryCache = mockk(relaxed = true)
+    private val favoritesRepository: FavoritesRepository = mockk(relaxed = true)
 
     private fun cleaner() = SignOutCleaner(
         context, secureStorage, sessionTimeoutService, swipeInteractionService,
         searchHistoryService, recentlyViewedService, adTrackingService, campaignAdService,
-        groupSessionManager, softPaywallService, queryCache,
+        groupSessionManager, softPaywallService, queryCache, favoritesRepository,
     )
 
     @Test
@@ -48,6 +51,25 @@ class SignOutCleanerTest {
         coVerify { searchHistoryService.clearAll() }
         coVerify { recentlyViewedService.clear() }
         coVerify { campaignAdService.clearCache() }
+        coVerify { queryCache.clear() }
+
+        // The local restaurant-favorites fallback and the in-memory id caches
+        // both outlived sign-out, handing the next account the previous
+        // account's saves.
+        verify { favoritesRepository.clearLocalState() }
+    }
+
+    @Test
+    fun `one failing step does not abort the rest of the teardown`() = runTest {
+        // Every step is meant to be isolated, but groupSessionManager.clear()
+        // was the one unguarded call: a throw there skipped every wipe below it,
+        // including the credential wipe.
+        every { groupSessionManager.clear() } throws IllegalStateException("boom")
+
+        cleaner().tearDown()
+
+        verify { secureStorage.deleteAll() }
+        verify { favoritesRepository.clearLocalState() }
         coVerify { queryCache.clear() }
     }
 }

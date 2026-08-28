@@ -70,6 +70,7 @@ import com.desmoines.aipulse.ui.theme.DesMoinesInsiderTheme
 import com.desmoines.aipulse.ui.theme.GlassIntensity
 import com.desmoines.aipulse.ui.theme.PremiumTokens
 import com.desmoines.aipulse.ui.theme.glassSurface
+import java.util.Locale
 
 /**
  * Attraction Detail screen matching iOS AttractionDetailView.swift.
@@ -322,7 +323,7 @@ private fun AttractionDetailInfo(
                 modifier = Modifier
                     .fillMaxWidth()
                     .semantics {
-                        contentDescription = "${String.format("%.1f", attraction.rating)} out of 5 stars"
+                        contentDescription = "${String.format(Locale.US, "%.1f", attraction.rating)} out of 5 stars"
                     }
             ) {
                 // Star rating

@@ -2,7 +2,6 @@ package com.desmoines.aipulse.ui.screens.profile
 
 import com.desmoines.aipulse.data.repository.AuthRepository
 import com.desmoines.aipulse.util.AnalyticsService
-import com.desmoines.aipulse.util.AppSearchService
 import com.desmoines.aipulse.util.ConsentService
 import com.desmoines.aipulse.util.OnboardingPreferences
 import io.mockk.every
@@ -10,7 +9,6 @@ import io.mockk.mockk
 import io.mockk.verify
 import io.mockk.verifyOrder
 import kotlinx.coroutines.flow.MutableStateFlow
-import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Test
 
 /**
@@ -23,16 +21,14 @@ class ProfileViewModelPrivacyTest {
     private val analyticsService = mockk<AnalyticsService>(relaxed = true)
     private val authRepository = mockk<AuthRepository>(relaxed = true)
     private val onboardingPreferences = mockk<OnboardingPreferences>(relaxed = true)
-    private val appSearchService = mockk<AppSearchService>(relaxed = true)
 
     private fun vm(): ProfileViewModel {
         every { consentService.locationConsent } returns MutableStateFlow(false)
         every { consentService.emailConsent } returns MutableStateFlow(false)
         every { consentService.analyticsConsent } returns MutableStateFlow(true)
-        every { appSearchService.isIndexingEnabled() } returns true
         // No session flow → the auth listener returns before touching viewModelScope.
         every { authRepository.sessionStatus } returns null
-        return ProfileViewModel(authRepository, onboardingPreferences, consentService, analyticsService, appSearchService)
+        return ProfileViewModel(authRepository, onboardingPreferences, consentService, analyticsService)
     }
 
     @Test
@@ -61,14 +57,5 @@ class ProfileViewModelPrivacyTest {
 
         verify { consentService.setLocationConsent(false) }
         verify { consentService.setEmailConsent(true) }
-    }
-
-    @Test
-    fun `disabling on-device search turns off indexing and reflects in state`() {
-        val viewModel = vm()
-        viewModel.setSearchIndexingEnabled(false)
-
-        verify { appSearchService.setIndexingEnabled(false) }
-        assertFalse(viewModel.searchIndexingEnabled.value)
     }
 }

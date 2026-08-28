@@ -17,6 +17,7 @@ import androidx.compose.ui.semantics.semantics
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
+import java.util.Locale
 
 /**
  * Centralized accessibility helper matching iOS accessibility support patterns.
@@ -142,7 +143,7 @@ fun SemanticsPropertyReceiver.assertiveLiveRegion() {
  */
 fun ratingAccessibilityLabel(rating: Double?, maxRating: Int = 5): String {
     if (rating == null) return "No rating"
-    return "${String.format("%.1f", rating)} out of $maxRating stars"
+    return "${String.format(Locale.US, "%.1f", rating)} out of $maxRating stars"
 }
 
 /**

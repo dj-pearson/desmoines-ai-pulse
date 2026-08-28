@@ -8,13 +8,13 @@ import com.desmoines.aipulse.data.model.Event
 import com.desmoines.aipulse.data.model.EventCategory
 import com.desmoines.aipulse.data.model.Restaurant
 import com.desmoines.aipulse.data.model.SubscriptionTier
+import com.desmoines.aipulse.data.remote.BillingService
 import com.desmoines.aipulse.data.remote.EventsQuery
 import com.desmoines.aipulse.data.model.RestaurantSortOption
 import com.desmoines.aipulse.data.remote.RestaurantsQuery
 import com.desmoines.aipulse.data.model.PaywallContext
 import com.desmoines.aipulse.data.repository.EventsRepository
 import com.desmoines.aipulse.data.repository.RestaurantsRepository
-import com.desmoines.aipulse.util.AppSearchService
 import com.desmoines.aipulse.util.Config
 import com.desmoines.aipulse.util.FetchGeneration
 import com.desmoines.aipulse.util.LocationService
@@ -50,7 +50,7 @@ class EventsViewModel @Inject constructor(
     private val networkMonitor: NetworkMonitor,
     private val locationService: LocationService,
     private val softPaywallService: SoftPaywallService,
-    private val appSearchService: AppSearchService,
+    private val billingService: BillingService,
 ) : ViewModel() {
 
     // region State
@@ -201,6 +201,13 @@ class EventsViewModel @Inject constructor(
                 if (hasLoadedInitialData && networkMonitor.isConnected.value) refresh()
             }
         }
+
+        // Mirror the live entitlement. This flow was a MutableStateFlow pinned
+        // to FREE with no writer, so paying subscribers were shown the
+        // free-tier UI (locked advanced filters, ad banners, the save cap).
+        viewModelScope.launch {
+            billingService.currentTier.collect { _currentTier.value = it }
+        }
     }
 
     fun loadInitialData() {
@@ -270,7 +277,11 @@ class EventsViewModel @Inject constructor(
         resetAndFetch()
     }
 
-    fun setCurrentTier(tier: SubscriptionTier) {
+    /**
+     * Overrides the entitlement mirrored from [BillingService]. Only for tests
+     * and previews; production state comes from the collector in `init`.
+     */
+    internal fun setCurrentTier(tier: SubscriptionTier) {
         _currentTier.value = tier
     }
 
@@ -369,7 +380,6 @@ class EventsViewModel @Inject constructor(
                 // Offset tracks raw rows fetched (not the premium-filtered display size).
                 currentOffset += response.events.size
                 // Surface this page to on-device system search (ANDP-070).
-                appSearchService.indexEvents(response.events)
             }
             .onFailure { error ->
                 if (!eventsFetch.isCurrent(token)) return@onFailure
@@ -415,7 +425,6 @@ class EventsViewModel @Inject constructor(
             )
         ).onSuccess { response ->
             _restaurants.value = response.restaurants
-            appSearchService.indexRestaurants(response.restaurants)
         }.onFailure { error ->
             Log.e(TAG, "fetchPopularRestaurants failed: ${error.message}", error)
         }

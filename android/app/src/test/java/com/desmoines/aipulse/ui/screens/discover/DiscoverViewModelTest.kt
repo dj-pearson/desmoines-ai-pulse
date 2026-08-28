@@ -2,9 +2,11 @@ package com.desmoines.aipulse.ui.screens.discover
 
 import com.desmoines.aipulse.data.model.Event
 import com.desmoines.aipulse.data.model.Restaurant
+import com.desmoines.aipulse.data.model.SubscriptionTier
 import com.desmoines.aipulse.data.model.SwipeItemType
 import com.desmoines.aipulse.data.remote.EventsResponse
 import com.desmoines.aipulse.data.remote.RestaurantsResponse
+import com.desmoines.aipulse.data.remote.BillingService
 import com.desmoines.aipulse.data.repository.AuthRepository
 import com.desmoines.aipulse.data.repository.GroupSessionManager
 import com.desmoines.aipulse.data.repository.EventsRepository
@@ -43,6 +45,7 @@ class DiscoverViewModelTest {
     private lateinit var swipeInteractionService: SwipeInteractionService
     private lateinit var softPaywallService: SoftPaywallService
     private lateinit var groupSessionManager: GroupSessionManager
+    private lateinit var billingService: BillingService
 
     @BeforeEach
     fun setup() {
@@ -54,6 +57,8 @@ class DiscoverViewModelTest {
         swipeInteractionService = mockk(relaxed = true)
         softPaywallService = mockk(relaxed = true)
         groupSessionManager = mockk(relaxed = true)
+        billingService = mockk(relaxed = true)
+        every { billingService.currentTier } returns MutableStateFlow(SubscriptionTier.FREE)
         every { authRepository.currentUserId } returns null
         every { swipeInteractionService.swipedKeys } returns MutableStateFlow(emptySet())
         every { groupSessionManager.activeSessionId } returns null
@@ -83,6 +88,7 @@ class DiscoverViewModelTest {
         swipeInteractionService,
         softPaywallService,
         groupSessionManager,
+        billingService,
     )
 
     @Test

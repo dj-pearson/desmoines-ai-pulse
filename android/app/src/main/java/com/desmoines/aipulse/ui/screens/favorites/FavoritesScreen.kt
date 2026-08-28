@@ -77,6 +77,7 @@ import com.desmoines.aipulse.ui.theme.DesMoinesInsiderTheme
 import com.desmoines.aipulse.util.rememberHapticPerformer
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /**
  * Favorites/Saved screen matching iOS FavoritesView.swift.
@@ -580,7 +581,7 @@ private fun FavoriteRestaurantRow(
                             tint = Color(0xFFFFD600), // yellow
                         )
                         Text(
-                            text = String.format("%.1f", rating),
+                            text = String.format(Locale.US, "%.1f", rating),
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,

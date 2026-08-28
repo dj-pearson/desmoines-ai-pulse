@@ -10,7 +10,10 @@ import androidx.lifecycle.viewModelScope
 import com.desmoines.aipulse.data.model.Event
 import com.desmoines.aipulse.data.model.EventCategory
 import com.desmoines.aipulse.data.model.SubscriptionTier
+import com.desmoines.aipulse.data.remote.BillingService
+import com.desmoines.aipulse.data.repository.AuthRepository
 import com.desmoines.aipulse.data.repository.EventsRepository
+import com.desmoines.aipulse.data.repository.FavoritesRepository
 import com.desmoines.aipulse.util.LocationService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,6 +32,9 @@ import javax.inject.Inject
 class EventDetailViewModel @Inject constructor(
     private val eventsRepository: EventsRepository,
     private val locationService: LocationService,
+    private val favoritesRepository: FavoritesRepository,
+    private val authRepository: AuthRepository,
+    private val billingService: BillingService,
 ) : ViewModel() {
 
     private val _event = MutableStateFlow<Event?>(null)
@@ -59,6 +65,7 @@ class EventDetailViewModel @Inject constructor(
             eventsRepository.fetchEvent(id)
                 .onSuccess { event ->
                     _event.value = event
+                    refreshFavoriteState(event.id)
                     loadRelatedEvents(event.id, event.category)
                 }
                 .onFailure { error ->
@@ -76,15 +83,57 @@ class EventDetailViewModel @Inject constructor(
             .onFailure { _relatedEvents.value = emptyList() }
     }
 
-    // MARK: - Favorites (placeholder — implemented in AND-024)
+    // MARK: - Favorites
 
-    // isFavorited will be wired in AND-024 when FavoritesService is built
     private val _isFavorited = MutableStateFlow(false)
     val isFavorited: StateFlow<Boolean> = _isFavorited.asStateFlow()
 
+    private val _favoriteError = MutableStateFlow<String?>(null)
+    val favoriteError: StateFlow<String?> = _favoriteError.asStateFlow()
+
+    /**
+     * Reads the persisted favorite state for [eventId].
+     *
+     * Until this was wired the heart was a local boolean that flipped on tap and
+     * reset the moment the screen was reopened, so every save from a detail
+     * screen was silently discarded.
+     */
+    private fun refreshFavoriteState(eventId: String) {
+        val userId = authRepository.currentUserId
+        if (userId == null) {
+            _isFavorited.value = false
+            return
+        }
+        viewModelScope.launch {
+            favoritesRepository.loadFavorites(userId).onSuccess { state ->
+                _isFavorited.value = eventId in state.favoriteEventIds
+            }
+        }
+    }
+
     fun toggleFavorite() {
-        // Placeholder — will connect to FavoritesRepository in AND-024
-        _isFavorited.value = !_isFavorited.value
+        val eventId = _event.value?.id ?: return
+        val userId = authRepository.currentUserId
+        if (userId == null) {
+            _favoriteError.value = "Sign in to save events."
+            return
+        }
+
+        viewModelScope.launch {
+            val currentIds = if (_isFavorited.value) setOf(eventId) else emptySet()
+            favoritesRepository.toggleEventFavorite(
+                userId = userId,
+                eventId = eventId,
+                currentIds = currentIds,
+                tier = billingService.currentTier.value,
+            )
+                .onSuccess { _isFavorited.value = it }
+                .onFailure { _favoriteError.value = it.message }
+        }
+    }
+
+    fun clearFavoriteError() {
+        _favoriteError.value = null
     }
 
     /**

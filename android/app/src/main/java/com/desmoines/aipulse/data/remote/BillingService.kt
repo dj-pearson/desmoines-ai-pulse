@@ -221,6 +221,14 @@ class BillingService @Inject constructor(
 
         val billingFlowParams = BillingFlowParams.newBuilder()
             .setProductDetailsParamsList(listOf(productDetailsParams))
+            .apply {
+                // Ties the Play purchase to the signed-in account. Google uses
+                // it for fraud detection and it is what makes a Real-time
+                // Developer Notification reconcilable to a user without a
+                // round-trip. Hashed, because Play requires this field to carry
+                // no personally identifiable information.
+                obfuscatedAccountId()?.let { setObfuscatedAccountId(it) }
+            }
             .build()
 
         billingClient.launchBillingFlow(activity, billingFlowParams)
@@ -251,16 +259,7 @@ class BillingService @Inject constructor(
     private suspend fun handlePurchase(purchase: Purchase) {
         when (purchase.purchaseState) {
             Purchase.PurchaseState.PURCHASED -> {
-                // Acknowledge the purchase if not already
-                if (!purchase.isAcknowledged) {
-                    val params = com.android.billingclient.api.AcknowledgePurchaseParams.newBuilder()
-                        .setPurchaseToken(purchase.purchaseToken)
-                        .build()
-                    val result = billingClient.acknowledgePurchase(params)
-                    if (result.responseCode != BillingClient.BillingResponseCode.OK) {
-                        Log.w(TAG, "Acknowledge failed: ${result.debugMessage}")
-                    }
-                }
+                acknowledgeIfNeeded(purchase)
 
                 updatePurchasedProducts()
 
@@ -322,11 +321,35 @@ class BillingService @Inject constructor(
             result.purchasesList.forEach { purchase ->
                 if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED) {
                     purchased.addAll(purchase.products)
+                    // Google Play auto-refunds and revokes any purchase left
+                    // unacknowledged for three days. Acknowledgement used to
+                    // happen only inside onPurchasesUpdated, so a purchase that
+                    // completed while the app was killed -- or whose callback
+                    // was never delivered -- was granted entitlement here and
+                    // then silently refunded.
+                    acknowledgeIfNeeded(purchase)
                 }
             }
             _purchasedProductIDs.value = purchased
             recomputeCurrentTier()
             Log.i(TAG, "Updated purchases: $purchased, tier: ${_currentTier.value}")
+        }
+    }
+
+    /**
+     * Acknowledges [purchase] with Google Play if it has not been acknowledged
+     * yet. Safe to call repeatedly: already-acknowledged purchases are skipped.
+     */
+    private suspend fun acknowledgeIfNeeded(purchase: Purchase) {
+        if (purchase.isAcknowledged) return
+        if (purchase.purchaseState != Purchase.PurchaseState.PURCHASED) return
+
+        val params = com.android.billingclient.api.AcknowledgePurchaseParams.newBuilder()
+            .setPurchaseToken(purchase.purchaseToken)
+            .build()
+        val result = billingClient.acknowledgePurchase(params)
+        if (result.responseCode != BillingClient.BillingResponseCode.OK) {
+            Log.w(TAG, "Acknowledge failed: ${result.debugMessage}")
         }
     }
 
@@ -603,6 +626,20 @@ class BillingService @Inject constructor(
         _backendTier.value = SubscriptionTier.FREE
         _crossPlatformSubscriptions.value = emptyList()
         recomputeCurrentTier()
+    }
+
+    /**
+     * A stable, non-identifying handle for the signed-in user, or null when
+     * signed out. Play caps this field at 64 characters and forbids PII, so the
+     * raw Supabase user id is hashed rather than sent.
+     */
+    private fun obfuscatedAccountId(): String? {
+        val userId = runCatching { supabaseClient?.auth?.currentSessionOrNull()?.user?.id }
+            .getOrNull() ?: return null
+        return java.security.MessageDigest.getInstance("SHA-256")
+            .digest(userId.toByteArray())
+            .joinToString("") { "%02x".format(java.util.Locale.ROOT, it) }
+            .take(64)
     }
 
     private fun isTransientError(error: Exception): Boolean {

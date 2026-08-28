@@ -102,10 +102,30 @@ jobs:
           VERSION_CODE="${{ github.event.inputs.versionCode }}"
           if [ -z "$VERSION_CODE" ]; then
             VERSION_CODE=${{ github.run_number }}
+            echo "::notice::versionCode input was blank; using run_number ($VERSION_CODE)."
           fi
+
+          # Play rejects an upload whose versionCode is not higher than the
+          # last one it accepted, and run_number is not tied to that at all --
+          # it drifts above the shipped code (run 12 vs versionCode 6 as of
+          # Aug 2026) and resets to 1 if this workflow file is ever renamed.
+          # The committed versionCode is the best local proxy for what Play has
+          # already seen, so treat it as a floor rather than discovering the
+          # mismatch in Play Console after a five-minute build.
+          COMMITTED=$(grep -oE 'versionCode = [0-9]+' android/app/build.gradle.kts | grep -oE '[0-9]+')
+          if [ -z "$COMMITTED" ]; then
+            echo "::error::Could not read versionCode from android/app/build.gradle.kts"
+            exit 1
+          fi
+          if [ "$VERSION_CODE" -le "$COMMITTED" ]; then
+            echo "::error::versionCode $VERSION_CODE is not above the committed versionCode $COMMITTED."
+            echo "::error::Play will reject this upload. Pass an explicit versionCode input greater than $COMMITTED."
+            exit 1
+          fi
+
           echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_ENV
           echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
-          echo "Version: $VERSION_NAME (code $VERSION_CODE)"
+          echo "Version: $VERSION_NAME (code $VERSION_CODE, committed floor $COMMITTED)"
 
       - name: Patch versionCode and versionName in build.gradle.kts
         working-directory: android
@@ -237,8 +257,24 @@ jobs:
           fi
 
       # ============================================================
-      # 6. BUILD
+      # 6. TEST, THEN BUILD
       # ============================================================
+      # This workflow produces the artifact that goes to Play, and until now it
+      # ran no automated check of any kind before building it. Tests go here
+      # rather than earlier because they need the BuildConfig fields from
+      # local.properties and the google-services.json written in steps 4 and 5.
+      - name: Run unit tests
+        working-directory: android
+        run: ./gradlew test --no-daemon
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-release-test-results
+          path: android/app/build/reports/tests/
+          if-no-files-found: ignore
+
       - name: Build release ${{ github.event.inputs.buildType }}
         working-directory: android
         run: |

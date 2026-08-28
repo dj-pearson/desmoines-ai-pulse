@@ -2,6 +2,7 @@ package com.desmoines.aipulse.data.repository
 
 import com.desmoines.aipulse.data.model.Event
 import com.desmoines.aipulse.data.model.Restaurant
+import com.desmoines.aipulse.data.model.SubscriptionTier
 
 /**
  * Repository interface for favorites operations.
@@ -16,13 +17,30 @@ interface FavoritesRepository {
 
     /**
      * Toggle an event favorite. Returns true if now favorited, false if removed.
+     *
+     * [tier] decides the save limit. It is required rather than defaulted: the
+     * limit used to be read as `SubscriptionTier.FREE.maxFavorites`
+     * unconditionally, which capped paying Insider and VIP subscribers at three
+     * saves while the paywall sold them "Unlimited favorites".
      */
-    suspend fun toggleEventFavorite(userId: String, eventId: String, currentIds: Set<String>): Result<Boolean>
+    suspend fun toggleEventFavorite(
+        userId: String,
+        eventId: String,
+        currentIds: Set<String>,
+        tier: SubscriptionTier,
+    ): Result<Boolean>
 
     /**
      * Toggle a restaurant favorite. Returns true if now favorited, false if removed.
+     *
+     * See [toggleEventFavorite] for why [tier] is a required parameter.
      */
-    suspend fun toggleRestaurantFavorite(userId: String, restaurantId: String, currentIds: Set<String>): Result<Boolean>
+    suspend fun toggleRestaurantFavorite(
+        userId: String,
+        restaurantId: String,
+        currentIds: Set<String>,
+        tier: SubscriptionTier,
+    ): Result<Boolean>
 
     /**
      * Fetch full Event objects for all favorited event IDs.
@@ -43,6 +61,17 @@ interface FavoritesRepository {
      * Check if a restaurant is favorited.
      */
     fun isRestaurantFavorited(restaurantId: String): Boolean
+
+    /**
+     * Drops every trace of the signed-in user's favorites held on this device:
+     * the in-memory id caches and the local restaurant-favorites fallback.
+     *
+     * Both survived sign-out before, so the next account to sign in on the
+     * device inherited the previous account's saves until a fresh
+     * [loadFavorites] happened to overwrite them, and the local restaurant
+     * fallback was never overwritten at all.
+     */
+    fun clearLocalState()
 }
 
 /**

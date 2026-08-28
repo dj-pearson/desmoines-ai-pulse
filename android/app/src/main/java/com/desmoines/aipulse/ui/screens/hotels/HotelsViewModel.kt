@@ -7,7 +7,6 @@ import com.desmoines.aipulse.data.model.Hotel
 import com.desmoines.aipulse.data.remote.HotelSort
 import com.desmoines.aipulse.data.remote.HotelsQuery
 import com.desmoines.aipulse.data.repository.HotelsRepository
-import com.desmoines.aipulse.util.AppSearchService
 import com.desmoines.aipulse.util.PaginationGuard
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -48,7 +47,6 @@ data class HotelsUiState(
 @HiltViewModel
 class HotelsViewModel @Inject constructor(
     private val repository: HotelsRepository,
-    private val appSearchService: AppSearchService,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HotelsUiState())
@@ -138,7 +136,6 @@ class HotelsViewModel @Inject constructor(
                         it.copy(hotels = resp.hotels, hasMore = resp.hasMore, isLoading = false, isRefreshing = false, errorMessage = null)
                     }
                     // Surface to on-device system search (ANDP-070).
-                    appSearchService.indexHotels(resp.hotels)
                 }
                 .onFailure {
                     _uiState.update { it.copy(isLoading = false, isRefreshing = false, errorMessage = "Couldn't load hotels. Tap to retry.") }

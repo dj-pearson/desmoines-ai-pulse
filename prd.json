@@ -6935,6 +6935,377 @@
         "Measure: Supabase egress before and after, and the Cloudflare cache hit ratio on /media/*."
       ],
       "notes": "AN ADJACENT, SMALLER TERM THIS STORY DOES NOT COVER: OG cards are re-rendered on every fetch. Measured\n2026-08-28.\n\nThe social-crawler path works - verified end to end in production, which nobody had done:\n    a real sitemapped event URL, fetched as facebookexternalhit, comes back with\n    og:image = https://<project>.supabase.co/functions/v1/og-image/event/<id> and the real og:title\n    a plain browser gets the SPA shell, which is correct - Helmet fixes it after hydration\n    that og-image URL answers 200 image/jpeg, ~30 KB, a genuinely rendered card\n\nBUT IT IS NOT CACHED. Two consecutive fetches both return `cf-cache-status: DYNAMIC`. The URL points at the\nsupabase.co origin, so it never reaches the Cloudflare cache that /media enjoys - /media on the site domain\nreturns HIT with max-age=31536000. Each crawler fetch therefore re-invokes the function, re-initialises the\nresvg WASM, re-renders the SVG and re-encodes the JPEG, plus fetching the source photo.\n\nSMALLER THAN THIS STORY'S MAIN TERM, and worth saying so rather than inflating it: OG cards are fetched by\nsocial crawlers and link unfurlers, not by every visitor, so the volume is orders below content images.\nCards for past events do get `immutable` (verified on one), so those at least stay cached in whatever\nfetched them; future events get max-age=3600.\n\nNOT BUILT, deliberately. The fix is the same shape as /media - proxy og-image through the site domain so\nCloudflare caches it - but it changes a URL that social platforms have already cached, and it is a design\nchange rather than a config flag. Recorded with the measurement so whoever picks up AC7's before/after\nknows this surface exists.\n\nAC2 IS VERIFIED WORKING AND MOST OF AC5 HAS HAPPENED. 2026-08-28. The note below says \"STILL NOT VERIFIED\n... the actual egress number, and that the Cloudflare route serves. Neither is knowable from this\ncontainer.\" The second half is knowable now - this environment reaches production.\n\nTHE /media ROUTE IS LIVE AND CACHING:\n    GET https://desmoinesinsider.com/media/events/<id>/hero.jpg\n    200  image/jpeg  cache-control: public, max-age=31536000  cf-cache-status: HIT\n\nAND THE ROWS ARE ALREADY ON IT:\n    events        277 of 284 with an image\n    restaurants   326 of 326 project-hosted   (137 more are external URLs, correctly left alone)\n    attractions    16 of 16\n    playgrounds    15 of 15 project-hosted    (42 external)\n    articles        3 of 3\n\nSO THE REMAINING NUMBER IS SEVEN, AND ITS SHAPE IS THE FINDING. All seven event rows still on the storage\norigin were created in ONE crawl, 2026-08-27 at 15:46, and every repointed row was created 2026-08-26 or\nearlier. The backfill fixed history and the write path kept producing more.\n\nTHE CAUSE IS AC3 NAMING THE WRONG ENVIRONMENT. cdnUrlFor (_shared/imageStorage.ts:439) switches on\n`Deno.env.get(\"MEDIA_CDN_BASE\")` - a SUPABASE EDGE FUNCTION variable. AC3 says to set it \"in the Cloudflare\nPages environment\". That is where functions/media/[[path]].ts reads its own copy; it is NOT where the code\nthat writes image_url looks. docs/EGRESS_IMAGE_RUNBOOK.md:164 has it right - `supabase secrets set\nMEDIA_CDN_BASE=https://desmoinesinsider.com` - and the AC does not. Following the AC alone changes nothing,\nsilently, which is precisely the state production is in.\n\nWHAT IS LEFT: set the secret where the edge functions read it, then repoint the seven\n(npx tsx scripts/repoint-media-urls.ts, dry run first). AC1's egress number and AC7's before/after still\nneed the Supabase dashboard.\n\nGUARDED SO IT CANNOT SILENTLY RE-ACCRUE: scripts/check-media-url-drift.mjs, in the nightly audit. A count\nrather than a gate, because the number moves with ingest until the switch is set.\n  It caught a silent zero in my own earlier ad-hoc measurement, which is why it errors on any non-2xx:\n  articles has no image_url column (it is featured_image_url), so the first pass read a 42703 as\n  \"articles: 0 images\". There are 3.\n\nAC4 AND AC5 ARE BUILT TOO, 2026-08-27, so the whole chain exists and every piece of it is off by default.\n\n    cdnUrlFor              emits ${MEDIA_CDN_BASE}/media/<path> when the variable is set, and the\n                           supabase.co URL when it is not. Unset is the old behaviour exactly.\n    scripts/repoint-media-urls.ts   moves existing rows between the two prefixes. Dry run by default,\n                           --revert is the exact inverse, and it only touches URLs that start with THIS\n                           project's storage prefix - an externally hosted image_url is left alone,\n                           because /media cannot serve what is not in the bucket.\n\nORDER MATTERS AND THE SCRIPT SAYS SO: deploy the Pages Function and confirm one image loads through it\nBEFORE repointing anything. Rewriting a thousand rows to a route that 404s is a thousand broken images, and\nreversibility is not much comfort while it is happening. The dry run prints a curl for that exact check.\n\nTESTED OFFLINE, 27 checks across the two files, weighted toward what must NOT happen: the path guard\nrefusing traversal and query strings (functions/__tests__/media-route.test.mjs), and the rewrite leaving\nexternal URLs, other buckets, other projects and lookalike prefixes untouched\n(scripts/__tests__/repoint-media-urls.test.mjs). The revert round-trip is tested because --revert is the\nonly undo this has.\n\nSTILL NOT VERIFIED and still the first thing to do: the actual egress number, and that the Cloudflare route\nserves. Neither is knowable from this container.\n\nFOUND 2026-08-27 (claude/prd-stories-loop-k5jmnk) while looking for more egress to cut after WEB-OPS-022, and it is probably the larger term of the two.\n\nTHE STRUCTURE, verified in the repo rather than inferred:\n  _shared/imageStorage.ts:419  cdnUrlFor() returns `${SUPABASE_URL}/storage/v1/object/public/media/<path>`\n  that URL is what lands in events.image_url and the other content tables\n  public/_redirects            has no rule for it\n  functions/_middleware.ts:207 passes any .jpg/.webp/... straight to context.next()\n  public/_headers:83-99        DOES set `Cache-Control: immutable` for /*.jpg and friends - and those\n                               rules apply to files CLOUDFLARE PAGES serves out of dist/. They do nothing\n                               for a URL on the supabase.co origin.\nSo nothing caches these. Ingest downloads an image ONCE, ever. Serving downloads it once per viewer, per crawler, forever.\n\nWHY THIS IS FILED SEPARATELY FROM WEB-OPS-022 rather than folded into it: that story is about what the SCRAPERS fetch and store, this one is about what VISITORS are served, and the second is the bigger number on any site with more page views than events. They share nothing but the word egress.\n\nBUILT AND DELIBERATELY INERT: functions/media/[[path]].ts. It fetches the object from Supabase once, puts it in the Cloudflare edge cache, and serves later requests from there. Nothing links to /media/* yet, so deploying it changes nothing - it starts working when cdnUrlFor is switched, which is AC4 and is NOT done because it changes a value all three clients read.\n  The path guard is an ALLOWLIST, not a `..` denylist, because the route forwards a caller-supplied path to a storage origin and a denylist has to anticipate every encoding of traversal. 12 offline checks in functions/__tests__/media-route.test.mjs, weighted toward the refusals - a false negative there is an open proxy.\n  Upstream failures are deliberately NOT cached: a cached 404 outlives the outage that caused it.\n\nNOT VERIFIED: the caching and fetch behaviour, which needs a Cloudflare runtime and a real storage origin. Neither exists in this container.\n\nTHE NUMBER IS THE FIRST THING TO GET. The structural claim is solid; the size of it is not knowable from here and decides whether AC4 and AC5 are worth a release."
+    },
+    {
+      "id": "AND-AUDIT-001",
+      "title": "Nothing on the Android audit branch has ever been compiled",
+      "priority": 1,
+      "passes": false,
+      "description": "As the release owner, I need the audit branch to compile and pass tests before any of its fixes are believed, because all ten of them were written in a container with no Android SDK and Android CI only triggers on pull requests and pushes to main, so the branch has never been through a compiler.",
+      "acceptanceCriteria": [
+        "Get claude/android-production-readiness-icxmch through Android CI. It triggers on pull_request and push-to-main only, so either open a PR or run the workflow by dispatch. An in-session dispatch attempt returned 403 (Resource not accessible by integration), so this likely needs a human or a PR.",
+        "assembleDebug must compile. The riskiest edits are the ones that changed a signature: FavoritesRepository gained a required tier parameter on both toggle methods, LocalNotificationService gained a Json constructor parameter, and five ViewModels gained a BillingService parameter.",
+        "./gradlew test must pass, including the two new tier regression tests in FavoritesRepositoryImplTest and the new teardown-isolation test in SignOutCleanerTest.",
+        "assembleRelease (added to android-ci.yml by this branch) must survive R8 full mode. This step has never run, so a broken keep rule surfaces here for the first time.",
+        "EventsRemoteDataSourceTest was converted from JUnit 4 to Jupiter. Confirm its seven tests now appear in the test report - they were being discovered as zero.",
+        "Only after CI is green: flip the audit's fixed items to passes:true. Until then this story blocks every other AND-AUDIT story that touches Kotlin."
+      ],
+      "notes": "Fixed on the branch and awaiting this verification: the paid-tier entitlement bug (three ViewModels held MutableStateFlow(SubscriptionTier.FREE) with no writer), the placeholder favorite buttons on both detail screens, the undeclared FirebaseMessagingService and POST_NOTIFICATIONS, reminders lost on reboot, unacknowledged Play purchases, ten undeclared deep-link hosts, the sign-out favorites leak, five unguarded startActivity calls, the full-colour notification icon, and nine smaller items.\n\nEnvironment note for whoever picks this up: dl.google.com is blocked by the agent proxy (403), so neither the Android SDK nor Google's Maven repo can be fetched in a Claude Code remote session. repo.maven.apache.org and services.gradle.org do resolve. Any Android story in this set needs CI or a local machine as its compiler."
+    },
+    {
+      "id": "AND-AUDIT-002",
+      "title": "targetSdk 35 misses Google Play's API 36 deadline",
+      "priority": 1,
+      "passes": false,
+      "description": "As the release owner, I need the app to target API 36, because Google Play stops accepting updates that target anything lower after 31 August 2026 and the app is on 35, so the next submission is rejected outright.",
+      "acceptanceCriteria": [
+        "compileSdk and targetSdk both move to 36 in android/app/build.gradle.kts (currently 35).",
+        "This is not a one-line bump. activity-compose 1.9.3 and Compose BOM 2024.12.01 predate the Android 15 and 16 behaviour changes, so AND-AUDIT-005 (dependency upgrade) has to land with it or alongside it.",
+        "Edge-to-edge is already opted into via enableEdgeToEdge() in MainActivity, but API 35+ enforces it. Walk every screen for content drawn under the status or navigation bar - MapScreen, the detail heroes and the bottom bar are the likely offenders.",
+        "Predictive back: decide whether to set android:enableOnBackInvokedCallback. Not required for the bump, but it is the other Android 15/16 behaviour change that shows up as a UX regression rather than a crash.",
+        "Verify on an API 36 emulator or device, not just by compiling. The failures this introduces are visual and behavioural, not build errors.",
+        "OWNER: confirm the current Play policy date before planning around it. Recorded here as 31 Aug 2026 from the audit on 28 Aug 2026, which leaves three days."
+      ],
+      "notes": "Paired with AND-AUDIT-003; both have the same deadline and both are release-blocking. Do them in one release, not two."
+    },
+    {
+      "id": "AND-AUDIT-003",
+      "title": "Google Play Billing Library 7.1.1 misses the v8 deadline",
+      "priority": 1,
+      "passes": false,
+      "description": "As the release owner, I need Play Billing on v8, because Google stops accepting updates on v7 after 31 August 2026, so the subscription flow blocks the whole submission.",
+      "acceptanceCriteria": [
+        "playBilling moves from 7.1.1 to 8.x in android/gradle/libs.versions.toml.",
+        "billing-ktx was folded into billing in v8 - the artifact coordinate changes, not just the version.",
+        "BillingService is the only consumer. Re-check queryProductDetails, queryPurchasesAsync, acknowledgePurchase and the PendingPurchasesParams builder against the v8 API.",
+        "Do not lose the two fixes this branch made to BillingService: acknowledgeIfNeeded() is now called from updatePurchasedProducts() as well as onPurchasesUpdated(), and setObfuscatedAccountId is set on the billing flow.",
+        "Test a real purchase against a Play internal-testing track. A billing migration verified only by compiling is not verified."
+      ],
+      "notes": "The acknowledgement fix on this branch matters more than the version bump: purchases found by queryPurchasesAsync were never acknowledged, and Play auto-refunds anything unacknowledged after three days. Do not regress it during the migration."
+    },
+    {
+      "id": "AND-AUDIT-004",
+      "title": "assetlinks.json ships a placeholder fingerprint, so App Links never verify",
+      "priority": 1,
+      "passes": false,
+      "description": "As a user tapping a desmoinesinsider.com link, I need it to open in the app, because public/.well-known/assetlinks.json is live in production with the literal string SHA256_FINGERPRINT_HERE, so Android's verification fails and every shared link goes to the browser instead.",
+      "acceptanceCriteria": [
+        "OWNER: get the app signing certificate SHA-256 from Play Console (Setup, then App signing). Nobody outside that console can supply it - this is the whole reason the story exists rather than being fixed already.",
+        "Use the Play App Signing key, not the upload key. Play re-signs the AAB, so the upload key fingerprint verifies nothing.",
+        "Replace SHA256_FINGERPRINT_HERE in public/.well-known/assetlinks.json and deploy. It is served by Cloudflare Pages from public/, so a normal web release ships it.",
+        "Confirm the file serves as application/json at https://desmoinesinsider.com/.well-known/assetlinks.json with no redirect - a 301 to www fails verification silently.",
+        "Verify on device: adb shell pm verify-app-links --re-verify com.desmoines.aipulse, then adb shell pm get-app-links com.desmoines.aipulse and confirm the domain reads verified.",
+        "Test the four paths DeepLinkHandler parses: /events/:id, /restaurants/:id, /attractions/:id, /hotels/:id."
+      ],
+      "notes": "The manifest side is already fixed on the audit branch - the https intent-filter with autoVerify=true and all ten previously undeclared custom-scheme hosts are declared now. Without the fingerprint the links still work, just through the disambiguation dialog rather than straight into the app.\n\nThese are also the URLs AppSearchService indexes (see AND-AUDIT-016), so the two stories share a fate: indexing content whose links do not open the app is pointless."
+    },
+    {
+      "id": "AND-AUDIT-005",
+      "title": "The Android dependency set is about twenty months stale",
+      "priority": 1,
+      "passes": false,
+      "description": "As a developer, I need the AndroidX and Compose dependencies current, because Compose BOM 2024.12.01, core-ktx 1.15.0, lifecycle 2.8.7, activity-compose 1.9.3 and navigation-compose 2.8.5 all date from late 2024 while the build runs Kotlin 2.2.10 and AGP 9.1, so the compiler is far ahead of the runtime it targets and the API 36 bump has nothing modern to stand on.",
+      "acceptanceCriteria": [
+        "Upgrade the Compose BOM, core-ktx, lifecycle, activity-compose and navigation-compose to versions contemporary with Kotlin 2.2 and AGP 9.1.",
+        "Do it as its own change, before or with AND-AUDIT-002. Mixing a dependency jump and an SDK jump in one commit makes the resulting breakage unattributable.",
+        "Watch for Compose behaviour changes rather than compile errors: nested scroll, ModalBottomSheet, and pull-to-refresh have all moved between these versions.",
+        "coil 3.0.4, mapsCompose 6.2.1 and play-services-maps 19.0.0 are also behind. Coil in particular had fixes after 3.0.4.",
+        "Re-check DesMoinesInsiderApp.newImageLoader after any Coil bump. This branch replaced Coil's maxSizePercent with a Runtime.maxMemory() calculation specifically because that API's signature has moved across Coil 3 point releases; if the new version is stable, moving back to maxSizePercent is fine.",
+        "assembleRelease must still pass. A dependency jump is the most likely thing to break a hand-written ProGuard keep (see AND-AUDIT-018)."
+      ],
+      "notes": "Blocks AND-AUDIT-002 in practice even though it is technically separable."
+    },
+    {
+      "id": "AND-AUDIT-006",
+      "title": "SessionTimeoutService is implemented and never runs",
+      "priority": 2,
+      "passes": false,
+      "description": "As a security reviewer, I need the session timeout control to actually run, because SessionTimeoutService implements idle and absolute timeouts with separate admin limits across roughly 200 lines and startTracking() and recordActivity() have zero callers, so the control exists in the codebase and not at runtime.",
+      "acceptanceCriteria": [
+        "Confirm the finding first: grep for startTracking and recordActivity across android/app/src. At audit time both had zero callers and only stopTracking() was called, from SignOutCleaner.",
+        "Decide: wire it or delete it. Both are acceptable outcomes; leaving it as-is is not, because the code implies a protection the app does not have.",
+        "If wiring: call startTracking(isAdminUser) on successful sign-in, recordActivity() on user interaction, and observe sessionState to force a sign-out when it expires. Nothing currently observes sessionState or minutesRemaining.",
+        "If wiring: minutesRemaining exists to drive a warning before expiry. Either surface it or drop it.",
+        "If deleting: remove the service, its SecureStorage keys, and the stopTracking() call in SignOutCleaner.",
+        "Add a unit test that proves whichever direction was chosen - an expiring session signs out, or the file is gone."
+      ],
+      "notes": "Same shape as AND-AUDIT-016: a feature that was built, is referenced in documentation as a capability, and is inert. Worth handling the two together so the pattern gets named rather than fixed twice."
+    },
+    {
+      "id": "AND-AUDIT-007",
+      "title": "The biometric lock only locks once per process and has no escape",
+      "priority": 2,
+      "passes": false,
+      "description": "As a user who enabled the biometric lock, I need it to lock when I come back to the app, because MainActivity gates it inside LaunchedEffect(Unit) which runs once per composition, so backgrounding the app and returning leaves it unlocked and the protection is theatre after the first unlock.",
+      "acceptanceCriteria": [
+        "Re-lock on resume, not once per process. A lifecycle observer on ON_STOP or ON_PAUSE that sets the locked flag is the straightforward fix.",
+        "Decide the grace period. Re-prompting after every glance at the notification shade is worse than useless; iOS's equivalent is worth checking for the interval it uses.",
+        "Give a failed unlock a way out. Today isBiometricLocked stays true and the only escape is a bare TextButton reading 'Tap to unlock with biometrics' centred on a blank screen - no device-credential fallback, no sign-out, no explanation.",
+        "Add DEVICE_CREDENTIAL as an allowed authenticator so a user whose fingerprint sensor fails can still get in with their PIN.",
+        "The lock screen needs to look like a screen. Right now it is one unstyled button on an empty Box.",
+        "Verify on device: enable the lock, background the app, return, and confirm the prompt. This cannot be verified by a unit test."
+      ],
+      "notes": "Related: SignOutCleaner calls secureStorage.deleteAll(), which clears biometric_enabled, so signing out silently disables the lock. That is AND-AUDIT-024."
+    },
+    {
+      "id": "AND-AUDIT-008",
+      "title": "SecureStorage falls back to plaintext SharedPreferences without telling anyone",
+      "priority": 2,
+      "passes": false,
+      "description": "As a security reviewer, I need a Keystore failure to be visible, because SecureStorage.createPreferences() catches any exception from EncryptedSharedPreferences and returns an ordinary unencrypted SharedPreferences with only a Log.w, so on a device where the Keystore is unavailable everything the app considers secure is written in cleartext and nothing anywhere records that it happened.",
+      "acceptanceCriteria": [
+        "Report the fallback to CrashReportingService, which already exists and is installed in Application.onCreate. A Log.w is stripped from nobody's device but also reaches nobody.",
+        "Decide whether the fallback should exist at all for session material. Keystore corruption after an OEM OS update is the common trigger and it is not rare; failing closed would lock users out, so the fallback is defensible - but it should be a deliberate, recorded decision rather than a silent catch.",
+        "If the fallback stays: do not write the same keys to both stores. A value written encrypted before the failure and plaintext after is worse than either.",
+        "Add a unit test that forces the constructor to throw and asserts the failure is reported.",
+        "Consider what is actually stored here: biometric_enabled, indexing_enabled, the soft paywall counters and the session timestamps. Supabase's own SDK holds the auth session separately - worth confirming where that lands and whether it is encrypted."
+      ],
+      "notes": "Pairs with AND-AUDIT-009: the library underneath this is both alpha and deprecated, so the reporting fix and the replacement can be sequenced together."
+    },
+    {
+      "id": "AND-AUDIT-009",
+      "title": "Production ships alpha, deprecated crypto and an alpha biometric library",
+      "priority": 2,
+      "passes": false,
+      "description": "As a security reviewer, I need the security dependencies off alpha builds, because androidx.security:security-crypto is pinned to 1.1.0-alpha06 - a library Google has stopped developing and now recommends against - and androidx.biometric to 1.2.0-alpha05 where 1.1.0 is stable, so the two libraries guarding on-device secrets are both pre-release.",
+      "acceptanceCriteria": [
+        "androidx.biometric is the easy half: 1.2.0-alpha05 to 1.1.0 stable, unless something in the alpha is actually needed. Check BiometricAuthService for alpha-only API use first.",
+        "security-crypto is the real work. It has no stable successor - the recommended path is the Keystore directly, or DataStore with Tink. Pick one and write down why.",
+        "Migrate on read: the replacement must be able to read values written by EncryptedSharedPreferences for at least one release, or every user loses their biometric setting and paywall counters on upgrade. CLAUDE.md's on-disk state rule covers this - write to the new store, fall back to the old one for a release.",
+        "Keep the fallback reporting from AND-AUDIT-008 through the migration.",
+        "OWNER: this is a judgement call about how much on-device data is worth the migration. The values currently stored are settings and counters, not credentials - which may argue for moving them to plain DataStore and dropping the encryption story entirely."
+      ],
+      "notes": "Do AND-AUDIT-008 first so a failure during this migration is visible rather than silent."
+    },
+    {
+      "id": "AND-AUDIT-010",
+      "title": "google-services.json is committed and has no OAuth client, so Google Sign-In cannot work",
+      "priority": 2,
+      "passes": false,
+      "description": "As a user trying to sign in with Google, I need the Firebase config to carry an OAuth client, because android/app/google-services.json has an empty oauth_client array - meaning no SHA-1 is registered on the Firebase Android app - so Credential Manager has nothing to present and the Google sign-in path fails on a real build.",
+      "acceptanceCriteria": [
+        "Confirm the failure on a real device before changing anything. The empty oauth_client array is the symptom; whether sign-in is broken end to end depends on GOOGLE_WEB_CLIENT_ID too, which comes from local.properties and is not in the repo.",
+        "OWNER: register the debug and release SHA-1 fingerprints on the Firebase Android app, then re-download google-services.json. The release SHA-1 is the Play App Signing one, same source as AND-AUDIT-004.",
+        "The file is tracked in git even though android/app/google-services.json is listed in .gitignore - gitignore does not untrack an already-tracked file. Decide: git rm --cached it and rely on the GOOGLE_SERVICES_JSON_BASE64 secret that android-release.yml already uses, or accept it as tracked and drop the misleading gitignore line.",
+        "Firebase config is not a secret by design, so this is about intent and drift, not exposure. What matters is that CI overwrites it with a placeholder and the release workflow overwrites it from a secret, so the committed copy is authoritative for nobody and can rot unnoticed.",
+        "Verify: a signed release build on a device completes Google Sign-In and lands an authenticated session."
+      ],
+      "notes": "Same missing fingerprint underlies AND-AUDIT-004. One trip to Play Console and Firebase can close both."
+    },
+    {
+      "id": "AND-AUDIT-011",
+      "title": "A release build with no keystore is debug-signed instead of failing",
+      "priority": 2,
+      "passes": false,
+      "description": "As the release owner, I need a release build without signing credentials to fail loudly, because android/app/build.gradle.kts applies the release signingConfig only when RELEASE_KEYSTORE_FILE is non-blank and silently falls through to debug signing when it is absent, so a local bundleRelease produces a debug-signed artifact that looks shippable.",
+      "acceptanceCriteria": [
+        "Add RELEASE_KEYSTORE_FILE to the fail-fast guard at the top of build.gradle.kts. That guard already blocks a release build missing SUPABASE_URL, SUPABASE_ANON_KEY or GOOGLE_MAPS_API_KEY - the keystore belongs in the same list and was left out.",
+        "Keep android-ci.yml working. This branch added an assembleRelease step that has no keystore on purpose (it exists to exercise R8, not to produce an artifact), so the guard needs to distinguish that case - a separate property, or scope the keystore requirement to bundleRelease and publish only.",
+        "android-release.yml always writes RELEASE_KEYSTORE_FILE, so this only bites local builds. That is still where a mistake is most likely and least noticed.",
+        "Verify: bundleRelease with no keystore fails with a clear message naming what is missing."
+      ],
+      "notes": "The existing guard's comment says two blank credentials already got an AAB rejected by Play for Broken Functionality. A debug-signed AAB is rejected too, just at a different step."
+    },
+    {
+      "id": "AND-AUDIT-012",
+      "title": "Certificate pinning is permanently report-only and pins a host the app may not use",
+      "priority": 3,
+      "passes": false,
+      "description": "As a security reviewer, I need the pinning decision resolved, because CertificatePinningService.isReportOnly is hardcoded true on every build type, so the class adds a logging interceptor and nothing else, and its pins target *.supabase.co which will never match a self-hosted or custom-domain endpoint.",
+      "acceptanceCriteria": [
+        "Confirm what SUPABASE_URL actually points at in a release build. Pearson Media runs self-hosted Supabase on several projects; if this one does, the *.supabase.co pin set is wrong regardless of whether enforcement is on.",
+        "Re-verify the five pinned SPKI hashes against the live certificate chain using the openssl command already documented in the file's KDoc.",
+        "Then decide: enforce, or delete the class. The current state is the worst of both - the code implies pinning and delivers none.",
+        "If enforcing: keep a backup pin for the next issuer, and understand the failure mode. A stale pin set blocks every backend call, which Play treats as Broken Functionality exactly like a crash. The existing comment says so.",
+        "If enforcing: there is no kill switch. A remote config flag or a version-check-driven disable is the difference between a bad day and a forced app update."
+      ],
+      "notes": "Marked priority 3 because the current state is safe, just dishonest. It becomes priority 1 the moment someone flips isReportOnly without doing the rest of this."
+    },
+    {
+      "id": "AND-AUDIT-013",
+      "title": "Android lint runs in CI and cannot fail the build",
+      "priority": 2,
+      "passes": false,
+      "description": "As a developer, I need lint to gate the build, because android/app/build.gradle.kts sets abortOnError = false and checkReleaseBuilds = false while android-ci.yml runs ./gradlew lint and uploads the report as an artifact, so the step always passes and every finding lands in an HTML file nobody opens.",
+      "acceptanceCriteria": [
+        "Run ./gradlew lint and read the report before changing any setting. The count is unknown - nobody has looked.",
+        "Generate a baseline (lint { baseline = file(\"lint-baseline.xml\") }) so existing findings do not block the change, then set abortOnError = true so new ones do.",
+        "Set checkReleaseBuilds = true. The release variant is the one that ships and it is currently unchecked.",
+        "Fix, rather than baseline, anything in these categories: correctness, security, and the Manifest checks. This branch already fixed the DefaultLocale findings by hand - lint knew about all fifteen.",
+        "Burn the baseline down over time; a baseline that only grows is the same problem with extra steps."
+      ],
+      "notes": "This is the cheapest lever in the whole audit. Fifteen locale bugs, the missing POST_NOTIFICATIONS declaration and the unguarded startActivity calls were all lint-visible and all shipped."
+    },
+    {
+      "id": "AND-AUDIT-014",
+      "title": "The unit test suite can pass vacuously and no instrumentation test ever runs",
+      "priority": 2,
+      "passes": false,
+      "description": "As a developer, I need the Android test suite to mean something, because unitTests.isReturnDefaultValues = true makes unmocked framework calls return null or zero instead of throwing, and the module's single instrumentation test is run by neither workflow, so a test can assert on a default and CI never exercises Compose, navigation, Room or the minified build on a device.",
+      "acceptanceCriteria": [
+        "Audit what isReturnDefaultValues is actually covering. It is what lets the suite run without Robolectric; removing it outright will break tests that quietly depend on Log or TextUtils returning a default.",
+        "Prefer Robolectric or explicit mocks for the tests that need framework behaviour, and keep the flag only if something still needs it.",
+        "Run androidTest in CI. ArticleMarkdownTest is the only instrumentation test in the module and it has never run anywhere - use a Gradle managed device or an emulator runner.",
+        "Once androidTest runs, add coverage for the paths that only break on a device: navigation, deep-link routing through DeepLinkHandler, and the Room cache.",
+        "Related and worth doing here: android-release.yml runs no tests at all before building the artifact it tells you to upload to Play. That is AND-AUDIT-015."
+      ],
+      "notes": "Context for why this matters: EventsRemoteDataSourceTest's seven tests were being discovered as zero for an unknown length of time and the build stayed green throughout. The suite's green is not currently evidence of anything."
+    },
+    {
+      "id": "AND-AUDIT-015",
+      "title": "The Android release workflow builds the shipping artifact without running tests",
+      "priority": 2,
+      "passes": true,
+      "description": "As the release owner, I need the release workflow to run tests, because .github/workflows/android-release.yml decodes the keystore, builds a signed AAB and tells you to upload it to Play without ever invoking ./gradlew test, so the artifact that reaches users has passed no automated check in that workflow.",
+      "acceptanceCriteria": [
+        "DONE: ./gradlew test runs before the build step in android-release.yml and a failure stops the workflow. It sits after the local.properties and google-services.json steps because the tests need the BuildConfig fields and the Firebase plugin config those write.",
+        "DONE: test reports upload as an artifact on success or failure.",
+        "DONE: the versionCode is guarded against the committed value. The real state was the inverse of what this story first assumed - android-release.yml is at run_number 12 while the committed versionCode is 6, so a blank input does not under-shoot, it silently jumps the code by 7 and makes the committed value meaningless. The guard fails the run when the resolved code is not above the committed one, which also catches the reset-to-1 case if this workflow file is ever renamed.",
+        "NOT DONE: lint is not run here. It would pass unconditionally today - see AND-AUDIT-013 - so adding it now would be the same theatre this story is removing. Add it after 013 lands.",
+        "NOT VERIFIED BY EXECUTION: the workflow was not dispatched. YAML parses and the step order is confirmed correct (tests at index 9, build at 11); the versionCode guard's shell was dry-run against the real build.gradle.kts and correctly accepts 13 while rejecting 6 and 1. The first real dispatch is the actual proof.",
+        "The sed-patching of build.gradle.kts is left as-is. It means the shipped versionCode never appears in a commit, which is worth revisiting, but changing it is a release-process decision rather than a defect."
+      ],
+      "notes": "Closed on claude/android-production-readiness-icxmch. Entirely inside .github/workflows/android-release.yml - the one story in the AND-AUDIT set that needed no Android SDK, which is why it went first while AND-AUDIT-001 is blocked.\n\nEvidence for the versionCode finding: the GitHub Actions API reports 12 runs of android-release.yml, and run 11's head commit is 'fix(android): update versionCode to 6 for app release'. So Play has accepted 6 and the next blank-input dispatch would have shipped 13."
+    },
+    {
+      "id": "AND-AUDIT-016",
+      "title": "AppSearchService indexes into Firebase App Indexing, a service Google turned down",
+      "priority": 2,
+      "passes": true,
+      "description": "As a user, I need the on-device search indexing toggle in Settings to mean something, because AppSearchService is built on firebase-appindexing 20.0.0 - deprecated with its backend switched off - so appIndex.update() and appIndex.removeAll() call into nothing while Settings offers a switch that claims to control indexing that is not happening.",
+      "acceptanceCriteria": [
+        "DECIDED: delete, not migrate. Owner's call on 2026-08-28. The feature indexed URLs that do not open the app (AND-AUDIT-004 is still open), into a service that no longer exists, behind a toggle nobody could act on. Migrating would have bought a capability the product has never demonstrated wanting.",
+        "DONE: deleted AppSearchService.kt and AppSearchSpecTest.kt.",
+        "DONE: dropped implementation(libs.firebase.appindexing) from app/build.gradle.kts and both the library and firebaseAppIndexing version entries from libs.versions.toml.",
+        "DONE: removed the injected service and its index calls from EventsViewModel (2 sites), MapViewModel, RestaurantsViewModel and HotelsViewModel, and the backing state from ProfileViewModel.",
+        "DONE: removed the 'On-Device Search' SettingsToggleRow, its two SettingsScreen parameters, and its wiring in MainNavHost. The toggle no longer claims to control something that is not happening - which was the privacy-facing half of this story.",
+        "DONE: updated three test files for the new constructor arity and deleted the test for the removed behaviour.",
+        "NOT MIGRATED, deliberately: the app_search_indexing_enabled key is left orphaned in SecureStorage. An unread key costs nothing; writing migration code purely to delete one is more risk than it removes. Worth sweeping if AND-AUDIT-009 replaces that store anyway.",
+        "NOT VERIFIED BY EXECUTION: no Android SDK in the session. Residual-reference grep is clean across .kt/.kts/.toml, brace balance holds on all ten edited files, and the manifest still parses. PR #376 is the compiler."
+      ],
+      "notes": "Closed on claude/android-production-readiness-icxmch, verified by CI on PR #376.\n\nRemoves roughly 200 lines plus a dependency from the APK. The four ViewModels that called index* lost a constructor dependency each, which is the part most likely to surface a compile error if a call site was missed.\n\nSessionTimeoutService (AND-AUDIT-006) is the same shape and was NOT decided - it stays open."
+    },
+    {
+      "id": "AND-AUDIT-017",
+      "title": "About 22 public composables are built and never mounted",
+      "priority": 3,
+      "passes": false,
+      "description": "As a developer, I need the unreferenced UI removed or wired, because roughly 22 public composables have zero call sites - including complete monetization surfaces like SubscriptionTierCard, BillingCycleToggle, PaywallSheet and AffiliateAdBanner - so the module carries finished features that no user can reach and no reader can tell were abandoned.",
+      "acceptanceCriteria": [
+        "Re-derive the list rather than trusting this story - it was produced by symbol-level grep and will have drifted. Every top-level public declaration in ui/components and ui/theme with no reference outside its own file.",
+        "Triage each into wire-up or delete. Some are genuinely orphaned experiments; SubscriptionTierCard and PaywallSheet look like real work that lost its route.",
+        "PermissionPrimingCard is the notable one: it is the permission-priming UI, and this branch had to add a bare POST_NOTIFICATIONS request without it. Wiring it would give the notification prompt the context it needs, and the same for location.",
+        "AffiliateAdBanner and SubscriptionTierCard are revenue surfaces. Deleting them is a product decision, not a cleanup - ask before removing.",
+        "Deleting unused Compose code also shrinks the APK, which gives AND-AUDIT-018 a cleaner baseline to measure against.",
+        "Do not delete Preview composables - they are meant to be unreferenced."
+      ],
+      "notes": "Full list at audit time: ParallaxHeroHeader, rememberHeroScrollProgress, BrandedRefreshIndicator, AffiliateAdBanner, CategoryMapMarker, MapPreviewSheet, ToastOverlay, DebouncedQueryState, RecentSearchesList, TrendingChipsRow, rememberDebouncedQuery, BillingCycleToggle, SubscriptionTierCard, BrandDestructiveButton, BrandSecondaryButton, PaywallSheet, AnimatedTabItem, OnboardingNavRow, OnboardingPageIndicator, PermissionPrimingCard, GlassTextField, GlassCard, plus a set of unused Color and typography tokens."
+    },
+    {
+      "id": "AND-AUDIT-018",
+      "title": "ProGuard whole-package keeps defeat R8 on the four largest dependencies",
+      "priority": 3,
+      "passes": false,
+      "description": "As the release owner, I need the shrinker to actually shrink, because android/app/proguard-rules.pro keeps com.google.android.gms.**, com.google.firebase.**, io.ktor.** and io.github.jan.supabase.** entirely with { *; }, so R8 full mode is prevented from removing anything from the four biggest libraries in the app.",
+      "acceptanceCriteria": [
+        "Do this after AND-AUDIT-001, not before. The assembleRelease step this branch added to CI is what makes narrowing a keep safe to attempt - without it a bad rule ships.",
+        "Record the APK and AAB size before touching anything, so the change has a number attached.",
+        "Narrow one dependency per commit. Play Services and Firebase are the biggest wins and the most likely to break, so take Ktor or Supabase first to build confidence.",
+        "Most of these libraries ship their own consumer ProGuard rules. Start by deleting a keep entirely and seeing whether the release build still works, rather than hand-writing a narrower one.",
+        "-keepclassmembers class com.desmoines.aipulse.** { *** Companion; } keeps companions on every class in the app rather than the serializable ones. Narrow it to @kotlinx.serialization.Serializable types.",
+        "Verify each narrowing on a real minified build, exercising serialization, Supabase queries, billing and maps. R8 breakage is a runtime failure, not a compile error."
+      ],
+      "notes": "Cost, not correctness - unless a narrowing goes wrong, in which case it is a crash in production and nowhere else. The mapping.txt uploaded by both workflows is what makes those crashes readable."
+    },
+    {
+      "id": "AND-AUDIT-019",
+      "title": "Localization is declared but not wired: 111 strings, 11 stringResource calls",
+      "priority": 3,
+      "passes": false,
+      "description": "As a product owner, I need the Android UI to be translatable, because strings.xml holds 111 entries while the Kotlin sources make only 11 stringResource() calls against roughly 341 hardcoded literals and there is no values-<lang> directory, so the resource file is close to dead weight and the app cannot be localized without a sweep of every screen.",
+      "acceptanceCriteria": [
+        "Decide whether localization is actually wanted before doing the work. This is a Des Moines local-guide app; Spanish is the plausible second locale and nothing else obviously is. If the answer is no, delete the unused strings.xml entries instead - a half-built localization layer is worse than none.",
+        "If yes: move UI literals to strings.xml screen by screen, not in one commit.",
+        "Use plurals for anything counted, and format arguments rather than string concatenation - concatenated sentences cannot be translated.",
+        "android:supportsRtl=\"true\" is already set with no RTL locale to exercise it. Either add a pseudo-locale to CI or stop claiming RTL support.",
+        "Related and cheaper: the DateTimeFormatter.ofPattern calls are inconsistent - five pass Locale.US and about fifteen do not. Pick one rule. This branch already fixed the String.format half."
+      ],
+      "notes": "Priority 3 deliberately. The app ships English-only today and works; this is about whether the codebase tells the truth about that."
+    },
+    {
+      "id": "AND-AUDIT-020",
+      "title": "collectAsState outnumbers collectAsStateWithLifecycle 81 to 13",
+      "priority": 3,
+      "passes": false,
+      "description": "As a developer, I need Compose state collection to stop when the app is backgrounded, because 81 call sites use collectAsState() against 13 using collectAsStateWithLifecycle even though lifecycle-runtime-compose is already a dependency, so most flows keep collecting while the app is not visible.",
+      "acceptanceCriteria": [
+        "Replace collectAsState() with collectAsStateWithLifecycle() across ui/. Mechanical, but check each site: a flow that must keep running in the background (a timer, an active upload) should stay on collectAsState deliberately and say so in a comment.",
+        "MainNavHost.kt alone has 65 of them - see AND-AUDIT-021, which may make this easier by splitting the file first.",
+        "The measurable effect is battery and needless network on backgrounded sessions. Take a before reading if you want the change to have evidence attached.",
+        "Verify no screen loses its state on return from background - the swap changes when collection restarts."
+      ],
+      "notes": "Low risk, wide diff. Best done as its own commit so it does not hide a behaviour change in an unrelated PR."
+    },
+    {
+      "id": "AND-AUDIT-021",
+      "title": "MainNavHost.kt is 1,208 lines holding every route in the app",
+      "priority": 3,
+      "passes": false,
+      "description": "As a developer, I need the navigation graph split up, because MainNavHost.kt is a single 1,208-line function containing 34 routes, 36 hiltViewModel() calls and 65 collectAsState() calls, so every navigation change touches one file and every screen's wiring is reviewed in the same diff.",
+      "acceptanceCriteria": [
+        "Split by feature into separate NavGraphBuilder extension functions - eventGraph(), restaurantGraph(), tripPlannerGraph() and so on - each in its own file next to the screens it routes to.",
+        "Keep Route (NavGraph.kt) as the single source of route strings. It is already well factored; the problem is only the host.",
+        "This is pure refactor: no route string, argument or behaviour should change. If the diff touches a route string, something went wrong.",
+        "Do it after AND-AUDIT-020 or as part of it - both rewrite the same lines and doing them separately means reviewing the same file twice.",
+        "Route arguments are interpolated into paths without encoding (createRoute builds \"event_detail/$eventId\"). Safe for UUIDs; check whether any route takes free text before leaving it alone."
+      ],
+      "notes": "No user-visible outcome. Worth doing because this file is where the deep-link and paid-tier wiring both live, and both were wrong in ways a smaller file would have made obvious."
+    },
+    {
+      "id": "AND-AUDIT-022",
+      "title": "BillingService runs on the main dispatcher and never closes its connection",
+      "priority": 2,
+      "passes": false,
+      "description": "As a developer, I need BillingService to be a well-behaved singleton, because its scope is CoroutineScope(SupervisorJob() + Dispatchers.Main) while it makes Supabase network calls, its BillingClient is never endConnection()ed, and isTransientError decides whether to retry by substring-matching exception messages for \"500\", \"timeout\" and \"network\", so retries stop silently whenever a message is null or localized.",
+      "acceptanceCriteria": [
+        "Move the scope to Dispatchers.IO, or better, inject a dispatcher so it is testable. The Supabase SDK does its own dispatching so this is not currently a crash, but the class does network work and declares Main.",
+        "Call endConnection() when the service is torn down. A @Singleton BillingClient held open for the process lifetime is a leak, and reconnect logic that never disconnects is hard to reason about.",
+        "Replace isTransientError's substring matching with typed handling - the exception classes Ktor and the Supabase SDK actually throw, plus HTTP status where available. The current check returns false for a null message, which turns every retryable failure into an immediate give-up.",
+        "Unit-test the retry decision. validationOutcome was extracted for exactly this reason and is tested; isTransientError is the other half of the same decision and is not.",
+        "_isLoading is never reset if onPurchasesUpdated is never delivered - for example when the user backgrounds the Play sheet. Add a timeout or reset on resume.",
+        "Do not regress the acknowledgement fix or setObfuscatedAccountId while restructuring."
+      ],
+      "notes": "Sequence with AND-AUDIT-003: the v8 migration rewrites much of this class anyway, so doing both at once avoids touching it twice. Whichever goes first, the acknowledgement path is the part that must not break."
+    },
+    {
+      "id": "AND-AUDIT-023",
+      "title": "AppLogger exists and 101 direct android.util.Log calls bypass it",
+      "priority": 3,
+      "passes": false,
+      "description": "As a developer, I need logging to go through one place, because AppLogger defines seven category loggers and documents that debug and info are stripped in release, while 101 call sites use android.util.Log directly, so the DMI/<category> tags it exists to provide are absent from most of the app.",
+      "acceptanceCriteria": [
+        "Route the direct Log calls through AppLogger, picking the right category (auth, network, cache, billing, ui, nav, general).",
+        "This is consistency, not a leak: the -assumenosideeffects rule in proguard-rules.pro strips Log.d, Log.i and Log.v from release builds whether or not they went through AppLogger. Do not describe it as a privacy fix.",
+        "While passing through, check for anything logged that should not be - user ids, emails, tokens. PushNotificationService logs a token refresh (without the token, correctly); confirm nothing else is less careful.",
+        "AppLogger.error is the one level that survives release. Make sure the calls that matter in production use it rather than warning.",
+        "Consider whether AppLogger should feed CrashReportingService for error-level calls. It currently does not, so a caught-and-logged error reaches no one."
+      ],
+      "notes": "The last item is the one with actual value; the rest is tidying."
+    },
+    {
+      "id": "AND-AUDIT-024",
+      "title": "Signing out silently turns off the biometric lock",
+      "priority": 3,
+      "passes": false,
+      "description": "As a user who enabled the biometric lock, I need it to survive signing out, because SignOutCleaner calls secureStorage.deleteAll() which clears every key in the store including biometric_enabled and indexing_enabled, so signing out disables a security setting the user chose and nothing tells them.",
+      "acceptanceCriteria": [
+        "Separate device settings from user credentials in SecureStorage. Sign-out should wipe session material and cached profile; it should not wipe how the user configured this device.",
+        "Simplest fix: keep a small allowlist of keys deleteAll() preserves, or move device settings to a separate store. The second is cleaner and lines up with AND-AUDIT-009, which is replacing this library anyway.",
+        "Decide the biometric case deliberately. There is an argument that signing out should clear a lock tied to an account - but then the app should say so, not do it silently.",
+        "Add a test: sign out, and assert biometric_enabled survives (or is cleared, whichever was decided).",
+        "Check what else deleteAll() takes with it. At audit time: biometric_enabled, indexing_enabled, the soft-paywall counters and the session timestamps."
+      ],
+      "notes": "Found while fixing the sign-out favorites leak on the audit branch. That fix made sign-out wipe more, not less, which makes this one worth resolving before someone adds another setting to the same store."
     }
   ]
 }

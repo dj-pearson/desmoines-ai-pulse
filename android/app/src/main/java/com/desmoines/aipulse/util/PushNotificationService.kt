@@ -115,7 +115,7 @@ class PushNotificationService : FirebaseMessagingService() {
         )
 
         val notification = NotificationCompat.Builder(this, CHANNEL_GENERAL)
-            .setSmallIcon(R.mipmap.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
@@ -239,6 +239,22 @@ class PushNotificationService : FirebaseMessagingService() {
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to sync device token: ${e.message}")
             }
+        }
+
+        /**
+         * Forgets the FCM registration token held on this device.
+         *
+         * Called on sign-out: the token is what the backend targets pushes at,
+         * so leaving it behind hands the next person to sign in on this device
+         * the previous account's notifications.
+         */
+        fun clearLocalToken(context: Context) {
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .remove(KEY_DEVICE_TOKEN)
+                .apply()
+            _deviceToken.value = null
+            _isRegistered.value = false
         }
 
         /**

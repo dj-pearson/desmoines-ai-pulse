@@ -59,6 +59,7 @@ import com.desmoines.aipulse.ui.theme.BrandOrange
 import com.desmoines.aipulse.ui.theme.DesMoinesInsiderTheme
 import com.desmoines.aipulse.ui.theme.Dimens
 import kotlin.math.roundToInt
+import java.util.Locale
 
 /**
  * Event filter bottom sheet matching iOS FilterSheet.swift.
@@ -360,14 +361,14 @@ fun FilterSheet(
                         }
                     } else {
                         Text(
-                            text = "${String.format("%.1f", localMinRating)} stars",
+                            text = "${String.format(Locale.US, "%.1f", localMinRating)} stars",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = BrandOrange,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .semantics {
-                                    contentDescription = "${String.format("%.1f", localMinRating)} stars minimum rating"
+                                    contentDescription = "${String.format(Locale.US, "%.1f", localMinRating)} stars minimum rating"
                                 }
                         )
                         Slider(

@@ -9,8 +9,23 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Build
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/**
+ * Everything needed to re-create a reminder alarm from scratch. Persisted
+ * alongside the scheduled-id set so [LocalNotificationService.rescheduleAll]
+ * can replay the alarms AlarmManager drops on reboot.
+ */
+@Serializable
+internal data class ReminderRecord(
+    val eventId: String,
+    val title: String,
+    val venue: String? = null,
+    val eventTimeMillis: Long,
+)
 
 /**
  * Manages local notifications for event reminders.
@@ -21,15 +36,26 @@ import javax.inject.Singleton
  */
 @Singleton
 class LocalNotificationService @Inject constructor(
-    @param:ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context,
+    private val json: Json,
 ) {
     companion object {
         const val CHANNEL_ID = "event_reminders"
         const val CHANNEL_NAME = "Event Reminders"
         const val CHANNEL_DESCRIPTION = "Notifications for upcoming event reminders"
 
-        private const val PREFS_NAME = "event_reminders_prefs"
-        private const val KEY_SCHEDULED_IDS = "scheduled_event_ids"
+        internal const val PREFS_NAME = "event_reminders_prefs"
+        internal const val KEY_SCHEDULED_IDS = "scheduled_event_ids"
+
+        /**
+         * Parallel store holding the payload needed to re-create each alarm
+         * after a reboot, which AlarmManager does not survive.
+         *
+         * Kept separate from [KEY_SCHEDULED_IDS] so existing installs keep
+         * working unchanged — they simply have no payload to replay for
+         * reminders scheduled before this shipped.
+         */
+        private const val KEY_SCHEDULED_PAYLOADS = "scheduled_event_payloads"
 
         /** Reminder fires 1 hour before the event (matching iOS). */
         const val REMINDER_OFFSET_MILLIS = 3600_000L // 1 hour
@@ -133,6 +159,7 @@ class LocalNotificationService @Inject constructor(
             }
 
             addScheduledEventId(eventId)
+            saveReminderRecord(ReminderRecord(eventId, title, venue, eventTimeMillis))
             return true
         } catch (e: SecurityException) {
             // Exact alarm permission denied
@@ -167,6 +194,7 @@ class LocalNotificationService @Inject constructor(
         }
 
         removeScheduledEventId(eventId)
+        removeReminderRecord(eventId)
     }
 
     // endregion
@@ -189,8 +217,11 @@ class LocalNotificationService @Inject constructor(
             cancelReminder(eventId)
             false
         } else {
+            // Report what actually happened: scheduleReminder returns false for
+            // an event less than an hour out or a denied exact-alarm permission,
+            // and claiming "true" there left the UI showing a bell for a
+            // reminder that was never set.
             scheduleReminder(eventId, title, venue, eventTimeMillis)
-            true
         }
     }
 
@@ -255,8 +286,73 @@ class LocalNotificationService @Inject constructor(
         if (toRemove.isNotEmpty()) {
             ids.removeAll(toRemove.toSet())
             prefs.edit().putStringSet(KEY_SCHEDULED_IDS, ids).apply()
+            toRemove.forEach { removeReminderRecord(it) }
             android.util.Log.d("DMI/notification", "Pruned ${before - ids.size} expired reminders")
         }
+    }
+
+    // endregion
+
+    // region Reboot recovery
+
+    /**
+     * Re-creates every still-future reminder alarm from the persisted records.
+     *
+     * AlarmManager drops all pending alarms on reboot and on package replace,
+     * so without this a reminder the user set days earlier simply never fires.
+     * Called from [BootCompletedReceiver].
+     *
+     * Records whose reminder time has already passed are dropped rather than
+     * replayed, so a device that was off over the event does not fire a "starts
+     * in 1 hour" notification for something that already happened.
+     */
+    fun rescheduleAll(): Int {
+        val records = loadReminderRecords()
+        if (records.isEmpty()) return 0
+
+        var restored = 0
+        records.forEach { record ->
+            val scheduled = scheduleReminder(
+                eventId = record.eventId,
+                title = record.title,
+                venue = record.venue,
+                eventTimeMillis = record.eventTimeMillis,
+            )
+            if (scheduled) {
+                restored++
+            } else {
+                // Past its trigger time, or exact-alarm permission is gone.
+                removeScheduledEventId(record.eventId)
+                removeReminderRecord(record.eventId)
+            }
+        }
+        return restored
+    }
+
+    private fun loadReminderRecords(): List<ReminderRecord> {
+        val raw = prefs.getStringSet(KEY_SCHEDULED_PAYLOADS, emptySet()) ?: emptySet()
+        return raw.mapNotNull { encoded ->
+            runCatching { json.decodeFromString(ReminderRecord.serializer(), encoded) }.getOrNull()
+        }
+    }
+
+    private fun saveReminderRecord(record: ReminderRecord) {
+        val kept = loadReminderRecords()
+            .filterNot { it.eventId == record.eventId }
+            .plus(record)
+        writeReminderRecords(kept)
+    }
+
+    private fun removeReminderRecord(eventId: String) {
+        val kept = loadReminderRecords().filterNot { it.eventId == eventId }
+        writeReminderRecords(kept)
+    }
+
+    private fun writeReminderRecords(records: List<ReminderRecord>) {
+        val encoded = records
+            .mapNotNull { runCatching { json.encodeToString(ReminderRecord.serializer(), it) }.getOrNull() }
+            .toSet()
+        prefs.edit().putStringSet(KEY_SCHEDULED_PAYLOADS, encoded).apply()
     }
 
     // endregion

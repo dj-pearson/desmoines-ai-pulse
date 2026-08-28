@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.desmoines.aipulse.data.model.PaywallContext
 import com.desmoines.aipulse.data.model.SwipeItem
 import com.desmoines.aipulse.data.model.SwipeItemType
+import com.desmoines.aipulse.data.remote.BillingService
 import com.desmoines.aipulse.data.remote.EventsQuery
 import com.desmoines.aipulse.data.remote.FavoritesException
 import com.desmoines.aipulse.data.remote.RestaurantsQuery
@@ -62,6 +63,7 @@ class DiscoverViewModel @Inject constructor(
     private val swipeInteractionService: SwipeInteractionService,
     private val softPaywallService: SoftPaywallService,
     private val groupSessionManager: GroupSessionManager,
+    private val billingService: BillingService,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DiscoverUiState())
@@ -178,9 +180,13 @@ class DiscoverViewModel @Inject constructor(
         viewModelScope.launch {
             val result = when (item.itemType) {
                 SwipeItemType.EVENT ->
-                    favoritesRepository.toggleEventFavorite(userId, item.rawId, favoriteEventIds)
+                    favoritesRepository.toggleEventFavorite(
+                        userId, item.rawId, favoriteEventIds, billingService.currentTier.value,
+                    )
                 SwipeItemType.RESTAURANT ->
-                    favoritesRepository.toggleRestaurantFavorite(userId, item.rawId, favoriteRestaurantIds)
+                    favoritesRepository.toggleRestaurantFavorite(
+                        userId, item.rawId, favoriteRestaurantIds, billingService.currentTier.value,
+                    )
             }
             result
                 .onSuccess { favorited ->

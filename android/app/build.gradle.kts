@@ -201,7 +201,6 @@ dependencies {
     // Firebase
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
-    implementation(libs.firebase.appindexing)
     implementation(libs.firebase.analytics)
 
     // Testing - JUnit 5
@@ -212,8 +211,10 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.turbine)
     testImplementation(libs.kotlinx.coroutines.test)
-    // JUnit 4 kept for backward compatibility with existing tests
-    testImplementation(libs.junit)
+    // No JUnit 4 on the unit-test classpath on purpose. `useJUnitPlatform()` is
+    // set below and there is no vintage engine, so a JUnit 4 @Test would be
+    // discovered by nothing and silently skipped while the build stayed green.
+    // That is exactly what happened to EventsRemoteDataSourceTest's seven tests.
 
     // Android instrumentation tests
     androidTestImplementation(libs.androidx.junit)
