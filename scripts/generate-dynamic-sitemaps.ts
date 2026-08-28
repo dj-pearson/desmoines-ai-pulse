@@ -64,10 +64,75 @@ interface SitemapUrl {
   priority?: string;
 }
 
-function generateSitemapXML(urls: SitemapUrl[]): string {
+/**
+ * Collapses repeated <loc> values, keeping the first and its metadata.
+ *
+ * Two rows that slug to the same URL produced two identical <url> blocks.
+ * Measured 2026-08-27 against production: sitemap-events carried 413 entries for
+ * 397 distinct URLs and sitemap-playgrounds 69 for 67, and the live file has
+ * been doing this for as long as the duplicate rows have existed. A URL listed
+ * twice does not rank twice; it makes the file disagree with its own count and
+ * advertises a duplication problem to the one audience most likely to act on it.
+ *
+ * DEDUPING HERE IS NOT A FIX FOR THE DUPLICATE ROWS and must not be mistaken for
+ * one - see WEB-SEO-017 for the crawler-side cause and the 10 event groups still
+ * awaiting a per-group merge. This stops the sitemap being a second, avoidable
+ * symptom of them, and the collapsed count is logged every run precisely so
+ * fixing it here does not make the underlying rows invisible.
+ *
+ * It lives in the single function every generator funnels through, so a sitemap
+ * added later cannot reintroduce it.
+ *
+ * Keeping the FIRST occurrence is deliberate: callers order deliberately
+ * (events by date desc, restaurants by name), so the first is the one the
+ * generator meant to rank.
+ */
+function dedupeUrls(urls: SitemapUrl[], label: string): SitemapUrl[] {
+  const seen = new Set<string>();
+  const kept: SitemapUrl[] = [];
+  const collapsed = new Map<string, number>();
+
+  for (const url of urls) {
+    if (seen.has(url.loc)) {
+      collapsed.set(url.loc, (collapsed.get(url.loc) ?? 1) + 1);
+      continue;
+    }
+    seen.add(url.loc);
+    kept.push(url);
+  }
+
+  if (collapsed.size > 0) {
+    const extra = [...collapsed.values()].reduce((n, c) => n + c - 1, 0);
+    console.warn(
+      `⚠️ ${label}: ${collapsed.size} URL(s) appeared more than once (${extra} extra entr(ies)) and were collapsed. ` +
+        'These are duplicate ROWS, not a sitemap bug - see WEB-SEO-017.'
+    );
+    for (const [loc, count] of [...collapsed].sort((a, b) => b[1] - a[1]).slice(0, 5)) {
+      console.warn(`     x${count}  ${loc}`);
+    }
+  }
+
+  return kept;
+}
+
+/**
+ * Writes a sitemap and returns how many URLs actually landed in it.
+ *
+ * The count matters: every generator used to log `urls.length`, which is the
+ * count BEFORE duplicates are collapsed, so sitemap-events reported 413 URLs
+ * while writing 397. A number that describes the input rather than the output is
+ * how a duplication problem stays invisible in a log people read every build.
+ */
+function writeSitemap(filename: string, urls: SitemapUrl[], label: string): number {
+  const unique = dedupeUrls(urls, label);
+  writeFileSync(join(process.cwd(), 'public', filename), renderSitemapXML(unique));
+  return unique.length;
+}
+
+function renderSitemapXML(unique: SitemapUrl[]): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${urls.map(url => `  <url>
+${unique.map(url => `  <url>
     <loc>${url.loc}</loc>
     <lastmod>${url.lastmod || currentDate}</lastmod>
     <changefreq>${url.changefreq || 'weekly'}</changefreq>
@@ -152,10 +217,9 @@ async function generateEventsSitemap(): Promise<number | null> {
     });
   }
 
-  const xml = generateSitemapXML(urls);
-  writeFileSync(join(process.cwd(), 'public', 'sitemap-events.xml'), xml);
-  console.log(`✅ Events sitemap generated: ${urls.length} URLs`);
-  return urls.length;
+  const written = writeSitemap('sitemap-events.xml', urls, 'events');
+  console.log(`✅ Events sitemap generated: ${written} URLs`);
+  return written;
 }
 
 async function generateRestaurantsSitemap(): Promise<number | null> {
@@ -188,10 +252,9 @@ async function generateRestaurantsSitemap(): Promise<number | null> {
     urls.push({ loc: `${baseUrl}/restaurants`, lastmod: currentDate, changefreq: 'weekly', priority: '0.8' });
   }
 
-  const xml = generateSitemapXML(urls);
-  writeFileSync(join(process.cwd(), 'public', 'sitemap-restaurants.xml'), xml);
-  console.log(`✅ Restaurants sitemap generated: ${urls.length} URLs`);
-  return urls.length;
+  const written = writeSitemap('sitemap-restaurants.xml', urls, 'restaurants');
+  console.log(`✅ Restaurants sitemap generated: ${written} URLs`);
+  return written;
 }
 
 async function generateAttractionsSitemap(): Promise<number | null> {
@@ -222,10 +285,9 @@ async function generateAttractionsSitemap(): Promise<number | null> {
     urls.push({ loc: `${baseUrl}/attractions`, lastmod: currentDate, changefreq: 'monthly', priority: '0.7' });
   }
 
-  const xml = generateSitemapXML(urls);
-  writeFileSync(join(process.cwd(), 'public', 'sitemap-attractions.xml'), xml);
-  console.log(`✅ Attractions sitemap generated: ${urls.length} URLs`);
-  return urls.length;
+  const written = writeSitemap('sitemap-attractions.xml', urls, 'attractions');
+  console.log(`✅ Attractions sitemap generated: ${written} URLs`);
+  return written;
 }
 
 async function generatePlaygroundsSitemap(): Promise<number | null> {
@@ -256,10 +318,9 @@ async function generatePlaygroundsSitemap(): Promise<number | null> {
     urls.push({ loc: `${baseUrl}/playgrounds`, lastmod: currentDate, changefreq: 'monthly', priority: '0.7' });
   }
 
-  const xml = generateSitemapXML(urls);
-  writeFileSync(join(process.cwd(), 'public', 'sitemap-playgrounds.xml'), xml);
-  console.log(`✅ Playgrounds sitemap generated: ${urls.length} URLs`);
-  return urls.length;
+  const written = writeSitemap('sitemap-playgrounds.xml', urls, 'playgrounds');
+  console.log(`✅ Playgrounds sitemap generated: ${written} URLs`);
+  return written;
 }
 
 async function generateArticlesSitemap(): Promise<number | null> {
@@ -286,10 +347,9 @@ async function generateArticlesSitemap(): Promise<number | null> {
     urls.push({ loc: `${baseUrl}/articles`, lastmod: currentDate, changefreq: 'weekly', priority: '0.8' });
   }
 
-  const xml = generateSitemapXML(urls);
-  writeFileSync(join(process.cwd(), 'public', 'sitemap-articles.xml'), xml);
-  console.log(`✅ Articles sitemap generated: ${urls.length} URLs`);
-  return urls.length;
+  const written = writeSitemap('sitemap-articles.xml', urls, 'articles');
+  console.log(`✅ Articles sitemap generated: ${written} URLs`);
+  return written;
 }
 
 /**
@@ -342,9 +402,10 @@ async function generatePseoSitemap(): Promise<number | null> {
     console.error('❌ Error computing the shippable pSEO set:', error);
     // Same reasoning as the guides generator: never leave a stale file behind,
     // because that looks like success. Write nothing-but-valid instead.
-    writeFileSync(
-      target,
-      generateSitemapXML([{ loc: `${baseUrl}/things-to-do`, lastmod: currentDate, changefreq: 'weekly', priority: '0.6' }])
+    writeSitemap(
+      'sitemap-pseo.xml',
+      [{ loc: `${baseUrl}/things-to-do`, lastmod: currentDate, changefreq: 'weekly', priority: '0.6' }],
+      'pseo',
     );
     console.warn('⚠️ pSEO sitemap fell back to the hub URL only.');
     return null;
@@ -399,9 +460,9 @@ async function generatePseoSitemap(): Promise<number | null> {
     urls.push({ loc: `${baseUrl}/things-to-do`, lastmod: currentDate, changefreq: 'weekly', priority: '0.6' });
   }
 
-  writeFileSync(target, generateSitemapXML(urls));
-  console.log(`✅ pSEO sitemap generated: ${urls.length} URLs (of ${published} published)`);
-  return urls.length;
+  const written = writeSitemap('sitemap-pseo.xml', urls, 'pseo');
+  console.log(`✅ pSEO sitemap generated: ${written} URLs (of ${published} published)`);
+  return written;
 }
 
 async function generateGuidesSitemap(): Promise<number | null> {
@@ -427,10 +488,11 @@ async function generateGuidesSitemap(): Promise<number | null> {
     // ship silently for months — the worst of the available options, because it
     // looks like success. Write a valid sitemap containing just the hub so the
     // output always reflects this run.
-    const fallback = generateSitemapXML([
-      { loc: `${baseUrl}/guides`, lastmod: currentDate, changefreq: 'monthly', priority: '0.7' },
-    ]);
-    writeFileSync(join(process.cwd(), 'public', 'sitemap-guides.xml'), fallback);
+    writeSitemap(
+      'sitemap-guides.xml',
+      [{ loc: `${baseUrl}/guides`, lastmod: currentDate, changefreq: 'monthly', priority: '0.7' }],
+      'guides',
+    );
     console.warn('⚠️ Guides sitemap fell back to the hub URL only — stale entries have been cleared.');
     return null;
   }
@@ -454,10 +516,9 @@ async function generateGuidesSitemap(): Promise<number | null> {
     })),
   ];
 
-  const xml = generateSitemapXML(urls);
-  writeFileSync(join(process.cwd(), 'public', 'sitemap-guides.xml'), xml);
-  console.log(`✅ Guides sitemap generated: ${urls.length} URLs`);
-  return urls.length;
+  const written = writeSitemap('sitemap-guides.xml', urls, 'guides');
+  console.log(`✅ Guides sitemap generated: ${written} URLs`);
+  return written;
 }
 
 async function main(): Promise<void> {
