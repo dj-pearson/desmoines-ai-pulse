@@ -31,7 +31,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { Star, Filter, List, Map, TreePine, SlidersHorizontal, ChevronRight, Check } from "lucide-react";
+import { Star, Filter, List, Map, TreePine, SlidersHorizontal, ChevronRight } from "lucide-react";
 // map-pin and users render once per card. Both are multi-shape lucide icons, so
 // the sprite costs 2 nodes where inline costs 3 and 5 - see the membership rules
 // in scripts/generate-icon-sprite.mjs. Measured saving on this route: 154 of
@@ -570,7 +570,10 @@ export default function Playgrounds() {
                       <div className="flex flex-wrap gap-1 mt-3">
                         {playground.amenities.slice(0, 3).map((amenity, index) => (
                           <Badge key={index} variant="outline" className="text-xs bg-emerald-50 text-emerald-700 border-emerald-200">
-                            <Check className="h-2.5 w-2.5 mr-0.5" />
+                            {/* No check icon. It cost 2 nodes x 75 badges and
+                                said nothing the amenity name does not: a badge
+                                in this list means the playground HAS that
+                                amenity. WEB-PERF-023. */}
                             {amenity}
                           </Badge>
                         ))}
@@ -650,7 +653,13 @@ export default function Playgrounds() {
                     }}
                     className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full border hover:border-emerald-500 hover:bg-emerald-50 transition-colors text-sm group"
                   >
-                    <Check className="h-3.5 w-3.5 text-emerald-500" />
+                    {/* No check icon here either, and this one was not merely
+                        decorative - it was wrong. These chips have NO selected
+                        state: clicking one sets the search query. A check mark
+                        is the universal "this is on" affordance, so 99 of them
+                        told the visitor every amenity filter was already
+                        applied. Removing it fixes the affordance and takes 198
+                        nodes off the prerendered page. WEB-PERF-023. */}
                     <span className="text-gray-700 group-hover:text-emerald-700">{amenity}</span>
                     <span className="text-xs text-gray-500">({count})</span>
                   </button>
