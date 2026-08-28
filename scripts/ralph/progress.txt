@@ -1467,3 +1467,28 @@ Evidence:
   - `.single()` erroring on no-row is a legitimate idiom that quietly merges "absent" with "unreadable".
     Where the consequence is a duplicate write, put the constraint in the schema instead.
 ---
+
+## 2026-08-28 - triaged the discarded-error backlog against the drift decision
+- Joined error-handling-baseline against the objects the 31 drifted migrations define and production
+  lacks: 44 of 156 sites are in code touching something missing (BLOCKED on the re-apply), 112 are
+  actionable now. The 44 is an upper bound - some drifted names are ordinary columns like reviewed_at.
+- Fixed pseo-batch-worker: a failed queue count printed remaining=0, identical to a drained queue.
+  Reporting-only, but a number that lies about a backlog is how a stuck queue goes unnoticed.
+  156 -> 154; file 2 -> 0.
+- CHECKED AND LEFT ALONE: triage-event-submission's two sites are FAIL-CLOSED auth checks (failed
+  getUser -> 401, failed role read -> 403); discarding the error denies access, which is the right
+  direction. run-scheduled-audit reads three WEB-BE-031 tables that do not exist.
+- I BURNED THREE ATTEMPTS ON THE JOIN and the cause is worth recording: my heredoc collapsed `\b`
+  to ``, so `new RegExp` got a literal BACKSPACE character instead of a word boundary and matched
+  nothing. JSON.stringify of the pattern showed `"seo_settings"` where a real backslash would
+  have rendered doubled. The first join reported 16 blocked, the second 0, the third 44.
+- **Learnings for future iterations:**
+  - NOT EVERY DISCARDED ERROR IS A DEFECT. Fail-closed auth checks are correct as written; so are
+    reads whose null the caller already maps to an error. Read the consequence before "fixing" a count.
+  - Triage a backlog against what blocks it. 28% of this one waits on a decision nobody has taken, and
+    hardening it first would be work thrown away or, worse, work that looks done.
+  - When a match returns zero on input you can see with your own eyes, print the pattern. A regex
+    built through shell heredocs is a string with its own escaping history.
+  - Two failed joins agreed with each other (16, then 0) and both were wrong. Agreement between two
+    runs of the same broken method is not corroboration.
+---
