@@ -1067,3 +1067,29 @@ Evidence:
   - A check written before the thing it guards exists tends to be under-tested. This one had never
     run in CI, so its blind spot survived from the day it was written.
 ---
+
+## 2026-08-28 - WEB-PERF-023 AC1: /map was 57% Leaflet runtime images
+- Measured composition of the live prerendered routes rather than counting elements again. /map's
+  1,124 <img> are 1,121 Leaflet nodes: 517 marker icons, 517 marker shadows, 87 tiles, against 550
+  words of text. All rebuilt by react-leaflet on hydration, so all discarded.
+- stripLeafletRuntime added to the existing transform chain in lazy-preload-patterns.mjs, next to the
+  modulepreload and JSON-LD strippers. #root 1,958 -> 837, words 550 -> 550. Verified against the
+  HTML production serves today, not a fixture.
+- THE SPRITE LEVER IS SMALLER THAN IT LOOKS: inline lucide is 2.4-2.8 nodes, SpriteIcon is 2.0. So
+  converting /playgrounds entirely saves ~283 of 2,389 (12%), not the ~800 that "icons are 34% of the
+  DOM" suggests. Recorded so nobody re-derives it.
+- AC1 for the LIST routes is in real tension with WEB-SEO-006, which spent this month increasing
+  those counts on purpose. /map was not that question - the removed nodes were not content.
+- **Learnings for future iterations:**
+  - COUNT WHAT THE ELEMENTS ARE, NOT JUST HOW MANY. This story had a per-route element count for
+    months and nine routes over the flag. One composition pass showed the worst route was not a list
+    problem at all, and its fix removed no content.
+  - Measure against the live prerendered HTML. It needs no build, it is what users and crawlers
+    actually get, and here it was better evidence than a local dist/.
+  - A transform that DELETES nodes from shipped HTML needs its tests weighted toward what it must
+    keep. Matching every <img> passed four of my twelve checks and failed the four that mattered.
+  - Verify a negative control APPLIED. Two of mine failed to patch the file at all and printed
+    nothing; the run looked identical to a control that fired and found nothing.
+  - `<img>` in prerendered output is worth auditing generally: 517 of these carried role="button"
+    tabindex="0", so the static page had 517 fake buttons in the tab order before hydration.
+---
