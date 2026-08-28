@@ -2,6 +2,7 @@ import React, { useState, useMemo, lazy } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
+import ItemListSchema from "@/components/schema/ItemListSchema";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { FAQSection } from "@/components/FAQSection";
 import { usePlaygrounds } from "@/hooks/usePlaygrounds";
@@ -189,8 +190,26 @@ export default function Playgrounds() {
     return Array.from(amenitySet).sort();
   }, [allPlaygrounds]);
 
+  // The rendered set, capped, so every URL here is a link the crawler can
+  // also see on the page. createSlug above is the same function the cards
+  // use, so the schema URL and the href cannot drift apart.
+  const SCHEMA_LIMIT = 20;
+  const schemaItems = filteredPlaygrounds
+    .slice(0, SCHEMA_LIMIT)
+    .map((item) => ({
+      name: item.name,
+      url: getCanonicalUrl(`/playgrounds/${createSlug(item.name)}`),
+      ...(item.image_url && { image: item.image_url }),
+      ...(item.description && { description: item.description }),
+    }));
+
   return (
     <div className="min-h-screen bg-background">
+      <ItemListSchema
+        name="Playgrounds in Des Moines, Iowa"
+        description="Public playgrounds, splash pads and accessible play equipment across the Greater Des Moines area."
+        items={schemaItems}
+      />
       <EnhancedLocalSEO
         pageTitle={pageTitle}
         pageDescription={pageDescription}

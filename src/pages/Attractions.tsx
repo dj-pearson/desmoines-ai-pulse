@@ -3,6 +3,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { AdBanner } from "@/components/AdBanner";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
+import ItemListSchema from "@/components/schema/ItemListSchema";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { FAQSection } from "@/components/FAQSection";
 import { useAttractions } from "@/hooks/useAttractions";
@@ -270,8 +271,26 @@ export default function Attractions() {
     },
   ];
 
+  // The rendered set, capped, so every URL here is a link the crawler can
+  // also see on the page. createSlug above is the same function the cards
+  // use, so the schema URL and the href cannot drift apart.
+  const SCHEMA_LIMIT = 20;
+  const schemaItems = paginatedAttractions
+    .slice(0, SCHEMA_LIMIT)
+    .map((item) => ({
+      name: item.name,
+      url: getCanonicalUrl(`/attractions/${createSlug(item.name)}`),
+      ...(item.image_url && { image: item.image_url }),
+      ...(item.description && { description: item.description }),
+    }));
+
   return (
     <div className="min-h-screen bg-background">
+      <ItemListSchema
+        name="Attractions in Des Moines, Iowa"
+        description="Museums, parks, landmarks and family attractions in the Greater Des Moines area."
+        items={schemaItems}
+      />
       <EnhancedLocalSEO
         pageTitle={pageTitle}
         pageDescription={pageDescription}
