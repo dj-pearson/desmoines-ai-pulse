@@ -2453,3 +2453,23 @@ _middleware.ts:268 rewrites the real <title>, not just og/twitter tags. So the m
   population is small, read it. Automation earns its place at a scale where reading is impractical - and
   either way the control comes first.
 ---
+
+2026-08-28 - SSRF: og-image was the one, and this time I controlled the sweep before believing it
+  The relay generalises past mail: a privileged function fetching an attacker-influenceable URL is the same
+  defect. og-image's fetchImageDataUri did a bare fetch(url) on card.imageUrl - a database value, and
+  image_url is not always ours: public event submissions carry one and every ingest path lifts it from a
+  third-party page. It was the only image-fetching function without a check; ten others already use
+  validateURLForSSRF, two of them for this exact job. Controlled under deno: the two URL shapes production
+  stores are allowed, and 169.254.169.254 / 127.0.0.1 / localhost / [::1] / file:// are blocked.
+
+  THE SWEEP CAME SECOND AND ITS CONTROL CAME FIRST. I pointed the detector at the PRE-FIX og-image and
+  required it to report it before looking at any other result - the opposite order to the mail sweep, where
+  I got a 0 and only then discovered the detector was blind. It passed, so the 32 hits mean something.
+  But 32 is not a finding: most are config.api_endpoint, GOOGLE_TOKEN_URL constants, or a fixed base with
+  query params. Of the five publicly reachable functions only two fetch dynamically at all, and both are
+  safe - geocode-location uses a constant NOMINATIM_API base with auth and a rate limit, and
+  oauth-callback fetches providerConfig.token_url while its new URL(req.url) is only parsed.
+
+  That is the second time in two iterations that the right move was: fix the instance, then read the small
+  population the sweep narrows to, rather than reporting the sweep's raw count.
+---
