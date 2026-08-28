@@ -1308,3 +1308,27 @@ Evidence:
   - Control BOTH paths of an allowlist. An escape hatch that silently swallows everything is worse
     than no gate; the pass path must say what it let through and why.
 ---
+
+## 2026-08-28 - WEB-SEO-002's twelve headless routes are zero, and now guarded
+- prerender.mjs said "Twelve hub routes render no SEOHead today". Measured: zero. All 35 carry a
+  canonical matching their route, a unique title and a description. Comment corrected with the date.
+- Nothing guarded it, so the property could drift either way unseen. check-prerender-head.mjs gates
+  on canonical presence, canonical-matches-route, title uniqueness and description presence.
+- MY FIRST VERSION FAILED THE HOMEPAGE. Comparing canonical to route by string suffix breaks on "/":
+  stripping the trailing slash from "https://host/" leaves no path to match. Compares pathnames now.
+- Swept all 35 prerendered pages for undefined / NaN / [object Object] / bare null / Lorem ipsum /
+  placeholder tokens / error strings in rendered text. Clean.
+- Chased /events/free's root cause and stopped short honestly: the catchdesmoines LISTING carries no
+  price data (one "Free Event" string and Handlebars placeholders), so the crawler defaulting to "See
+  website" is correct. Whether detail pages carry price needs crawl4ai rendering I cannot cheaply do
+  here, so I did not guess.
+- **Learnings for future iterations:**
+  - A COMMENT ASSERTING A DEFECT COUNT IS A MEASUREMENT WITH NO EXPIRY DATE. This one drove a timeout
+    choice and had been wrong for some time. When you read one, check it before reasoning from it.
+  - A property that is currently perfect and unguarded is the easiest thing to lose. Gate it while it
+    is clean - that is the cheapest moment, and there is no baseline to negotiate.
+  - Read the check's OUTPUT, not its exit code. Mine failed for a real-looking reason on the one route
+    whose shape I had not thought about, and the row said so plainly.
+  - Stop when the measurement needs a tool you do not have. The price question needed a rendered
+    crawl; guessing at it would have put a wrong cause in the notes.
+---
