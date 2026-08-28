@@ -2153,3 +2153,20 @@ Evidence:
   admin.auth.getUser(bearer) as a check - assign-role does exactly that. A scary number from a crude regex
   is not a finding. The two I confirmed by reading and probing are.
 ---
+
+2026-08-28 - Two more guarded, chosen because their callers were PROVABLE
+  Migration 20260823000008 enumerates every pg_cron job against the function it posts to. That turns "who
+  calls this" from a grep into a fact for the functions in that table, which is the difference between
+  guarding safely and breaking a working path. auto-enrich-restaurants: cron is the only caller anywhere.
+  generate-weekend-guide: cron plus WeekendGuideManager, mounted only in AdminTools behind requireAdmin.
+  25 -> 23 baselined.
+
+  generate-weekend-guide SPENDS MODEL BUDGET and my own triage said it did not. I had grepped each function
+  for anthropic/openai/CLAUDE_API; it calls Claude through _shared/aiConfig. A per-file regex does not see
+  through an import, and I used one to decide which functions were worth caring about. The two I ranked as
+  "modest side effects" may deserve another look on the same grounds.
+
+  WHAT I AM DELIBERATELY NOT DOING: guarding the other 23 in a batch. Each needs its callers enumerated the
+  way these four did, several are public by design (og-image, log-error), and a wrong guard breaks a
+  working path silently. The ratchet holds the line; the triage is a human's to work through.
+---
