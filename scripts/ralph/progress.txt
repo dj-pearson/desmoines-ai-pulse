@@ -1820,3 +1820,28 @@ Evidence:
   positioning statement off a partial grep would risk deleting true claims to fix false ones, and that is
   the owner's call. Flagged with the evidence and its limits instead.
 ---
+
+2026-08-28 - WEB-SEO-011 / WEB-SEO-017: CI answered two ACs that had been argued about for weeks
+  I had gh available the whole time and had not used it. Two corrections fell straight out:
+
+  WEB-SEO-017's TITLE IS WRONG. It says the Daily Event Crawler "is switched OFF". It is ACTIVE and has run
+  on schedule every day since 2026-08-23, all green, writing rows - 12 events on the 27th. The scheduled run
+  before that was 2026-02-12 and failed, so the six-month disabled stretch was real and is over. Somebody
+  re-enabled it and no note records that, which also makes AC4 ("record WHY it was switched off") harder.
+
+  WEB-SEO-011 AC2 asks whether a run completes and whether anything changes as a result. Run 33089115082:
+  crawl succeeded in 6m43s, Publish Freshness ran for FOUR SECONDS and both steps skipped. A run completes
+  daily and nothing reaches a crawler. That is the thesis, measured instead of argued.
+
+  AND A BLOCKER NOBODY HAD RECORDED: regenerate-sitemaps and google-indexing-api are both 404 - never
+  deployed. So setting EDGE_FUNCTION_API_KEY moves that step from "skipped" to "404", not to working.
+  "Blocked on two secrets" was incomplete.
+
+  A BUG I WROTE AND CAUGHT BEFORE COMMITTING. My first version of the fixed warning used
+  `[ -z "$X" ] && missing=...`. Actions runs run: blocks under bash -e, where a test evaluating FALSE
+  returns 1 and aborts the step - so it would have broken precisely when the secret IS set, which is the
+  case nobody would have tested. Rewrote with plain if and ran both branches under bash -e first.
+
+  THE HABIT WORTH KEEPING: when a story argues about whether something runs, ask the thing that runs it.
+  Three ACs across two priority-1 stories were resolvable with two gh commands.
+---
