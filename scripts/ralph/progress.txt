@@ -2546,3 +2546,21 @@ edge-side sanitisers, no story of its own)
   with a negative control. Its first test passed while emitting nothing in
   either case - waitFor returned instead of asserting, so it never retried.
   AC4 and AC6 stay open and stay the owner's.
+
+2026-08-28  WEB-LEGAL-012: the web opt-out worked, the web preferences screen
+deleted it
+  AC1's premise is wrong in a way that changes AC2. messagingAllowed is not an
+  unwritten field - lifecycle-classifier.ts:121 DERIVES it from
+  profiles.communication_preferences, which the web already writes. There is one
+  bag and one derivation, not two shapes to converge; AC1 means "converge iOS
+  and Android onto it".
+  The real defect: communication_preferences has three writers and
+  PreferencesManager replaced the whole JSONB column instead of merging, so Save
+  deleted taste_preferences, ui_preferences and `marketing`. Since every gate
+  reads `!== false`, deleting an explicit false opts the user back into
+  marketing mail silently. Fixed b1c4385d, negative-controlled both ways.
+  Swept: useNewsletterSubscription merges correctly, Auth.tsx writes at creation.
+  PreferencesManager was the only offender.
+  Severity unmeasurable here - anon reads of profiles return 0 rows for the
+  UNFILTERED control too, so that is RLS, not an empty table.
+  AC3 (iOS) and AC4 (Android) unchanged.
