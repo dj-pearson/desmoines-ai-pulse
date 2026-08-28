@@ -161,6 +161,13 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: node scripts/check-media-url-drift.mjs
 
+      # WEB-OPS-007. A pg_cron job succeeds when net.http_post ENQUEUES, not
+      # when the call lands - so a job posting to a function that was never
+      # deployed reports healthy forever, and writes no automation_job_runs row
+      # either. Offline: migration URLs against the deploy baseline.
+      - name: Scheduled jobs point at functions that exist
+        run: node scripts/check-cron-targets.mjs
+
       - name: Scheduled-job health ratchet
 
         env:
