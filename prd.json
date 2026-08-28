@@ -7098,7 +7098,7 @@
       "id": "AND-AUDIT-011",
       "title": "A release build with no keystore is debug-signed instead of failing",
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "description": "As the release owner, I need a release build without signing credentials to fail loudly, because android/app/build.gradle.kts applies the release signingConfig only when RELEASE_KEYSTORE_FILE is non-blank and silently falls through to debug signing when it is absent, so a local bundleRelease produces a debug-signed artifact that looks shippable.",
       "acceptanceCriteria": [
         "Add RELEASE_KEYSTORE_FILE to the fail-fast guard at the top of build.gradle.kts. That guard already blocks a release build missing SUPABASE_URL, SUPABASE_ANON_KEY or GOOGLE_MAPS_API_KEY - the keystore belongs in the same list and was left out.",
@@ -7106,7 +7106,7 @@
         "android-release.yml always writes RELEASE_KEYSTORE_FILE, so this only bites local builds. That is still where a mistake is most likely and least noticed.",
         "Verify: bundleRelease with no keystore fails with a clear message naming what is missing."
       ],
-      "notes": "The existing guard's comment says two blank credentials already got an AAB rejected by Play for Broken Functionality. A debug-signed AAB is rejected too, just at a different step."
+      "notes": "Split into two guards with two scopes. buildsReleaseCode (bundleRelease, assembleRelease, publish) keeps requiring the backend credentials. buildsShippableArtifact (bundleRelease, publish only) newly requires all four keystore properties plus a keystore file that actually exists on disk. assembleRelease is deliberately excluded so android-ci.yml keeps exercising R8 with no keystore, which was the constraint the story flagged.\n\nRequiring all four rather than just RELEASE_KEYSTORE_FILE: a keystore path with a blank password does fail, but later and in a message that does not name the cause. The existence check is there for the same reason.\n\nCorrecting the story's own premise: I could not confirm the claim that a keystore-less release build is *debug-signed*. What is verifiable from the build script is that the release signingConfig is simply not applied, and the build still reports success. That is the defect either way, so the guard is unchanged, but the wording should not assert a mechanism nobody checked. The buildTypes block now logs a warning on the assembleRelease path saying the artifact carries no release signature and is not shippable.\n\nKnown remaining hole, not fixed here because it predates this change and widening the fix was not warranted: the guard matches on gradle.startParameter.taskNames, so `./gradlew build` reaches assembleRelease as a dependency without the string 'assemblerelease' ever appearing in the requested task names. Task-name matching cannot see that. A variant-scoped check would."
     },
     {
       "id": "AND-AUDIT-012",

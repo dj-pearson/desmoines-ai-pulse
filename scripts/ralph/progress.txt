@@ -2825,35 +2825,34 @@ whether you found them all.
 Caught it only because AND-AUDIT-006 sent me into the same file for an unrelated
 reason. That is luck, not method.
 
-## Deno CI: marketing-optout-agents has never run
+## AND-AUDIT-011 - a keystore-less release build no longer reports success
 
-Not an AND-AUDIT story - found while ruling out a red check on PR #380.
+app/build.gradle.kts applied the release signingConfig only when
+RELEASE_KEYSTORE_FILE was non-blank, and did nothing at all when it was absent.
+The build printed BUILD SUCCESSFUL and handed you an artifact with no release
+signature, which you find out about at upload.
 
-"Edge function & migration invariants" fails on every PR that touches
-android/app/src/main/java/**, at:
-  deno test --allow-read --allow-env --no-check=remote \
-    supabase/functions/_tests/marketing-optout-agents.test.ts
-  error: Could not find "@types/node" in a node_modules folder.
+Fix is two guards with two scopes rather than one list:
+- buildsReleaseCode (bundleRelease, assembleRelease, publish) keeps requiring
+  SUPABASE_URL, SUPABASE_ANON_KEY, GOOGLE_MAPS_API_KEY.
+- buildsShippableArtifact (bundleRelease, publish) newly requires all four
+  keystore properties and a keystore file that exists on disk.
 
-The workflow's own comment already diagnosed the cause correctly and applied
---no-check=remote as the fix. It does not work, and the reason is a detail worth
-keeping: --no-check=remote skips the BODIES of remote declaration files but still
-resolves their type-reference directives, and the @types/node reference inside
-supabase-js's index.d.mts is exactly such a directive. So the flag that was added
-to fix this never could. The four tests in that file have never executed.
+assembleRelease is excluded from the second on purpose: android-ci.yml runs it on
+every PR with no keystore to exercise R8. Checked both workflows before writing
+the guard rather than after - android-ci.yml writes the three credentials and no
+keystore, android-release.yml writes all four keystore values with an absolute
+path, so neither workflow changes behaviour. That check is the whole reason this
+is a one-cycle change instead of a revert.
 
-Fix is bare --no-check, which also drops type-checking of the test's own source.
-Real loss, still the better trade: four tests that run beat four tests that are
-type-checked and skipped. The alternative that keeps both is a root deno.json with
-nodeModulesDir plus an @types/node import and a deno install step - a lot of
-machinery for one suite.
+Fourth stale premise in a row: the story said a keystore-less release build is
+"debug-signed". I could not confirm that from the build script or the CI logs, so
+I did not repeat it. What is verifiable is that no release signingConfig is
+applied and the build still succeeds - which is the actual defect, and the guard
+is the same either way. Do not restate a story's mechanism claim in a commit
+message without checking it; three of these have now been wrong.
 
-The workflow lists its own path in on.pull_request.paths, so the PR verifies its
-own fix. Expect the possibility that the tests fail on first execution: nothing
-has ever run them, so their passing was never established.
-
-Process note: I nearly filed this as "not my PR's problem" and moved on, which is
-the correct posture for a red check on someone else's code but would have left a
-suite silently dead. Reading the workflow comment was what turned it from noise
-into a finding - the comment said what the author expected, and the log said what
-actually happened, and they disagreed.
+Left unfixed and recorded instead: the guard matches gradle.startParameter.taskNames,
+so `./gradlew build` reaches assembleRelease as a dependency with no matching
+string in the requested task names. Pre-existing, and fixing it means a
+variant-scoped check, which is a bigger change than this story asked for.

@@ -17,24 +17,65 @@ val localProperties = Properties().apply {
     }
 }
 
-// Fail fast if a RELEASE artifact is built without the credentials the app
-// needs to function. A blank GOOGLE_MAPS_API_KEY crashes the Map tab; blank
-// Supabase keys leave every screen empty. Both got an AAB rejected by Google
-// Play for Broken Functionality — never let that artifact build again.
-run {
-    val requestedTasks = gradle.startParameter.taskNames.joinToString(" ").lowercase()
-    val isReleaseBuild = listOf("bundlerelease", "assemblerelease", "publish")
-        .any { requestedTasks.contains(it) }
-    if (isReleaseBuild) {
-        val required = listOf("SUPABASE_URL", "SUPABASE_ANON_KEY", "GOOGLE_MAPS_API_KEY")
-        val missing = required.filter { localProperties.getProperty(it, "").isBlank() }
-        if (missing.isNotEmpty()) {
-            throw GradleException(
-                "Release build aborted: missing required local.properties values: " +
-                    "${missing.joinToString()}. Populate them before assembling a " +
-                    "release bundle (these are absent from the gitignored working copy)."
-            )
-        }
+// Fail fast if a RELEASE artifact is built without what it needs. Two
+// different requirements with two different scopes, so they are two checks.
+val requestedReleaseTasks = gradle.startParameter.taskNames.joinToString(" ").lowercase()
+
+// Tasks that compile release code. Anything here without working credentials
+// produces an app that installs and then does nothing: a blank
+// GOOGLE_MAPS_API_KEY crashes the Map tab, blank Supabase keys leave every
+// screen empty. Both got an AAB rejected by Google Play for Broken
+// Functionality — never let that artifact build again.
+val buildsReleaseCode = listOf("bundlerelease", "assemblerelease", "publish")
+    .any { requestedReleaseTasks.contains(it) }
+
+// Tasks that produce something you could actually ship. assembleRelease is
+// deliberately NOT in this list: android-ci.yml runs it on every PR with no
+// keystore at all, because its job is to exercise R8 and catch a ProGuard rule
+// that strips something the app needs. That APK is never published.
+val buildsShippableArtifact = listOf("bundlerelease", "publish")
+    .any { requestedReleaseTasks.contains(it) }
+
+fun failForMissing(what: String, keys: List<String>) {
+    val missing = keys.filter { localProperties.getProperty(it, "").isBlank() }
+    if (missing.isNotEmpty()) {
+        throw GradleException(
+            "Release build aborted: $what. Missing from local.properties: " +
+                "${missing.joinToString()}. Populate them before building a release " +
+                "artifact (they are absent from the gitignored working copy)."
+        )
+    }
+}
+
+if (buildsReleaseCode) {
+    failForMissing(
+        "the app cannot function without its backend credentials",
+        listOf("SUPABASE_URL", "SUPABASE_ANON_KEY", "GOOGLE_MAPS_API_KEY"),
+    )
+}
+
+if (buildsShippableArtifact) {
+    // Without these the release signingConfig below is skipped and the build
+    // still reports success, handing you an artifact with no release signature
+    // that looks exactly like a good one until Play rejects the upload. All
+    // four are needed: a keystore path with a blank password fails later, in a
+    // message that does not name the cause.
+    failForMissing(
+        "a shippable release artifact cannot be signed",
+        listOf(
+            "RELEASE_KEYSTORE_FILE",
+            "RELEASE_KEYSTORE_PASSWORD",
+            "RELEASE_KEY_ALIAS",
+            "RELEASE_KEY_PASSWORD",
+        ),
+    )
+    val keystore = file(localProperties.getProperty("RELEASE_KEYSTORE_FILE", ""))
+    if (!keystore.exists()) {
+        throw GradleException(
+            "Release build aborted: RELEASE_KEYSTORE_FILE points at " +
+                "${keystore.absolutePath}, which does not exist. Fix the path in " +
+                "local.properties, or restore the keystore from wherever it is kept."
+        )
     }
 }
 
@@ -88,6 +129,16 @@ android {
             val releaseKeystore = localProperties.getProperty("RELEASE_KEYSTORE_FILE", "")
             if (releaseKeystore.isNotBlank()) {
                 signingConfig = signingConfigs.getByName("release")
+            } else if (buildsReleaseCode) {
+                // Reachable only from assembleRelease, which the guard above
+                // lets through on purpose. Say so, because a release build that
+                // prints BUILD SUCCESSFUL and leaves you an artifact carrying no
+                // release signature is the kind of thing you discover at upload.
+                project.logger.warn(
+                    "No RELEASE_KEYSTORE_FILE in local.properties, so no release " +
+                        "signing config is applied. This build is fine for checking " +
+                        "R8 output; the artifact it produces is NOT shippable."
+                )
             }
         }
     }
