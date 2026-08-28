@@ -16,6 +16,10 @@ import javax.inject.Singleton
  * (swipe/search/recently-viewed/ad), the query cache, and the image cache, and
  * drops any in-memory session state. Every step is best-effort and isolated so
  * one failure can't abort the rest.
+ *
+ * What it deliberately does not touch: the device settings listed in
+ * [SecureStorage.DEVICE_SETTING_KEYS]. Signing out ends a session; it is not a
+ * reason to undo a security choice the user made about this handset.
  */
 @Singleton
 class SignOutCleaner @Inject constructor(
@@ -55,8 +59,10 @@ class SignOutCleaner @Inject constructor(
         // The FCM registration token is what the backend addresses pushes to.
         step("pushToken") { PushNotificationService.clearLocalToken(context) }
 
-        // Wipe credentials + cached profile last.
-        step("secureStorage") { secureStorage.deleteAll() }
+        // Wipe credentials + cached profile last. deleteUserData, not
+        // deleteAll: the store also holds device settings, and clearing it
+        // wholesale switched the user's biometric lock back off on sign-out.
+        step("secureStorage") { secureStorage.deleteUserData() }
     }
 
     /**
