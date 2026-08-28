@@ -1964,3 +1964,26 @@ Evidence:
   shell as 200 text/html, so removing it would manufacture a fresh copy of the defect I fixed yesterday.
   Left it, and wrote down why so the next person does not re-derive it.
 ---
+
+2026-08-28 - I corrected my own headline from two iterations ago
+  I reported "11 pg_cron jobs now succeed" as WEB-OPS-007's largest ever movement. Five of those eleven
+  call edge functions that return 404. A pg_cron job here posts via net.http_post and SUCCEEDS when the
+  POST is ENQUEUED, not when the call lands - so a job firing into nothing reports success forever.
+
+  I took "succeeded" from a health RPC at face value because it was a number from production rather than a
+  note, and I had spent two iterations learning to trust production over notes. The lesson does not
+  generalise that far: a measurement is only as good as what it measures. cron_health measures the TRIGGER.
+  Checking the eleven targets took one loop and should have been part of the original claim.
+
+  IT IS ALSO WEB-OPS-007 AC6's OWN GAP, INVERTED. AC6 says the watchdog observes automation_job_runs, so a
+  job that never fires is invisible. cron_health observes the trigger, so a job whose target is missing
+  looks healthy. Two monitors, mirror-image blind spots, and nothing between them verifies the work
+  happened. send-event-reminders is deployed and answering 500, which neither monitor would surface either.
+
+  THE NUMBER WORTH KEEPING: 65 undeployed edge functions reads as one large security review. It is not.
+  52 are verify_jwt=false; THIRTEEN are JWT-gated and can ship individually without adding a single open
+  endpoint. That batch alone unblocks WEB-SEO-014's whole OAuth chain (gsc-oauth, gsc-fetch-properties,
+  gsc-sync-data are ALL 404, so "complete the OAuth connection" is currently impossible, against a refresh
+  token that lapses ~2026-09-30), XPLAT-007's export, XPLAT-008's two Test buttons, and two hollow cron
+  jobs. One secret: SUPABASE_ACCESS_TOKEN on the Scrape environment.
+---
