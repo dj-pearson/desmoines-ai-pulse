@@ -32,6 +32,7 @@ import { Resvg, initWasm } from "https://esm.sh/@resvg/resvg-wasm@2.6.2";
 // re-encode an already-rasterised 1200x630 buffer, so it is cheap here.
 import { Image } from "https://deno.land/x/imagescript@1.2.17/mod.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
+import { validateURLForSSRF } from "../_shared/validation.ts";
 
 const SITE_URL = Deno.env.get("SITE_URL") || Deno.env.get("VITE_SITE_URL") || "https://desmoinesinsider.com";
 // /og-image.png does not exist - Cloudflare answers it with the SPA shell, so
@@ -116,6 +117,22 @@ function wrapTitle(title: string, perLine = 26, maxLines = 3): string[] {
 
 async function fetchImageDataUri(url: string | null): Promise<string | null> {
   if (!url) return null;
+  // SSRF guard, matching image-proxy and image-transform. This fetches a URL
+  // read out of the database, and image_url is not always something this
+  // project chose: a public event submission carries one, and every ingest path
+  // takes it from a third-party page. A raw fetch() here would reach whatever
+  // that string names, including an address inside Supabase's own network.
+  //
+  // og-image was the only image-fetching function without this check - ten
+  // others already use validateURLForSSRF, two of them for exactly this job.
+  //
+  // Failure returns null rather than throwing: the caller falls back to the
+  // default card, which is what it already does for a dead or non-image URL.
+  const check = validateURLForSSRF(url, { allowedProtocols: ["https:", "http:"], blockPrivateIPs: true });
+  if (!check.valid) {
+    console.warn(`[og-image] refused image URL: ${check.error}`);
+    return null;
+  }
   try {
     const res = await fetch(url);
     if (!res.ok) return null;
