@@ -2698,3 +2698,37 @@ deleted it
   - A merged PR is not verification. #376 merged ~3 minutes before its own CI
     reported. If CI is the gate, the merge has to wait for it.
 ---
+
+## 2026-08-28 - AND-AUDIT-001 closed green; 005 + 002 pushed (Android)
+- main went GREEN on Android CI run 33177743864 (merge commit 526be47a). First time
+  steps 8/9/10 have EVER completed in this repo: Run Unit Tests 23s, Build Debug APK
+  1m55s, Build Release APK (R8 full mode) 5m36s. AND-AUDIT-001 closed.
+- AND-AUDIT-005 + 002 done together: compose-bom 2024.12.01 -> 2026.08.00, core-ktx
+  1.19.0, lifecycle 2.11.0, activity-compose 1.13.0, navigation-compose 2.10.0, and
+  compileSdk/targetSdk 35 -> 36.
+- Files changed: prd.json, android/gradle/libs.versions.toml, android/app/build.gradle.kts
+
+- **Learnings for future iterations:**
+  - HOW TO GET REAL ANDROID VERSION NUMBERS FROM A REMOTE SESSION: Google Maven is
+    blocked (dl.google.com AND maven.google.com both 403 via the agent proxy), so you
+    cannot resolve or list AndroidX versions. But WebFetch against
+    developer.android.com/jetpack/androidx/releases/<lib> DOES work and gives exact
+    stable version strings. Use it. Never guess a version string - a nonexistent
+    version is a guaranteed red CI cycle, and each cycle is ~12 minutes.
+    Confirmed-good as of 2026-08-28: compose-bom 2026.08.00 (ui 1.12.0, material3
+    1.4.0), core-ktx 1.19.0, lifecycle 2.11.0, activity-compose 1.13.0,
+    navigation-compose 2.10.0, billing 9.1.0.
+  - Do NOT sequence a dependency bump before an SDK bump when the deps are newer than
+    the SDK. Mid-2026 AndroidX is built against SDK 36 and will not compile on
+    compileSdk 35, so a deps-only PR is a guaranteed failure. Land them together.
+  - R8 full mode PASSED on the first ever assembleRelease, with the over-broad
+    -keep class com.google.android.gms.** { *; } rules still in place. So
+    AND-AUDIT-018 (narrowing those keeps) is now a size optimisation with a working
+    baseline to measure against, not a latent crash risk.
+  - A story's own premise can be wrong. AND-AUDIT-003 claimed billing-ktx was folded
+    into billing in v8; the actual Play release notes say Kotlin extensions are still
+    a separate artifact in v8 and v9. Corrected the story rather than carrying the
+    error into the migration. Read the primary source before implementing.
+  - Both Play deadlines (targetSdk 36, Billing v8+) are 31 Aug 2026 with an extension
+    to 1 Nov 2026 requestable in Play Console. Worth knowing before anyone rushes.
+---
