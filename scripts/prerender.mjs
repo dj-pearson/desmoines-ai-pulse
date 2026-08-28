@@ -56,7 +56,13 @@ import http from 'node:http';
 import os from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
-import { stripInjectedPreloads, restoreAsyncFontLinks, dedupeJsonLd } from './lazy-preload-patterns.mjs';
+import {
+  stripInjectedPreloads,
+  restoreAsyncFontLinks,
+  dedupeJsonLd,
+  stripLeafletRuntime,
+  stripPrerenderSignal,
+} from './lazy-preload-patterns.mjs';
 import { PRERENDER_ROUTES } from './prerender-routes.mjs';
 import process from 'node:process';
 
@@ -349,8 +355,16 @@ async function main() {
   let ok = 0;
   let failed = 0;
   let strippedTotal = 0;
+let leafletStrippedTotal = 0;
+// Routes whose queries never reported settled. Not a failure - the capture still
+// happens - but it is the population thin captures come from, so it is printed.
+const unsettledRoutes = [];
+// Routes still showing a skeleton when the capture ran. Same idea, different
+// blind spot: a fetch that is not a TanStack query is invisible to the wait above.
+const stillLoadingRoutes = [];
   let restoredFontsTotal = 0;
 let duplicateJsonLdTotal = 0;
+const duplicateJsonLdRoutes = [];
 
   // The title vite shipped in the shell. An entity page that still carries this
   // never rendered itself — see the strict gate in renderRoute().
@@ -405,9 +419,12 @@ let duplicateJsonLdTotal = 0;
       // signal. See the browser-per-worker note at launch for why this matters.
       //
       // A route that renders no SEO component at all emits no data-rh and just
-      // hits the timeout, same as the old sleep. Twelve hub routes are in that
-      // state today (WEB-SEO-002), so keep the timeout short enough that they
-      // do not dominate the run.
+      // hits the timeout, same as the old sleep. This comment used to say
+      // "twelve hub routes are in that state today (WEB-SEO-002)"; measured
+      // 2026-08-28, ZERO are - all 35 carry a canonical, a unique title and a
+      // description. The timeout stays short anyway, because a route that
+      // regresses should cost seconds rather than dominate the run, and
+      // scripts/check-prerender-head.mjs now fails the build if one does.
       // The old predicate was `!!document.head.querySelector('[data-rh]')`, and
       // it had silently become a no-op: index.html now authors 9 data-rh tags
       // of its own (WEB-SEO-002/012 hands the fallback title/description/og
@@ -454,6 +471,47 @@ let duplicateJsonLdTotal = 0;
       // keeps finding that hand-maintained route lists go stale. Two consecutive
       // equal samples is the settle; the cap means a page that legitimately
       // renders nothing still proceeds, exactly as before.
+      // FIRST, WAIT FOR THE QUERIES THEMSELVES. src/components/PrerenderSignal.tsx
+      // publishes data-queries-settled on <html> when TanStack Query has nothing
+      // in flight (and has actually fetched, or a grace period has passed for a
+      // route that never fetches). That is the signal the two waits above were
+      // standing in for: Helmet proves the page mounted, a stable element count
+      // proves it stopped changing, and a LOADING SKELETON IS STABLE - which is
+      // how /events/this-weekend captured 422 elements with zero event cards on
+      // 2026-08-28 and 2,390 with forty on the next build of the same code.
+      //
+      // Fails open. If the signal never arrives - an older bundle, a route that
+      // throws before mounting - this proceeds to the element-count settle
+      // below, which is exactly the previous behaviour.
+      const queriesSettled = await page
+        .waitForFunction(
+          () => document.documentElement.dataset.queriesSettled === 'true',
+          { timeout: 10000 },
+        )
+        .then(() => true)
+        .catch(() => false);
+      if (!queriesSettled) unsettledRoutes.push(route);
+
+      // AND THEN FOR THE APP'S OWN "I AM LOADING" MARKER TO GO AWAY, because
+      // useIsFetching only sees TanStack Query. useRestaurants is a manual
+      // useState/useEffect fetch, so /restaurants reported settled while its
+      // main list was still a skeleton - captured with "Loading restaurants..."
+      // in the HTML, an ItemList of numberOfItems 0, and a description promising
+      // "200+ local restaurants".
+      //
+      // SkeletonGroup (src/components/ui/skeleton.tsx) renders
+      // role="status" aria-busy="true", which is the semantic declaration that a
+      // region is loading and is set by nothing else in this app. That makes it
+      // a real discriminator rather than a proxy - WEB-SEO-006 rejected
+      // animate-pulse for being present in loaded pages too, and this is not.
+      //
+      // Fails open on the same terms as the wait above.
+      const skeletonsGone = await page
+        .waitForFunction(() => !document.querySelector('[aria-busy="true"]'), { timeout: 10000 })
+        .then(() => true)
+        .catch(() => false);
+      if (!skeletonsGone) stillLoadingRoutes.push(route);
+
       const SAMPLE_MS = 150;
       const SETTLE_CAP_MS = 4000;
       let previous = -1;
@@ -486,8 +544,22 @@ let duplicateJsonLdTotal = 0;
       // taken mid-update captures both copies. Four live URLs were serving
       // FAQPage twice, which Google treats as invalid structured data. See
       // dedupeJsonLd for why this is fixed after the fact rather than waited out.
-      const [html, dropped] = dedupeJsonLd(deFonted);
-      if (dropped > 0) duplicateJsonLdTotal += dropped;
+      const [deJsonLd, dropped, droppedTypes] = dedupeJsonLd(deFonted);
+      if (dropped > 0) {
+        duplicateJsonLdTotal += dropped;
+        duplicateJsonLdRoutes.push(`${route} (${droppedTypes.join(', ')})`);
+      }
+      // Leaflet built a whole map in Chromium: one <img> per marker, one per
+      // marker shadow, one per visible tile. react-leaflet rebuilds all of it on
+      // hydration, so every one of those nodes is parsed and discarded. On /map
+      // that was 1,121 of 1,958 elements in #root against 550 words of text.
+      // See stripLeafletRuntime for what it costs to keep them.
+      const [deLeaflet, leafletDropped] = stripLeafletRuntime(deJsonLd);
+      if (leafletDropped > 0) leafletStrippedTotal += leafletDropped;
+      // The queries-settled handshake has done its job by now; shipping it would
+      // tell every reader of production HTML that a visitor's queries had
+      // settled before they started. See stripPrerenderSignal.
+      const [html] = stripPrerenderSignal(deLeaflet);
       if (strippedPreloads > 0) {
         strippedTotal += strippedPreloads;
       }
@@ -657,8 +729,16 @@ let duplicateJsonLdTotal = 0;
     `[prerender] done in ${totalSeconds}s: ${ok} prerendered, ${failed} failed, ` +
       `${entityUnrendered.length} over budget, of ${scope} routes; ` +
       `stripped ${strippedTotal} runtime-injected modulepreload link(s); ` +
+      `${leafletStrippedTotal} Leaflet runtime image(s); ` +
+      (unsettledRoutes.length
+        ? `${unsettledRoutes.length} route(s) captured WITHOUT a queries-settled signal (${unsettledRoutes.slice(0, 5).join(', ')}); `
+        : 'all routes reported queries settled; ') +
+      (stillLoadingRoutes.length
+        ? `${stillLoadingRoutes.length} route(s) captured with a skeleton still mounted (${stillLoadingRoutes.slice(0, 5).join(', ')}); `
+        : 'no route captured mid-skeleton; ') +
       `restored ${restoredFontsTotal} async font link(s); ` +
-      `dropped ${duplicateJsonLdTotal} duplicate JSON-LD block(s)`,
+      `dropped ${duplicateJsonLdTotal} duplicate JSON-LD block(s)` +
+      (duplicateJsonLdRoutes.length ? ` on ${duplicateJsonLdRoutes.slice(0, 5).join(', ')}` : ''),
   );
 
   // WEB-OPS-020 AC5. The counts only ever existed in the raw build log, which

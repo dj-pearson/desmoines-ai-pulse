@@ -6,7 +6,7 @@
  * missed: decimal/hex/octal/short IPv4, IPv4-in-IPv6, localhost/0.0.0.0, and
  * cloud-metadata addresses — while confirming real public URLs still pass.
  */
-import { isPrivateIP, validateURLForSSRF } from './validation.ts';
+import { isPrivateIP, sanitizeLikeInput, sanitizePostgrestPattern, validateURLForSSRF } from './validation.ts';
 
 function assert(cond: boolean, msg: string): void {
   if (!cond) throw new Error(`assertion failed: ${msg}`);
@@ -70,4 +70,43 @@ Deno.test('validateURLForSSRF rejects encoded-IP URLs, allows public https', () 
   assert(!validateURLForSSRF('http://169.254.169.254/').valid, 'metadata URL blocked');
   assert(validateURLForSSRF('https://example.com/page').valid, 'public https allowed');
   assert(!validateURLForSSRF('ftp://example.com/').valid, 'non-http protocol blocked');
+});
+
+/**
+ * LIKE/ILIKE sanitiser tests. There were none, which is how the apostrophe
+ * stripping survived: nothing asserted what these functions preserve, only
+ * (implicitly) that they removed things.
+ */
+// A literal backslash in this file has been mangled by more than one tool, so
+// the expected values are built from a char code instead. The first version of
+// these tests compared against '\%' written as a single backslash, which
+// TypeScript reads as plain '%' - the assertion was wrong, not the sanitiser.
+const BS = String.fromCharCode(92);
+
+Deno.test('sanitizeLikeInput escapes wildcards and keeps real punctuation', () => {
+  // The direction that matters. Stripping the apostrophe emptied every name
+  // search mentioning one: against production, venue ilike with it returns 44
+  // rows and without it returns 0.
+  assert(sanitizeLikeInput("Casey's Center") === "Casey's Center", 'apostrophe preserved');
+  assert(sanitizeLikeInput("Chef George's Steak Bar") === "Chef George's Steak Bar", 'apostrophe preserved in a longer name');
+
+  // What it must still do: a bare wildcard cannot be allowed to match everything.
+  assert(sanitizeLikeInput('%') === BS + '%', 'percent escaped');
+  assert(sanitizeLikeInput('_') === BS + '_', 'underscore escaped');
+  assert(sanitizeLikeInput('50% Off') === '50' + BS + '% Off', 'percent escaped mid-string');
+  assert(sanitizeLikeInput('a_b') === 'a' + BS + '_b', 'underscore escaped mid-string');
+  assert(sanitizeLikeInput('a' + BS + 'b') === 'a' + BS + BS + 'b', 'backslash escaped');
+  assert(sanitizeLikeInput('drop;') === 'drop', 'semicolon removed');
+  assert(sanitizeLikeInput('  padded  ') === 'padded', 'trimmed');
+});
+
+Deno.test('sanitizePostgrestPattern strips what PostgREST parses structurally', () => {
+  // These four rewrite an or(...) filter, so they must go.
+  for (const ch of [',', '(', ')', '*', '`']) {
+    assert(!sanitizePostgrestPattern(`a${ch}b`).includes(ch), `${ch} stripped`);
+  }
+  // An apostrophe is NOT structural there - verified against production, the
+  // same or(...) query answers 206 with 44 rows - so it survives here too.
+  assert(sanitizePostgrestPattern("Casey's Center") === "Casey's Center", 'apostrophe survives');
+  assert(sanitizePostgrestPattern('%') === BS + '%', 'wildcard still escaped');
 });

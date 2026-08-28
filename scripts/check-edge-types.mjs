@@ -48,6 +48,9 @@ import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
+/** tsconfig globs are '/'-only, on every platform. */
+const toGlob = (p) => p.split('\\').join('/');
 const BASELINE = join(ROOT, '.github/edge-type-baseline.json');
 const BASE_CONFIG = join(ROOT, 'tsconfig.edge.json');
 const WRITE = process.argv.includes('--write');
@@ -81,10 +84,20 @@ writeFileSync(
       compilerOptions: {
         ...wide.compilerOptions,
         paths: Object.fromEntries(
-          Object.entries(wide.compilerOptions.paths ?? {}).map(([k, v]) => [k, v.map((p) => join(ROOT, p))]),
+          Object.entries(wide.compilerOptions.paths ?? {}).map(([k, v]) => [k, v.map((p) => toGlob(join(ROOT, p)))]),
         ),
       },
-      include: wide.include.map((p) => join(ROOT, p)),
+      // FORWARD SLASHES, ALWAYS. TypeScript resolves `include` and `paths` as
+      // globs, and a glob only accepts '/' - a Windows path.join gives
+      // 'C:\...\supabase\functions\**\*.ts', which matches nothing.
+      //
+      // It failed SILENTLY and in the worst possible direction: tsc emitted
+      // "TS18003: No inputs were found", that line carries no (line,col) so the
+      // error parser below skipped it, the count came back zero, and the ratchet
+      // announced "158 error(s) across 31 file(s) fixed. Re-baseline to lock it
+      // in." Taking that advice would have written a zeroed baseline and
+      // permanently blinded the check - on CI too, where the glob does work.
+      include: wide.include.map((p) => toGlob(join(ROOT, p))),
     },
     null,
     2,
@@ -106,7 +119,14 @@ try {
 
 const counts = new Map();
 const lines = [];
-for (const line of out.split('\n')) {
+// SPLIT ON \r?\n, NOT \n. tsc writes CRLF on Windows, and in a JavaScript regex
+// \r is a LINE TERMINATOR - so `.` cannot match it and `(.*)$` never reaches the
+// end of a line that still carries one. Every error line failed to parse, the
+// count came back zero, and the ratchet reported all 158 baselined errors as
+// fixed. That is the second half of the same silent failure as the backslashed
+// glob above: two Windows-only faults, each of which made a checker that saw
+// nothing announce a clean codebase.
+for (const line of out.split(/\r?\n/)) {
   const m = line.match(/^(.*?)\((\d+),(\d+)\): error (TS\d+): (.*)$/);
   if (!m) continue;
   const abs = m[1].replace(/\\/g, '/');
@@ -115,6 +135,17 @@ for (const line of out.split('\n')) {
   const rel = abs.slice(idx);
   counts.set(rel, (counts.get(rel) ?? 0) + 1);
   lines.push(`${rel}:${m[2]} ${m[4]}: ${m[5]}`);
+}
+
+// A COMPILE THAT SAW NO FILES IS NOT A CLEAN COMPILE. Without this the harness
+// reports zero errors and "everything fixed" whenever the config stops matching
+// - which is exactly what a backslashed glob did on Windows.
+if (/TS18003|No inputs were found/.test(out)) {
+  console.error(
+    '[edge-types] tsc found NO INPUT FILES - the include glob matched nothing.\n' +
+      '  Refusing to report a clean run. This is a harness fault, not a clean codebase.',
+  );
+  process.exit(2);
 }
 
 const total = [...counts.values()].reduce((a, b) => a + b, 0);

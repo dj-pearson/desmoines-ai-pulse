@@ -98,7 +98,7 @@ export default function OpenNowRestaurants() {
   const faqData = [
     {
       question: "Which restaurants in Des Moines are open right now?",
-      answer: `We track real-time operating hours for ${openRestaurants.length}+ Des Moines restaurants. Our database updates continuously to show which restaurants are currently accepting orders. According to the Des Moines Restaurant Association, over 300 restaurants operate in the metro area, with varying hours by day and season.`,
+      answer: `We track real-time operating hours for Des Moines restaurants. Our database updates continuously to show which restaurants are currently accepting orders. According to the Des Moines Restaurant Association, over 300 restaurants operate in the metro area, with varying hours by day and season.`,
     },
     {
       question: "What restaurants are open late in Des Moines?",
@@ -143,7 +143,7 @@ export default function OpenNowRestaurants() {
         // appends script children that differ rather than replacing them, so
         // the prerender captured both. Production served two FAQPage blocks
         // on this page, one saying "0 events" and one saying "8 events".
-        faqData={isLoading ? undefined : faqData}
+        faqData={faqData}
         isTimeSensitive={true}
         keywords={[
           "restaurants open now Des Moines",

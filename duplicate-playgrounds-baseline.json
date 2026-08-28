@@ -1,0 +1,7 @@
+{
+  "_comment": "Playground rows whose names produce the same URL slug. The detector fails on a NEW one, not on these - merging is a per-row decision about which id existing links point at. Do not add to this list to make CI pass.",
+  "groups": [
+    "riverview-park",
+    "union-park"
+  ]
+}

@@ -35,6 +35,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const EVENT_BASELINE = join(ROOT, 'duplicate-events-baseline.json');
+const PLAYGROUND_BASELINE = join(ROOT, 'duplicate-playgrounds-baseline.json');
 
 function env(key: string): string | undefined {
   if (process.env[key]) return process.env[key];
@@ -241,3 +242,93 @@ if (freshEventDupes.length > 0) {
 }
 
 console.log('OK No new event stored more than once.');
+
+// ---------------------------------------------------------------------------
+// PLAYGROUNDS.
+//
+// Added 2026-08-27 after the sitemap generator started reporting collapsed URLs
+// and named two: /playgrounds/riverview-park and /playgrounds/union-park. Both
+// are single rows duplicated in July 2025, three days apart, and no check has
+// ever looked at this table - the restaurant check was written for restaurants
+// and extended to events, and playgrounds sat outside both.
+//
+// THE KEY IS THE SLUG, not name+address. A playground URL is /playgrounds/<slug>
+// derived from the name alone (createSlug in the sitemap generator), so two rows
+// whose names differ only in punctuation collide in the URL space even though
+// name+address would separate them. Keying on what the URL is built from is what
+// makes this agree with the symptom that found it.
+//
+// BASELINED at the two that exist, like events: merging them is a per-row
+// decision about which id the existing links point at.
+interface PlaygroundRow {
+  id: string;
+  name: string | null;
+}
+
+const playgroundRows = (await fetchAll('playgrounds', 'id,name')) as unknown as PlaygroundRow[];
+if (playgroundRows.length === 0) {
+  console.error('[duplicate-entities] playgrounds returned no rows - refusing to pass.');
+  process.exit(1);
+}
+
+const playgroundSlug = (name: string) =>
+  name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
+const playgroundGroups = new Map<string, PlaygroundRow[]>();
+for (const row of playgroundRows) {
+  if (!row.name?.trim()) continue;
+  const key = playgroundSlug(row.name);
+  if (!key) continue;
+  if (!playgroundGroups.has(key)) playgroundGroups.set(key, []);
+  playgroundGroups.get(key)!.push(row);
+}
+
+const playgroundDupes = [...playgroundGroups.entries()].filter(([, g]) => g.length > 1);
+
+if (process.argv.includes('--write-playgrounds')) {
+  const keys = playgroundDupes.map(([k]) => k).sort();
+  writeFileSync(
+    PLAYGROUND_BASELINE,
+    `${JSON.stringify(
+      {
+        _comment:
+          'Playground rows whose names produce the same URL slug. The detector fails on a NEW one, not on these - merging is a per-row decision about which id existing links point at. Do not add to this list to make CI pass.',
+        groups: keys,
+      },
+      null,
+      2,
+    )}
+`,
+  );
+  console.log(`[duplicate-entities] wrote ${keys.length} baselined playground group(s).`);
+  process.exit(0);
+}
+
+const knownPlaygroundGroups = new Set<string>(
+  existsSync(PLAYGROUND_BASELINE)
+    ? (JSON.parse(readFileSync(PLAYGROUND_BASELINE, 'utf8')).groups as string[])
+    : [],
+);
+const freshPlaygroundDupes = playgroundDupes.filter(([key]) => !knownPlaygroundGroups.has(key));
+
+console.log(
+  `[duplicate-entities] ${playgroundRows.length} playgrounds, ${playgroundDupes.length} group(s) sharing ` +
+    `a URL slug (${knownPlaygroundGroups.size} baselined).`,
+);
+
+if (freshPlaygroundDupes.length > 0) {
+  console.error(`
+X ${freshPlaygroundDupes.length} NEW playground(s) sharing a URL slug:`);
+  for (const [slug, group] of freshPlaygroundDupes) {
+    console.error(`
+  /playgrounds/${slug}`);
+    for (const row of group) console.error(`    ${row.id}  ${row.name}`);
+  }
+  console.error(
+    '\n  Two rows resolve to one URL, so the sitemap lists it once and the page can\n' +
+      '  only show one of them. Merge the rows, or rename one so the slugs differ.\n',
+  );
+  process.exit(1);
+}
+
+console.log('OK No new playground sharing a URL slug.');

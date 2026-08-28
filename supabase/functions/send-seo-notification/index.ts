@@ -10,6 +10,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 import { errorResponse } from "../_shared/errorResponse.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,6 +22,17 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+
+  // Runs as service_role and had no caller check. verify_jwt defaults to
+  // true, which only means "a valid Supabase JWT" - the publishable anon
+  // key is one and ships in every client bundle.
+  //
+  // Callers, enumerated before guarding:
+  //   run-scheduled-audit only, which sends Bearer ${supabaseServiceKey} (index.ts:225)
+  // requireAdminOrApiKey accepts EDGE_FUNCTION_API_KEY, the service-role
+  // key and an admin JWT, so a manual or server-to-server call still works.
+  const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+  if (authFailure) return authFailure;
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;

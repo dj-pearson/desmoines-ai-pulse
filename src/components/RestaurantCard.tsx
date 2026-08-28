@@ -1,6 +1,15 @@
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
-import { ChefHat, Star, MapPin, Flame, Sparkles, Leaf, Wheat } from "lucide-react";
+import { ChefHat, Star, Flame, Sparkles, Leaf, Wheat } from "lucide-react";
+// map-pin renders once per card and this card renders on nine pages. It is a
+// two-shape lucide icon, so inline costs 3 nodes and the sprite costs 2.
+//
+// Star STAYS INLINE deliberately and so does ChefHat. Per the membership rules
+// in scripts/generate-icon-sprite.mjs a sprite instance is always 2 nodes, so a
+// single-path icon like star saves nothing - and star is the highest-count icon
+// on /restaurants/dietary at 197. ChefHat would save one node per card and
+// every sprite symbol ships on every page whether used or not.
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { memo, useState, useMemo, useCallback, useRef } from "react";
 import { OptimizedImage } from "@/components/OptimizedImage";
 import { SocialProofBadge } from "@/components/SocialProofBadge";
@@ -256,7 +265,7 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
           {/* Location */}
           {(restaurant.location || restaurant.city) && (
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground pt-1 border-t border-gray-100 dark:border-gray-800">
-              <MapPin className="h-3.5 w-3.5 shrink-0" />
+              <SpriteIcon name="map-pin" className="h-3.5 w-3.5 shrink-0" />
               <span className="line-clamp-1">
                 {restaurant.location || restaurant.city}
               </span>

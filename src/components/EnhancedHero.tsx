@@ -172,7 +172,20 @@ export function EnhancedHero({
             { to: "/events/today", value: formatStat(eventsToday), label: "Events Today" },
             { to: "/restaurants/open-now", value: formatStat(restaurantsCount), label: "Restaurants" },
             { to: "/events", value: formatStat(newThisWeek), label: "New This Week" },
-            { to: "/trip-planner", value: "24/7", label: "AI Assistant" },
+            // NOT "24/7 / AI Assistant". Two things were wrong with it and the
+            // tile sits among three LIVE COUNTS, so a reader takes it for a
+            // measured figure like the others (WEB-QA-005 AC2, XPLAT-009 AC4).
+            //
+            //   web has no AI assistant at all. Ask Pulse (discover-chat) ships
+            //   on iOS and Android and has never been built here - XPLAT-009 AC1
+            //   is the open decision about whether it comes to web.
+            //   the tile links to /trip-planner, which is a different feature
+            //   and is gated behind <PremiumGate requiredTier="insider">.
+            //
+            // So it now names the thing it actually opens. The Insider
+            // requirement is carried by the AI Plan My Night CTA below rather
+            // than repeated on a four-word tile.
+            { to: "/trip-planner", value: "AI", label: "Trip Planner" },
           ] as const).map((stat) => (
             <Link
               key={stat.to}

@@ -90,19 +90,16 @@ const EXTENSIONS = ['.ts', '.tsx', '.mjs'];
  * whose own header says it must only ever shrink.
  */
 const PENDING_MIGRATIONS = [
-  { table: 'event_discussions', column: 'message_type', migration: '20260718000003' },
-  { table: 'event_discussions', column: 'media_url', migration: '20260718000003' },
-  // Menu scraper diagnostics. The scraper writes this best-effort inside a
-  // try/catch, so a missing table degrades logging only — but the reference is
-  // still real and must not be baselined as a permanent violation.
-  { table: 'menu_scrape_attempts', migration: '20260730000001' },
-  // Billing interval, needed so the trial-conversion notice can state the real
-  // amount (WEB-LEGAL-006). Additive nullable column; readers must treat NULL
-  // as "unknown" rather than assuming monthly.
-  { table: 'user_subscriptions', column: 'billing_interval', migration: '20260817000001' },
   // Per-status attendance counts without the attendee list, so the SELECT policy
   // on event_attendance can be restricted to a user's own rows (WEB-SEC-025).
   { rpc: 'event_attendance_tallies', migration: '20260827000002' },
+  // The venue image that lets the crawler stop downloading a near-duplicate per
+  // event (WEB-OPS-022). Until it exists, venueImage.ts's read 42703s on every
+  // call and falls back to per-event images - the cost this module exists to
+  // avoid. Migration 20260827000001 authored it and its own comment says these
+  // two sites were parked in schema-baseline.json instead; that was the wrong
+  // file, since the baseline is for references with no fix in flight.
+  { table: 'known_venues', column: 'image_url', migration: '20260827000001' },
 ];
 
 const isPending = (table, column) =>
@@ -497,6 +494,31 @@ function main() {
   const showAll = process.argv.includes('--all');
   const update = process.argv.includes('--update');
   const schema = parseSchema();
+
+  // THE HEADER OF PENDING_MIGRATIONS SAYS TO REMOVE AN ENTRY ONCE ITS MIGRATION
+  // IS APPLIED, "a stale allowlist silently re-opens the exact bug class this
+  // script exists to catch" - and nothing enforced it, so the rule held only as
+  // long as somebody remembered. An entry whose object is now IN the generated
+  // schema is suppressing a check that would otherwise pass, which is strictly
+  // worse than no entry.
+  const landed = PENDING_MIGRATIONS.filter((p) =>
+    p.rpc
+      ? schema.functions.has(p.rpc)
+      : p.column
+        ? schema.tables.get(p.table)?.has(p.column)
+        : schema.tables.has(p.table),
+  );
+  if (landed.length) {
+    console.error(
+      `check-schema-usage: ${landed.length} PENDING_MIGRATIONS entr(ies) have landed in the ` +
+      'generated schema and must be deleted from the list:',
+    );
+    for (const p of landed) {
+      console.error(`  ${p.rpc ?? [p.table, p.column].filter(Boolean).join('.')}  (${p.migration})`);
+    }
+    console.error('  Each one now suppresses a check that would pass on its own.');
+    process.exit(2);
+  }
 
   if (schema.tables.size === 0) {
     console.error('check-schema-usage: parsed 0 tables from types.ts — the generated format likely changed.');

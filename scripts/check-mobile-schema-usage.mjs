@@ -46,6 +46,7 @@
  *   node scripts/check-mobile-schema-usage.mjs --write   # re-baseline
  */
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { parseSelect } from './lib/mobileSelectColumns.mjs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -65,6 +66,20 @@ const snapshot = JSON.parse(readFileSync(SNAPSHOT, 'utf8'));
 const relations = new Set(snapshot.relations ?? []);
 if (relations.size === 0) {
   console.error('[mobile-schema] snapshot lists no relations - refusing to pass.');
+  process.exit(1);
+}
+
+// table -> Set(column). The snapshot stores them as "table.column" strings.
+const columnsByTable = new Map();
+for (const entry of snapshot.columns ?? []) {
+  const dot = entry.indexOf('.');
+  if (dot === -1) continue;
+  const table = entry.slice(0, dot);
+  if (!columnsByTable.has(table)) columnsByTable.set(table, new Set());
+  columnsByTable.get(table).add(entry.slice(dot + 1));
+}
+if (columnsByTable.size === 0) {
+  console.error('[mobile-schema] snapshot lists no columns - refusing to pass on the column check.');
   process.exit(1);
 }
 
@@ -91,7 +106,7 @@ if (files.length === 0) {
 const FROM = /\.from\(\s*"([a-z_][a-z0-9_]*)"/g;
 const referenced = new Map();
 for (const file of files) {
-  const rel = file.slice(ROOT.length + 1).replace(/\\/g, '/');
+  const rel = file.slice(ROOT.length + 1).split('\\').join('/');
   for (const m of readFileSync(file, 'utf8').matchAll(new RegExp(FROM.source, 'g'))) {
     if (!referenced.has(m[1])) referenced.set(m[1], []);
     referenced.get(m[1]).push(rel);
@@ -99,6 +114,61 @@ for (const file of files) {
 }
 
 const missing = [...referenced.entries()].filter(([t]) => !relations.has(t));
+
+// COLUMNS, not just tables. The table check above catches a whole feature
+// pointing at nothing; this catches one bad name inside an otherwise working
+// query, which fails the request with 42703 and - because both SDKs surface
+// that as a thrown error the caller usually catches - looks like an empty list.
+//
+// Only EXPLICIT column lists are checkable. `.select("*")` names nothing, so
+// the risk there is a Codable/data-class property for a column that does not
+// exist. Swift decoding of an OPTIONAL property tolerates a missing key, and
+// almost every property on these models is optional, so that surface is small
+// and is not asserted here - stating it because "the check passes" should not
+// be read as "every mobile model matches the schema".
+const COLUMN_SITE = /\.from\(\s*"([a-z_][a-z0-9_]*)"[\s\S]{0,200}?\.select\(\s*"([^"]+)"/g;
+const columnFindings = [];
+let columnCheckedSites = 0;
+for (const file of files) {
+  const rel = file.slice(ROOT.length + 1).split('\\').join('/');
+  const text = readFileSync(file, 'utf8');
+  for (const m of text.matchAll(COLUMN_SITE)) {
+    const table = m[1];
+    // A table that does not exist is already reported above; its columns cannot
+    // be checked and reporting them too would triple one finding.
+    if (!columnsByTable.has(table)) continue;
+    const line = text.slice(0, m.index).split('\n').length;
+    columnCheckedSites++;
+    const spec = parseSelect(m[2]);
+    for (const col of spec.columns) {
+      if (!columnsByTable.get(table).has(col)) columnFindings.push({ rel, line, table, col });
+    }
+    for (const embed of spec.embeds) {
+      // AN EMBED HEAD IS EITHER A TARGET TABLE OR A FOREIGN-KEY COLUMN, and
+      // PostgREST accepts both spellings:
+      //     plan:subscription_plans(name)         head is a TABLE
+      //     profiles:user_id (first_name)         head is the FK COLUMN
+      // The second is in RatingsService.swift:29 and the first pass reported it
+      // as 'embedded table user_id does not exist'. Resolving which table a FK
+      // points at needs the constraint graph, which the snapshot does not carry,
+      // so a head that is a real column of the outer table is accepted and its
+      // inner columns are left unchecked. Under-checking beats a false failure
+      // in a gate that blocks merges.
+      if (!columnsByTable.has(embed.table)) {
+        const isForeignKeyEmbed = columnsByTable.get(table).has(embed.table);
+        if (!isForeignKeyEmbed) {
+          columnFindings.push({ rel, line, table: embed.table, col: '(embedded table does not exist)' });
+        }
+        continue;
+      }
+      for (const col of embed.columns) {
+        if (!columnsByTable.get(embed.table).has(col)) {
+          columnFindings.push({ rel, line, table: embed.table, col });
+        }
+      }
+    }
+  }
+}
 
 if (process.argv.includes('--write')) {
   writeFileSync(
@@ -139,5 +209,19 @@ if (fresh.length > 0) {
   process.exit(1);
 }
 
-console.log('\nOK No new mobile reference to a table that does not exist.');
+if (columnFindings.length > 0) {
+  console.error(`\nX ${columnFindings.length} mobile select(s) name a column that does not exist:`);
+  for (const f of columnFindings) console.error(`  ${f.rel}:${f.line}  ${f.table}.${f.col}`);
+  console.error(
+    '\n  PostgREST answers 42703 and both SDKs throw, which the caller usually catches -'+
+      '\n  so this reads as an empty list rather than an error. See XPLAT-013.'+
+      '\n'
+  );
+  process.exit(1);
+}
+
+console.log(
+  `[mobile-schema] ${columnCheckedSites} explicit column list(s) checked against ${columnsByTable.size} table(s) of columns.`
+);
+console.log('\nOK No new mobile reference to a table or column that does not exist.');
 process.exit(0);

@@ -84,11 +84,11 @@ export default function KidsEvents() {
   const faqData = [
     {
       question: "What are the best kids events in Des Moines?",
-      answer: `We track ${kidsEvents.length}+ family-friendly events in Des Moines including library story times, playground programs, Science Center exhibits, Blank Park Zoo events, and seasonal festivals. According to the Des Moines Parks & Recreation department, the metro area hosts 300+ kids events annually.`,
+      answer: `We track family-friendly events in Des Moines including library story times, playground programs, Science Center exhibits, Blank Park Zoo events, and seasonal festivals. According to the Des Moines Parks & Recreation department, the metro area hosts 300+ kids events annually.`,
     },
     {
       question: "Are there free activities for kids in Des Moines?",
-      answer: `Yes! We currently list ${freeKidsEvents.length} free kids events. Des Moines Public Library offers 100+ free children's programs monthly across 6 locations. Parks & Recreation provides free playground programs all summer, and many museums offer free admission days.`,
+      answer: `Yes - free kids events are listed here alongside paid ones. Des Moines Public Library offers 100+ free children's programs monthly across 6 locations. Parks & Recreation provides free playground programs all summer, and many museums offer free admission days.`,
     },
     {
       question: "What age groups do kids events in Des Moines serve?",
@@ -118,7 +118,7 @@ export default function KidsEvents() {
         // appends script children that differ rather than replacing them, so
         // the prerender captured both. Production served two FAQPage blocks
         // on this page, one saying "0 events" and one saying "8 events".
-        faqData={isLoading ? undefined : faqData}
+        faqData={faqData}
         keywords={[
           "kids events Des Moines",
           "family friendly Des Moines",

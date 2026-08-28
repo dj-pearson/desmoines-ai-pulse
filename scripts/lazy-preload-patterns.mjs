@@ -194,12 +194,94 @@ export function dedupeJsonLd(html) {
   }
 
   const doomed = blocks.filter((b) => b.helmet && b.type && lastOfType.get(b.type) !== b.index);
-  if (doomed.length === 0) return [html, 0];
+  if (doomed.length === 0) return [html, 0, []];
 
   // Splice from the end so earlier offsets stay valid.
   let out = html;
   for (const b of [...doomed].sort((a, c) => c.index - a.index)) {
     out = out.slice(0, b.index) + out.slice(b.index + b.full.length);
   }
-  return [out, doomed.length];
+  // THE @TYPES COME BACK WITH THE COUNT. A bare total says a duplicate happened
+  // somewhere across 35 routes, which is not enough to act on - and the header
+  // above is explicit that this function can mask a source defect, so the report
+  // has to be specific enough to tell "Helmet caught mid-update" from "two
+  // components each emit one". Third element, so existing two-element
+  // destructures keep working.
+  return [out, doomed.length, doomed.map((b) => b.type)];
+}
+
+/**
+ * Removes Leaflet's runtime image layers from a captured page.
+ *
+ * Chromium runs the app, so by capture time Leaflet has built a complete map:
+ * one <img> per marker, one more per marker SHADOW, and one per visible tile.
+ * Measured on the live prerendered /map, 2026-08-28:
+ *
+ *     1,958 elements in #root, of which 1,124 are <img>
+ *       517  img.leaflet-marker-icon
+ *       517  img.leaflet-marker-shadow
+ *        87  img.leaflet-tile
+ *     -----
+ *     1,121 of them Leaflet's, against 550 words of actual page text
+ *
+ * NONE OF IT SURVIVES HYDRATION. react-leaflet initialises a fresh map and
+ * rebuilds every pane, so these nodes are parsed, laid out, and thrown away.
+ * What they cost in the meantime is real: 87 OpenStreetMap tile requests for a
+ * viewport the visitor may never look at, 1,034 nodes React must walk past on
+ * boot (WEB-PERF-023 AC3 is exactly this), and 517 elements carrying
+ * role="button" tabindex="0" that are in the tab order and do nothing.
+ *
+ * NOTHING IS LOST TO A CRAWLER. marker-icon.png has alt="Marker", the shadows
+ * and tiles have alt="", and the page's 550 words are untouched. This is the
+ * opposite trade-off from WEB-SEO-006, which fought to get CONTENT into the
+ * prerendered HTML - these are not content.
+ *
+ * THE ONE REAL COST, stated rather than buried: a visitor with JavaScript
+ * disabled or still loading now sees an empty map frame instead of a static
+ * snapshot. That snapshot was of a fixed viewport chosen at build time, so it
+ * was already showing the wrong place to most people, and it could not be
+ * panned, zoomed or clicked.
+ *
+ * Images only. The pane <div>s stay, because Leaflet expects its container
+ * structure to be present and the divs are a few dozen nodes against a
+ * thousand.
+ */
+export function stripLeafletRuntime(html) {
+  // Self-closing <img> tags with a leaflet-* class. Matched on the class
+  // attribute rather than on src: the marker src is the relative
+  // "marker-icon.png", which is not distinctive, while the classes are.
+  const re = /<img\b[^>]*\bclass="[^"]*\bleaflet-(?:marker-icon|marker-shadow|tile)\b[^"]*"[^>]*>/g;
+  let removed = 0;
+  const out = html.replace(re, () => {
+    removed++;
+    return '';
+  });
+  return removed === 0 ? [html, 0] : [out, removed];
+}
+
+/**
+ * Removes the prerenderer's own handshake attribute from the shipped HTML.
+ *
+ * src/components/PrerenderSignal.tsx publishes data-queries-settled on <html>
+ * so scripts/prerender.mjs knows when TanStack Query has finished. That is
+ * build-time metadata: by the time the file is written it has served its whole
+ * purpose, and leaving it in bakes `data-queries-settled="true"` into all 35
+ * pages.
+ *
+ * NOTHING READS IT, so this is not a bug fix - it is the same hygiene applied
+ * to the injected modulepreloads and the Leaflet panes. The reason to bother is
+ * that a stale "true" in production HTML is actively misleading: it says the
+ * queries have settled for a visitor whose queries have not started, and the
+ * next person to grep production for a load signal would believe it.
+ *
+ * Attribute only. The <html> tag keeps its lang, class and style.
+ */
+export function stripPrerenderSignal(html) {
+  const re = /\s*data-queries-settled="[^"]*"/g;
+  let removed = 0;
+  const out = html.replace(re, () => {
+    removed++;
+    return '';
+  });
+  return removed === 0 ? [html, 0] : [out, removed];
 }

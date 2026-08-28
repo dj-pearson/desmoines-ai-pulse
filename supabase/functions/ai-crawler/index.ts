@@ -33,6 +33,7 @@ import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { isHostAllowed } from "../_shared/fetchGuard.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { recordAnthropicUsage } from "../_shared/providerUsage.ts";
+import { sanitizeLikeInput } from "../_shared/validation.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1325,8 +1326,19 @@ async function checkForDuplicates(
           query = supabase
             .from(tableName)
             .select("id")
-            .ilike("title", item.title?.trim())
-            .ilike("venue", item.venue?.trim());
+            // sanitizeLikeInput, because a SCRAPED title is a LIKE PATTERN here.
+            // One stored title already carries a literal percent ("Monday Pop Up
+            // Hours and 10% Bourbon..."), and in an ilike that percent is a
+            // wildcard - so this duplicate check can match a row that is not a
+            // duplicate. It GATES THE INSERT, so a false match silently drops a
+            // real event, which is the same shape as the firecrawl duplicate
+            // check fixed earlier in this story.
+            //
+            // Safe for names only since sanitizeLikeInput stopped stripping
+            // apostrophes: before that it would have turned "Chef George's" into
+            // "Chef Georges" and MISSED the real duplicate instead.
+            .ilike("title", sanitizeLikeInput(item.title?.trim() ?? ""))
+            .ilike("venue", sanitizeLikeInput(item.venue?.trim() ?? ""));
           break;
         case "restaurants":
         case "playgrounds":

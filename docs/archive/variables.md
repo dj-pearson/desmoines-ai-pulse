@@ -298,8 +298,8 @@ These are used by scripts in the `scripts/` directory.
 | `scripts/analyze-event-dates.ts` | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` |
 | `scripts/analyze-event-urls.ts` | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` |
 | `scripts/backfill-coordinates.ts` | `VITE_SUPABASE_URL`, `SUPABASE_SERVICE_KEY` |
-| `scripts/check-catchdesmoines-urls.ts` | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` |
-| `scripts/check-harbour-update.ts` | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` |
+| `scripts/inspect-catchdesmoines-urls.ts` | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` |
+| `scripts/inspect-harbour-update.ts` | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` |
 | `scripts/convert-timezones.ts` | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` |
 | `scripts/event-datetime-crawler.ts` | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` |
 | `scripts/find-platform-events.ts` | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` |

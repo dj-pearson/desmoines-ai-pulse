@@ -49,6 +49,28 @@ jobs:
       - name: Run TypeScript type check
         run: npm run type-check
 
+      # scripts/ was in NO tsconfig, so the type-checker never read a line of it:
+      # `npm run type-check` exited 0 on a script containing
+      # `const x: number = "nope"`, verified by adding exactly that. WEB-CI-027
+      # already records the consequence - a stray closing brace in
+      # scripts/run-migration.ts reaching CI, under the note "tsconfig does not
+      # include scripts/, so the file is invisible to the type-checker entirely".
+      # Clean at zero errors from the first run, so it gates rather than ratchets.
+      - name: Type-check the scripts directory
+        run: npm run type-check:scripts
+
+      # functions/ is the Cloudflare Pages middleware and it was in no tsconfig
+      # either - so the file that runs on EVERY production request, decides what
+      # a social crawler is served and rewrites the canonical on the SPA
+      # fallback, had never been read by the compiler. Its only import,
+      # EventContext from @cloudflare/workers-types, resolves to nothing because
+      # that package is not installed; functions/_typecheck/cloudflare.d.ts
+      # declares it rather than adding a dependency (see the file for why).
+      # WEB-SEO-006 already notes the HTMLRewriter transform "cannot be executed
+      # in CI", which makes static checking most of the coverage available here.
+      - name: Type-check the Pages Functions
+        run: npm run type-check:functions
+
       # Edge functions are excluded from tsconfig.json, and no workflow runs
       # `deno check`, so until now NOTHING type-checked supabase/functions -
       # eslint parses them and runs no type-aware rules. A wrong property on a
@@ -79,6 +101,11 @@ jobs:
       # deletion against a database this repo's CI cannot reach, so unit-testing
       # the pure part is the only check they get. They were written and then not
       # wired up, which is the same as not having them.
+      # Every *.test.mjs under scripts/__tests__ and functions/__tests__,
+      # DISCOVERED rather than listed. This step used to run a hand-maintained
+      # chain of four; an audit found ten suites, two of which had never run in
+      # CI at all - including the only guard on the WEB-SEO-006 canonical
+      # rewrite, which that story says cannot be verified any other way.
       - name: Offline helper suites
         run: npm run test:offline
 
@@ -182,6 +209,16 @@ jobs:
       - name: pSEO slugs do not collide with real routes
         run: node scripts/check-pseo-route-collisions.mjs
 
+      # The forward-looking half of AC7. The check above compares PUBLISHED slugs
+      # against routes; this one compares everything the taxonomy COULD generate,
+      # so a new dimension value that would collide is visible before a
+      # generation run rather than after. Offline - reads src/pseo/taxonomy.ts,
+      # src/App.tsx and public/_redirects. Reports, does not gate: the 10 literal
+      # collisions and 257 shadowed URLs are decisions about which layer owns a
+      # prefix, and gating on them would be red from the first run.
+      - name: pSEO taxonomy collisions
+        run: npx tsx scripts/check-pseo-collisions.ts
+
       - name: Critical-path JS budget
         run: node scripts/check-bundle-budget.mjs
 
@@ -192,8 +229,33 @@ jobs:
       # ratchets per route with a wide tolerance: these pages render live data,
       # so a tight gate on a data-driven number is a flake, and a flaky gate gets
       # switched off (see WEB-CI-020, WEB-CI-021).
+      # WEB-SEO-006. No prerendered page may ship a loading skeleton. /restaurants
+      # shipped "Loading restaurants..." and an ItemList of numberOfItems 0 on
+      # every build until 2026-08-28, and nothing caught it because every other
+      # guard here measures a DIFFERENCE against a baseline - a route that has
+      # always been wrong looks stable. This asserts an absolute property, so it
+      # gates where check-dom-budget cannot: a shipped skeleton is never correct
+      # on any data, so there is no quiet week that makes it fire.
+      - name: No prerendered page ships a skeleton
+        run: node scripts/check-prerender-content.mjs
+
+      # WEB-SEO-002 was "12 routes render no SEOHead" - pages shipping with the
+      # shell's title, no canonical and the site-wide description. All 35 are
+      # clean today and nothing was guarding it, so the property got fixed and
+      # the comment in prerender.mjs went stale. None of these move with live
+      # data, so this gates.
+      - name: Every prerendered page declares its own head
+        run: node scripts/check-prerender-head.mjs
+
       - name: Prerendered DOM size
         run: node scripts/check-dom-budget.mjs
+
+      # WEB-SEO-006. /og-image.png was never in public/, and Cloudflare answers a
+      # missing static file with the SPA shell - 200 text/html where an image
+      # belongs. Six pages advertised it as their og:image and nothing errored.
+      # Offline: an asset this site serves must be present in the build.
+      - name: Advertised assets exist in the build
+        run: node scripts/check-asset-content-types.mjs
 
       # WEB-LEGAL-009 AC2. Also runs after the build, because Vite rewrites
       # index.html and the CSP has to match what is SERVED, not the source.
@@ -287,6 +349,29 @@ jobs:
       # reads scripts/db-snapshot.json.
       - name: Mobile clients query tables that exist
         run: node scripts/check-mobile-schema-usage.mjs
+
+      # A service-role edge function must check WHO is calling. verify_jwt only
+      # means "a valid Supabase JWT", which the publishable anon key is - so it
+      # separates a site visitor from nobody and nothing more. Two functions were
+      # reachable that way: one dispatched mail, one started a paid geocoding
+      # batch. Baselined; this stops the list growing.
+      - name: Service-role functions verify their caller
+        run: node scripts/check-edge-auth.mjs
+
+      # profiles.communication_preferences is one JSONB column with four owners,
+      # and a PostgREST update REPLACES it. PreferencesManager sent a fresh
+      # literal, so Save Preferences deleted taste_preferences, ui_preferences
+      # and the marketing opt-out - and every consent gate reads !== false, so
+      # deleting an explicit false opts the user back in silently. Offline.
+      - name: Shared JSONB bags are merged, not replaced
+        run: node scripts/check-jsonb-bag-writes.mjs
+
+      # check-schema-usage compares code against src/integrations/supabase/types.ts,
+      # which makes types.ts the reference - and nothing checked the reference. A
+      # column declared there but absent in production type-checks, PASSES
+      # check-schema-usage, and 42703s at runtime. Offline; same snapshot as above.
+      - name: Generated types claim nothing production lacks
+        run: node scripts/check-types-drift.mjs
 
       # IOS-AUDIT-REL-007: universal links, Sign in with Apple webcredentials and
       # App Clip invocation all fail SILENTLY when the AASA disagrees with the

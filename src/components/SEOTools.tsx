@@ -410,9 +410,9 @@ ${JSON.stringify(eventListSchema, null, 2)}
 <meta property="og:description" content="Discover the best events, restaurants, attractions, and family activities in Des Moines, Iowa. Real-time updates and personalized recommendations." />
 <meta property="og:type" content="website" />
 <meta property="og:url" content="https://desmoinesinsider.com" />
-<meta property="og:image" content="https://desmoinesinsider.com/og-image.jpg" />
-<meta property="og:image:width" content="1200" />
-<meta property="og:image:height" content="630" />
+<meta property="og:image" content="https://desmoinesinsider.com/DMI-Logo.png" />
+<meta property="og:image:width" content="800" />
+<meta property="og:image:height" content="800" />
 <meta property="og:locale" content="en_US" />
 <meta property="og:site_name" content="Des Moines Insider" />
 
@@ -420,7 +420,7 @@ ${JSON.stringify(eventListSchema, null, 2)}
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="Des Moines Insider - Your AI-Powered Local Guide" />
 <meta name="twitter:description" content="Discover the best events, restaurants, attractions, and family activities in Des Moines, Iowa." />
-<meta name="twitter:image" content="https://desmoinesinsider.com/og-image.jpg" />
+<meta name="twitter:image" content="https://desmoinesinsider.com/DMI-Logo.png" />
 
 <!-- Additional Meta Tags -->
 <meta name="description" content="Discover the best events, restaurants, attractions, and family activities in Des Moines, Iowa. AI-powered recommendations, real-time updates, and comprehensive local insights." />

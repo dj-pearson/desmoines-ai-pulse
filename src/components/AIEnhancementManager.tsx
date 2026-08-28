@@ -18,6 +18,7 @@ import {
   Bot
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { getErrorMessage } from "@/lib/errorHandler";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { createLogger } from '@/lib/logger';
@@ -71,13 +72,13 @@ export default function AIEnhancementManager() {
   const fetchStats = async () => {
     try {
       // Get total future events
-      const { count: totalEvents } = await supabase
+      const { count: totalEvents, error: totalError } = await supabase
         .from('events')
         .select('*', { count: 'exact', head: true })
         .gte('date', new Date().toISOString());
 
       // Get enhanced events (future events with AI writeups)
-      const { count: enhancedEvents } = await supabase
+      const { count: enhancedEvents, error: enhancedError } = await supabase
         .from('events')
         .select('*', { count: 'exact', head: true })
         .gte('date', new Date().toISOString())
@@ -91,6 +92,22 @@ export default function AIEnhancementManager() {
         .order('created_at', { ascending: false })
         .limit(1)
         .single();
+
+      // A COUNT THAT FAILED IS NOT A COUNT OF ZERO, and this panel used to render
+      // it as one. Both errors were discarded, so `totalEvents || 0` turned a
+      // failed read into 0 and the card showed "0 total, 0 enhanced, 0 pending,
+      // 0%" - which an admin reads as "nothing needs enhancing" rather than "I
+      // could not look".
+      //
+      // The catch below never covered it: a Supabase count error is returned as
+      // { count: null, error }, it does not throw, so the toast never fired.
+      if (totalError || enhancedError) {
+        log.error('fetchStats', 'could not count events', { data: totalError ?? enhancedError });
+        toast.error('Could not load enhancement statistics', {
+          description: getErrorMessage(totalError ?? enhancedError),
+        });
+        return;
+      }
 
       const pendingEvents = (totalEvents || 0) - (enhancedEvents || 0);
       const enhancementRate = totalEvents ? ((enhancedEvents || 0) / totalEvents) * 100 : 0;
@@ -111,12 +128,21 @@ export default function AIEnhancementManager() {
   // Fetch enhancement history from cron logs
   const fetchHistory = async () => {
     try {
-      const { data } = await supabase
+      const { data, error: historyError } = await supabase
         .from('cron_logs')
         .select('id, message, created_at, error_details')
         .or('message.ilike.%AI%,message.ilike.%enhancement%,message.ilike.%bulk%')
         .order('created_at', { ascending: false })
         .limit(20);
+
+      // Distinguish "no history" from "could not read it". Without this a failed
+      // read renders an empty history panel, which looks like a job that has
+      // never run - the same false zero as the counts above.
+      if (historyError) {
+        log.error('fetchHistory', 'could not read cron_logs', { data: historyError });
+        toast.error('Could not load enhancement history', { description: getErrorMessage(historyError) });
+        return;
+      }
 
       if (data) {
         const historyData = data.map(log => ({

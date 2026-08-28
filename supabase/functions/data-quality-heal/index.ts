@@ -60,6 +60,16 @@ Deno.serve(async (req) => {
         supabase.from(table).select('id', { count: 'exact', head: true }).is('seo_title', null),
         supabase.from(table).select('id', { count: 'exact', head: true }).is('image_url', null),
       ]);
+      // A COUNT THAT FAILED IS NOT A COUNT OF ZERO, and on a data-quality job
+      // that inversion is the whole point of the job. `?? 0` reported "0 rows
+      // missing coordinates / SEO / images" whether the data was complete or
+      // the count had errored, so the KPI a reader trusts most - the one saying
+      // there is nothing wrong - was the one a failed read produced.
+      const kpiError = coordsMissing.error ?? seoMissing.error ?? imageMissing.error;
+      if (kpiError) {
+        throw new Error(`could not count missing fields on ${table}: ${kpiError.message}`);
+      }
+
       kpi[table] = {
         missingCoords: coordsMissing.count ?? 0,
         missingSeo: seoMissing.count ?? 0,
@@ -68,12 +78,19 @@ Deno.serve(async (req) => {
 
       // ---- Stage 1: geocode ----
       const addrCols = ADDR_COLS[table];
-      const { data: rows } = await supabase
+      const { data: rows, error: rowsError } = await supabase
         .from(table)
         .select(`id, latitude, longitude, heal_attempts, ${addrCols.join(', ')}`)
         .is('latitude', null)
         .eq('needs_manual_verification', false)
         .limit(BATCH);
+
+      // Same inversion on the work queue: `rows ?? []` made a failed read walk
+      // zero rows, and the stage then reported geocoded: 0 with the job marked
+      // successful - identical to "there was nothing left to heal".
+      if (rowsError) {
+        throw new Error(`could not read rows to geocode on ${table}: ${rowsError.message}`);
+      }
 
       for (const row of rows ?? []) {
         const r = row as Record<string, unknown>;

@@ -87,7 +87,7 @@ export default function FreeEvents() {
   const faqData = [
     {
       question: "What free events are happening in Des Moines?",
-      answer: `We track ${freeEvents.length}+ free events across Des Moines and surrounding areas. Our listings include community festivals, concerts in the park, farmers markets, art exhibitions, library programs, and family-friendly activities—all with free admission.`,
+      answer: `We track free events across Des Moines and surrounding areas. Our listings include community festivals, concerts in the park, farmers markets, art exhibitions, library programs, and family-friendly activities—all with free admission.`,
     },
     {
       question: "Are these events really free?",
@@ -95,7 +95,7 @@ export default function FreeEvents() {
     },
     {
       question: "What types of free events are available in Des Moines?",
-      answer: `Des Moines offers diverse free activities including: concerts and live music (${categoryCounts['Music'] || 0}), community festivals, outdoor movies, farmers markets, art gallery openings, library programs, nature walks, fitness classes in parks, and seasonal celebrations. Something for everyone!`,
+      answer: `Des Moines offers diverse free activities including concerts and live music, community festivals, outdoor movies, farmers markets, art gallery openings, library programs, nature walks, fitness classes in parks, and seasonal celebrations. Something for everyone!`,
     },
     {
       question: "How do I find family-friendly free events?",
@@ -125,7 +125,7 @@ export default function FreeEvents() {
         // appends script children that differ rather than replacing them, so
         // the prerender captured both. Production served two FAQPage blocks
         // on this page, one saying "0 events" and one saying "8 events".
-        faqData={isLoading ? undefined : faqData}
+        faqData={faqData}
         keywords={[
           "free events Des Moines",
           "no cost activities Des Moines",

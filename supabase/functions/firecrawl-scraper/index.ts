@@ -1187,6 +1187,18 @@ Return empty array [] if no competitive content found.`
             // and one annotation is cheaper than carrying them.
             // deno-lint-ignore no-explicit-any
             let existingItems: any[] = [];
+            // THIS READ GATES A WRITE, which is why its error cannot be
+            // dropped. All three branches captured `error` and none looked at
+            // it, and `data || []` turns a failed lookup into an empty result -
+            // indistinguishable from "no duplicate exists". The insert below
+            // then runs. A single transient failure here does not lose data,
+            // it MANUFACTURES data: a duplicate row for every item in the
+            // batch, on a scraper that re-runs on a schedule.
+            //
+            // Skipping the item is the conservative move. The next scheduled
+            // run re-scrapes it, so a skip costs one cycle of latency, while a
+            // wrong insert has to be found and cleaned up by hand.
+            let dupCheckError: { message?: string } | null = null;
             if (category === 'events') {
               const { data, error } = await supabase
                 .from(tableName)
@@ -1194,6 +1206,7 @@ Return empty array [] if no competitive content found.`
                 .eq('title', transformedData.title)
                 .eq('venue', transformedData.venue);
               existingItems = data || [];
+              dupCheckError = error;
             } else if (category === 'competitor_analysis') {
               const { data, error } = await supabase
                 .from(tableName)
@@ -1201,12 +1214,22 @@ Return empty array [] if no competitive content found.`
                 .eq('title', transformedData.title)
                 .eq('competitor_id', transformedData.competitor_id);
               existingItems = data || [];
+              dupCheckError = error;
             } else {
               const { data, error } = await supabase
                 .from(tableName)
                 .select('*')
                 .eq('name', transformedData.name);
               existingItems = data || [];
+              dupCheckError = error;
+            }
+
+            if (dupCheckError) {
+              console.error(
+                `[firecrawl-scraper] duplicate check failed for ${tableName}; skipping item rather than risking a duplicate insert:`,
+                dupCheckError.message ?? dupCheckError
+              );
+              continue;
             }
 
             if (existingItems.length > 0) {

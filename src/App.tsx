@@ -1,5 +1,4 @@
 import { LucideSprite } from "@/components/ui/icon-sprite.generated";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { RouteErrorBoundary } from "@/components/ui/route-error-boundary";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
@@ -22,6 +21,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import BottomNav from "@/components/BottomNav";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { GuestFavoriteMigrator } from "@/components/GuestFavoriteMigrator";
+import { PrerenderSignal } from "@/components/PrerenderSignal";
 import { GlobalUpgradeModal } from "@/components/GlobalUpgradeModal";
 import { AccessibilityProvider } from "@/contexts/AccessibilityContext";
 import { AccessibilityWidget } from "@/components/AccessibilityWidget";
@@ -207,6 +207,9 @@ const AdminAI = lazyWithRetry(() => import("./pages/AdminAI"));
 const AdminTools = lazyWithRetry(() => import("./pages/AdminTools"));
 const AdminAnalyticsPage = lazyWithRetry(() => import("./pages/AdminAnalyticsPage"));
 const AdminGscCallback = lazyWithRetry(() => import("./pages/AdminGscCallback"));
+// The Search Console OAuth callback above has been routed since March; the page
+// that shows what the connection produced never was. See WEB-SEO-014.
+const SEODashboard = lazyWithRetry(() => import("./pages/SEODashboard"));
 const AdminSecurity = lazyWithRetry(() => import("./pages/AdminSecurity"));
 const AdminSystem = lazyWithRetry(() => import("./pages/AdminSystem"));
 const AdminAutonomy = lazyWithRetry(() => import("./pages/AdminAutonomy"));
@@ -385,12 +388,20 @@ const App = () => (
   {/* Defines the <symbol> set every <SpriteIcon /> references. Rendered
       once, before anything that uses it (WEB-PERF-023). */}
   <LucideSprite />
-  <TooltipProvider>
+    {/* No app-root TooltipProvider. Every consumer of ui/tooltip already
+        wraps itself in one - AIDisclosureBadge, PremiumBadge,
+        RecommendationBadge, MenuUrlManager and sidebar (which needs its own
+        anyway, for delayDuration={0}) - so this one was redundant, and it
+        was the only thing pulling the Radix tooltip and its floating-ui
+        popper into the render-blocking entry chunk. WEB-PERF-020. */}
     <BrowserRouter>
       <ScrollRestoration />
       <AuthProvider>
         <SessionManager />
         <GuestFavoriteMigrator />
+        {/* Publishes data-queries-settled on <html> for scripts/prerender.mjs.
+            Renders nothing and does no work in a browser beyond one attribute. */}
+        <PrerenderSignal />
         <GlobalUpgradeModal />
         <OfflineBanner />
         <ErrorBoundary>
@@ -443,6 +454,7 @@ const App = () => (
             <Route path="/admin/tools" element={<ProtectedRoute requireAdmin><AdminTools /></ProtectedRoute>} />
             <Route path="/admin/analytics-dashboard" element={<ProtectedRoute requireAdmin><AdminAnalyticsPage /></ProtectedRoute>} />
             <Route path="/admin/oauth/callback" element={<ProtectedRoute requireAdmin><AdminGscCallback /></ProtectedRoute>} />
+            <Route path="/admin/seo" element={<ProtectedRoute requireAdmin><SEODashboard /></ProtectedRoute>} />
             <Route path="/admin/security" element={<ProtectedRoute requireAdmin><AdminSecurity /></ProtectedRoute>} />
             <Route path="/admin/system" element={<ProtectedRoute requireAdmin><AdminSystem /></ProtectedRoute>} />
             <Route path="/admin/autonomy" element={<ProtectedRoute requireAdmin><AdminAutonomy /></ProtectedRoute>} />
@@ -627,7 +639,6 @@ const App = () => (
       </ErrorBoundary>
       </AuthProvider>
     </BrowserRouter>
-  </TooltipProvider>
   </AccessibilityProvider>
 );
 

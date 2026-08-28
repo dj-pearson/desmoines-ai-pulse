@@ -46,7 +46,7 @@
  * drifted migration exits 1 - that is the case worth blocking, because it means
  * a push has just recorded work it did not do.
  *
- * Usage: node scripts/check-migration-drift.mjs [--all]
+ * Usage: node scripts/check-migration-drift.mjs [--all] [--json]
  */
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -55,6 +55,9 @@ const MIGRATIONS_DIR = 'supabase/migrations';
 const SNAPSHOT_PATH = 'scripts/db-snapshot.json';
 const BASELINE_PATH = '.github/migration-drift-baseline.json';
 const showAll = process.argv.includes('--all');
+// --json emits the drifted set for scripts/report-drift-decisions.mjs, so the
+// migration-side analysis lives here once rather than being re-derived there.
+const asJson = process.argv.includes('--json');
 
 if (!existsSync(SNAPSHOT_PATH)) {
   console.error(`check-migration-drift: ${SNAPSHOT_PATH} is missing. See the header for the refresh command.`);
@@ -90,6 +93,19 @@ const collect = (sql, re) => {
 };
 
 const files = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith('.sql')).sort();
+// A CHECKER THAT SEES NO INPUT MUST NOT REPORT SUCCESS. Three checks in this
+// repo have already failed exactly this way - the offline suite runner, the
+// prerender content check, and check-edge-types, which announced "158 errors
+// fixed" while its tsconfig glob matched zero files. An empty scan is a harness
+// fault; reporting it as a clean codebase is how coverage disappears silently.
+if (files.length === 0) {
+  console.error(`check-migration-drift: no .sql files under ${MIGRATIONS_DIR} - refusing to pass.`);
+  process.exit(2);
+}
+if (ledger.size === 0) {
+  console.error('check-migration-drift: the snapshot ledger is empty - refusing to pass.');
+  process.exit(2);
+}
 const sources = new Map(files.map((f) => [f, stripComments(readFileSync(join(MIGRATIONS_DIR, f), 'utf8'))]));
 
 // An object absent from production is only drift if nothing later removed it on
@@ -160,6 +176,11 @@ for (const file of files) {
 
 const fresh = drifted.filter((d) => !d.known);
 const known = drifted.filter((d) => d.known);
+
+if (asJson) {
+  console.log(JSON.stringify({ capturedAt: snapshot.capturedAt, drifted }, null, 2));
+  process.exit(fresh.length ? 1 : 0);
+}
 
 console.log(
   `check-migration-drift: ${ledger.size} ledgered migrations against a schema snapshot from ${snapshot.capturedAt} ` +
