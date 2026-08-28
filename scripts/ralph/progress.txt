@@ -1360,7 +1360,8 @@ Evidence:
   would have committed a zeroed baseline and blinded CI too.
 - TWO Windows-only faults, each sufficient alone: path.join produced backslashed tsconfig globs (which
   accept only '/'), so tsc matched zero inputs; and after fixing that, the error parser still counted
-  zero because tsc writes CRLF and  is a LINE TERMINATOR in a JS regex, so `(.*)$` never matches.
+  zero because tsc writes CRLF and 
+ is a LINE TERMINATOR in a JS regex, so `(.*)$` never matches.
 - CI was fine throughout - ubuntu gives '/' and LF - so the committed baseline is accurate. The damage
   was local, on the only thing that type-checks supabase/functions.
 - The fix immediately found og-image at 1 -> 3, from main's JPEG commit. Both type-level; baselined at
@@ -1369,8 +1370,10 @@ Evidence:
   - A CHECKER THAT SEES NOTHING MUST NEVER REPORT SUCCESS. Third time this session: the offline suite
     runner, the prerender content check, and now this. Every scanner needs a "found zero inputs" guard.
   - TSCONFIG GLOBS ARE '/'-ONLY. path.join is wrong for `include` and `paths` on Windows, always.
-  -  IS A LINE TERMINATOR IN JAVASCRIPT REGEX, so `.` will not match it and `$` sits after it. Split
-    tool output on /?
+  - 
+ IS A LINE TERMINATOR IN JAVASCRIPT REGEX, so `.` will not match it and `$` sits after it. Split
+    tool output on /
+?
 /, never '
 '.
   - Cross-platform bugs in a checker are worse than in product code: the product fails loudly on the
@@ -1403,7 +1406,8 @@ Evidence:
 ## 2026-08-28 - two clean sweeps, and a ratchet 120 sites behind reality
 - Swept for the cross-platform parsing class: only check-edge-types had it. strict-ratchet splits on
   '
-' too but its regex has no `$` anchor, so  cannot break it - verified by running it (24/17
+' too but its regex has no `$` anchor, so 
+ cannot break it - verified by running it (24/17
   against baseline 24, genuinely parsing).
 - Swept all 19 baseline files for position-keyed entries: none. duplicate-events-baseline looks
   line-keyed to a naive regex but its keys are title|date|venue and the match is a timestamp.
@@ -2798,3 +2802,36 @@ note rather than the code, and left passes=false so the remaining AC stays visib
 Nearly shipped it before thinking the sequence through. The tell was asking "what
 is actually in the foreground when ON_STOP fires here" instead of treating
 ON_STOP as generic "app backgrounded".
+
+## Deno CI: marketing-optout-agents has never run
+
+Not an AND-AUDIT story - found while ruling out a red check on PR #380.
+
+"Edge function & migration invariants" fails on every PR that touches
+android/app/src/main/java/**, at:
+  deno test --allow-read --allow-env --no-check=remote \
+    supabase/functions/_tests/marketing-optout-agents.test.ts
+  error: Could not find "@types/node" in a node_modules folder.
+
+The workflow's own comment already diagnosed the cause correctly and applied
+--no-check=remote as the fix. It does not work, and the reason is a detail worth
+keeping: --no-check=remote skips the BODIES of remote declaration files but still
+resolves their type-reference directives, and the @types/node reference inside
+supabase-js's index.d.mts is exactly such a directive. So the flag that was added
+to fix this never could. The four tests in that file have never executed.
+
+Fix is bare --no-check, which also drops type-checking of the test's own source.
+Real loss, still the better trade: four tests that run beat four tests that are
+type-checked and skipped. The alternative that keeps both is a root deno.json with
+nodeModulesDir plus an @types/node import and a deno install step - a lot of
+machinery for one suite.
+
+The workflow lists its own path in on.pull_request.paths, so the PR verifies its
+own fix. Expect the possibility that the tests fail on first execution: nothing
+has ever run them, so their passing was never established.
+
+Process note: I nearly filed this as "not my PR's problem" and moved on, which is
+the correct posture for a red check on someone else's code but would have left a
+suite silently dead. Reading the workflow comment was what turned it from noise
+into a finding - the comment said what the author expected, and the log said what
+actually happened, and they disagreed.
