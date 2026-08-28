@@ -1777,3 +1777,26 @@ Evidence:
   `readonly string[]`, balances immediately, and yields an empty list - so the gap reported as 0 tables.
   Anchor on the assignment, not the name.
 ---
+
+2026-08-28 - WEB-QA-017: the schema check trusted a reference nobody had checked
+  check-schema-usage compares code to types.ts. So types.ts is the reference, and nothing verified it.
+  CLAUDE.md warns about the direction that is merely annoying (types stale, absence is not proof); the
+  dangerous direction is unwritten - a column DECLARED in types.ts but absent in production type-checks,
+  PASSES check-schema-usage, and 42703s at runtime. This story's own failure mode, delivered by the tool
+  meant to stop it.
+
+  Answer: 270 tables vs a 269-table snapshot, 0 ghost columns, 0 ghost tables. In sync. That is a good
+  result and it needed to be a measured one - several stories lean on that reference.
+
+  scripts/check-types-drift.mjs, offline, in pr-checks.yml. Controlled both ways (fake column, fake table),
+  types.ts restored and re-verified clean after each.
+
+  THE FALSE POSITIVE IS THE PART WORTH REMEMBERING. First run reported event_promotion_analytics_summary as
+  a ghost table. It is not - an anon GET returns 200. It is a VIEW that the snapshot lists under `relations`
+  and describes with no `columns`. Had I shipped on the first green-ish run, the check's one and only
+  finding would have been wrong, which is how a new guard teaches people to ignore it. Column-less
+  relations are now skipped AND counted in the output, so the skip cannot go unnoticed.
+
+  Origin: I found that events has no `description` column while doing the merge work. The useful question
+  was not "fix that one" but "does the reference know?" - and that is a question no story had asked.
+---
