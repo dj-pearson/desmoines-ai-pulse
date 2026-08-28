@@ -2213,3 +2213,26 @@ Evidence:
   resembles it. The migration states the mapping; read the mapping. Same family as inferring a column from
   a model field and a table from a story's prose.
 ---
+
+2026-08-28 - AC5 asked how many closed stories never actually shipped. It is 48.
+  WEB-OPS-007 AC5 says "the 17 stories already marked done whose only delivery mechanism is one of these
+  jobs". Cross-referenced every closed story against the deploy baseline:
+      58  AOS-* stories marked passes = true
+       3  every function they name is deployed
+      48  name at least one function that has NEVER been deployed
+       7  name no edge function at all
+  The Autonomy OS is recorded in this backlog as substantially complete and almost none of it runs. Every
+  family is affected - CORE, CS, DEV, all seven MAINT, all seven NURTURE, PROSPECT, SEC.
+
+  I RESTRICTED IT TO AOS-* ON PURPOSE. The proxy is "the story names the function", standing in for "the
+  story is delivered by the function". That holds for AOS stories, where the agent IS the deliverable
+  (AOS-MAINT-003 is "Backup verification agent"; agent-backup-verify is what it shipped). It does not hold
+  for a story that mentions a function in passing - WEB-BE-032 names a dozen while burning down discarded
+  errors. A naive scan said 40 stories across all prefixes; that number would have been wrong in the way
+  that gets repeated.
+
+  ONE CAUSE, NOT 48. Deploy Edge Functions has run once, failed in 13s on a missing SUPABASE_ACCESS_TOKEN.
+  So AC5 is not really "what about 17 stories that quietly did not work" - it is "the agent fleet has never
+  run at all; deploy it or descope it". That is a different and much larger question, and it is the
+  owner's.
+---
