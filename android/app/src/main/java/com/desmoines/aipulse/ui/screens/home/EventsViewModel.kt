@@ -15,7 +15,6 @@ import com.desmoines.aipulse.data.remote.RestaurantsQuery
 import com.desmoines.aipulse.data.model.PaywallContext
 import com.desmoines.aipulse.data.repository.EventsRepository
 import com.desmoines.aipulse.data.repository.RestaurantsRepository
-import com.desmoines.aipulse.util.AppSearchService
 import com.desmoines.aipulse.util.Config
 import com.desmoines.aipulse.util.FetchGeneration
 import com.desmoines.aipulse.util.LocationService
@@ -51,7 +50,6 @@ class EventsViewModel @Inject constructor(
     private val networkMonitor: NetworkMonitor,
     private val locationService: LocationService,
     private val softPaywallService: SoftPaywallService,
-    private val appSearchService: AppSearchService,
     private val billingService: BillingService,
 ) : ViewModel() {
 
@@ -382,7 +380,6 @@ class EventsViewModel @Inject constructor(
                 // Offset tracks raw rows fetched (not the premium-filtered display size).
                 currentOffset += response.events.size
                 // Surface this page to on-device system search (ANDP-070).
-                appSearchService.indexEvents(response.events)
             }
             .onFailure { error ->
                 if (!eventsFetch.isCurrent(token)) return@onFailure
@@ -428,7 +425,6 @@ class EventsViewModel @Inject constructor(
             )
         ).onSuccess { response ->
             _restaurants.value = response.restaurants
-            appSearchService.indexRestaurants(response.restaurants)
         }.onFailure { error ->
             Log.e(TAG, "fetchPopularRestaurants failed: ${error.message}", error)
         }

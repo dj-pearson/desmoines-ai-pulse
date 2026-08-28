@@ -107,9 +107,8 @@
             <!--
                 Android App Links for desmoinesinsider.com. DeepLinkHandler
                 already parses /events/:id, /restaurants/:id, /attractions/:id
-                and /hotels/:id; these are also the URLs AppSearchService
-                indexes, so without this filter every indexed result and every
-                shared link bounces to the browser.
+                and /hotels/:id, so without this filter every shared link
+                bounces to the browser instead of opening the app.
 
                 autoVerify requires public/.well-known/assetlinks.json to carry
                 the release signing certificate SHA-256. It currently ships a

@@ -76,7 +76,7 @@ Separately, `toggleReminder()` returned `true` unconditionally after calling `sc
 
 `DeepLinkHandler` parses ten custom-scheme hosts (`event`, `restaurant`, `attraction`, `hotel`, `home`, `dining`, `search`, `map`, `favorites`, `profile`) and four `https://desmoinesinsider.com` paths. The manifest declared four hosts (`auth-callback`, `ask-pulse`, `find-restaurants`, `find-events`) and no `https` filter at all. The parser was complete and unreachable.
 
-The same URLs are what `AppSearchService` indexes for system search, so every indexed result also bounced to the browser.
+The same URLs were what `AppSearchService` indexed for system search (since deleted, see below), so every indexed result also bounced to the browser.
 
 **Fixed**: intent-filters added for all custom-scheme hosts and for `https` App Links with `autoVerify="true"`.
 
@@ -133,7 +133,9 @@ A crash-safe launcher already existed (`SafeLinkLauncher`, written for exactly t
 
 **Dependencies are roughly 20 months stale.** Compose BOM 2024.12.01, core-ktx 1.15.0, lifecycle 2.8.7, activity-compose 1.9.3, navigation-compose 2.8.5 — all from late 2024, running under Kotlin 2.2.10 and AGP 9.1. A Compose compiler that far ahead of its runtime is a supported-but-untested combination.
 
-**`firebase-appindexing:20.0.0`.** Firebase App Indexing was deprecated and its backend turned down. `AppSearchService` (~200 lines plus a test file) calls `appIndex.update()` and `appIndex.removeAll()` into a service that no longer exists. Either migrate to `androidx.appsearch` or delete the feature and its opt-out toggle in Settings — right now the toggle claims to control indexing that is not happening.
+**`firebase-appindexing:20.0.0`.** Firebase App Indexing was deprecated and its backend turned down. `AppSearchService` (~200 lines plus a test file) called `appIndex.update()` and `appIndex.removeAll()` into a service that no longer exists, behind a Settings toggle that claimed to control indexing that was not happening.
+
+**Resolved (AND-AUDIT-016)**: the feature is deleted — the service, its test, the dependency, the Settings row, and the index calls in four ViewModels. The `app_search_indexing_enabled` key is left orphaned in `SecureStorage` rather than migrated away; an unread key costs nothing and a migration to delete one is more risk than it removes.
 
 ### Security and privacy
 
@@ -197,6 +199,6 @@ Whole-package `{ *; }` keeps on Play Services and Firebase defeat most of R8's s
 1. `assetlinks.json` fingerprint — one string, unblocks App Links verification, needs Play Console access.
 2. targetSdk 36 + dependency upgrade + Billing v8. This is the long pole and it has a deadline.
 3. Turn `lint.abortOnError` back on behind a generated baseline, so the next locale or manifest bug fails in CI.
-4. Decide `AppSearchService` and `SessionTimeoutService`: wire them up or delete them. Both are currently code that claims a capability the app does not have.
+4. ~~Decide `AppSearchService`~~ — deleted (AND-AUDIT-016). `SessionTimeoutService` is still undecided: wire it up or delete it. It currently claims a capability the app does not have.
 5. Replace `androidx.security:security-crypto` before it goes further out of support, and make its plaintext fallback report.
 6. Narrow the ProGuard keeps, one dependency per PR, against the new release build in CI.

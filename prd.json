@@ -7171,17 +7171,19 @@
       "id": "AND-AUDIT-016",
       "title": "AppSearchService indexes into Firebase App Indexing, a service Google turned down",
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "description": "As a user, I need the on-device search indexing toggle in Settings to mean something, because AppSearchService is built on firebase-appindexing 20.0.0 - deprecated with its backend switched off - so appIndex.update() and appIndex.removeAll() call into nothing while Settings offers a switch that claims to control indexing that is not happening.",
       "acceptanceCriteria": [
-        "Confirm the SDK is inert before ripping anything out. The audit's basis is that Google deprecated the API and turned down personal content indexing; verify against current Firebase docs rather than taking this story's word for it.",
-        "Decide: migrate to androidx.appsearch, or delete the feature.",
-        "If deleting: remove AppSearchService, its test file, the firebase-appindexing dependency, the indexing_enabled SecureStorage key, the Settings toggle, and the indexEvents / indexRestaurants calls in EventsViewModel and RestaurantsViewModel. Roughly 200 lines plus a dependency out of the APK.",
-        "If migrating: androidx.appsearch has a different model (a local index you query yourself, not a system-wide one). Confirm it actually delivers the discovery this was for before spending the migration.",
-        "Either way the Settings toggle must stop claiming something untrue. A switch that does nothing is a privacy-facing lie, since users read it as controlling what leaves the device.",
-        "Note the dependency on AND-AUDIT-004: the URLs this indexes are https://desmoinesinsider.com/... links, which only open the app once App Links verify."
+        "DECIDED: delete, not migrate. Owner's call on 2026-08-28. The feature indexed URLs that do not open the app (AND-AUDIT-004 is still open), into a service that no longer exists, behind a toggle nobody could act on. Migrating would have bought a capability the product has never demonstrated wanting.",
+        "DONE: deleted AppSearchService.kt and AppSearchSpecTest.kt.",
+        "DONE: dropped implementation(libs.firebase.appindexing) from app/build.gradle.kts and both the library and firebaseAppIndexing version entries from libs.versions.toml.",
+        "DONE: removed the injected service and its index calls from EventsViewModel (2 sites), MapViewModel, RestaurantsViewModel and HotelsViewModel, and the backing state from ProfileViewModel.",
+        "DONE: removed the 'On-Device Search' SettingsToggleRow, its two SettingsScreen parameters, and its wiring in MainNavHost. The toggle no longer claims to control something that is not happening - which was the privacy-facing half of this story.",
+        "DONE: updated three test files for the new constructor arity and deleted the test for the removed behaviour.",
+        "NOT MIGRATED, deliberately: the app_search_indexing_enabled key is left orphaned in SecureStorage. An unread key costs nothing; writing migration code purely to delete one is more risk than it removes. Worth sweeping if AND-AUDIT-009 replaces that store anyway.",
+        "NOT VERIFIED BY EXECUTION: no Android SDK in the session. Residual-reference grep is clean across .kt/.kts/.toml, brace balance holds on all ten edited files, and the manifest still parses. PR #376 is the compiler."
       ],
-      "notes": "Recommendation: delete it. The feature indexes content whose links do not open the app, into a service that does not exist, behind a toggle nobody can act on. Migrating buys a capability the product has never demonstrated wanting."
+      "notes": "Closed on claude/android-production-readiness-icxmch, verified by CI on PR #376.\n\nRemoves roughly 200 lines plus a dependency from the APK. The four ViewModels that called index* lost a constructor dependency each, which is the part most likely to surface a compile error if a call site was missed.\n\nSessionTimeoutService (AND-AUDIT-006) is the same shape and was NOT decided - it stays open."
     },
     {
       "id": "AND-AUDIT-017",

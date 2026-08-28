@@ -8,7 +8,6 @@ import com.desmoines.aipulse.data.remote.SupabaseClientProvider
 import com.desmoines.aipulse.data.repository.AuthRepository
 import com.desmoines.aipulse.ui.screens.auth.AuthViewModel
 import com.desmoines.aipulse.util.AnalyticsService
-import com.desmoines.aipulse.util.AppSearchService
 import com.desmoines.aipulse.util.ConsentService
 import com.desmoines.aipulse.util.OnboardingPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -40,7 +39,6 @@ class ProfileViewModel @Inject constructor(
     private val onboardingPreferences: OnboardingPreferences,
     private val consentService: ConsentService,
     private val analyticsService: AnalyticsService,
-    private val appSearchService: AppSearchService,
 ) : ViewModel() {
 
     // MARK: - Privacy / Consent (ANDP-067)
@@ -62,15 +60,6 @@ class ProfileViewModel @Inject constructor(
     fun setAnalyticsConsent(enabled: Boolean) {
         consentService.setAnalyticsConsent(enabled)
         analyticsService.applyConsent()
-    }
-
-    private val _searchIndexingEnabled = MutableStateFlow(appSearchService.isIndexingEnabled())
-    /** Whether app content is indexed into on-device system search (ANDP-070). */
-    val searchIndexingEnabled: StateFlow<Boolean> = _searchIndexingEnabled.asStateFlow()
-
-    fun setSearchIndexingEnabled(enabled: Boolean) {
-        appSearchService.setIndexingEnabled(enabled)
-        _searchIndexingEnabled.value = enabled
     }
 
     // MARK: - Profile Fields

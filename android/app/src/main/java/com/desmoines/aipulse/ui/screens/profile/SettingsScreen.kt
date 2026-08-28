@@ -29,7 +29,6 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PrivacyTip
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarRate
@@ -82,8 +81,6 @@ fun SettingsScreen(
     onToggleLocationConsent: (Boolean) -> Unit = {},
     onToggleEmailConsent: (Boolean) -> Unit = {},
     onToggleAnalyticsConsent: (Boolean) -> Unit = {},
-    searchIndexingEnabled: Boolean = true,
-    onToggleSearchIndexing: (Boolean) -> Unit = {},
     // Navigation
     onNavigateBack: () -> Unit = {},
     onNavigateToSubscription: () -> Unit = {},
@@ -205,14 +202,6 @@ fun SettingsScreen(
                 subtitle = "Help improve the app with usage data",
                 checked = analyticsConsent,
                 onCheckedChange = onToggleAnalyticsConsent,
-            )
-
-            SettingsToggleRow(
-                icon = Icons.Default.Search,
-                title = "On-Device Search",
-                subtitle = "Let system search find events, dining, and places",
-                checked = searchIndexingEnabled,
-                onCheckedChange = onToggleSearchIndexing,
             )
 
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))

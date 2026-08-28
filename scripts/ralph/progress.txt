@@ -2637,3 +2637,32 @@ deleted it
     diff stays a pure insertion. Use ensure_ascii=False or every em dash in the
     existing 474 stories turns into an escape sequence.
 ---
+
+## 2026-08-28 - AND-AUDIT-016 (Android)
+- Deleted AppSearchService and the whole Firebase App Indexing feature. Owner
+  decided delete over migrate. ~200 lines plus the firebase-appindexing
+  dependency out of the APK.
+- Files changed: deleted AppSearchService.kt + AppSearchSpecTest.kt; edited
+  build.gradle.kts, libs.versions.toml, EventsViewModel, MapViewModel,
+  RestaurantsViewModel, HotelsViewModel, ProfileViewModel, SettingsScreen,
+  MainNavHost, ProfileViewModelPrivacyTest, RestaurantsViewModelStaleFetchTest,
+  HotelsViewModelTest, AndroidManifest comment, ANDROID_PRODUCTION_AUDIT.md.
+
+- **Learnings for future iterations:**
+  - PR #376 is now open for claude/android-production-readiness-icxmch, so
+    Android CI runs on every push to that branch. That is the compiler for all
+    remaining AND-AUDIT stories - there is still no SDK in the container.
+  - Deleting an injected @Singleton is wider than it looks: four ViewModels lost
+    a constructor parameter and three test files had to follow. Grep for the
+    class name AND the lowercase field name AND every public method name before
+    assuming a removal is complete - the field-name grep is what caught the
+    leftover test at ProfileViewModelPrivacyTest:68.
+  - After removing a Compose call site, check whether its icon import went
+    orphaned (Icons.Default.Search in SettingsScreen) and whether an assertion
+    import did (assertFalse in ProfileViewModelPrivacyTest). Unused imports are
+    warnings, not errors, so nothing catches them without lint - see
+    AND-AUDIT-013.
+  - Removing a persisted-preference feature does NOT require migrating the key
+    away. An orphaned SecureStorage key is inert; migration code to delete one
+    is pure added risk.
+---
