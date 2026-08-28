@@ -1845,3 +1845,30 @@ Evidence:
   THE HABIT WORTH KEEPING: when a story argues about whether something runs, ask the thing that runs it.
   Three ACs across two priority-1 stories were resolvable with two gh commands.
 ---
+
+2026-08-28 - WEB-OPS-007: CI had the answer, and one missing token explains three stories
+  Second iteration in a row where gh answered what the notes had been arguing. Two findings, both bigger
+  than the code change I made.
+
+  WEB-OPS-007's TITLE IS STALE. "57 of 61 have never run successfully" - the audit's own step reports
+  16 healthy and 405 successful runs in 24h, up from 5 healthy / 266 the night before. 11 jobs started
+  working, caused by b0acfaaf "fix(cron): make scheduled jobs actually run" on main. The largest movement
+  this story has ever had and nothing recorded it.
+
+  THE NIGHTLY AUDIT HAS BEEN RED TWO NIGHTS, which by this repo's own rule is how a gate gets ignored. Red
+  for two reasons and only one is a problem: the baseline is 11 jobs stale, and outreach-sequencer
+  (0 15 * * 3) is a WEEKLY job that is structurally absent from a 24h baseline six days in seven, then gets
+  reported as "newly failing" the moment it runs. Fixed the message to distinguish a REGRESSION (was
+  healthy at baseline) from a first observation. Re-baselining needs the service key; AC7 says do it
+  deliberately, so I left it.
+
+  ONE TOKEN GATES THREE STORIES. Deploy Edge Functions has run once, failed in 13s:
+  "SUPABASE_ACCESS_TOKEN is not set on the 'Scrape' environment". So NO edge function has ever deployed
+  through it - which is why export-user-data (XPLAT-007), regenerate-sitemaps and google-indexing-api
+  (WEB-SEO-011) are all 404. Three stories each record "not deployed" as their own blocker. It is one
+  secret, and the workflow already prints the exact fix.
+
+  THE LESSON IS THE SAME AS YESTERDAY'S AND I SHOULD HAVE LEARNED IT SOONER: these notes accumulate
+  reasoning about production while CI holds measurements of it. I spent several iterations reading notes
+  before running two gh commands.
+---
