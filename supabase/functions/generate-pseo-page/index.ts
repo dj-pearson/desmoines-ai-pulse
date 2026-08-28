@@ -19,6 +19,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getAIConfig, getClaudeHeaders, getAnthropicApiKey } from "../_shared/aiConfig.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -45,6 +46,17 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+
+  // Runs as service_role and had no caller check. verify_jwt is not a gate:
+  // it defaults to true, and true only means "a valid Supabase JWT" - which
+  // the publishable anon key is, in every client bundle.
+  //
+  // Every caller is admin-gated already: PseoAdmin via usePseoAdmin, mounted at
+  // /admin/ai behind <ProtectedRoute requireAdmin>. No cron job posts here.
+  // So the route assumed admin and the server did not enforce it; the admin
+  // JWT that functions.invoke sends is what requireAdminOrApiKey checks.
+  const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+  if (authFailure) return authFailure;
 
   const rateLimit = checkRateLimit(req, {
     max: 20,
