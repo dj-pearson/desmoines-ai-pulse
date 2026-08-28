@@ -26,6 +26,11 @@ class BootCompletedReceiver : BroadcastReceiver() {
     lateinit var localNotificationService: LocalNotificationService
 
     override fun onReceive(context: Context, intent: Intent) {
+        // Required: Hilt performs the field injection inside the generated
+        // superclass's onReceive. Skipping it leaves localNotificationService
+        // uninitialised and throws on first touch.
+        super.onReceive(context, intent)
+
         if (intent.action != Intent.ACTION_BOOT_COMPLETED &&
             intent.action != Intent.ACTION_MY_PACKAGE_REPLACED
         ) {

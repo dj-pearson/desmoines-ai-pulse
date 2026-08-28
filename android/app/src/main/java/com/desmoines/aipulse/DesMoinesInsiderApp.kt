@@ -59,7 +59,7 @@ class DesMoinesInsiderApp : Application(), SingletonImageLoader.Factory {
         return ImageLoader.Builder(context)
             .memoryCache {
                 MemoryCache.Builder()
-                    .maxSizePercent(context, MEMORY_CACHE_HEAP_FRACTION)
+                    .maxSizeBytes(imageMemoryCacheBytes())
                     .build()
             }
             .diskCache {
@@ -84,6 +84,13 @@ class DesMoinesInsiderApp : Application(), SingletonImageLoader.Factory {
             .crossfade(true)
             .build()
     }
+
+    /**
+     * Image memory cache budget, as a fraction of the heap this process is
+     * actually allowed.
+     */
+    private fun imageMemoryCacheBytes(): Long =
+        (Runtime.getRuntime().maxMemory() * MEMORY_CACHE_HEAP_FRACTION).toLong()
 
     /**
      * Interceptor that applies a default 7-day Cache-Control header when the server

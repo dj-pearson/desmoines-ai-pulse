@@ -332,7 +332,7 @@ class LocalNotificationService @Inject constructor(
     private fun loadReminderRecords(): List<ReminderRecord> {
         val raw = prefs.getStringSet(KEY_SCHEDULED_PAYLOADS, emptySet()) ?: emptySet()
         return raw.mapNotNull { encoded ->
-            runCatching { json.decodeFromString<ReminderRecord>(encoded) }.getOrNull()
+            runCatching { json.decodeFromString(ReminderRecord.serializer(), encoded) }.getOrNull()
         }
     }
 
@@ -350,7 +350,7 @@ class LocalNotificationService @Inject constructor(
 
     private fun writeReminderRecords(records: List<ReminderRecord>) {
         val encoded = records
-            .mapNotNull { runCatching { json.encodeToString(it) }.getOrNull() }
+            .mapNotNull { runCatching { json.encodeToString(ReminderRecord.serializer(), it) }.getOrNull() }
             .toSet()
         prefs.edit().putStringSet(KEY_SCHEDULED_PAYLOADS, encoded).apply()
     }

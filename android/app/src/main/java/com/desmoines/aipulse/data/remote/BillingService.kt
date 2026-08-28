@@ -638,7 +638,7 @@ class BillingService @Inject constructor(
             .getOrNull() ?: return null
         return java.security.MessageDigest.getInstance("SHA-256")
             .digest(userId.toByteArray())
-            .joinToString("") { "%02x".format(it) }
+            .joinToString("") { "%02x".format(java.util.Locale.ROOT, it) }
             .take(64)
     }
 
