@@ -2473,3 +2473,28 @@ _middleware.ts:268 rewrites the real <title>, not just og/twitter tags. So the m
   That is the second time in two iterations that the right move was: fix the instance, then read the small
   population the sweep narrows to, rather than reporting the sweep's raw count.
 ---
+
+2026-08-28 - A security sanitiser was emptying the search results
+  Followed the "what else takes attacker-influenceable input" thread from mail recipients and fetched URLs
+  to LIKE patterns. sanitizeLikeInput stripped [';] as "remove quotes" - a raw-SQL instinct that does not
+  apply, because these values reach PostgREST as a filter value or bound parameter, never as SQL text.
+
+      venue ilike '%Casey's Center%'   44 rows
+      venue ilike '%Caseys Center%'     0 rows
+
+  nlp-search runs a location through sanitizePostgrestPattern before matching venue and location, so a
+  natural-language search for Casey's Center, Chef George's Steak Bar or Wooly's returned nothing. The
+  sanitiser was not protecting anything - I verified an apostrophe is not structural in a PostgREST or(...)
+  filter, same query answers 206 with 44 rows - and the characters that ARE structural are stripped
+  elsewhere.
+
+  NEITHER SANITISER HAD A SINGLE TEST. That is how it lived: nothing asserted what they PRESERVE, only
+  implicitly that they removed things. A sanitiser without preservation tests only gets more aggressive
+  over time, because every future edit is "strip one more character" and nothing objects.
+
+  AND MY TESTS FAILED FIRST, on my own error. The heredoc collapsed '\%' to '\%', which TypeScript reads
+  as plain '%', so the assertion compared the wrong value. The code was right. Expected strings are now
+  built from String.fromCharCode(92) so nothing in the writing chain can mangle them - which is the same
+  backslash problem that has bitten me six times this session, this time inside a quoted heredoc I had
+  assumed was safe.
+---
