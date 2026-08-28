@@ -5,6 +5,7 @@
  * Risk level: MEDIUM
  */
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { renderExtractionPrompt, contentWindowFor } from "../_shared/prompts/index.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -383,59 +384,17 @@ function getSportsSchedulePrompt(url: string, content: string): string {
     defaultTicketBase = "https://iowa.gleague.nba.com/tickets";
   }
 
-  return `You are an expert at extracting SPORTS GAME SCHEDULES from team websites. Extract EVERY game/event from this content from ${url}.
-
-CURRENT DATE: ${currentDate}
-WEBSITE CONTENT:
-${content.substring(0, 25000)}
-
-🎯 SPORTS SCHEDULE EXTRACTION - WHAT TO LOOK FOR:
-- Game matchups: "vs [Opponent]", "at [Opponent]", "@ [Opponent]"
-- Date patterns: "Fri, Mar 6", "Sat, Oct 11 6:00PM", "Mar 21 5:00 PM CDT"
-- Home vs Away: "Home" / "VS" = home game, "Away" / "AT" / "@" = away game
-- **CRITICAL**: Extract ONLY HOME games (games at ${venue}) - skip away games
-- "Buy Tickets" links, "BUYTIX", ticket buttons - use as source_url
-- Opponent team names (Storm Chasers, Griffins, Thunderbirds, Blizzard, etc.)
-- Tables, schedule grids, game cards, list items with dates
-
-📅 DATE CONVERSION (Central Time - Des Moines, Iowa):
-- All times are Central (CT/CDT)
-- "6:00PM" → "19:00:00", "7:00 PM" → "19:00:00", "5:05PM" → "17:05:00"
-- "Fri, Mar 6 6:05PM" → "2026-03-06 18:05:00"
-- No time? Default to 19:00:00 (7:00 PM)
-- SKIP past dates (before ${currentDate})
-
-🔗 TICKET/SOURCE URL (CRITICAL):
-- Look for "Buy Tickets", "BUYTIX", "tickets" links - use the href as source_url
-- Pattern: <a href="...">Buy Tickets</a> or similar
-- If per-game ticket link found, use it. Else use: ${defaultTicketBase}
-- source_url MUST be a full https:// URL
-
-For EVERY HOME GAME you find, extract:
-- title: "${teamName} vs [Opponent]" (e.g., "Iowa Cubs vs Storm Chasers")
-- description: Brief description (e.g., "Triple-A baseball at Principal Park")
-- date: YYYY-MM-DD HH:MM:SS (future dates only, Central Time)
-- location: "Des Moines, IA"
-- venue: "${venue}"
-- category: "Sports"
-- price: "See website" or price if shown
-- source_url: Ticket purchase URL (Buy Tickets link or ${defaultTicketBase})
-
-FORMAT AS JSON ARRAY ONLY - no other text:
-[
-  {
-    "title": "${teamName} vs Opponent Name",
-    "description": "Game description",
-    "date": "2026-MM-DD HH:MM:SS",
-    "location": "Des Moines, IA",
-    "venue": "${venue}",
-    "category": "Sports",
-    "price": "See website",
-    "source_url": "https://...ticket-url..."
-  }
-]
-
-🚨 Extract EVERY home game. Return [] ONLY if no games found. Include source_url (ticket link) for each event.`;
+  // The prompt text lives in _shared/prompts/eventExtraction.json so the hub
+  // renders the identical one. The team lookup above stays here: it is logic,
+  // not text, and it is what the placeholders are filled from.
+  return renderExtractionPrompt("events-sports", {
+    URL: url,
+    CURRENT_DATE: currentDate,
+    CONTENT: content.substring(0, contentWindowFor("events-sports")),
+    TEAM_NAME: teamName,
+    VENUE: venue,
+    DEFAULT_TICKET_BASE: defaultTicketBase,
+  });
 }
 
 serve(async (req) => {
@@ -604,295 +563,22 @@ serve(async (req) => {
 
       // Generate category-specific prompts
       // Use sports schedule prompt for Iowa Cubs, Iowa Wild, Iowa Barnstormers, Iowa Wolves
+      // DMI-007: the prompt TEXT is in _shared/prompts/eventExtraction.json,
+      // rendered identically by the hub. Which prompt a url gets is still
+      // decided here, because that is logic rather than text.
       const prompts = {
         events: isSportsScheduleDomain(currentUrl)
           ? getSportsSchedulePrompt(currentUrl, content)
-          : `You are an expert at extracting event information from Des Moines area event websites (event calendars, venue sites, festival pages, ticketing sites, and community listings). Your task is to find EVERY SINGLE EVENT mentioned in this content from ${currentUrl}.
-
-CURRENT DATE: ${nowCentralStr}
-WEBSITE CONTENT:
-${content.substring(0, 15000)}
-
-CRITICAL PARSING INSTRUCTIONS:
-
-🎯 WHAT TO LOOK FOR:
-- ANY text that mentions specific event names or titles
-- Venue names that host events (fairgrounds, theaters, arenas, etc.)
-- Date patterns (July 30, Jul 30th, 7/30, 2025, etc.)
-- Event categories (concerts, festivals, sports, shows, fairs, etc.)
-- HTML structures: <article class="slide">, event cards, lists, grids
-
-🔍 SPECIFIC EVENT PATTERNS:
-- Look for proper nouns that sound like event names
-- Geographic venues (Warren County, Indianola, Des Moines locations)
-- Entertainment venues (theaters, halls, stadiums)
-- Event types (fair, festival, concert, show, game, exhibition)
-- Time indicators (daily, weekly, through August, etc.)
-
-💡 EXTRACTION EXAMPLES:
-- "Warren County Fair" → title: "Warren County Fair"
-- "Anastasia the Musical" → title: "Anastasia the Musical" 
-- "National Senior Games" → title: "National Senior Games"
-- "Iowa Artists Sale-A-Bration" → title: "Iowa Artists Sale-A-Bration"
-- "Live Horse Racing" → title: "Live Horse Racing"
-
-📅 DATE CONVERSION (CRITICAL TIMEZONE HANDLING):
-- All events are in Des Moines, Iowa (Central Time Zone)
-- Convert ALL times to Central Time (CDT in summer -5 UTC, CST in winter -6 UTC)
-- Current date reference: ${nowCentralStr}
-- YEAR INFERENCE: When a date has no explicit year, choose the NEXT upcoming
-  occurrence relative to the current date. If the month/day is still ahead this
-  year, use ${currentYearStr}; if it has already passed this year, use the
-  following year. NEVER default to a past year.
-
-EXAMPLES (current year is ${currentYearStr}):
-- "Aug 15th" → "${currentYearStr}-08-15 19:00:00" (7:00 PM Central Time default, if still upcoming)
-- "January 5" when today is in July → next year's January (month already implies the next occurrence)
-- "7:30 PM" → "${currentYearStr}-MM-DD 19:30:00" (keep Central Time)
-- "8 AM" → "${currentYearStr}-MM-DD 08:00:00" (morning events)
-- "Through Aug 28" → create events until that date
-- No specific time? → default to 7:00 PM Central (19:00:00)
-- All-day events → use 12:00 PM Central (12:00:00)
-- Past dates (before ${nowCentralStr}) → SKIP these events
-
-⚠️ TIMEZONE CRITICAL: Store times in Central Time format (not UTC). The system will handle UTC conversion automatically.
-
-🔗 IMPORTANT - EVENT DETAIL URLs:
-On listing pages, the "Visit Website" link is NOT shown - it's only on individual event detail pages.
-Your job is to extract the detail_url (link to the event's detail page) so we can fetch the actual source URL.
-
-Look for anchor tags that link to event detail pages:
-- Pattern: /event/event-slug/event-id/
-- Example: <a href="/event/chef-georges-steak-bar-classics/53924/">Event Title</a>
-
-🏢 VENUE EXTRACTION:
-- Look for venue names near event titles
-- Just extract the venue NAME - we have a database of known venues with full addresses
-- Common Des Moines venues: Wells Fargo Arena, Civic Center, Hoyt Sherman, Val Air, etc.
-- County fairgrounds, high schools, parks
-- If unclear → use "Des Moines, IA" as location
-- DO NOT spend tokens on addresses/coordinates - we'll look these up automatically
-
-For EVERY event you find, extract:
-- title: Exact event name from content
-- date: YYYY-MM-DD HH:MM:SS (future dates only, in Central Time)
-- location: City/state (default: "Des Moines, IA")
-- venue: Specific venue name
-- description: Any details about the event
-- category: Music/Sports/Arts/Community/Entertainment/Festival
-- price: If mentioned, or "See website"
-- detail_url: The link to the individual event page (e.g., "/event/event-name/12345/" for CatchDesMoines)
-
-🔗 CRITICAL - EXTRACTING detail_url:
-When crawling event listing pages, look for links to individual event detail pages.
-For CatchDesMoines.com, these links usually follow the pattern: /event/event-slug/event-id/
-Example: /event/chef-georges-steak-bar-classics/53924/
-This URL is REQUIRED for fetching the actual "Visit Website" URL from the detail page.
-
-CRITICAL SUCCESS FACTORS:
-✅ Extract events even with incomplete info
-✅ Use logical defaults for missing details
-✅ Convert all date formats consistently to Central Time
-✅ Include recurring events as separate entries
-✅ ALWAYS extract the detail_url for each event
-✅ Scan the ENTIRE content thoroughly
-
-FORMAT AS JSON ARRAY ONLY - no other text:
-[
-  {
-    "title": "Event Name",
-    "date": "2025-MM-DD HH:MM:SS",
-    "location": "Des Moines, IA",
-    "venue": "Venue Name",
-    "description": "Event description",
-    "category": "Concert",
-    "price": "$25",
-    "detail_url": "/event/event-name/12345/"
-  }
-]
-
-🚨 ABSOLUTE REQUIREMENT: Extract EVERY event mentioned in the content. The detail_url is CRITICAL - always include it. Return empty array [] ONLY if literally no events are found anywhere in the content.`,
-
-        restaurants: `You are an expert at extracting restaurant information from websites like Eater.com, Des Moines Register, and restaurant listing sites. Your task is to find EVERY SINGLE RESTAURANT mentioned in this content from ${currentUrl}.
-
-WEBSITE CONTENT:
-${content.substring(0, 15000)}
-
-CRITICAL PARSING INSTRUCTIONS FOR RESTAURANT SITES:
-
-🎯 WHAT TO LOOK FOR:
-- Restaurant names (often in headers, links, or bold text)
-- Food establishment mentions (cafes, bistros, breweries, bakeries, etc.)
-- Article structures with restaurant reviews or lists
-- Address information or neighborhood mentions
-- Menu items or cuisine descriptions
-- Chef or owner names associated with restaurants
-
-🔍 SPECIFIC RESTAURANT PATTERNS:
-- Look for proper nouns that sound like restaurant names
-- Food-related business names (ending in Kitchen, Grill, Bistro, etc.)
-- Geographic location indicators (downtown, West Des Moines, etc.)
-- Price indicators ($, $$, $$$, "affordable", "upscale")
-- Cuisine type mentions (Italian, Mexican, farm-to-table, etc.)
-- Restaurant review language ("must-try", "best", "favorite")
-
-For EVERY restaurant you find, extract:
-- name: Exact restaurant name from content
-- cuisine: Type of cuisine (Italian, American, Mexican, Asian Fusion, etc.)
-- location: Address or area description (default: "Des Moines, IA")
-- rating: Numerical rating 1-5 if mentioned, or null
-- price_range: $, $$, $$$, or $$$$ based on content
-- description: Key details about food, atmosphere, or specialties
-- phone: Phone number if mentioned
-- website: Website URL if mentioned
-
-FORMAT AS JSON ARRAY:
-[
-  {
-    "name": "Restaurant Name",
-    "cuisine": "Cuisine Type",
-    "location": "Des Moines, IA",
-    "rating": 4.5,
-    "price_range": "$$",
-    "description": "Restaurant description and specialties",
-    "phone": "515-xxx-xxxx",
-    "website": "https://restaurant-website.com"
-  }
-]
-
-🚨 ABSOLUTE REQUIREMENT: Extract EVERY restaurant or food establishment mentioned in the content. Return empty array [] ONLY if literally no restaurants are found anywhere in the content.`,
-
-        playgrounds: `You are an expert at extracting playground and children's recreation information from websites like visitdesmoines.com, Greater DSM, and family activity sites. Your task is to find EVERY SINGLE PLAYGROUND or children's recreational facility mentioned in this content from ${currentUrl}.
-
-WEBSITE CONTENT:
-${content.substring(0, 15000)}
-
-CRITICAL PARSING INSTRUCTIONS FOR PLAYGROUND SITES:
-
-🎯 WHAT TO LOOK FOR:
-- Playground names (often park names or specific playground names)
-- Children's recreation areas, splash pads, adventure playgrounds
-- Parks with playground equipment mentioned
-- Family-friendly recreational facilities
-- Youth activity centers or outdoor play areas
-- Age-specific play structures or facilities
-
-For EVERY playground you find, extract:
-- name: Exact playground or park name from content
-- location: Address or area description (default: "Des Moines, IA")
-- description: Key features, themes, or special attributes
-- age_range: Target age group (e.g., "2-12 years", "All ages")
-- amenities: Array of equipment and features
-- rating: Numerical rating 1-5 if mentioned, or null
-
-FORMAT AS JSON ARRAY:
-[
-  {
-    "name": "Playground Name",
-    "location": "Des Moines, IA",
-    "description": "Playground features and description",
-    "age_range": "2-12 years",
-    "amenities": ["swings", "slides", "climbing structure", "splash pad"],
-    "rating": 4.2
-  }
-]
-
-🚨 ABSOLUTE REQUIREMENT: Extract EVERY playground or children's recreational facility mentioned in the content. Return empty array [] ONLY if literally no playgrounds are found anywhere in the content.`,
-
-        restaurant_openings: `Extract information about new restaurant openings from this website content from ${currentUrl}.
-
-WEBSITE CONTENT:
-${content.substring(0, 15000)}
-
-Please analyze this content and extract information about NEW restaurant openings, upcoming restaurants, or recently opened restaurants. For each opening, provide:
-- name: Restaurant name
-- description: Description of the restaurant concept
-- location: Location where it will open/opened
-- cuisine: Type of cuisine
-- opening_date: Opening date (format as YYYY-MM-DD, or null if not specified)
-- status: 'opening_soon', 'newly_opened', or 'announced'
-
-Format as JSON array:
-[
-  {
-    "name": "Restaurant Name",
-    "description": "Restaurant concept description",
-    "location": "Location",
-    "cuisine": "Cuisine Type",
-    "opening_date": "2025-MM-DD",
-    "status": "opening_soon"
-  }
-]
-
-Return empty array [] if no restaurant openings found.`,
-
-        attractions: `Extract all attractions, tourist spots, or places of interest from this website content from ${currentUrl}.
-
-WEBSITE CONTENT:
-${content.substring(0, 15000)}
-
-Please analyze this content and extract ALL attractions, tourist destinations, or points of interest. For each attraction, provide:
-- name: Attraction name
-- type: Type of attraction (Museum, Park, Historic Site, Entertainment, etc.)
-- location: Full address or location description
-- description: Description of the attraction
-- rating: Numerical rating if available (1-5 scale)
-- website: Website URL if available
-
-Format as JSON array:
-[
-  {
-    "name": "Attraction Name",
-    "type": "Attraction Type",
-    "location": "Full address",
-    "description": "Attraction description",
-    "rating": 4.3,
-    "website": "Website URL"
-  }
-]
-
-Return empty array [] if no attractions found.`,
-
-        competitor_analysis: `Analyze this competitor website content from ${currentUrl} and extract valuable content pieces for competitive analysis.
-
-WEBSITE CONTENT:
-${content.substring(0, 15000)}
-
-Extract ALL content pieces that could be valuable for competitive analysis, including:
-- Articles/blog posts about local attractions, events, or dining
-- Event listings and promotional content
-- Restaurant features or reviews
-- Tourism-related content
-- Community guides or recommendations
-- Marketing campaigns or promotional materials
-
-For each content piece, provide:
-- title: Content title or headline
-- description: Brief summary of the content
-- url: Specific URL if different from page URL, otherwise use page URL
-- content_type: Type of content (Article, Event Listing, Guide, Review, etc.)
-- category: Content category (Tourism, Dining, Events, Attractions, etc.)
-- publish_date: Publication date if available (YYYY-MM-DD format)
-- engagement_indicators: Any social sharing numbers, comments, or engagement metrics found
-
-Format as JSON array:
-[
-  {
-    "title": "Content Title",
-    "description": "Content description and key points",
-    "url": "${currentUrl}",
-    "content_type": "Article",
-    "category": "Tourism",
-    "publish_date": "2025-01-15",
-    "engagement_indicators": {
-      "likes": 25,
-      "shares": 5,
-      "comments": 3
-    }
-  }
-]
-
-Return empty array [] if no competitive content found.`
+          : renderExtractionPrompt("events", {
+            URL: currentUrl,
+            CURRENT_DATE: nowCentralStr,
+            CURRENT_YEAR: currentYearStr,
+            CONTENT: content.substring(0, contentWindowFor("events")),
+          }),
+        restaurants: renderExtractionPrompt("restaurants", {
+          URL: currentUrl,
+          CONTENT: content.substring(0, contentWindowFor("restaurants")),
+        }),
       };
 
       const selectedPrompt = prompts[category as keyof typeof prompts] || prompts.events;
