@@ -1915,3 +1915,25 @@ Evidence:
      CI had flagged the day before. The re-baseline was right and the absorption was invisible. When a
      ratchet has been blind, re-baselining it is not a neutral act - diff what you are banking.
 ---
+
+2026-08-28 - WEB-SEO-006: guarding the class, and a control that failed twice
+  Followed yesterday's finding rather than a story: the SPA fallback manufactures a 200 for every missing
+  static file, so any check asking "does this URL answer?" passes on all of them. Swept all 35 prerendered
+  pages for advertised assets and verified each against production - clean, but only because I had just
+  fixed the one that was broken.
+
+  So I built the guard. It went wrong twice and the control caught both.
+    1. Stripping the host from any absolute URL and fetching the path against our origin turned every
+       Supabase storage image into a false positive. Seven of them, confidently reported.
+    2. Worse: the offline check looked only at root-relative paths, and its control PASSED. SEOHead builds
+       og:image as `${baseUrl}${BRAND.ogImage}` - the reference that actually broke is ABSOLUTE. The guard
+       examined 11 assets out of 70 and none was the one it existed for.
+
+  THAT SECOND ONE IS THE LESSON. A guard written FROM a specific bug can still fail to cover that bug, and
+  it will look healthy while doing so - 11 assets checked, green tick, nothing to see. The only thing that
+  said otherwise was re-injecting the original defect and watching the check pass. Write the control from
+  the ORIGINAL bug, not from the abstraction you built afterwards.
+
+  Now: offline mode reports "MISSING not in dist/", --live reports "200 text/html", reverting passes.
+  Wired into pr-checks after the build.
+---
