@@ -2301,3 +2301,28 @@ Evidence:
   Not built. Proxying og-image through the site domain would work, but it changes a URL social platforms
   have cached, and that is a design decision.
 ---
+
+2026-08-28 - WEB-SEO-006: the fix is already built and pointed at the wrong crawlers
+  Asked what a search crawler actually receives on an entity page, having verified the social path works.
+
+    facebookexternalhit  <title> = the real event title, og:title, real description
+    Googlebot / GPTBot   <title> = "Things to Do in Des Moines This Weekend", homepage description
+
+_middleware.ts:268 rewrites the real <title>, not just og/twitter tags. So the machinery that would give
+  Google and every AI crawler a correct title and description across all 884 entity URLs exists, is proven
+  in production, and is gated at :237 on a CRAWLER_UA list that includes Slackbot and excludes Googlebot,
+  GPTBot, ClaudeBot and PerplexityBot.
+  And those crawlers are allowed in - robots.txt has 28 groups; GPTBot, ClaudeBot, PerplexityBot and
+  Google-Extended all get Allow: / while anthropic-ai, CCBot, Bytespider and Scrapy get Disallow: /.
+
+  I DID NOT ADD THEM TO THE LIST, and the reason is a line the middleware's own header draws: it removes
+  what is "actively harmful" pending PRERENDER_ENTITIES. Widening the UA list is not that - it is adopting
+  DYNAMIC RENDERING for search, which Google tolerates when content is equivalent and recommends against
+  in favour of the SSR that PRERENDER_ENTITIES provides. One line, real upside, a strategy choice rather
+  than a defect. Recorded as a costed option.
+
+  THE HABIT WORTH NAMING: three times this week the most valuable thing was asking what a DIFFERENT client
+  sees. Googlebot vs a browser found this. facebookexternalhit vs Googlebot found that <title> is already
+  rewritten. An anon bearer vs no bearer found the newsletter dispatcher. The site behaves differently per
+  caller in more places than the notes record.
+---
