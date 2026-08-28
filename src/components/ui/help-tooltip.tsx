@@ -2,6 +2,7 @@ import React from 'react';
 import {
   Tooltip,
   TooltipContent,
+  TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { HelpCircle, Info, AlertCircle } from 'lucide-react';
@@ -45,6 +46,11 @@ export function HelpTooltip({
   const Icon = iconMap[variant];
 
   return (
+    // Self-providing, like every other tooltip consumer in the tree. This was
+    // the one that leaned on the app-root TooltipProvider, and Radix throws
+    // rather than degrading when no Provider ancestor exists - so leaving it
+    // implicit meant the first component to import HelpTooltip would crash.
+    <TooltipProvider>
     <Tooltip delayDuration={200}>
       <TooltipTrigger asChild>
         {children || (
@@ -78,5 +84,6 @@ export function HelpTooltip({
         )}
       </TooltipContent>
     </Tooltip>
+    </TooltipProvider>
   );
 }

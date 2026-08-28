@@ -1,5 +1,4 @@
 import { LucideSprite } from "@/components/ui/icon-sprite.generated";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { RouteErrorBoundary } from "@/components/ui/route-error-boundary";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
@@ -389,7 +388,12 @@ const App = () => (
   {/* Defines the <symbol> set every <SpriteIcon /> references. Rendered
       once, before anything that uses it (WEB-PERF-023). */}
   <LucideSprite />
-  <TooltipProvider>
+    {/* No app-root TooltipProvider. Every consumer of ui/tooltip already
+        wraps itself in one - AIDisclosureBadge, PremiumBadge,
+        RecommendationBadge, MenuUrlManager and sidebar (which needs its own
+        anyway, for delayDuration={0}) - so this one was redundant, and it
+        was the only thing pulling the Radix tooltip and its floating-ui
+        popper into the render-blocking entry chunk. WEB-PERF-020. */}
     <BrowserRouter>
       <ScrollRestoration />
       <AuthProvider>
@@ -635,7 +639,6 @@ const App = () => (
       </ErrorBoundary>
       </AuthProvider>
     </BrowserRouter>
-  </TooltipProvider>
   </AccessibilityProvider>
 );
 
