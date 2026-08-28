@@ -239,6 +239,14 @@ jobs:
       - name: No prerendered page ships a skeleton
         run: node scripts/check-prerender-content.mjs
 
+      # WEB-SEO-002 was "12 routes render no SEOHead" - pages shipping with the
+      # shell's title, no canonical and the site-wide description. All 35 are
+      # clean today and nothing was guarding it, so the property got fixed and
+      # the comment in prerender.mjs went stale. None of these move with live
+      # data, so this gates.
+      - name: Every prerendered page declares its own head
+        run: node scripts/check-prerender-head.mjs
+
       - name: Prerendered DOM size
         run: node scripts/check-dom-budget.mjs
 

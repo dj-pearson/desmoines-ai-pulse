@@ -418,9 +418,12 @@ let duplicateJsonLdTotal = 0;
       // signal. See the browser-per-worker note at launch for why this matters.
       //
       // A route that renders no SEO component at all emits no data-rh and just
-      // hits the timeout, same as the old sleep. Twelve hub routes are in that
-      // state today (WEB-SEO-002), so keep the timeout short enough that they
-      // do not dominate the run.
+      // hits the timeout, same as the old sleep. This comment used to say
+      // "twelve hub routes are in that state today (WEB-SEO-002)"; measured
+      // 2026-08-28, ZERO are - all 35 carry a canonical, a unique title and a
+      // description. The timeout stays short anyway, because a route that
+      // regresses should cost seconds rather than dominate the run, and
+      // scripts/check-prerender-head.mjs now fails the build if one does.
       // The old predicate was `!!document.head.querySelector('[data-rh]')`, and
       // it had silently become a no-op: index.html now authors 9 data-rh tags
       // of its own (WEB-SEO-002/012 hands the fallback title/description/og
