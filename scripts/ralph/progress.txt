@@ -2564,3 +2564,23 @@ deleted it
   Severity unmeasurable here - anon reads of profiles return 0 rows for the
   UNFILTERED control too, so that is RLS, not an empty table.
   AC3 (iOS) and AC4 (Android) unchanged.
+
+2026-08-28  WEB-QA-017: the suppression mechanism itself had rotted
+  Baseline 98 -> 96, 195 -> 193 suppressed (b5e183ba).
+  Composition of the remaining 195, which matters more than the number:
+    189  migrations ledgered applied that never ran -> WEB-QA-018's decision
+      2  device_tokens -> product decision (XPLAT-006)
+      2  exec_sql in scripts/run-migration.ts -> a script, not the app
+      2  known_venues.image_url
+  Six of 195 are not waiting on WEB-QA-018, so AC1 is gated on that decision and
+  the headline count is not a measure of remaining work.
+  PENDING_MIGRATIONS had gone stale: 4 of its 6 entries had already landed, all
+  4 confirmed in PRODUCTION, each suppressing a check that passes on its own.
+  Its header told people to remove them and nothing enforced it; now exits 2,
+  controlled by adding events.title.
+  known_venues.image_url was parked in the baseline (for things with no fix in
+  flight) though migration 20260827000001 authors it - moved to
+  PENDING_MIGRATIONS. Live consequence: venueImage.ts:56 selects that column on
+  every call, so it 42703s and falls back to per-event image downloads. The
+  venue-image dedup has never worked in production. One caller,
+  backfill-images:337. Needs the same db push as the other pending migrations.
