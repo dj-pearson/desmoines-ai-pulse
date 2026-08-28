@@ -25,5 +25,30 @@
     "send-weekly-digest",
     "social-media-manager",
     "subscription-lifecycle"
-  ]
+  ],
+  "notes": {
+    "log-content-metrics": "PUBLIC BY DESIGN - anonymous visitors report Core Web Vitals, so a guard would delete the feature. Bounded by a rate limit instead; its own header explains this. Do not guard.",
+    "og-image": "PUBLIC BY DESIGN - renders the social card any crawler fetches.",
+    "check-login-attempt": "Sends mail via Resend (RESEND_API_KEY, resend.com). Reachable with the anon key. Enumerate callers before guarding - it is on the sign-in path.",
+    "check-core-web-vitals": "Calls the Google PageSpeed Insights API (quota).",
+    "send-weekly-digest": "Sends mail via Resend.",
+    "send-seo-notification": "Sends mail via Resend.",
+    "notify-event-submission": "Sends mail via Resend.",
+    "social-media-manager": "Reaches a paid API directly.",
+    "enhance-content": "Model spend.",
+    "generate-pseo-page": "Model spend.",
+    "scrape-restaurant-menus": "Reaches a paid API directly.",
+    "scrape-ticketmaster-events": "Paid/rate-limited API via _shared/scraper.ts and fetchWithTimeout.ts.",
+    "subscription-lifecycle": "Reaches a paid API directly; also 404 in production (never deployed).",
+    "gsc-fetch-properties": "Google API. 404 in production - never deployed.",
+    "gsc-sync-data": "Google API. 404 in production - never deployed.",
+    "analyze-content": "Writes the DB; no paid call detected.",
+    "analyze-images": "Writes the DB; no paid call detected.",
+    "crawl-site": "Writes the DB; no paid call detected. Targets seo_* tables that do not exist (WEB-BE-031), so likely inert.",
+    "generate-hotel-affiliate-urls": "Writes the DB; no paid call detected.",
+    "pseo-batch-worker": "Writes the DB; no paid call detected.",
+    "calculate-trending": "Read-only; no paid call detected.",
+    "generate-sitemaps": "Read-only; no paid call detected.",
+    "oauth-callback": "Read-only; no paid call detected. Part of an OAuth flow - check the state/code handling before assuming a guard is right."
+  }
 }

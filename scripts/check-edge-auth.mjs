@@ -115,6 +115,16 @@ if (privileged === 0) {
   process.exit(1);
 }
 
+// Annotations survive a re-baseline. The list of NAMES is regenerated; the
+// `notes` map beside it is hand-written triage - why an entry is here, and
+// whether it should be guarded at all. Losing that on every --write would mean
+// re-deriving it, and at least one entry is a deliberate design decision:
+// log-content-metrics is public on purpose (anonymous visitors report metrics)
+// and is bounded by a rate limit instead, which its own header explains.
+const priorNotes = existsSync(BASELINE)
+  ? (JSON.parse(readFileSync(BASELINE, 'utf8')).notes ?? {})
+  : {};
+
 if (WRITE) {
   writeFileSync(
     BASELINE,
@@ -124,6 +134,7 @@ if (WRITE) {
           'Edge functions that build a service-role client and verify no caller. TRIAGE, not a vulnerability list - some are public by design. Each needs its callers enumerated before being guarded. This list must only ever shrink. See scripts/check-edge-auth.mjs.',
         generated: new Date().toISOString().slice(0, 10),
         unguarded: unguarded.sort(),
+        notes: priorNotes,
       },
       null,
       2,
