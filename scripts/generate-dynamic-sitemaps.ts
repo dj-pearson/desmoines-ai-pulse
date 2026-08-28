@@ -187,6 +187,25 @@ async function generateEventsSitemap(): Promise<number | null> {
       .from('events')
       .select('title, date, event_start_utc, updated_at')
       .gte('date', cutoff)
+      // THE SITEMAP MUST NOT ADVERTISE A URL THE APP REFUSES TO RENDER.
+      // useEventBySlug.ts:53-54 filters both of these, so a merged or hidden
+      // event resolves to nothing on its own detail page - while this query
+      // filtered neither and would happily submit it to Google. That is a
+      // soft-404 with a sitemap entry pointing at it, which is worse than the
+      // page simply not existing.
+      //
+      // INERT TODAY AND VERIFIED SO, not assumed: of the 413 events inside the
+      // grace window, 0 are merged and 0 are hidden, and the same query with
+      // both filters still returns 413. Neither column has a NULL row, which
+      // matters because `col <> true` is NULL for a NULL row and would drop it.
+      //
+      // NOT INERT SOON. WEB-SEO-017 AC2 is ten duplicate groups waiting to be
+      // merged, and merging is exactly what sets is_merged - so doing that work
+      // without this filter would manufacture ten sitemapped soft-404s. 700
+      // events are already hidden; they sit outside the window only because
+      // WEB-AUTO-006 hides stale past-dated rows.
+      .neq('is_merged', true)
+      .neq('is_hidden', true)
       .order('date', { ascending: false })
       .order('id')
       .range(from, from + PAGE - 1);
@@ -245,6 +264,10 @@ async function generateRestaurantsSitemap(): Promise<number | null> {
   const { data: restaurants, error } = await supabase
     .from('restaurants')
     .select('name, slug, is_featured, updated_at')
+    // Same rule as events above: useRestaurants.ts:193 hides merged rows, so
+    // sitemapping one submits a URL the listing will not show. 0 of 478
+    // restaurants are merged today and none is NULL, so this is inert now.
+    .neq('is_merged', true)
     .order('name')
     .order('id')
     .limit(5000);
