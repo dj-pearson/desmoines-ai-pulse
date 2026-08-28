@@ -1605,3 +1605,30 @@ Evidence:
   case, and it is weaker than a control. Said so in the commit rather than letting "two runs now match"
   stand in for proof it never could be.
 ---
+
+2026-08-28 - WEB-SEO-008: an unattributed count, followed to a real defect
+  The prerender summary said "dropped 1 duplicate JSON-LD block(s)" and could not say where. Made
+  dedupeJsonLd return the dropped @types and prerender name the route: /restaurants (ItemList).
+
+  The duplicate itself was benign - Helmet mid-update, last-wins kept the settled 20-item block. The
+  defect was next to it: numberOfItems came from totalCount (478) while itemListElement was sliced to 20.
+  The only one of ten ItemList routes where the numbers disagreed. Structured data that contradicts
+  itself is a claim a crawler can check and find false.
+
+  THE GAP WAS IN THE GUARD'S OWN HEADER. check-prerender-content.mjs opens with "/restaurants shipped ...
+  an ItemList with numberOfItems 0" and asserted the skeleton and the empty anchors but never the list.
+  A file can state the defect it exists for and still not cover half of it. Worth re-reading other
+  guards' headers against what they actually assert.
+
+  WHAT I DID NOT ASSERT, and the restraint is the point: an EMPTY ItemList. A hub with nothing to show
+  emits none, and the DOM cannot tell "no rows" from "rows never arrived". That is check-hub-inventory's
+  question because it asks the database - the exact mistake its own header records making in v1.
+
+  dedupeJsonLd had zero tests while deleting structured data for a living. Nine now, and the load-bearing
+  ones are the no-ops (never touch a block written straight into index.html). Controlled by removing the
+  data-rh guard: fails exactly those two.
+
+  PROCESS NOTE, third time this session: a python heredoc mangled backslash escapes again, twice, and
+  produced a JS parse error the second time. Line-based splicing with no escapes worked both times. Stop
+  reaching for string anchors that contain \n when editing through a heredoc.
+---
