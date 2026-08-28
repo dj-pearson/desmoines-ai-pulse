@@ -1285,3 +1285,26 @@ Evidence:
   - Measure before filing a suspicion. /stay looked like it was missing its SEO component and was not;
     my own wrong link prefix produced the "0 hotel links" that started it.
 ---
+
+## 2026-08-28 - WEB-SEO-006: why the existing loading guard missed /restaurants
+- prerender.mjs already refused to publish a capture containing "Loading X..." - but only when
+  #main-content has under 2,000 chars, deliberately, because rejecting on any spinner "threw away the
+  homepage over a single spinner".
+- That rule is exactly what let /restaurants through: its main list was a skeleton while the rest of
+  the page carried well over 2,000 characters. And no SIZE threshold would have caught it either -
+  the skeleton was a small fraction of a large page and still the entire point of the route.
+- So the gate I added yesterday has to be absolute, and the cost that comment protects against is
+  real. Stated it in the file and gave it ALLOWED_SKELETON_ROUTES - per route, with a reason, empty
+  today. Both paths controlled: unlisted skeleton exits 1 and names the route; allowlisted exits 0,
+  prints the reason, and reports how many were allowed rather than claiming a clean run.
+- **Learnings for future iterations:**
+  - WHEN YOU ADD A GATE, GO FIND THE ARGUMENT AGAINST IT - it is usually already written in the file
+    you are duplicating. This one was a comment explaining why an earlier, stricter version was
+    softened, and it applied directly to what I had just shipped.
+  - Proportionality guards cannot see importance. "Small part of a big page" and "the only reason the
+    page exists" are the same measurement.
+  - Every gate needs a per-case escape hatch with a stated reason, or the first false positive
+    deletes the whole check. A baseline that can only shrink, or an allowlist that must stay empty.
+  - Control BOTH paths of an allowlist. An escape hatch that silently swallows everything is worse
+    than no gate; the pass path must say what it let through and why.
+---
