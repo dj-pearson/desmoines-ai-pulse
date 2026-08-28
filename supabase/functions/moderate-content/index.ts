@@ -107,27 +107,37 @@ async function scoreText(text: string, kind: ContentType): Promise<Scores> {
   }
 }
 
-/** Pull the text + a short excerpt for a content item. Null = row not found. */
+/**
+ * Pull the text + a short excerpt for a content item. Null = row not found.
+ *
+ * A READ FAILURE ALSO RETURNS NULL and that is deliberate rather than an
+ * oversight: moderateOne maps null to a verdict of 'error', which the sweep
+ * counts and reports via ctx.failed(). So the item is never silently treated as
+ * clean. What the caller loses is WHY - a missing row and a failed read are the
+ * same value here - so the error is logged before returning.
+ */
 async function loadItem(
   supabase: SupabaseClient,
   contentType: ContentType,
   contentId: string,
 ): Promise<{ text: string; excerpt: string } | null> {
   if (contentType === 'review') {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('user_ratings')
       .select('review_text, moderation_status')
       .eq('id', contentId)
       .maybeSingle<{ review_text: string | null }>();
+    if (error) console.error(`[moderate-content] review ${contentId} unreadable: ${error.message}`);
     if (!data) return null;
     const text = (data.review_text ?? '').trim();
     return { text, excerpt: text.slice(0, 140) };
   }
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('contact_submissions')
     .select('name, subject, message, inquiry_type')
     .eq('id', contentId)
     .maybeSingle<{ name: string | null; subject: string | null; message: string | null; inquiry_type: string | null }>();
+  if (error) console.error(`[moderate-content] contact ${contentId} unreadable: ${error.message}`);
   if (!data) return null;
   const text = [data.subject, data.message].filter(Boolean).join('\n').trim();
   return { text, excerpt: (data.subject || data.message || '').slice(0, 140) };
@@ -270,12 +280,26 @@ Deno.serve(async (req) => {
 
     const result = await runJob('moderate-content', async (ctx) => {
       const paused = await isPaused(supabase);
-      const { data: pendingRows } = await supabase
+      const { data: pendingRows, error: pendingError } = await supabase
         .from('user_ratings')
         .select('id')
         .eq('moderation_status', 'pending')
         .order('created_at', { ascending: true })
         .limit(SWEEP_BATCH);
+
+      // AN UNREADABLE QUEUE IS NOT AN EMPTY QUEUE. This error was discarded, so a
+      // failed read fell through to `pendingRows ?? []` and the sweep returned
+      // { scanned: 0, approved: 0, flagged: 0, rejected: 0, error: 0 } with
+      // success: true and a 200 - byte-identical to "there was nothing pending".
+      //
+      // On a scheduled sweep that means moderation stops and every signal says
+      // healthy: no alert, a green automation_job_runs row, and user reviews
+      // sitting unmoderated for as long as the read keeps failing. Throwing puts
+      // the failure where runJob can record it and returns 500 to the caller.
+      if (pendingError) {
+        throw new Error(`could not read the pending moderation queue: ${pendingError.message}`);
+      }
+
       const rows = (pendingRows ?? []) as { id: string }[];
 
       const counts: Record<Verdict, number> = { approved: 0, flagged: 0, rejected: 0, error: 0 };
