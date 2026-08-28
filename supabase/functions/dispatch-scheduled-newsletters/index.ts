@@ -22,6 +22,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { runJob } from "../_shared/jobRunner.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const FROM_ADDRESS =
@@ -224,6 +225,29 @@ serve(async (req) => {
       },
     });
   }
+
+  // THE DOCSTRING ABOVE CLAIMED THIS CHECK EXISTED AND NO CODE PERFORMED IT.
+  // There is no config.toml entry for this function, so verify_jwt defaults to
+  // TRUE - and that only means "a valid Supabase JWT". The publishable ANON KEY
+  // is a valid JWT and ships in every client bundle, so the gateway let it
+  // through and nothing here looked at the role. Verified against production:
+  // no Authorization header -> 401 at the gateway; anon bearer -> 200 and the
+  // job ran. This function then does privileged writes with the service-role
+  // client below and dispatches mail through Resend.
+  //
+  // requireAdminOrApiKey accepts EDGE_FUNCTION_API_KEY, the service-role key
+  // (which is what the pg_cron job sends - see
+  // 20260520000012_schedule_newsletter_dispatch.sql, Bearer ||
+  // current_setting(app.settings.supabase_service_role_key)), or an admin user
+  // JWT. An anon bearer falls through to the admin check and is refused, so the
+  // scheduled path is unchanged and the public path closes.
+  const corsHeaders = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers":
+      "authorization, x-client-info, apikey, content-type",
+  };
+  const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+  if (authFailure) return authFailure;
 
   try {
     const supabase = createClient(
