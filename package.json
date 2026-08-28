@@ -99,6 +99,7 @@
     "icons:sprite": "node scripts/generate-icon-sprite.mjs",
     "check-pseo-inventory": "tsx scripts/check-pseo-inventory.ts",
     "check-pseo-collisions": "tsx scripts/check-pseo-collisions.ts",
+    "check-hub-inventory": "node scripts/check-hub-inventory.mjs",
     "check-icon-sprite": "node scripts/generate-icon-sprite.mjs --check",
     "check-schema-dupes": "node scripts/check-duplicate-schema.mjs",
     "audit:seo-head": "node scripts/audit-prerendered-seo.mjs",

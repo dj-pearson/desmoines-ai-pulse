@@ -134,6 +134,17 @@ jobs:
       # long the oldest un-advertised event has been waiting. Reports, never
       # gates: a sitemap lagging during a quiet week is expected, and gating on
       # it is the permanently-red trap WEB-CI-020/021 already cost two lanes.
+      # WEB-SEO-013 AC5 on the hand-built hubs, which never had an inventory
+      # gate - check-pseo-inventory covers only the generated pSEO pages. Asks
+      # the database rather than the built HTML, because a hub that renders
+      # nothing emits no ItemList and would be skipped by a DOM count. Reports;
+      # each entry needs the 301-or-unpublish decision AC5 describes.
+      - name: Hand-built hub inventory
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: node scripts/check-hub-inventory.mjs
+
       - name: Sitemap freshness
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
