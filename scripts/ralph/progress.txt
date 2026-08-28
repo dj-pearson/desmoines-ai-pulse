@@ -2170,3 +2170,26 @@ Evidence:
   way these four did, several are public by design (og-image, log-error), and a wrong guard breaks a
   working path silently. The ratchet holds the line; the triage is a human's to work through.
 ---
+
+2026-08-28 - Re-triaged the 23 by following imports, and got it wrong again in a new way
+  Last commit's lesson was that a per-file regex cannot see through an import - it had told me
+  generate-weekend-guide did not spend money when it calls Claude via _shared/aiConfig. So I traced one
+  level into _shared. The ranking changed materially: 13 of 23 reach a paid API, not the handful the flat
+  grep found. Mail senders, model spend, Google APIs.
+
+  THE NEW PASS THEN PRODUCED ITS OWN FALSE POSITIVE, and it is a good one. It flagged log-content-metrics
+  for matching "geocode" - inside a COMMENT explaining that the function is public ON PURPOSE (anonymous
+  visitors report Core Web Vitals; a guard would delete the feature) and is bounded by a RATE LIMIT
+  instead. So the second regex was fooled by prose exactly as the ratchet was two commits ago. Same
+  mistake, different tool, one day apart.
+
+  WHAT I DID ABOUT IT rather than just noting it: the baseline now carries a `notes` map - what each entry
+  does, whether it spends money, and whether guarding is even correct. log-content-metrics is marked "do
+  not guard". A bare list of 23 names invites the batch-guarding I keep refusing; a list with reasons is
+  something a human can actually work through. --write regenerates the names and PRESERVES the notes, so
+  re-baselining cannot silently throw the triage away.
+
+  THE PATTERN, stated once because it has now happened three times in two days: every regex I write over
+  this codebase eventually matches a comment, and comments in this repo are unusually long and quote code.
+  Strip comments before matching, or expect prose to answer for code.
+---
