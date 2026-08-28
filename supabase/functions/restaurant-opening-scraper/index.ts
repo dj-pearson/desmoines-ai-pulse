@@ -11,6 +11,7 @@ import { scrapeUrl } from "../_shared/scraper.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { getAnthropicApiKey } from "../_shared/aiConfig.ts";
+import { sanitizeLikeInput } from '../_shared/validation.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -252,7 +253,11 @@ FORMAT AS JSON ARRAY ONLY - no other text:
             const { data: existingList } = await supabase
               .from('restaurants')
               .select('id, name, location, status, opening_date, opening_timeframe')
-              .ilike('name', restaurant.name);
+              // A scraped name is a LIKE pattern here; a percent or underscore in
+              // it would widen this existence check and mask a genuinely new
+              // restaurant. Escaped, not stripped - sanitizeLikeInput keeps
+              // apostrophes, which most venue names here have.
+              .ilike('name', sanitizeLikeInput(restaurant.name ?? ''));
 
             // Find match only if BOTH name and location match (same restaurant in same location)
             // If name matches but location is different, treat as new location (allow it)
