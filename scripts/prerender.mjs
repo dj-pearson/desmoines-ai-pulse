@@ -56,7 +56,13 @@ import http from 'node:http';
 import os from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
-import { stripInjectedPreloads, restoreAsyncFontLinks, dedupeJsonLd, stripLeafletRuntime } from './lazy-preload-patterns.mjs';
+import {
+  stripInjectedPreloads,
+  restoreAsyncFontLinks,
+  dedupeJsonLd,
+  stripLeafletRuntime,
+  stripPrerenderSignal,
+} from './lazy-preload-patterns.mjs';
 import { PRERENDER_ROUTES } from './prerender-routes.mjs';
 import process from 'node:process';
 
@@ -541,8 +547,12 @@ let duplicateJsonLdTotal = 0;
       // hydration, so every one of those nodes is parsed and discarded. On /map
       // that was 1,121 of 1,958 elements in #root against 550 words of text.
       // See stripLeafletRuntime for what it costs to keep them.
-      const [html, leafletDropped] = stripLeafletRuntime(deJsonLd);
+      const [deLeaflet, leafletDropped] = stripLeafletRuntime(deJsonLd);
       if (leafletDropped > 0) leafletStrippedTotal += leafletDropped;
+      // The queries-settled handshake has done its job by now; shipping it would
+      // tell every reader of production HTML that a visitor's queries had
+      // settled before they started. See stripPrerenderSignal.
+      const [html] = stripPrerenderSignal(deLeaflet);
       if (strippedPreloads > 0) {
         strippedTotal += strippedPreloads;
       }

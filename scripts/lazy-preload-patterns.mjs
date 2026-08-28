@@ -252,3 +252,30 @@ export function stripLeafletRuntime(html) {
   });
   return removed === 0 ? [html, 0] : [out, removed];
 }
+
+/**
+ * Removes the prerenderer's own handshake attribute from the shipped HTML.
+ *
+ * src/components/PrerenderSignal.tsx publishes data-queries-settled on <html>
+ * so scripts/prerender.mjs knows when TanStack Query has finished. That is
+ * build-time metadata: by the time the file is written it has served its whole
+ * purpose, and leaving it in bakes `data-queries-settled="true"` into all 35
+ * pages.
+ *
+ * NOTHING READS IT, so this is not a bug fix - it is the same hygiene applied
+ * to the injected modulepreloads and the Leaflet panes. The reason to bother is
+ * that a stale "true" in production HTML is actively misleading: it says the
+ * queries have settled for a visitor whose queries have not started, and the
+ * next person to grep production for a load signal would believe it.
+ *
+ * Attribute only. The <html> tag keeps its lang, class and style.
+ */
+export function stripPrerenderSignal(html) {
+  const re = /\s*data-queries-settled="[^"]*"/g;
+  let removed = 0;
+  const out = html.replace(re, () => {
+    removed++;
+    return '';
+  });
+  return removed === 0 ? [html, 0] : [out, removed];
+}

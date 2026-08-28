@@ -9,7 +9,7 @@
  * page is a silent SEO regression: the page still renders, the build still
  * passes, and a crawler just sees less than it did.
  */
-import { stripLeafletRuntime } from '../lazy-preload-patterns.mjs';
+import { stripLeafletRuntime, stripPrerenderSignal } from '../lazy-preload-patterns.mjs';
 
 let failures = 0;
 const check = (name, cond, detail = '') => {
@@ -70,6 +70,31 @@ console.log('\npreserves surrounding content');
     n === 2 && out.includes('<h1>Map</h1>') && out.includes('<p>Explore Des Moines</p>'),
     out,
   );
+}
+
+console.log('\nstripPrerenderSignal: build-time handshake, not shipped output');
+{
+  const html = '<html lang="en" class="dark" data-queries-settled="true" style="--x: 1;"><head></head></html>';
+  const [out, n] = stripPrerenderSignal(html);
+  check(
+    'removes the attribute and keeps lang, class and style',
+    n === 1 && out === '<html lang="en" class="dark" style="--x: 1;"><head></head></html>',
+    out,
+  );
+}
+{
+  const [out, n] = stripPrerenderSignal('<html lang="en"><head></head></html>');
+  check('no-op when absent, same string', n === 0 && out === '<html lang="en"><head></head></html>');
+}
+{
+  // The prerenderer writes "true", but a capture that timed out could carry
+  // "false" - both are build-time state and neither should ship.
+  const [, n] = stripPrerenderSignal('<html data-queries-settled="false"></html>');
+  check('removes it whatever the value', n === 1);
+}
+{
+  const [out] = stripPrerenderSignal('<div data-queries-total="9"></div>');
+  check('leaves a differently-named data attribute alone', out === '<div data-queries-total="9"></div>', out);
 }
 
 console.log(`\n${failures} failure(s)`);
