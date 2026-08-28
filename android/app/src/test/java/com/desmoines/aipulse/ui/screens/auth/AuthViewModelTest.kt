@@ -4,6 +4,7 @@ import com.desmoines.aipulse.data.remote.BillingService
 import com.desmoines.aipulse.data.repository.AuthRepository
 import com.desmoines.aipulse.ui.screens.auth.AuthViewModel.PasswordStrength
 import com.desmoines.aipulse.util.BiometricAuthService
+import com.desmoines.aipulse.util.SessionTimeoutService
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -33,6 +34,7 @@ class AuthViewModelTest {
     private lateinit var authRepository: AuthRepository
     private lateinit var biometricAuthService: BiometricAuthService
     private lateinit var billingService: BillingService
+    private lateinit var sessionTimeoutService: SessionTimeoutService
     private lateinit var viewModel: AuthViewModel
 
     @BeforeEach
@@ -41,8 +43,14 @@ class AuthViewModelTest {
         authRepository = mockk(relaxed = true)
         biometricAuthService = mockk(relaxed = true)
         billingService = mockk(relaxed = true)
+        sessionTimeoutService = mockk(relaxed = true)
         every { authRepository.sessionStatus } returns emptyFlow()
-        viewModel = AuthViewModel(authRepository, biometricAuthService, billingService)
+        viewModel = AuthViewModel(
+            authRepository,
+            biometricAuthService,
+            billingService,
+            sessionTimeoutService,
+        )
     }
 
     @AfterEach
