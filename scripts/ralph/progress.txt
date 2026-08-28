@@ -1148,3 +1148,25 @@ Evidence:
   - When correcting your own recorded number, correct it where it was recorded. The wrong figure was
     in prd.json where the next person would read it first.
 ---
+
+## 2026-08-28 - the offline suites are discovered now, and two had never run
+- Audited what runs. 10 *.test.mjs suites exist; test:offline listed 4. Two were in NOTHING:
+  functions/__tests__/middleware-canonical.test.mjs and scripts/__tests__/list-edge-deploys.test.mjs.
+- The first is the ONLY guard on WEB-SEO-006's canonical rewrite, which that story says cannot be
+  verified any other way because HTMLRewriter does not exist outside the Workers runtime.
+- FOUR OF THE SIX GAPS WERE MINE. This session I added four suites and wired each as its own
+  pr-checks step, never having noticed the aggregator. Same mistake, same file, four times.
+- scripts/run-offline-suites.mjs globs both __tests__ dirs. Adding a suite makes it run. It exits 1
+  when the glob matches nothing, because a discovery runner that finds zero must not report success.
+- pr-checks 26 steps -> 22. Negative-controlled: breaking one suite makes the runner exit 1, print
+  that suite's output and name it.
+- **Learnings for future iterations:**
+  - CHECK FOR AN AGGREGATOR BEFORE ADDING A CI STEP. `npm run test:offline` already existed and I
+    walked past it four times, each time making the list less true.
+  - Audit test wiring the same way as check wiring. Iteration 8 found three checks nothing ran; the
+    identical audit on tests found two suites nothing ran, one of them load-bearing.
+  - Prefer discovery to a list for anything that grows. A hand-maintained list of suites is a
+    baseline keyed on someone remembering.
+  - A discovery runner must fail on an empty match. Otherwise a moved directory turns the whole
+    safety net into a green tick.
+---
