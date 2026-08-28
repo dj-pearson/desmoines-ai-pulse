@@ -343,6 +343,13 @@ jobs:
       - name: Mobile clients query tables that exist
         run: node scripts/check-mobile-schema-usage.mjs
 
+      # check-schema-usage compares code against src/integrations/supabase/types.ts,
+      # which makes types.ts the reference - and nothing checked the reference. A
+      # column declared there but absent in production type-checks, PASSES
+      # check-schema-usage, and 42703s at runtime. Offline; same snapshot as above.
+      - name: Generated types claim nothing production lacks
+        run: node scripts/check-types-drift.mjs
+
       # IOS-AUDIT-REL-007: universal links, Sign in with Apple webcredentials and
       # App Clip invocation all fail SILENTLY when the AASA disagrees with the
       # app - no build error, no test, the link just opens Safari and you find
