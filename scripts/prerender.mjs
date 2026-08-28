@@ -353,6 +353,9 @@ let leafletStrippedTotal = 0;
 // Routes whose queries never reported settled. Not a failure - the capture still
 // happens - but it is the population thin captures come from, so it is printed.
 const unsettledRoutes = [];
+// Routes still showing a skeleton when the capture ran. Same idea, different
+// blind spot: a fetch that is not a TanStack query is invisible to the wait above.
+const stillLoadingRoutes = [];
   let restoredFontsTotal = 0;
 let duplicateJsonLdTotal = 0;
 
@@ -478,6 +481,26 @@ let duplicateJsonLdTotal = 0;
         .then(() => true)
         .catch(() => false);
       if (!queriesSettled) unsettledRoutes.push(route);
+
+      // AND THEN FOR THE APP'S OWN "I AM LOADING" MARKER TO GO AWAY, because
+      // useIsFetching only sees TanStack Query. useRestaurants is a manual
+      // useState/useEffect fetch, so /restaurants reported settled while its
+      // main list was still a skeleton - captured with "Loading restaurants..."
+      // in the HTML, an ItemList of numberOfItems 0, and a description promising
+      // "200+ local restaurants".
+      //
+      // SkeletonGroup (src/components/ui/skeleton.tsx) renders
+      // role="status" aria-busy="true", which is the semantic declaration that a
+      // region is loading and is set by nothing else in this app. That makes it
+      // a real discriminator rather than a proxy - WEB-SEO-006 rejected
+      // animate-pulse for being present in loaded pages too, and this is not.
+      //
+      // Fails open on the same terms as the wait above.
+      const skeletonsGone = await page
+        .waitForFunction(() => !document.querySelector('[aria-busy="true"]'), { timeout: 10000 })
+        .then(() => true)
+        .catch(() => false);
+      if (!skeletonsGone) stillLoadingRoutes.push(route);
 
       const SAMPLE_MS = 150;
       const SETTLE_CAP_MS = 4000;
@@ -693,6 +716,9 @@ let duplicateJsonLdTotal = 0;
       (unsettledRoutes.length
         ? `${unsettledRoutes.length} route(s) captured WITHOUT a queries-settled signal (${unsettledRoutes.slice(0, 5).join(', ')}); `
         : 'all routes reported queries settled; ') +
+      (stillLoadingRoutes.length
+        ? `${stillLoadingRoutes.length} route(s) captured with a skeleton still mounted (${stillLoadingRoutes.slice(0, 5).join(', ')}); `
+        : 'no route captured mid-skeleton; ') +
       `restored ${restoredFontsTotal} async font link(s); ` +
       `dropped ${duplicateJsonLdTotal} duplicate JSON-LD block(s)`,
   );
