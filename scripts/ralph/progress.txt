@@ -2435,3 +2435,21 @@ _middleware.ts:268 rewrites the real <title>, not just og/twitter tags. So the m
   as correctly public and moved on; one of them was taking a mail recipient from an untrusted body. Public
   by design raises the bar on input validation rather than lowering it.
 ---
+
+2026-08-28 - Audited all 13 mail senders; the relay was the only one
+  Generalised the open-relay finding: does any other function take its recipient from the request body?
+  Read the `to:` expression of every function touching Resend or SendGrid. Four derive it from the database
+  (send-event-reminders, send-feedback-reply, send-weekly-digest, check-login-attempt), eight sit behind a
+  caller guard, and notify-event-submission was the one - now fixed.
+  check-login-attempt is the only one both public and deployed, and it is right: recipient = profile?.email
+  from a lookup, "no account -> send nothing (non-enumeration)", rate-limited. A caller can only cause a
+  notice to an address that already exists, which is the feature.
+
+  THE AUTOMATED SWEEP SAID 0 AND WAS BLIND. I wrote a detector, got 0 hits across 13 functions, and ran it
+  against the PRE-FIX notify-event-submission as a control. It found nothing there either. It matched
+  `const {...} = await req.json()`; the real code does `const body = await req.json()` and destructures on
+  the next statement. So the zero meant nothing.
+  Reading thirteen `to:` expressions by hand took less time than repairing the regex would have. When the
+  population is small, read it. Automation earns its place at a scale where reading is impractical - and
+  either way the control comes first.
+---
