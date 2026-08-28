@@ -2193,3 +2193,23 @@ Evidence:
   this codebase eventually matches a comment, and comments in this repo are unusually long and quote code.
   Strip comments before matching, or expect prose to answer for code.
 ---
+
+2026-08-28 - Built the check I had said needed a service-role key, and it corrected me
+  Two days ago I wrote that cross-referencing cron targets against deployed functions was "for whoever has
+  the service-role key". It is not: the /functions/v1/<name> URLs are written into the migrations, and the
+  deploy baseline is committed. Entirely offline.
+
+    57 functions are posted to from migrations; 35 have never been deployed.
+  29 are the agent-* fleet - one undeployed subsystem, and the output groups them so it does not read as 29
+  separate problems.
+
+  IT ALSO CAUGHT AN ERROR IN MY OWN HEADLINE. I reported FIVE of eleven "now succeeding" jobs firing into
+  404s. It is four. enhance-events-morning targets batch-enhance-events (20250107000006:46), which is
+  deployed - I had inferred the function name from the job name. I even wrote at the time that the
+  hand-mapping was "good enough to report and not good enough to gate". It was not good enough to report.
+  Ten of the eleven guesses were right, which is exactly why the wrong one survived.
+
+  THE RULE I KEEP RELEARNING, in a third form this week: do not infer an identifier from a name that
+  resembles it. The migration states the mapping; read the mapping. Same family as inferring a column from
+  a model field and a table from a story's prose.
+---
