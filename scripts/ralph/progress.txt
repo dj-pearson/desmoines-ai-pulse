@@ -1170,3 +1170,27 @@ Evidence:
   - A discovery runner must fail on an empty match. Otherwise a moved directory turns the whole
     safety net into a green tick.
 ---
+
+## 2026-08-28 - WEB-SEO-008: eight landing pages intermittently shipped with no FAQPage
+- The recorded residual named two URLs. Auditing all 35 prerendered routes showed the missing set
+  CHANGES EVERY BUILD: altoona+johnston, then free+kids+this-weekend+today, then none.
+- Cause is the original fix seen from the other side. `faqData={isLoading ? undefined : faqData}` on 8
+  pages avoided react-helmet-async appending two different FAQPage blocks - and shipped ZERO whenever
+  the prerenderer captured before the query resolved.
+- Proof it was a race: /events/altoona and /events/clive have identical h3 and ItemList counts, and
+  only one of them had a FAQPage on that build.
+- Took the live counts out of every FAQ answer, so both renders emit identical JSON and it is always
+  passed. FAQPage 20 -> 24 of 35 routes; all 13 /events/* now have one; still zero duplicates.
+  Verified across two consecutive builds because the defect WAS the variance.
+- **Learnings for future iterations:**
+  - WHEN A NOTE NAMES SPECIFIC URLS AS A RESIDUAL, CHECK WHETHER THE SET IS STABLE. These were a
+    sample of a race, and fixing "those two URLs" would have fixed nothing.
+  - A fix for a duplicate can create a zero. Withholding data to stop two copies being emitted means
+    emitting none whenever the withholding condition is still true at capture time.
+  - Structured data must not interpolate a live count. It differs between renders, it goes stale
+    against the page, and it is the thing that forced the withhold in the first place.
+  - `--update` on a whole-file baseline silently reverses deliberate per-entry decisions. It moved /
+    off the high-water mark I set two commits earlier; edited back by hand and recorded.
+  - The prerender content race is still live: /events/this-weekend captured 422 elements with zero
+    cards on one build and 2,390 with 40 on the next. Never baseline a build without checking.
+---
