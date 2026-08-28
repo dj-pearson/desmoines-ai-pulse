@@ -86,6 +86,22 @@ interface SitemapUrl {
  * Keeping the FIRST occurrence is deliberate: callers order deliberately
  * (events by date desc, restaurants by name), so the first is the one the
  * generator meant to rank.
+ *
+ * THAT ARGUMENT NEEDS A TOTAL ORDER, which none of the six queries had. They
+ * ordered by one column and stopped, so every tie was broken by whatever
+ * Postgres happened to return - and ties are the normal case here, not the
+ * edge: hundreds of events share a date, and two restaurants share the name
+ * "Texas Roadhouse". So "the first occurrence" was not a stable choice, and
+ * the checked-in sitemaps were rewritten on every single build with the same
+ * URL set in a different sequence. Real changes were invisible in a diff of
+ * several hundred reordered lines.
+ *
+ * Every query now carries .order('id') as a final tiebreaker. Ordering is not
+ * significant to a crawler; determinism is significant to review. It also
+ * pre-empts a sharper version of the same fault: PostgREST caps a response at
+ * 1000 rows, and once events passes that, an ambiguous sort decides WHICH
+ * events make the cut. That is membership churn with no data change. The
+ * counts today are 397 events and 478 restaurants, so this is latent.
  */
 function dedupeUrls(urls: SitemapUrl[], label: string): SitemapUrl[] {
   const seen = new Set<string>();
@@ -172,6 +188,7 @@ async function generateEventsSitemap(): Promise<number | null> {
       .select('title, date, event_start_utc, updated_at')
       .gte('date', cutoff)
       .order('date', { ascending: false })
+      .order('id')
       .range(from, from + PAGE - 1);
 
     if (error) {
@@ -229,6 +246,7 @@ async function generateRestaurantsSitemap(): Promise<number | null> {
     .from('restaurants')
     .select('name, slug, is_featured, updated_at')
     .order('name')
+    .order('id')
     .limit(5000);
 
   if (error) {
@@ -263,7 +281,8 @@ async function generateAttractionsSitemap(): Promise<number | null> {
   const { data: attractions, error } = await supabase
     .from('attractions')
     .select('id, name, updated_at')
-    .order('name');
+    .order('name')
+    .order('id');
 
   if (error) {
     console.error('❌ Error fetching attractions:', error);
@@ -296,7 +315,8 @@ async function generatePlaygroundsSitemap(): Promise<number | null> {
   const { data: playgrounds, error } = await supabase
     .from('playgrounds')
     .select('id, name, updated_at')
-    .order('name');
+    .order('name')
+    .order('id');
 
   if (error) {
     console.error('❌ Error fetching playgrounds:', error);
@@ -329,7 +349,8 @@ async function generateArticlesSitemap(): Promise<number | null> {
   const { data: articles, error } = await supabase
     .from('articles')
     .select('id, slug, updated_at, created_at')
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .order('id');
 
   if (error) {
     console.error('❌ Error fetching articles:', error);
@@ -480,7 +501,8 @@ async function generateGuidesSitemap(): Promise<number | null> {
     .from('seasonal_guides')
     .select('id, slug, title, updated_at, is_published')
     .eq('is_published', true)
-    .order('title');
+    .order('title')
+    .order('id');
 
   if (error) {
     console.error('❌ Error fetching guides:', error);
