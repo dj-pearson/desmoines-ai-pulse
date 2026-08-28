@@ -1238,3 +1238,26 @@ Evidence:
   - When a filter returns zero, check the DATA SHAPE before the filter. The free-events filter is
     correct; the column it reads has no free-ness in it at all.
 ---
+
+## 2026-08-28 - WEB-SEO-006: /restaurants was shipping an empty list to crawlers
+- Yesterday I said captures were deterministic. True only for TanStack-backed routes. useRestaurants
+  is a manual useState/useEffect fetch, so useIsFetching never saw it.
+- /restaurants shipped "Loading restaurants...", an ItemList of numberOfItems 0, and a description
+  promising "200+ local restaurants" - on EVERY build, not intermittently.
+- The discriminator this story searched for and did not find is aria-busy. SkeletonGroup renders
+  role="status" aria-busy="true"; nothing else in the app sets it. One of 35 routes carried it at
+  capture, which is what makes it trustworthy rather than a proxy.
+- /restaurants 1455 -> 2818 elements, 12 -> 45 restaurant links, ItemList 0 -> 478/20. Stable across
+  two builds.
+- **Learnings for future iterations:**
+  - A "the data has loaded" signal is only as broad as the data layer it watches. This codebase has
+    two - TanStack Query and hand-rolled useState/useEffect - and the fix I shipped yesterday covered
+    one. Check for the second implementation before claiming a class of bug is closed.
+  - AN INTERMITTENT BUG AND A PERMANENT ONE LOOK THE SAME IN ONE BUILD. The queries fix made
+    /events/* stable and left /restaurants broken every time; only auditing all 35 routes for a
+    loading marker separated them.
+  - ARIA attributes are underused as build-time signals. aria-busy is a semantic, app-authored,
+    already-present statement that a region is loading - strictly better than sniffing CSS classes.
+  - When a note says a signal was searched for and not found, search again with the accessibility
+    layer in mind.
+---
