@@ -2760,3 +2760,35 @@ deleted it
     successful lint (~3m36s). Step duration is a usable first signal for what kind of
     failure you are looking at before opening the log.
 ---
+
+## AND-AUDIT-011 - a keystore-less release build no longer reports success
+
+app/build.gradle.kts applied the release signingConfig only when
+RELEASE_KEYSTORE_FILE was non-blank, and did nothing at all when it was absent.
+The build printed BUILD SUCCESSFUL and handed you an artifact with no release
+signature, which you find out about at upload.
+
+Fix is two guards with two scopes rather than one list:
+- buildsReleaseCode (bundleRelease, assembleRelease, publish) keeps requiring
+  SUPABASE_URL, SUPABASE_ANON_KEY, GOOGLE_MAPS_API_KEY.
+- buildsShippableArtifact (bundleRelease, publish) newly requires all four
+  keystore properties and a keystore file that exists on disk.
+
+assembleRelease is excluded from the second on purpose: android-ci.yml runs it on
+every PR with no keystore to exercise R8. Checked both workflows before writing
+the guard rather than after - android-ci.yml writes the three credentials and no
+keystore, android-release.yml writes all four keystore values with an absolute
+path, so neither workflow changes behaviour. That check is the whole reason this
+is a one-cycle change instead of a revert.
+
+Fourth stale premise in a row: the story said a keystore-less release build is
+"debug-signed". I could not confirm that from the build script or the CI logs, so
+I did not repeat it. What is verifiable is that no release signingConfig is
+applied and the build still succeeds - which is the actual defect, and the guard
+is the same either way. Do not restate a story's mechanism claim in a commit
+message without checking it; three of these have now been wrong.
+
+Left unfixed and recorded instead: the guard matches gradle.startParameter.taskNames,
+so `./gradlew build` reaches assembleRelease as a dependency with no matching
+string in the requested task names. Pre-existing, and fixing it means a
+variant-scoped check, which is a bigger change than this story asked for.
