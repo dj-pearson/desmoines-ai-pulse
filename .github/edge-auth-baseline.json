@@ -2,40 +2,17 @@
   "_comment": "Edge functions that build a service-role client and verify no caller. TRIAGE, not a vulnerability list - some are public by design. Each needs its callers enumerated before being guarded. This list must only ever shrink. See scripts/check-edge-auth.mjs.",
   "generated": "2026-08-28",
   "unguarded": [
-    "calculate-trending",
     "check-login-attempt",
-    "gsc-fetch-properties",
     "log-content-metrics",
     "notify-event-submission",
     "oauth-callback",
-    "og-image",
-    "pseo-batch-worker",
-    "scrape-ticketmaster-events",
-    "send-seo-notification"
+    "og-image"
   ],
   "notes": {
-    "log-content-metrics": "PUBLIC BY DESIGN - anonymous visitors report Core Web Vitals, so a guard would delete the feature. Bounded by a rate limit instead; its own header explains this. Do not guard.",
-    "og-image": "PUBLIC BY DESIGN - renders the social card any crawler fetches.",
-    "check-login-attempt": "Sends mail via Resend (RESEND_API_KEY, resend.com). Reachable with the anon key. Enumerate callers before guarding - it is on the sign-in path.",
-    "check-core-web-vitals": "Calls the Google PageSpeed Insights API (quota).",
-    "send-weekly-digest": "Sends mail via Resend.",
-    "send-seo-notification": "Sends mail via Resend.",
-    "notify-event-submission": "Sends mail via Resend.",
-    "social-media-manager": "Reaches a paid API directly.",
-    "enhance-content": "Model spend.",
-    "generate-pseo-page": "Model spend.",
-    "scrape-restaurant-menus": "Reaches a paid API directly.",
-    "scrape-ticketmaster-events": "Paid/rate-limited API via _shared/scraper.ts and fetchWithTimeout.ts.",
-    "subscription-lifecycle": "Reaches a paid API directly; also 404 in production (never deployed).",
-    "gsc-fetch-properties": "Google API. 404 in production - never deployed.",
-    "gsc-sync-data": "Google API. 404 in production - never deployed.",
-    "analyze-content": "Writes the DB; no paid call detected.",
-    "analyze-images": "Writes the DB; no paid call detected.",
-    "crawl-site": "Writes the DB; no paid call detected. Targets seo_* tables that do not exist (WEB-BE-031), so likely inert.",
-    "generate-hotel-affiliate-urls": "Writes the DB; no paid call detected.",
-    "pseo-batch-worker": "Writes the DB; no paid call detected.",
-    "calculate-trending": "Read-only; no paid call detected.",
-    "generate-sitemaps": "Read-only; no paid call detected.",
-    "oauth-callback": "Read-only; no paid call detected. Part of an OAuth flow - check the state/code handling before assuming a guard is right."
+    "check-login-attempt": "DO NOT GUARD. Called from src/contexts/AuthContext.tsx during SIGN-IN, by any user. An admin gate breaks authentication for everyone. It does send mail via Resend, so if it needs bounding, bound it with a rate limit - not with a role check.",
+    "log-content-metrics": "DO NOT GUARD. Public by design - anonymous visitors report Core Web Vitals, so a guard deletes the feature. Its own header explains this and it is bounded by a rate limit instead.",
+    "notify-event-submission": "DO NOT GUARD as admin. Called from src/hooks/useUserSubmittedEvents.ts - public users submitting an event - and also server-to-server by triage-event-submission. Any bound here must be a rate limit.",
+    "og-image": "DO NOT GUARD. Renders the social card that any crawler or unfurler fetches; the middleware points og:image straight at it.",
+    "oauth-callback": "DO NOT GUARD. Its caller is an external OAuth provider redirecting a browser to it; there is no bearer to check. Verify the state/code handling instead."
   }
 }
