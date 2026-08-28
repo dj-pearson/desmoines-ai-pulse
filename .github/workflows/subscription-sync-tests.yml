@@ -93,7 +93,18 @@ jobs:
       # --allow-env because the suite DELETES RESEND_API_KEY and the Anthropic
       # keys before importing anything: without that, a runner holding them would
       # turn this into real outbound mail.
-      - run: deno test --allow-read --allow-env supabase/functions/_tests/marketing-optout-agents.test.ts
+      # --no-check=remote, and this step is why the whole job has been red.
+      # Alone among these suites it imports an agent that imports supabase-js,
+      # and Deno type-checks the downloaded index.d.mts, which carries a
+      # reference to @types/node. There is no node_modules for Deno to resolve
+      # that from on the runner, so the run dies before any test executes:
+      #   error: Could not find "@types/node" in a node_modules folder.
+      # WEB-LEGAL-012's notes predicted the opposite - "CI has the network and
+      # needs neither the map nor --no-check" - which was true of the import MAP
+      # and wrong about the type check.
+      # =remote rather than bare --no-check: the test's own source is still
+      # type-checked, only the downloaded .d.ts files are skipped.
+      - run: deno test --allow-read --allow-env --no-check=remote supabase/functions/_tests/marketing-optout-agents.test.ts
       # XPLAT-007. The right of ACCESS must stay sourced from the same list as
       # the right of erasure - they had drifted by 57 tables, and the export
       # named three that do not exist.
