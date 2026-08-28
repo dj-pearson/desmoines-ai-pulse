@@ -2498,3 +2498,21 @@ _middleware.ts:268 rewrites the real <title>, not just og/twitter tags. So the m
   backslash problem that has bitten me six times this session, this time inside a quoted heredoc I had
   assumed was safe.
 ---
+
+2026-08-28 - Two dedupe checks where a scraped name was a wildcard
+  Followed the residue I parked last iteration. ai-crawler and restaurant-opening-scraper fed a scraped
+  title/venue/name straight into .ilike() as the PATTERN. A percent or underscore in scraped text is a
+  wildcard, so the duplicate check can match a row that is not a duplicate - and in ai-crawler it gates the
+  INSERT, so a false match silently drops a real event.
+
+  Measured before fixing: 1 of 1,193 titles carries a literal percent, none carries an underscore. Small,
+  live, and growing. Controlled both ways against production - the sanitized pattern still matches its own
+  row (1 row either way), so Postgres honours the backslash escape through PostgREST.
+
+  THE ORDERING MATTERED AND I ALMOST GOT IT BACKWARDS. I spotted this residue BEFORE fixing the apostrophe
+  strip, and the note I wrote then said sanitizeLikeInput was "the wrong tool for it until this apostrophe
+  change ships". That was right: applying it a day earlier would have turned "Chef George's" into "Chef
+  Georges" and missed real duplicates - manufacturing exactly the problem WEB-SEO-017 exists to fix, on a
+  name that is literally one of its ten known duplicate groups. A sanitiser is only safe for matching once
+  you know what it preserves.
+---
