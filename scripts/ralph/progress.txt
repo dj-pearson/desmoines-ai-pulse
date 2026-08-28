@@ -2413,3 +2413,25 @@ _middleware.ts:268 rewrites the real <title>, not just og/twitter tags. So the m
   strip comments before matching: my first version was fooled by exactly the same prose it exists to
   catch.
 ---
+
+2026-08-28 - Checking my own annotation found an open mail relay
+  I had marked notify-event-submission "DO NOT GUARD as admin - any bound here must be a rate limit", then
+  asked whether the five remaining public functions actually HAVE rate limits. Four do (og-image,
+  log-content-metrics, check-login-attempt). This one had none, and reading it to add one turned up
+  something much worse.
+
+  It took the recipient straight off the request body - recipientEmail = submitterEmail - while eventId was
+  required and never used to look anything up. Deployed, no caller check, and verify_jwt only demands a
+  valid JWT, which the anon key is. So a public POST could send mail FROM the site's domain TO any address
+  with the caller's own subject and body text.
+
+  THE SWEEP WAS RIGHT TO SKIP IT AND WRONG ABOUT WHY. An auth guard cannot fix this - the legitimate caller
+  is a member of the public submitting an event. The fix is to stop trusting the body for anything that
+  decides who is mailed or what it says: recipient and title now come from user_submitted_events by
+  eventId, with a 404 when there is no row and a 503 on a failed lookup rather than a silent skip.
+
+  THE GENERAL SHAPE, which I want to remember: "this endpoint is public by design" answers the question of
+  whether to add auth, and answers nothing about what it does with its INPUT. I classified five functions
+  as correctly public and moved on; one of them was taking a mail recipient from an untrusted body. Public
+  by design raises the bar on input validation rather than lowering it.
+---
