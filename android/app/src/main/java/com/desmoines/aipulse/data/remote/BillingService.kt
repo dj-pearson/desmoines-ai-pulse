@@ -18,6 +18,7 @@ import com.android.billingclient.api.queryProductDetails
 import com.android.billingclient.api.queryPurchasesAsync
 import com.desmoines.aipulse.data.model.SubscriptionTier
 import com.desmoines.aipulse.util.Config
+import com.desmoines.aipulse.util.NetworkRetry
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
@@ -26,8 +27,11 @@ import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Columns
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,7 +46,6 @@ import kotlinx.serialization.json.put
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
-import kotlin.math.pow
 
 private const val TAG = "BillingService"
 
@@ -51,12 +54,28 @@ private const val TAG = "BillingService"
  * Mirrors iOS StoreKitService.swift — same tier structure, retry logic, and grace period approach.
  */
 @Singleton
-class BillingService @Inject constructor(
-    @param:ApplicationContext private val context: Context,
+class BillingService internal constructor(
+    private val context: Context,
     private val supabaseClient: SupabaseClient?,
+    /**
+     * Dispatcher for everything this service does off the Play callbacks.
+     * Defaulted at the injection site rather than here so a test can supply a
+     * TestDispatcher; production always gets IO.
+     */
+    private val dispatcher: CoroutineDispatcher,
 ) : PurchasesUpdatedListener {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    @Inject
+    constructor(
+        @ApplicationContext context: Context,
+        supabaseClient: SupabaseClient?,
+    ) : this(context, supabaseClient, Dispatchers.IO)
+
+    // Was Dispatchers.Main. Every launch below does network or disk work --
+    // receipt validation, Supabase queries, Play queries -- and declaring Main
+    // for that is wrong even where the SDK happens to dispatch internally, because
+    // it makes the next person's addition main-thread work by default.
+    private val scope = CoroutineScope(SupervisorJob() + dispatcher)
 
     // region State
 
@@ -106,7 +125,15 @@ class BillingService @Inject constructor(
         )
         .build()
 
+    // Written from Play's BillingClientStateListener callbacks and read from
+    // coroutines on [dispatcher], so it needs to be visible across threads.
+    @Volatile
     private var isConnected = false
+
+    /**
+     * Watchdog for [launchPurchaseFlow]. See [startPurchaseWatchdog].
+     */
+    private var purchaseWatchdog: Job? = null
 
     init {
         connect()
@@ -231,10 +258,40 @@ class BillingService @Inject constructor(
             }
             .build()
 
+        // Armed before the sheet launches, not after, so there is no window in
+        // which Play could report back before the watchdog exists.
+        startPurchaseWatchdog()
         billingClient.launchBillingFlow(activity, billingFlowParams)
     }
 
+    /**
+     * Clears [_isLoading] if Play never reports back.
+     *
+     * [launchPurchaseFlow] sets the loading flag and only [onPurchasesUpdated]
+     * clears it. That callback is not guaranteed: if the user backgrounds the
+     * Play sheet and swipes the app away, or Play dies while the sheet is up,
+     * nothing arrives and the spinner stays on screen for the rest of the
+     * process lifetime, with the purchase buttons disabled behind it.
+     *
+     * The timeout is generous on purpose. A legitimate purchase can sit on the
+     * Play sheet for minutes while the user adds a card or completes a bank
+     * challenge, and the app is backgrounded throughout, so nobody is looking
+     * at the spinner while the clock runs.
+     */
+    private fun startPurchaseWatchdog() {
+        purchaseWatchdog?.cancel()
+        purchaseWatchdog = scope.launch {
+            delay(PURCHASE_FLOW_TIMEOUT_MS)
+            if (_isLoading.value) {
+                Log.w(TAG, "No purchase result after ${PURCHASE_FLOW_TIMEOUT_MS}ms; clearing loading state")
+                _isLoading.value = false
+            }
+        }
+    }
+
     override fun onPurchasesUpdated(result: BillingResult, purchases: List<Purchase>?) {
+        // Play answered, so the watchdog has nothing left to guard against.
+        purchaseWatchdog?.cancel()
         when (result.responseCode) {
             BillingClient.BillingResponseCode.OK -> {
                 purchases?.forEach { purchase ->
@@ -407,6 +464,9 @@ class BillingService @Inject constructor(
     private companion object {
         const val MAX_RETRIES = 3
         const val BASE_RETRY_DELAY_MS = 1000L
+
+        /** How long [startPurchaseWatchdog] waits for Play before giving up. */
+        const val PURCHASE_FLOW_TIMEOUT_MS = 5 * 60 * 1000L
     }
 
     private suspend fun syncAllEntitlementsToBackend() {
@@ -459,10 +519,12 @@ class BillingService @Inject constructor(
             put("packageName", Config.APP_BUNDLE_ID)
         }
 
-        var lastError: Exception? = null
-
-        for (attempt in 0 until MAX_RETRIES) {
-            try {
+        val decoded: ValidationResponse = try {
+            NetworkRetry.withRetry(
+                maxAttempts = MAX_RETRIES,
+                baseDelayMs = BASE_RETRY_DELAY_MS,
+                isRetryable = ::isTransientValidationError,
+            ) {
                 val response = client.functions("validate-android-receipt", body = payload)
                 val bodyString = response.bodyAsText()
 
@@ -472,54 +534,52 @@ class BillingService @Inject constructor(
                 // treating every `valid:false` as definitive would revoke every
                 // paying user's entitlement during a backend outage or a
                 // misconfigured deploy. Only a 2xx body is a verdict; anything
-                // else falls through to the retry/grace path below.
+                // else is thrown, and the retry/grace path below decides.
                 if (!response.status.isSuccess()) {
-                    throw IllegalStateException(
-                        "validate-android-receipt returned ${response.status.value}: $bodyString"
-                    )
+                    throw ReceiptValidationHttpException(response.status.value, bodyString)
                 }
 
-                val decoded = validationJson.decodeFromString<ValidationResponse>(bodyString)
-
-                // The verdict itself lives in validationOutcome at the bottom of
-                // this file so it can be unit-tested (XPLAT-002 AC3). The status
-                // is already known 2xx here; passing it keeps the rule in one
-                // place rather than half here and half there.
-                if (validationOutcome(response.status.isSuccess(), decoded.valid) == ValidationOutcome.GRANT) {
-                    Log.i(TAG, "Server validation succeeded for product=$productId")
-                    // Clear any prior revocation — e.g. the user re-subscribed
-                    // after a refund.
-                    _serverRevokedProductIDs.value -= productId
-                    recomputeCurrentTier()
-                    return
-                } else {
-                    // Server definitively rejected the receipt. Revoke rather
-                    // than granting an indefinite grace period (XPLAT-002).
-                    Log.w(
-                        TAG,
-                        "Server validation returned invalid; revoking local entitlement for " +
-                            "product=$productId, user=$userId, reason=${decoded.reason ?: "unknown"}"
-                    )
-                    _serverRevokedProductIDs.value += productId
-                    recomputeCurrentTier()
-                    return
-                }
-            } catch (e: Exception) {
-                lastError = e
-                val isTransient = isTransientError(e)
-
-                if (isTransient && attempt < MAX_RETRIES - 1) {
-                    val delayMs = BASE_RETRY_DELAY_MS * 2.0.pow(attempt.toDouble()).toLong()
-                    Log.d(TAG, "Transient error on attempt ${attempt + 1}/$MAX_RETRIES, retrying in ${delayMs}ms: ${e.message}")
-                    delay(delayMs)
-                    continue
-                }
-                break
+                validationJson.decodeFromString<ValidationResponse>(bodyString)
             }
+        } catch (cancellation: CancellationException) {
+            // The old loop caught Exception, which swallowed cancellation and
+            // kept retrying a coroutine that had already been cancelled.
+            throw cancellation
+        } catch (e: Exception) {
+            // Retries exhausted, or a failure not worth retrying. Either way we
+            // have no verdict, so log and leave the entitlement alone: the user
+            // keeps what they paid for until the server actually says otherwise.
+            // Deliberately not "after $MAX_RETRIES attempts": a non-retryable
+            // failure gives up on the first one, and a log that overstates what
+            // was tried is how you end up chasing the wrong thing.
+            Log.w(
+                TAG,
+                "Server validation produced no verdict (grace period): " +
+                    "${e::class.java.simpleName}: ${e.message}, product=$productId, user=$userId"
+            )
+            return
         }
 
-        // All retries exhausted — log but do NOT revoke (grace period)
-        Log.w(TAG, "Server validation failed after $MAX_RETRIES attempts (grace period): ${lastError?.message}, product=$productId, user=$userId")
+        // The verdict itself lives in validationOutcome at the bottom of this
+        // file so it can be unit-tested (XPLAT-002 AC3). The status is already
+        // known 2xx here; passing it keeps the rule in one place rather than
+        // half here and half there.
+        if (validationOutcome(true, decoded.valid) == ValidationOutcome.GRANT) {
+            Log.i(TAG, "Server validation succeeded for product=$productId")
+            // Clear any prior revocation: e.g. the user re-subscribed after a refund.
+            _serverRevokedProductIDs.value -= productId
+            recomputeCurrentTier()
+        } else {
+            // Server definitively rejected the receipt. Revoke rather than
+            // granting an indefinite grace period (XPLAT-002).
+            Log.w(
+                TAG,
+                "Server validation returned invalid; revoking local entitlement for " +
+                    "product=$productId, user=$userId, reason=${decoded.reason ?: "unknown"}"
+            )
+            _serverRevokedProductIDs.value += productId
+            recomputeCurrentTier()
+        }
     }
 
     @Serializable
@@ -642,17 +702,6 @@ class BillingService @Inject constructor(
             .take(64)
     }
 
-    private fun isTransientError(error: Exception): Boolean {
-        val message = error.message?.lowercase() ?: return false
-        return message.contains("500") ||
-                message.contains("502") ||
-                message.contains("503") ||
-                message.contains("504") ||
-                message.contains("timeout") ||
-                message.contains("network") ||
-                message.contains("connection")
-    }
-
     // endregion
 
     // region Helpers
@@ -736,6 +785,38 @@ internal enum class ValidationOutcome {
      * a misconfigured deploy. Only a 2xx body is a verdict.
      */
     NO_VERDICT,
+}
+
+/**
+ * A non-2xx response from `validate-android-receipt`.
+ *
+ * Exists so the retry decision can be made on the status number. The previous
+ * code threw an IllegalStateException with the status interpolated into its
+ * message and then decided whether to retry by searching that message for
+ * "500", "502", "503" and "504". A 429 or a 408 was therefore never retried,
+ * a body that happened to contain the digits "503" was, and any exception with
+ * a null or localized message fell straight through to give-up.
+ */
+internal class ReceiptValidationHttpException(
+    val status: Int,
+    body: String,
+) : Exception("validate-android-receipt returned $status: $body")
+
+/**
+ * Whether a receipt-validation failure is worth another attempt.
+ *
+ * Delegates to [NetworkRetry.defaultIsRetryable] for transport failures and
+ * coroutine cancellation, which is where that policy already lives; this only
+ * adds the status rule for the manufactured [ReceiptValidationHttpException],
+ * since Supabase's `functions()` hands back a response rather than throwing and
+ * so never produces a Ktor ResponseException for the default to read.
+ *
+ * 408 and 429 are retryable alongside 5xx: both mean "not now", not "no".
+ */
+internal fun isTransientValidationError(error: Throwable): Boolean = when (error) {
+    is ReceiptValidationHttpException ->
+        error.status == 408 || error.status == 429 || error.status in 500..599
+    else -> NetworkRetry.defaultIsRetryable(error)
 }
 
 /**

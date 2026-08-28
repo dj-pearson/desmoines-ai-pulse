@@ -2760,3 +2760,41 @@ deleted it
     successful lint (~3m36s). Step duration is a usable first signal for what kind of
     failure you are looking at before opening the log.
 ---
+
+## AND-AUDIT-022 - BillingService retry, dispatcher, stuck spinner (5 of 6 ACs)
+
+The biggest finding was that the fix already existed in the repo. NetworkRetry
+(util/NetworkRetry.kt) has defaultIsRetryable, which handles CancellationException,
+Ktor ResponseException status and IOException - exactly the typed classifier this
+story asks for. BillingService had reimplemented it as substring matching on
+exception messages and got it wrong. Check for an existing helper before writing a
+classifier; the duplicate was worse than the original in every respect.
+
+The substring rule's real failure modes, now covered by tests:
+- IOException().message is null, so it returned false on the transport failures it
+  existed to catch. Every retryable network error became an immediate give-up.
+- 429 and 408 were not in the matched list, so a rate-limited or timed-out
+  validation was never retried.
+- It searched the whole message, and the message carried the response body, so a
+  4xx whose body mentioned "503" was retried as a server error.
+
+One thing the shared default cannot do: Supabase's functions() returns a response
+rather than throwing, so no Ktor ResponseException is ever produced and the status
+was being smuggled through an IllegalStateException message string. Fixed with a
+typed ReceiptValidationHttpException carrying the status.
+
+Separate real bug found while restructuring: the loop caught Exception, which
+swallows CancellationException, so a cancelled coroutine kept retrying.
+
+AC2 (endConnection) deliberately NOT implemented, and this is the part worth
+remembering. The obvious version is ProcessLifecycleOwner ON_STOP -> endConnection()
+with ensureConnected() reconnecting on demand. It is a money bug: the Play purchase
+sheet IS the foreground, so every purchase backgrounds the app, and disconnecting
+there means the purchase completes and onPurchasesUpdated never arrives. Gating on
+_isLoading does not rescue it, because the AC5 watchdog can clear that flag while a
+purchase is still genuinely open. Held binding < dropped purchase. Wrote the story
+note rather than the code, and left passes=false so the remaining AC stays visible.
+
+Nearly shipped it before thinking the sequence through. The tell was asking "what
+is actually in the foreground when ON_STOP fires here" instead of treating
+ON_STOP as generic "app backgrounded".
