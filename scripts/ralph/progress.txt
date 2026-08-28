@@ -2732,3 +2732,31 @@ deleted it
   - Both Play deadlines (targetSdk 36, Billing v8+) are 31 Aug 2026 with an extension
     to 1 Nov 2026 requestable in Play Console. Worth knowing before anyone rushes.
 ---
+
+## 2026-08-28 - AND-AUDIT-002 separated from 005 after CI disproved the coupling (Android)
+- CI run 33179244127 failed at checkDebugAarMetadata with 16 issues, all the same shape:
+  current AndroidX (navigation 2.10.0, compose 1.12.0, core 1.19.0, lifecycle 2.11.0)
+  declares it requires compileSdk 37, and AGP 9.1.0's max recommended compileSdk is 36.
+- Reverted the dependency bumps; kept compileSdk/targetSdk 36. AND-AUDIT-002 now stands
+  alone as a two-line change. AND-AUDIT-005 reopened with the real blocker recorded.
+
+- **Learnings for future iterations:**
+  - I GOT THE DEPENDENCY/SDK COUPLING BACKWARDS AND SHOULD HAVE TESTED THE CHEAP
+    HYPOTHESIS FIRST. I claimed the dependency upgrade was a prerequisite for
+    targetSdk 36 and landed them together on that reasoning. The opposite is true:
+    compileSdk 36 works fine with the 2024-era dependencies, and the dependency bump
+    is what broke the build. The minimal change (two lines) would have proven the
+    deadline fix in one cycle; instead the large change cost a cycle and proved
+    nothing about the deadline. Land the smallest change that tests the claim.
+  - AndroidX AAR metadata carries a compileSdk floor, and it moves ahead of AGP. As of
+    Aug 2026 the current stable AndroidX wants compileSdk 37 while AGP 9.1.0 caps at
+    36, so "upgrade the dependencies" is really "upgrade AGP, then Gradle, then
+    compileSdk, then the dependencies". Price the toolchain move before quoting a
+    dependency bump as easy.
+  - compileSdk can legitimately exceed targetSdk. Play's requirement is on targetSdk
+    only, so a compileSdk 37 / targetSdk 36 combination is valid and is the likely
+    shape of the eventual AndroidX upgrade.
+  - checkDebugAarMetadata fails FAST (~57s) versus a real compile failure (~82s) or a
+    successful lint (~3m36s). Step duration is a usable first signal for what kind of
+    failure you are looking at before opening the log.
+---
