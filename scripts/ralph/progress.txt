@@ -2236,3 +2236,27 @@ Evidence:
   run at all; deploy it or descope it". That is a different and much larger question, and it is the
   owner's.
 ---
+
+2026-08-28 - Costing the deploy-or-descope decision instead of restating it
+  Yesterday's finding was that 48 closed AOS stories name a function that has never been deployed. The
+  useful follow-up is not "that is bad" but "what would it cost to fix, and what would it risk".
+
+    49  undeployed functions behind those stories
+    49  are WRITTEN - 8,250 lines of index.ts, zero missing directories
+  So deploy = run a deploy. Descope = delete code that was already paid for.
+
+  AND THE SECURITY REVIEW THE WORKFLOW ASKS FOR IS ANSWERABLE. deploy-edge-functions.yml withholds them
+  because "51 new public endpoints is a review, not a side effect of merging" and notes they "have
+  in-function guards". Checked rather than trusted:
+      49 of 49 verify_jwt = false   -> yes, gateway-open
+      49 of 49 have an in-function caller check
+       0 of 49 have none
+  Every one imports requireAdminOrApiKey and calls it as the handler's first statement. Spot-checked three
+  in source with comments stripped, because a 49/49 result from a regex is exactly the shape that has
+  fooled me three times this week.
+
+  SO THE REVIEW IS DONE AND THE ANSWER IS FAVOURABLE: deploying the fleet adds no unauthenticated endpoint.
+  What remains is a scope question - is the Autonomy OS something to run at all - and that is the owner's.
+  Worth separating explicitly, because "51 new public endpoints" reads like a safety blocker and is not
+  one.
+---
