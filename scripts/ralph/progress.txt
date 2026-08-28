@@ -2393,3 +2393,23 @@ _middleware.ts:268 rewrites the real <title>, not just og/twitter tags. So the m
   introduced. The tell was the file COUNT: 31 -> 1. A ratchet reporting mass improvement should always be
   read as "did the scan shrink?" first.
 ---
+
+2026-08-28 - The service-role auth sweep is done: 25 -> 5
+  Finished by searching the last caller dimension - edge function to edge function - which resolved
+  send-seo-notification (run-scheduled-audit sends it a service-role bearer) and confirmed four others have
+  no caller in src/, migrations, edge functions, workflows, mobile OR scripts. Their only hits were
+  archived docs.
+
+  Twenty guarded in total, every one with its callers enumerated before the guard went in. The five left
+  are annotated DO NOT GUARD with the reason on each: check-login-attempt is the sign-in path,
+  log-content-metrics and og-image are public by design, notify-event-submission is public submissions,
+  and oauth-callback is a browser redirect from an external provider with no bearer to check.
+
+  THE DURABLE FINDING IS NOT THE COUNT. Three of the twenty documented a check they did not perform:
+  dispatch-scheduled-newsletters' docstring promised an admin-bearer check, backfill-all-coordinates had a
+  comment and no code, and send-weekly-digest had "// Verify authorization" over a test that asked only
+  whether a header was PRESENT - on a bulk mailer. In every case the comment is what made it read as safe,
+  and in every case the words were the only thing checking anything. That is also why my own ratchet had to
+  strip comments before matching: my first version was fooled by exactly the same prose it exists to
+  catch.
+---
