@@ -1194,3 +1194,25 @@ Evidence:
   - The prerender content race is still live: /events/this-weekend captured 422 elements with zero
     cards on one build and 2,390 with 40 on the next. Never baseline a build without checking.
 ---
+
+## 2026-08-28 - WEB-SEO-006: the prerender settle waits for queries now, and captures are deterministic
+- The two existing waits answered the wrong question. Helmet's data-rh proves the page MOUNTED; a stable
+  #root count proves it STOPPED CHANGING - and a loading skeleton is static, so both fire mid-query.
+- Evidence before: /events/this-weekend captured 422 el / 0 cards then 2,390 / 40 on identical code;
+  / measured 1944, 1207, 2022, 1210 across four builds.
+- src/components/PrerenderSignal.tsx publishes useIsFetching as <html data-queries-settled>.
+  prerender.mjs waits on it, fails open to the old settle, and reports routes captured without it.
+- After: three consecutive builds byte-identical on every route, home included.
+- **Learnings for future iterations:**
+  - WHEN A NOTE SAYS "no generic signal was available", CHECK AGAIN AGAINST THE STACK. useIsFetching is
+    exactly that signal and had been in the app the whole time; the two proxies in use were both
+    measuring side effects of loading rather than loading.
+  - A stability signal must handle "zero because nothing started yet". Writing settled=true on the
+    first zero would have shipped a change that measured nothing and looked like a fix.
+  - Fail open, and COUNT the fail-opens. A settle that silently falls back is indistinguishable from
+    one that works; the run now prints how many routes had no signal.
+  - Deterministic output makes every downstream baseline honest. The high-water hack I needed for /
+    two commits earlier is now dead code, and the DOM collapse detector stops being ambiguous.
+  - This also explains WEB-SEO-008's wandering FAQPage: same race, different symptom. One root cause
+    was producing two separately-filed defects.
+---
