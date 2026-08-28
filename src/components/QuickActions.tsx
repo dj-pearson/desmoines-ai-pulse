@@ -112,7 +112,15 @@ export function QuickActions({ className, onAIPlanClick }: QuickActionsProps) {
         <QuickAction
           icon={<Sparkles className="h-6 w-6" aria-hidden="true" />}
           label="AI Plan My Night"
-          sublabel="Let AI build your itinerary"
+          // "Let AI build your itinerary" promised something a logged-out
+          // visitor cannot have: /trip-planner wraps the planner in
+          // <PremiumGate requiredTier="insider">, so the click ended on a
+          // paywall with no warning (WEB-QA-005 AC2).
+          //
+          // This states what is true TODAY and does not settle AC1. If the
+          // owner picks the limited-free-itinerary funnel instead, this string
+          // and its mobile twin below are the two places to change.
+          sublabel="Itinerary planning, included with Insider"
           variant="primary"
           onClick={onAIPlanClick}
           className="min-h-[88px]"
@@ -179,10 +187,16 @@ export function QuickActionsMobile({
         size="lg"
         onClick={onAIPlanClick}
         className="h-16 w-full bg-[#FFC107] bg-gradient-to-r from-[#FFD700] to-[#FFA500] hover:from-[#FFA500] hover:to-[#FFD700] text-[#2D1B69] font-bold shadow-lg gap-2"
-        aria-label="AI Plan My Night - build your itinerary"
+        aria-label="AI Plan My Night - itinerary planning, included with Insider"
       >
         <Sparkles className="h-5 w-5" aria-hidden="true" />
         <span className="text-sm">AI Plan My Night</span>
+        {/* The requirement rides on the button itself here: the mobile layout
+            has no sublabel slot, and sending someone to a paywall from an
+            unqualified gold CTA is the gap WEB-QA-005 AC2 names. */}
+        <span className="text-[10px] font-semibold uppercase tracking-wide rounded-full bg-[#2D1B69]/15 px-2 py-0.5">
+          Insider
+        </span>
       </Button>
 
       {/* Consolidated "right now" row */}
