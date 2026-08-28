@@ -1360,7 +1360,8 @@ Evidence:
   would have committed a zeroed baseline and blinded CI too.
 - TWO Windows-only faults, each sufficient alone: path.join produced backslashed tsconfig globs (which
   accept only '/'), so tsc matched zero inputs; and after fixing that, the error parser still counted
-  zero because tsc writes CRLF and  is a LINE TERMINATOR in a JS regex, so `(.*)$` never matches.
+  zero because tsc writes CRLF and 
+ is a LINE TERMINATOR in a JS regex, so `(.*)$` never matches.
 - CI was fine throughout - ubuntu gives '/' and LF - so the committed baseline is accurate. The damage
   was local, on the only thing that type-checks supabase/functions.
 - The fix immediately found og-image at 1 -> 3, from main's JPEG commit. Both type-level; baselined at
@@ -1369,8 +1370,10 @@ Evidence:
   - A CHECKER THAT SEES NOTHING MUST NEVER REPORT SUCCESS. Third time this session: the offline suite
     runner, the prerender content check, and now this. Every scanner needs a "found zero inputs" guard.
   - TSCONFIG GLOBS ARE '/'-ONLY. path.join is wrong for `include` and `paths` on Windows, always.
-  -  IS A LINE TERMINATOR IN JAVASCRIPT REGEX, so `.` will not match it and `$` sits after it. Split
-    tool output on /?
+  - 
+ IS A LINE TERMINATOR IN JAVASCRIPT REGEX, so `.` will not match it and `$` sits after it. Split
+    tool output on /
+?
 /, never '
 '.
   - Cross-platform bugs in a checker are worse than in product code: the product fails loudly on the
@@ -1403,7 +1406,8 @@ Evidence:
 ## 2026-08-28 - two clean sweeps, and a ratchet 120 sites behind reality
 - Swept for the cross-platform parsing class: only check-edge-types had it. strict-ratchet splits on
   '
-' too but its regex has no `$` anchor, so  cannot break it - verified by running it (24/17
+' too but its regex has no `$` anchor, so 
+ cannot break it - verified by running it (24/17
   against baseline 24, genuinely parsing).
 - Swept all 19 baseline files for position-keyed entries: none. duplicate-events-baseline looks
   line-keyed to a naive regex but its keys are title|date|venue and the match is a timestamp.
@@ -2820,3 +2824,35 @@ whether you found them all.
 
 Caught it only because AND-AUDIT-006 sent me into the same file for an unrelated
 reason. That is luck, not method.
+
+## AND-AUDIT-011 - a keystore-less release build no longer reports success
+
+app/build.gradle.kts applied the release signingConfig only when
+RELEASE_KEYSTORE_FILE was non-blank, and did nothing at all when it was absent.
+The build printed BUILD SUCCESSFUL and handed you an artifact with no release
+signature, which you find out about at upload.
+
+Fix is two guards with two scopes rather than one list:
+- buildsReleaseCode (bundleRelease, assembleRelease, publish) keeps requiring
+  SUPABASE_URL, SUPABASE_ANON_KEY, GOOGLE_MAPS_API_KEY.
+- buildsShippableArtifact (bundleRelease, publish) newly requires all four
+  keystore properties and a keystore file that exists on disk.
+
+assembleRelease is excluded from the second on purpose: android-ci.yml runs it on
+every PR with no keystore to exercise R8. Checked both workflows before writing
+the guard rather than after - android-ci.yml writes the three credentials and no
+keystore, android-release.yml writes all four keystore values with an absolute
+path, so neither workflow changes behaviour. That check is the whole reason this
+is a one-cycle change instead of a revert.
+
+Fourth stale premise in a row: the story said a keystore-less release build is
+"debug-signed". I could not confirm that from the build script or the CI logs, so
+I did not repeat it. What is verifiable is that no release signingConfig is
+applied and the build still succeeds - which is the actual defect, and the guard
+is the same either way. Do not restate a story's mechanism claim in a commit
+message without checking it; three of these have now been wrong.
+
+Left unfixed and recorded instead: the guard matches gradle.startParameter.taskNames,
+so `./gradlew build` reaches assembleRelease as a dependency with no matching
+string in the requested task names. Pre-existing, and fixing it means a
+variant-scoped check, which is a bigger change than this story asked for.
