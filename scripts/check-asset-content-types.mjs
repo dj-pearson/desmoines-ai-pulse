@@ -101,6 +101,18 @@ for (const file of pages) {
   }
 }
 
+// ROBOTS.TXT DECLARES SITEMAPS, AND NO PAGE LINKS TO THEM. They are advertised
+// to every crawler and referenced from nowhere in the HTML, so the page sweep
+// above cannot see them. A Sitemap: line pointing at a file the build does not
+// contain is the same defect as the og:image: Cloudflare answers 200 text/html,
+// and a crawler asked for XML and got a web page.
+const robots = join(DIST, 'robots.txt');
+if (existsSync(robots)) {
+  for (const m of readFileSync(robots, 'utf8').matchAll(/^\s*Sitemap:\s*(\S+)\s*$/gim)) {
+    if (!refs.has(m[1])) refs.set(m[1], '/robots.txt');
+  }
+}
+
 // A CHECK THAT PARSED NOTHING MUST NOT PASS. Several checks in this repo have
 // reported a clean result while reading zero inputs; see check-edge-types.mjs.
 if (refs.size === 0) {
