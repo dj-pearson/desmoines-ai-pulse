@@ -1378,3 +1378,24 @@ Evidence:
   - "Everything is fixed, re-baseline to lock it in" deserves suspicion proportional to how good the
     news is. 158 errors do not vanish between two commits.
 ---
+
+## 2026-08-28 - audited all 34 check scripts for the empty-scan failure
+- Three had already failed this way (offline runner, prerender content, edge types). Three is a
+  pattern, so I audited the rest instead of waiting to trip over the fourth.
+- Six had no guard; four can plausibly see empty input and all four printed a clean result:
+  check-migration-drift, check-pseo-route-collisions, check-pseo-collisions, check-error-handling.
+  Each now exits 2. Each controlled by emptying its own input - file list, slug file, taxonomy,
+  ESLint results.
+- check-migration-drift is the one that mattered most: it guards the 31 drifted migrations and would
+  have said "No ledger drift" over an empty directory.
+- Left check-pseo-inventory and check-anon-exposure alone: both read production and exit 0 by design.
+- **Learnings for future iterations:**
+  - WHEN THE SAME BUG APPEARS THREE TIMES, STOP FIXING INSTANCES AND SWEEP THE CLASS. The audit took
+    one heuristic grep plus four readings and found four more.
+  - The guard belongs where the INPUT is acquired, not where the result is printed. Every one of these
+    was a collection built early and consumed far away.
+  - A ratchet's empty-scan failure is worse than a gate's: it does not just pass, it reports
+    IMPROVEMENT and invites you to re-baseline the coverage away.
+  - Grep for the guard, not for the bug. "refusing to pass" as a phrase turned out to be a reliable
+    marker of which scripts had already thought about it.
+---
