@@ -159,7 +159,21 @@ export function sanitizeLikeInput(input: string, maxLength = 500): string {
     .replace(/\\/g, '\\\\')  // Escape backslash first
     .replace(/%/g, '\\%')    // Escape LIKE wildcard %
     .replace(/_/g, '\\_')    // Escape LIKE wildcard _
-    .replace(/[';]/g, '')    // Remove quotes
+    // APOSTROPHES ARE KEPT. This line used to strip [';] as "remove quotes",
+    // which is a raw-SQL instinct that does not apply here: these values reach
+    // PostgREST as a filter value or a bound parameter, never as SQL text.
+    //
+    // Measured against production: venue ilike with the apostrophe returns 44
+    // rows, the stripped form returns 0. Many venue names here carry one -
+    // Casey's Center, Chef George's Steak Bar, Wooly's - so removing it
+    // silently emptied every name search that mentioned one, which is exactly
+    // what nlp-search does with a location or neighbourhood.
+    //
+    // Checked separately that an apostrophe is NOT structural inside a
+    // PostgREST or(...) filter: the same query answers 206 with 44 rows. The
+    // characters that ARE structural there are stripped by
+    // sanitizePostgrestPattern below, which is the right place for them.
+    .replace(/;/g, '')       // semicolon still goes; nothing needs it
     .trim();
 }
 
