@@ -1443,3 +1443,27 @@ Evidence:
   - When alerting on a per-item loop, aggregate the shared-cause failure. One outage should not page
     once per item.
 ---
+
+## 2026-08-28 - moderate-content: an unreadable queue looked like an empty one
+- Second pick from the deployed-function list, by consequence. The scheduled review sweep discarded its
+  pending-queue error, so a failed read returned { scanned: 0, ...all zeros } with success: true and a
+  200 - identical to "nothing pending". Moderation stops, every signal says healthy, reviews sit
+  unmoderated. Now throws so runJob records it.
+- loadItem's two sites were NOT the same defect and are handled differently: its null already maps to
+  an 'error' verdict that the sweep counts, so an unreadable item is never treated as clean. Only the
+  reason was missing, so both log. Tightening those into throws would turn one bad row into a failed
+  sweep.
+- 159 -> 156 sites; file 3 -> 0; baseline re-banked at 156/102.
+- SKIPPED generate-invoice-pdf despite being next by count: its invoices/payments tables come from a
+  drifted migration and do not exist, so it cannot run. Recorded a real risk there for whoever
+  re-applies it - the existingInvoice lookup uses .single(), so a read failure is indistinguishable
+  from "no invoice yet" and would create a second invoice for one payment.
+- **Learnings for future iterations:**
+  - NOT EVERY DISCARDED ERROR IS THE SAME DEFECT. Three sites in one file: one was a silent failure
+    worth throwing on, two were already surfaced by the caller and only needed a log. A uniform fix
+    would have made the sweep fail on a single bad row.
+  - Check whether the code can even run before hardening it. Two of the highest-count files target
+    tables from drifted migrations; the fix belongs with the re-apply, not before it.
+  - `.single()` erroring on no-row is a legitimate idiom that quietly merges "absent" with "unreadable".
+    Where the consequence is a duplicate write, put the constraint in the schema instead.
+---
