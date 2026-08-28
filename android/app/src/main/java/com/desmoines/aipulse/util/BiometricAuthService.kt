@@ -178,13 +178,4 @@ class BiometricAuthService @Inject constructor(
             biometricPrompt.authenticate(promptInfoBuilder.build())
         }
     }
-
-    // MARK: - Cleanup
-
-    /**
-     * Disables biometric auth and clears preference. Call on sign out.
-     */
-    fun reset() {
-        disable()
-    }
 }

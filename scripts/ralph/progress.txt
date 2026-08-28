@@ -2798,3 +2798,25 @@ CI note: run 33179729704 (Android CI 363) came back green on PR #379 head 2301bf
 lint, unit tests, debug APK and the R8 release build all pass. That confirms the
 AndroidX revert cleared checkDebugAarMetadata and that compileSdk/targetSdk 36 works
 with the existing 2024-era dependencies. #379 still needs a human to merge it.
+
+## AND-AUDIT-024 follow-up: the second path that cleared the biometric lock
+
+Found while reading AuthViewModel for AND-AUDIT-006, after #380 had already gone
+green. AuthViewModel.signOut() called biometricAuthService.reset(), which
+delegates to disable(), which deletes the key outright. So #380's fix - teaching
+SecureStorage.deleteUserData() to preserve the key - achieved nothing, because a
+different caller wiped it directly on the same sign-out.
+
+Removed the call, and reset() with it: one caller, and the Settings toggle
+already uses disable(), which is the real API. Added a regression test asserting
+sign-out does not disable biometrics.
+
+The lesson is the transferable part. I fixed the storage layer and declared the
+behaviour fixed, having grepped for callers of deleteAll() but not for callers of
+the feature. The right search was biometricAuthService.* - who touches this
+setting at all - not who touches the store it lives in. A defect with two paths
+is fully open until both are closed, and a green CI run says nothing about
+whether you found them all.
+
+Caught it only because AND-AUDIT-006 sent me into the same file for an unrelated
+reason. That is luck, not method.
