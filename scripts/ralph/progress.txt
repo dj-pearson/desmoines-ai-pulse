@@ -2326,3 +2326,47 @@ _middleware.ts:268 rewrites the real <title>, not just og/twitter tags. So the m
   rewritten. An anon bearer vs no bearer found the newsletter dispatcher. The site behaves differently per
   caller in more places than the notes record.
 ---
+
+2026-08-28 - Security headers verified live (clean), and a consolidated handover
+  Checked the last unverified surface: production serves every header public/_headers declares - CSP, HSTS
+  preload, X-Frame-Options DENY, nosniff, Referrer-Policy, Permissions-Policy, CORP same-site, COEP
+  credentialless, COOP same-origin-allow-popups. And the CSP hashes are current: 3 executable inline
+  scripts, 3 sha256 hashes, all three match.
+    A first pass said "3 of 9 covered" because my regex counted the six application/ld+json blocks as
+    scripts. Browsers do not execute those and script-src does not gate them. Fourth regex this week to
+    answer a question I did not ask.
+
+  ── WHAT IS ACTUALLY WAITING ON THE OWNER ────────────────────────────────────────────────────────
+  Ordered by how much each unblocks, from a week of probing rather than from the story text.
+
+  1. SUPABASE_ACCESS_TOKEN on the 'Scrape' environment. Deploy Edge Functions has run ONCE, 2026-08-27,
+     and failed in 13 seconds. No edge function has ever deployed through it. This one secret gates:
+       - the agent fleet: 49 written functions, 8,250 lines, behind 48 closed AOS stories
+       - the GSC OAuth chain (gsc-oauth, gsc-fetch-properties, gsc-sync-data are all 404) against a
+         refresh token WEB-SEO-014 says lapses ~2026-09-30
+       - export-user-data (XPLAT-007), the right of ACCESS, while delete-user-account is already live
+       - agent-ci-health, which is why 21 green CI Health Report runs recorded nothing
+       - 4 cron jobs currently reporting success while posting into 404s
+     Deploy risk is measured, not assumed: all 49 fleet functions are verify_jwt=false AND all 49 carry an
+     in-function requireAdminOrApiKey. Deploying adds no unauthenticated endpoint.
+
+  2. supabase db push. Two migrations are merged and never applied:
+       20260827000002  event_attendance_tallies - its absence makes check-in counts read 0 and has kept
+                       the app type ratchet red on EVERY PR since PR #373
+       20260828000001  get_pending_reminders email cast - written this session; the function 500s on
+                       every hourly run today, so no event reminder has ever been sent
+
+  3. WEB-QA-018's re-apply / repair / retire decision on 31 drifted migrations. Gates WEB-QA-017 AC1,
+     WEB-QA-019's 17 RPCs, WEB-BE-031's ten seo_* tables and 44 error-handling sites.
+
+  4. supabase secrets set MEDIA_CDN_BASE. AC3 names the Cloudflare Pages env; cdnUrlFor reads Deno.env,
+     so setting it there alone changes nothing. Seven event rows re-accrue per crawl until it is set.
+
+  5. Smaller, each recorded in its story: the bot User-Agent decision (WEB-SEC-024 AC3), whether to widen
+     the middleware's CRAWLER_UA to Googlebot/GPTBot (WEB-SEO-006, one line, a dynamic-rendering choice),
+     GitGuardian's dashboard exclusion (WEB-CI-027 - and note it PASSED on PR #374), and the 23 annotated
+     service-role functions in .github/edge-auth-baseline.json.
+
+  And the branch itself: 154 commits, never pushed. All three PR-blocking CI failures on main are fixed on
+  it; validate, eight post-build gates, 12/12 offline suites and 17/17 deno suites all pass locally.
+---
