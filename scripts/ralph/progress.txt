@@ -2370,3 +2370,26 @@ _middleware.ts:268 rewrites the real <title>, not just og/twitter tags. So the m
   And the branch itself: 154 commits, never pushed. All three PR-blocking CI failures on main are fixed on
   it; validate, eight post-build gates, 12/12 offline suites and 17/17 deno suites all pass locally.
 ---
+
+2026-08-28 - Eight more guarded, 23 -> 15, and a near-miss worth writing down
+  Worked the triage list the way the earlier four were done: enumerate callers, verify each one's route,
+  guard only where the set is provable. Eight qualified - four behind SEOManager at /admin/seo, plus
+  HotelManager, RestaurantMenuManager, PseoAdmin and SearchTrafficDashboard, every route
+  <ProtectedRoute requireAdmin>, none with a cron caller.
+
+  THE EXCLUSIONS ARE THE POINT. check-login-attempt is called from AuthContext during SIGN-IN, by any
+  user; an admin gate there breaks authentication for everyone. notify-event-submission is called from
+  useUserSubmittedEvents - public users submitting events. log-content-metrics was already annotated "do
+  not guard". Guarding by name-shape, or by "it runs as service_role so it must be admin", would have
+  broken sign-in. Enumerating callers is the whole method.
+
+  AND THE CHECK NEARLY TALKED ME INTO DESTROYING A BASELINE. My import inserter picked the last line
+  STARTING with "import ", which for a multi-line import is its opening brace - so it split the statement
+  in scrape-restaurant-menus. tsc bailed on the entire project, and check-edge-types printed:
+      6 error(s) across 1 file(s)
+      160 error(s) across 31 file(s) fixed. Re-baseline to lock it in.
+  That is the precise false all-clear its own header documents, and it arrived as a SUGGESTION to
+  re-baseline. Following it would have zeroed a 160-entry baseline off a syntax error I had just
+  introduced. The tell was the file COUNT: 31 -> 1. A ratchet reporting mass improvement should always be
+  read as "did the scan shrink?" first.
+---
