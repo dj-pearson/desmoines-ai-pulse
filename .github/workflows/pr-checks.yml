@@ -229,6 +229,16 @@ jobs:
       # ratchets per route with a wide tolerance: these pages render live data,
       # so a tight gate on a data-driven number is a flake, and a flaky gate gets
       # switched off (see WEB-CI-020, WEB-CI-021).
+      # WEB-SEO-006. No prerendered page may ship a loading skeleton. /restaurants
+      # shipped "Loading restaurants..." and an ItemList of numberOfItems 0 on
+      # every build until 2026-08-28, and nothing caught it because every other
+      # guard here measures a DIFFERENCE against a baseline - a route that has
+      # always been wrong looks stable. This asserts an absolute property, so it
+      # gates where check-dom-budget cannot: a shipped skeleton is never correct
+      # on any data, so there is no quiet week that makes it fire.
+      - name: No prerendered page ships a skeleton
+        run: node scripts/check-prerender-content.mjs
+
       - name: Prerendered DOM size
         run: node scripts/check-dom-budget.mjs
 
