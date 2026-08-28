@@ -2099,3 +2099,29 @@ Evidence:
   went back. Most of what I have flagged this week for later has been owner-blocked; this one was three
   commands away. Re-read your own parked items before hunting for new ones.
 ---
+
+2026-08-28 - Re-reading parked items found a real auth hole
+  Last iteration's lesson was to re-read my own parked notes. One said dispatch-scheduled-newsletters
+  "returned 200" to an anon POST and I had assumed that was fine. It was not.
+
+  Its docstring claims verify_jwt=false plus an admin-bearer check. There is no config.toml entry at all,
+  so verify_jwt defaults to TRUE - and verify_jwt only means "a valid Supabase JWT". The publishable ANON
+  KEY is one, and ships in every client bundle. No code in the function looked at the role. Verified both
+  ways against production: no header -> 401, anon bearer -> 200 and the job ran. It then does service-role
+  writes and dispatches mail through Resend.
+  Fixed with requireAdminOrApiKey - the cron sends a service-role bearer, which that helper accepts, so the
+  scheduled path is unchanged.
+
+  I INVOKED IT BEFORE READING IT, which was the wrong order for an endpoint that sends email. It is a no-op
+  with nothing scheduled and nothing was, but I got that right by luck rather than by care. Read the source
+  of anything with side effects before poking it.
+
+  THE SWEEP IS TRIAGE AND I ALMOST REPORTED IT AS A FINDING. First pass: "52 deployed functions use a
+  service-role client with no guard". That included assign-role, which verifies the caller is admin
+  server-side via admin.auth.getUser(bearer) - my regex just did not know that idiom. Tightening the
+  definition of "guard" to include auth.getUser, API keys and webhook signatures took it to 23, and several
+  of those are public by design. A big scary number from a crude regex is not a finding; the one I
+  confirmed and the one I spot-checked are.
+  Confirmed second instance: backfill-all-coordinates, zero auth references, service-role client, geocodes
+  four tables at cost per call.
+---
