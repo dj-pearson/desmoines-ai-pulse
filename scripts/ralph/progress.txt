@@ -2279,3 +2279,25 @@ Evidence:
   it. I did not renormalise the rest of the repo, which would be a large unrelated change. No other file
   on the branch has EOL churn above 40 lines; I checked all of them.
 ---
+
+2026-08-28 - Verified the social-card path end to end, and found it uncached
+  Chased a loose end: og-image is deployed, but my earlier probe got the FALLBACK. That was my error - it
+  takes a PATH (/og-image/<type>/<id>), not query params, so ?title=test correctly fell through. Same
+  mistake as inferring a cron target from a job name, twice in three days.
+
+  With the real interface it works, and so does the middleware. Using a REAL sitemapped URL rather than a
+  slug I built myself:
+      facebookexternalhit -> og:image = .../og-image/event/<real id>, og:title = the real event title
+      plain browser       -> the SPA shell, which is correct (Helmet fixes it after hydration)
+      that og:image URL   -> 200 image/jpeg, ~30 KB, a genuinely rendered card
+  My first attempt used a slug I constructed and got the shell for both, which I nearly wrote up as "the
+  middleware does not fire". It fires; my URL did not exist, and the middleware fails open by design.
+
+  THE FINDING IS THAT NOTHING CACHES IT. Two consecutive fetches both return cf-cache-status: DYNAMIC. The
+  og:image points at the supabase.co origin, so it never reaches the Cloudflare cache that /media gets -
+  /media returns HIT. Every crawler fetch re-invokes the function, re-inits resvg WASM, re-renders and
+  re-encodes. Recorded under WEB-OPS-023 as an adjacent term, explicitly smaller than its main one: cards
+  are fetched by unfurlers, not by every visitor.
+  Not built. Proxying og-image through the site domain would work, but it changes a URL social platforms
+  have cached, and that is a design decision.
+---
