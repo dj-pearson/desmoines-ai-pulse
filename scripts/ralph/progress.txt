@@ -1937,3 +1937,30 @@ Evidence:
   Now: offline mode reports "MISSING not in dist/", --live reports "200 text/html", reverting passes.
   Wired into pr-checks after the build.
 ---
+
+2026-08-28 - A verification iteration: three claims checked, two corrected, one guard widened
+  Probed the sitemap/robots surface end to end instead of picking a story. Most of what I found was already
+  known and deliberately handled, which is worth saying plainly rather than dressing up as discovery.
+
+  WHAT WAS NEW:
+  - robots.txt declares NINE sitemaps and no page links to any of them, so the asset check built last
+    iteration could not see them. A Sitemap: line for a missing file fails exactly like the og:image did.
+    Now covered, controlled, 21 assets checked vs 12.
+  - WEB-SEO-013's title ("absent from every sitemap") is stale: production advertises 244 pSEO URLs. This
+    branch takes that to 18 via the FLOOR shippable set - intentional, and worth recording before someone
+    sees 226 URLs vanish from Search Console after the deploy and calls it a regression.
+
+  TWO READINGS I GOT WRONG AND CAUGHT:
+  1. classifySlugs reported "18 unrouted" and I nearly filed it as 18 sitemapped soft-404s. It deliberately
+     EXCLUDES routes that serve pSEO pages and path="*" - so that output means "no OTHER route steals
+     them", the healthy answer. App.tsx:619-629 routes all six pSEO patterns including /:seg1/:seg2.
+  2. All 244 live pSEO URLs share the homepage's title, which looked like a duplicate-title defect at
+     scale. It is the documented SPA-fallback behaviour: _middleware.ts self-canonicalises and strips the
+     homepage JSON-LD, and the title is deliberately left alone because there is no per-entity data at that
+     layer. Already reasoned about, already handled, pending PRERENDER_ENTITIES.
+
+  AND ONE CLEANUP I TALKED MYSELF OUT OF: public/sitemap-index.xml duplicates sitemap.xml and is referenced
+  nowhere. Deleting an orphan looks free. It is not - on this site a deleted static file serves the SPA
+  shell as 200 text/html, so removing it would manufacture a fresh copy of the defect I fixed yesterday.
+  Left it, and wrote down why so the next person does not re-derive it.
+---
