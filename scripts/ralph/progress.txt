@@ -2760,3 +2760,36 @@ deleted it
     successful lint (~3m36s). Step duration is a usable first signal for what kind of
     failure you are looking at before opening the log.
 ---
+
+## Deno CI: marketing-optout-agents has never run
+
+Not an AND-AUDIT story - found while ruling out a red check on PR #380.
+
+"Edge function & migration invariants" fails on every PR that touches
+android/app/src/main/java/**, at:
+  deno test --allow-read --allow-env --no-check=remote \
+    supabase/functions/_tests/marketing-optout-agents.test.ts
+  error: Could not find "@types/node" in a node_modules folder.
+
+The workflow's own comment already diagnosed the cause correctly and applied
+--no-check=remote as the fix. It does not work, and the reason is a detail worth
+keeping: --no-check=remote skips the BODIES of remote declaration files but still
+resolves their type-reference directives, and the @types/node reference inside
+supabase-js's index.d.mts is exactly such a directive. So the flag that was added
+to fix this never could. The four tests in that file have never executed.
+
+Fix is bare --no-check, which also drops type-checking of the test's own source.
+Real loss, still the better trade: four tests that run beat four tests that are
+type-checked and skipped. The alternative that keeps both is a root deno.json with
+nodeModulesDir plus an @types/node import and a deno install step - a lot of
+machinery for one suite.
+
+The workflow lists its own path in on.pull_request.paths, so the PR verifies its
+own fix. Expect the possibility that the tests fail on first execution: nothing
+has ever run them, so their passing was never established.
+
+Process note: I nearly filed this as "not my PR's problem" and moved on, which is
+the correct posture for a red check on someone else's code but would have left a
+suite silently dead. Reading the workflow comment was what turned it from noise
+into a finding - the comment said what the author expected, and the log said what
+actually happened, and they disagreed.
