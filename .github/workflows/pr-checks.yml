@@ -198,6 +198,13 @@ jobs:
       - name: Migration drift decision rules
         run: npx tsx scripts/__tests__/drift-decisions.test.mjs
 
+      # WEB-SEO-011. The sitemap generator and the freshness check must build the
+      # same event URL or the check reports every event missing. Pinned to TZ=UTC
+      # inside the test, because on a Central developer machine the timezone
+      # conversion is a no-op and the assertions pass without it.
+      - name: Sitemap slug shapes
+        run: npx tsx scripts/__tests__/sitemap-slugs.test.mjs
+
       - name: Critical-path JS budget
         run: node scripts/check-bundle-budget.mjs
 

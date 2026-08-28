@@ -10,6 +10,9 @@ import { createClient } from '@supabase/supabase-js';
 import { readFileSync, existsSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { computePseoShippable } from './lib/pseoShippable';
+// Slug shapes live in one place so the freshness check cannot build a URL the
+// generator would not have written. See scripts/lib/sitemapSlugs.ts.
+import { createSlug, createEventSlug } from './lib/sitemapSlugs';
 
 // Load .env for local development (Cloudflare Pages / Infisical set env vars at build time)
 function loadEnvFile(filePath: string): void {
@@ -34,10 +37,7 @@ function loadEnvFile(filePath: string): void {
 }
 loadEnvFile(join(process.cwd(), '.env'));
 loadEnvFile(join(process.cwd(), '.env.local'));
-import { toZonedTime } from 'date-fns-tz';
-import { parseISO } from 'date-fns';
 
-const CENTRAL_TIMEZONE = 'America/Chicago';
 
 // Environment variables - no hardcoded secrets
 // Support both VITE_* (frontend) and plain names (Infisical/server scripts)
@@ -62,36 +62,6 @@ interface SitemapUrl {
   lastmod?: string;
   changefreq?: string;
   priority?: string;
-}
-
-function createSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
-
-/**
- * Create event slug matching app's createEventSlugWithCentralTime (Central Time)
- */
-function createEventSlug(title: string, event?: { date?: string; event_start_utc?: string }): string {
-  const titleSlug = title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '');
-  if (!event) return titleSlug;
-  try {
-    const dateToUse = event.event_start_utc || event.date;
-    if (!dateToUse) return titleSlug;
-    const dateObj = typeof dateToUse === 'string' ? parseISO(dateToUse) : dateToUse;
-    const centralDate = toZonedTime(dateObj, CENTRAL_TIMEZONE);
-    const year = centralDate.getFullYear();
-    const month = String(centralDate.getMonth() + 1).padStart(2, '0');
-    const day = String(centralDate.getDate()).padStart(2, '0');
-    return `${titleSlug}-${year}-${month}-${day}`;
-  } catch {
-    return titleSlug;
-  }
 }
 
 function generateSitemapXML(urls: SitemapUrl[]): string {
