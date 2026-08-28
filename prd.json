@@ -7298,7 +7298,7 @@
       "id": "AND-AUDIT-024",
       "title": "Signing out silently turns off the biometric lock",
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "description": "As a user who enabled the biometric lock, I need it to survive signing out, because SignOutCleaner calls secureStorage.deleteAll() which clears every key in the store including biometric_enabled and indexing_enabled, so signing out disables a security setting the user chose and nothing tells them.",
       "acceptanceCriteria": [
         "Separate device settings from user credentials in SecureStorage. Sign-out should wipe session material and cached profile; it should not wipe how the user configured this device.",
@@ -7307,7 +7307,7 @@
         "Add a test: sign out, and assert biometric_enabled survives (or is cleared, whichever was decided).",
         "Check what else deleteAll() takes with it. At audit time: biometric_enabled, indexing_enabled, the soft-paywall counters and the session timestamps."
       ],
-      "notes": "Found while fixing the sign-out favorites leak on the audit branch. That fix made sign-out wipe more, not less, which makes this one worth resolving before someone adds another setting to the same store."
+      "notes": "Resolved by splitting device settings from account data in SecureStorage rather than moving them to a second store: SecureStorage.DEVICE_SETTING_KEYS names what survives, deleteUserData() preserves it, and deleteAll() stays a genuine full wipe. Sign-out now calls deleteUserData(). BiometricAuthService takes its key from the same constant so the two cannot drift.\n\nThe biometric case was decided as preserve, not clear. Biometric enrolment is a property of the handset, so an account boundary is not a reason to switch the lock off, and clearing it silently downgraded a security setting the user chose. Nothing needs to be said to the user because nothing visibly changes; the disclosure the story asks for would only be owed on the clear-it option.\n\nThe rest of the audit-time list came out differently than the story assumed. indexing_enabled no longer exists (AND-AUDIT-016 deleted AppSearchService). The soft-paywall counters and session timestamps are per-user and SignOutCleaner already resets both by hand, so clearing them is deliberate and they stay out of the allowlist.\n\nTested in SecureStorageTest against an in-memory FakeSharedPreferences, reached through a new internal constructor - the real store needs the Android Keystore, which a JVM unit test does not have, and depending on the Keystore fallback tripping would have made the test assert an accident. SignOutCleanerTest now also asserts deleteAll() is NOT called.\n\nFOLLOW-UP, found after the first green CI run: SecureStorage was not the only path clearing the setting. AuthViewModel.signOut() called biometricAuthService.reset(), which delegates to disable(), which deletes the key directly. Making deleteUserData() preserve it achieved nothing while a second caller wiped it a line earlier. That call is removed, and reset() with it - it had exactly one caller, and the user-facing Settings toggle uses disable(), which is the real API. AuthViewModelTest now asserts sign-out does not disable biometrics.\n\nWorth generalising: fixing the storage layer is not the same as fixing the behaviour. The grep that would have caught this on the first pass is for callers of the FEATURE (biometricAuthService.*), not just callers of the store (deleteAll)."
     }
   ]
 }
