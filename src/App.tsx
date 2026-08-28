@@ -22,6 +22,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import BottomNav from "@/components/BottomNav";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { GuestFavoriteMigrator } from "@/components/GuestFavoriteMigrator";
+import { PrerenderSignal } from "@/components/PrerenderSignal";
 import { GlobalUpgradeModal } from "@/components/GlobalUpgradeModal";
 import { AccessibilityProvider } from "@/contexts/AccessibilityContext";
 import { AccessibilityWidget } from "@/components/AccessibilityWidget";
@@ -394,6 +395,9 @@ const App = () => (
       <AuthProvider>
         <SessionManager />
         <GuestFavoriteMigrator />
+        {/* Publishes data-queries-settled on <html> for scripts/prerender.mjs.
+            Renders nothing and does no work in a browser beyond one attribute. */}
+        <PrerenderSignal />
         <GlobalUpgradeModal />
         <OfflineBanner />
         <ErrorBoundary>

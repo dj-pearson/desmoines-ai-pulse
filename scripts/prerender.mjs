@@ -350,6 +350,9 @@ async function main() {
   let failed = 0;
   let strippedTotal = 0;
 let leafletStrippedTotal = 0;
+// Routes whose queries never reported settled. Not a failure - the capture still
+// happens - but it is the population thin captures come from, so it is printed.
+const unsettledRoutes = [];
   let restoredFontsTotal = 0;
 let duplicateJsonLdTotal = 0;
 
@@ -455,6 +458,27 @@ let duplicateJsonLdTotal = 0;
       // keeps finding that hand-maintained route lists go stale. Two consecutive
       // equal samples is the settle; the cap means a page that legitimately
       // renders nothing still proceeds, exactly as before.
+      // FIRST, WAIT FOR THE QUERIES THEMSELVES. src/components/PrerenderSignal.tsx
+      // publishes data-queries-settled on <html> when TanStack Query has nothing
+      // in flight (and has actually fetched, or a grace period has passed for a
+      // route that never fetches). That is the signal the two waits above were
+      // standing in for: Helmet proves the page mounted, a stable element count
+      // proves it stopped changing, and a LOADING SKELETON IS STABLE - which is
+      // how /events/this-weekend captured 422 elements with zero event cards on
+      // 2026-08-28 and 2,390 with forty on the next build of the same code.
+      //
+      // Fails open. If the signal never arrives - an older bundle, a route that
+      // throws before mounting - this proceeds to the element-count settle
+      // below, which is exactly the previous behaviour.
+      const queriesSettled = await page
+        .waitForFunction(
+          () => document.documentElement.dataset.queriesSettled === 'true',
+          { timeout: 10000 },
+        )
+        .then(() => true)
+        .catch(() => false);
+      if (!queriesSettled) unsettledRoutes.push(route);
+
       const SAMPLE_MS = 150;
       const SETTLE_CAP_MS = 4000;
       let previous = -1;
@@ -666,6 +690,9 @@ let duplicateJsonLdTotal = 0;
       `${entityUnrendered.length} over budget, of ${scope} routes; ` +
       `stripped ${strippedTotal} runtime-injected modulepreload link(s); ` +
       `${leafletStrippedTotal} Leaflet runtime image(s); ` +
+      (unsettledRoutes.length
+        ? `${unsettledRoutes.length} route(s) captured WITHOUT a queries-settled signal (${unsettledRoutes.slice(0, 5).join(', ')}); `
+        : 'all routes reported queries settled; ') +
       `restored ${restoredFontsTotal} async font link(s); ` +
       `dropped ${duplicateJsonLdTotal} duplicate JSON-LD block(s)`,
   );
