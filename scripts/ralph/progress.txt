@@ -1422,3 +1422,24 @@ Evidence:
   - "Every entry reads N -> 0" is the signature of a scan that saw nothing. Confirm the total is
     non-zero before believing a mass improvement.
 ---
+
+## 2026-08-28 - job-health-watchdog returned { alerts: [] } when its own reads failed
+- Prioritised the 161 discarded-error sites by DEPLOYMENT: 51 across 34 deployed functions, 24 in
+  undeployed ones. A swallowed error in a function nobody can call is not yet costing anything.
+- The watchdog discarded both automation_job_runs errors. A failed read left lastRun null, and the
+  alert is gated on `if (lastRun)` - a gate that exists for a good reason. So the failure produced no
+  false alarm and NO ALARM: a 200 and an empty alerts array, from a monitor that had just gone blind.
+- Now: read failures are collected as UNREADABLE and skipped rather than judged healthy, reported once
+  rather than per job, and the response distinguishes `unreadable` from `alerts`.
+- 161 -> 159 sites; the file 2 -> 0; baseline re-banked at 159/103.
+- **Learnings for future iterations:**
+  - A MONITOR MUST BE ABLE TO REPORT THAT IT COULD NOT LOOK. "No alerts" and "I could not check" were
+    the same value here, and the second is an incident.
+  - A guard added for a good reason can hide a different failure. `if (lastRun)` correctly suppresses
+    noise for unwired jobs and incorrectly suppresses it for unreadable ones; the fix is to separate
+    the two causes, not to remove the guard.
+  - Prioritise swallowed errors by whether the code is DEPLOYED. It split 75 edge sites into 51 that
+    can bite today and 24 that cannot, using a baseline the repo already maintains.
+  - When alerting on a per-item loop, aggregate the shared-cause failure. One outage should not page
+    once per item.
+---
