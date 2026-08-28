@@ -1261,3 +1261,27 @@ Evidence:
   - When a note says a signal was searched for and not found, search again with the accessibility
     layer in mind.
 ---
+
+## 2026-08-28 - WEB-SEO-006: an absolute assertion, because every other guard measured a difference
+- Audited all six entity hubs, row count against prerendered output. Every one renders its data now;
+  no second /restaurants.
+- The real lesson from /restaurants is WHY nothing caught it. check-dom-budget, the collapse detector
+  and the prerenderer's quality gate all compare against a baseline or the shell. A route that has
+  ALWAYS been wrong matches its baseline and passes everything.
+- scripts/check-prerender-content.mjs asserts an absolute property instead: no aria-busy="true" in any
+  shipped page. It gates, unlike check-dom-budget, because a skeleton is never correct on any data
+  whereas element counts move with a quiet week.
+- Checked and cleared two non-defects: /stay's thin schema (it has canonical/description/og:title,
+  just fewer JSON-LD types) and the three hubs with no ItemList (absent, not empty - a missed
+  opportunity, not the invalid-list bug).
+- **Learnings for future iterations:**
+  - A BASELINE CANNOT CATCH A BUG THAT PREDATES IT. Every ratchet here measures change; something that
+    shipped broken from day one is perfectly stable. Pair ratchets with at least one absolute
+    assertion about the artifact.
+  - Gate on properties that no legitimate data can violate; report on properties that move with data.
+    That is the whole difference between this check and check-dom-budget, and both are right.
+  - Verify a new check would have caught the bug that motivated it. I had the pre-fix measurement
+    (aria-busy x1) so this was checkable rather than assumed.
+  - Measure before filing a suspicion. /stay looked like it was missing its SEO component and was not;
+    my own wrong link prefix produced the "0 hotel links" that started it.
+---
