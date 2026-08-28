@@ -1723,3 +1723,30 @@ Evidence:
   I selected events.description - which does not exist - and treated the 42703 error body as an empty page.
   The count check is the only reason I looked. Non-array responses now throw.
 ---
+
+2026-08-28 - XPLAT-013: the mobile guard checked tables and stopped there
+  check-mobile-schema-usage exists because Swift and Kotlin have no generated types. That argument does not
+  stop at table names, and the guard did. A missing table kills a feature; one wrong column 42703s, both
+  SDKs throw, the caller catches, and it reads as an empty list - the same silence one level down.
+  22 explicit column lists now checked against 269 tables. 0 findings, and controlled: injecting a bad
+  column fails with file, line, table and column; reverting passes.
+
+  THE PARSER WAS WRONG TWICE ON REAL FILES, which is the reusable part.
+    plan:subscription_plans(name)   is an embed, not a column. Split on ':' and take the right side and you
+                                    report a missing column that was never a column.
+    profiles:user_id (first_name)   is the same syntax meaning something else - the head is a foreign-key
+                                    COLUMN, not a table. Two valid spellings, indistinguishable without the
+                                    constraint graph. Accepted rather than guessed: under-checking beats a
+                                    false failure in a gate that blocks merges.
+  Both were found by running against the tree, not by thinking about the grammar. Neither would have
+  occurred to me from the docs.
+
+  events HAS NO `description` COLUMN, found while reading production for the merge work and confirmed here.
+  iOS declares `var description: String?` - optional, so it decodes to nil. A non-optional would have
+  emptied every event list in the app with nothing anywhere reporting a schema error.
+
+  PROCESS, and I am now certain of it: python heredocs in this environment collapse backslash escapes.
+  Four separate breakages this session, including one where a str.replace anchor containing an escape
+  silently did NOT match, so the edit no-opped and the script kept its old output. Assert on EVERY
+  replacement, or edit by line index with no escapes at all. The silent no-op is the dangerous one.
+---
