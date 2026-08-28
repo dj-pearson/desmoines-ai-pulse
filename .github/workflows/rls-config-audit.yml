@@ -151,6 +151,16 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: npx tsx scripts/check-sitemap-freshness.ts
 
+      # WEB-OPS-023. The /media route caches; rows written before the ingest
+      # switch is set bypass it and cost egress per view. The count re-accrues
+      # every crawl until MEDIA_CDN_BASE is set in the SUPABASE secrets (not
+      # only in Pages), so it is worth watching rather than gating.
+      - name: Images still served off the storage origin
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: node scripts/check-media-url-drift.mjs
+
       - name: Scheduled-job health ratchet
 
         env:
