@@ -11,8 +11,8 @@
   "notes": {
     "check-login-attempt": "DO NOT GUARD. Called from src/contexts/AuthContext.tsx during SIGN-IN, by any user. An admin gate breaks authentication for everyone. It does send mail via Resend, so if it needs bounding, bound it with a rate limit - not with a role check.",
     "log-content-metrics": "DO NOT GUARD. Public by design - anonymous visitors report Core Web Vitals, so a guard deletes the feature. Its own header explains this and it is bounded by a rate limit instead.",
-    "notify-event-submission": "DO NOT GUARD as admin. Called from src/hooks/useUserSubmittedEvents.ts - public users submitting an event - and also server-to-server by triage-event-submission. Any bound here must be a rate limit.",
+    "notify-event-submission": "DO NOT GUARD as admin. Called from src/hooks/useUserSubmittedEvents.ts - public users submitting an event - and server-to-server by triage-event-submission. Now bounded by checkRateLimit (max 20 / 15 min) and, more importantly, it no longer trusts the body: recipient and title are read from user_submitted_events by eventId. It used to take the `to:` address from the request body, which made it an open mail relay.",
     "og-image": "DO NOT GUARD. Renders the social card that any crawler or unfurler fetches; the middleware points og:image straight at it.",
-    "oauth-callback": "DO NOT GUARD. Its caller is an external OAuth provider redirecting a browser to it; there is no bearer to check. Verify the state/code handling instead."
+    "oauth-callback": "DO NOT GUARD. Its caller is an external OAuth provider redirecting a browser here; there is no bearer to check. Deliberately NOT rate-limited either: callers share NAT addresses and a limit here would break sign-in for a whole network. It neither sends mail nor spends money - verify the state/code handling instead if this needs attention."
   }
 }

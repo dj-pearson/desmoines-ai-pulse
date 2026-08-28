@@ -13,6 +13,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
 import { escapeHtml } from "../_shared/escapeHtml.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { checkRateLimit } from "../_shared/rateLimit.ts";
 
 serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -20,6 +21,22 @@ serve(async (req) => {
 
   const origin = req.headers.get("origin") || "";
   const corsHeaders = getCorsHeaders(isOriginAllowed(origin) ? origin : undefined);
+
+  // BOUNDED. This endpoint is public by necessity - the caller is a member of
+  // the public submitting an event - and it sends mail, so the only control
+  // available is a limit on how often one client can do it. og-image,
+  // log-content-metrics and check-login-attempt already use this helper; this
+  // one and oauth-callback were the two that did not.
+  //
+  // Generous on purpose: a submitter legitimately triggers one notification per
+  // submission, and an admin reviewing a queue triggers one per decision. 20 in
+  // the default 15-minute window is far above either and still stops a loop.
+  const rateLimit = checkRateLimit(req, {
+    max: 20,
+    endpoint: "notify-event-submission",
+    message: "Notification rate limit exceeded.",
+  });
+  if (!rateLimit.success) return rateLimit.response!;
 
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
