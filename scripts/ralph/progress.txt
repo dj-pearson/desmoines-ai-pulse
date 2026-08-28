@@ -1511,3 +1511,26 @@ Evidence:
     an account shown as disconnected. That is worse than an error, because nobody investigates it.
   - The same triage keeps holding: fail-closed auth reads are fine, reads that gate a write are not.
 ---
+
+## 2026-08-28 - the false zero, three times in three commits
+- AIEnhancementManager counted total and enhanced events, discarded both errors, and computed
+  `totalEvents || 0`. A failed read rendered "0 total, 0 enhanced, 0 pending, 0%" - read by an admin
+  as "nothing needs enhancing". Its catch could never fire: a Supabase count error returns
+  { count: null, error } and does not throw. Same shape one function down in the history panel.
+- That is the third instance in three commits: moderate-content's empty queue, pseo-batch-worker's
+  remaining=0, and this. 150 -> 147; file 4 -> 1.
+- CHECKED AND LEFT ALONE: send-campaign-notification (one fail-closed 403, one that leaves
+  recipient_email null in the stored row - visible in the data); MergeReviewPanel (RowCard already
+  takes missingId and renders the raw id, so a failed read degrades visibly before a destructive
+  merge); triage-event-submission (both fail closed).
+- **Learnings for future iterations:**
+  - `?? 0` OR `|| 0` ON A VALUE THAT IS NULL BECAUSE THE READ FAILED turns a diagnostic into a
+    reassurance. Every instance of the false zero this week has been that one line.
+  - A try/catch around Supabase calls does NOT cover query errors. They are returned, not thrown, so a
+    component can have visible, well-written error handling that is unreachable.
+  - The triage is now stable enough to state: fail-closed auth reads are fine; reads whose null the
+    caller already surfaces are fine; reads that gate a write, or that become a displayed zero, are
+    not.
+  - Checking four files and changing one is a good ratio, not a wasted iteration. The three left alone
+    would each have been churn.
+---
