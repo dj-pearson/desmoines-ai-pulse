@@ -345,12 +345,20 @@ serve(async (req) => {
   }
 
   if (!pendingItems || pendingItems.length === 0) {
-    const { count: remainingCount } = await supabase
+    // A COUNT THAT FAILED IS NOT A COUNT OF ZERO. `remainingCount ?? 0` below
+    // logged "remaining=0" whether the queue was drained or the count errored,
+    // which reads as "the backlog is clear" either way. The main queue fetch
+    // above already checks its own error and 500s, so this is reporting only -
+    // but a reporting number that lies about a backlog is how a stuck queue
+    // goes unnoticed.
+    const { count: remainingCount, error: remainingError } = await supabase
       .from("pseo_generation_queue")
       .select("*", { count: "exact", head: true })
       .eq("status", "pending");
 
-    console.log(`pseo-batch-worker: no pending items, remaining=${remainingCount ?? 0}`);
+    console.log(
+      `pseo-batch-worker: no pending items, remaining=${remainingError ? 'UNKNOWN (' + remainingError.message + ')' : remainingCount ?? 0}`,
+    );
     return jsonResponse({
       success: true,
       processed: 0,
@@ -466,7 +474,8 @@ serve(async (req) => {
   );
 
   // ── Step 5: Count remaining ───────────────────────────────────────────────
-  const { count: remainingCount } = await supabase
+  // Same as above: distinguish a failed count from a drained queue.
+  const { count: remainingCount, error: remainingError } = await supabase
     .from("pseo_generation_queue")
     .select("*", { count: "exact", head: true })
     .eq("status", "pending");
@@ -475,7 +484,7 @@ serve(async (req) => {
   const skippedCount = results.filter((r) => r.status === "skipped").length;
   const failed = results.filter((r) => r.status === "failed").length;
 
-  console.log(`pseo-batch-worker: done — succeeded=${succeeded}, skipped=${skippedCount}, failed=${failed}, remaining=${remainingCount ?? 0}`);
+  console.log(`pseo-batch-worker: done — succeeded=${succeeded}, skipped=${skippedCount}, failed=${failed}, remaining=${remainingError ? 'UNKNOWN' : remainingCount ?? 0}`);
 
   return jsonResponse({
     success: true,
