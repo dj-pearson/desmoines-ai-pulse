@@ -49,6 +49,16 @@ jobs:
       - name: Run TypeScript type check
         run: npm run type-check
 
+      # scripts/ was in NO tsconfig, so the type-checker never read a line of it:
+      # `npm run type-check` exited 0 on a script containing
+      # `const x: number = "nope"`, verified by adding exactly that. WEB-CI-027
+      # already records the consequence - a stray closing brace in
+      # scripts/run-migration.ts reaching CI, under the note "tsconfig does not
+      # include scripts/, so the file is invisible to the type-checker entirely".
+      # Clean at zero errors from the first run, so it gates rather than ratchets.
+      - name: Type-check the scripts directory
+        run: npm run type-check:scripts
+
       # Edge functions are excluded from tsconfig.json, and no workflow runs
       # `deno check`, so until now NOTHING type-checked supabase/functions -
       # eslint parses them and runs no type-aware rules. A wrong property on a

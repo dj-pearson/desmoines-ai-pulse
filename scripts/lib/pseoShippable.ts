@@ -278,6 +278,15 @@ function makeFetchers(base, key) {
         });
         if (!res.ok) return { ids: [], total: 0, error: `HTTP ${res.status} ${(await res.text()).slice(0, 120)}` };
         const body = await res.json();
+        // fetchAll guards its response with Array.isArray and this did not, which
+        // the first type-checked run of scripts/ caught: `body.map` on `unknown`.
+        // A 200 carrying a non-array body would have thrown inside the retry
+        // loop and been reported as "fetch failed: TypeError ... is not a
+        // function" after three attempts - a network error message for a shape
+        // problem, on the path that decides what reaches a sitemap.
+        if (!Array.isArray(body)) {
+          return { ids: [], total: 0, error: `unexpected body: ${JSON.stringify(body).slice(0, 120)}` };
+        }
         const range = res.headers.get('content-range') || '';
         const total = Number(range.split('/')[1]);
         return { ids: body.map((r) => r.id), total: Number.isFinite(total) ? total : body.length };

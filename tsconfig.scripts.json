@@ -1,0 +1,71 @@
+{
+  // Type coverage for scripts/, which nothing had.
+  //
+  // tsconfig.app.json includes only "src" and tsconfig.node.json only
+  // "vite.config.ts", so every file under scripts/ was invisible to the
+  // type-checker. `npm run type-check` exited 0 on a script containing
+  // `const x: number = "nope"` - verified by adding exactly that.
+  //
+  // This is not theoretical. WEB-CI-027 records a stray closing brace in
+  // scripts/run-migration.ts reaching CI and failing the lint lane, with the
+  // note "tsconfig does not include scripts/, so the file is invisible to the
+  // type-checker entirely". That hole is what this closes.
+  //
+  // Settings mirror the root tsconfig.json rather than tsconfig.node.json's
+  // strict:true. The point is to catch syntax errors and real type errors in a
+  // directory that had NO checking; turning strict on at the same time would
+  // bury those under hundreds of nullability findings and the check would be
+  // baselined away on day one.
+  "compilerOptions": {
+    "target": "ES2022",
+    // DOM is here for the Puppeteer scripts, whose page.evaluate() callbacks
+    // genuinely execute in a browser and reference document and window.
+    //
+    // IT COSTS SOMETHING AND THE COST IS WORTH STATING. `lib` is program-wide -
+    // a per-file `/// <reference lib="dom" />` behaves identically, verified -
+    // so with DOM present `Response.json()` resolves to DOM's `any` instead of
+    // undici's `unknown`. That silently retires a real class of finding: the
+    // first run of this config, before DOM was added, flagged
+    // `body.map(...)` in lib/pseoShippable.ts as a property access on `unknown`,
+    // which was a genuine missing Array.isArray guard (fixed in the same commit).
+    // Without DOM, ten call sites that legitimately touch the browser cannot
+    // compile at all. Taken deliberately, not by default.
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "allowJs": true,
+    "checkJs": false,
+    "resolveJsonModule": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": ["node"],
+    "strict": false,
+    "strictNullChecks": false,
+    "noImplicitAny": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "ignoreDeprecations": "5.0",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["scripts/**/*.ts", "scripts/**/*.mjs"],
+  "exclude": [
+    // Two DENO files misfiled under scripts/. They import from deno.land and
+    // esm.sh and use the Deno global, none of which resolve in a Node project,
+    // and type-checking them here would report the runtime rather than a defect.
+    //
+    //   verify-event-sources.ts        a Deno CLI tool (Deno.args)
+    //   enhanced-datetime-extraction.ts  an edge-function draft, referenced by
+    //                                    nothing in package.json, .github/ or
+    //                                    any other script
+    //
+    // Moving them under supabase/functions/, where check-edge-types already
+    // type-checks Deno code, is the right home and is not this change.
+    "scripts/verify-event-sources.ts",
+    "scripts/enhanced-datetime-extraction.ts"
+  ]
+}
