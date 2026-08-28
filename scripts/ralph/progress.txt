@@ -933,3 +933,39 @@ Evidence:
     `process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href` - argv[1] is
     undefined under `node -e`.
 ---
+
+## 2026-08-27 - WEB-SEO-011: the ingest-to-discoverable gap is now measured nightly
+- scripts/check-sitemap-freshness.ts compares the live sitemap against the database: 413 events in the
+  7-day window, 407 <loc> live, 11 ingested and not yet advertised, 6 advertised past the window.
+- AC7 wants median days from ingest to INDEXED, which needs the expiring GSC grant. Median days from
+  ingest to ADVERTISED needs nothing, is computable today, and is the half we control.
+- THE DESIGN IN THE STORY NOTES WAS WRONG AND I MEASURED BEFORE BUILDING IT. The note proposed
+  comparing newest lastmod against the last deploy. sitemap-pseo carries 2026-03-18 and
+  sitemap-articles 2025-10-14 because their content genuinely has not changed - so the rule would fire
+  on the two files that are behaving. lastmod is now printed without a verdict.
+- Report, never gate, and in the NIGHTLY not pr-checks. The prior note refused to build this at all
+  because a CI gate on it goes red during a quiet week. The fix was the venue, not the metric.
+- FOUND ON THE FIRST RUN: 407 <loc> entries, 392 distinct. 15 URLs are submitted twice, including the
+  chef-george-s-steak-bar triple WEB-SEO-017 recorded. Duplicate rows were known; that they reach
+  Google as repeated sitemap entries was not. Added to WEB-SEO-017's notes too.
+- Extracted scripts/lib/sitemapSlugs.ts so the check cannot build a URL the generator would not write.
+  Proved it behaviour-preserving by running the COMMITTED generator (git show HEAD:...) and diffing -
+  byte-identical. My first attempt at that proof used `git stash push` on a file plus an untracked
+  one, the stash silently did not apply, and I compared the new code against itself.
+- LATENT DEFECT FOUND BY THE TEST: createEventSlug's catch never fired for a bad date, because
+  parseISO returns an Invalid Date instead of throwing. The slug came out `title-NaN-NaN-NaN`. Not
+  reachable today; guarded anyway.
+- **Learnings for future iterations:**
+  - A TIMEZONE TEST PASSES FOR FREE ON A MACHINE IN THAT TIMEZONE. This host is America/Chicago, so
+    deleting the toZonedTime call left every assertion green locally while CI (UTC) would have caught
+    it. The test now re-execs itself under TZ=UTC, passing process.execArgv so the child keeps the tsx
+    loader. Any test asserting on local date fields must pin TZ.
+  - `git stash push <tracked> <untracked>` can no-op silently. Verify a before/after comparison
+    actually ran against the OLD code - `git show HEAD:path > tmp` and run that.
+  - parseISO/new Date do not throw on garbage, they return Invalid Date. A try/catch around date
+    parsing is not a guard; `Number.isNaN(d.getTime())` is.
+  - When a story's notes propose a design, measure the premise before building it. Two of the four
+    sitemaps legitimately carry months-old lastmod, which the proposed rule would have flagged.
+  - Freshness of production DATA belongs in the nightly report; freshness of CODE belongs in CI. The
+    permanently-red trap comes from putting the first in the second.
+---
