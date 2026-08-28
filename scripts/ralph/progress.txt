@@ -2825,39 +2825,34 @@ whether you found them all.
 Caught it only because AND-AUDIT-006 sent me into the same file for an unrelated
 reason. That is luck, not method.
 
-## AND-AUDIT-006 - SessionTimeoutService actually runs now
+## AND-AUDIT-011 - a keystore-less release build no longer reports success
 
-Owner chose wire-up over delete, then answered three follow-on questions:
-navigation events as the activity signal, admins only, warn-then-sign-out.
+app/build.gradle.kts applied the release signingConfig only when
+RELEASE_KEYSTORE_FILE was non-blank, and did nothing at all when it was absent.
+The build printed BUILD SUCCESSFUL and handed you an artifact with no release
+signature, which you find out about at upload.
 
-The question worth having asked: the service's only activity signal was
-onActivityResumed, and the app is single-Activity Compose. That callback fires
-when the app is re-entered and never while someone is using it. Wiring the class
-as written - which is what "just call startTracking()" would have meant - would
-have signed an admin out mid-scroll after 30 minutes of continuous use. Reading
-the class for what it DID rather than what its KDoc claimed is what surfaced
-that, and it turned a one-line wiring task into a design question with a real
-answer. Recording it because the same shape recurs: a service whose docs
-describe an intent the code never implemented.
+Fix is two guards with two scopes rather than one list:
+- buildsReleaseCode (bundleRelease, assembleRelease, publish) keeps requiring
+  SUPABASE_URL, SUPABASE_ANON_KEY, GOOGLE_MAPS_API_KEY.
+- buildsShippableArtifact (bundleRelease, publish) newly requires all four
+  keystore properties and a keystore file that exists on disk.
 
-Wiring: MainScreen calls recordActivity() from LaunchedEffect(navBackStackEntry);
-AuthViewModel gates startTracking() behind the admin check and behind
-isSessionValid() (ordering matters - startTracking resets the idle timer, so
-checking after it would silently renew a session that expired overnight);
-SessionTimeoutViewModel observes sessionState and calls AuthRepository.signOut()
-on EXPIRED, which already runs SignOutCleaner and therefore stopTracking().
+assembleRelease is excluded from the second on purpose: android-ci.yml runs it on
+every PR with no keystore to exercise R8. Checked both workflows before writing
+the guard rather than after - android-ci.yml writes the three credentials and no
+keystore, android-release.yml writes all four keystore values with an absolute
+path, so neither workflow changes behaviour. That check is the whole reason this
+is a one-cycle change instead of a revert.
 
-Scope decision: deleted the regular-user 60min/8h policy outright rather than
-leaving it as an unreachable branch. Unreachable code is the exact defect this
-story is about; keeping it "in case" would have reproduced it one level down.
+Fourth stale premise in a row: the story said a keystore-less release build is
+"debug-signed". I could not confirm that from the build script or the CI logs, so
+I did not repeat it. What is verifiable is that no release signingConfig is
+applied and the build still succeeds - which is the actual defect, and the guard
+is the same either way. Do not restate a story's mechanism claim in a commit
+message without checking it; three of these have now been wrong.
 
-Two latent bugs found while wiring, neither in the story:
-1. `while (isActive)` inside scope.launch { } binds to CoroutineScope.isActive,
-   the lambda receiver's extension property, NOT the service's field of the same
-   name. The field was write-only and the loop was following coroutine liveness.
-   It behaved correctly only by luck, because stopTracking() cancels the job.
-   Renamed to isTracking. Worth watching for generally: any field named isActive,
-   isEmpty, coroutineContext etc. read inside a launch/async block is shadowed.
-2. The scope was Dispatchers.Main while reading and writing
-   EncryptedSharedPreferences every 30 seconds. Moved to IO. Same class of defect
-   as AND-AUDIT-022's BillingService scope - worth a sweep for others.
+Left unfixed and recorded instead: the guard matches gradle.startParameter.taskNames,
+so `./gradlew build` reaches assembleRelease as a dependency with no matching
+string in the requested task names. Pre-existing, and fixing it means a
+variant-scoped check, which is a bigger change than this story asked for.
