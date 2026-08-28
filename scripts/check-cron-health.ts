@@ -168,12 +168,26 @@ if (fixed.length) {
   for (const j of fixed) console.log(`  ${j}`);
 }
 
+// SAY WHICH KIND. These are merged for the exit code and were merged for the
+// message too, under one heading that reads as a regression - and only one of
+// them is. A job in base.healthy that is now failing has actually broken. A job
+// absent from the baseline entirely has usually just been SEEN for the first
+// time, because the baseline is captured over the same rolling window this runs
+// over: a weekly job like outreach-sequencer (0 15 * * 3) is structurally absent
+// from it on six days out of seven, then appears the moment it runs.
+//
+// Both still fail the ratchet - a first sighting that fails is worth knowing -
+// but the reader needs to know whether something broke or something appeared.
 const broken = [...new Set([...newlyFailing, ...regressed])].sort();
 if (broken.length) {
-  console.error(`\nX ${broken.length} scheduled job(s) newly failing every run:`);
+  console.error(`\nX ${broken.length} scheduled job(s) failing every run and not in the baseline:`);
   for (const j of broken) {
     const r = ran.find((x) => x.jobname === j)!;
+    const kind = knownHealthy.has(j)
+      ? 'REGRESSION - healthy at baseline'
+      : 'first observation - absent from the baseline window';
     console.error(`  ${j}  (${r.failed} failures, schedule ${r.schedule})`);
+    console.error(`    ${kind}`);
     if (r.last_error) console.error(`    ${r.last_error.replace(/\s+/g, ' ').slice(0, 160)}`);
   }
   console.error(
