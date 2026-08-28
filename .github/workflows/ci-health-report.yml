@@ -27,13 +27,35 @@ jobs:
           WF_START: ${{ github.event.workflow_run.run_started_at }}
           WF_END: ${{ github.event.workflow_run.updated_at }}
         run: |
-          if [ -z "$SUPABASE_URL" ] || [ -z "$EDGE_FUNCTION_API_KEY" ]; then
-            echo "secrets not set — skipping."; exit 0
+          # A SKIP MUST BE VISIBLE. This was a plain echo, so 21 consecutive runs
+          # reported success having sent nothing at all - the green-check-that-
+          # measured-nothing shape this repo keeps finding in its own checkers.
+          # ::warning:: puts it on the run summary instead of in scrollback.
+          missing=""
+          if [ -z "$SUPABASE_URL" ]; then missing="SUPABASE_URL"; fi
+          if [ -z "$EDGE_FUNCTION_API_KEY" ]; then
+            missing="${missing:+${missing} and }EDGE_FUNCTION_API_KEY"
+          fi
+          if [ -n "$missing" ]; then
+            echo "::warning::${missing} not set - CI health was NOT reported for ${WF_NAME}."
+            exit 0
           fi
           # Duration in seconds from the run timestamps.
           DUR=$(node -e "const s=new Date(process.env.WF_START).getTime(),e=new Date(process.env.WF_END).getTime();console.log(isFinite(s)&&isFinite(e)?Math.max(0,Math.round((e-s)/1000)):0)")
           payload=$(node -e "process.stdout.write(JSON.stringify({mode:'ingest',workflow:process.env.WF_NAME,conclusion:process.env.WF_CONCLUSION,duration_s:Number(process.env.DUR),branch:process.env.WF_BRANCH,head_sha:process.env.WF_SHA,run_id:String(process.env.WF_ID)}))" DUR="$DUR")
-          curl -sS -X POST "${SUPABASE_URL}/functions/v1/agent-ci-health" \
+          # CHECK THE STATUS. `curl -sS` exits 0 on an HTTP error, so the old
+          # `curl ... && echo "reported"` printed "reported" even on a 404 - and
+          # agent-ci-health IS 404 today, because no edge function has ever
+          # deployed (SUPABASE_ACCESS_TOKEN is unset on the Scrape environment).
+          # Claiming to have reported when nothing was recorded is worse than
+          # the silent skip it replaces.
+          code=$(curl -sS -o /tmp/ci-health.json -w '%{http_code}' -X POST \
+            "${SUPABASE_URL}/functions/v1/agent-ci-health" \
             -H "x-api-key: ${EDGE_FUNCTION_API_KEY}" -H "Content-Type: application/json" \
-            --data "$payload" \
-            && echo "reported ${WF_NAME}=${WF_CONCLUSION} (${DUR}s)"
+            --max-time 30 --data "$payload") || code="000"
+          if [ "$code" = "200" ] || [ "$code" = "201" ]; then
+            echo "reported ${WF_NAME}=${WF_CONCLUSION} (${DUR}s)"
+          else
+            echo "::warning::agent-ci-health returned ${code} - ${WF_NAME} was NOT recorded."
+            head -c 300 /tmp/ci-health.json 2>/dev/null || true
+          fi
