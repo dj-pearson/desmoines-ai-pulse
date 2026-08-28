@@ -4,7 +4,6 @@
   "unguarded": [
     "analyze-content",
     "analyze-images",
-    "auto-enrich-restaurants",
     "calculate-trending",
     "check-core-web-vitals",
     "check-login-attempt",
@@ -13,7 +12,6 @@
     "generate-hotel-affiliate-urls",
     "generate-pseo-page",
     "generate-sitemaps",
-    "generate-weekend-guide",
     "gsc-fetch-properties",
     "gsc-sync-data",
     "log-content-metrics",
