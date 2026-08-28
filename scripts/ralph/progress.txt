@@ -2125,3 +2125,31 @@ Evidence:
   Confirmed second instance: backfill-all-coordinates, zero auth references, service-role client, geocodes
   four tables at cost per call.
 ---
+
+2026-08-28 - Fixed the second confirmed auth hole, then guarded the class instead of the instances
+  backfill-all-coordinates: zero auth references, service-role client, geocodes four tables at a cost per
+  address. Guarded with requireAdminOrApiKey after checking BOTH callers survive - pg_cron sends a
+  service-role bearer and raises rather than posting unauthenticated (20260823000008:68-74), and the only
+  UI caller is CoordinateManager inside AdminTools, behind <ProtectedRoute requireAdmin>. So the route
+  already assumed admin and the server simply was not enforcing it. Same shape as WEB-SEC-025's
+  event_attendees: a control enforced client-side is not a control.
+
+  I STOPPED FIXING AT TWO, on purpose. The remaining candidates have real but modest side effects and
+  unverified caller lists, and mass-guarding them would risk breaking working paths - the exact failure I
+  have avoided all session. Built a ratchet instead: 148 service-role functions, 25 verify no caller,
+  baselined so the list can only shrink.
+
+  THE CONTROL FAILED THE FIRST TIME AND THAT IS THE INTERESTING PART. I removed the guard CALL from
+  backfill-all-coordinates, left the comment explaining it, and the check PASSED - the regex matched
+  "requireAdminOrApiKey" in prose. A function whose docstring promises a check it does not perform is
+  EXACTLY this defect; dispatch-scheduled-newsletters documented an admin-bearer check and had none. So the
+  first version of the guard would have been fooled by the very thing it was written to catch. Comments are
+  stripped before matching now, and the control fires.
+  That is the third checker I have written this session whose control caught it missing its own bug. The
+  pattern is consistent enough to state as a rule: build the control out of the ORIGINAL defect, and run it
+  before believing a green result.
+
+  ALSO WORTH KEEPING: my first sweep said 52 unguarded and was wrong, because it did not recognise
+  admin.auth.getUser(bearer) as a check - assign-role does exactly that. A scary number from a crude regex
+  is not a finding. The two I confirmed by reading and probing are.
+---
