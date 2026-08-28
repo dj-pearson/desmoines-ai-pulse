@@ -2856,3 +2856,111 @@ Left unfixed and recorded instead: the guard matches gradle.startParameter.taskN
 so `./gradlew build` reaches assembleRelease as a dependency with no matching
 string in the requested task names. Pre-existing, and fixing it means a
 variant-scoped check, which is a bigger change than this story asked for.
+
+## Deno CI: marketing-optout-agents has never run
+
+Not an AND-AUDIT story - found while ruling out a red check on PR #380.
+
+"Edge function & migration invariants" fails on every PR that touches
+android/app/src/main/java/**, at:
+  deno test --allow-read --allow-env --no-check=remote \
+    supabase/functions/_tests/marketing-optout-agents.test.ts
+  error: Could not find "@types/node" in a node_modules folder.
+
+The workflow's own comment already diagnosed the cause correctly and applied
+--no-check=remote as the fix. It does not work, and the reason is a detail worth
+keeping: --no-check=remote skips the BODIES of remote declaration files but still
+resolves their type-reference directives, and the @types/node reference inside
+supabase-js's index.d.mts is exactly such a directive. So the flag that was added
+to fix this never could. The four tests in that file have never executed.
+
+Fix is bare --no-check, which also drops type-checking of the test's own source.
+Real loss, still the better trade: four tests that run beat four tests that are
+type-checked and skipped. The alternative that keeps both is a root deno.json with
+nodeModulesDir plus an @types/node import and a deno install step - a lot of
+machinery for one suite.
+
+The workflow lists its own path in on.pull_request.paths, so the PR verifies its
+own fix. Expect the possibility that the tests fail on first execution: nothing
+has ever run them, so their passing was never established.
+
+Process note: I nearly filed this as "not my PR's problem" and moved on, which is
+the correct posture for a red check on someone else's code but would have left a
+suite silently dead. Reading the workflow comment was what turned it from noise
+into a finding - the comment said what the author expected, and the log said what
+actually happened, and they disagreed.
+
+## AND-AUDIT-022 - BillingService retry, dispatcher, stuck spinner (5 of 6 ACs)
+
+The biggest finding was that the fix already existed in the repo. NetworkRetry
+(util/NetworkRetry.kt) has defaultIsRetryable, which handles CancellationException,
+Ktor ResponseException status and IOException - exactly the typed classifier this
+story asks for. BillingService had reimplemented it as substring matching on
+exception messages and got it wrong. Check for an existing helper before writing a
+classifier; the duplicate was worse than the original in every respect.
+
+The substring rule's real failure modes, now covered by tests:
+- IOException().message is null, so it returned false on the transport failures it
+  existed to catch. Every retryable network error became an immediate give-up.
+- 429 and 408 were not in the matched list, so a rate-limited or timed-out
+  validation was never retried.
+- It searched the whole message, and the message carried the response body, so a
+  4xx whose body mentioned "503" was retried as a server error.
+
+One thing the shared default cannot do: Supabase's functions() returns a response
+rather than throwing, so no Ktor ResponseException is ever produced and the status
+was being smuggled through an IllegalStateException message string. Fixed with a
+typed ReceiptValidationHttpException carrying the status.
+
+Separate real bug found while restructuring: the loop caught Exception, which
+swallows CancellationException, so a cancelled coroutine kept retrying.
+
+AC2 (endConnection) deliberately NOT implemented, and this is the part worth
+remembering. The obvious version is ProcessLifecycleOwner ON_STOP -> endConnection()
+with ensureConnected() reconnecting on demand. It is a money bug: the Play purchase
+sheet IS the foreground, so every purchase backgrounds the app, and disconnecting
+there means the purchase completes and onPurchasesUpdated never arrives. Gating on
+_isLoading does not rescue it, because the AC5 watchdog can clear that flag while a
+purchase is still genuinely open. Held binding < dropped purchase. Wrote the story
+note rather than the code, and left passes=false so the remaining AC stays visible.
+
+Nearly shipped it before thinking the sequence through. The tell was asking "what
+is actually in the foreground when ON_STOP fires here" instead of treating
+ON_STOP as generic "app backgrounded".
+
+## AND-AUDIT-006 - SessionTimeoutService actually runs now
+
+Owner chose wire-up over delete, then answered three follow-on questions:
+navigation events as the activity signal, admins only, warn-then-sign-out.
+
+The question worth having asked: the service's only activity signal was
+onActivityResumed, and the app is single-Activity Compose. That callback fires
+when the app is re-entered and never while someone is using it. Wiring the class
+as written - which is what "just call startTracking()" would have meant - would
+have signed an admin out mid-scroll after 30 minutes of continuous use. Reading
+the class for what it DID rather than what its KDoc claimed is what surfaced
+that, and it turned a one-line wiring task into a design question with a real
+answer. Recording it because the same shape recurs: a service whose docs
+describe an intent the code never implemented.
+
+Wiring: MainScreen calls recordActivity() from LaunchedEffect(navBackStackEntry);
+AuthViewModel gates startTracking() behind the admin check and behind
+isSessionValid() (ordering matters - startTracking resets the idle timer, so
+checking after it would silently renew a session that expired overnight);
+SessionTimeoutViewModel observes sessionState and calls AuthRepository.signOut()
+on EXPIRED, which already runs SignOutCleaner and therefore stopTracking().
+
+Scope decision: deleted the regular-user 60min/8h policy outright rather than
+leaving it as an unreachable branch. Unreachable code is the exact defect this
+story is about; keeping it "in case" would have reproduced it one level down.
+
+Two latent bugs found while wiring, neither in the story:
+1. `while (isActive)` inside scope.launch { } binds to CoroutineScope.isActive,
+   the lambda receiver's extension property, NOT the service's field of the same
+   name. The field was write-only and the loop was following coroutine liveness.
+   It behaved correctly only by luck, because stopTracking() cancels the job.
+   Renamed to isTracking. Worth watching for generally: any field named isActive,
+   isEmpty, coroutineContext etc. read inside a launch/async block is shadowed.
+2. The scope was Dispatchers.Main while reading and writing
+   EncryptedSharedPreferences every 30 seconds. Moved to IO. Same class of defect
+   as AND-AUDIT-022's BillingService scope - worth a sweep for others.
