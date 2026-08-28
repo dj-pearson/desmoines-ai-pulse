@@ -1093,3 +1093,34 @@ Evidence:
   - `<img>` in prerendered output is worth auditing generally: 517 of these carried role="button"
     tabindex="0", so the static page had 517 fake buttons in the tab order before hydration.
 ---
+
+## 2026-08-28 - WEB-PERF-023: verified the Leaflet strip in a real build, then made AC1 decidable
+- Ran a full `npm run build`. The prerender log reports "1121 Leaflet runtime image(s)" - the exact
+  figure measured against the live page, so the transform behaves the same on captured output.
+  dist/map/index.html: 0 leaflet <img>, 7 pane divs and .leaflet-container kept, 61 h3, 563 words.
+- /map 1957 -> 836 and off the over-1500 list. That is a >50% drop, which the DOM budget check
+  correctly reported as a COLLAPSE - a false alarm I had introduced by not re-baselining. Fixed
+  through the check's own --update path.
+- --update rewrites all 35 routes, so it also absorbed three data-driven moves that are NOT mine
+  (/events/this-weekend 1609->2390, /events/today 450->1504, / 1944->1207). CHECKED BEFORE BAKING
+  THEM IN, because a thin capture looks identical to a smaller page: / has 13 h2 / 20 h3 / 1355 words
+  / 6 JSON-LD, and /events/today now has 28 h3 and an ItemList where WEB-SEO-006 recorded 5 h3 and
+  none. Both full captures; the second is the settle fix working.
+- Ran every dist-dependent check with the fresh build: bundle-budget, csp-hashes,
+  spa-fallback-canonical, dead-lib-modules, dom-budget. All exit 0. Critical path still 197.2 KB.
+- AC1 arithmetic, which the story never had: cards are 48 elements not the guessed 60, so 21 cards
+  fit under 1500 on three routes, not "about a dozen". /playgrounds is a different shape - its cards
+  are ~20 elements each and its FILTER PANEL is ~795 (99 chips + 75 badges, each an inline
+  lucide-check).
+- **Learnings for future iterations:**
+  - A CHANGE THAT MOVES A MEASURED NUMBER INVALIDATES ITS BASELINE. I shipped the Leaflet strip
+    without re-baselining and left a collapse report behind. Check which baselines name the thing you
+    just changed before committing.
+  - Before absorbing someone else's movement into a baseline, verify it is real. A thin prerender
+    capture and a genuinely smaller page produce the same element count; h2/h3/word/JSON-LD counts
+    tell them apart.
+  - Estimating per-item cost from a page total is unreliable. "Icons are 34% of the DOM" suggested a
+    big sprite win; the per-icon delta made it 12%. "About a dozen cards" was 21.
+  - Two routes with the same element count can need opposite fixes. /events/* is cards;
+    /playgrounds is a filter panel, and capping its card list would aim at the wrong half.
+---
