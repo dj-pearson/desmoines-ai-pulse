@@ -6,6 +6,7 @@ import { useAuth } from './useAuth';
 import { toast } from 'sonner';
 import { createLogger } from '@/lib/logger';
 import { EVENT_LIST_COLUMNS, RESTAURANT_LIST_COLUMNS, ATTRACTION_LIST_COLUMNS } from '@/lib/listColumns';
+import { sanitizePostgrestPattern } from '@/lib/postgrestPattern';
 
 const log = createLogger('useAdvancedSearch');
 
@@ -233,7 +234,8 @@ export function useAdvancedSearch() {
 
     // Apply text search
     if (searchFilters.query) {
-      query = query.or(`title.ilike.%${searchFilters.query}%,venue.ilike.%${searchFilters.query}%,location.ilike.%${searchFilters.query}%`);
+      const safeQuery = sanitizePostgrestPattern(searchFilters.query);
+      query = query.or(`title.ilike.%${safeQuery}%,venue.ilike.%${safeQuery}%,location.ilike.%${safeQuery}%`);
     }
 
     // Apply location filter
@@ -277,7 +279,8 @@ export function useAdvancedSearch() {
 
     // Apply text search
     if (searchFilters.query) {
-      query = query.or(`name.ilike.%${searchFilters.query}%,cuisine.ilike.%${searchFilters.query}%,location.ilike.%${searchFilters.query}%`);
+      const safeQuery = sanitizePostgrestPattern(searchFilters.query);
+      query = query.or(`name.ilike.%${safeQuery}%,cuisine.ilike.%${safeQuery}%,location.ilike.%${safeQuery}%`);
     }
 
     // Apply location filter
@@ -324,7 +327,8 @@ export function useAdvancedSearch() {
 
     // Apply text search
     if (searchFilters.query) {
-      query = query.or(`name.ilike.%${searchFilters.query}%,type.ilike.%${searchFilters.query}%,location.ilike.%${searchFilters.query}%`);
+      const safeQuery = sanitizePostgrestPattern(searchFilters.query);
+      query = query.or(`name.ilike.%${safeQuery}%,type.ilike.%${safeQuery}%,location.ilike.%${safeQuery}%`);
     }
 
     // Apply location filter
@@ -365,7 +369,8 @@ export function useAdvancedSearch() {
 
     // Apply text search
     if (searchFilters.query) {
-      query = query.or(`name.ilike.%${searchFilters.query}%,location.ilike.%${searchFilters.query}%`);
+      const safeQuery = sanitizePostgrestPattern(searchFilters.query);
+      query = query.or(`name.ilike.%${safeQuery}%,location.ilike.%${safeQuery}%`);
     }
 
     // Apply location filter
