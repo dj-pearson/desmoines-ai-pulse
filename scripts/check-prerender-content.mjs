@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * No prerendered page may ship a loading state (WEB-SEO-006).
+ * No prerendered page may ship a loading state or an unnamed link
+ * (WEB-SEO-006).
  *
  * /restaurants shipped "Loading restaurants..." in its HTML, an ItemList with
  * numberOfItems 0, and its own description promising "200+ local restaurants" -
@@ -10,7 +11,27 @@
  * always been wrong looks stable. This one asserts an ABSOLUTE property, so a
  * page that was born broken fails on the first run.
  *
- * WHAT IT ASSERTS: no element carries aria-busy="true". SkeletonGroup
+ * WHAT IT ASSERTS, all three being things no live data can make correct:
+ *
+ *   no aria-busy="true"   the page is still loading
+ *   no link with no accessible name   a WCAG 2.4.4 failure, and a crawler
+ *                         following it lands nowhere
+ *
+ * THERE IS NO NESTED-ANCHOR ASSERTION, and the reason is worth writing down
+ * because the obvious check is impossible. An <a> inside an <a> is invalid, and
+ * every HTML parser - Chromium's and jsdom's alike - SPLITS them rather than
+ * building the nested tree. So by the time this file reads dist/, the nesting no
+ * longer exists to find: `querySelectorAll('a a')` matches nothing, on a page
+ * that definitely has the bug. I wrote that assertion, watched its control fail
+ * to fire, and deleted it rather than ship protection that cannot trigger.
+ *
+ * What the split LEAVES BEHIND is detectable, and it is the same defect: an
+ * empty outer anchor. /restaurants shipped three of them -
+ * <a class="block" href="/restaurants/bonchon"></a> - plus duplicate hrefs for
+ * one restaurant. So the unnamed-link rule below is the nested-anchor check,
+ * arrived at from the only side a parser leaves visible.
+ *
+ * ON THE FIRST: no element carries aria-busy="true". SkeletonGroup
  * (src/components/ui/skeleton.tsx) sets it on every skeleton this app renders,
  * and nothing else sets it. A page that still has one at capture time is a page
  * whose data had not arrived - it will serve a skeleton to any client that does
@@ -49,6 +70,7 @@
  */
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
+import { JSDOM } from 'jsdom';
 
 const DIST = 'dist';
 
@@ -89,34 +111,58 @@ const ALLOWED_SKELETON_ROUTES = new Map([
   // ['/example', 'why a crawler seeing this skeleton is acceptable'],
 ]);
 
+/** An <a> with nothing a screen reader or a crawler could announce. */
+function unnamedLinks(doc, root) {
+  return [...root.querySelectorAll('a[href]')].filter((a) => {
+    if (a.closest('[aria-hidden="true"]')) return false;
+    if ((a.getAttribute('aria-label') || a.getAttribute('aria-labelledby') || a.getAttribute('title') || '').trim()) {
+      return false;
+    }
+    if ((a.textContent || '').trim()) return false;
+    // An image with real alt text names the link.
+    return !a.querySelector('img[alt]:not([alt=""])');
+  });
+}
+
 const failures = [];
 const allowed = [];
 for (const file of files) {
   const html = readFileSync(file, 'utf8');
-  if (!BUSY.test(html)) continue;
   let route = '/' + relative(DIST, file).split(sep).join('/');
   route = route.replace(/index\.html$/, '').replace(/(.)\/$/, '$1');
-  const occurrences = (html.match(new RegExp(BUSY.source, 'gi')) || []).length;
-  if (ALLOWED_SKELETON_ROUTES.has(route)) {
-    allowed.push({ route, occurrences, reason: ALLOWED_SKELETON_ROUTES.get(route) });
-    continue;
+
+  if (BUSY.test(html)) {
+    const occurrences = (html.match(new RegExp(BUSY.source, 'gi')) || []).length;
+    if (ALLOWED_SKELETON_ROUTES.has(route)) {
+      allowed.push({ route, occurrences, reason: ALLOWED_SKELETON_ROUTES.get(route) });
+    } else {
+      failures.push({ route, what: `ships a loading skeleton (aria-busy x${occurrences})` });
+    }
   }
-  failures.push({ route, occurrences });
+
+  // Parsed rather than regexed: nesting and accessible names are tree
+  // questions, and a regex over serialized HTML cannot answer either.
+  const doc = new JSDOM(html).window.document;
+  const root = doc.getElementById('root');
+  if (!root) continue;
+
+  const unnamed = unnamedLinks(doc, root).length;
+  if (unnamed > 0) failures.push({ route, what: `${unnamed} link(s) with no accessible name` });
 }
 
-console.log(`[prerender-content] ${files.length} prerendered page(s) checked for a shipped loading state.`);
+console.log(`[prerender-content] ${files.length} prerendered page(s) checked for skeletons and unnamed links.`);
 
 for (const a of allowed) {
   console.log(`  allowed: ${a.route} (aria-busy x${a.occurrences}) - ${a.reason}`);
 }
 
 if (failures.length === 0) {
-  console.log(`OK No page ships a skeleton${allowed.length ? ` outside the ${allowed.length} allowed` : ''}.`);
+  console.log(`OK No page ships a skeleton or an unnamed link${allowed.length ? ` outside the ${allowed.length} allowed skeleton(s)` : ''}.`);
   process.exit(0);
 }
 
 console.error(`\nX ${failures.length} page(s) ship a loading skeleton:`);
-for (const f of failures) console.error(`  ${f.route}  (aria-busy x${f.occurrences})`);
+for (const f of failures) console.error(`  ${f.route}: ${f.what}`);
 console.error(
   '\n  These serve a skeleton to every client that does not run JavaScript.\n' +
     '  The prerenderer waits for aria-busy to clear, so this means that wait timed\n' +

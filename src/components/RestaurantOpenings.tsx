@@ -96,16 +96,33 @@ export function RestaurantOpenings() {
         {restaurants.slice(0, 6).map((restaurant) => {
           const slug = createSlug(restaurant.name);
           return (
-            <Link
-              to={`/restaurants/${slug}`}
+            /* THE CARD IS NOT AN <a>, AND IT USED TO BE. This whole Card was
+               wrapped in <Link className="block">, with the "Read More" anchor
+               below nested inside it. An <a> inside an <a> is invalid, and
+               Chromium does not render it as written - it SPLITS the anchors,
+               so the prerendered /restaurants shipped three empty
+               <a class="block" href="/restaurants/..."></a> elements and
+               duplicate hrefs for the same restaurant. An empty link is a WCAG
+               2.4.4 failure and a crawler following it lands nowhere.
+
+               The stretched-link pattern keeps both destinations as real links:
+               the title's ::after overlays the whole card so the card stays
+               clickable, and "Read More" sits above it because it is positioned
+               and comes later in the DOM. Card is `relative` for the overlay to
+               anchor to. */
+            <Card
               key={restaurant.id}
-              className="block"
+              className="relative smooth-transition hover:shadow-lg hover:scale-[1.02] touch-target"
             >
-              <Card className="smooth-transition hover:shadow-lg hover:scale-[1.02] touch-target">
-                <CardHeader className="space-y-3 mobile-padding">
+              <CardHeader className="space-y-3 mobile-padding">
                   <div className="flex items-start justify-between gap-3">
                     <CardTitle className="text-mobile-body md:text-lg leading-tight flex-1 min-w-0">
-                      {restaurant.name}
+                      <Link
+                        to={`/restaurants/${slug}`}
+                        className="after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+                      >
+                        {restaurant.name}
+                      </Link>
                     </CardTitle>
                     <Badge
                       variant="secondary"
@@ -174,7 +191,7 @@ export function RestaurantOpenings() {
                         href={restaurant.sourceUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-primary hover:underline smooth-transition touch-target self-start"
+                        className="relative inline-flex items-center gap-1 text-xs text-primary hover:underline smooth-transition touch-target self-start"
                         aria-label={`Read more about ${restaurant.name} (opens in new tab)`}
                       >
                         <span aria-hidden="true">Read More</span>
@@ -183,8 +200,7 @@ export function RestaurantOpenings() {
                     )}
                   </div>
                 </CardContent>
-              </Card>
-            </Link>
+            </Card>
           );
         })}
       </div>
