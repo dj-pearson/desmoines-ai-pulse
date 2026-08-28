@@ -59,6 +59,18 @@ jobs:
       - name: Type-check the scripts directory
         run: npm run type-check:scripts
 
+      # functions/ is the Cloudflare Pages middleware and it was in no tsconfig
+      # either - so the file that runs on EVERY production request, decides what
+      # a social crawler is served and rewrites the canonical on the SPA
+      # fallback, had never been read by the compiler. Its only import,
+      # EventContext from @cloudflare/workers-types, resolves to nothing because
+      # that package is not installed; functions/_typecheck/cloudflare.d.ts
+      # declares it rather than adding a dependency (see the file for why).
+      # WEB-SEO-006 already notes the HTMLRewriter transform "cannot be executed
+      # in CI", which makes static checking most of the coverage available here.
+      - name: Type-check the Pages Functions
+        run: npm run type-check:functions
+
       # Edge functions are excluded from tsconfig.json, and no workflow runs
       # `deno check`, so until now NOTHING type-checked supabase/functions -
       # eslint parses them and runs no type-aware rules. A wrong property on a
