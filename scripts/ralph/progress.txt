@@ -2584,3 +2584,20 @@ deleted it
   every call, so it 42703s and falls back to per-event image downloads. The
   venue-image dedup has never worked in production. One caller,
   backfill-images:337. Needs the same db push as the other pending migrations.
+
+2026-08-28  WEB-QA-015: the story's own invariant had a third writer breaking it
+  Its notes document "writeToServer ABORTS if it cannot read the current bag
+  first" and assume two writers. There are four owners of
+  profiles.communication_preferences, and PreferencesManager replaced the whole
+  column - deleting taste_preferences and ui_preferences, the values this story
+  exists to make durable. Fixed b1c4385d.
+  This also softens the story's own measurement: "0 of 6 profiles carry
+  ui_preferences" was read as "nobody has met the migrate-on-read condition".
+  A writer was deleting both keys on every save, so zero is equally consistent
+  with a round trip that happened and was wiped. AC4 still needs one signed-in
+  round trip to settle.
+  Invariant now enforced: scripts/check-jsonb-bag-writes.mjs, gating in
+  pr-checks.yml, controlled both ways. The first version matched .update() and
+  reported clean - PreferencesManager reaches .update() through updateProfile()
+  one file away, so a guard keyed on the Supabase call was blind to the exact
+  defect it was written for.
