@@ -350,6 +350,14 @@ jobs:
       - name: Mobile clients query tables that exist
         run: node scripts/check-mobile-schema-usage.mjs
 
+      # A service-role edge function must check WHO is calling. verify_jwt only
+      # means "a valid Supabase JWT", which the publishable anon key is - so it
+      # separates a site visitor from nobody and nothing more. Two functions were
+      # reachable that way: one dispatched mail, one started a paid geocoding
+      # batch. Baselined; this stops the list growing.
+      - name: Service-role functions verify their caller
+        run: node scripts/check-edge-auth.mjs
+
       # check-schema-usage compares code against src/integrations/supabase/types.ts,
       # which makes types.ts the reference - and nothing checked the reference. A
       # column declared there but absent in production type-checks, PASSES

@@ -1,0 +1,31 @@
+{
+  "_comment": "Edge functions that build a service-role client and verify no caller. TRIAGE, not a vulnerability list - some are public by design. Each needs its callers enumerated before being guarded. This list must only ever shrink. See scripts/check-edge-auth.mjs.",
+  "generated": "2026-08-28",
+  "unguarded": [
+    "analyze-content",
+    "analyze-images",
+    "auto-enrich-restaurants",
+    "calculate-trending",
+    "check-core-web-vitals",
+    "check-login-attempt",
+    "crawl-site",
+    "enhance-content",
+    "generate-hotel-affiliate-urls",
+    "generate-pseo-page",
+    "generate-sitemaps",
+    "generate-weekend-guide",
+    "gsc-fetch-properties",
+    "gsc-sync-data",
+    "log-content-metrics",
+    "notify-event-submission",
+    "oauth-callback",
+    "og-image",
+    "pseo-batch-worker",
+    "scrape-restaurant-menus",
+    "scrape-ticketmaster-events",
+    "send-seo-notification",
+    "send-weekly-digest",
+    "social-media-manager",
+    "subscription-lifecycle"
+  ]
+}
