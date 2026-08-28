@@ -2011,3 +2011,26 @@ Evidence:
   from Pages, imageStorage reads it from Supabase secrets. Same name, different runtimes, and setting one
   looks like setting both.
 ---
+
+2026-08-28 - PR Checks had TWO failing jobs and I only chased one
+  Last time I followed the edge-types failure and stopped. The same run had a second red job. It has been
+  red on every pull request since PR #373 merged: the app type ratchet, 375 errors against a 374 baseline,
+  one new error in useCommunityFeatures.ts.
+
+  MIGRATION 20260827000002 WAS MERGED AND NEVER PUSHED. event_attendance_tallies answers PGRST202 in
+  production while voting_category_tallies (an earlier migration) answers 200, and it is not in the drift
+  baseline - so this is not drift, it is a file nobody ran. getEventCheckIns therefore returns zeros for
+  every event, invisible only because event_attendance holds no rows. The comment directly above that call
+  exists to prevent a false zero; the unapplied migration reintroduced one three lines below it.
+
+  I ALMOST RE-BASELINED, which the failing output itself suggests. strict-ratchet.mjs's header stopped me:
+  re-baseline on LINUX ONLY, because a Windows baseline turned the check permanently red for everyone on
+  2026-08-23 and was reverted. Used the repo's existing `as never` idiom instead, which is what the two
+  other pending-RPC call sites do. 374/70, baseline held, 7 vitest cases still green.
+    Worth recording against that caveat: my local count matched CI exactly (375 errors, 71 files, both). The
+    platform gap it warns about may have closed. One matching run is not enough to overturn a warning that
+    already cost a revert, so I left the caveat alone and said why.
+
+  THE HABIT TO FIX: when a CI run has multiple failing jobs, read them all before picking one. I lost a
+  day's worth of red PRs to reading the first failure and treating it as the failure.
+---
