@@ -250,6 +250,13 @@ jobs:
       - name: Prerendered DOM size
         run: node scripts/check-dom-budget.mjs
 
+      # WEB-SEO-006. /og-image.png was never in public/, and Cloudflare answers a
+      # missing static file with the SPA shell - 200 text/html where an image
+      # belongs. Six pages advertised it as their og:image and nothing errored.
+      # Offline: an asset this site serves must be present in the build.
+      - name: Advertised assets exist in the build
+        run: node scripts/check-asset-content-types.mjs
+
       # WEB-LEGAL-009 AC2. Also runs after the build, because Vite rewrites
       # index.html and the CSP has to match what is SERVED, not the source.
       # Guards the pinning WEB-LEGAL-001 depends on: editing the inline consent
