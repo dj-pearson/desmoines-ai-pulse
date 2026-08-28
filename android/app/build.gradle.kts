@@ -40,12 +40,12 @@ run {
 
 android {
     namespace = "com.desmoines.aipulse"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.desmoines.aipulse"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 6
         versionName = "1.0.0"
 
