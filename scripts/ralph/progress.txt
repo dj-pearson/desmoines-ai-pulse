@@ -1800,3 +1800,23 @@ Evidence:
   Origin: I found that events has no `description` column while doing the merge work. The useful question
   was not "fix that one" but "does the reference know?" - and that is a question no story had asked.
 ---
+
+2026-08-28 - WEB-QA-005 AC2 / XPLAT-009 AC4: the same false claim in three places, two of them fixed
+  Two iterations ago I fixed the "AI Plan My Night" CTA and treated AC2 as done. It names TWO things, and
+  the second - the "24/7 AI Assistant" stat - was the worse one: it sits among three live counts, so it
+  reads as a measured figure, and it links to /trip-planner, a different and Insider-gated feature. Web has
+  no AI assistant at all; Ask Pulse ships only on iOS and Android.
+
+  THE STRUCTURED DATA MATTERED MORE than the tile, and I only found it because I grepped the BUILT page
+  instead of stopping at the component. After fixing the tile, "AI Assistant" still appeared once in
+  dist/index.html - from Index.tsx's applicationCategory. That property was wrong twice over: it belongs to
+  SoftwareApplication, not WebSite, so it was invalid on that node and contributed nothing even before it
+  was false. Checking the artifact rather than the diff is what caught it.
+
+  WHERE I STOPPED, and this one is a real line rather than a shrug. index.html's shell still claims "First
+  truly conversational AI city guide ... via web, SMS, voice assistants, and ChatGPT". Same defect, larger,
+  machine-read. But the evidence is MIXED: public/.well-known/ai-plugin.json exists and answers 200 in
+  production, while twilio has 0 hits anywhere. Some of those channels are real. Rewriting a company's
+  positioning statement off a partial grep would risk deleting true claims to fix false ones, and that is
+  the owner's call. Flagged with the evidence and its limits instead.
+---
