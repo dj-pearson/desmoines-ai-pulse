@@ -2260,3 +2260,22 @@ Evidence:
   Worth separating explicitly, because "51 new public endpoints" reads like a safety blocker and is not
   one.
 ---
+
+2026-08-28 - Audited the CI steps I added but have never watched run
+  Seven new steps across five workflows this session, none of which has executed in CI because the branch
+  is unpushed. Writing a gate you have never seen run is how the edge-type ratchet came to measure nothing
+  on Windows, so I checked them rather than assuming.
+
+    all five workflows parse, with the triggers they had before
+    check-asset-content-types reads dist/ and sits at pr-checks:258, after the build at :178
+    check-edge-auth, check-types-drift and check-mobile-schema-usage run in migration-safety, which has a
+      checkout and NO npm install - and all three import only node:fs/path/url, so that is fine
+    check-media-url-drift carries the VITE_SUPABASE_* env block it needs; check-cron-targets is offline
+
+  ONE THING A REVIEWER WILL NOTICE AND SHOULD NOT BE PUZZLED BY: rls-config-audit.yml shows 371 changed
+  lines for 55 lines of real content. The file on main has MIXED CRLF/CR/LF terminators and my edits
+  rewrote it as LF throughout. .gitattributes declares `* text=auto`, so LF in the repo is the stated
+  policy and many workflow blobs simply predate it - normalising follows the policy rather than fighting
+  it. I did not renormalise the rest of the repo, which would be a large unrelated change. No other file
+  on the branch has EOL churn above 40 lines; I checked all of them.
+---
