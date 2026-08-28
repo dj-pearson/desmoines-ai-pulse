@@ -65,6 +65,21 @@ object SafeLinkLauncher {
         return openUrl(context, "https://www.google.com/maps/search/?api=1&query=$latitude,$longitude")
     }
 
+    /**
+     * Starts [intent], returning false instead of throwing when nothing on the
+     * device handles it.
+     *
+     * Call sites that build their own Intent (dialer, calendar, `geo:`
+     * directions) should route through here rather than `context.startActivity`
+     * directly: a tablet with no dialer, or an Android Go device with no
+     * calendar, turns a bare startActivity into an ActivityNotFoundException
+     * crash rather than a no-op.
+     */
+    fun start(context: Context, intent: Intent?): Boolean {
+        if (intent == null) return false
+        return launch(context, intent)
+    }
+
     private fun launch(context: Context, intent: Intent): Boolean =
         runCatching { context.startActivity(intent); true }.getOrDefault(false)
 }

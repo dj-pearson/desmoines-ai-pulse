@@ -1,14 +1,19 @@
 package com.desmoines.aipulse.data.remote
 
 import com.desmoines.aipulse.util.Config
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
 
 /**
  * Unit tests for EventsQuery builder logic and Haversine distance calculation.
+ *
+ * On JUnit 5 (Jupiter). This file was the only JUnit 4 test left in the module,
+ * and with `useJUnitPlatform()` set and no vintage engine on the classpath, the
+ * platform silently discovered none of its seven tests -- `./gradlew test`
+ * reported green while never running them.
  */
 class EventsRemoteDataSourceTest {
 
@@ -85,7 +90,7 @@ class EventsRemoteDataSourceTest {
             42.0347, -93.6199,
         )
         // Approximately 49-50 km
-        assertTrue("Distance should be ~49-51 km, was ${distance / 1000} km", distance in 48_000.0..52_000.0)
+        assertTrue(distance in 48_000.0..52_000.0, "Distance should be ~49-51 km, was ${distance / 1000} km")
     }
 
     @Test

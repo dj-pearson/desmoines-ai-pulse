@@ -1,6 +1,8 @@
 package com.desmoines.aipulse.ui.screens.surpriseme
 
 import com.desmoines.aipulse.data.model.SurprisePick
+import com.desmoines.aipulse.data.model.SubscriptionTier
+import com.desmoines.aipulse.data.remote.BillingService
 import com.desmoines.aipulse.data.remote.FavoritesException
 import com.desmoines.aipulse.data.repository.AuthRepository
 import com.desmoines.aipulse.data.repository.FavoritesRepository
@@ -15,6 +17,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -36,6 +39,7 @@ class SurpriseMeViewModelTest {
     private lateinit var favoritesRepository: FavoritesRepository
     private lateinit var authRepository: AuthRepository
     private lateinit var softPaywallService: SoftPaywallService
+    private lateinit var billingService: BillingService
 
     @BeforeEach
     fun setup() {
@@ -44,6 +48,8 @@ class SurpriseMeViewModelTest {
         favoritesRepository = mockk(relaxed = true)
         authRepository = mockk(relaxed = true)
         softPaywallService = mockk(relaxed = true)
+        billingService = mockk(relaxed = true)
+        every { billingService.currentTier } returns MutableStateFlow(SubscriptionTier.FREE)
         every { authRepository.currentUserId } returns "u1"
         // Result is a value class — relaxed mocks can't synthesize one, so stub it.
         coEvery { favoritesRepository.loadFavorites(any()) } returns Result.success(FavoritesState())
@@ -55,7 +61,9 @@ class SurpriseMeViewModelTest {
     private fun pick(id: String = "e1", type: String = "event") =
         SurprisePick(itemType = type, itemId = id, title = "Pick $id", reason = "because")
 
-    private fun vm() = SurpriseMeViewModel(repository, favoritesRepository, authRepository, softPaywallService)
+    private fun vm() = SurpriseMeViewModel(
+        repository, favoritesRepository, authRepository, softPaywallService, billingService,
+    )
 
     @Test
     fun `roll reveals a pick and tracks shown`() = runTest(testDispatcher) {
@@ -101,7 +109,9 @@ class SurpriseMeViewModelTest {
     @Test
     fun `save toggles favorite, tracks saved, and dismisses`() = runTest(testDispatcher) {
         coEvery { repository.surprise(any(), any()) } returns Result.success(pick("e1"))
-        coEvery { favoritesRepository.toggleEventFavorite(any(), any(), any()) } returns Result.success(true)
+        coEvery {
+            favoritesRepository.toggleEventFavorite(any(), any(), any(), any())
+        } returns Result.success(true)
         val viewModel = vm()
         advanceUntilIdle()
 
@@ -115,7 +125,7 @@ class SurpriseMeViewModelTest {
     @Test
     fun `save at the favorites cap presents the paywall and dismisses`() = runTest(testDispatcher) {
         coEvery { repository.surprise(any(), any()) } returns Result.success(pick("e1"))
-        coEvery { favoritesRepository.toggleEventFavorite(any(), any(), any()) } returns
+        coEvery { favoritesRepository.toggleEventFavorite(any(), any(), any(), any()) } returns
             Result.failure(FavoritesException.LimitReached(3))
         val viewModel = vm()
         advanceUntilIdle()

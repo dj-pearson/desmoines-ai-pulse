@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.desmoines.aipulse.data.model.Restaurant
 import com.desmoines.aipulse.data.model.RestaurantSortOption
 import com.desmoines.aipulse.data.model.SubscriptionTier
+import com.desmoines.aipulse.data.remote.BillingService
 import com.desmoines.aipulse.data.remote.RestaurantsQuery
 import com.desmoines.aipulse.data.repository.RestaurantsRepository
 import com.desmoines.aipulse.util.AppSearchService
@@ -59,6 +60,7 @@ class RestaurantsViewModel @Inject constructor(
     private val restaurantsRepository: RestaurantsRepository,
     private val networkMonitor: NetworkMonitor,
     private val appSearchService: AppSearchService,
+    private val billingService: BillingService,
 ) : ViewModel() {
 
     // region State
@@ -165,6 +167,13 @@ class RestaurantsViewModel @Inject constructor(
                 delay(RECONNECT_DEBOUNCE_MS)
                 if (hasLoadedInitialData && networkMonitor.isConnected.value) refresh()
             }
+        }
+
+        // Mirror the live entitlement. This flow was a MutableStateFlow pinned
+        // to FREE with no writer, so paying subscribers were shown the
+        // free-tier UI (locked advanced filters, ad banners, the save cap).
+        viewModelScope.launch {
+            billingService.currentTier.collect { _currentTier.value = it }
         }
     }
 

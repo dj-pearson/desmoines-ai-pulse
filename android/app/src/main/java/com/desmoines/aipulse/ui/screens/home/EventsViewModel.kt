@@ -8,6 +8,7 @@ import com.desmoines.aipulse.data.model.Event
 import com.desmoines.aipulse.data.model.EventCategory
 import com.desmoines.aipulse.data.model.Restaurant
 import com.desmoines.aipulse.data.model.SubscriptionTier
+import com.desmoines.aipulse.data.remote.BillingService
 import com.desmoines.aipulse.data.remote.EventsQuery
 import com.desmoines.aipulse.data.model.RestaurantSortOption
 import com.desmoines.aipulse.data.remote.RestaurantsQuery
@@ -51,6 +52,7 @@ class EventsViewModel @Inject constructor(
     private val locationService: LocationService,
     private val softPaywallService: SoftPaywallService,
     private val appSearchService: AppSearchService,
+    private val billingService: BillingService,
 ) : ViewModel() {
 
     // region State
@@ -201,6 +203,13 @@ class EventsViewModel @Inject constructor(
                 if (hasLoadedInitialData && networkMonitor.isConnected.value) refresh()
             }
         }
+
+        // Mirror the live entitlement. This flow was a MutableStateFlow pinned
+        // to FREE with no writer, so paying subscribers were shown the
+        // free-tier UI (locked advanced filters, ad banners, the save cap).
+        viewModelScope.launch {
+            billingService.currentTier.collect { _currentTier.value = it }
+        }
     }
 
     fun loadInitialData() {
@@ -270,7 +279,11 @@ class EventsViewModel @Inject constructor(
         resetAndFetch()
     }
 
-    fun setCurrentTier(tier: SubscriptionTier) {
+    /**
+     * Overrides the entitlement mirrored from [BillingService]. Only for tests
+     * and previews; production state comes from the collector in `init`.
+     */
+    internal fun setCurrentTier(tier: SubscriptionTier) {
         _currentTier.value = tier
     }
 

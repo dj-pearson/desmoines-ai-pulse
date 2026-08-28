@@ -46,8 +46,10 @@ class DesMoinesInsiderApp : Application(), SingletonImageLoader.Factory {
         appScope.launch { crashUploader.uploadPending() }
         appScope.launch { cacheManager.pruneExpired() }
         appScope.launch { queryCache.prune() }
-        // Clean up reminder IDs for alarms that have already fired
-        localNotificationService.pruneExpiredReminders()
+        // Clean up reminder IDs for alarms that have already fired. Reads
+        // SharedPreferences and rebuilds a PendingIntent per saved reminder, so
+        // it belongs off the cold-start critical path like the other three.
+        appScope.launch { localNotificationService.pruneExpiredReminders() }
 
         // Initialize Firebase Cloud Messaging push notifications
         PushNotificationService.initialize(this)
@@ -57,7 +59,7 @@ class DesMoinesInsiderApp : Application(), SingletonImageLoader.Factory {
         return ImageLoader.Builder(context)
             .memoryCache {
                 MemoryCache.Builder()
-                    .maxSizeBytes(MEMORY_CACHE_SIZE)
+                    .maxSizePercent(context, MEMORY_CACHE_HEAP_FRACTION)
                     .build()
             }
             .diskCache {
@@ -108,8 +110,15 @@ class DesMoinesInsiderApp : Application(), SingletonImageLoader.Factory {
     }
 
     companion object {
-        /** 50 MB memory cache — matches iOS CachedAsyncImage memory limit */
-        private const val MEMORY_CACHE_SIZE = 50L * 1024 * 1024
+        /**
+         * Share of the app's available heap given to the image memory cache.
+         *
+         * Was a flat 50 MB to match the iOS limit, but Android heap sizes are
+         * per-device: on a low-end phone with a 96 MB heap that cache alone is
+         * over half the budget and turns image-heavy scrolling into an
+         * OutOfMemoryError. A fraction scales with whatever the device allows.
+         */
+        private const val MEMORY_CACHE_HEAP_FRACTION = 0.20
         /** 200 MB disk cache — matches iOS CachedAsyncImage disk limit */
         private const val DISK_CACHE_SIZE = 200L * 1024 * 1024
         /** Default cache TTL when server doesn't specify Cache-Control */

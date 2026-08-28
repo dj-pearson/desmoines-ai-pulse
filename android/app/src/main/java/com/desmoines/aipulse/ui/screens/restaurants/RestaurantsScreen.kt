@@ -86,6 +86,7 @@ import com.desmoines.aipulse.ui.components.CachedAsyncImage
 import com.desmoines.aipulse.ui.components.EmptyStateView
 import com.desmoines.aipulse.ui.components.InlineLoadingView
 import com.desmoines.aipulse.ui.components.rememberShimmerBrush
+import java.util.Locale
 
 // region Main Screen
 
@@ -480,7 +481,7 @@ fun RestaurantCard(
                         horizontalArrangement = Arrangement.spacedBy(3.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.semantics {
-                            contentDescription = "${String.format("%.1f", rating)} out of 5 stars"
+                            contentDescription = "${String.format(Locale.US, "%.1f", rating)} out of 5 stars"
                         }
                     ) {
                         for (star in 1..5) {
@@ -497,7 +498,7 @@ fun RestaurantCard(
                             )
                         }
                         Text(
-                            text = String.format("%.1f", rating),
+                            text = String.format(Locale.US, "%.1f", rating),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

@@ -63,6 +63,7 @@ import com.desmoines.aipulse.ui.theme.PremiumTokens
 import com.desmoines.aipulse.ui.theme.StatusSuccess
 import com.desmoines.aipulse.ui.theme.glassSurface
 import com.desmoines.aipulse.util.rememberHapticPerformer
+import java.util.Locale
 
 /**
  * Hotel Detail screen (ANDP-034). Hero header, info, amenities, and a
@@ -227,7 +228,7 @@ private fun HotelDetailInfo(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.semantics {
-                        contentDescription = "${String.format("%.1f", rating)} star hotel"
+                        contentDescription = "${String.format(Locale.US, "%.1f", rating)} star hotel"
                     },
                 ) {
                     Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -242,7 +243,7 @@ private fun HotelDetailInfo(
                         }
                     }
                     Text(
-                        text = String.format("%.1f", rating),
+                        text = String.format(Locale.US, "%.1f", rating),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
                     )

@@ -89,6 +89,29 @@ jobs:
         working-directory: android
         run: ./gradlew assembleDebug
 
+      # The shipping artifact is the R8-minified release build, and nothing in
+      # CI ever built it. R8 full mode is on, proguard-rules.pro carries hand-
+      # written keeps for kotlinx.serialization, Supabase, Ktor and Room, and
+      # every one of those was only ever validated by uploading to Play. This
+      # step compiles and shrinks the release variant so a broken keep rule
+      # fails here instead of in a user's crash log.
+      #
+      # The build is signed with the debug key (no release keystore in this
+      # workflow); android-release.yml is still the only path that produces a
+      # distributable artifact.
+      - name: Build Release APK (exercises R8/ProGuard)
+        working-directory: android
+        run: ./gradlew assembleRelease
+
+      - name: Upload R8 mapping and usage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r8-reports
+          path: |
+            android/app/build/outputs/mapping/release/
+          if-no-files-found: ignore
+
       - name: Upload lint results
         if: always()
         uses: actions/upload-artifact@v4

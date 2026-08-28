@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.desmoines.aipulse.data.model.PaywallContext
 import com.desmoines.aipulse.data.model.SurprisePick
+import com.desmoines.aipulse.data.remote.BillingService
 import com.desmoines.aipulse.data.remote.FavoritesException
 import com.desmoines.aipulse.data.repository.AuthRepository
 import com.desmoines.aipulse.data.repository.FavoritesRepository
@@ -40,6 +41,7 @@ class SurpriseMeViewModel @Inject constructor(
     private val favoritesRepository: FavoritesRepository,
     private val authRepository: AuthRepository,
     private val softPaywallService: SoftPaywallService,
+    private val billingService: BillingService,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SurpriseMeUiState())
@@ -99,9 +101,13 @@ class SurpriseMeViewModel @Inject constructor(
         val userId = authRepository.currentUserId ?: return
         viewModelScope.launch {
             val result = if (pick.isEvent) {
-                favoritesRepository.toggleEventFavorite(userId, pick.itemId, favoriteEventIds)
+                favoritesRepository.toggleEventFavorite(
+                    userId, pick.itemId, favoriteEventIds, billingService.currentTier.value,
+                )
             } else {
-                favoritesRepository.toggleRestaurantFavorite(userId, pick.itemId, favoriteRestaurantIds)
+                favoritesRepository.toggleRestaurantFavorite(
+                    userId, pick.itemId, favoriteRestaurantIds, billingService.currentTier.value,
+                )
             }
             result
                 .onSuccess {

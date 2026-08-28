@@ -504,6 +504,16 @@ private fun NavGraphBuilder.addDetailDestinations(navController: NavHostControll
             viewModel.loadEvent(eventId)
         }
 
+        // A save can be rejected (signed out, or the free-tier limit reached).
+        // Without this the heart just refuses to fill with no explanation.
+        val favoriteError by viewModel.favoriteError.collectAsState()
+        androidx.compose.runtime.LaunchedEffect(favoriteError) {
+            favoriteError?.let {
+                android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_SHORT).show()
+                viewModel.clearFavoriteError()
+            }
+        }
+
         EventDetailScreen(
             event = event,
             relatedEvents = relatedEvents,
@@ -523,25 +533,30 @@ private fun NavGraphBuilder.addDetailDestinations(navController: NavHostControll
             onToggleFavorite = { viewModel.toggleFavorite() },
             onAddToCalendar = {
                 viewModel.createCalendarIntent()?.let { intent ->
-                    context.startActivity(intent)
-                    viewModel.setCalendarAdded()
+                    // No calendar app resolves this on some tablets and Android
+                    // Go devices; an unguarded startActivity there is an
+                    // ActivityNotFoundException crash, not a no-op.
+                    runCatching { context.startActivity(intent) }
+                        .onSuccess { viewModel.setCalendarAdded() }
+                        .onFailure {
+                            android.widget.Toast.makeText(
+                                context,
+                                "No calendar app available.",
+                                android.widget.Toast.LENGTH_SHORT,
+                            ).show()
+                        }
                 }
             },
             onOpenDirections = {
-                viewModel.createDirectionsIntent()?.let { intent ->
-                    try {
-                        context.startActivity(intent)
-                    } catch (_: Exception) {
-                        viewModel.createDirectionsFallbackIntent()?.let { fallback ->
-                            context.startActivity(fallback)
-                        }
-                    }
+                // Both hops go through the safe launcher: the old catch block
+                // called startActivity again unguarded, so a device with neither
+                // Google Maps nor a geo: handler crashed from inside the handler.
+                if (!com.desmoines.aipulse.util.SafeLinkLauncher.start(context, viewModel.createDirectionsIntent())) {
+                    com.desmoines.aipulse.util.SafeLinkLauncher.start(context, viewModel.createDirectionsFallbackIntent())
                 }
             },
             onOpenDirectionsFallback = {
-                viewModel.createDirectionsFallbackIntent()?.let { intent ->
-                    context.startActivity(intent)
-                }
+                com.desmoines.aipulse.util.SafeLinkLauncher.start(context, viewModel.createDirectionsFallbackIntent())
             },
             onShowSubscription = {
                 navController.navigate(Route.Subscription.route)
@@ -573,6 +588,15 @@ private fun NavGraphBuilder.addDetailDestinations(navController: NavHostControll
             viewModel.loadRestaurant(restaurantId)
         }
 
+        // See the event-detail block: a rejected save needs to say why.
+        val restaurantFavoriteError by viewModel.favoriteError.collectAsState()
+        androidx.compose.runtime.LaunchedEffect(restaurantFavoriteError) {
+            restaurantFavoriteError?.let {
+                android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_SHORT).show()
+                viewModel.clearFavoriteError()
+            }
+        }
+
         RestaurantDetailScreen(
             restaurant = restaurant,
             isLoading = isLoading,
@@ -590,23 +614,34 @@ private fun NavGraphBuilder.addDetailDestinations(navController: NavHostControll
             onToggleFavorite = { viewModel.toggleFavorite() },
             onCall = {
                 viewModel.createCallIntent()?.let { intent ->
-                    context.startActivity(intent)
+                    // A device with no dialer (most tablets) throws
+                    // ActivityNotFoundException here rather than doing nothing.
+                    runCatching { context.startActivity(intent) }.onFailure {
+                        android.widget.Toast.makeText(
+                            context,
+                            "No phone app available.",
+                            android.widget.Toast.LENGTH_SHORT,
+                        ).show()
+                    }
                 }
             },
             onOpenWebsite = {
                 viewModel.createWebsiteIntent()?.let { intent ->
-                    context.startActivity(intent)
+                    runCatching { context.startActivity(intent) }.onFailure {
+                        android.widget.Toast.makeText(
+                            context,
+                            "No browser available.",
+                            android.widget.Toast.LENGTH_SHORT,
+                        ).show()
+                    }
                 }
             },
             onOpenDirections = {
-                viewModel.createDirectionsIntent()?.let { intent ->
-                    try {
-                        context.startActivity(intent)
-                    } catch (_: Exception) {
-                        viewModel.createDirectionsFallbackIntent()?.let { fallback ->
-                            context.startActivity(fallback)
-                        }
-                    }
+                // Both hops go through the safe launcher: the old catch block
+                // called startActivity again unguarded, so a device with neither
+                // Google Maps nor a geo: handler crashed from inside the handler.
+                if (!com.desmoines.aipulse.util.SafeLinkLauncher.start(context, viewModel.createDirectionsIntent())) {
+                    com.desmoines.aipulse.util.SafeLinkLauncher.start(context, viewModel.createDirectionsFallbackIntent())
                 }
             },
             onShowSubscription = {
@@ -643,19 +678,15 @@ private fun NavGraphBuilder.addDetailDestinations(navController: NavHostControll
                 context.startActivity(Intent.createChooser(shareIntent, "Share Attraction"))
             },
             onOpenWebsite = {
-                viewModel.createWebsiteIntent()?.let { intent ->
-                    context.startActivity(intent)
-                }
+                com.desmoines.aipulse.util.SafeLinkLauncher.start(context, viewModel.createWebsiteIntent())
             },
             onOpenDirections = {
-                viewModel.createDirectionsIntent()?.let { intent ->
-                    try {
-                        context.startActivity(intent)
-                    } catch (_: Exception) {
-                        viewModel.createDirectionsFallbackIntent()?.let { fallback ->
-                            context.startActivity(fallback)
-                        }
-                    }
+                // The Google Maps intent is package-pinned, so fall back to any
+                // geo: handler. Both hops go through the safe launcher: the old
+                // catch block called startActivity again unguarded, so a device
+                // with neither handler crashed from inside the handler.
+                if (!com.desmoines.aipulse.util.SafeLinkLauncher.start(context, viewModel.createDirectionsIntent())) {
+                    com.desmoines.aipulse.util.SafeLinkLauncher.start(context, viewModel.createDirectionsFallbackIntent())
                 }
             },
             onNavigateToSubscription = { navController.navigate(Route.Subscription.route) },
@@ -825,17 +856,14 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
                 com.desmoines.aipulse.util.SafeLinkLauncher.openUrl(context, viewModel.bookingUrl())
             },
             onCall = {
-                viewModel.createCallIntent()?.let { intent -> context.startActivity(intent) }
+                com.desmoines.aipulse.util.SafeLinkLauncher.start(context, viewModel.createCallIntent())
             },
             onOpenDirections = {
-                viewModel.createDirectionsIntent()?.let { intent ->
-                    try {
-                        context.startActivity(intent)
-                    } catch (_: Exception) {
-                        viewModel.createDirectionsFallbackIntent()?.let { fallback ->
-                            context.startActivity(fallback)
-                        }
-                    }
+                // Both hops go through the safe launcher: the old catch block
+                // called startActivity again unguarded, so a device with neither
+                // Google Maps nor a geo: handler crashed from inside the handler.
+                if (!com.desmoines.aipulse.util.SafeLinkLauncher.start(context, viewModel.createDirectionsIntent())) {
+                    com.desmoines.aipulse.util.SafeLinkLauncher.start(context, viewModel.createDirectionsFallbackIntent())
                 }
             },
             onRetry = { viewModel.retry() },

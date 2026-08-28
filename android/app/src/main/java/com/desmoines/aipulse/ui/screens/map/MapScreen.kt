@@ -95,6 +95,7 @@ import com.google.maps.android.compose.MarkerComposable
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /**
  * Map/Explore screen showing nearby events, restaurants, and attractions
@@ -701,7 +702,7 @@ private fun RestaurantPopup(
                                 modifier = Modifier.size(12.dp),
                             )
                             Text(
-                                String.format("%.1f", rating),
+                                String.format(Locale.US, "%.1f", rating),
                                 style = MaterialTheme.typography.labelSmall,
                             )
                         }
@@ -816,7 +817,7 @@ private fun AttractionPopup(
                             modifier = Modifier.size(12.dp),
                         )
                         Text(
-                            String.format("%.1f", rating),
+                            String.format(Locale.US, "%.1f", rating),
                             style = MaterialTheme.typography.labelSmall,
                         )
                     }
