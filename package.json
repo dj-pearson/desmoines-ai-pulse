@@ -71,7 +71,7 @@
     "test:leaflet-strip": "tsx scripts/__tests__/leaflet-strip.test.mjs",
     "check-sitemap-freshness": "tsx scripts/check-sitemap-freshness.ts",
     "report-drift-decisions": "node scripts/report-drift-decisions.mjs",
-    "test:offline": "npm run test:venue-images && npm run test:media-route && npm run test:media-urls && npm run test:provider-usage",
+    "test:offline": "tsx scripts/run-offline-suites.mjs",
     "check-edge-types": "node scripts/check-edge-types.mjs",
     "check-agent-drift": "node scripts/check-agent-pair-drift.mjs",
     "check-schema": "node scripts/check-schema-usage.mjs",

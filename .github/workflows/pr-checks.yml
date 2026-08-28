@@ -101,6 +101,11 @@ jobs:
       # deletion against a database this repo's CI cannot reach, so unit-testing
       # the pure part is the only check they get. They were written and then not
       # wired up, which is the same as not having them.
+      # Every *.test.mjs under scripts/__tests__ and functions/__tests__,
+      # DISCOVERED rather than listed. This step used to run a hand-maintained
+      # chain of four; an audit found ten suites, two of which had never run in
+      # CI at all - including the only guard on the WEB-SEO-006 canonical
+      # rewrite, which that story says cannot be verified any other way.
       - name: Offline helper suites
         run: npm run test:offline
 
@@ -213,36 +218,6 @@ jobs:
       # prefix, and gating on them would be red from the first run.
       - name: pSEO taxonomy collisions
         run: npx tsx scripts/check-pseo-collisions.ts
-
-      # WEB-SEO-013 AC5/AC7: the rules that decide which pSEO pages reach
-      # sitemap-pseo.xml. The measurement needs production and cannot run here,
-      # but the rules are pure - and a bug in them publishes doorway pages or
-      # soft-404s to Google, which is not the kind of mistake a later run
-      # notices.
-      - name: pSEO shippable rules
-        run: npx tsx scripts/__tests__/pseo-shippable.test.mjs
-
-      # WEB-QA-018 AC1. report-drift-decisions.mjs joins the drift checker to the
-      # schema-usage checker to say which of the 31 drifted migrations have code
-      # waiting on them. Its two rules are asymmetric - calling a needed
-      # migration "no readers" points at deleting a live feature - so they are
-      # guarded even though the report itself only ever prints.
-      - name: Migration drift decision rules
-        run: npx tsx scripts/__tests__/drift-decisions.test.mjs
-
-      # WEB-SEO-011. The sitemap generator and the freshness check must build the
-      # same event URL or the check reports every event missing. Pinned to TZ=UTC
-      # inside the test, because on a Central developer machine the timezone
-      # conversion is a no-op and the assertions pass without it.
-      - name: Sitemap slug shapes
-        run: npx tsx scripts/__tests__/sitemap-slugs.test.mjs
-
-      # WEB-PERF-023 AC1. stripLeafletRuntime deletes <img> tags from captured
-      # HTML on its way to dist/, so the cases that matter are the ones it must
-      # NOT touch - removing a content image from a prerendered page is a silent
-      # SEO regression that still builds and still renders.
-      - name: Leaflet runtime strip
-        run: npx tsx scripts/__tests__/leaflet-strip.test.mjs
 
       - name: Critical-path JS budget
         run: node scripts/check-bundle-budget.mjs
