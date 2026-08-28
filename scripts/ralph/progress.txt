@@ -1354,3 +1354,27 @@ Evidence:
   - aria-hidden subtrees must be excluded from every a11y sweep. Radix ships hidden native controls
     for form compatibility and they are correct.
 ---
+
+## 2026-08-28 - the edge type ratchet was checking nothing on Windows
+- It reported "0 errors across 0 files" and "158 fixed. Re-baseline to lock it in." Taking that advice
+  would have committed a zeroed baseline and blinded CI too.
+- TWO Windows-only faults, each sufficient alone: path.join produced backslashed tsconfig globs (which
+  accept only '/'), so tsc matched zero inputs; and after fixing that, the error parser still counted
+  zero because tsc writes CRLF and  is a LINE TERMINATOR in a JS regex, so `(.*)$` never matches.
+- CI was fine throughout - ubuntu gives '/' and LF - so the committed baseline is accurate. The damage
+  was local, on the only thing that type-checks supabase/functions.
+- The fix immediately found og-image at 1 -> 3, from main's JPEG commit. Both type-level; baselined at
+  160 with the reasons recorded rather than refactoring a deployed function I cannot run.
+- **Learnings for future iterations:**
+  - A CHECKER THAT SEES NOTHING MUST NEVER REPORT SUCCESS. Third time this session: the offline suite
+    runner, the prerender content check, and now this. Every scanner needs a "found zero inputs" guard.
+  - TSCONFIG GLOBS ARE '/'-ONLY. path.join is wrong for `include` and `paths` on Windows, always.
+  -  IS A LINE TERMINATOR IN JAVASCRIPT REGEX, so `.` will not match it and `$` sits after it. Split
+    tool output on /?
+/, never '
+'.
+  - Cross-platform bugs in a checker are worse than in product code: the product fails loudly on the
+    broken platform, the checker succeeds quietly on it.
+  - "Everything is fixed, re-baseline to lock it in" deserves suspicion proportional to how good the
+    news is. 158 errors do not vanish between two commits.
+---
