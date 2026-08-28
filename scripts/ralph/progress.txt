@@ -1632,3 +1632,25 @@ Evidence:
   produced a JS parse error the second time. Line-based splicing with no escapes worked both times. Stop
   reaching for string anchors that contain \n when editing through a heredoc.
 ---
+
+2026-08-28 - WEB-PERF-023: /playgrounds 2238 -> 1890, by deleting icons rather than converting them
+  The story had correctly concluded the sprite lever was finished on that route: a single-path icon is
+  2 nodes inline and 2 as a sprite instance. The question nobody had asked was whether the icons should
+  exist. lucide-check x174 = 348 nodes, 15.5% of the page, and neither instance carried information.
+
+  ONE OF THE TWO WAS A CORRECTNESS BUG, not a perf one. The 99 amenity filter chips have no selected
+  state at all - clicking one sets the search query - so a check mark, which is the universal "this is
+  on" affordance, told every visitor that all 99 filters were already applied. The DOM saving was the
+  second-best reason to remove it.
+
+  WHERE I STOPPED, and why it is a boundary rather than laziness. /restaurants is now the worst route
+  (2812, 46% of it svg) and the two big blocks are 185 stars and 104 chef-hats. Both are removable, both
+  save real nodes, and neither has an argument behind it beyond my taste - the chip icon is identical on
+  every chip so it differentiates nothing, but "identical decoration" is a design call. Recorded the
+  numbers in the story and left the decision. A DOM budget is not a mandate to strip a UI.
+
+  Also: the story's headline numbers (/map 6564, /events/date-night 6052, /restaurants/dietary 4981) are
+  all stale - /map is 836 since the Leaflet strip. Refreshed the whole table in the notes. Numbers in an
+  AC decay silently, and this is the third story this week whose stated figures were wrong by enough to
+  change a decision.
+---
