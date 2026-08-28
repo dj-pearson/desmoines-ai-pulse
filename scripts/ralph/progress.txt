@@ -1399,3 +1399,26 @@ Evidence:
   - Grep for the guard, not for the bug. "refusing to pass" as a phrase turned out to be a reliable
     marker of which scripts had already thought about it.
 ---
+
+## 2026-08-28 - two clean sweeps, and a ratchet 120 sites behind reality
+- Swept for the cross-platform parsing class: only check-edge-types had it. strict-ratchet splits on
+  '
+' too but its regex has no `$` anchor, so  cannot break it - verified by running it (24/17
+  against baseline 24, genuinely parsing).
+- Swept all 19 baseline files for position-keyed entries: none. duplicate-events-baseline looks
+  line-keyed to a naive regex but its keys are title|date|venue and the match is a timestamp.
+- REAL FIND: check-error-handling was at 161 sites / 104 files against a baseline of 281 / 160. 120
+  fixed sites were unbanked and therefore unprotected. Re-baselined at 161/104.
+- MY FIRST CONTROL FOR THAT WAS INVALID. I replaced `if (error) throw error` with a swallowed branch
+  and the ratchet stayed green - because the selector fires on a destructure that OMITS error, not on
+  a checked-then-ignored one. Injecting `const { data } = await ...` fails it and names the file.
+- **Learnings for future iterations:**
+  - A NEGATIVE RESULT IS WORTH RECORDING. Two sweeps found nothing; writing that down stops the next
+    person re-running them, and "verified clean" is a different claim from "never looked".
+  - Read the rule before writing the control. I wrote a control against my mental model of what
+    "discarded error" means rather than against the selector, and a green run nearly read as proof.
+  - An unbanked improvement is unprotected. A ratchet only defends the number in the file, so a fix
+    nobody baselines can silently regress - check for the gap, not just for regressions.
+  - "Every entry reads N -> 0" is the signature of a scan that saw nothing. Confirm the total is
+    non-zero before believing a mass improvement.
+---
