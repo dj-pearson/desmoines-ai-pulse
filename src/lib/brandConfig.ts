@@ -33,7 +33,17 @@ export const BRAND = {
 
   // Default images
   logo: '/DMI-Logo.png',
-  ogImage: '/og-image.png',
+  // /og-image.png DOES NOT EXIST, and the way it fails is the problem: Cloudflare
+  // serves the SPA shell for it, so a social crawler gets 200 text/html where an
+  // image should be. No error anywhere, and the link preview simply has no image.
+  // Six prerendered pages fell back to it - /articles, /contact, /iowa-state-fair,
+  // /restaurants, /things-to-do, /trip-planner - while the other 37 pass an
+  // explicit DMI-Logo.png. This makes the default the file those 37 already use.
+  //
+  // DMI-Logo.png is 800x800. A purpose-built 1200x630 card would preview better
+  // on every network; that is a design task, not a broken-link fix, so it is not
+  // done here. An existing square image beats a 200 of HTML.
+  ogImage: '/DMI-Logo.png',
 
   // Theme colors
   themeColor: '#3B82F6',

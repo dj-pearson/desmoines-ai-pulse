@@ -127,14 +127,14 @@ export default function HotelDetails() {
         <meta property="og:type" content="website" />
         <meta property="og:title" content={`${hotel.name} - Hotels in ${hotel.city}, ${hotel.state}`} />
         <meta property="og:description" content={hotel.short_description || `${hotel.name} in ${hotel.area || hotel.city}. Book your stay in Des Moines.`} />
-        <meta property="og:image" content={hotel.image_url || '/og-image.png'} />
+        <meta property="og:image" content={hotel.image_url || '/DMI-Logo.png'} />
         <meta property="og:image:width" content="1200" />
         <meta property="og:image:height" content="630" />
         <meta property="og:image:alt" content={`${hotel.name} - Hotel in ${hotel.city}, ${hotel.state}`} />
         <meta property="og:url" content={getCanonicalUrl(`/stay/${hotel.slug}`)} />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={`${hotel.name} - Hotels in ${hotel.city}`} />
-        <meta name="twitter:image" content={hotel.image_url || '/og-image.png'} />
+        <meta name="twitter:image" content={hotel.image_url || '/DMI-Logo.png'} />
       </Helmet>
 
       <HotelSchema

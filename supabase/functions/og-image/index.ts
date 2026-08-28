@@ -34,7 +34,10 @@ import { Image } from "https://deno.land/x/imagescript@1.2.17/mod.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
 
 const SITE_URL = Deno.env.get("SITE_URL") || Deno.env.get("VITE_SITE_URL") || "https://desmoinesinsider.com";
-const DEFAULT_OG = `${SITE_URL}/og-image.png`;
+// /og-image.png does not exist - Cloudflare answers it with the SPA shell, so
+// this fallback handed crawlers 200 text/html where an image belongs. Points at
+// a file that is actually in public/ now.
+const DEFAULT_OG = `${SITE_URL}/DMI-Logo.png`;
 /**
  * JPEG quality for the rendered card.
  *
