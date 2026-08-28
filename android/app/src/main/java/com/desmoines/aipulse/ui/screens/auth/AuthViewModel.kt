@@ -278,10 +278,6 @@ class AuthViewModel @Inject constructor(
     fun signOut() {
         viewModelScope.launch {
             authRepository.signOut()
-                .onSuccess {
-                    // Clear biometric auth on sign out (matching iOS pattern)
-                    biometricAuthService.reset()
-                }
                 .onFailure { error ->
                     setError(error.message ?: "Sign out failed.")
                 }

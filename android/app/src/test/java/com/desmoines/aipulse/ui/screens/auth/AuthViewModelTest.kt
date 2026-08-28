@@ -8,6 +8,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.emptyFlow
@@ -47,6 +48,19 @@ class AuthViewModelTest {
     @AfterEach
     fun tearDown() {
         Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `signing out leaves the biometric lock alone`() = runTest {
+        // signOut used to call biometricAuthService.reset(), which deleted the
+        // biometric preference. That was a second path to the same defect
+        // AND-AUDIT-024 fixes in SecureStorage: making deleteUserData() preserve
+        // the key achieves nothing while another caller clears it directly.
+        // Biometric enrolment belongs to the device, not the account.
+        viewModel.signOut()
+        advanceUntilIdle()
+
+        verify(exactly = 0) { biometricAuthService.disable() }
     }
 
     @Nested

@@ -1360,7 +1360,8 @@ Evidence:
   would have committed a zeroed baseline and blinded CI too.
 - TWO Windows-only faults, each sufficient alone: path.join produced backslashed tsconfig globs (which
   accept only '/'), so tsc matched zero inputs; and after fixing that, the error parser still counted
-  zero because tsc writes CRLF and  is a LINE TERMINATOR in a JS regex, so `(.*)$` never matches.
+  zero because tsc writes CRLF and 
+ is a LINE TERMINATOR in a JS regex, so `(.*)$` never matches.
 - CI was fine throughout - ubuntu gives '/' and LF - so the committed baseline is accurate. The damage
   was local, on the only thing that type-checks supabase/functions.
 - The fix immediately found og-image at 1 -> 3, from main's JPEG commit. Both type-level; baselined at
@@ -1369,8 +1370,10 @@ Evidence:
   - A CHECKER THAT SEES NOTHING MUST NEVER REPORT SUCCESS. Third time this session: the offline suite
     runner, the prerender content check, and now this. Every scanner needs a "found zero inputs" guard.
   - TSCONFIG GLOBS ARE '/'-ONLY. path.join is wrong for `include` and `paths` on Windows, always.
-  -  IS A LINE TERMINATOR IN JAVASCRIPT REGEX, so `.` will not match it and `$` sits after it. Split
-    tool output on /?
+  - 
+ IS A LINE TERMINATOR IN JAVASCRIPT REGEX, so `.` will not match it and `$` sits after it. Split
+    tool output on /
+?
 /, never '
 '.
   - Cross-platform bugs in a checker are worse than in product code: the product fails loudly on the
@@ -1403,7 +1406,8 @@ Evidence:
 ## 2026-08-28 - two clean sweeps, and a ratchet 120 sites behind reality
 - Swept for the cross-platform parsing class: only check-edge-types had it. strict-ratchet splits on
   '
-' too but its regex has no `$` anchor, so  cannot break it - verified by running it (24/17
+' too but its regex has no `$` anchor, so 
+ cannot break it - verified by running it (24/17
   against baseline 24, genuinely parsing).
 - Swept all 19 baseline files for position-keyed entries: none. duplicate-events-baseline looks
   line-keyed to a naive regex but its keys are title|date|venue and the match is a timestamp.
@@ -2760,6 +2764,66 @@ deleted it
     successful lint (~3m36s). Step duration is a usable first signal for what kind of
     failure you are looking at before opening the log.
 ---
+
+## AND-AUDIT-024 - sign-out no longer switches the biometric lock off
+
+SignOutCleaner called secureStorage.deleteAll(), and the encrypted store holds
+device settings alongside credentials, so signing out cleared biometric_auth_enabled.
+A user who turned the lock on found it off after signing back in, silently.
+
+Fix: SecureStorage.DEVICE_SETTING_KEYS names what a sign-out wipe keeps,
+deleteUserData() preserves those keys and clears the rest, deleteAll() stays a
+genuine full wipe for callers that want one. BiometricAuthService now reads its
+key from the same constant, so the allowlist and the writer cannot drift apart.
+
+Decided preserve rather than clear. Biometric enrolment belongs to the handset,
+not the account, so an account boundary is not a reason to disable it. That also
+avoids the disclosure the story asked for: nothing visibly changes for the user,
+which is only true on this branch of the decision.
+
+Two of the story's own premises were stale by the time I got here. indexing_enabled
+was already gone (AND-AUDIT-016 deleted AppSearchService). The soft-paywall counters
+and session timestamps are per-user, and SignOutCleaner already resets both by hand,
+so wiping them is deliberate and they stay off the allowlist. Worth re-checking a
+story's factual claims against the tree before implementing it - this is the third
+time an audit story I wrote has been partly overtaken by a later one.
+
+Testing learning: SecureStorage builds EncryptedSharedPreferences on the Android
+Keystore, which a JVM unit test does not have. The class already falls back to plain
+SharedPreferences on any Exception, and it was tempting to lean on that - mock the
+Context, let the Keystore path blow up, catch the fake on the way out. That would
+have been a test asserting an accident: whether the fallback fires depends on
+whether the mockable android.jar makes MasterKey.Builder throw an Exception or an
+Error, and ExceptionInInitializerError is not an Exception. Added an internal
+constructor that takes the SharedPreferences instead. An explicit seam beats a test
+that passes for a reason you cannot state.
+
+CI note: run 33179729704 (Android CI 363) came back green on PR #379 head 2301bfa -
+lint, unit tests, debug APK and the R8 release build all pass. That confirms the
+AndroidX revert cleared checkDebugAarMetadata and that compileSdk/targetSdk 36 works
+with the existing 2024-era dependencies. #379 still needs a human to merge it.
+
+## AND-AUDIT-024 follow-up: the second path that cleared the biometric lock
+
+Found while reading AuthViewModel for AND-AUDIT-006, after #380 had already gone
+green. AuthViewModel.signOut() called biometricAuthService.reset(), which
+delegates to disable(), which deletes the key outright. So #380's fix - teaching
+SecureStorage.deleteUserData() to preserve the key - achieved nothing, because a
+different caller wiped it directly on the same sign-out.
+
+Removed the call, and reset() with it: one caller, and the Settings toggle
+already uses disable(), which is the real API. Added a regression test asserting
+sign-out does not disable biometrics.
+
+The lesson is the transferable part. I fixed the storage layer and declared the
+behaviour fixed, having grepped for callers of deleteAll() but not for callers of
+the feature. The right search was biometricAuthService.* - who touches this
+setting at all - not who touches the store it lives in. A defect with two paths
+is fully open until both are closed, and a green CI run says nothing about
+whether you found them all.
+
+Caught it only because AND-AUDIT-006 sent me into the same file for an unrelated
+reason. That is luck, not method.
 
 ## AND-AUDIT-011 - a keystore-less release build no longer reports success
 
