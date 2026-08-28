@@ -1894,3 +1894,24 @@ Evidence:
   google-indexing-api as 404 for the same reason: Deploy Edge Functions has run once and failed in 13
   seconds on a missing SUPABASE_ACCESS_TOKEN.
 ---
+
+2026-08-28 - WEB-SEO-006: a 200 that serves the wrong content type
+  Chased the red PR Checks rather than picking a story. It fails at "Edge functions gained no type errors"
+  on og-image/index.ts going 1 -> 3. Those three turned out to be SHIM ARTIFACTS - TS2614 on a remote
+  import is listed as exactly that in check-edge-types' own header - so the CI failure was not the defect.
+  Probing og-image anyway is what found the real one.
+
+  /og-image.png IS NOT IN public/ AND NEVER HAS BEEN. Cloudflare answers it with the SPA shell: 200
+  text/html where an image belongs. No 404, no error, no signal - the link preview just has no picture.
+  BRAND.ogImage pointed at it, so six prerendered pages inherited it while 37 passed DMI-Logo.png
+  explicitly. The majority looking right is why it survived. All 43 now emit the file that exists.
+
+  TWO THINGS I WANT TO REMEMBER.
+  1. A 200 with the wrong content-type is harder to find than a 404, and this project's SPA fallback
+     manufactures them for every missing static file. Any check that asks "does this URL answer?" will pass
+     on all of them. check-prerender-head verifies og:image is PRESENT, not that it resolves to an image.
+  2. My own re-baseline banked a regression. Commit 2d3acd29 fixed the Windows glob that had the edge-type
+     ratchet measuring nothing, and writing a correct baseline necessarily absorbed og-image's 1 -> 3 that
+     CI had flagged the day before. The re-baseline was right and the absorption was invisible. When a
+     ratchet has been blind, re-baselining it is not a neutral act - diff what you are banking.
+---
