@@ -194,14 +194,20 @@ export function dedupeJsonLd(html) {
   }
 
   const doomed = blocks.filter((b) => b.helmet && b.type && lastOfType.get(b.type) !== b.index);
-  if (doomed.length === 0) return [html, 0];
+  if (doomed.length === 0) return [html, 0, []];
 
   // Splice from the end so earlier offsets stay valid.
   let out = html;
   for (const b of [...doomed].sort((a, c) => c.index - a.index)) {
     out = out.slice(0, b.index) + out.slice(b.index + b.full.length);
   }
-  return [out, doomed.length];
+  // THE @TYPES COME BACK WITH THE COUNT. A bare total says a duplicate happened
+  // somewhere across 35 routes, which is not enough to act on - and the header
+  // above is explicit that this function can mask a source defect, so the report
+  // has to be specific enough to tell "Helmet caught mid-update" from "two
+  // components each emit one". Third element, so existing two-element
+  // destructures keep working.
+  return [out, doomed.length, doomed.map((b) => b.type)];
 }
 
 /**

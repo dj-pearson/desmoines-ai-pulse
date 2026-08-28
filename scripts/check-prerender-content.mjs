@@ -148,9 +148,44 @@ for (const file of files) {
 
   const unnamed = unnamedLinks(doc, root).length;
   if (unnamed > 0) failures.push({ route, what: `${unnamed} link(s) with no accessible name` });
+
+  // THE ITEMLIST HALF OF THE DEFECT IN THIS FILE'S HEADER, which went
+  // unguarded. The header opens with "/restaurants shipped ... an ItemList with
+  // numberOfItems 0", and the two assertions above cover the skeleton and the
+  // empty anchors but never the list itself.
+  //
+  // A list that declares a count and then supplies a different number of items
+  // is a claim a crawler can check and find false. /restaurants declared 478
+  // and supplied 20 - numberOfItems was taken from the total row count while
+  // itemListElement was sliced - and it was the only one of ten ItemList-
+  // emitting routes where the numbers disagreed.
+  //
+  // ABSOLUTE, like the rest of this file: no live data makes a self-
+  // contradictory list correct. An empty list is NOT asserted on, deliberately.
+  // A hub with nothing to show emits no ItemList at all, and an empty one is a
+  // question for check-hub-inventory, which asks the DATABASE what the page
+  // should have had. The DOM cannot tell "no rows" from "rows never arrived".
+  for (const el of doc.querySelectorAll('script[type="application/ld+json"]')) {
+    let parsed;
+    try {
+      parsed = JSON.parse(el.textContent || '');
+    } catch {
+      failures.push({ route, what: 'has an unparseable ld+json block' });
+      continue;
+    }
+    for (const node of Array.isArray(parsed) ? parsed : [parsed]) {
+      if (!node || node['@type'] !== 'ItemList') continue;
+      const declared = node.numberOfItems;
+      if (typeof declared !== 'number') continue;
+      const actual = Array.isArray(node.itemListElement) ? node.itemListElement.length : 0;
+      if (declared !== actual) {
+        failures.push({ route, what: `ItemList declares numberOfItems ${declared} but supplies ${actual}` });
+      }
+    }
+  }
 }
 
-console.log(`[prerender-content] ${files.length} prerendered page(s) checked for skeletons and unnamed links.`);
+console.log(`[prerender-content] ${files.length} prerendered page(s) checked for skeletons, unnamed links and self-contradictory ItemLists.`);
 
 for (const a of allowed) {
   console.log(`  allowed: ${a.route} (aria-busy x${a.occurrences}) - ${a.reason}`);
@@ -161,8 +196,12 @@ if (failures.length === 0) {
   process.exit(0);
 }
 
-console.error(`\nX ${failures.length} page(s) ship a loading skeleton:`);
+console.error(`\nX ${failures.length} problem(s):`);
 for (const f of failures) console.error(`  ${f.route}: ${f.what}`);
+// The advice below is skeleton-specific, so it is printed only when a skeleton
+// is actually among the failures. An ItemList mismatch printed under "these
+// serve a skeleton to every client" sends the reader to the wrong file.
+if (failures.some((f) => f.what.startsWith('ships a loading skeleton'))) {
 console.error(
   '\n  These serve a skeleton to every client that does not run JavaScript.\n' +
     '  The prerenderer waits for aria-busy to clear, so this means that wait timed\n' +
@@ -172,4 +211,12 @@ console.error(
     '  loses nothing by missing, add the route to ALLOWED_SKELETON_ROUTES with a\n' +
     '  reason. Do not add one to make a red build green.\n',
 );
+}
+if (failures.some((f) => f.what.startsWith('ItemList declares'))) {
+  console.error(
+    'An ItemList that declares one count and supplies another is a claim a ' +
+      'crawler can check and find false. numberOfItems must count the items in ' +
+      'itemListElement, not the collection the page was drawn from.',
+  );
+}
 process.exit(1);

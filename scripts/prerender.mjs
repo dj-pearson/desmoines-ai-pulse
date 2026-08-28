@@ -364,6 +364,7 @@ const unsettledRoutes = [];
 const stillLoadingRoutes = [];
   let restoredFontsTotal = 0;
 let duplicateJsonLdTotal = 0;
+const duplicateJsonLdRoutes = [];
 
   // The title vite shipped in the shell. An entity page that still carries this
   // never rendered itself — see the strict gate in renderRoute().
@@ -543,8 +544,11 @@ let duplicateJsonLdTotal = 0;
       // taken mid-update captures both copies. Four live URLs were serving
       // FAQPage twice, which Google treats as invalid structured data. See
       // dedupeJsonLd for why this is fixed after the fact rather than waited out.
-      const [deJsonLd, dropped] = dedupeJsonLd(deFonted);
-      if (dropped > 0) duplicateJsonLdTotal += dropped;
+      const [deJsonLd, dropped, droppedTypes] = dedupeJsonLd(deFonted);
+      if (dropped > 0) {
+        duplicateJsonLdTotal += dropped;
+        duplicateJsonLdRoutes.push(`${route} (${droppedTypes.join(', ')})`);
+      }
       // Leaflet built a whole map in Chromium: one <img> per marker, one per
       // marker shadow, one per visible tile. react-leaflet rebuilds all of it on
       // hydration, so every one of those nodes is parsed and discarded. On /map
@@ -733,7 +737,8 @@ let duplicateJsonLdTotal = 0;
         ? `${stillLoadingRoutes.length} route(s) captured with a skeleton still mounted (${stillLoadingRoutes.slice(0, 5).join(', ')}); `
         : 'no route captured mid-skeleton; ') +
       `restored ${restoredFontsTotal} async font link(s); ` +
-      `dropped ${duplicateJsonLdTotal} duplicate JSON-LD block(s)`,
+      `dropped ${duplicateJsonLdTotal} duplicate JSON-LD block(s)` +
+      (duplicateJsonLdRoutes.length ? ` on ${duplicateJsonLdRoutes.slice(0, 5).join(', ')}` : ''),
   );
 
   // WEB-OPS-020 AC5. The counts only ever existed in the raw build log, which

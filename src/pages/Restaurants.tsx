@@ -285,14 +285,23 @@ export default function Restaurants() {
     "late night food Des Moines",
   ];
 
+  /** How many restaurants go into the ItemList. Both fields must use it. */
+  const RESTAURANT_SCHEMA_LIMIT = 20;
+
   const restaurantsSchema = {
     "@context": "https://schema.org",
     "@type": "ItemList",
     name: "Best Restaurants in Des Moines, Iowa",
     description:
       "Complete guide to the best restaurants in Des Moines, Iowa. Browse 200+ local restaurants with ratings, reviews, menus, and real-time availability.",
-    numberOfItems: totalCount || restaurants.length,
-    itemListElement: restaurants.slice(0, 20).map((restaurant, index) => ({
+    // numberOfItems COUNTS THE ITEMS ACTUALLY LISTED, not the collection the
+    // page was drawn from. This read `totalCount || restaurants.length` while
+    // itemListElement was sliced to 20, so the prerendered page declared an
+    // ItemList of 478 and then supplied 20 - the only route of the ten emitting
+    // an ItemList where the two numbers disagreed. Structured data that
+    // contradicts itself is worse than none: it is a claim a crawler can check.
+    numberOfItems: Math.min(restaurants.length, RESTAURANT_SCHEMA_LIMIT),
+    itemListElement: restaurants.slice(0, RESTAURANT_SCHEMA_LIMIT).map((restaurant, index) => ({
       "@type": "ListItem",
       position: index + 1,
       item: {

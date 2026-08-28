@@ -9,7 +9,7 @@
  * page is a silent SEO regression: the page still renders, the build still
  * passes, and a crawler just sees less than it did.
  */
-import { stripLeafletRuntime, stripPrerenderSignal } from '../lazy-preload-patterns.mjs';
+import { stripLeafletRuntime, stripPrerenderSignal, dedupeJsonLd } from '../lazy-preload-patterns.mjs';
 
 let failures = 0;
 const check = (name, cond, detail = '') => {
@@ -95,6 +95,60 @@ console.log('\nstripPrerenderSignal: build-time handshake, not shipped output');
 {
   const [out] = stripPrerenderSignal('<div data-queries-total="9"></div>');
   check('leaves a differently-named data attribute alone', out === '<div data-queries-total="9"></div>', out);
+}
+
+console.log('');
+console.log('dedupeJsonLd: it DELETES structured data, so the no-op cases are the ones that matter');
+{
+  const ld = (body, rh = true) =>
+    '<script type="application/ld+json"' + (rh ? ' data-rh="true"' : '') + '>' + body + '</script>';
+  const FAQ_A = ld('{"@type":"FAQPage","x":1}');
+  const FAQ_B = ld('{"@type":"FAQPage","x":2}');
+  const head = (s) => '<head>' + s + '</head>';
+
+  {
+    const [out, n, types] = dedupeJsonLd(head(FAQ_A + FAQ_B));
+    check('drops the earlier of two same-@type Helmet blocks', n === 1 && out === head(FAQ_B), out);
+    check('reports which @type was dropped', JSON.stringify(types) === '["FAQPage"]', JSON.stringify(types));
+    // Helmet APPENDS the settled render, so the last block is the correct one.
+    // Keeping the first would ship the loading render's JSON.
+    check('keeps the LAST one, not the first', out.includes('"x":2') && !out.includes('"x":1'));
+  }
+  {
+    const two = head(ld('{"@type":"FAQPage"}') + ld('{"@type":"ItemList"}'));
+    const [out, n] = dedupeJsonLd(two);
+    check('leaves different @types alone', n === 0 && out === two);
+  }
+  {
+    // A block written straight into index.html carries no data-rh and is not
+    // Helmet's to replace. Dropping one would delete hand-authored markup.
+    const hand = head(ld('{"@type":"FAQPage"}', false) + ld('{"@type":"FAQPage"}', false));
+    const [out, n] = dedupeJsonLd(hand);
+    check('never touches non-Helmet blocks', n === 0 && out === hand);
+  }
+  {
+    const mixed = head(ld('{"@type":"FAQPage","a":1}', false) + ld('{"@type":"FAQPage","a":2}'));
+    const [out, n] = dedupeJsonLd(mixed);
+    check('a Helmet block does not evict a hand-authored one of the same type', n === 0 && out === mixed, out);
+  }
+  {
+    const [out, n, types] = dedupeJsonLd('<head><title>x</title></head>');
+    check('no JSON-LD at all: same string, zero, empty list',
+      n === 0 && out === '<head><title>x</title></head>' && Array.isArray(types) && types.length === 0);
+  }
+  {
+    const [, n] = dedupeJsonLd(head(ld('{"@type":"FAQPage"}') + FAQ_A + FAQ_B));
+    check('three of a type drops two', n === 2, String(n));
+  }
+  {
+    // The @type regex takes the FIRST match in the body, so two @graph blocks
+    // whose first member differs are left alone. Recorded as the current
+    // behaviour, not asserted as ideal.
+    const g1 = ld('{"@graph":[{"@type":"WebSite"},{"@type":"FAQPage"}]}');
+    const g2 = ld('{"@graph":[{"@type":"Organization"},{"@type":"FAQPage"}]}');
+    const [, n] = dedupeJsonLd(head(g1 + g2));
+    check('does not reach inside @graph', n === 0, String(n));
+  }
 }
 
 console.log(`\n${failures} failure(s)`);

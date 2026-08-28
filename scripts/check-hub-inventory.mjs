@@ -21,9 +21,15 @@
  * did the opposite. Counting ItemList entries out of dist/ looked cheaper and
  * was wrong twice over: a hub that renders NOTHING emits no ItemList at all, so
  * the emptiest pages were skipped as "no list here" - precisely the ones worth
- * catching - and /restaurants emits an ItemList with zero itemListElement while
- * rendering fifteen restaurant links, so it reported as empty when it is not.
+ * catching - and /restaurants emitted an ItemList with zero itemListElement
+ * while rendering restaurant links, so it reported as empty when it was not.
  * The DOM says what a page drew; only the query says what it had to draw.
+ *
+ * THAT SECOND EXAMPLE IS NOW HISTORY, and it is left here because the argument
+ * survives it. /restaurants ships 20 itemListElement as of 2026-08-28. It also
+ * used to declare numberOfItems 478 against those 20 - the total row count,
+ * not the list - which check-prerender-content.mjs now gates on. Do not read
+ * the sentence above as a current measurement; re-measure before quoting it.
  *
  * THE LOCATION LIST IS READ FROM THE PAGE COMPONENT, not restated here. Its
  * searchTerms are what the route filters on, so a location added to
