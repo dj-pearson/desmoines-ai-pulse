@@ -114,10 +114,22 @@ export default function ImageBackfill() {
         return q;
       };
 
-      const { count: total } = await baseQuery();
-      const { count: withImages } = await baseQuery()
+      const { count: total, error: totalError } = await baseQuery();
+      const { count: withImages, error: withImagesError } = await baseQuery()
         .not('image_url', 'is', null)
         .neq('image_url', '');
+
+      // A COUNT THAT FAILED IS NOT A COUNT OF ZERO. `total || 0` turned a failed
+      // read into 0, so needsBackfill came out 0 - 0 = 0 and the panel told an
+      // admin this category needs no backfill. The catch below never covered it:
+      // a Supabase count error is returned as { count: null, error }, not thrown.
+      if (totalError || withImagesError) {
+        log.error('fetchStats', 'could not count images', {
+          category: cat,
+          error: String(totalError ?? withImagesError),
+        });
+        return;
+      }
 
       const totalNum = total || 0;
       const withImagesNum = withImages || 0;
