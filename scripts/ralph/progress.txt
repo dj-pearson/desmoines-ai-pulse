@@ -1654,3 +1654,27 @@ Evidence:
   AC decay silently, and this is the third story this week whose stated figures were wrong by enough to
   change a decision.
 ---
+
+2026-08-28 - WEB-QA-018/019/017: a stale environment caveat, and one fix that was deferred for the wrong reason
+  Most of the remaining open stories funnel into WEB-QA-018's re-apply decision, which is genuinely the
+  owner's. What is NOT the owner's is making the migrations correct before they run.
+
+  invoices.payment_id is now UNIQUE. WEB-QA-018's own notes reached that recommendation and then declined
+  it as "polishing dead code". That reasoning holds for the edge function and not for the migration: the
+  constraint is part of the shape the table gets when someone applies it. Two things already assumed at
+  most one invoice per payment - billing_history LEFT JOINs on it, and generate-invoice-pdf's
+  .single()-with-discarded-error branch - and neither enforced it.
+
+  THE "NO CREDENTIALS IN THIS CONTAINER" CAVEAT IS STALE and it appears in several stories' notes. .env
+  has the anon key, the REST path is reachable, and npm run build pulls 478 restaurants through it on
+  every run. Read-only verification against production is available here. Anything in these notes that
+  says a claim could not be checked from this environment should be re-read before it is believed.
+    Used it: 11 of 11 sampled WEB-QA-018 tables absent, 5 of 5 sampled RPCs PGRST202, known_venues.image_url
+    42703. Every claim I probed held. The value was confirming the evidence had not decayed, since the
+    reports were written days ago and a decision is about to rest on them.
+    Still unavailable: anything needing the service-role key, which I did not go looking for.
+
+  WHAT I DID NOT DO: take the decision. WEB-QA-017 AC1, WEB-QA-019's 17 RPCs and WEB-OPS-022's AC5-AC8 all
+  wait on it, which is a lot of pressure to decide it in passing. It is a product call about whether entire
+  modules ship.
+---
