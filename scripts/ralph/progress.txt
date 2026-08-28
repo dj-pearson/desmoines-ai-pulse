@@ -2825,73 +2825,34 @@ whether you found them all.
 Caught it only because AND-AUDIT-006 sent me into the same file for an unrelated
 reason. That is luck, not method.
 
-## AND-AUDIT-022 - BillingService retry, dispatcher, stuck spinner (5 of 6 ACs)
+## AND-AUDIT-011 - a keystore-less release build no longer reports success
 
-The biggest finding was that the fix already existed in the repo. NetworkRetry
-(util/NetworkRetry.kt) has defaultIsRetryable, which handles CancellationException,
-Ktor ResponseException status and IOException - exactly the typed classifier this
-story asks for. BillingService had reimplemented it as substring matching on
-exception messages and got it wrong. Check for an existing helper before writing a
-classifier; the duplicate was worse than the original in every respect.
+app/build.gradle.kts applied the release signingConfig only when
+RELEASE_KEYSTORE_FILE was non-blank, and did nothing at all when it was absent.
+The build printed BUILD SUCCESSFUL and handed you an artifact with no release
+signature, which you find out about at upload.
 
-The substring rule's real failure modes, now covered by tests:
-- IOException().message is null, so it returned false on the transport failures it
-  existed to catch. Every retryable network error became an immediate give-up.
-- 429 and 408 were not in the matched list, so a rate-limited or timed-out
-  validation was never retried.
-- It searched the whole message, and the message carried the response body, so a
-  4xx whose body mentioned "503" was retried as a server error.
+Fix is two guards with two scopes rather than one list:
+- buildsReleaseCode (bundleRelease, assembleRelease, publish) keeps requiring
+  SUPABASE_URL, SUPABASE_ANON_KEY, GOOGLE_MAPS_API_KEY.
+- buildsShippableArtifact (bundleRelease, publish) newly requires all four
+  keystore properties and a keystore file that exists on disk.
 
-One thing the shared default cannot do: Supabase's functions() returns a response
-rather than throwing, so no Ktor ResponseException is ever produced and the status
-was being smuggled through an IllegalStateException message string. Fixed with a
-typed ReceiptValidationHttpException carrying the status.
+assembleRelease is excluded from the second on purpose: android-ci.yml runs it on
+every PR with no keystore to exercise R8. Checked both workflows before writing
+the guard rather than after - android-ci.yml writes the three credentials and no
+keystore, android-release.yml writes all four keystore values with an absolute
+path, so neither workflow changes behaviour. That check is the whole reason this
+is a one-cycle change instead of a revert.
 
-Separate real bug found while restructuring: the loop caught Exception, which
-swallows CancellationException, so a cancelled coroutine kept retrying.
+Fourth stale premise in a row: the story said a keystore-less release build is
+"debug-signed". I could not confirm that from the build script or the CI logs, so
+I did not repeat it. What is verifiable is that no release signingConfig is
+applied and the build still succeeds - which is the actual defect, and the guard
+is the same either way. Do not restate a story's mechanism claim in a commit
+message without checking it; three of these have now been wrong.
 
-AC2 (endConnection) deliberately NOT implemented, and this is the part worth
-remembering. The obvious version is ProcessLifecycleOwner ON_STOP -> endConnection()
-with ensureConnected() reconnecting on demand. It is a money bug: the Play purchase
-sheet IS the foreground, so every purchase backgrounds the app, and disconnecting
-there means the purchase completes and onPurchasesUpdated never arrives. Gating on
-_isLoading does not rescue it, because the AC5 watchdog can clear that flag while a
-purchase is still genuinely open. Held binding < dropped purchase. Wrote the story
-note rather than the code, and left passes=false so the remaining AC stays visible.
-
-Nearly shipped it before thinking the sequence through. The tell was asking "what
-is actually in the foreground when ON_STOP fires here" instead of treating
-ON_STOP as generic "app backgrounded".
-
-## Deno CI: marketing-optout-agents has never run
-
-Not an AND-AUDIT story - found while ruling out a red check on PR #380.
-
-"Edge function & migration invariants" fails on every PR that touches
-android/app/src/main/java/**, at:
-  deno test --allow-read --allow-env --no-check=remote \
-    supabase/functions/_tests/marketing-optout-agents.test.ts
-  error: Could not find "@types/node" in a node_modules folder.
-
-The workflow's own comment already diagnosed the cause correctly and applied
---no-check=remote as the fix. It does not work, and the reason is a detail worth
-keeping: --no-check=remote skips the BODIES of remote declaration files but still
-resolves their type-reference directives, and the @types/node reference inside
-supabase-js's index.d.mts is exactly such a directive. So the flag that was added
-to fix this never could. The four tests in that file have never executed.
-
-Fix is bare --no-check, which also drops type-checking of the test's own source.
-Real loss, still the better trade: four tests that run beat four tests that are
-type-checked and skipped. The alternative that keeps both is a root deno.json with
-nodeModulesDir plus an @types/node import and a deno install step - a lot of
-machinery for one suite.
-
-The workflow lists its own path in on.pull_request.paths, so the PR verifies its
-own fix. Expect the possibility that the tests fail on first execution: nothing
-has ever run them, so their passing was never established.
-
-Process note: I nearly filed this as "not my PR's problem" and moved on, which is
-the correct posture for a red check on someone else's code but would have left a
-suite silently dead. Reading the workflow comment was what turned it from noise
-into a finding - the comment said what the author expected, and the log said what
-actually happened, and they disagreed.
+Left unfixed and recorded instead: the guard matches gradle.startParameter.taskNames,
+so `./gradlew build` reaches assembleRelease as a dependency with no matching
+string in the requested task names. Pre-existing, and fixing it means a
+variant-scoped check, which is a bigger change than this story asked for.
