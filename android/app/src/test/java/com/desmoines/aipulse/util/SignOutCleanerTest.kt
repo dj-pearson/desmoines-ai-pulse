@@ -39,8 +39,10 @@ class SignOutCleanerTest {
     fun `tearDown resets every per-user store and stops the session timer`() = runTest {
         cleaner().tearDown()
 
-        // Credentials + session.
-        verify { secureStorage.deleteAll() }
+        // Credentials + session. deleteUserData, not deleteAll: the store also
+        // holds device settings and a full wipe switched the biometric lock off.
+        verify { secureStorage.deleteUserData() }
+        verify(exactly = 0) { secureStorage.deleteAll() }
         verify { sessionTimeoutService.stopTracking() }
         verify { groupSessionManager.clear() }
         verify { softPaywallService.reset() }
@@ -68,7 +70,7 @@ class SignOutCleanerTest {
 
         cleaner().tearDown()
 
-        verify { secureStorage.deleteAll() }
+        verify { secureStorage.deleteUserData() }
         verify { favoritesRepository.clearLocalState() }
         coVerify { queryCache.clear() }
     }
