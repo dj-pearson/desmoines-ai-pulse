@@ -2516,3 +2516,33 @@ _middleware.ts:268 rewrites the real <title>, not just og/twitter tags. So the m
   name that is literally one of its ten known duplicate groups. A sanitiser is only safe for matching once
   you know what it preserves.
 ---
+
+2026-08-28  client-side PostgREST filter injection (found while auditing the
+edge-side sanitisers, no story of its own)
+  The advanced search box fed raw typed text into a PostgREST or() filter at
+  four sites in useAdvancedSearch.ts. Production, before -> after:
+      "Bar, Grill"  400 failed to parse logic tree -> 200
+      "a*b"         446 rows                       -> 23
+      "jazz"        4 rows                         -> 4     (control)
+      "Casey's"     44 rows                        -> 44    (control)
+  Fixed in ebf5dae8 with src/lib/postgrestPattern.ts, a deliberate duplicate of
+  the Deno helper - that module is outside src/ and outside the app tsconfig,
+  and its SSRF half calls Deno.resolveDns. The two must be kept in step; both
+  headers say so, including that neither may strip apostrophes.
+  EventsPage.tsx:396 builds an or() too but its cityName is a hardcoded map
+  lookup, so it is a closed set and was left alone.
+
+2026-08-28  WEB-SEO-013: the /restaurants ItemList defect its own notes recorded
+  Measured as Googlebot on production - ItemList, then links rendered:
+      /attractions          NONE        22
+      /playgrounds          NONE        67
+      /restaurants          n=0  el=0    6
+      /events               n=30 el=30  35
+  The /restaurants row is a STALE DEPLOY, not a code defect - this branch's
+  build emits n=20 el=20 there. The unfiled half was /attractions and
+  /playgrounds emitting no list markup at all. Both now n=20 el=20, every URL
+  a link the crawler also sees, built with the same createSlug the cards use.
+  ItemListSchema had no callers and reproduced both defects; fixed in 84f60ff1
+  with a negative control. Its first test passed while emitting nothing in
+  either case - waitFor returned instead of asserting, so it never retried.
+  AC4 and AC6 stay open and stay the owner's.
