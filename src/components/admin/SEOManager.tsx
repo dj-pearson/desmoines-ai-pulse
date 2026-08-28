@@ -35,6 +35,7 @@ import {
   BarChart3,
 } from "lucide-react";
 import { createLogger } from '@/lib/logger';
+import { GscPerformancePanel } from "@/components/admin/GscPerformancePanel";
 
 const log = createLogger('SEOManager');
 
@@ -366,22 +367,7 @@ export function SEOManager() {
 
         {/* 2. Keywords Tab */}
         <TabsContent value="keywords" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Keyword Tracking</CardTitle>
-              <CardDescription>
-                Monitor keyword rankings and performance
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Alert>
-                <AlertDescription>
-                  Keyword tracking feature coming soon. This will integrate with Google Search
-                  Console for real-time keyword performance data.
-                </AlertDescription>
-              </Alert>
-            </CardContent>
-          </Card>
+          <GscPerformancePanel />
         </TabsContent>
 
         {/* 3-10. More tabs with placeholders */}

@@ -20,6 +20,7 @@ import {
   Menu as MenuIcon,
   MessageCircle,
   Receipt,
+  Search,
   Settings,
   Share2,
   Shield,
@@ -118,6 +119,7 @@ const NAV_GROUPS: NavGroup[] = [
     minRole: "moderator",
     items: [
       { label: "Analytics", href: "/admin/analytics-dashboard", icon: BarChart3 },
+      { label: "SEO", href: "/admin/seo", icon: Search, description: "Search Console performance + SEO tools" },
       { label: "Lifecycle", href: "/admin/lifecycle", icon: Users, description: "User lifecycle stages + transitions" },
       { label: "Feedback", href: "/admin/feedback", icon: MessageCircle },
       { label: "Trending tuner", href: "/admin/trending", icon: Flame },

@@ -207,6 +207,9 @@ const AdminAI = lazyWithRetry(() => import("./pages/AdminAI"));
 const AdminTools = lazyWithRetry(() => import("./pages/AdminTools"));
 const AdminAnalyticsPage = lazyWithRetry(() => import("./pages/AdminAnalyticsPage"));
 const AdminGscCallback = lazyWithRetry(() => import("./pages/AdminGscCallback"));
+// The Search Console OAuth callback above has been routed since March; the page
+// that shows what the connection produced never was. See WEB-SEO-014.
+const SEODashboard = lazyWithRetry(() => import("./pages/SEODashboard"));
 const AdminSecurity = lazyWithRetry(() => import("./pages/AdminSecurity"));
 const AdminSystem = lazyWithRetry(() => import("./pages/AdminSystem"));
 const AdminAutonomy = lazyWithRetry(() => import("./pages/AdminAutonomy"));
@@ -443,6 +446,7 @@ const App = () => (
             <Route path="/admin/tools" element={<ProtectedRoute requireAdmin><AdminTools /></ProtectedRoute>} />
             <Route path="/admin/analytics-dashboard" element={<ProtectedRoute requireAdmin><AdminAnalyticsPage /></ProtectedRoute>} />
             <Route path="/admin/oauth/callback" element={<ProtectedRoute requireAdmin><AdminGscCallback /></ProtectedRoute>} />
+            <Route path="/admin/seo" element={<ProtectedRoute requireAdmin><SEODashboard /></ProtectedRoute>} />
             <Route path="/admin/security" element={<ProtectedRoute requireAdmin><AdminSecurity /></ProtectedRoute>} />
             <Route path="/admin/system" element={<ProtectedRoute requireAdmin><AdminSystem /></ProtectedRoute>} />
             <Route path="/admin/autonomy" element={<ProtectedRoute requireAdmin><AdminAutonomy /></ProtectedRoute>} />
