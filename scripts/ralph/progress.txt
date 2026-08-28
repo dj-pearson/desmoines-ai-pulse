@@ -1872,3 +1872,25 @@ Evidence:
   reasoning about production while CI holds measurements of it. I spent several iterations reading notes
   before running two gh commands.
 ---
+
+2026-08-28 - A green workflow that had never done anything, 21 times
+  Swept every workflow on main rather than picking a story. Two failures I already knew about, and one
+  SUCCESS that was worse than either: CI Health Report, 21 consecutive green runs, none of which sent
+  anything. EDGE_FUNCTION_API_KEY is empty, so it echoed "secrets not set - skipping" and exited 0.
+
+  THE SECOND DEFECT WAS THE DANGEROUS ONE and only showed up on reading the code after the logs. The post
+  was `curl -sS ... && echo "reported ${WF_NAME}=..."`. curl exits 0 on an HTTP error, so it prints
+  "reported" whatever comes back - and agent-ci-health is 404. Setting the missing secret would have
+  converted 21 silent no-ops into 21 runs actively claiming to have recorded data. A skip that says nothing
+  is bad; a success message that is false is worse.
+
+  WEB-CI-004 IS MARKED PASSING AND ITS AC2 HAS NEVER BEEN TRUE. "An E2E run appears in the ingested health
+  report after the fix." Its AC1 genuinely works - the trigger fires with the corrected workflow name. It
+  was closed on the code change without checking the outcome, which is the thing this repo says over and
+  over: verify by outcome, not by absence of error. Left passes=true and filed it under WEB-OPS-007 AC5,
+  which is already the owner-facing decision about stories delivered by mechanisms that never ran.
+
+  FOUR STORIES, ONE TOKEN. agent-ci-health joins export-user-data, regenerate-sitemaps and
+  google-indexing-api as 404 for the same reason: Deploy Edge Functions has run once and failed in 13
+  seconds on a missing SUPABASE_ACCESS_TOKEN.
+---
