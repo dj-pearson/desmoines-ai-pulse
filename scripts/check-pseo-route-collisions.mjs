@@ -40,6 +40,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { classifySlugs } from './lib/pseoRouteClaims.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const APP = join(ROOT, 'src/App.tsx');
@@ -60,87 +61,24 @@ const slugs = readFileSync(SLUGS, 'utf8')
   .map((s) => s.trim())
   .filter((s) => s.startsWith('/'));
 
-if (!existsSync(APP)) {
-  console.error('[pseo-collisions] src/App.tsx not found - refusing to pass.');
+let claims;
+try {
+  // Route parsing and slug classification live in scripts/lib/pseoRouteClaims.mjs
+  // because the pSEO sitemap generator selects on the same answer. Two
+  // implementations would let the audit report a clean surface while the
+  // generator submitted the URLs it was reporting on.
+  claims = classifySlugs(slugs, { appPath: APP, redirectsPath: REDIRECTS });
+} catch (err) {
+  console.error(`[pseo-collisions] ${err.message}`);
   process.exit(1);
 }
 
-const app = readFileSync(APP, 'utf8');
-
-const PSEO_ELEMENT = /Pseo/;
-const allRoutes = [...app.matchAll(/<Route\s+path="([^"]+)"\s+element=\{<(\w+)/g)].map((m) => ({
-  path: m[1],
-  element: m[2],
-}));
-
-if (allRoutes.length === 0) {
-  console.error('[pseo-collisions] No <Route path="..." element={<X> found in src/App.tsx. The check is blind.');
-  process.exit(1);
-}
-
-const pseoRoutes = allRoutes.filter((r) => PSEO_ELEMENT.test(r.element));
-if (pseoRoutes.length === 0) {
-  console.error(
-    '[pseo-collisions] No pSEO-serving route found in src/App.tsx. Either the component was ' +
-      'renamed or pSEO routing moved; without excluding those routes every slug reports as a hit.'
-  );
-  process.exit(1);
-}
-
-const routePaths = allRoutes
-  .filter((r) => !PSEO_ELEMENT.test(r.element))
-  .map((r) => r.path)
-  .filter((p) => p !== '*' && p !== '/*');
-
-const redirectSources = existsSync(REDIRECTS)
-  ? readFileSync(REDIRECTS, 'utf8')
-      .split('\n')
-      .map((l) => l.trim())
-      .filter((l) => l && !l.startsWith('#'))
-      .map((l) => l.split(/\s+/)[0])
-  : [];
-
-function routeMatcher(path) {
-  const normalised = path.startsWith('/') ? path : `/${path}`;
-  const hasParam = normalised.includes(':') || normalised.includes('*');
-  const re = new RegExp(
-    '^' +
-      normalised
-        .split('/')
-        .map((seg) =>
-          seg.startsWith(':') ? '[^/]+' : seg === '*' ? '.*' : seg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-        )
-        .join('/') +
-      '$'
-  );
-  return { path: normalised, hasParam, re };
-}
-
-const matchers = routePaths.map(routeMatcher);
-
-const exact = [];
-const shadowed = [];
-const redirected = [];
-
-for (const slug of slugs) {
-  if (redirectSources.includes(slug)) {
-    redirected.push(slug);
-    continue;
-  }
-  // Literal routes are checked first: a slug that matches both a literal and a
-  // parameterised route is an exact collision, not a shadowing.
-  const literal = matchers.find((m) => !m.hasParam && m.re.test(slug));
-  if (literal) {
-    exact.push(`${slug}  <-  ${literal.path}`);
-    continue;
-  }
-  const param = matchers.find((m) => m.hasParam && m.re.test(slug));
-  if (param) shadowed.push({ slug, route: param.path });
-}
+const { exact: exactHits, shadowed, redirected, redirectSources, routeCount, pseoRouteCount } = claims;
+const exact = exactHits.map((e) => `${e.slug}  <-  ${e.route}`);
 
 console.log(
-  `[pseo-collisions] ${slugs.length} published slug(s) vs ${routePaths.length} hand-built route(s) ` +
-    `(${pseoRoutes.length} pSEO-serving and 1 catch-all excluded), ${redirectSources.length} redirect source(s).`
+  `[pseo-collisions] ${slugs.length} published slug(s) vs ${routeCount} hand-built route(s) ` +
+    `(${pseoRouteCount} pSEO-serving and 1 catch-all excluded), ${redirectSources.length} redirect source(s).`
 );
 if (redirected.length > 0) {
   console.log(`[pseo-collisions] ${redirected.length} already handled by public/_redirects.`);

@@ -63,6 +63,7 @@
     "test:media-route": "tsx functions/__tests__/media-route.test.mjs",
     "test:venue-images": "tsx scripts/__tests__/reclaim-venue-images.test.mjs",
     "test:provider-usage": "tsx scripts/__tests__/provider-usage.test.mjs",
+    "test:pseo-shippable": "tsx scripts/__tests__/pseo-shippable.test.mjs",
     "test:offline": "npm run test:venue-images && npm run test:media-route && npm run test:media-urls && npm run test:provider-usage",
     "check-edge-types": "node scripts/check-edge-types.mjs",
     "check-agent-drift": "node scripts/check-agent-pair-drift.mjs",

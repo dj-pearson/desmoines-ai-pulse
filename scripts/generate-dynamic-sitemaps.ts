@@ -9,6 +9,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync, existsSync, writeFileSync } from 'fs';
 import { join } from 'path';
+import { computePseoShippable } from './lib/pseoShippable';
 
 // Load .env for local development (Cloudflare Pages / Infisical set env vars at build time)
 function loadEnvFile(filePath: string): void {
@@ -336,70 +337,100 @@ async function generateArticlesSitemap(): Promise<number | null> {
 async function generatePseoSitemap(): Promise<number | null> {
   console.log('🧩 Generating pSEO sitemap...');
 
-  // Deliberate cap. src/pseo/roadmap.ts targets ~950 pages and itself warns
-  // that a sudden page-count spike reads as suspicious; on a site with this
-  // authority profile, 950 new URLs at once IS that spike. Release in batches
-  // and raise this as GSC indexation holds up.
-  const PSEO_URL_CAP = 300;
+  const target = join(process.cwd(), 'public', 'sitemap-pseo.xml');
 
-  // Quality floor. PseoAdmin treats >= 0.8 as good and >= 0.6 as borderline, so
-  // 0.6 is the existing notion of "not obviously thin".
+  // IT SOURCES THE SHIPPABLE SET, NOT is_published.
   //
-  // NOTE this is NOT the inventory gate the story asks for (>= 8 qualifying
-  // events, else fold the page back up). That has to be enforced where pages
-  // are generated and published — the sitemap step cannot re-count live
-  // inventory per page without N queries, and a page already published thin is
-  // already indexable. This floor is the backstop, not the gate.
-  const MIN_QUALITY_SCORE = 0.6;
-
-  const { data: pages, error } = await supabase
-    .from('pseo_pages')
-    .select('slug, updated_at, published_at, quality_score')
-    .eq('is_published', true)
-    .order('quality_score', { ascending: false, nullsFirst: false });
-
-  if (error) {
-    console.error('❌ Error fetching pSEO pages:', error);
+  // This used to select every published row above a 0.6 quality_score, capped
+  // at 300, and the comment here said the inventory gate belonged where pages
+  // are published because "the sitemap step cannot re-count live inventory per
+  // page without N queries". The N queries turned out to cost 19 seconds for
+  // 244 pages, which is nothing against a two-minute build, and the gate never
+  // arrived at the publish step - so the 244 URLs shipped.
+  //
+  // Measured 2026-08-27: of those 244, 123 clear AC5's inventory floor and 101
+  // of THOSE render a listing identical to another passing page's. Submitting
+  // them is the doorway pattern by the ordinary definition, several URLs
+  // rendering the same content to catch different queries, and a sitemap is a
+  // stronger signal to Google than leaving a page merely reachable.
+  //
+  // quality_score is gone from the selection rather than kept alongside. It
+  // scores the generated PROSE; the floor counts the ENTITIES the page lists.
+  // A page can be well-written about nothing, and that is the failure mode here.
+  //
+  // The 300-URL cap is gone with it. It was capping a number that does not
+  // exist - the shippable set is 22 - and AC6's batching now has room to raise
+  // real pages into it rather than to hold back duplicates.
+  let shippable: Awaited<ReturnType<typeof computePseoShippable>>;
+  try {
+    shippable = await computePseoShippable({
+      base: SUPABASE_URL,
+      key: SUPABASE_KEY,
+      now: new Date(),
+    });
+  } catch (error) {
+    console.error('❌ Error computing the shippable pSEO set:', error);
     // Same reasoning as the guides generator: never leave a stale file behind,
     // because that looks like success. Write nothing-but-valid instead.
     writeFileSync(
-      join(process.cwd(), 'public', 'sitemap-pseo.xml'),
+      target,
       generateSitemapXML([{ loc: `${baseUrl}/things-to-do`, lastmod: currentDate, changefreq: 'weekly', priority: '0.6' }])
     );
     console.warn('⚠️ pSEO sitemap fell back to the hub URL only.');
     return null;
   }
 
-  const published = pages ?? [];
-  const aboveFloor = published.filter(
-    (p) => p.quality_score == null || p.quality_score >= MIN_QUALITY_SCORE
-  );
-  const belowFloor = published.length - aboveFloor.length;
-  const selected = aboveFloor.slice(0, PSEO_URL_CAP);
-  const overCap = aboveFloor.length - selected.length;
+  // A PAGE WHOSE QUERY FAILED READS AS rendered 0, which is indistinguishable
+  // from a page with no inventory - so a transient network fault would silently
+  // shrink the sitemap and look exactly like a clean run. Keep the last good
+  // file instead. This is not the stale-file case the fallback above guards
+  // against: there the measurement is absent, here it is known to be partial.
+  if (shippable.errors > 0) {
+    console.warn(
+      `⚠️ ${shippable.errors} pSEO listing quer${shippable.errors === 1 ? 'y' : 'ies'} failed, so the shippable set is understated. ` +
+        'Keeping the existing sitemap-pseo.xml rather than publishing a shrunken one.'
+    );
+    return null;
+  }
 
-  // Never truncate silently — a capped sitemap that reports only its own size
+  const published = shippable.results.length;
+  const bySlug = new Map(shippable.pages.map((p: { slug: string }) => [p.slug, p]));
+  const excluded = published - shippable.canonical.length;
+
+  // Never truncate silently — a filtered sitemap that reports only its own size
   // reads as full coverage.
-  if (belowFloor > 0) {
-    console.warn(`⚠️ ${belowFloor} published pSEO page(s) excluded: quality_score below ${MIN_QUALITY_SCORE}.`);
-  }
-  if (overCap > 0) {
-    console.warn(`⚠️ ${overCap} published pSEO page(s) excluded by the ${PSEO_URL_CAP}-URL cap. Raise PSEO_URL_CAP once GSC indexation holds.`);
+  if (excluded > 0) {
+    console.warn(
+      `⚠️ ${excluded} published pSEO page(s) excluded: below AC5's inventory floor, ` +
+        `or a duplicate of another URL's listing (${shippable.shadowed.length} duplicates). ` +
+        'Run `npm run check-pseo-inventory` for the per-page verdict.'
+    );
   }
 
-  const urls = selected.map(page => ({
-    loc: `${baseUrl}${page.slug.startsWith('/') ? page.slug : `/${page.slug}`}`,
-    lastmod: (page.updated_at || page.published_at || currentDate).split('T')[0],
-    changefreq: 'weekly',
-    priority: '0.6'
-  }));
+  if (shippable.temporalOnlyByClaim.length > 0) {
+    console.warn(
+      `⚠️ ${shippable.temporalOnlyByClaim.length} listing(s) are submitted under a SEASONAL url because their ` +
+        'evergreen one is claimed by an entity-detail route (e.g. /asian/fall, because /restaurants/asian ' +
+        'resolves to RestaurantDetails). WEB-SEO-013 AC7 - decide who owns /<content-type>/<category>.'
+    );
+  }
+
+  const urls = shippable.canonical.map((slug: string) => {
+    const page = bySlug.get(slug) as { updated_at?: string; published_at?: string } | undefined;
+    return {
+      loc: `${baseUrl}${slug.startsWith('/') ? slug : `/${slug}`}`,
+      lastmod: (page?.updated_at || page?.published_at || currentDate).split('T')[0],
+      changefreq: 'weekly',
+      priority: '0.6'
+    };
+  });
 
   if (urls.length === 0) {
     urls.push({ loc: `${baseUrl}/things-to-do`, lastmod: currentDate, changefreq: 'weekly', priority: '0.6' });
   }
 
-  writeFileSync(join(process.cwd(), 'public', 'sitemap-pseo.xml'), generateSitemapXML(urls));
-  console.log(`✅ pSEO sitemap generated: ${urls.length} URLs (of ${published.length} published)`);
+  writeFileSync(target, generateSitemapXML(urls));
+  console.log(`✅ pSEO sitemap generated: ${urls.length} URLs (of ${published} published)`);
   return urls.length;
 }
 

@@ -182,6 +182,14 @@ jobs:
       - name: pSEO slugs do not collide with real routes
         run: node scripts/check-pseo-route-collisions.mjs
 
+      # WEB-SEO-013 AC5/AC7: the rules that decide which pSEO pages reach
+      # sitemap-pseo.xml. The measurement needs production and cannot run here,
+      # but the rules are pure - and a bug in them publishes doorway pages or
+      # soft-404s to Google, which is not the kind of mistake a later run
+      # notices.
+      - name: pSEO shippable rules
+        run: npx tsx scripts/__tests__/pseo-shippable.test.mjs
+
       - name: Critical-path JS budget
         run: node scripts/check-bundle-budget.mjs
 
