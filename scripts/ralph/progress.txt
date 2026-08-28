@@ -2077,3 +2077,25 @@ Evidence:
   are overwhelmingly waiting on an owner decision or a credential - most of them on the single
   SUPABASE_ACCESS_TOKEN. The branch has 122 commits and has never been pushed.
 ---
+
+2026-08-28 - The loose thread from two days ago was a real defect
+  When I probed the eleven "now succeeding" cron jobs I noted send-event-reminders returning 500 and wrote
+  "worth its own look". Looked:
+      42804  Returned type character varying(255) does not match expected type text in column 3.
+  get_pending_reminders declares user_email TEXT and selects auth.users.email, which Supabase defines as
+  varchar(255). PostgreSQL does not coerce a RETURNS TABLE column, so the function raises before returning
+  anything. NO EVENT REMINDER HAS EVER BEEN SENT, on an hourly schedule.
+
+  Fixed with one cast in migration 20260828000001. Deliberately not a blanket cast - the other four text
+  columns are genuinely TEXT in their own migrations; only the auth.users column, which this project does
+  not own, is varchar. One line of body diff.
+
+  IT IS THE CONCRETE VERSION OF WEB-OPS-007 AC6, with both blind spots firing at once. The cron trigger
+  succeeds because net.http_post was ENQUEUED. No automation_job_runs row is written because the function
+  raises before reaching that code. So the trigger monitor says healthy and the work monitor says nothing,
+  and an hourly job that has never delivered looks exactly like one with nothing to do.
+
+  THE HABIT THAT FOUND IT: I wrote "worth its own look" in a note rather than chasing it, and then actually
+  went back. Most of what I have flagged this week for later has been owner-blocked; this one was three
+  commands away. Re-read your own parked items before hunting for new ones.
+---
