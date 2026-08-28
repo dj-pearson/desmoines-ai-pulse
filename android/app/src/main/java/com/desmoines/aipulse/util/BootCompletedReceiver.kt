@@ -3,11 +3,13 @@ package com.desmoines.aipulse.util
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import dagger.hilt.android.AndroidEntryPoint
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /**
  * Restores event reminder alarms after a device restart or an app update.
@@ -18,24 +20,33 @@ import javax.inject.Inject
  * is gone and drops the id, so the reminder also disappears from the UI with no
  * trace. Replaying from the persisted records here happens before the app is
  * next opened, so prune finds live alarms and leaves them alone.
+ *
+ * Dependencies come from an [EntryPoint] rather than `@AndroidEntryPoint` field
+ * injection. Hilt's receiver support needs `super.onReceive()` to run its
+ * injection, but `BroadcastReceiver.onReceive` is abstract and Hilt rewrites the
+ * superclass in a bytecode transform that runs *after* kotlinc — so from Kotlin
+ * that call is "Abstract member cannot be accessed directly" and does not
+ * compile. Pulling the dependency from the SingletonComponent sidesteps the
+ * whole problem and is what Hilt documents for this case.
  */
-@AndroidEntryPoint
 class BootCompletedReceiver : BroadcastReceiver() {
 
-    @Inject
-    lateinit var localNotificationService: LocalNotificationService
+    @EntryPoint
+    @InstallIn(SingletonComponent::class)
+    interface Dependencies {
+        fun localNotificationService(): LocalNotificationService
+    }
 
     override fun onReceive(context: Context, intent: Intent) {
-        // Required: Hilt performs the field injection inside the generated
-        // superclass's onReceive. Skipping it leaves localNotificationService
-        // uninitialised and throws on first touch.
-        super.onReceive(context, intent)
-
         if (intent.action != Intent.ACTION_BOOT_COMPLETED &&
             intent.action != Intent.ACTION_MY_PACKAGE_REPLACED
         ) {
             return
         }
+
+        val localNotificationService = EntryPointAccessors
+            .fromApplication(context.applicationContext, Dependencies::class.java)
+            .localNotificationService()
 
         // Rescheduling touches SharedPreferences and AlarmManager for every
         // saved reminder. onReceive runs on the main thread with a ~10s budget,
