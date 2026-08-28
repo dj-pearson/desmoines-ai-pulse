@@ -31,7 +31,12 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { MapPin, Star, Users, Filter, List, Map, TreePine, SlidersHorizontal, ChevronRight, Check } from "lucide-react";
+import { Star, Filter, List, Map, TreePine, SlidersHorizontal, ChevronRight, Check } from "lucide-react";
+// map-pin and users render once per card. Both are multi-shape lucide icons, so
+// the sprite costs 2 nodes where inline costs 3 and 5 - see the membership rules
+// in scripts/generate-icon-sprite.mjs. Measured saving on this route: 154 of
+// 2,388 elements (WEB-PERF-023).
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { Link } from "react-router-dom";
 
 // Lazy load map to prevent react-leaflet bundling issues
@@ -531,7 +536,7 @@ export default function Playgrounds() {
                           variant="outline"
                           className="bg-[#2D1B69]/10 text-[#2D1B69] text-xs"
                         >
-                          <Users className="h-3 w-3 mr-1" />
+                          <SpriteIcon name="users" className="h-3 w-3 mr-1" />
                           Ages {playground.age_range}
                         </Badge>
                       )}
@@ -551,7 +556,7 @@ export default function Playgrounds() {
                       )}
                       {playground.location && (
                         <div className="flex items-center gap-2">
-                          <MapPin className="h-4 w-4" />
+                          <SpriteIcon name="map-pin" className="h-4 w-4" />
                           <span className="line-clamp-1">{playground.location}</span>
                         </div>
                       )}
