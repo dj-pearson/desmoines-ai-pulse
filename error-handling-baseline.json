@@ -1,6 +1,6 @@
 {
   "scope": "src + supabase/functions; data|count destructures; rule-scoped counting",
-  "total": 161,
+  "total": 159,
   "files": {
     "src/components/admin/AdRateManager.tsx": 1,
     "src/components/admin/BlockedEmailDomainsManager.tsx": 1,
@@ -84,7 +84,6 @@
     "supabase/functions/generate-itinerary/index.ts": 1,
     "supabase/functions/generate-proposal/index.ts": 4,
     "supabase/functions/get-sponsored-pick/index.ts": 3,
-    "supabase/functions/job-health-watchdog/index.ts": 2,
     "supabase/functions/manage-subscription/index.ts": 1,
     "supabase/functions/moderate-content/index.ts": 3,
     "supabase/functions/nlp-search/index.ts": 1,

@@ -39,10 +39,14 @@ Deno.serve(async (req) => {
   );
 
   const alerts: string[] = [];
+  // Jobs whose automation_job_runs read FAILED, as opposed to returning no rows.
+  // Without this the watchdog cannot tell those two apart - see the read-failure
+  // handling below for why that made it report healthy while blind.
+  const unreadable: string[] = [];
 
   for (const [jobName, maxAgeHours] of Object.entries(EXPECTED_MAX_AGE_HOURS)) {
     // Latest SUCCESS for cadence; latest run for failure detection.
-    const { data: lastSuccess } = await supabase
+    const { data: lastSuccess, error: lastSuccessError } = await supabase
       .from('automation_job_runs')
       .select('started_at')
       .eq('job_name', jobName)
@@ -51,13 +55,28 @@ Deno.serve(async (req) => {
       .limit(1)
       .maybeSingle();
 
-    const { data: lastRun } = await supabase
+    const { data: lastRun, error: lastRunError } = await supabase
       .from('automation_job_runs')
       .select('status, started_at, error')
       .eq('job_name', jobName)
       .order('started_at', { ascending: false })
       .limit(1)
       .maybeSingle();
+
+    // A FAILED READ IS NOT A HEALTHY JOB, and this watchdog used to treat it as
+    // one. Both queries discarded their error, so a failure left lastRun null -
+    // and the `if (lastRun)` gate below then skipped the alert entirely. The
+    // function returned { alerts: [] } and a 200, which reads as "everything is
+    // fine" from a monitor whose own reads had just failed.
+    //
+    // That is WEB-AUTO-001's gap in a second form: it shipped cron observability
+    // and could not see a job that never fired, because it watched the work
+    // rather than the trigger. A monitor also has to be able to report that it
+    // could not look.
+    if (lastSuccessError || lastRunError) {
+      unreadable.push(jobName);
+      continue;
+    }
 
     const now = Date.now();
     const maxAgeMs = maxAgeHours * 60 * 60 * 1000;
@@ -83,8 +102,25 @@ Deno.serve(async (req) => {
     }
   }
 
+  // ONE alert for the read failure, not one per job: a table-wide outage would
+  // otherwise page N times for a single cause.
+  if (unreadable.length > 0) {
+    const msg =
+      `job-health-watchdog could not read automation_job_runs for ${unreadable.length} job(s) ` +
+      `(${unreadable.slice(0, 5).join(', ')}${unreadable.length > 5 ? ', ...' : ''}). ` +
+      'Their health is UNKNOWN, not healthy.';
+    alerts.push(msg);
+    await sendJobAlert('job-health-watchdog', msg);
+  }
+
   return new Response(
-    JSON.stringify({ checked: Object.keys(EXPECTED_MAX_AGE_HOURS).length, alerts }),
+    JSON.stringify({
+      checked: Object.keys(EXPECTED_MAX_AGE_HOURS).length,
+      // Reported separately so a caller can tell "nothing wrong" from "I could
+      // not check". Both used to arrive as an empty alerts array.
+      unreadable: unreadable.length,
+      alerts,
+    }),
     { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
   );
 });
