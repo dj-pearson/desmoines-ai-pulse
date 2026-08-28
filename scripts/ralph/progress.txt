@@ -1332,3 +1332,25 @@ Evidence:
   - Stop when the measurement needs a tool you do not have. The price question needed a rendered
     crawl; guessing at it would have put a wrong cause in the notes.
 ---
+
+## 2026-08-28 - a11y sweep: one real defect, two false positives, one impossible check
+- /restaurants shipped 3 empty <a class="block" href="..."></a>. Cause: RestaurantOpenings nested a
+  "Read More" <a> inside a card-wide <Link>. Chromium splits nested anchors; the empty outer one is
+  what ships. Fixed with the stretched-link pattern. Only component in src/ with the nesting.
+- FALSE POSITIVES I nearly filed: 29 "unnamed buttons" on /stay are Radix checkboxes and <button> is a
+  labelable element, so their <label for> names them. The "unlabelled inputs" were Radix's hidden
+  native <select aria-hidden="true">.
+- I ADDED A NESTED-ANCHOR CHECK AND ITS CONTROL DID NOT FIRE. Parsers split nested anchors, so
+  querySelectorAll('a a') matches nothing in dist/ even on a broken page. Deleted it and wrote down
+  why; the empty anchor it leaves behind is the detectable trace, so the unnamed-link rule IS the
+  nested-anchor check.
+- **Learnings for future iterations:**
+  - CONTROL EVERY ASSERTION, INCLUDING THE ONES THAT LOOK OBVIOUS. This one read as solid protection
+    and could never trigger. A check nobody controls is a comment.
+  - Some defects are only visible through their trace. The parser destroys the evidence of nested
+    anchors and leaves an empty one; assert on the trace, not the cause.
+  - Know the HTML spec before calling something an a11y bug. <button> is labelable, so <label for>
+    gives it a name - 29 of my 32 findings evaporated on that one fact.
+  - aria-hidden subtrees must be excluded from every a11y sweep. Radix ships hidden native controls
+    for form compatibility and they are correct.
+---
