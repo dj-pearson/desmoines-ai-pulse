@@ -969,3 +969,27 @@ Evidence:
   - Freshness of production DATA belongs in the nightly report; freshness of CODE belongs in CI. The
     permanently-red trap comes from putting the first in the second.
 ---
+
+## 2026-08-27 - WEB-SEO-017: duplicate rows no longer reach Google as duplicate sitemap URLs
+- Yesterday's freshness check reported 407 <loc> for 392 distinct URLs. Regenerating locally found the
+  same shape in a file nobody had looked at: playgrounds, 69 for 67.
+- Deduped in the single function every generator funnels through, so a sitemap added later cannot
+  reintroduce it. events 413 -> 397, playgrounds 69 -> 67. Verified across all nine files: zero dupes.
+- THE FIX IS THE SYMPTOM, NOT THE CAUSE, and the code says so at the dedupe. The 10 event groups still
+  need their per-group merge. Every collapse is logged on every build so the cause stays visible.
+- Extended check-duplicate-entities to playgrounds. It keys on the URL SLUG, not name+address like the
+  restaurant check, because a playground URL is built from the name alone - keying on what the URL is
+  built from is what makes the check agree with the symptom that found it.
+- The generators were logging urls.length, the count BEFORE dedupe, so the build printed 413 while
+  writing 397. writeSitemap now returns what it actually wrote.
+- **Learnings for future iterations:**
+  - A COUNT THAT DESCRIBES THE INPUT IS NOT A COUNT. "Generated 413 URLs" was printed on every build
+    for months while 397 were written. If a function filters, the caller must report the post-filter
+    number or the log actively conceals the filtering.
+  - When a detector is written for one table, ask which tables it does NOT cover before trusting a
+    clean run. Restaurants -> events -> playgrounds, each extension found real rows.
+  - Key a uniqueness check on whatever the USER-VISIBLE identifier is built from. name+address would
+    have separated the two Union Parks; the URL does not, and the URL is what collides.
+  - Fixing a symptom is fine when the code names the cause and keeps counting it. Silently collapsing
+    duplicates would have removed the only evidence anyone had.
+---
