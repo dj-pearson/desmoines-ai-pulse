@@ -1750,3 +1750,30 @@ Evidence:
   silently did NOT match, so the edit no-opped and the script kept its old output. Assert on EVERY
   replacement, or edit by line index with no escapes at all. The silent no-op is the dangerous one.
 ---
+
+2026-08-28 - XPLAT-007: the export said "complete except for legal retention". It was 8 of 80.
+  Measured rather than characterised: 62 PURGE_TABLES (rows we delete on request), 8 shown, 54 deleted but
+  never shown, plus 18 RETAINED_TABLES with 0 shown. The 18 are the sharper half - data we decline to
+  delete is data the user is MORE entitled to see.
+
+  The notice claimed the only omissions were legally-retained records. That was the fixable defect and it
+  needed no deploy: the export now names its own scope in tables_included and says it is not complete. An
+  export that lists nothing implies it read everything.
+
+  A CONCLUSION THAT REVERSED WHILE MEASURING. My instinct was to port the 62-table list into the client and
+  delete the hand-maintained 8. That would be WORSE. RLS decides what a browser can read, and a table the
+  user cannot select from returns [] rather than an error - so the export would assert "you have no data
+  here" for every denied table. A false zero in a legal-rights document. The server-side function uses the
+  service role precisely to avoid that, which is why the fix is a deploy and not a refactor.
+
+  AND THE DEPLOY IS ONE FUNCTION, NOT THE REVIEW THE WORKFLOW WARNS ABOUT. export-user-data has no
+  config.toml entry, so verify_jwt defaults to true and it is not among the 71 verify_jwt=false functions
+  deploy-edge-functions.yml deliberately withholds. Its erasure counterpart delete-user-account is already
+  live. "Blocked on a deploy" was true; "blocked on the 51-endpoint review" was not, and nobody had
+  separated the two.
+
+  THREE SILENT ZEROS IN MY OWN TOOLING TODAY, all caught by the same reflex of asserting the input is
+  non-empty. The last one was not shell escaping: indexOf('[') after "PURGE_TABLES" finds the bracket in
+  `readonly string[]`, balances immediately, and yields an empty list - so the gap reported as 0 tables.
+  Anchor on the assignment, not the name.
+---
