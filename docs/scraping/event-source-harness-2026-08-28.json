@@ -1,0 +1,366 @@
+[
+  {
+    "id": "catchdesmoines",
+    "label": "Catch Des Moines",
+    "listingUrl": "https://www.catchdesmoines.com/events/",
+    "listingStatus": "skipped",
+    "strategyThatWon": "adapter (owned elsewhere)",
+    "eventCount": 0,
+    "coverage": {
+      "withDate": 0,
+      "withOwnUrl": 0,
+      "withImage": 0,
+      "withVenue": 0
+    },
+    "detailLinksFound": 0,
+    "tribeRest": "not-probed",
+    "sample": null,
+    "notes": [
+      "A bespoke adapter owns this host; verify it via its own unit tests and a live crawl, not this harness."
+    ]
+  },
+  {
+    "id": "seatgeek",
+    "label": "SeatGeek (Des Moines radius)",
+    "listingUrl": "https://seatgeek.com/search?f=1&search=des+moines&ui_origin=home_search",
+    "listingStatus": "skipped",
+    "strategyThatWon": "adapter (owned elsewhere)",
+    "eventCount": 0,
+    "coverage": {
+      "withDate": 0,
+      "withOwnUrl": 0,
+      "withImage": 0,
+      "withVenue": 0
+    },
+    "detailLinksFound": 0,
+    "tribeRest": "not-probed",
+    "sample": null,
+    "notes": [
+      "A bespoke adapter owns this host; verify it via its own unit tests and a live crawl, not this harness."
+    ]
+  },
+  {
+    "id": "eventbrite-wdm",
+    "label": "Eventbrite — West Des Moines",
+    "listingUrl": "https://www.eventbrite.com/d/ia--west-des-moines/events/",
+    "listingStatus": "skipped",
+    "strategyThatWon": "adapter (owned elsewhere)",
+    "eventCount": 0,
+    "coverage": {
+      "withDate": 0,
+      "withOwnUrl": 0,
+      "withImage": 0,
+      "withVenue": 0
+    },
+    "detailLinksFound": 0,
+    "tribeRest": "not-probed",
+    "sample": null,
+    "notes": [
+      "A bespoke adapter owns this host; verify it via its own unit tests and a live crawl, not this harness."
+    ]
+  },
+  {
+    "id": "hyveetix",
+    "label": "Hy-Vee Tix (AudienceView / evenue)",
+    "listingUrl": "https://hyveetix.evenue.net/list/CONC",
+    "listingStatus": "skipped",
+    "strategyThatWon": "blocked",
+    "eventCount": 0,
+    "coverage": {
+      "withDate": 0,
+      "withOwnUrl": 0,
+      "withImage": 0,
+      "withVenue": 0
+    },
+    "detailLinksFound": 0,
+    "tribeRest": "not-probed",
+    "sample": null,
+    "notes": [
+      "Marked blocked in the profile; not requested."
+    ]
+  },
+  {
+    "id": "iowa-cubs",
+    "label": "Iowa Cubs (MiLB Triple-A)",
+    "listingUrl": "https://www.milb.com/iowa/schedule/2026/fullseason",
+    "listingStatus": "skipped",
+    "strategyThatWon": "adapter (owned elsewhere)",
+    "eventCount": 0,
+    "coverage": {
+      "withDate": 0,
+      "withOwnUrl": 0,
+      "withImage": 0,
+      "withVenue": 0
+    },
+    "detailLinksFound": 0,
+    "tribeRest": "not-probed",
+    "sample": null,
+    "notes": [
+      "A bespoke adapter owns this host; verify it via its own unit tests and a live crawl, not this harness."
+    ]
+  },
+  {
+    "id": "iowa-barnstormers",
+    "label": "Iowa Barnstormers (IFL)",
+    "listingUrl": "https://theiowabarnstormers.com/sports/fball/2026/schedule",
+    "listingStatus": "skipped",
+    "strategyThatWon": "adapter (owned elsewhere)",
+    "eventCount": 0,
+    "coverage": {
+      "withDate": 0,
+      "withOwnUrl": 0,
+      "withImage": 0,
+      "withVenue": 0
+    },
+    "detailLinksFound": 0,
+    "tribeRest": "not-probed",
+    "sample": null,
+    "notes": [
+      "A bespoke adapter owns this host; verify it via its own unit tests and a live crawl, not this harness."
+    ]
+  },
+  {
+    "id": "iowa-wild",
+    "label": "Iowa Wild (AHL)",
+    "listingUrl": "https://www.iowawild.com/games",
+    "listingStatus": "ok (170522 chars)",
+    "strategyThatWon": "none",
+    "eventCount": 0,
+    "coverage": {
+      "withDate": 0,
+      "withOwnUrl": 0,
+      "withImage": 0,
+      "withVenue": 0
+    },
+    "detailLinksFound": 0,
+    "tribeRest": "not-probed",
+    "sample": null,
+    "notes": [
+      "Listing ld+json: 0 event(s).",
+      "No detail links matched. Either the calendar is client-rendered (needs Browserless) or this profile's detailPathPatterns need the real URL shape.",
+      "ZERO events via cheap strategies — this source still depends on the Browserless + Claude path."
+    ]
+  },
+  {
+    "id": "iowa-wolves",
+    "label": "Iowa Wolves (NBA G League)",
+    "listingUrl": "https://iowa.gleague.nba.com/schedule",
+    "listingStatus": "ok (107951 chars)",
+    "strategyThatWon": "none",
+    "eventCount": 0,
+    "coverage": {
+      "withDate": 0,
+      "withOwnUrl": 0,
+      "withImage": 0,
+      "withVenue": 0
+    },
+    "detailLinksFound": 0,
+    "tribeRest": "not-probed",
+    "sample": null,
+    "notes": [
+      "Listing ld+json: 0 event(s).",
+      "No detail links matched. Either the calendar is client-rendered (needs Browserless) or this profile's detailPathPatterns need the real URL shape.",
+      "ZERO events via cheap strategies — this source still depends on the Browserless + Claude path."
+    ]
+  },
+  {
+    "id": "dm-playhouse",
+    "label": "Des Moines Community Playhouse",
+    "listingUrl": "https://dmplayhouse.com/shows/",
+    "listingStatus": "ok (370621 chars)",
+    "strategyThatWon": "none",
+    "eventCount": 0,
+    "coverage": {
+      "withDate": 0,
+      "withOwnUrl": 0,
+      "withImage": 0,
+      "withVenue": 0
+    },
+    "detailLinksFound": 23,
+    "tribeRest": "miss",
+    "sample": null,
+    "notes": [
+      "Listing ld+json: 0 event(s).",
+      "Detail crawl: 0/5 sampled pages parsed (23 links found).",
+      "ZERO events via cheap strategies — this source still depends on the Browserless + Claude path."
+    ]
+  },
+  {
+    "id": "theater-desmoines",
+    "label": "Theater Des Moines",
+    "listingUrl": "https://www.theaterdesmoines.com/events/",
+    "listingStatus": "ok (161182 chars)",
+    "strategyThatWon": "listing-jsonld",
+    "eventCount": 84,
+    "coverage": {
+      "withDate": 84,
+      "withOwnUrl": 84,
+      "withImage": 8,
+      "withVenue": 84
+    },
+    "detailLinksFound": 9,
+    "tribeRest": "miss",
+    "sample": {
+      "title": "Wicked",
+      "description": "Des Moines Civic Center is the best venue to be for a ‘Wicked’ good time...",
+      "date": "2026-09-03 00:00:00",
+      "location": "221 Walnut Street, Des Moines, Iowa, 50309, United States",
+      "venue": "Des Moines Civic Center",
+      "category": "Arts",
+      "price": "See website",
+      "source_url": "https://www.theaterdesmoines.com/events/wicked-03-september-2026/",
+      "image_url": "https://www.theaterdesmoines.com/wp-content/uploads/2025/08/1540-customperformer_image-3-scaled.webp"
+    },
+    "notes": [
+      "Listing ld+json: 84 event(s)."
+    ]
+  },
+  {
+    "id": "des-moines-theater-resale",
+    "label": "des-moines-theater.com (third-party resale listing)",
+    "listingUrl": "https://www.des-moines-theater.com/shows/concert",
+    "listingStatus": "ok (420455 chars)",
+    "strategyThatWon": "listing-jsonld",
+    "eventCount": 6,
+    "coverage": {
+      "withDate": 6,
+      "withOwnUrl": 6,
+      "withImage": 6,
+      "withVenue": 6
+    },
+    "detailLinksFound": 22,
+    "tribeRest": "not-probed",
+    "sample": {
+      "title": "Sara Evans",
+      "description": "In an industry that idolises youthful male aggression, Sara stands out as confident and honest, steering away from the themes of hedonism, drinking and partying. On stage Sara is adept at connecting with the audience while showcasing those breath-taking vocals and an impressive versatility. Prepare for a captivating and inspiring performance all round!",
+      "date": "2026-12-18 19:00:00",
+      "location": "1501 Woodland Ave, Des Moines, IA, 50309",
+      "venue": "Hoyt Sherman Place",
+      "category": "Music",
+      "price": "$64",
+      "source_url": "https://www.des-moines-theater.com/shows/hoyt-sherman-place/sara-evans",
+      "image_url": "https://cdn.mytheatreland.com/images/show/13860_show_1600x708_hero.jpg"
+    },
+    "notes": [
+      "Listing ld+json: 6 event(s)."
+    ]
+  },
+  {
+    "id": "first-fleet-woolys",
+    "label": "Wooly's (First Fleet Concerts)",
+    "listingUrl": "https://www.firstfleetconcerts.com/events",
+    "listingStatus": "ok (48053 chars)",
+    "strategyThatWon": "none",
+    "eventCount": 0,
+    "coverage": {
+      "withDate": 0,
+      "withOwnUrl": 0,
+      "withImage": 0,
+      "withVenue": 0
+    },
+    "detailLinksFound": 6,
+    "tribeRest": "not-probed",
+    "sample": null,
+    "notes": [
+      "Listing ld+json: 0 event(s).",
+      "Detail crawl: 0/5 sampled pages parsed (6 links found).",
+      "ZERO events via cheap strategies — this source still depends on the Browserless + Claude path."
+    ]
+  },
+  {
+    "id": "vibrant-music-hall",
+    "label": "Vibrant Music Hall",
+    "listingUrl": "https://www.vibrantmusichall.com/shows",
+    "listingStatus": "skipped",
+    "strategyThatWon": "adapter (owned elsewhere)",
+    "eventCount": 0,
+    "coverage": {
+      "withDate": 0,
+      "withOwnUrl": 0,
+      "withImage": 0,
+      "withVenue": 0
+    },
+    "detailLinksFound": 0,
+    "tribeRest": "not-probed",
+    "sample": null,
+    "notes": [
+      "A bespoke adapter owns this host; verify it via its own unit tests and a live crawl, not this harness."
+    ]
+  },
+  {
+    "id": "dm-symphony",
+    "label": "Des Moines Symphony",
+    "listingUrl": "https://www.dmsymphony.org/concerts-events/",
+    "listingStatus": "ok (46980 chars)",
+    "strategyThatWon": "none",
+    "eventCount": 0,
+    "coverage": {
+      "withDate": 0,
+      "withOwnUrl": 0,
+      "withImage": 0,
+      "withVenue": 0
+    },
+    "detailLinksFound": 9,
+    "tribeRest": "miss",
+    "sample": null,
+    "notes": [
+      "Listing ld+json: 0 event(s).",
+      "Detail crawl: 0/5 sampled pages parsed (9 links found).",
+      "ZERO events via cheap strategies — this source still depends on the Browserless + Claude path."
+    ]
+  },
+  {
+    "id": "hoyt-sherman",
+    "label": "Hoyt Sherman Place",
+    "listingUrl": "https://hoytsherman.org/events/",
+    "listingStatus": "ok (175911 chars)",
+    "strategyThatWon": "none",
+    "eventCount": 0,
+    "coverage": {
+      "withDate": 0,
+      "withOwnUrl": 0,
+      "withImage": 0,
+      "withVenue": 0
+    },
+    "detailLinksFound": 43,
+    "tribeRest": "miss",
+    "sample": null,
+    "notes": [
+      "Listing ld+json: 0 event(s).",
+      "Detail crawl: 0/5 sampled pages parsed (43 links found).",
+      "ZERO events via cheap strategies — this source still depends on the Browserless + Claude path."
+    ]
+  },
+  {
+    "id": "horizon-events-center",
+    "label": "Horizon Events Center",
+    "listingUrl": "https://www.horizoneventscenter.com/upcoming-events/",
+    "listingStatus": "ok (178637 chars)",
+    "strategyThatWon": "tribe-rest",
+    "eventCount": 7,
+    "coverage": {
+      "withDate": 7,
+      "withOwnUrl": 7,
+      "withImage": 7,
+      "withVenue": 7
+    },
+    "detailLinksFound": 4,
+    "tribeRest": "hit",
+    "sample": {
+      "title": "BINGO LOCO",
+      "description": "&lt;p&gt;September 12, 2026 More info coming soon! &lt;/p&gt;\\n",
+      "date": "2026-09-12 19:30:00",
+      "location": "2100 NW 100th St, Clive, Iowa, 50325",
+      "venue": "Clive",
+      "category": "Community",
+      "price": "See website",
+      "source_url": "https://www.horizoneventscenter.com/event/bingo-loco-2026912/",
+      "image_url": "https://www.horizoneventscenter.com/wp-content/uploads/2026/07/Screenshot-2026-07-27-at-3.05.01-PM.png"
+    },
+    "notes": [
+      "Tribe REST returned 3 event(s) on a 5-per-page probe — this source should be served by tribeEvents.ts.",
+      "Listing ld+json: 3 event(s).",
+      "Detail crawl: 4/4 sampled pages parsed (4 links found)."
+    ]
+  }
+]
