@@ -17,6 +17,7 @@ import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
 import { runJob } from '../_shared/jobRunner.ts';
 import { renderEmail, SITE_URL } from '../_shared/emailLayout.ts';
 import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 
 // deno-lint-ignore no-explicit-any
 type Supa = any;
@@ -108,6 +109,13 @@ Deno.serve(async (req) => {
   if (corsResponse) return corsResponse;
   const origin = req.headers.get('origin') || undefined;
   const corsHeaders = getCorsHeaders(origin);
+
+  // Runs as service_role and had no caller check. verify_jwt defaults to true,
+  // which only means "a valid Supabase JWT" - the anon key is one.
+  // pg_cron is the only caller (20260620000007, Bearer <service_role_key>),
+  // which requireAdminOrApiKey accepts.
+  const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+  if (authFailure) return authFailure;
 
   const url = Deno.env.get('SUPABASE_URL')!;
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;

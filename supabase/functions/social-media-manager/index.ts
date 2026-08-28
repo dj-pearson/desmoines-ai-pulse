@@ -1,4 +1,5 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.43.1";
@@ -69,6 +70,17 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+
+  // Runs as service_role and had no caller check. verify_jwt is not a gate:
+  // it defaults to true, and true only means "a valid Supabase JWT", which
+  // the publishable anon key is.
+  //
+  // Callers, enumerated before guarding:
+  //   pg_cron (20250815040232, 20250825174423) plus SocialMediaManager -> AdminTools
+  // requireAdminOrApiKey accepts the service-role key the cron sends and an
+  // admin user JWT, so every real caller is unaffected.
+  const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+  if (authFailure) return authFailure;
 
   // Helper function to check if we should post now based on time
   const shouldPostNow = (contentType: string): boolean => {

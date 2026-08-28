@@ -4,8 +4,6 @@
   "unguarded": [
     "calculate-trending",
     "check-login-attempt",
-    "enhance-content",
-    "generate-sitemaps",
     "gsc-fetch-properties",
     "log-content-metrics",
     "notify-event-submission",
@@ -13,10 +11,7 @@
     "og-image",
     "pseo-batch-worker",
     "scrape-ticketmaster-events",
-    "send-seo-notification",
-    "send-weekly-digest",
-    "social-media-manager",
-    "subscription-lifecycle"
+    "send-seo-notification"
   ],
   "notes": {
     "log-content-metrics": "PUBLIC BY DESIGN - anonymous visitors report Core Web Vitals, so a guard would delete the feature. Bounded by a rate limit instead; its own header explains this. Do not guard.",
