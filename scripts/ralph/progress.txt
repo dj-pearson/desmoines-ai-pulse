@@ -1216,3 +1216,25 @@ Evidence:
   - This also explains WEB-SEO-008's wandering FAQPage: same race, different symptom. One root cause
     was producing two separately-filed defects.
 ---
+
+## 2026-08-28 - WEB-SEO-013 AC5: the hand-built hubs had no inventory gate
+- check-pseo-inventory covers the 244 generated pages. The routes in sitemap-static.xml are
+  hand-written, prerendered and submitted the same way, and nothing counted what they list.
+  7 of 8 are below AC5's floor of 8; /events/johnston, /events/clive and /events/free list nothing.
+- /events/free CANNOT list anything: of 332 upcoming events, 330 have price "See website" and 2 have
+  "$12-$35". Nothing is free, 0 or null. Its FAQ claims otherwise. That is ingestion, and the owner's.
+- I WROTE THE CHECK THE WRONG WAY FIRST: counting ItemList out of dist/. A hub that renders nothing
+  emits no ItemList, so the three emptiest routes were skipped as "no list here"; and /restaurants
+  emits an empty ItemList while listing 15 restaurants, so it reported empty when it is not.
+  Rewrote it to ask the database.
+- Found in passing: /restaurants ships an ItemList with zero items while listing 15 restaurants.
+- **Learnings for future iterations:**
+  - A CHECK THAT MEASURES ABSENCE MUST NOT INFER IT FROM MARKUP THAT IS ALSO ABSENT. "No ItemList"
+    meant both "not a list page" and "a list page with nothing in it", and the second is the finding.
+  - Run a new check and READ every row before trusting it. /restaurants at 1,455 elements reported as
+    EMPTY, which is what exposed the flaw - a summary count alone would have shipped it.
+  - Inventory can only be judged from prerendered output once capture is deterministic. This check
+    would have been unbuildable a day ago and would have reported races as content problems.
+  - When a filter returns zero, check the DATA SHAPE before the filter. The free-events filter is
+    correct; the column it reads has no free-ness in it at all.
+---
