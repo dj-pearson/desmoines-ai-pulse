@@ -993,3 +993,29 @@ Evidence:
   - Fixing a symptom is fine when the code names the cause and keeps counting it. Silently collapsing
     duplicates would have removed the only evidence anyone had.
 ---
+
+## 2026-08-27 - WEB-CI-027: scripts/ is now type-checked, which it never was
+- WEB-CI-027's notes recorded "tsconfig does not include scripts/, so the file is invisible to the
+  type-checker entirely" as the explanation for a stray brace reaching CI, and nothing closed it.
+  Re-verified: appended `const x: number = "nope"` to a scripts file, `npm run type-check` exit 0.
+- 19 errors in the whole directory: 10 Puppeteer page.evaluate callbacks, 6 from two Deno files
+  misfiled under scripts/, 3 genuine. Gates at zero rather than baselining.
+- ONE OF THE GENUINE THREE WAS MINE from iteration 2: lib/pseoShippable.ts called body.map() on a
+  fetch response with no Array.isArray guard, where its sibling fetchAll has one. Caught on the
+  lane's first run, which is the argument for the lane.
+- DOM in `lib` makes Response.json() `any` instead of `unknown`, retiring that exact finding. Tried a
+  per-file `/// <reference lib="dom" />` to scope it - `lib` is program-wide, so it behaves
+  identically. Kept DOM, stated the cost in the config.
+- **Learnings for future iterations:**
+  - `npm run type-check` DOES NOT COVER scripts/ OR supabase/functions/. It reads tsconfig.json,
+    which references tsconfig.app.json ("src") and tsconfig.node.json ("vite.config.ts") only. Any
+    claim of "tsc clean" about work in those directories was true and meaningless until now. Run
+    `npm run type-check:scripts` and `npm run type-check:edge` for those.
+  - What actually covered scripts/ before was `eslint .` (which does read them) and running them.
+    That catches syntax errors and unused vars, not type errors.
+  - A tsconfig `lib` entry is program-wide and a per-file `/// <reference lib="..." />` does not
+    scope it. Verified by trying it: adding the directive to four files masked a finding in a fifth.
+  - When adding DOM to a Node project, know that you are trading away `unknown` on Response.json().
+  - When a story's notes diagnose a defect in passing while explaining something else, the defect
+    usually stays. That note was three days old and the hole was still open.
+---
