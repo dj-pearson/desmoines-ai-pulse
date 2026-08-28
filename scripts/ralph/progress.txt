@@ -2601,3 +2601,39 @@ deleted it
   reported clean - PreferencesManager reaches .update() through updateProfile()
   one file away, so a guard keyed on the Supabase call was blind to the exact
   defect it was written for.
+
+## 2026-08-28 - AND-AUDIT-001..024 filed, AND-AUDIT-015 closed (Android)
+- Filed the Android production-readiness audit as 24 stories in prd.json
+  (AND-AUDIT-001..024), following the IOS-AUDIT-* precedent. 5 priority-1,
+  11 priority-2, 8 priority-3. Full write-up in android/ANDROID_PRODUCTION_AUDIT.md.
+- Closed AND-AUDIT-015: android-release.yml now runs ./gradlew test before
+  building the AAB it tells you to upload to Play, uploads the test report, and
+  guards versionCode against the committed value.
+- Files changed: prd.json, .github/workflows/android-release.yml
+
+- **Learnings for future iterations:**
+  - BLOCKER FOR EVERY ANDROID STORY IN A REMOTE SESSION: there is no Android SDK
+    in the container and dl.google.com is blocked by the agent proxy (403), so
+    neither the SDK nor Google's Maven repo can be fetched. repo.maven.apache.org
+    and services.gradle.org DO resolve, but AGP cannot run without the SDK.
+    `cd android && ./gradlew lint assembleDebug` - the quality gate that
+    scripts/ralph/CLAUDE-android.md requires - cannot be run here at all.
+    Android work in a remote session needs CI or a local machine as its compiler.
+    AND-AUDIT-015 was picked first precisely because it is pure YAML.
+  - Android CI triggers on pull_request and push-to-main only, so pushing an
+    Android branch runs nothing. workflow_dispatch via the GitHub MCP returns
+    403 (Resource not accessible by integration), so a PR is the only way an
+    agent gets a branch compiled.
+  - Do not trust `passes` flags in the side PRDs. prd-android-parity.json has all
+    55 ANDP stories at passes:false, but ANDP-060, -063, -064, -069, -070 and
+    -074 are all referenced as done in shipped Kotlin comments. prd.json is the
+    maintained one.
+  - Verify a version-drift claim against the Actions API before writing the fix.
+    This story was filed assuming run_number might under-shoot the committed
+    versionCode; the API showed the opposite (run 12 vs versionCode 6), so the
+    fix became a floor guard rather than a max() computation.
+  - prd.json round-trips cleanly through
+    `json.dump(..., indent=2, ensure_ascii=False)` plus a trailing newline - the
+    diff stays a pure insertion. Use ensure_ascii=False or every em dash in the
+    existing 474 stories turns into an escape sequence.
+---

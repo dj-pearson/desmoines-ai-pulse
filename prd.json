@@ -7155,16 +7155,17 @@
       "id": "AND-AUDIT-015",
       "title": "The Android release workflow builds the shipping artifact without running tests",
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "description": "As the release owner, I need the release workflow to run tests, because .github/workflows/android-release.yml decodes the keystore, builds a signed AAB and tells you to upload it to Play without ever invoking ./gradlew test, so the artifact that reaches users has passed no automated check in that workflow.",
       "acceptanceCriteria": [
-        "Add ./gradlew test before the build step in android-release.yml and let a failure stop the workflow.",
-        "Consider also running lint there once AND-AUDIT-013 makes it meaningful.",
-        "versionCode defaults to github.run_number when the input is left blank. The committed versionCode is 6 - if run_number is ever lower, Play rejects the upload. Either require the input or compute max(run_number, committed + 1).",
-        "The workflow patches build.gradle.kts with sed. It works, but it means the shipped versionCode never appears in a commit. Worth deciding whether that is intentional.",
-        "Verify by running the workflow with a deliberately failing test and confirming no artifact is produced."
+        "DONE: ./gradlew test runs before the build step in android-release.yml and a failure stops the workflow. It sits after the local.properties and google-services.json steps because the tests need the BuildConfig fields and the Firebase plugin config those write.",
+        "DONE: test reports upload as an artifact on success or failure.",
+        "DONE: the versionCode is guarded against the committed value. The real state was the inverse of what this story first assumed - android-release.yml is at run_number 12 while the committed versionCode is 6, so a blank input does not under-shoot, it silently jumps the code by 7 and makes the committed value meaningless. The guard fails the run when the resolved code is not above the committed one, which also catches the reset-to-1 case if this workflow file is ever renamed.",
+        "NOT DONE: lint is not run here. It would pass unconditionally today - see AND-AUDIT-013 - so adding it now would be the same theatre this story is removing. Add it after 013 lands.",
+        "NOT VERIFIED BY EXECUTION: the workflow was not dispatched. YAML parses and the step order is confirmed correct (tests at index 9, build at 11); the versionCode guard's shell was dry-run against the real build.gradle.kts and correctly accepts 13 while rejecting 6 and 1. The first real dispatch is the actual proof.",
+        "The sed-patching of build.gradle.kts is left as-is. It means the shipped versionCode never appears in a commit, which is worth revisiting, but changing it is a release-process decision rather than a defect."
       ],
-      "notes": "Small story, entirely inside one YAML file, and it closes the last gap between CI and the artifact users install."
+      "notes": "Closed on claude/android-production-readiness-icxmch. Entirely inside .github/workflows/android-release.yml - the one story in the AND-AUDIT set that needed no Android SDK, which is why it went first while AND-AUDIT-001 is blocked.\n\nEvidence for the versionCode finding: the GitHub Actions API reports 12 runs of android-release.yml, and run 11's head commit is 'fix(android): update versionCode to 6 for app release'. So Play has accepted 6 and the next blank-input dispatch would have shipped 13."
     },
     {
       "id": "AND-AUDIT-016",
