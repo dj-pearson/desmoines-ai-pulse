@@ -829,3 +829,37 @@ Evidence:
   - A test that deletes an API key before importing the module under test is not tidiness. These
     modules POST on the happy path, and the test fixtures carry email addresses.
 ---
+
+## 2026-08-27 - WEB-SEO-014 AC6: Search Console performance in the SEO admin
+- The keywords tab was a placeholder promising GSC integration "coming soon". The tables have held
+  1,630 keyword rows and 2,060 page rows since March. The integration was finished; nothing showed it.
+- THE PAGE THE AC NAMES HAD NO ROUTE. src/pages/SEODashboard.tsx had zero importers anywhere in src/,
+  so building into it would have satisfied the AC and delivered nothing. Routed at /admin/seo with
+  AdminNav and listed under Insights. /admin/oauth/callback -> AdminGscCallback had been routed since
+  March, so the connect flow was reachable and the page showing its output was not.
+- The panel leads with freshness, not with metrics: data window, age of the newest row, last sync,
+  next scheduled sync, and a countdown on the OAuth refresh token. Stale past 7 days raises a
+  destructive alert; inside 45 days of Google's six-month idle limit raises the token warning.
+- AC5 Q1 and Q2 are rendered rather than only documented: queries at position 11-30, and top-ten
+  pages with zero clicks. The second excludes pages that never rank - position 42 with no clicks is a
+  ranking problem and rewriting its title changes nothing.
+- 9 vitest cases against a pure aggregateGscPerformance(property, rows, now). Both load-bearing ones
+  negative-controlled by breaking the code; each broke exactly one test.
+- One test failed first for MY error, not the code's: I asserted a weighted position of 10.99 landed
+  in the page-2 bucket. It does not - the floor is 11. Retuned the fixture to 900 impressions at 12
+  against 1 at 3, where the weighted answer (11.99) and the plain mean (7.5) fall on opposite sides
+  of the filter. A fixture that does not discriminate proves nothing even when it passes.
+- critical path 196.7 -> 197.2 KB gz. Left the baseline at 196.7 rather than ratcheting for 0.5 KB.
+- **Learnings for future iterations:**
+  - CHECK THE PAGE IS ROUTED BEFORE BUILDING INTO IT. grep for the component name across src/; an
+    admin page with zero importers is not a surface. This one had been unrouted long enough that an
+    acceptance criterion was written telling someone to use it.
+  - PostgREST returns BIGINT as a JSON string, again. This is the second entry in this file about it.
+    Any sum over impressions/clicks concatenates and the result still looks like a plausible number.
+  - Supabase caps a response at 1000 rows and reports no error. Both GSC perf tables are larger, so a
+    plain .select() truncates the aggregate silently. Page with .range().
+  - An average position must be weighted by impressions. A row mean lets a single impression at a
+    good position rewrite a query's standing.
+  - Make the aggregation a pure function taking a now argument. It removes the need to mock the
+    client entirely, and freshness assertions are untestable without a pinned clock.
+---
