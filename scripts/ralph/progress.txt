@@ -1581,3 +1581,27 @@ Evidence:
   failing. It only surfaced because I went to check the call shape against a neighbouring line. Reverted with
   the rest of that false positive.
 ---
+
+2026-08-28 - WEB-PERF-020: the tooltip block, and a sitemap that rewrote itself every build
+  The story left one item unattempted with an open question - does Radix still need a Provider ancestor?
+  It does (no default context, Root throws), but the app-root provider was redundant regardless: all five
+  real consumers already self-provide. Only ui/help-tooltip.tsx relied on the global one, and it has zero
+  importers, so it would have thrown for its first importer, not for anyone today.
+    critical path 197.3 -> 183.4 KB gz; margin under budget 2.7 -> 16.6 KB.
+
+  TWO MEASUREMENT LESSONS, both mine.
+  1. My first probe of the built entry grepped for "floating-ui" and found 0, which read as "the block is
+     already gone". The package name does not survive minification; its CSS custom properties do
+     (radix-popper-*). The note I was checking was right and my probe was wrong.
+  2. I ran the offline suites with `node` and got 3/10, then reported nothing until I had read the
+     runner's header, which says to run it with tsx because it forwards process.execArgv. 10/10. A
+     failing suite is worth one look at how you invoked it before it is worth a diagnosis.
+
+  AND ONE CONTROL THAT FAILED HONESTLY. Every sitemap query ordered by a single column with no
+  tiebreaker, and the build rewrote all six with an identical URL set in a different sequence. Fixed with
+  .order('id'). But the control - run the OLD code twice, expect different output - came back
+  byte-identical, so the fix is not demonstrable by re-running. Unspecified tie order is nondeterministic
+  by contract and one instance was observed between the committed files and a fresh run; that is the
+  case, and it is weaker than a control. Said so in the commit rather than letting "two runs now match"
+  stand in for proof it never could be.
+---
