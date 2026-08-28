@@ -108,6 +108,15 @@ const current = {};
  * disable comment to a file RAISES its count and fails CI with a message about
  * discarded errors, which teaches people to re-baseline past it.
  */
+// A CHECKER THAT SEES NO INPUT MUST NOT REPORT SUCCESS. If the lint target
+// stops matching files, every count comes back zero and the ratchet reads as a
+// codebase that fixed itself. check-edge-types announced "158 errors fixed"
+// exactly that way.
+if (results.length === 0) {
+  console.error('[error-handling] ESLint returned no files - refusing to pass.');
+  process.exit(2);
+}
+
 let total = 0;
 const parseFailures = [];
 for (const r of results) {

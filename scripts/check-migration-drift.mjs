@@ -93,6 +93,19 @@ const collect = (sql, re) => {
 };
 
 const files = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith('.sql')).sort();
+// A CHECKER THAT SEES NO INPUT MUST NOT REPORT SUCCESS. Three checks in this
+// repo have already failed exactly this way - the offline suite runner, the
+// prerender content check, and check-edge-types, which announced "158 errors
+// fixed" while its tsconfig glob matched zero files. An empty scan is a harness
+// fault; reporting it as a clean codebase is how coverage disappears silently.
+if (files.length === 0) {
+  console.error(`check-migration-drift: no .sql files under ${MIGRATIONS_DIR} - refusing to pass.`);
+  process.exit(2);
+}
+if (ledger.size === 0) {
+  console.error('check-migration-drift: the snapshot ledger is empty - refusing to pass.');
+  process.exit(2);
+}
 const sources = new Map(files.map((f) => [f, stripComments(readFileSync(join(MIGRATIONS_DIR, f), 'utf8'))]));
 
 // An object absent from production is only drift if nothing later removed it on

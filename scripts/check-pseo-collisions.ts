@@ -73,6 +73,15 @@ for (const [label, keys] of patterns) {
   walk(0, []);
 }
 
+// A CHECKER THAT SEES NO INPUT MUST NOT REPORT SUCCESS. If the taxonomy import
+// stops yielding dimension values - a rename, a refactor - this would generate
+// zero URLs, find zero collisions and print a clean surface. Three checks in
+// this repo have already failed that way; see check-edge-types.mjs.
+if (generated.size === 0) {
+  console.error('[pseo-collisions] the taxonomy produced NO urls - refusing to pass. Check src/pseo/taxonomy.ts.');
+  process.exit(2);
+}
+
 // Everything that already exists.
 //
 // ROUTE CLAIMS COME FROM THE SHARED MODULE, not from a local regex. This used to

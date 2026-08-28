@@ -61,6 +61,11 @@ const slugs = readFileSync(SLUGS, 'utf8')
   .map((s) => s.trim())
   .filter((s) => s.startsWith('/'));
 
+if (slugs.length === 0) {
+  console.error(`[pseo-collisions] no slugs read from ${SLUGS} - refusing to pass. Refresh it; see the header.`);
+  process.exit(2);
+}
+
 let claims;
 try {
   // Route parsing and slug classification live in scripts/lib/pseoRouteClaims.mjs
