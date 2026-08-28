@@ -1492,3 +1492,22 @@ Evidence:
   - Two failed joins agreed with each other (16, then 0) and both were wrong. Agreement between two
     runs of the same broken method is not corroboration.
 ---
+
+## 2026-08-28 - the GSC admin dashboard confirmed a disconnect that had not happened
+- Largest file in the discarded-error backlog (6 sites). handleDisconnectAll discarded the error on the
+  credential read AND both writes, so a failure skipped everything and still rendered "Disconnected"
+  with a success toast - while the OAuth credential stayed active and the properties remained.
+- Two more showed the wrong STATE: a failed credential read made every token render as not-expired, and
+  a failed active-credential read looked like "no credentials" and advised reconnecting.
+- A fourth reported "Already showing only your site's properties" with a success toast when the read
+  behind the delete had failed. Safe direction, false confirmation.
+- 154 -> 150; file 6 -> 2. The two left are auth reads that already deny access on failure.
+- **Learnings for future iterations:**
+  - A WRITE FLOW MUST CHECK EVERY STEP, not just the last one. Three sequential operations, one error
+    check between them, and the success toast fired regardless of which one failed.
+  - Name the partial state. "Properties removed but the credential is still active" is a different
+    problem from either success or failure, and it is the state a user most needs told.
+  - Read failures in admin UI produce CONFIDENT WRONG STATE, not blank panels: a token shown as valid,
+    an account shown as disconnected. That is worse than an error, because nobody investigates it.
+  - The same triage keeps holding: fail-closed auth reads are fine, reads that gate a write are not.
+---
