@@ -455,9 +455,15 @@ serve(async (req) => {
         .order("date", { ascending: true })
         .limit(5);
 
-      const { data: allEvents, error: allEventsError } = await supabase
+      // count, NOT data.length. Both of these asked for { count: "exact" } and
+      // then ignored the count, measuring data.length instead - but PostgREST
+      // caps a response at 1000 rows, so "totalEvents" silently stopped being
+      // the total at 1000 and this debug view would report a growing table as
+      // permanently stuck there. head: true also stops us transferring every
+      // id in the table to count it.
+      const { count: allEventsCount, error: allEventsError } = await supabase
         .from("events")
-        .select("id", { count: "exact" });
+        .select("id", { count: "exact", head: true });
 
       const { data: restaurants, error: restaurantsError } = await supabase
         .from("restaurants")
@@ -465,22 +471,29 @@ serve(async (req) => {
         .order("created_at", { ascending: false })
         .limit(5);
 
-      const { data: allRestaurants, error: allRestaurantsError } =
-        await supabase.from("restaurants").select("id", { count: "exact" });
+      const { count: allRestaurantsCount, error: allRestaurantsError } =
+        await supabase
+          .from("restaurants")
+          .select("id", { count: "exact", head: true });
 
       return new Response(
         JSON.stringify({
           success: true,
           debug: {
             upcomingEvents: events?.length || 0,
-            totalEvents: allEvents?.length || 0,
+            totalEvents: allEventsCount ?? 0,
             recentRestaurants: restaurants?.length || 0,
-            totalRestaurants: allRestaurants?.length || 0,
+            totalRestaurants: allRestaurantsCount ?? 0,
             sampleUpcomingEvents: events || [],
             sampleRecentRestaurants: restaurants || [],
             errors: {
               events: eventsError?.message,
               restaurants: restaurantsError?.message,
+              // Both count reads were unreported, so a failed count arrived
+              // here as a confident 0 - the worst answer a debug endpoint can
+              // give, because it looks like a finding.
+              totalEvents: allEventsError?.message,
+              totalRestaurants: allRestaurantsError?.message,
             },
           },
         }),
