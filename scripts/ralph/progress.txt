@@ -1678,3 +1678,23 @@ Evidence:
   wait on it, which is a lot of pressure to decide it in passing. It is a product call about whether entire
   modules ship.
 ---
+
+2026-08-28 - WEB-QA-005 AC2, and a note on what the backlog now looks like
+  The homepage's gold CTA promised "Let AI build your itinerary" and its handler navigates straight to
+  /trip-planner, where the planner sits behind <PremiumGate requiredTier="insider">. A logged-out visitor
+  got the promise and then the paywall with nothing in between. Both variants now state the requirement.
+
+  THE USEFUL PART IS THAT AC2 DID NOT NEED AC1. The story's notes had listed the copy as open alongside
+  the funnel decision, which read as a dependency. It is not one: the copy was describing something that
+  is not true under EITHER branch, because neither is live. An AC that follows from a decision is still
+  worth re-reading for the half that is just wrong today.
+
+  ON THE SHAPE OF WHAT IS LEFT, because it changes what this loop is worth. I surveyed eight open stories
+  this iteration before finding one with unblocked work: XPLAT-008 AC2, WEB-LEGAL-011 AC8 (needs a browser
+  session as an approving admin), WEB-OPS-022 AC5-AC8, WEB-QA-017 AC1, WEB-QA-019's 17 RPCs, WEB-BE-031,
+  WEB-LEGAL-008 (explicitly reserved for review) and XPLAT-006 are all waiting on an owner decision or a
+  credential this environment does not have. XPLAT-006 additionally carries its own advice not to do the
+  web half first, which I followed rather than overrode.
+  The remaining open backlog is mostly decisions, not work. Worth saying plainly rather than continuing to
+  find smaller and smaller adjacent tasks.
+---
