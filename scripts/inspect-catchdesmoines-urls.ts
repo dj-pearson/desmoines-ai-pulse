@@ -1,3 +1,11 @@
+/**
+ * Ad-hoc diagnostic: prints the ten most recently updated events whose source_url is a catchdesmoines.com page.
+ *
+ * NOT A CHECK. It has no baseline, no verdict and always exits 0. It was named
+ * check-* and sat in a directory of 32 real ratchets, so an audit of which
+ * checks are wired into CI had to open it to find out it was never meant to be.
+ * Renamed to inspect-* for that reason; nothing referenced it.
+ */
 import { createClient } from "@supabase/supabase-js";
 
 // Using environment variables for secure credential management

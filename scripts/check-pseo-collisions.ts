@@ -24,6 +24,7 @@
  * Usage: npx tsx scripts/check-pseo-collisions.ts
  */
 import { readFileSync } from 'node:fs';
+import { classifySlugs } from './lib/pseoRouteClaims.mjs';
 import {
   contentTypeDimension,
   locationDimension,
@@ -73,36 +74,69 @@ for (const [label, keys] of patterns) {
 }
 
 // Everything that already exists.
-const app = readFileSync('src/App.tsx', 'utf8');
-const realRoutes = new Set(
-  [...app.matchAll(/<Route\s+path="([^"]+)"/g)].map((m) => m[1]).filter((p) => !p.includes(':') && p !== '*')
-);
-const redirects = new Set(
-  readFileSync('public/_redirects', 'utf8')
-    .split(/\r?\n/)
-    .filter((l) => l.trim() && !l.trim().startsWith('#'))
-    .map((l) => l.trim().split(/\s+/)[0])
-);
+//
+// ROUTE CLAIMS COME FROM THE SHARED MODULE, not from a local regex. This used to
+// build its own set with
+//     .filter((p) => !p.includes(':') && p !== '*')
+// which DROPPED EVERY PARAMETERISED ROUTE - so /restaurants/{category} and
+// /attractions/{location}, which resolve to RestaurantDetails and
+// AttractionDetails rather than to a pSEO page, reported as clean. That is the
+// class of collision that turned out to matter most: of the 22 URLs the
+// shippable set first selected, 13 were claimed by an entity-detail route and
+// would have been submitted to Google as soft-404s (WEB-SEO-013).
+//
+// classifySlugs is what check-pseo-route-collisions.mjs uses against PUBLISHED
+// slugs. This runs the same rules over what the taxonomy COULD generate, so the
+// forward-looking check and the current-state check cannot disagree about what
+// "claimed" means.
+const claims = classifySlugs([...generated.keys()], {
+  appPath: 'src/App.tsx',
+  redirectsPath: 'public/_redirects',
+});
+
 const sitemapped = new Set<string>();
 for (const f of ['sitemap-static.xml']) {
   const xml = readFileSync(`public/${f}`, 'utf8');
   for (const m of xml.matchAll(/<loc>https?:\/\/[^/]+([^<]*)<\/loc>/g)) sitemapped.add(m[1].replace(/\/$/, '') || '/');
 }
 
-const hitsRoute: string[] = [];
-const hitsRedirect: string[] = [];
-const hitsSitemap: string[] = [];
-for (const [url, pattern] of generated) {
-  if (realRoutes.has(url)) hitsRoute.push(`${url}   <- ${pattern}`);
-  else if (redirects.has(url)) hitsRedirect.push(`${url}   <- ${pattern}`);
-  else if (sitemapped.has(url)) hitsSitemap.push(`${url}   <- ${pattern}`);
-}
+const patternOf = (url: string) => generated.get(url) ?? '(unknown pattern)';
+const hitsRoute = claims.exact.map((e) => `${e.slug}   <- ${patternOf(e.slug)}   [${e.route}]`);
+const hitsShadowed = claims.shadowed.map((e) => `${e.slug}   <- ${patternOf(e.slug)}   [${e.route}]`);
+const hitsRedirect = claims.redirected.map((slug) => `${slug}   <- ${patternOf(slug)}`);
+const hitsSitemap = [...generated.keys()]
+  .filter((url) => !claims.claimed.has(url) && !claims.redirected.includes(url) && sitemapped.has(url))
+  .map((url) => `${url}   <- ${patternOf(url)}`);
 
 console.log(`taxonomy can generate ${generated.size} distinct URLs across ${patterns.length} patterns`);
 console.log(`  content_type=${dims.content_type.length} location=${dims.location.length} audience=${dims.audience.length} temporal=${dims.temporal.length} category=${dims.category.length}\n`);
 
-console.log(`COLLIDES WITH A REAL ROUTE IN App.tsx (${hitsRoute.length}) — these would be shadowed or would shadow:`);
+console.log(`COLLIDES WITH A LITERAL ROUTE IN App.tsx (${hitsRoute.length}) - the generated page would never render:`);
 hitsRoute.sort().forEach((h) => console.log('  ' + h));
+
+// The bigger and quieter half. An entity-detail route answers the URL and looks
+// for an entity with that slug, finds none, and serves whatever it does for a
+// miss - which per WEB-SEO-006 is the SPA shell. Nothing errors.
+console.log(`
+SHADOWED BY A PARAMETERISED ROUTE (${hitsShadowed.length}) - resolves to an entity page, not a pSEO page:`);
+// Grouped by route. 257 lines of slugs is not a finding; "257 generatable URLs
+// sit under three entity-detail routes" is the same shape the published-side
+// check already reports, and the same decision: which layer owns the prefix.
+{
+  const byRoute = new Map<string, string[]>();
+  for (const { slug, route } of claims.shadowed) {
+    if (!byRoute.has(route)) byRoute.set(route, []);
+    byRoute.get(route)!.push(slug);
+  }
+  for (const [route, list] of [...byRoute].sort((a, b) => b[1].length - a[1].length)) {
+    console.log(`  ${route.padEnd(24)} ${String(list.length).padStart(4)}   e.g. ${list.slice(0, 3).join(', ')}`);
+  }
+  console.log(
+    '\n  Nothing errors on these: the entity route looks for a slug it will not find and\n' +
+      '  serves whatever it does for a miss, which per WEB-SEO-006 is the SPA shell. Decide\n' +
+      '  per prefix which layer owns the slug before generating any of them.',
+  );
+}
 console.log(`\nCOLLIDES WITH AN EXISTING _redirects RULE (${hitsRedirect.length}):`);
 hitsRedirect.sort().forEach((h) => console.log('  ' + h));
 console.log(`\nCOLLIDES WITH A SITEMAPPED STATIC URL (${hitsSitemap.length}):`);

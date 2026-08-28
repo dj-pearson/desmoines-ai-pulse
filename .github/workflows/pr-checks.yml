@@ -204,6 +204,16 @@ jobs:
       - name: pSEO slugs do not collide with real routes
         run: node scripts/check-pseo-route-collisions.mjs
 
+      # The forward-looking half of AC7. The check above compares PUBLISHED slugs
+      # against routes; this one compares everything the taxonomy COULD generate,
+      # so a new dimension value that would collide is visible before a
+      # generation run rather than after. Offline - reads src/pseo/taxonomy.ts,
+      # src/App.tsx and public/_redirects. Reports, does not gate: the 10 literal
+      # collisions and 257 shadowed URLs are decisions about which layer owns a
+      # prefix, and gating on them would be red from the first run.
+      - name: pSEO taxonomy collisions
+        run: npx tsx scripts/check-pseo-collisions.ts
+
       # WEB-SEO-013 AC5/AC7: the rules that decide which pSEO pages reach
       # sitemap-pseo.xml. The measurement needs production and cannot run here,
       # but the rules are pure - and a bug in them publishes doorway pages or
