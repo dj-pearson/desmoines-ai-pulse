@@ -142,8 +142,22 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           EDGE_FUNCTION_API_KEY: ${{ secrets.EDGE_FUNCTION_API_KEY }}
         run: |
-          if [ -z "${EDGE_FUNCTION_API_KEY}" ] || [ -z "${SUPABASE_URL}" ]; then
-            echo "::warning::SUPABASE_URL or EDGE_FUNCTION_API_KEY not set — skipping sitemap regeneration."
+          # NAME THE MISSING ONE. This said "SUPABASE_URL or
+          # EDGE_FUNCTION_API_KEY not set", which an owner reading the run
+          # cannot act on - it does not say whether one secret is needed or
+          # two. On run 33089115082 the crawl job wrote 12 events using
+          # SUPABASE_URL, so only EDGE_FUNCTION_API_KEY was missing, and the
+          # warning implied both (WEB-SEO-011 AC4).
+          missing=""
+          # PLAIN if, NOT `[ -z X ] && y=1`. Actions runs this under bash -e,
+          # where a test that evaluates FALSE returns 1 and aborts the step -
+          # so the && form would break precisely when the secret IS set.
+          if [ -z "${SUPABASE_URL}" ]; then missing="SUPABASE_URL"; fi
+          if [ -z "${EDGE_FUNCTION_API_KEY}" ]; then
+            missing="${missing:+${missing} and }EDGE_FUNCTION_API_KEY"
+          fi
+          if [ -n "${missing}" ]; then
+            echo "::warning::${missing} not set - skipping sitemap regeneration."
             exit 0
           fi
           code=$(curl -sS -o /tmp/regen.json -w '%{http_code}' -X POST \
