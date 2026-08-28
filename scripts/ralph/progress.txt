@@ -2760,3 +2760,41 @@ deleted it
     successful lint (~3m36s). Step duration is a usable first signal for what kind of
     failure you are looking at before opening the log.
 ---
+
+## AND-AUDIT-024 - sign-out no longer switches the biometric lock off
+
+SignOutCleaner called secureStorage.deleteAll(), and the encrypted store holds
+device settings alongside credentials, so signing out cleared biometric_auth_enabled.
+A user who turned the lock on found it off after signing back in, silently.
+
+Fix: SecureStorage.DEVICE_SETTING_KEYS names what a sign-out wipe keeps,
+deleteUserData() preserves those keys and clears the rest, deleteAll() stays a
+genuine full wipe for callers that want one. BiometricAuthService now reads its
+key from the same constant, so the allowlist and the writer cannot drift apart.
+
+Decided preserve rather than clear. Biometric enrolment belongs to the handset,
+not the account, so an account boundary is not a reason to disable it. That also
+avoids the disclosure the story asked for: nothing visibly changes for the user,
+which is only true on this branch of the decision.
+
+Two of the story's own premises were stale by the time I got here. indexing_enabled
+was already gone (AND-AUDIT-016 deleted AppSearchService). The soft-paywall counters
+and session timestamps are per-user, and SignOutCleaner already resets both by hand,
+so wiping them is deliberate and they stay off the allowlist. Worth re-checking a
+story's factual claims against the tree before implementing it - this is the third
+time an audit story I wrote has been partly overtaken by a later one.
+
+Testing learning: SecureStorage builds EncryptedSharedPreferences on the Android
+Keystore, which a JVM unit test does not have. The class already falls back to plain
+SharedPreferences on any Exception, and it was tempting to lean on that - mock the
+Context, let the Keystore path blow up, catch the fake on the way out. That would
+have been a test asserting an accident: whether the fallback fires depends on
+whether the mockable android.jar makes MasterKey.Builder throw an Exception or an
+Error, and ExceptionInInitializerError is not an Exception. Added an internal
+constructor that takes the SharedPreferences instead. An explicit seam beats a test
+that passes for a reason you cannot state.
+
+CI note: run 33179729704 (Android CI 363) came back green on PR #379 head 2301bfa -
+lint, unit tests, debug APK and the R8 release build all pass. That confirms the
+AndroidX revert cleared checkDebugAarMetadata and that compileSdk/targetSdk 36 works
+with the existing 2024-era dependencies. #379 still needs a human to merge it.

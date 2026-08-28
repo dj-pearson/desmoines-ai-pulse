@@ -25,7 +25,10 @@ class BiometricAuthService @Inject constructor(
 ) {
 
     companion object {
-        private const val KEY_BIOMETRIC_ENABLED = "biometric_auth_enabled"
+        // Declared on SecureStorage so its DEVICE_SETTING_KEYS allowlist and
+        // this class cannot drift apart -- if they did, sign-out would go back
+        // to silently clearing the lock.
+        private const val KEY_BIOMETRIC_ENABLED = SecureStorage.KEY_BIOMETRIC_ENABLED
     }
 
     /**
