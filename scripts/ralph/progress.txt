@@ -2666,3 +2666,35 @@ deleted it
     away. An orphaned SecureStorage key is inert; migration code to delete one
     is pure added risk.
 ---
+
+## 2026-08-28 - AND-AUDIT-001 first CI result: main was red (Android)
+- PR #376 was merged before its CI finished, so main briefly carried code that
+  had never been compiled. Android CI run 33176574968 on the merge commit
+  failed at compileDebugKotlin with exactly ONE error, in code I had added:
+  BootCompletedReceiver.kt:32 "Abstract member cannot be accessed directly".
+- Fixed by dropping @AndroidEntryPoint field injection and pulling
+  LocalNotificationService from a Hilt @EntryPoint instead.
+
+- **Learnings for future iterations:**
+  - DO NOT call super.onReceive() from a Kotlin @AndroidEntryPoint
+    BroadcastReceiver. Hilt's docs say receivers must call it, but that guidance
+    is written for Java: BroadcastReceiver.onReceive is ABSTRACT, and Hilt swaps
+    the superclass to Hilt_YourReceiver in a bytecode transform that runs AFTER
+    kotlinc. At Kotlin compile time the supertype is still BroadcastReceiver, so
+    the call is a hard compile error.
+    Use dagger.hilt.android.EntryPointAccessors.fromApplication(
+        context.applicationContext, YourEntryPoint::class.java)
+    with a nested @EntryPoint @InstallIn(SingletonComponent::class) interface.
+    No @AndroidEntryPoint on the receiver at all. NotificationReceiver already
+    sidesteps this by taking no injected dependencies.
+  - FirebaseMessagingService.onNewToken / onMessageReceived ARE concrete, so
+    super calls there are fine. The abstract-super trap is specific to
+    BroadcastReceiver.onReceive.
+  - Good news buried in the failure: kotlinc reported this as the only error
+    across the whole module, so the other ~40 edited files - including the
+    FavoritesRepository tier signature change, the LocalNotificationService Json
+    parameter, BillingService added to five ViewModels, and the four constructor
+    parameters removed with AppSearchService - all compiled clean.
+  - A merged PR is not verification. #376 merged ~3 minutes before its own CI
+    reported. If CI is the gate, the merge has to wait for it.
+---
