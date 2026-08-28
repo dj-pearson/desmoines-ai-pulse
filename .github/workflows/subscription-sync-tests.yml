@@ -102,9 +102,19 @@ jobs:
       # WEB-LEGAL-012's notes predicted the opposite - "CI has the network and
       # needs neither the map nor --no-check" - which was true of the import MAP
       # and wrong about the type check.
-      # =remote rather than bare --no-check: the test's own source is still
-      # type-checked, only the downloaded .d.ts files are skipped.
-      - run: deno test --allow-read --allow-env --no-check=remote supabase/functions/_tests/marketing-optout-agents.test.ts
+      # =remote was the first attempt at that, on the reasoning that it would
+      # keep type-checking the test's own source while skipping the downloaded
+      # .d.ts files. It does not work: --no-check=remote skips the BODIES of
+      # remote declaration files but still resolves their type-reference
+      # directives, and the reference to @types/node is exactly such a
+      # directive. So the step kept dying at the same line and these four tests
+      # have never once executed.
+      # Bare --no-check gives up type-checking the test source too. That is a
+      # real loss, and still the better trade: four tests that run beat four
+      # tests that are type-checked and skipped. The alternative that keeps both
+      # is a root deno.json with nodeModulesDir + an @types/node import and a
+      # deno install step, which is a lot of machinery for one suite.
+      - run: deno test --allow-read --allow-env --no-check supabase/functions/_tests/marketing-optout-agents.test.ts
       # XPLAT-007. The right of ACCESS must stay sourced from the same list as
       # the right of erasure - they had drifted by 57 tables, and the export
       # named three that do not exist.
