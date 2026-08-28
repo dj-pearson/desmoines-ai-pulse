@@ -237,6 +237,13 @@ jobs:
       - name: Sitemap slug shapes
         run: npx tsx scripts/__tests__/sitemap-slugs.test.mjs
 
+      # WEB-PERF-023 AC1. stripLeafletRuntime deletes <img> tags from captured
+      # HTML on its way to dist/, so the cases that matter are the ones it must
+      # NOT touch - removing a content image from a prerendered page is a silent
+      # SEO regression that still builds and still renders.
+      - name: Leaflet runtime strip
+        run: npx tsx scripts/__tests__/leaflet-strip.test.mjs
+
       - name: Critical-path JS budget
         run: node scripts/check-bundle-budget.mjs
 

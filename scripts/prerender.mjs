@@ -56,7 +56,7 @@ import http from 'node:http';
 import os from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
-import { stripInjectedPreloads, restoreAsyncFontLinks, dedupeJsonLd } from './lazy-preload-patterns.mjs';
+import { stripInjectedPreloads, restoreAsyncFontLinks, dedupeJsonLd, stripLeafletRuntime } from './lazy-preload-patterns.mjs';
 import { PRERENDER_ROUTES } from './prerender-routes.mjs';
 import process from 'node:process';
 
@@ -349,6 +349,7 @@ async function main() {
   let ok = 0;
   let failed = 0;
   let strippedTotal = 0;
+let leafletStrippedTotal = 0;
   let restoredFontsTotal = 0;
 let duplicateJsonLdTotal = 0;
 
@@ -486,8 +487,15 @@ let duplicateJsonLdTotal = 0;
       // taken mid-update captures both copies. Four live URLs were serving
       // FAQPage twice, which Google treats as invalid structured data. See
       // dedupeJsonLd for why this is fixed after the fact rather than waited out.
-      const [html, dropped] = dedupeJsonLd(deFonted);
+      const [deJsonLd, dropped] = dedupeJsonLd(deFonted);
       if (dropped > 0) duplicateJsonLdTotal += dropped;
+      // Leaflet built a whole map in Chromium: one <img> per marker, one per
+      // marker shadow, one per visible tile. react-leaflet rebuilds all of it on
+      // hydration, so every one of those nodes is parsed and discarded. On /map
+      // that was 1,121 of 1,958 elements in #root against 550 words of text.
+      // See stripLeafletRuntime for what it costs to keep them.
+      const [html, leafletDropped] = stripLeafletRuntime(deJsonLd);
+      if (leafletDropped > 0) leafletStrippedTotal += leafletDropped;
       if (strippedPreloads > 0) {
         strippedTotal += strippedPreloads;
       }
@@ -657,6 +665,7 @@ let duplicateJsonLdTotal = 0;
     `[prerender] done in ${totalSeconds}s: ${ok} prerendered, ${failed} failed, ` +
       `${entityUnrendered.length} over budget, of ${scope} routes; ` +
       `stripped ${strippedTotal} runtime-injected modulepreload link(s); ` +
+      `${leafletStrippedTotal} Leaflet runtime image(s); ` +
       `restored ${restoredFontsTotal} async font link(s); ` +
       `dropped ${duplicateJsonLdTotal} duplicate JSON-LD block(s)`,
   );

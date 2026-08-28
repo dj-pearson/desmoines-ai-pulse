@@ -203,3 +203,52 @@ export function dedupeJsonLd(html) {
   }
   return [out, doomed.length];
 }
+
+/**
+ * Removes Leaflet's runtime image layers from a captured page.
+ *
+ * Chromium runs the app, so by capture time Leaflet has built a complete map:
+ * one <img> per marker, one more per marker SHADOW, and one per visible tile.
+ * Measured on the live prerendered /map, 2026-08-28:
+ *
+ *     1,958 elements in #root, of which 1,124 are <img>
+ *       517  img.leaflet-marker-icon
+ *       517  img.leaflet-marker-shadow
+ *        87  img.leaflet-tile
+ *     -----
+ *     1,121 of them Leaflet's, against 550 words of actual page text
+ *
+ * NONE OF IT SURVIVES HYDRATION. react-leaflet initialises a fresh map and
+ * rebuilds every pane, so these nodes are parsed, laid out, and thrown away.
+ * What they cost in the meantime is real: 87 OpenStreetMap tile requests for a
+ * viewport the visitor may never look at, 1,034 nodes React must walk past on
+ * boot (WEB-PERF-023 AC3 is exactly this), and 517 elements carrying
+ * role="button" tabindex="0" that are in the tab order and do nothing.
+ *
+ * NOTHING IS LOST TO A CRAWLER. marker-icon.png has alt="Marker", the shadows
+ * and tiles have alt="", and the page's 550 words are untouched. This is the
+ * opposite trade-off from WEB-SEO-006, which fought to get CONTENT into the
+ * prerendered HTML - these are not content.
+ *
+ * THE ONE REAL COST, stated rather than buried: a visitor with JavaScript
+ * disabled or still loading now sees an empty map frame instead of a static
+ * snapshot. That snapshot was of a fixed viewport chosen at build time, so it
+ * was already showing the wrong place to most people, and it could not be
+ * panned, zoomed or clicked.
+ *
+ * Images only. The pane <div>s stay, because Leaflet expects its container
+ * structure to be present and the divs are a few dozen nodes against a
+ * thousand.
+ */
+export function stripLeafletRuntime(html) {
+  // Self-closing <img> tags with a leaflet-* class. Matched on the class
+  // attribute rather than on src: the marker src is the relative
+  // "marker-icon.png", which is not distinctive, while the classes are.
+  const re = /<img\b[^>]*\bclass="[^"]*\bleaflet-(?:marker-icon|marker-shadow|tile)\b[^"]*"[^>]*>/g;
+  let removed = 0;
+  const out = html.replace(re, () => {
+    removed++;
+    return '';
+  });
+  return removed === 0 ? [html, 0] : [out, removed];
+}

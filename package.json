@@ -68,6 +68,7 @@
     "test:pseo-shippable": "tsx scripts/__tests__/pseo-shippable.test.mjs",
     "test:drift-decisions": "tsx scripts/__tests__/drift-decisions.test.mjs",
     "test:sitemap-slugs": "tsx scripts/__tests__/sitemap-slugs.test.mjs",
+    "test:leaflet-strip": "tsx scripts/__tests__/leaflet-strip.test.mjs",
     "check-sitemap-freshness": "tsx scripts/check-sitemap-freshness.ts",
     "report-drift-decisions": "node scripts/report-drift-decisions.mjs",
     "test:offline": "npm run test:venue-images && npm run test:media-route && npm run test:media-urls && npm run test:provider-usage",
