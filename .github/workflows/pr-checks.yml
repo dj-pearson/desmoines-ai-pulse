@@ -358,6 +358,14 @@ jobs:
       - name: Service-role functions verify their caller
         run: node scripts/check-edge-auth.mjs
 
+      # profiles.communication_preferences is one JSONB column with four owners,
+      # and a PostgREST update REPLACES it. PreferencesManager sent a fresh
+      # literal, so Save Preferences deleted taste_preferences, ui_preferences
+      # and the marketing opt-out - and every consent gate reads !== false, so
+      # deleting an explicit false opts the user back in silently. Offline.
+      - name: Shared JSONB bags are merged, not replaced
+        run: node scripts/check-jsonb-bag-writes.mjs
+
       # check-schema-usage compares code against src/integrations/supabase/types.ts,
       # which makes types.ts the reference - and nothing checked the reference. A
       # column declared there but absent in production type-checks, PASSES
