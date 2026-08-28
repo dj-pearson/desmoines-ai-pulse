@@ -1987,3 +1987,27 @@ Evidence:
   token that lapses ~2026-09-30), XPLAT-007's export, XPLAT-008's two Test buttons, and two hollow cron
   jobs. One secret: SUPABASE_ACCESS_TOKEN on the Scrape environment.
 ---
+
+2026-08-28 - WEB-OPS-023: the switch was set, just not where the code reads it
+  The story says the whole chain is "off by default" and unverified. Production disagrees: the /media route
+  serves 200 image/jpeg with max-age=31536000 and cf-cache-status HIT, and 277 of 284 events, 326 of 326
+  project-hosted restaurants, 16 of 16 attractions and 3 of 3 articles are already on it. AC2 works and
+  most of AC5 has happened.
+
+  THE SEVEN THAT ARE NOT ARE THE WHOLE STORY. All seven were created in ONE crawl - 2026-08-27 15:46 - and
+  every repointed row predates it. So the backfill ran and the write path kept producing more.
+
+  AC3 POINTS AT THE WRONG ENVIRONMENT. cdnUrlFor switches on Deno.env.get("MEDIA_CDN_BASE") - a Supabase
+  edge function variable - and AC3 says to set it "in the Cloudflare Pages environment", which is where the
+  Pages route reads its own separate copy. The runbook has it right; the AC does not. Following the AC
+  alone would change nothing and give no sign of it, which is exactly what happened.
+
+  ANOTHER SILENT ZERO, MINE. My first ad-hoc count reported "articles: 0 images". articles has no
+  image_url column - it is featured_image_url - so a 42703 was read as an empty count. There are 3. The
+  committed check errors on any non-2xx, which is the only reason I found out. That is the fourth silent
+  zero I have produced this session; the pattern is always the same shape - an error body parsed as data.
+
+  TWO ENV VARS WITH ONE NAME AND TWO HOMES is a trap worth remembering: functions/media reads MEDIA_CDN_BASE
+  from Pages, imageStorage reads it from Supabase secrets. Same name, different runtimes, and setting one
+  looks like setting both.
+---
