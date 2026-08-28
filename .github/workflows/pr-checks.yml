@@ -190,6 +190,14 @@ jobs:
       - name: pSEO shippable rules
         run: npx tsx scripts/__tests__/pseo-shippable.test.mjs
 
+      # WEB-QA-018 AC1. report-drift-decisions.mjs joins the drift checker to the
+      # schema-usage checker to say which of the 31 drifted migrations have code
+      # waiting on them. Its two rules are asymmetric - calling a needed
+      # migration "no readers" points at deleting a live feature - so they are
+      # guarded even though the report itself only ever prints.
+      - name: Migration drift decision rules
+        run: npx tsx scripts/__tests__/drift-decisions.test.mjs
+
       - name: Critical-path JS budget
         run: node scripts/check-bundle-budget.mjs
 
