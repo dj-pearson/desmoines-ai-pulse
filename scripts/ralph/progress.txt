@@ -898,3 +898,38 @@ Evidence:
   - vitest here only includes src/**; scripts/__tests__ use a hand-rolled check() harness run with
     tsx and a `test:*` npm script. Follow that rather than fighting the include.
 ---
+
+## 2026-08-27 - WEB-QA-018 AC1: which drifted migrations have code waiting on them
+- 31 migrations are ledgered as applied and produced nothing. AC1 asks for a per-module decision and
+  nobody had the numbers, because the two checks that hold them were never joined:
+  check-migration-drift (migration -> missing object) and check-schema-usage (code -> missing name).
+  scripts/report-drift-decisions.mjs joins them. `npm run report-drift-decisions`.
+- 17 have readers, 14 have none a static scan can see; 174 proven call sites. The big ones are
+  crm_infrastructure (78), add_payments_and_invoices (24) and add_ai_trip_planner_nlp_search (19).
+- MY FIRST RUN WAS WRONG AND THAT IS WHERE THE THIRD SIGNAL CAME FROM. It said the seven GSC helper
+  functions (WEB-SEO-014 AC3 is blocked on them) and create_update_coordinates_function had no
+  readers. True of TypeScript, false of the database: update_coordinates is called by a trigger in
+  20250731000002_create_location_triggers.sql, which CLAUDE.md documents. Added a count of references
+  from OTHER migrations; it moved 5 migrations out of the delete pile. Shipping after one run would
+  have recommended deleting the geocoding trigger's function.
+- Renamed the verdict from RETIRE to NO-READERS for the same reason. A static scan cannot see dynamic
+  SQL or pg_cron job bodies, so it names a place to look, not a conclusion.
+- 11 offline checks, 2 negative controls. Dropping the SQL signal fails 1; substring instead of
+  word-boundary matching fails 2. The first attempt at the second control produced a syntax error
+  rather than a working substring matcher, so it reported nothing and looked like a passing control -
+  a "control" that cannot run is worse than no control, because it reads as evidence.
+- **Learnings for future iterations:**
+  - A REFERENCE COUNT OVER src/ IS NOT A REFERENCE COUNT. Postgres objects are called from triggers,
+    other functions and cron job bodies. Any "is this used" question about a database object has to
+    scan supabase/migrations/ too, or it will recommend deleting live plumbing.
+  - Name a verdict for what the evidence supports. "NO READERS" and "RETIRE" describe the same rows
+    and only one of them is defensible from a static scan.
+  - When two error directions cost different amounts, say so in the code and make the rule
+    asymmetric. Here any single signal means REAPPLY, because unused objects are cheap and a deleted
+    feature is not.
+  - Verify a negative control actually RAN. Grep for the FAIL line, not just for the absence of
+    success - a control that crashes prints nothing and passes review.
+  - A script that both exports helpers and runs at top level will execute on import. Guard with
+    `process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href` - argv[1] is
+    undefined under `node -e`.
+---
