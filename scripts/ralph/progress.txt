@@ -1534,3 +1534,27 @@ Evidence:
   - Checking four files and changing one is a good ratio, not a wasted iteration. The three left alone
     would each have been churn.
 ---
+
+## 2026-08-28 - turned the false-zero pattern into a search
+- Having found it three times by reading files one at a time, I wrote a detector for the SHAPE: a
+  destructure taking data/count WITHOUT error, whose binding is defaulted with || 0, ?? 0 or ?? []
+  within a dozen lines. 15 candidates across src/ and supabase/functions.
+- data-quality-heal was the sharpest: its KPI reported "0 rows missing coordinates/SEO/images" whether
+  the data was clean or the count errored - the reassuring number was exactly what a failed read
+  produced. Its geocode stage walked `rows ?? []` and reported geocoded: 0 with the job successful.
+- ImageBackfill had the AIEnhancementManager shape: needsBackfill = 0 - 0 = 0, telling an admin the
+  category was complete.
+- 147 -> 144 sites. Detector re-run: 15 -> 12.
+- LEFT THE OTHER 12: MergeReviewPanel already renders a missing-row id; agent-support-responder,
+  subscription-lifecycle and generate-proposal are undeployed.
+- **Learnings for future iterations:**
+  - WHEN YOU RECOGNISE A SHAPE THREE TIMES, WRITE THE SEARCH. Reading 101 files one at a time would
+    have taken days and missed the ones with only a single site.
+  - A pattern search is for TRIAGE, not for a codemod. Twelve of fifteen hits were fine; a blanket fix
+    would have added churn and, on the fail-closed ones, made things worse.
+  - Deployment status is the cheapest filter for "does this cost anything today". Three of the
+    remaining twelve are in functions nobody can call.
+  - The most dangerous false zero is on a metric whose whole job is to say something is wrong. A
+    data-quality reporter that reports perfect quality when it cannot read is worse than one that
+    crashes.
+---
