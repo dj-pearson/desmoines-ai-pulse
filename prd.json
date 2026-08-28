@@ -6960,14 +6960,13 @@
       "passes": true,
       "description": "As the release owner, I need the app to target API 36, because Google Play stops accepting updates that target anything lower after 31 August 2026 and the app is on 35, so the next submission is rejected outright.",
       "acceptanceCriteria": [
-        "DONE: compileSdk and targetSdk both 35 -> 36 in android/app/build.gradle.kts. minSdk stays at 26.",
-        "CONFIRMED against developer.android.com/google/play/requirements/target-sdk on 2026-08-28: from 31 August 2026 new apps and updates must target API 36. An extension to 1 November 2026 can be requested in Play Console. That extension is the fallback if this bump needs more soak time than three days allows - worth knowing before anyone rushes a release.",
-        "DONE: the dependency upgrade (AND-AUDIT-005) landed in the same change, because mid-2026 AndroidX is built against SDK 36 and would not have compiled on 35.",
-        "NOT VERIFIED, and this is the important gap: API 35+ ENFORCES edge-to-edge. MainActivity already calls enableEdgeToEdge(), so the app opts in, but nothing here proves each screen handles insets correctly. Every screen needs a look on an API 36 device or emulator - MapScreen, the detail-screen heroes and the bottom bar are the likely offenders. CI compiling is not evidence of this.",
-        "NOT DONE: android:enableOnBackInvokedCallback is still unset, so predictive back stays off. That is a UX decision rather than a compliance one and is better made with a device in hand.",
-        "The story's original claim that this 'is not a one-line change' held up exactly: it needed five dependency bumps to become compilable at all."
+        "DONE: compileSdk and targetSdk both 35 -> 36 in android/app/build.gradle.kts. minSdk stays at 26. That is the entire change - no dependency movement needed.",
+        "CORRECTION: this story originally claimed the bump 'is not a one-line change' and needed the dependency upgrade first. Wrong on both counts. CI run 33179244127 showed the dependency upgrade is what breaks the build (current AndroidX wants compileSdk 37, AGP 9.1.0 caps at 36), so the deps were reverted and the SDK move stands alone. It IS a one-line change, twice.",
+        "CONFIRMED against developer.android.com/google/play/requirements/target-sdk on 2026-08-28: from 31 August 2026 new apps and updates must target API 36. An extension to 1 November 2026 can be requested in Play Console.",
+        "NOT VERIFIED, and this is the gap that matters: API 35+ ENFORCES edge-to-edge. MainActivity already calls enableEdgeToEdge(), so the app opts in, but nothing here proves each screen handles insets correctly. Every screen wants a look on an API 36 device or emulator - MapScreen, the detail-screen heroes and the bottom bar are the likely offenders. A green CI run is not evidence of this.",
+        "NOT DONE: android:enableOnBackInvokedCallback is still unset, so predictive back stays off. A UX decision better made with a device in hand."
       ],
-      "notes": "Landed with AND-AUDIT-005 in one change. The compile side is CI-verified; the edge-to-edge and predictive-back behaviour changes are NOT, and cannot be from this session. Treat the visual pass as outstanding work before shipping a release build."
+      "notes": "Compile side pending CI on PR #378. The edge-to-edge behaviour change is NOT verifiable from this session and remains outstanding work before a release build."
     },
     {
       "id": "AND-AUDIT-003",
@@ -7004,19 +7003,19 @@
     },
     {
       "id": "AND-AUDIT-005",
-      "title": "The Android dependency set is about twenty months stale",
+      "title": "Upgrading AndroidX is gated behind an AGP upgrade, not just stale versions",
       "priority": 1,
-      "passes": true,
-      "description": "As a developer, I need the AndroidX and Compose dependencies current, because Compose BOM 2024.12.01, core-ktx 1.15.0, lifecycle 2.8.7, activity-compose 1.9.3 and navigation-compose 2.8.5 all date from late 2024 while the build runs Kotlin 2.2.10 and AGP 9.1, so the compiler is far ahead of the runtime it targets and the API 36 bump has nothing modern to stand on.",
+      "passes": false,
+      "description": "As a developer, I need to understand what actually blocks the AndroidX upgrade, because the current stable releases (compose 1.12.0, core 1.19.0, lifecycle 2.11.0, navigation 2.10.0) all declare they require compileSdk 37, while AGP 9.1.0 tops out at a maximum recommended compileSdk of 36 - so the dependency set cannot move until the toolchain does.",
       "acceptanceCriteria": [
-        "DONE: compose-bom 2024.12.01 -> 2026.08.00 (compose-ui 1.12.0, material3 1.4.0), core-ktx 1.15.0 -> 1.19.0, lifecycle 2.8.7 -> 2.11.0, activity-compose 1.9.3 -> 1.13.0, navigation-compose 2.8.5 -> 2.10.0. Versions taken from developer.android.com release notes, not guessed - Google Maven is unreachable from this session (dl.google.com and maven.google.com both 403 through the agent proxy), so WebFetch against the release notes is the only way to get real version strings here.",
-        "DONE, and deliberately merged with AND-AUDIT-002 rather than sequenced before it. AndroidX released in mid-2026 is built against SDK 36, so a dependency-only bump on compileSdk 35 was expected to fail outright. Splitting them would have bought a guaranteed red CI cycle.",
-        "NOT DONE, deliberately left for separate changes to keep the blast radius reviewable: coil 3.0.4, maps-compose 6.2.1, play-services-maps 19.0.0, room 2.8.4. None of them block the API 36 deadline.",
-        "NOT DONE: play-billing is AND-AUDIT-003 and is a real API migration, not a version bump.",
-        "The Coil memory-cache calculation in DesMoinesInsiderApp is untouched. It uses Runtime.maxMemory() rather than Coil's maxSizePercent specifically because that API's signature has moved across Coil 3 point releases; revisit when Coil itself is bumped.",
-        "WATCH ITEM for the CI result: MainActivity calls calculateWindowSizeClass() from material3-window-size-class under @OptIn(ExperimentalMaterial3WindowSizeClassApi). That API has been moving toward material3-adaptive across releases. If anything fails to compile on this bump, that is the first place to look."
+        "EVIDENCE, from Android CI run 33179244127 (checkDebugAarMetadata, 16 issues): \"Dependency 'androidx.navigation:navigation-compose-android:2.10.0' requires libraries and applications that depend on it to compile against version 37 or later of the Android APIs. :app is currently compiled against android-36. Also, the maximum recommended compile SDK version for Android Gradle plugin 9.1.0 is 36.\"",
+        "CORRECTION to how this story was originally filed and to how I first implemented it. I asserted that the dependency upgrade was a prerequisite for targetSdk 36 and landed them together. That was backwards: compileSdk 36 works fine with the existing 2024-era dependencies, and it was the dependency bump that broke the build. AND-AUDIT-002 has been separated back out and stands on its own.",
+        "The real sequence is: upgrade AGP to a version that supports compileSdk 37, then compileSdk 37, then the AndroidX versions. targetSdk can stay at 36 - compileSdk higher than targetSdk is a normal, supported combination.",
+        "Find the AGP version that supports compileSdk 37 before touching anything. Note that an AGP upgrade usually drags the Gradle wrapper with it (currently 9.3.1), so this is a toolchain change, not a version-catalog edit.",
+        "ALTERNATIVE worth pricing first: intermediate AndroidX versions that still cap at compileSdk 36 would get most of the currency without the toolchain move. Requires checking the compileSdk requirement per candidate version, which is only visible from the AAR metadata or release notes - Google Maven is unreachable from a remote agent session.",
+        "This is NOT deadline-blocking. It was only ever blocking in my incorrect reading; the Play requirement is targetSdk 36, which AND-AUDIT-002 delivers on its own."
       ],
-      "notes": "Landed together with AND-AUDIT-002. Verified by CI, not locally - there is still no Android SDK in this session."
+      "notes": "Attempted on 2026-08-28 and reverted after CI. The attempt is the useful part: it proves the ceiling is AGP, not the version numbers, which is a much more specific starting point than 'the dependency set is stale'.\n\nConfirmed-current stable versions as of 2026-08-28, all requiring compileSdk 37: compose-bom 2026.08.00 (ui 1.12.0, material3 1.4.0), core-ktx 1.19.0, lifecycle 2.11.0, activity-compose 1.13.0, navigation-compose 2.10.0."
     },
     {
       "id": "AND-AUDIT-006",
