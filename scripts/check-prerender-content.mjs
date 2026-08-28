@@ -16,6 +16,27 @@
  * whose data had not arrived - it will serve a skeleton to any client that does
  * not run JavaScript, which is the entire population prerendering exists for.
  *
+ * THE COUNTER-ARGUMENT, which is already in this repo and deserves answering
+ * rather than ignoring. prerender.mjs rejects a capture containing "Loading X..."
+ * ONLY when #main-content has under 2,000 characters, and says why: "this app
+ * lazy-loads plenty of below-the-fold sections, so a fully-rendered page can
+ * legitimately still show 'Loading dashboard...' in one widget. Rejecting on
+ * that alone threw away the homepage - 11k characters of real content - over a
+ * single spinner."
+ *
+ * That proportionality rule is exactly what let /restaurants through: its main
+ * list was a skeleton while the rest of the page carried well over 2,000
+ * characters. And no threshold on SIZE would have caught it either - the
+ * skeleton was a small fraction of a large page and still the entire point of
+ * the route.
+ *
+ * So this check is absolute, and the cost is the case that comment protects: a
+ * genuinely lazy below-the-fold widget unresolved at capture fails the build
+ * here. Zero of 35 routes are in that state today. When one legitimately is,
+ * ALLOWED_SKELETON_ROUTES is the escape hatch - per route, with a reason -
+ * rather than deleting the check, which is how a gate that fires once gets
+ * switched off for good.
+ *
  * IT GATES, and that is deliberate where check-dom-budget does not. Element
  * counts move with live data, so gating on them is red in any quiet week. A
  * shipped skeleton is never correct on any data, so there is no quiet week that
@@ -57,20 +78,40 @@ if (files.length === 0) {
 // what the component contracts to emit, class names are styling and change.
 const BUSY = /aria-busy\s*=\s*["']true["']/i;
 
+/**
+ * Routes permitted to ship a skeleton, each with the reason it is acceptable.
+ * EMPTY TODAY and it should stay that way: an entry here means crawlers and
+ * every JS-less client see a loading state on that route forever. Add one only
+ * when the skeleton is a genuinely lazy below-the-fold widget whose absence
+ * costs a crawler nothing - never to make a red build green.
+ */
+const ALLOWED_SKELETON_ROUTES = new Map([
+  // ['/example', 'why a crawler seeing this skeleton is acceptable'],
+]);
+
 const failures = [];
+const allowed = [];
 for (const file of files) {
   const html = readFileSync(file, 'utf8');
   if (!BUSY.test(html)) continue;
   let route = '/' + relative(DIST, file).split(sep).join('/');
   route = route.replace(/index\.html$/, '').replace(/(.)\/$/, '$1');
   const occurrences = (html.match(new RegExp(BUSY.source, 'gi')) || []).length;
+  if (ALLOWED_SKELETON_ROUTES.has(route)) {
+    allowed.push({ route, occurrences, reason: ALLOWED_SKELETON_ROUTES.get(route) });
+    continue;
+  }
   failures.push({ route, occurrences });
 }
 
 console.log(`[prerender-content] ${files.length} prerendered page(s) checked for a shipped loading state.`);
 
+for (const a of allowed) {
+  console.log(`  allowed: ${a.route} (aria-busy x${a.occurrences}) - ${a.reason}`);
+}
+
 if (failures.length === 0) {
-  console.log('OK No page ships a skeleton.');
+  console.log(`OK No page ships a skeleton${allowed.length ? ` outside the ${allowed.length} allowed` : ''}.`);
   process.exit(0);
 }
 
@@ -80,6 +121,9 @@ console.error(
   '\n  These serve a skeleton to every client that does not run JavaScript.\n' +
     '  The prerenderer waits for aria-busy to clear, so this means that wait timed\n' +
     '  out: the page fetches outside TanStack Query and took longer than the cap,\n' +
-    '  or it never clears its loading state at all. See scripts/prerender.mjs.\n',
+    '  or it never clears its loading state at all. See scripts/prerender.mjs.\n\n' +
+    '  If the skeleton is a genuinely lazy below-the-fold widget that a crawler\n' +
+    '  loses nothing by missing, add the route to ALLOWED_SKELETON_ROUTES with a\n' +
+    '  reason. Do not add one to make a red build green.\n',
 );
 process.exit(1);
