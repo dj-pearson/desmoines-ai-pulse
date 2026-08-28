@@ -1044,3 +1044,26 @@ Evidence:
   - When a story says a behaviour "cannot be executed in CI", that is where static checking is worth
     the most, and it is exactly where nobody had set it up.
 ---
+
+## 2026-08-27 - WEB-SEO-013 AC7: the forward-looking collision check was blind and unwired
+- Audited all 34 scripts/check-* for whether anything runs them. Three were run by nothing.
+- Two of the three were NOT checks - check-catchdesmoines-urls.ts and check-harbour-update.ts print
+  rows and exit 0. Named check-* in a directory of 32 real ratchets, so the audit had to open each
+  one. Renamed inspect-*, header added, one docs line updated. Nothing else referenced them.
+- The third was real: check-pseo-collisions.ts, AC7's before-a-generation-run half. Its route set
+  used `.filter((p) => !p.includes(':'))`, dropping every parameterised route, so it found 10
+  collisions and ZERO shadowings. After pointing it at the shared pseoRouteClaims module: 10 literal,
+  257 shadowed across 5 entity-detail routes - including /outdoors/:slug and /sports/:slug, which the
+  published-side check cannot see because no published slug reaches them yet.
+- **Learnings for future iterations:**
+  - A CHECK NOTHING RUNS IS NOT A CHECK. Auditing `scripts/check-*` against workflows and
+    package.json took one command and found three. Worth repeating whenever a ratchet is added.
+  - Naming matters for auditability. Two ad-hoc diagnostics named check-* meant the audit could not
+    be done from the file list alone.
+  - The same defect can hide in the second implementation of a rule. The published-side collision
+    check handled parameterised routes; the taxonomy-side one, written separately, did not. That is
+    the third time this session that one rule in two places disagreed - shippable set, slug
+    construction, and now route claims. Shared module every time.
+  - A check written before the thing it guards exists tends to be under-tested. This one had never
+    run in CI, so its blind spot survived from the day it was written.
+---
