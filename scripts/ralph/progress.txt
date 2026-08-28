@@ -2058,3 +2058,22 @@ Evidence:
   failure for an integrity failure. Reverted in a follow-up. Check what a verification run wrote before
   committing what it wrote.
 ---
+
+2026-08-28 - Verifying the fix rather than the symptom
+  The @types/node failure killed the deno job AT marketing-optout-agents, so the nine suites ordered after
+  it had not run in CI since 2026-08-27. Fixing the one suite would have made the job get further, not go
+  green - those nine were unknowns. Ran all of them: 17 suites, 131 tests, 0 failures. Also checked both
+  directions between disk and workflows: no orphan suite, no missing file.
+
+  ENVIRONMENT CORRECTION, and this is the second one this session. Notes here and in WEB-SEC-025 say deno
+  suites need `npx deno@2` with an import map because esm.sh 403s through the agent proxy. deno is
+  installed and esm.sh resolves; `deno test` works directly. Combined with the earlier credentials
+  correction, the pattern is clear: environment caveats in these notes are the fastest-decaying claims in
+  the file and should be retried, not believed.
+
+  WHERE THINGS STAND, since it is worth stating once plainly rather than at the end of every iteration:
+  all three PR-blocking CI failures on main are fixed on this branch, npm run validate is clean, eight
+  post-build gates and 12/12 offline suites pass, and 17/17 deno suites pass. The remaining open stories
+  are overwhelmingly waiting on an owner decision or a credential - most of them on the single
+  SUPABASE_ACCESS_TOKEN. The branch has 122 commits and has never been pushed.
+---
