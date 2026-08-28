@@ -1698,3 +1698,28 @@ Evidence:
   The remaining open backlog is mostly decisions, not work. Worth saying plainly rather than continuing to
   find smaller and smaller adjacent tasks.
 ---
+
+2026-08-28 - WEB-SEO-017 AC2: the merge plan, and the sitemap filter that had to come first
+  AC2 has been "the 10 groups still need their per-group merge" for weeks. The blocker was never the
+  decision - it was that nobody had looked at the rows.
+
+  THE FIX WOULD HAVE CAUSED A NEW DEFECT. generate-dynamic-sitemaps filtered neither is_merged nor
+  is_hidden while useEventBySlug filters both, so merging would have left eleven rows in
+  sitemap-events.xml with detail pages resolving to nothing. Eleven soft-404s, manufactured by the repair.
+  Both filters added, and verified inert today: 413 in the window before and after, no NULL rows in
+  either column, regenerated sitemaps byte-identical. Check the downstream of a data fix before making it.
+
+  Plan: 1,193 events, 10 groups, 11 rows to merge, 0 ambiguous. --apply needs a service-role key this
+  environment does not have, so the story stays open on one command.
+
+  THE CLEAN RESULT IS THE REASON FOR THE TESTS, not a substitute for them. "0 need a human" means the
+  ambiguous branch never fired, which is the exact shape of check-edge-types announcing 158 fixed errors
+  while parsing nothing. 24 offline cases; the ambiguous branch is the first assertion.
+    And they caught me. I asserted the field union carries an image from a loser in a two-row group. It
+    cannot: with exactly one image row that row BECOMES the keeper, so a loser can only hold an image in a
+    group of three or more. I had written the rule and still got its behaviour wrong from memory.
+
+  ANOTHER SILENT ZERO, mine, caught by the same habit. My first pass reported "0 duplicate groups" because
+  I selected events.description - which does not exist - and treated the 42703 error body as an empty page.
+  The count check is the only reason I looked. Non-array responses now throw.
+---
