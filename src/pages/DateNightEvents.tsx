@@ -109,7 +109,7 @@ export default function DateNightEvents() {
   const faqData = [
     {
       question: "What are the best date night activities in Des Moines?",
-      answer: `Des Moines offers ${matchingEvents.length}+ date-worthy events including live music at venues like Wooly's and Hoyt Sherman Place, wine tastings, comedy shows, and dinner theaters. According to Des Moines Tourism, the metro area hosts 150+ evening entertainment events monthly—more than comparable Midwest cities.`,
+      answer: `Des Moines offers date-worthy events including live music at venues like Wooly's and Hoyt Sherman Place, wine tastings, comedy shows, and dinner theaters. According to Des Moines Tourism, the metro area hosts 150+ evening entertainment events monthly—more than comparable Midwest cities.`,
     },
     {
       question: "Where can couples go for romantic dates in Des Moines?",
@@ -143,7 +143,7 @@ export default function DateNightEvents() {
         // appends script children that differ rather than replacing them, so
         // the prerender captured both. Production served two FAQPage blocks
         // on this page, one saying "0 events" and one saying "8 events".
-        faqData={isLoading ? undefined : faqData}
+        faqData={faqData}
         keywords={[
           "date night Des Moines",
           "romantic things to do Des Moines",

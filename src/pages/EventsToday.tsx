@@ -86,7 +86,7 @@ export default function EventsToday() {
   const faqData = [
     {
       question: `What's happening today in Des Moines?`,
-      answer: `We have ${formatCount(todaysEvents.length, 'event')} happening today in Des Moines and surrounding areas. See our complete list with times, locations, and details.`,
+      answer: `See everything happening today in Des Moines and surrounding areas, with times, locations and details. The list is rebuilt daily.`,
     },
     {
       question: "How current is this information?",
@@ -116,7 +116,7 @@ export default function EventsToday() {
         // appends script children that differ rather than replacing them, so
         // the prerender captured both. Production served two FAQPage blocks
         // on this page, one saying "0 events" and one saying "8 events".
-        faqData={isLoading ? undefined : faqData}
+        faqData={faqData}
         isTimeSensitive={true}
       />
       <EventListJsonLd

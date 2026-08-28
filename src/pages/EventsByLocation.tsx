@@ -240,10 +240,26 @@ export default function EventsByLocation() {
     { name: suburbInfo.name, url: `/events/${slug}` },
   ];
 
+  // NO LIVE COUNT IN ANY ANSWER, and that is the whole point (WEB-SEO-008).
+  //
+  // This answer used to interpolate upcomingEvents.length, which made the FAQ
+  // differ between the loading render and the loaded one - so the block below
+  // had to withhold it while loading, or react-helmet-async would append both
+  // and production would serve two FAQPage blocks saying different numbers.
+  //
+  // Withholding traded that for a worse failure: whenever the prerenderer
+  // captured a route before its query resolved, the page shipped with NO
+  // FAQPage at all. Measured on the 2026-08-28 build, /events/altoona and
+  // /events/johnston had zero while /events/clive and /events/windsor-heights -
+  // same 5 h3, same empty ItemList - had one. A race, not a data difference.
+  //
+  // A count in structured data is also wrong on its own terms: it is a snapshot
+  // that goes stale the moment an event is ingested, and Google may well read a
+  // number the page no longer shows.
   const faqData = [
     {
       question: `What events are happening in ${suburbInfo.name}?`,
-      answer: `We currently have ${upcomingEvents.length} upcoming events in ${suburbInfo.name}. Check our list below for dates, times, and locations.`,
+      answer: `Browse upcoming ${suburbInfo.name} events below for dates, times and locations. The list is updated daily as new events are announced.`,
     },
     {
       question: `What is ${suburbInfo.name} known for?`,
@@ -263,13 +279,18 @@ export default function EventsByLocation() {
         canonicalUrl={`${BRAND.baseUrl}/events/${slug}`}
         pageType="website"
         breadcrumbs={breadcrumbs}
-        // Withheld until the data lands (WEB-SEO-008). Every answer here
-        // interpolates a live count, so the loading render and the loaded
-        // render produce DIFFERENT FAQPage JSON - and react-helmet-async
-        // appends script children that differ rather than replacing them, so
-        // the prerender captured both. Production served two FAQPage blocks
-        // on this page, one saying "0 events" and one saying "8 events".
-        faqData={isLoading ? undefined : faqData}
+        // Always emitted now. It used to be withheld while loading because the
+        // answers carried a live event count, so the loading and loaded renders
+        // produced different FAQPage JSON and react-helmet-async appended both
+        // rather than replacing - production served two blocks, one saying
+        // "0 events" and one saying "8 events".
+        //
+        // faqData no longer depends on any loaded value (see its definition
+        // above), so both renders produce byte-identical JSON and there is
+        // nothing to duplicate. That removes the reason to withhold, and with it
+        // the failure withholding caused: a route captured before its query
+        // resolved shipped with no FAQPage at all.
+        faqData={faqData}
         suburb={suburbInfo.name}
       />
       <EventListJsonLd

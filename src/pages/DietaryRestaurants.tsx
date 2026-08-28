@@ -136,7 +136,7 @@ export default function DietaryRestaurants() {
         ? "Top vegan spots include: Ritual Cafe (100% vegan), Flying Mango (extensive vegan menu), Freshii (build-your-own bowls), Gateway Market (vegan deli section). According to Happy Cow, Des Moines has 15+ vegan-friendly restaurants, significantly more than in 2015."
         : selectedDiet === "gluten-free"
         ? "Gluten-free leaders: Tavern Pizza + Bowl (dedicated GF menu), Proof (GF options marked), Crispy Leaf (GF base options). Many restaurants now use separate prep areas. According to the Gluten Intolerance Group, 30% of Des Moines restaurants offer verified GF options—up from 10% in 2018."
-        : `Des Moines has ${restaurants.length}+ restaurants accommodating dietary restrictions. Look for menus marked with dietary symbols, ask servers about preparation methods, and call ahead for complex restrictions. Most restaurants willing to modify dishes.`,
+        : `Des Moines has many restaurants accommodating dietary restrictions. Look for menus marked with dietary symbols, ask servers about preparation methods, and call ahead for complex restrictions. Most restaurants willing to modify dishes.`,
     },
     {
       question: "Do Des Moines restaurants have dedicated prep areas for dietary restrictions?",
@@ -170,7 +170,7 @@ export default function DietaryRestaurants() {
         // appends script children that differ rather than replacing them, so
         // the prerender captured both. Production served two FAQPage blocks
         // on this page, one saying "0 events" and one saying "8 events".
-        faqData={isLoading ? undefined : faqData}
+        faqData={faqData}
         keywords={[
           "vegan restaurants Des Moines",
           "vegetarian Des Moines",

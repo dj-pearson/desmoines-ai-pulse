@@ -110,7 +110,7 @@ export default function EventsThisWeekend() {
   const faqData = [
     {
       question: "What's happening this weekend in Des Moines?",
-      answer: `We have ${formatCount(weekendEvents.length, 'event')} happening this weekend in Des Moines and surrounding areas. See our complete list with dates, times, and maps on one page.`,
+      answer: `See everything happening this weekend in Des Moines and surrounding areas, with dates, times and maps on one page. The list is rebuilt daily as events are announced.`,
     },
     {
       question: "Are there kid-friendly events this weekend?",
@@ -143,7 +143,7 @@ export default function EventsThisWeekend() {
         // appends script children that differ rather than replacing them, so
         // the prerender captured both. Production served two FAQPage blocks
         // on this page, one saying "0 events" and one saying "8 events".
-        faqData={isLoading ? undefined : faqData}
+        faqData={faqData}
         isTimeSensitive={true}
       />
       <EventListJsonLd
