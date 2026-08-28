@@ -1019,3 +1019,28 @@ Evidence:
   - When a story's notes diagnose a defect in passing while explaining something else, the defect
     usually stays. That note was three days old and the hole was still open.
 ---
+
+## 2026-08-27 - functions/ is now type-checked (WEB-SEO-006 / WEB-CI-027 follow-on)
+- Same gap as scripts/, one directory over, and not build tooling: _middleware.ts runs on every
+  production request. Its only import - EventContext from @cloudflare/workers-types - resolves to
+  nothing, because the package is not installed and nothing ever said so.
+- 3 errors before, 0 after. Gates rather than ratchets.
+- TRIED THE DEPENDENCY FIRST AND REVERTED IT. `npm install --save-dev @cloudflare/workers-types` on
+  Windows pruned 31 @esbuild/<platform> optional binaries from package-lock.json, including
+  @esbuild/linux-x64 that CI needs. Net -550 lockfile lines for a types-only package.
+- Shim instead: functions/_typecheck/cloudflare.d.ts, following the deno.d.ts precedent. Left the
+  source import alone so the file stays correct if the real package is installed later.
+- Negative-controlled four ways: context.reqeust, .transfrom, a stray brace, and a type error in the
+  media route to prove that file is in the glob too.
+- **Learnings for future iterations:**
+  - `npm install` ON WINDOWS PRUNES OTHER PLATFORMS' OPTIONAL BINARIES FROM THE LOCKFILE. Adding one
+    types-only devDependency removed 31 @esbuild entries. ALWAYS `git diff --stat package-lock.json`
+    after an install here; a net deletion means the tree was reconciled, not just extended.
+  - Three directories had zero type coverage and two are now closed: scripts/ and functions/. The
+    third, supabase/functions/, is partly covered - type-check:edge is scoped to _shared/ only, with
+    a per-file ratchet for the ~120 others.
+  - A shim must be negative-controlled or it is decoration. Typos on the shimmed surface must fail;
+    if `context.anything` type-checks, the shim proves nothing.
+  - When a story says a behaviour "cannot be executed in CI", that is where static checking is worth
+    the most, and it is exactly where nobody had set it up.
+---
