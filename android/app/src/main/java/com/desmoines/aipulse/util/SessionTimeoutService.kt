@@ -18,14 +18,25 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Tracks user activity and enforces session timeouts.
- * Mirrors backend session_policies table (idle + absolute timeouts).
+ * Tracks admin activity and enforces session timeouts: 30 minutes idle,
+ * 4 hours absolute.
  *
- * - Regular users: 60-min idle timeout, 8-hour absolute timeout
- * - Admin users: 30-min idle timeout, 4-hour absolute timeout
+ * ADMIN SESSIONS ONLY. The backend `session_policies` table also defines a
+ * 60-minute / 8-hour policy for regular users, and this class used to carry it
+ * too. The client deliberately does not enforce that half (AND-AUDIT-006): this
+ * is a consumer events and restaurant guide, and signing a browsing user out
+ * mid-listing is a real cost against no threat model. A stale *admin* session is
+ * where it actually matters. Callers gate on the admin role; [startTracking] is
+ * only ever called for one.
  *
- * Resets idle timer on app resume (lifecycle activity callback).
- * Persists last activity timestamp in SecureStorage for app restart scenarios.
+ * The idle timer is reset by [recordActivity], which callers fire on navigation
+ * and on return to the foreground. Do not rely on the lifecycle callback below
+ * alone: the app is single-Activity Compose, so `onActivityResumed` fires when
+ * the app is re-entered and never while someone is using it. Wired to that
+ * signal by itself, this class would sign an admin out mid-scroll.
+ *
+ * Last-activity and session-start timestamps persist in SecureStorage so
+ * [isSessionValid] can catch a session that expired while the app was closed.
  */
 @Singleton
 class SessionTimeoutService @Inject constructor(
@@ -37,13 +48,8 @@ class SessionTimeoutService @Inject constructor(
         private const val KEY_LAST_ACTIVITY = "session_last_activity"
         private const val KEY_SESSION_START = "session_start_time"
 
-        // User timeouts
-        private const val USER_IDLE_TIMEOUT_MS = 60L * 60 * 1000       // 60 minutes
-        private const val USER_ABSOLUTE_TIMEOUT_MS = 8L * 60 * 60 * 1000 // 8 hours
-
-        // Admin timeouts (stricter)
-        private const val ADMIN_IDLE_TIMEOUT_MS = 30L * 60 * 1000      // 30 minutes
-        private const val ADMIN_ABSOLUTE_TIMEOUT_MS = 4L * 60 * 60 * 1000 // 4 hours
+        private const val IDLE_TIMEOUT_MS = 30L * 60 * 1000        // 30 minutes
+        private const val ABSOLUTE_TIMEOUT_MS = 4L * 60 * 60 * 1000 // 4 hours
 
         // Warning before expiry
         private const val WARNING_BEFORE_MS = 5L * 60 * 1000           // 5 minutes
@@ -52,10 +58,17 @@ class SessionTimeoutService @Inject constructor(
         private const val CHECK_INTERVAL_MS = 30_000L                  // 30 seconds
     }
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    // Reads and writes EncryptedSharedPreferences on every tick; the state it
+    // publishes is a StateFlow, which is safe to update from any thread.
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var checkJob: Job? = null
-    private var isAdmin = false
-    private var isActive = false
+
+    // Named isTracking, not isActive. Inside scope.launch { } the lambda
+    // receiver is CoroutineScope, which carries its own isActive extension
+    // property, and that shadows a field of the same name -- so the loop below
+    // read the coroutine's liveness and this flag was never actually consulted.
+    @Volatile
+    private var isTracking = false
 
     private val _sessionState = MutableStateFlow(SessionState.ACTIVE)
     val sessionState: StateFlow<SessionState> = _sessionState.asStateFlow()
@@ -82,13 +95,14 @@ class SessionTimeoutService @Inject constructor(
     }
 
     /**
-     * Start tracking session timeouts. Call after successful authentication.
+     * Start tracking. Call after an authenticated user is confirmed to be an
+     * admin; see the class doc for why non-admin sessions are not tracked.
      *
-     * @param isAdminUser Whether the authenticated user has admin role
+     * Resets the idle timer, so check [isSessionValid] first if you need to know
+     * whether the previous session had already expired.
      */
-    fun startTracking(isAdminUser: Boolean) {
-        isAdmin = isAdminUser
-        isActive = true
+    fun startTracking() {
+        isTracking = true
 
         val now = System.currentTimeMillis()
         secureStorage.saveLong(KEY_SESSION_START, now)
@@ -100,20 +114,20 @@ class SessionTimeoutService @Inject constructor(
         // Start periodic timeout checks
         checkJob?.cancel()
         checkJob = scope.launch {
-            while (isActive) {
+            while (isTracking) {
                 checkTimeouts()
                 delay(CHECK_INTERVAL_MS)
             }
         }
 
-        AppLogger.auth.info("Session timeout tracking started (admin=$isAdminUser)")
+        AppLogger.auth.info("Admin session timeout tracking started")
     }
 
     /**
      * Stop tracking session timeouts. Call on sign out.
      */
     fun stopTracking() {
-        isActive = false
+        isTracking = false
         checkJob?.cancel()
         checkJob = null
         _sessionState.value = SessionState.ACTIVE
@@ -149,11 +163,8 @@ class SessionTimeoutService @Inject constructor(
         if (lastActivity == 0L || sessionStart == 0L) return true // No tracking data
 
         val now = System.currentTimeMillis()
-        val idleTimeout = if (isAdmin) ADMIN_IDLE_TIMEOUT_MS else USER_IDLE_TIMEOUT_MS
-        val absoluteTimeout = if (isAdmin) ADMIN_ABSOLUTE_TIMEOUT_MS else USER_ABSOLUTE_TIMEOUT_MS
-
-        val idleExpired = (now - lastActivity) > idleTimeout
-        val absoluteExpired = (now - sessionStart) > absoluteTimeout
+        val idleExpired = (now - lastActivity) > IDLE_TIMEOUT_MS
+        val absoluteExpired = (now - sessionStart) > ABSOLUTE_TIMEOUT_MS
 
         return !idleExpired && !absoluteExpired
     }
@@ -165,29 +176,26 @@ class SessionTimeoutService @Inject constructor(
 
         if (lastActivity == 0L || sessionStart == 0L) return
 
-        val idleTimeout = if (isAdmin) ADMIN_IDLE_TIMEOUT_MS else USER_IDLE_TIMEOUT_MS
-        val absoluteTimeout = if (isAdmin) ADMIN_ABSOLUTE_TIMEOUT_MS else USER_ABSOLUTE_TIMEOUT_MS
-
         val idleElapsed = now - lastActivity
         val absoluteElapsed = now - sessionStart
 
         // Check absolute timeout first (non-resettable)
-        if (absoluteElapsed >= absoluteTimeout) {
+        if (absoluteElapsed >= ABSOLUTE_TIMEOUT_MS) {
             _sessionState.value = SessionState.EXPIRED
             AppLogger.auth.warning("Session expired: absolute timeout reached")
             return
         }
 
         // Check idle timeout
-        if (idleElapsed >= idleTimeout) {
+        if (idleElapsed >= IDLE_TIMEOUT_MS) {
             _sessionState.value = SessionState.EXPIRED
             AppLogger.auth.warning("Session expired: idle timeout reached")
             return
         }
 
         // Check warning threshold
-        val idleRemaining = idleTimeout - idleElapsed
-        val absoluteRemaining = absoluteTimeout - absoluteElapsed
+        val idleRemaining = IDLE_TIMEOUT_MS - idleElapsed
+        val absoluteRemaining = ABSOLUTE_TIMEOUT_MS - absoluteElapsed
         val minRemaining = minOf(idleRemaining, absoluteRemaining)
 
         if (minRemaining <= WARNING_BEFORE_MS) {

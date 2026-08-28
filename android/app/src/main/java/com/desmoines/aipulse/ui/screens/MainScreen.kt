@@ -17,7 +17,9 @@ import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -42,6 +44,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.desmoines.aipulse.ui.components.OfflineBanner
 import com.desmoines.aipulse.ui.components.PaywallHost
+import com.desmoines.aipulse.ui.components.SessionTimeoutBanner
 import com.desmoines.aipulse.ui.components.ads.InterstitialAdView
 import com.desmoines.aipulse.ui.components.ads.InterstitialAdViewModel
 import com.desmoines.aipulse.ui.components.bestof.BestOfWinnersViewModel
@@ -72,6 +75,35 @@ fun MainScreen(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
     val haptic = rememberHapticPerformer()
+
+    // Admin session timeout (AND-AUDIT-006). Navigation is the activity signal:
+    // the app is single-Activity Compose, so the service's own
+    // onActivityResumed callback only fires on returning to the app and would
+    // never see someone who is actively using it.
+    val sessionTimeoutViewModel: SessionTimeoutViewModel = hiltViewModel()
+    val sessionMinutesRemaining by sessionTimeoutViewModel.minutesRemaining.collectAsState()
+    val sessionExpired by sessionTimeoutViewModel.expiredNotice.collectAsState()
+    LaunchedEffect(navBackStackEntry) {
+        sessionTimeoutViewModel.recordActivity()
+    }
+
+    if (sessionExpired) {
+        AlertDialog(
+            onDismissRequest = { sessionTimeoutViewModel.acknowledgeExpiry() },
+            title = { Text("Signed out") },
+            text = {
+                Text(
+                    "Your admin session timed out, so you have been signed out on " +
+                        "this device. Sign in again to continue."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { sessionTimeoutViewModel.acknowledgeExpiry() }) {
+                    Text("OK")
+                }
+            },
+        )
+    }
 
     // Shared backdrop blur state: any screen presenting a sheet can set
     // isBlurred = true and the entire nav host below will pick up a
@@ -253,6 +285,10 @@ fun MainScreen(
             }
             Column(modifier = Modifier.weight(1f)) {
                 OfflineBanner(networkMonitor = networkMonitor)
+                SessionTimeoutBanner(
+                    minutesRemaining = sessionMinutesRemaining,
+                    onStaySignedIn = { sessionTimeoutViewModel.recordActivity() },
+                )
                 MainNavHost(
                     navController = navController,
                     scrollToTopTrigger = scrollToTopTrigger,
@@ -329,6 +365,10 @@ fun MainScreen(
         ) { innerPadding ->
             Column(modifier = Modifier.padding(innerPadding)) {
                 OfflineBanner(networkMonitor = networkMonitor)
+                SessionTimeoutBanner(
+                    minutesRemaining = sessionMinutesRemaining,
+                    onStaySignedIn = { sessionTimeoutViewModel.recordActivity() },
+                )
                 MainNavHost(
                     navController = navController,
                     scrollToTopTrigger = scrollToTopTrigger,
