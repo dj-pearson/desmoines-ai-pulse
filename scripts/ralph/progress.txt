@@ -1558,3 +1558,26 @@ Evidence:
     data-quality reporter that reports perfect quality when it cannot read is worse than one that
     crashes.
 ---
+
+2026-08-28 - WEB-BE-032: errors that were captured and then ignored
+  The ratchet only catches destructures that OMIT error. Binding error and never reading it passes it, and is
+  the same defect. Three real ones, one per severity tier:
+  - firecrawl-scraper: the duplicate check gates the insert, and `existingItems = data || []` makes a failed
+    lookup look like "no duplicate exists". Worse than a false zero - it manufactures rows rather than losing
+    them, on a scheduled re-run. Skips the item now.
+  - manage-subscription: a failed read answered "No active subscription found" to a paying customer. Separates
+    PGRST116 from a genuine failure; 503 on the latter.
+  - social-media-manager: count: "exact" requested, data.length measured, PostgREST caps at 1000.
+  Ratchet re-baselined, three commits stale: 127 -> 112 sites.
+
+  The lesson is about the scan, not the fixes. It bounded scope by character distance and was wrong in both
+  directions: two confident false positives in useTrending (errors aggregated 118 lines below the window) and
+  two missed firecrawl branches (identifier `error` reused inside the window). First reported count was 28, of
+  which 22 were noise. A proximity heuristic cannot answer a scope question. The accurate version filters tsc
+  TS6133 for error-named bindings; do that before trusting a number from this shape again.
+
+  Caught one of my own: the useTrending patch called `log.error` where the module binds `logger`, which would
+  have been a ReferenceError on the fallback path - the exact path that only runs when things are already
+  failing. It only surfaced because I went to check the call shape against a neighbouring line. Reverted with
+  the rest of that false positive.
+---
