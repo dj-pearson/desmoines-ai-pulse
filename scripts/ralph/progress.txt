@@ -2034,3 +2034,27 @@ Evidence:
   THE HABIT TO FIX: when a CI run has multiple failing jobs, read them all before picking one. I lost a
   day's worth of red PRs to reading the first failure and treating it as the failure.
 ---
+
+2026-08-28 - The third failing check, found only by asking a different question
+  Last iteration's lesson was "read all failing jobs, not the first". I did that - `gh run view --json jobs`
+  on the PR Checks run, two failures, both handled. There was a THIRD, in a different workflow, and it only
+  appears under `gh pr checks`. Reading the RUN and reading the PR are not the same question.
+
+  "Edge function & migration invariants" has been red since 2026-08-27, green on every run before it:
+      error: Could not find "@types/node" in a node_modules folder.
+  marketing-optout-agents.test.ts is the only one of eleven suites importing an agent that imports
+  supabase-js. Deno type-checks the downloaded index.d.mts, which references @types/node, and that job is
+  checkout + setup-deno with no npm ci. The run dies before one test executes and takes the suites after it
+  down too.
+
+  IT PASSES LOCALLY. I ran the bare command and got 10 passed, because this tree has node_modules/@types/node.
+  Reproducing needs a machine without one - every runner and no developer. That is the whole reason a test
+  added to prove an opt-out works has been silently voiding its own job for two days.
+  Fixed with --no-check=remote: the test's source is still checked, only downloaded .d.ts is skipped.
+
+  AND I NEARLY SHIPPED A LOCKFILE I COULD NOT VERIFY. The verification run added esm.sh integrity hashes to
+  deno.lock and they rode along in the commit. esm.sh rebuilds ?target=denonext output independently of the
+  package version, so hashes resolved on my machine could differ on a runner - trading an @types/node
+  failure for an integrity failure. Reverted in a follow-up. Check what a verification run wrote before
+  committing what it wrote.
+---
