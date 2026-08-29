@@ -4147,3 +4147,27 @@ Codebase pattern: a mock at a framework boundary does not just skip that
 boundary's bugs, it makes them unaskable. When a test stubs Uri, JSON, or a
 clock, ask what the real one does that the stub cannot express - and then go and
 measure it rather than reasoning about it.
+
+================================================================================
+2026-08-29  AND-AUDIT-014 AC4 complete - and AND-AUDIT-021's premise is stale
+================================================================================
+MainNavHost.kt is 87 lines, not 1,208. The package was split into NavGraph,
+DetailDestinations, FlowDestinations and TabDestinations and nobody recorded it,
+so TWO stories were still deferring to AND-AUDIT-021 as a blocker.
+
+Navigation measured before writing anything: 34 routes declared, 34 registered,
+0 raw-string navigate() calls. Nothing for a device test to find, so AC4's
+navigation item ships as static guards for the two failures that stay possible -
+a route never registered, and a createRoute that no longer builds its pattern.
+Both crash at tap time and both compile.
+
+Four mutations, each caught by exactly one test.
+
+Corrected my own inputs block from two commits back: a .kt file under
+src/main/java is already a test input via its compiled classes. Only the
+manifest, res/xml and androidTest sources needed declaring. Verified by dropping
+the .kt entries and re-running the mutation.
+
+Codebase pattern: before doing work a story defers to another story for, MEASURE
+the blocker. This one had been fixed and not written down, and it was holding up
+two other stories.
