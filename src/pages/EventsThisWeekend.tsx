@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { ListFreshness } from "@/components/ListFreshness";
+import { MonthLinks } from "@/components/seo/MonthLinks";
 import { FAQSection } from "@/components/FAQSection";
 import { SocialEventCard } from "@/components/SocialEventCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
@@ -189,6 +190,11 @@ export default function EventsThisWeekend() {
               read "2 hours ago" days later. Renders nothing when no row carries
               a usable date. */}
           <ListFreshness rows={weekendEvents} className="mb-4" />
+
+          {/* SEO-016: the month index pages existed, worked, and were linked
+              from nowhere on the whole site. Crawlers follow links; a URL that
+              appears only in a sitemap is a weak signal. */}
+          <MonthLinks className="mb-6" />
 
           <div className="flex items-center gap-4 text-muted-foreground mb-4">
             <div className="flex items-center gap-1">

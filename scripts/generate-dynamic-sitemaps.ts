@@ -243,6 +243,70 @@ async function generateEventsSitemap(): Promise<number | null> {
     };
   });
 
+  // SEO-016: month index pages, e.g. /events/september-2026.
+  //
+  // These pages EXIST and are reachable - EventsSegmentHandler dispatches a
+  // month-year slug on /events/:slug to MonthlyEventsPage, which declares its
+  // own canonical and emits EventListJsonLd. They were in NO sitemap, in no
+  // prerender route, and linked from nowhere on the site, so nothing could find
+  // them. A page that works and cannot be discovered is indistinguishable from
+  // one that was never built.
+  //
+  // "des moines events september 2026" is how people search a calendar, and the
+  // demand is already visible in Search Console without a page to serve it:
+  // "des moines festivals 2026" earns 2.51% CTR at position 10.3.
+  //
+  // DERIVED FROM THE EVENTS THIS SITEMAP JUST COLLECTED, which is the whole
+  // point. The story's own criterion is "do not publish month pages for periods
+  // with no data" - a thin page per month across two years is 24 near-empty
+  // pages, which is the pSEO trap. Building the set from real rows makes that
+  // true by construction rather than by a rule somebody has to remember: a
+  // month appears only if an event falls in it.
+  //
+  // MIN_EVENTS_PER_MONTH is a floor on top of that. One event in a month is not
+  // a listing page, it is a detail page with a heading, and it would compete
+  // with the event's own URL.
+  const MIN_EVENTS_PER_MONTH = 3;
+  const MONTH_NAMES = [
+    'january', 'february', 'march', 'april', 'may', 'june',
+    'july', 'august', 'september', 'october', 'november', 'december',
+  ];
+
+  const perMonth = new Map<string, { count: number; lastmod: string }>();
+  for (const event of eventList) {
+    // Prefer the UTC start, matching what the page itself queries on.
+    const raw = event.event_start_utc || event.date;
+    if (!raw) continue;
+    const d = new Date(raw);
+    if (!Number.isFinite(d.getTime())) continue;
+    const slug = `${MONTH_NAMES[d.getUTCMonth()]}-${d.getUTCFullYear()}`;
+    const lastmod = event.updated_at ? event.updated_at.split('T')[0] : currentDate;
+    const seen = perMonth.get(slug);
+    if (!seen) perMonth.set(slug, { count: 1, lastmod });
+    else {
+      seen.count += 1;
+      // Newest touched event in the month is the month page's real lastmod.
+      if (lastmod > seen.lastmod) seen.lastmod = lastmod;
+    }
+  }
+
+  const monthUrls = [...perMonth.entries()]
+    .filter(([, v]) => v.count >= MIN_EVENTS_PER_MONTH)
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .map(([slug, v]) => ({
+      loc: `${baseUrl}/events/${slug}`,
+      lastmod: v.lastmod,
+      changefreq: 'daily',
+      priority: '0.8',
+    }));
+
+  const skipped = perMonth.size - monthUrls.length;
+  console.log(
+    `   ${monthUrls.length} month page(s) with >= ${MIN_EVENTS_PER_MONTH} events` +
+      (skipped > 0 ? `; ${skipped} month(s) skipped as too thin` : ''),
+  );
+  urls.push(...monthUrls);
+
   // Sitemap spec requires at least one <url> - include events index if empty
   if (urls.length === 0) {
     urls.push({
