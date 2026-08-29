@@ -4020,3 +4020,27 @@ three passed with the guard disabled - the prompt only shows while already
 locked, so re-locking on return is a no-op. Removed the guard, its tests and its
 comment. Mutation-test a guard before trusting the tests that surround it; a
 green test next to speculative code proves nothing about the code.
+
+================================================================================
+2026-08-29  WEB-PERF-023 - the cheaper card, measured instead of designed
+================================================================================
+The previous note reserved "a cheaper card" as a design change. Counting the
+built HTML first showed most of the cost was not design: 3 of a card's 50 tags
+were elements rendered and then hidden, and 41% of the homepage was inline SVG
+icon internals.
+
+SocialEventCard 50 -> 43 tags. 665 lucide JSX uses converted to SpriteIcon
+across 185 files. Three icons added to the sprite on arithmetic the old comments
+had skipped - building-2 saves 180 nodes on /stay against a 7-node symbol.
+
+9 routes: 20697 -> 18977 elements (-8.3%), bundle +0.4 KB gz.
+/events/kids drops under the 1,500 Lighthouse flag. 10 of 35 still over it.
+
+Two of my own mistakes, both caught by existing guards:
+  a const placed above the declaration it referenced (TDZ) blanked every event
+  route - prerender's strict gate refused to publish the error page.
+  the codemod's import landed inside a multi-line import block in 4 files -
+  check-import-exports.mjs caught it.
+
+Pattern: when a note says "X is the next move but it needs a design decision",
+measure X first. Two thirds of this was waste, not design.
