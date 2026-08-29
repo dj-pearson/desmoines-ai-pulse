@@ -3517,3 +3517,32 @@ before, on a clean tree, verified by stashing.
   FAQSection render must still fail, and re-adding the stale emitter must trip the new drift check - both
   were run before believing the green.
 ---
+
+## 2026-08-29 - Guard sweep, and a correction: most edge functions ARE deployed
+Ran the project's own check-* scripts looking for more red-but-ignored gates after the WEB-SEO-008 fix. One
+was red - on my own new function - and re-baselining it turned up a claim I had repeated three times and
+never checked.
+
+Files changed:
+- edge-deploy-baseline.json - executive-digest added; gsc-fetch-properties, gsc-sync-data and
+  subscription-lifecycle removed, because they are deployed
+- prd.json - XPLAT-007 correction
+
+**Learnings for future iterations:**
+- **97 of 162 edge functions ARE deployed.** XPLAT-007 says "NO edge function has ever deployed", and
+  WEB-SEO-011 and XPLAT-008 repeat it. What has never succeeded is the deploy WORKFLOW. The live product
+  surface answers today: discover-chat, generate-itinerary, image-transform, validate-ios-receipt,
+  version-check, og-image. Undeployed are the newer agent/automation ones - regenerate-sitemaps,
+  export-user-data, crm-console, outreach-reply, agent-ops-digest, get-active-ads.
+- **Which means a single function can ship without the GitHub secret.** `npx supabase functions deploy <slug>
+  --project-ref <ref>` is how the 97 got there. SUPABASE_ACCESS_TOKEN unblocks AUTOMATED deploys, not all
+  deploys. Do not tell the owner a one-function fix is blocked on CI.
+- **The 401-vs-404 discriminator is the cheap probe:** POST {} with the anon key; 404 means undeployed,
+  anything else (401/400/405/302) means deployed. Same test check-edge-deploys.ts uses.
+- **`npm run validate` is not the full gate.** check-edge-deploys, check-bundle-budget, check-cron-health,
+  check-anon-exposure and others run only in CI workflows, so a green validate can still leave a guard red -
+  which is exactly what the AOS-MANAGE-001 commit did. Run the CI check list, not just validate.
+- check-cron-health skips silently without SUPABASE_URL / SERVICE_ROLE_KEY. That is fine in CI -
+  rls-config-audit.yml declares `environment: Scrape` at :19 so it gets them - but it means a local run
+  proves nothing.
+---
