@@ -10,21 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { 
-  Settings, 
-  Bell, 
-  Shield, 
-  Zap, 
-  Mail, 
-  Eye, 
-  Globe,
-  Clock,
-  Database,
-  BarChart,
-  Server,
-  Palette,
-  RefreshCw
-} from 'lucide-react';
+import { Settings, Bell, Shield, Zap, Mail, Eye, Globe, Database, BarChart, Server, Palette, RefreshCw } from "lucide-react";
 import { createLogger } from '@/lib/logger';
 import { storage } from '@/lib/safeStorage';
 

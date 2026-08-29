@@ -3,20 +3,9 @@ import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-  ChefHat,
-  DollarSign,
-  MapPin,
-  Star,
-  Clock,
-  Leaf,
-  X,
-  ChevronDown,
-  Check,
-  Sparkles,
-  SlidersHorizontal,
-} from "lucide-react";
+import { ChefHat, DollarSign, MapPin, Star, Leaf, X, ChevronDown, Check, SlidersHorizontal } from "lucide-react";
 import type { RestaurantFilterOptions } from "@/components/RestaurantFilters";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface RestaurantInlineFiltersProps {
   filters: RestaurantFilterOptions;
@@ -352,7 +341,7 @@ export function RestaurantInlineFilters({
             <div className="space-y-2">
               <label className="flex items-center justify-between p-2.5 rounded-xl bg-gray-50 dark:bg-gray-800 cursor-pointer">
                 <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-emerald-500" />
+                  <SpriteIcon name="clock" className="h-4 w-4 text-emerald-500" />
                   <div>
                     <span className="text-sm font-medium">Open Now</span>
                     <p className="text-[11px] text-muted-foreground">Currently serving</p>
@@ -367,7 +356,7 @@ export function RestaurantInlineFilters({
               </label>
               <label className="flex items-center justify-between p-2.5 rounded-xl bg-gray-50 dark:bg-gray-800 cursor-pointer">
                 <div className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-amber-500" />
+                  <SpriteIcon name="sparkles" className="h-4 w-4 text-amber-500" />
                   <div>
                     <span className="text-sm font-medium">Featured Only</span>
                     <p className="text-[11px] text-muted-foreground">Editor's picks</p>

@@ -10,21 +10,9 @@ import { useAuth } from "@/hooks/useAuth";
 import Header from "./Header";
 import Footer from "./Footer";
 import SEOHead from "./SEOHead";
-import {
-  Search,
-  MapPin,
-  Star,
-  Clock,
-  DollarSign,
-  Heart,
-  Filter,
-  Grid,
-  List,
-  ExternalLink,
-  Calendar,
-  Navigation2
-} from "lucide-react";
+import { Search, Star, DollarSign, Heart, Filter, Grid, List, Navigation2 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export default function AdvancedSearchPage() {
   const { user } = useAuth();
@@ -50,11 +38,11 @@ export default function AdvancedSearchPage() {
   const getContentTypeIcon = (type: string) => {
     switch (type) {
       case 'event':
-        return <Calendar className="h-4 w-4" />;
+        return <SpriteIcon name="calendar" className="h-4 w-4" />;
       case 'restaurant':
         return <DollarSign className="h-4 w-4" />;
       case 'attraction':
-        return <MapPin className="h-4 w-4" />;
+        return <SpriteIcon name="map-pin" className="h-4 w-4" />;
       case 'playground':
         return <Navigation2 className="h-4 w-4" />;
       default:
@@ -216,7 +204,7 @@ export default function AdvancedSearchPage() {
 
                             <div className="space-y-2 text-sm">
                               <div className="flex items-center gap-1 text-muted-foreground">
-                                <MapPin className="h-3 w-3" />
+                                <SpriteIcon name="map-pin" className="h-3 w-3" />
                                 <span className="truncate">{result.location}</span>
                                 {result.distance && (
                                   <span className="text-xs">({result.distance.toFixed(1)} mi)</span>
@@ -256,7 +244,7 @@ export default function AdvancedSearchPage() {
                             <Link to={getResultLink(result)} className="block">
                               <Button className="w-full mt-4 group">
                                 View Details
-                                <ExternalLink className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                                <SpriteIcon name="external-link" className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
                               </Button>
                             </Link>
                           </CardContent>
@@ -292,7 +280,7 @@ export default function AdvancedSearchPage() {
 
                               <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                                 <div className="flex items-center gap-1">
-                                  <MapPin className="h-3 w-3" />
+                                  <SpriteIcon name="map-pin" className="h-3 w-3" />
                                   <span>{result.location}</span>
                                   {result.distance && (
                                     <span>({result.distance.toFixed(1)} mi)</span>
@@ -333,7 +321,7 @@ export default function AdvancedSearchPage() {
                                 <Link to={getResultLink(result)}>
                                   <Button variant="outline" size="sm" className="group">
                                     View Details
-                                    <ExternalLink className="h-3 w-3 ml-1 group-hover:translate-x-1 transition-transform" />
+                                    <SpriteIcon name="external-link" className="h-3 w-3 ml-1 group-hover:translate-x-1 transition-transform" />
                                   </Button>
                                 </Link>
                               </div>

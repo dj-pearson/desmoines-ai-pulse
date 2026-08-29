@@ -6,8 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import { useCampaigns } from "@/hooks/useCampaigns";
 import { useAuth } from "@/hooks/useAuth";
 import { format } from "date-fns";
-import { Eye, Calendar, DollarSign, Plus, Upload, BarChart3 } from "lucide-react";
+import { Eye, DollarSign, Plus, Upload, BarChart3 } from "lucide-react";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const STATUS_COLORS = {
   draft: "secondary",
@@ -98,7 +99,7 @@ export default function CampaignDashboard() {
               <CardContent>
                 <div className="grid md:grid-cols-3 gap-4 mb-4">
                   <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <SpriteIcon name="calendar" className="h-4 w-4 text-muted-foreground" />
                     <div>
                       <p className="text-sm font-medium">Duration</p>
                       <p className="text-sm text-muted-foreground">

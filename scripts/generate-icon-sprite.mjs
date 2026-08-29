@@ -52,8 +52,20 @@ const OUT = path.join(ROOT, 'src', 'components', 'ui', 'icon-sprite.generated.ts
  */
 const ICONS = [
   'arrow-right',
+  // building-2 is the single best entry in this list and it was missed because
+  // rule 2 was read as a yes/no rather than as arithmetic. It has SEVEN child
+  // shapes, so each instance goes 8 nodes -> 2, and HotelCard puts one on every
+  // card: measured on the prerendered /stay, 30 instances = 180 nodes recovered
+  // against a symbol that costs 7 once.
+  'building-2',
   'calendar',
+  // chef-hat saves only one node per instance, and RestaurantCard's own comment
+  // used to say that was not worth a symbol on every page. The arithmetic says
+  // otherwise: 104 instances on /restaurants against a 2-node symbol.
+  'chef-hat',
   'clock',
+  // external-link repeats per card on /stay (27) and per row in several lists.
+  'external-link',
   'map-pin',
   'share-2',
   'sparkles',

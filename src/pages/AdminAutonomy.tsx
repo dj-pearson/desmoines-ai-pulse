@@ -5,17 +5,8 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import SEOHead from "@/components/SEOHead";
-import {
-  CheckCircle2,
-  AlertTriangle,
-  Inbox,
-  ShieldCheck,
-  GitMerge,
-  Megaphone,
-  Activity,
-  RefreshCw,
-  ArrowRight,
-} from "lucide-react";
+import { CheckCircle2, AlertTriangle, Inbox, ShieldCheck, GitMerge, Megaphone, Activity, RefreshCw } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 /**
  * Admin Autonomy Dashboard (WEB-AUTO-014). One pane answering "is anything
@@ -124,7 +115,7 @@ export default function AdminAutonomy() {
                       ) : (
                         <Badge variant={waiting ? "default" : "secondary"}>{count}</Badge>
                       )}
-                      <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                      <SpriteIcon name="arrow-right" className="h-4 w-4 text-muted-foreground" />
                     </div>
                   </div>
                 </Card>

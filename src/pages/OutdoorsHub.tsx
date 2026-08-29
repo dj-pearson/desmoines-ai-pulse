@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import { TreePine, MapPin, Ruler, Mountain, Bike, Footprints, Route } from 'lucide-react';
+import { TreePine, Ruler, Mountain, Bike, Footprints, Route } from "lucide-react";
 
 const DIFFICULTY_COLORS: Record<string, string> = {
   easy: 'bg-green-500/10 text-green-700 dark:text-green-400',

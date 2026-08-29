@@ -18,7 +18,7 @@ import { getEventCategoryStyle, STATUS_BADGE } from '@/lib/categoryStyles';
 import { SponsoredBadge } from '@/components/SponsoredBadge';
 import { isSponsoredActive, logSponsoredClick } from '@/lib/sponsored';
 import { useSponsoredImpression } from '@/hooks/useSponsoredImpression';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 
 interface SocialEventCardProps {
   event: Event;
@@ -55,6 +55,16 @@ function SocialEventCardComponent({
   const liveStats = socialData?.liveStats ?? individualFetch.liveStats;
   const attendees = socialData?.attendees ?? individualFetch.attendees;
 
+  // WEB-PERF-023. The imageless panel below used to render on EVERY card and be
+  // hidden with a class, because the img's onError reached for its next sibling
+  // and needed it already in the DOM. Measured in the built HTML, that was six
+  // wasted elements on 31 of 33 cards on /events. React state does the same job
+  // with nothing rendered until it is needed, and it also stops the error
+  // handler baking inline styles into prerendered HTML that hydration will not
+  // clean up.
+  const [imageFailed, setImageFailed] = useState(false);
+  const showImage = Boolean(event.image_url) && !imageFailed;
+
   const categoryStyle = getEventCategoryStyle(event.category);
 
   const getDateParts = () => {
@@ -84,6 +94,15 @@ function SocialEventCardComponent({
   // Sponsored listing (WEB-FEAT-005): active only while not expired.
   const sponsoredActive = isSponsoredActive(event);
   const cardRef = useRef<HTMLDivElement>(null);
+
+  // Mirrors the four conditions inside the stack below. Kept adjacent to them
+  // so a fifth badge cannot be added without this going false for it.
+  const hasTopRightBadge = Boolean(
+    sponsoredActive ||
+      isLive ||
+      (!sponsoredActive && event.is_featured) ||
+      (event as any).distance_meters,
+  );
   useSponsoredImpression(cardRef, 'event', event.id, sponsoredActive);
 
   return (
@@ -104,19 +123,14 @@ function SocialEventCardComponent({
         <CardContent className="p-0">
           {/* Image Section with Overlay */}
           <div className={`relative overflow-hidden ${featured ? 'h-64 md:h-80' : 'h-52'}`}>
-            {event.image_url ? (
+            {showImage ? (
               <img
                 src={event.image_url}
                 alt={`${event.title} - ${event.category} event in ${event.city || 'Des Moines'}, Iowa`}
                 className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                 loading="lazy"
                 decoding="async"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.style.display = 'none';
-                  const fallback = target.nextElementSibling as HTMLElement;
-                  if (fallback) fallback.style.display = 'flex';
-                }}
+                onError={() => setImageFailed(true)}
               />
             ) : null}
             {/* Designed fallback when the event has no image (WEB-QA-006).
@@ -126,10 +140,9 @@ function SocialEventCardComponent({
                 category tokens the date badge uses — with a soft dot texture and
                 the category set as a typographic element, so an imageless card
                 looks intentional next to cards that do have art. */}
+            {!showImage && (
             <div
-              className={`relative w-full h-full overflow-hidden items-center justify-center flex-col gap-3 ${categoryStyle.icon} ${
-                event.image_url ? 'hidden' : 'flex'
-              }`}
+              className={`relative w-full h-full overflow-hidden items-center justify-center flex-col gap-3 flex ${categoryStyle.icon}`}
             >
               {/* Subtle dot texture so the panel isn't a flat wash of colour */}
               <div
@@ -152,24 +165,28 @@ function SocialEventCardComponent({
                 {event.category}
               </span>
             </div>
+            )}
 
             {/* Bottom gradient for text readability */}
             <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
 
             {/* Date Badge - Calendar Style */}
-            <div className="absolute top-3 left-3 z-10">
-              <div className="bg-white dark:bg-slate-900 rounded-lg shadow-lg overflow-hidden text-center w-14">
-                <div className={`${categoryStyle.bg} text-white text-[10px] font-bold py-0.5 tracking-wider`}>
-                  {dateParts.month}
-                </div>
-                <div className="py-1">
-                  <div className="text-xl font-bold leading-none text-foreground">{dateParts.day}</div>
-                  <div className="text-[10px] text-muted-foreground">{dateParts.weekday}</div>
-                </div>
+            {/* The positioning wrapper and the badge were two divs describing the
+                same box (WEB-PERF-023). */}
+            <div className="absolute top-3 left-3 z-10 bg-white dark:bg-slate-900 rounded-lg shadow-lg overflow-hidden text-center w-14">
+              <div className={`${categoryStyle.bg} text-white text-[10px] font-bold py-0.5 tracking-wider`}>
+                {dateParts.month}
+              </div>
+              <div className="py-1">
+                <div className="text-xl font-bold leading-none text-foreground">{dateParts.day}</div>
+                <div className="text-[10px] text-muted-foreground">{dateParts.weekday}</div>
               </div>
             </div>
 
-            {/* Top Right Badges */}
+            {/* Top Right Badges. The container shipped empty on 38 of 38 cards on
+                /events/today and 40 of 40 on /events/date-night - most events
+                are neither sponsored, live, featured nor distance-tagged. */}
+            {hasTopRightBadge && (
             <div className="absolute top-3 right-3 z-10 flex flex-col gap-1.5 items-end">
               {sponsoredActive && <SponsoredBadge className="shadow-lg" />}
               {isLive && (
@@ -191,6 +208,7 @@ function SocialEventCardComponent({
                 </Badge>
               )}
             </div>
+            )}
 
             {/* Bottom Info Overlay */}
             <div className="absolute bottom-0 left-0 right-0 p-4 z-10">

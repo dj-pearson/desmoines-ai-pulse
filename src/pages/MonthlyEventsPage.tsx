@@ -11,13 +11,14 @@ import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar, MapPin, ChevronLeft, ChevronRight, Clock } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { format, startOfMonth, endOfMonth, parseISO, isValid } from "date-fns";
 import { useState, useEffect, useMemo } from "react";
 import { BRAND } from "@/lib/brandConfig";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { EVENT_LIST_COLUMNS } from "@/lib/listColumns";
 import { formatCount } from "@/lib/pluralize";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 /**
  * WEB-PERF-023. The grid rendered every event in the month, which measured
@@ -194,16 +195,16 @@ export default function MonthlyEventsPage() {
             
             <div className="text-center">
               <div className="flex items-center gap-2 mb-2">
-                <Calendar className="h-6 w-6 text-primary" />
+                <SpriteIcon name="calendar" className="h-6 w-6 text-primary" />
                 <h1 className="text-3xl font-bold">{monthDisplayName} Events</h1>
               </div>
               <div className="flex items-center gap-4 text-muted-foreground">
                 <div className="flex items-center gap-1">
-                  <MapPin className="h-4 w-4" />
+                  <SpriteIcon name="map-pin" className="h-4 w-4" />
                   <span>Des Moines Metro Area</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Clock className="h-4 w-4" />
+                  <SpriteIcon name="clock" className="h-4 w-4" />
                   <span>{events?.length || 0} Events This Month</span>
                 </div>
               </div>
@@ -365,7 +366,7 @@ export default function MonthlyEventsPage() {
         ) : (
           <Card className="text-center py-12">
             <CardContent>
-              <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <SpriteIcon name="calendar" className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h2 className="text-xl font-semibold mb-2">
                 No Events Found for {monthDisplayName}
               </h2>

@@ -1,17 +1,7 @@
 import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Gift,
-  Baby,
-  Heart,
-  Clock,
-  Leaf,
-  Calendar,
-  MapPin,
-  Utensils,
-  Music,
-  Users,
-} from "lucide-react";
+import { Gift, Baby, Heart, Leaf, Utensils, Music } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface RelatedLink {
   href: string;
@@ -48,21 +38,21 @@ const ALL_RELATED_LINKS: RelatedLink[] = [
     href: "/events/today",
     label: "Today's Events",
     description: "What's happening right now",
-    icon: <Calendar className="h-5 w-5" />,
+    icon: <SpriteIcon name="calendar" className="h-5 w-5" />,
     category: "events",
   },
   {
     href: "/events/this-weekend",
     label: "This Weekend",
     description: "Weekend activities and entertainment",
-    icon: <Calendar className="h-5 w-5" />,
+    icon: <SpriteIcon name="calendar" className="h-5 w-5" />,
     category: "events",
   },
   {
     href: "/events",
     label: "All Events",
     description: "Browse all Des Moines events",
-    icon: <Calendar className="h-5 w-5" />,
+    icon: <SpriteIcon name="calendar" className="h-5 w-5" />,
     category: "events",
   },
   // Restaurants
@@ -70,7 +60,7 @@ const ALL_RELATED_LINKS: RelatedLink[] = [
     href: "/restaurants/open-now",
     label: "Open Now",
     description: "Restaurants currently serving",
-    icon: <Clock className="h-5 w-5" />,
+    icon: <SpriteIcon name="clock" className="h-5 w-5" />,
     category: "restaurants",
   },
   {
@@ -92,14 +82,14 @@ const ALL_RELATED_LINKS: RelatedLink[] = [
     href: "/attractions",
     label: "Attractions",
     description: "Museums, parks, and landmarks",
-    icon: <MapPin className="h-5 w-5" />,
+    icon: <SpriteIcon name="map-pin" className="h-5 w-5" />,
     category: "guides",
   },
   {
     href: "/playgrounds",
     label: "Playgrounds",
     description: "Parks and play areas for kids",
-    icon: <Users className="h-5 w-5" />,
+    icon: <SpriteIcon name="users" className="h-5 w-5" />,
     category: "guides",
   },
 ];
@@ -163,7 +153,7 @@ export default function RelatedContent({
     <Card className="mt-8">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <MapPin className="h-5 w-5 text-primary" />
+          <SpriteIcon name="map-pin" className="h-5 w-5 text-primary" />
           {title}
         </CardTitle>
       </CardHeader>

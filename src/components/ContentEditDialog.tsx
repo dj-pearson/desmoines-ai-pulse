@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Switch } from "./ui/switch";
 import { Badge } from "./ui/badge";
 import { Alert, AlertDescription } from "./ui/alert";
-import { CalendarIcon, Save, X, Plus, Trash2, MapPin, CheckCircle2 } from "lucide-react";
+import { CalendarIcon, Save, X, Plus, Trash2, CheckCircle2 } from "lucide-react";
 import { Calendar } from "./ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { format } from "date-fns";
@@ -17,6 +17,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useVenueMatcher, KnownVenue } from "@/hooks/useKnownVenues";
 import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('ContentEditDialog');
 
@@ -584,7 +585,7 @@ export default function ContentEditDialog({
               {/* Show venue match alert after venue field */}
               {field.key === "venue" && matchedVenue && !venueAutoFilled && (
                 <Alert className="mt-2 border-green-200 bg-green-50">
-                  <MapPin className="h-4 w-4 text-green-600" />
+                  <SpriteIcon name="map-pin" className="h-4 w-4 text-green-600" />
                   <AlertDescription className="flex items-center justify-between">
                     <div className="text-sm">
                       <span className="font-medium text-green-800">

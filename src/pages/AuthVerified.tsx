@@ -2,11 +2,12 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle, Sparkles, Calendar, Heart, ArrowRight } from "lucide-react";
+import { CheckCircle, Heart } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export default function AuthVerified() {
   const navigate = useNavigate();
@@ -58,7 +59,7 @@ export default function AuthVerified() {
             {/* What's Next Section */}
             <div className="bg-primary/5 rounded-lg p-6 space-y-4">
               <h3 className="font-semibold text-lg flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-primary" />
+                <SpriteIcon name="sparkles" className="h-5 w-5 text-primary" />
                 What You Can Do Now
               </h3>
 
@@ -77,7 +78,7 @@ export default function AuthVerified() {
 
                 <div className="flex items-start gap-3">
                   <div className="rounded-full bg-primary/10 p-2 mt-1">
-                    <Calendar className="h-4 w-4 text-primary" />
+                    <SpriteIcon name="calendar" className="h-4 w-4 text-primary" />
                   </div>
                   <div>
                     <h4 className="font-medium">Get Personalized Recommendations</h4>
@@ -89,7 +90,7 @@ export default function AuthVerified() {
 
                 <div className="flex items-start gap-3">
                   <div className="rounded-full bg-primary/10 p-2 mt-1">
-                    <Sparkles className="h-4 w-4 text-primary" />
+                    <SpriteIcon name="sparkles" className="h-4 w-4 text-primary" />
                   </div>
                   <div>
                     <h4 className="font-medium">Add Events to Your Calendar</h4>
@@ -139,7 +140,7 @@ export default function AuthVerified() {
                 size="lg"
               >
                 Start Exploring Events
-                <ArrowRight className="ml-2 h-5 w-5" />
+                <SpriteIcon name="arrow-right" className="ml-2 h-5 w-5" />
               </Button>
 
               <p className="text-center text-sm text-muted-foreground">

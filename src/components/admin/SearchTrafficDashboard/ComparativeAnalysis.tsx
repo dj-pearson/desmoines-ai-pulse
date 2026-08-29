@@ -18,7 +18,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
-import { BarChart3, TrendingUp, Activity } from "lucide-react";
+import { BarChart3, Activity } from "lucide-react";
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('ComparativeAnalysis');

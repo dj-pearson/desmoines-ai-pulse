@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { createLogger } from '@/lib/logger';
 import { supabase } from "@/integrations/supabase/client";
 import { useSearchParams, Link } from "react-router-dom";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('DietaryRestaurants');
 import Header from "@/components/Header";
@@ -12,7 +13,7 @@ import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import RelatedContent from "@/components/RelatedContent";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Leaf, Wheat, Beef, MapPin, FilterX } from "lucide-react";
+import { Leaf, Wheat, Beef, FilterX } from "lucide-react";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
@@ -206,7 +207,7 @@ export default function DietaryRestaurants() {
 
           <div className="flex items-center gap-4 text-muted-foreground mb-4">
             <div className="flex items-center gap-1">
-              <MapPin className="h-4 w-4" />
+              <SpriteIcon name="map-pin" className="h-4 w-4" />
               <span>Des Moines Metro Area</span>
             </div>
             {selectedDiet && (

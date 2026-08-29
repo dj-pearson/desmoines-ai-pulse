@@ -1,7 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Clock, Globe, CheckCircle, Code, Target } from "lucide-react";
+import { Globe, CheckCircle, Code, Target } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface ScraperTemplate {
   id: string;
@@ -71,7 +72,7 @@ export default function ScraperTemplateCard({
 
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-xs">
-            <Clock className="h-3 w-3 text-blue-600" />
+            <SpriteIcon name="clock" className="h-3 w-3 text-blue-600" />
             <span className="font-medium">Schedule:</span>
             <code className="bg-gray-100 px-1 rounded">
               {template.schedule}

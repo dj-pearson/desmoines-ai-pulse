@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { createLogger } from '@/lib/logger';
 import { supabase } from "@/integrations/supabase/client";
 import { getRestaurantOpenStatus } from "@/lib/restaurantHours";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('OpenNowRestaurants');
 import Header from "@/components/Header";
@@ -12,7 +13,7 @@ import RestaurantCard from "@/components/RestaurantCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import RelatedContent from "@/components/RelatedContent";
 import { Card, CardContent } from "@/components/ui/card";
-import { Clock, MapPin, Calendar, Utensils } from "lucide-react";
+import { Utensils } from "lucide-react";
 import { format } from "date-fns";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
@@ -172,21 +173,21 @@ export default function OpenNowRestaurants() {
         {/* Hero Section - GEO Optimized */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">
-            <Clock className="h-6 w-6 text-primary animate-pulse" />
+            <SpriteIcon name="clock" className="h-6 w-6 text-primary animate-pulse" />
             <h1 className="text-3xl font-bold">Restaurants Open Now in Des Moines</h1>
           </div>
 
           <div className="flex items-center gap-4 text-muted-foreground mb-4">
             <div className="flex items-center gap-1">
-              <Calendar className="h-4 w-4" />
+              <SpriteIcon name="calendar" className="h-4 w-4" />
               <span>{format(currentTime, "EEEE, MMMM d, yyyy")}</span>
             </div>
             <div className="flex items-center gap-1">
-              <Clock className="h-4 w-4" />
+              <SpriteIcon name="clock" className="h-4 w-4" />
               <span className="font-semibold text-green-700">{format(currentTime, "h:mm a")}</span>
             </div>
             <div className="flex items-center gap-1">
-              <MapPin className="h-4 w-4" />
+              <SpriteIcon name="map-pin" className="h-4 w-4" />
               <span>Des Moines Metro</span>
             </div>
           </div>
@@ -326,7 +327,7 @@ export default function OpenNowRestaurants() {
         ) : (
           <Card>
             <CardContent className="pt-6 text-center">
-              <Clock className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+              <SpriteIcon name="clock" className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
               <h3 className="text-lg font-semibold mb-2">Loading Restaurant Hours</h3>
               <p className="text-muted-foreground mb-4">
                 Checking real-time operating hours...

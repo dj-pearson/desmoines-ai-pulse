@@ -8,16 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useEventSocialConnections } from '@/hooks/useEventSocialConnections';
 import { useAuth } from '@/hooks/useAuth';
-import {
-  Users,
-  UserPlus,
-  MapPin,
-  Send,
-  Check,
-  X,
-  Calendar,
-  MessageCircle,
-} from 'lucide-react';
+import { UserPlus, Send, Check, X, MessageCircle } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface EventFriendFinderProps {
   eventId: string;
@@ -71,7 +63,7 @@ export function EventFriendFinder({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center">
-          <Users className="h-5 w-5 mr-2" />
+          <SpriteIcon name="users" className="h-5 w-5 mr-2" />
           Social Connections
         </CardTitle>
       </CardHeader>
@@ -80,7 +72,7 @@ export function EventFriendFinder({
         {pendingInvitations.length > 0 && (
           <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
             <h4 className="font-medium text-blue-900 mb-3 flex items-center">
-              <Calendar className="h-4 w-4 mr-2" />
+              <SpriteIcon name="calendar" className="h-4 w-4 mr-2" />
               Event Invitations ({pendingInvitations.length})
             </h4>
             <div className="space-y-3">
@@ -179,7 +171,7 @@ export function EventFriendFinder({
                       <div>
                         <p className="font-medium text-sm">{friend.friend_name}</p>
                         <p className="text-xs text-muted-foreground flex items-center">
-                          <MapPin className="h-3 w-3 mr-1" />
+                          <SpriteIcon name="map-pin" className="h-3 w-3 mr-1" />
                           {Math.round(friend.distance_km)}km away
                         </p>
                       </div>
@@ -200,7 +192,7 @@ export function EventFriendFinder({
 
           <TabsContent value="invite" className="space-y-3">
             <div className="text-center py-8">
-              <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+              <SpriteIcon name="users" className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
               <p className="text-sm text-muted-foreground mb-4">
                 Friends list feature coming soon!
               </p>

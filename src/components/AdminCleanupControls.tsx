@@ -6,9 +6,10 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
-import { Trash2, AlertTriangle, CheckCircle, Clock } from "lucide-react";
+import { Trash2, AlertTriangle, CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('AdminCleanupControls');
 
@@ -121,7 +122,7 @@ export default function AdminCleanupControls() {
         >
           {isLoading ? (
             <>
-              <Clock className="h-4 w-4 mr-2 animate-spin" />
+              <SpriteIcon name="clock" className="h-4 w-4 mr-2 animate-spin" />
               Running {isDryRun ? "Preview" : "Cleanup"}...
             </>
           ) : (

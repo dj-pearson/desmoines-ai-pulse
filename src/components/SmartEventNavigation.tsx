@@ -3,19 +3,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import {
-  Calendar,
-  MapPin,
-  Clock,
-  Tag,
-  TrendingUp,
-  Sparkles,
-  ChevronLeft,
-  ChevronRight,
-  Search,
-  Filter,
-} from "lucide-react";
+import { Tag, ChevronLeft, ChevronRight, Search, Filter } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 type Event = Database["public"]["Tables"]["events"]["Row"];
 import { useEvents } from "@/hooks/useEvents";
@@ -253,7 +243,7 @@ export const SmartEventNavigation: React.FC<SmartEventNavigationProps> = ({
         {/* Timeline Filter */}
         <div className="mb-4">
           <div className="flex items-center gap-2 mb-2">
-            <Calendar className="h-4 w-4" />
+            <SpriteIcon name="calendar" className="h-4 w-4" />
             <span className="text-sm font-medium">Quick Date Filter:</span>
           </div>
           <div className="flex gap-2 overflow-x-auto pb-2">
@@ -341,7 +331,7 @@ export const SmartEventNavigation: React.FC<SmartEventNavigationProps> = ({
           {eventClusters.trending.length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <TrendingUp className="h-5 w-5 text-orange-500" />
+                <SpriteIcon name="trending-up" className="h-5 w-5 text-orange-500" />
                 <h3 className="text-xl font-semibold">Trending This Week</h3>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -362,7 +352,7 @@ export const SmartEventNavigation: React.FC<SmartEventNavigationProps> = ({
           {eventClusters.free.length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <Sparkles className="h-5 w-5 text-green-500" />
+                <SpriteIcon name="sparkles" className="h-5 w-5 text-green-500" />
                 <h3 className="text-xl font-semibold">Free Events</h3>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -429,20 +419,20 @@ const EventCard: React.FC<{
               {event.title}
             </h4>
             {event.is_featured && (
-              <Sparkles className="h-4 w-4 text-yellow-500 flex-shrink-0 ml-2" />
+              <SpriteIcon name="sparkles" className="h-4 w-4 text-yellow-500 flex-shrink-0 ml-2" />
             )}
           </div>
 
           <div className="space-y-2 text-xs text-muted-foreground">
             <div className="flex items-center gap-1">
-              <Calendar className="h-3 w-3" />
+              <SpriteIcon name="calendar" className="h-3 w-3" />
               <span>{format(new Date(event.date), "MMM d")}</span>
-              <Clock className="h-3 w-3 ml-2" />
+              <SpriteIcon name="clock" className="h-3 w-3 ml-2" />
               <span>{format(new Date(event.date), "h:mm a")}</span>
             </div>
             
             <div className="flex items-center gap-1">
-              <MapPin className="h-3 w-3" />
+              <SpriteIcon name="map-pin" className="h-3 w-3" />
               <span className="line-clamp-1">{event.location}</span>
             </div>
           </div>

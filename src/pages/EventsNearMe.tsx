@@ -8,13 +8,14 @@ import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { LoadingSpinner } from '@/components/ui/loading-skeleton';
-import { MapPin, Navigation, Calendar, DollarSign, List, Map as MapIcon, Loader2 } from 'lucide-react';
+import { Navigation, DollarSign, List, Map as MapIcon, Loader2 } from "lucide-react";
 import { Link } from 'react-router-dom';
 import { useEventsNearby, useGeolocation, getDistanceDisplay } from '@/hooks/useProximitySearch';
 import type { MapLocation } from '@/components/InteractiveMap';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { formatCount } from "@/lib/pluralize";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 // Lazy load map component
 const EventsMap = lazy(() => import('@/components/InteractiveMap').then(mod => ({ default: mod.InteractiveMap })));
@@ -91,7 +92,7 @@ export default function EventsNearMe() {
           <Card className="mb-6">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <MapPin className="h-5 w-5" />
+                <SpriteIcon name="map-pin" className="h-5 w-5" />
                 Your Location
               </CardTitle>
               <CardDescription>
@@ -261,13 +262,13 @@ export default function EventsNearMe() {
                       <div className="space-y-2 text-sm">
                         {event.date && (
                           <div className="flex items-center gap-2 text-muted-foreground">
-                            <Calendar className="h-4 w-4" />
+                            <SpriteIcon name="calendar" className="h-4 w-4" />
                             {format(new Date(event.date), 'MMM d, yyyy')}
                           </div>
                         )}
                         {event.distance_miles !== undefined && (
                           <div className="flex items-center gap-2 text-muted-foreground">
-                            <MapPin className="h-4 w-4" />
+                            <SpriteIcon name="map-pin" className="h-4 w-4" />
                             {getDistanceDisplay(event.distance_miles)}
                           </div>
                         )}
@@ -308,7 +309,7 @@ export default function EventsNearMe() {
           {!isLoading && !error && events.length === 0 && (
             <Card>
               <CardContent className="py-12 text-center">
-                <MapPin className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <SpriteIcon name="map-pin" className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                 <h3 className="text-lg font-semibold mb-2">No events found</h3>
                 <p className="text-muted-foreground mb-4">
                   Try increasing the search radius or changing the category filter.

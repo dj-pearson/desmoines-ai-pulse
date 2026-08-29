@@ -2,9 +2,10 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, CheckCircle, Users } from "lucide-react";
+import { Mail, CheckCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('Newsletter');
 
@@ -106,7 +107,7 @@ export default function Newsletter() {
                 key={i}
                 className="w-8 h-8 rounded-full bg-white/20 border-2 border-white/40 flex items-center justify-center"
               >
-                <Users className="h-4 w-4 text-white/80" />
+                <SpriteIcon name="users" className="h-4 w-4 text-white/80" />
               </div>
             ))}
           </div>

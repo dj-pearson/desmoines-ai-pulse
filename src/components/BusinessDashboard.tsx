@@ -7,18 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useBusinessPartnership } from "@/hooks/useBusinessPartnership";
 import { useAuth } from "@/hooks/useAuth";
-import { 
-  Building2, 
-  BarChart3, 
-  Phone, 
-  Globe, 
-  MapPin, 
-  Eye, 
-  MousePointer, 
-  Star,
-  Calendar,
-  TrendingUp
-} from "lucide-react";
+import { BarChart3, Phone, Globe, Eye, MousePointer, Star } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export function BusinessDashboard() {
   const { user } = useAuth();
@@ -119,7 +109,7 @@ export function BusinessDashboard() {
     return (
       <Card>
         <CardContent className="p-6 text-center">
-          <Building2 className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+          <SpriteIcon name="building-2" className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
           <p className="text-muted-foreground">Sign in to access business dashboard</p>
         </CardContent>
       </Card>
@@ -131,7 +121,7 @@ export function BusinessDashboard() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Building2 className="w-5 h-5" />
+            <SpriteIcon name="building-2" className="w-5 h-5" />
             Business Profile Setup
           </CardTitle>
         </CardHeader>
@@ -177,7 +167,7 @@ export function BusinessDashboard() {
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center space-x-2">
-                <TrendingUp className="w-4 h-4 text-muted-foreground" />
+                <SpriteIcon name="trending-up" className="w-4 h-4 text-muted-foreground" />
                 <div>
                   <p className="text-2xl font-bold">{analytics.length}</p>
                   <p className="text-xs text-muted-foreground">Days Tracked</p>
@@ -324,7 +314,7 @@ export function BusinessDashboard() {
 
                     {businessProfile.address && (
                       <div className="flex items-center gap-2">
-                        <MapPin className="w-4 h-4" />
+                        <SpriteIcon name="map-pin" className="w-4 h-4" />
                         <div>
                           <p className="font-medium">Address</p>
                           <p className="text-muted-foreground">{businessProfile.address}</p>
@@ -359,7 +349,7 @@ export function BusinessDashboard() {
                   {analytics.slice(0, 10).map((day) => (
                     <div key={day.id} className="flex items-center justify-between p-3 border rounded">
                       <div className="flex items-center gap-2">
-                        <Calendar className="w-4 h-4" />
+                        <SpriteIcon name="calendar" className="w-4 h-4" />
                         <span className="font-medium">{new Date(day.date).toLocaleDateString()}</span>
                       </div>
                       <div className="flex gap-4 text-sm text-muted-foreground">

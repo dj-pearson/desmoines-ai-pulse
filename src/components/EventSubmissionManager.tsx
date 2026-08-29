@@ -7,20 +7,11 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { 
-  Globe, 
-  Rss, 
-  Zap, 
-  Settings, 
-  CheckCircle, 
-  AlertCircle,
-  Send,
-  Copy,
-  ExternalLink
-} from 'lucide-react';
+import { Globe, Rss, Zap, Settings, CheckCircle, AlertCircle, Send, Copy } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { createLogger } from '@/lib/logger';
 import { storage } from '@/lib/safeStorage';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('EventSubmissionManager');
 
@@ -305,7 +296,7 @@ export default function EventSubmissionManager() {
                           asChild
                         >
                           <a href={platform.setupUrl} target="_blank" rel="noopener noreferrer">
-                            <ExternalLink className="h-4 w-4 mr-2" />
+                            <SpriteIcon name="external-link" className="h-4 w-4 mr-2" />
                             Setup Guide
                           </a>
                         </Button>

@@ -2,9 +2,10 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { storage } from '@/lib/safeStorage';
-import { Search, Clock, TrendingUp, X } from 'lucide-react';
+import { Search, X } from "lucide-react";
 import { cn } from '@/lib/utils';
 import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('SearchAutocomplete');
 
@@ -284,7 +285,7 @@ export function SearchAutocomplete({
         <div className="p-2">
           <div className="flex items-center justify-between px-2 py-1">
             <span className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center gap-1">
-              <Clock className="h-3 w-3" />
+              <SpriteIcon name="clock" className="h-3 w-3" />
               Recent Searches
             </span>
             <button
@@ -314,7 +315,7 @@ export function SearchAutocomplete({
                 onClick={() => handleSelect(search)}
                 onMouseEnter={() => setActiveIndex(idx)}
               >
-                <Clock className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" />
+                <SpriteIcon name="clock" className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" />
                 {search}
               </button>
             );
@@ -330,7 +331,7 @@ export function SearchAutocomplete({
         <div className="p-2">
           <div className="px-2 py-1">
             <span className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center gap-1">
-              <TrendingUp className="h-3 w-3" />
+              <SpriteIcon name="trending-up" className="h-3 w-3" />
               Suggestions
             </span>
           </div>

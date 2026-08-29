@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Sparkles, Calendar } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
+
 
 interface AIWriteupProps {
   writeup: string;
@@ -32,14 +33,14 @@ export default function AIWriteup({
         <div className="flex items-center justify-between">
           <CardTitle className="text-xl font-semibold text-gray-800 flex items-center gap-2">
             <div className="p-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg">
-              <Sparkles className="h-5 w-5 text-white" />
+              <SpriteIcon name="sparkles" className="h-5 w-5 text-white" />
             </div>
             Enhanced Overview
           </CardTitle>
         </div>
         {generatedAt && (
           <div className="flex items-center gap-1 text-sm text-gray-500">
-            <Calendar className="h-3 w-3" />
+            <SpriteIcon name="calendar" className="h-3 w-3" />
             Generated on {formatDate(generatedAt)}
           </div>
         )}

@@ -8,8 +8,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Trophy, MapPin, Calendar, Clock, Ticket } from 'lucide-react';
+import { Trophy } from "lucide-react";
 import { EVENT_LIST_COLUMNS } from '@/lib/listColumns';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 function useSportsEvents(timeframe: 'today' | 'week') {
   const now = new Date();
@@ -81,7 +82,7 @@ export default function SportsHub() {
           {/* Today's Games */}
           <section className="mb-12">
             <div className="flex items-center gap-2 mb-4">
-              <Clock className="h-5 w-5 text-primary" />
+              <SpriteIcon name="clock" className="h-5 w-5 text-primary" />
               <h2 className="text-2xl font-bold">Today&apos;s Games</h2>
               <Badge variant="secondary">{todayGames?.length || 0}</Badge>
             </div>
@@ -94,7 +95,7 @@ export default function SportsHub() {
                         <h3 className="font-semibold mb-1 line-clamp-2">{event.title}</h3>
                         {event.venue && (
                           <p className="text-sm text-muted-foreground flex items-center gap-1">
-                            <MapPin className="h-3 w-3" /> {event.venue}
+                            <SpriteIcon name="map-pin" className="h-3 w-3" /> {event.venue}
                           </p>
                         )}
                         {event.date && (
@@ -102,7 +103,7 @@ export default function SportsHub() {
                             {new Date(event.date).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
                           </p>
                         )}
-                        {event.price && <Badge variant="outline" className="mt-2"><Ticket className="h-3 w-3 mr-1" />{event.price}</Badge>}
+                        {event.price && <Badge variant="outline" className="mt-2"><SpriteIcon name="ticket" className="h-3 w-3 mr-1" />{event.price}</Badge>}
                       </CardContent>
                     </Card>
                   </Link>
@@ -116,7 +117,7 @@ export default function SportsHub() {
           {/* This Week */}
           <section className="mb-12">
             <div className="flex items-center gap-2 mb-4">
-              <Calendar className="h-5 w-5 text-primary" />
+              <SpriteIcon name="calendar" className="h-5 w-5 text-primary" />
               <h2 className="text-2xl font-bold">This Week&apos;s Schedule</h2>
             </div>
             {weekGames && weekGames.length > 0 ? (
@@ -180,7 +181,7 @@ export default function SportsHub() {
                           <Badge variant="secondary">{team.sport}</Badge>
                           {team.venue_name && (
                             <Badge variant="outline">
-                              <MapPin className="h-3 w-3 mr-1" />
+                              <SpriteIcon name="map-pin" className="h-3 w-3 mr-1" />
                               {team.venue_name}
                             </Badge>
                           )}

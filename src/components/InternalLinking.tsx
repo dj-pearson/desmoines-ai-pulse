@@ -4,15 +4,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { createEventSlugWithCentralTime } from "@/lib/timezone";
-import {
-  Calendar,
-  MapPin,
-  ChefHat,
-  Music,
-  Theater,
-  PartyPopper,
-} from "lucide-react";
+import { Music, Theater, PartyPopper } from "lucide-react";
 import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('InternalLinking');
 
@@ -102,12 +96,12 @@ export function InternalLinking({
       case "arts":
         return <Theater className="h-4 w-4" />;
       case "food":
-        return <ChefHat className="h-4 w-4" />;
+        return <SpriteIcon name="chef-hat" className="h-4 w-4" />;
       case "nightlife":
       case "entertainment":
         return <PartyPopper className="h-4 w-4" />;
       default:
-        return <Calendar className="h-4 w-4" />;
+        return <SpriteIcon name="calendar" className="h-4 w-4" />;
     }
   };
 
@@ -177,13 +171,13 @@ export function InternalLinking({
                     <h4 className="font-medium text-sm">{restaurant.name}</h4>
                     {restaurant.location && (
                       <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                        <MapPin className="h-3 w-3" />
+                        <SpriteIcon name="map-pin" className="h-3 w-3" />
                         {restaurant.location}
                       </p>
                     )}
                   </div>
                   <Badge variant="outline" className="text-xs">
-                    <ChefHat className="h-3 w-3 mr-1" />
+                    <SpriteIcon name="chef-hat" className="h-3 w-3 mr-1" />
                     {restaurant.cuisine}
                   </Badge>
                 </div>
@@ -248,13 +242,13 @@ export function InternalLinking({
                     <h4 className="font-medium text-sm">{restaurant.name}</h4>
                     {restaurant.location && (
                       <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                        <MapPin className="h-3 w-3" />
+                        <SpriteIcon name="map-pin" className="h-3 w-3" />
                         {restaurant.location}
                       </p>
                     )}
                   </div>
                   <Badge variant="outline" className="text-xs">
-                    <ChefHat className="h-3 w-3 mr-1" />
+                    <SpriteIcon name="chef-hat" className="h-3 w-3 mr-1" />
                     {restaurant.cuisine}
                   </Badge>
                 </div>

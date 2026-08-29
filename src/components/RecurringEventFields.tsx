@@ -4,8 +4,9 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Repeat, Calendar, AlertCircle } from 'lucide-react';
+import { Repeat, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface RecurringEventFieldsProps {
   isRecurring: boolean;
@@ -112,7 +113,7 @@ export function RecurringEventFields({
 
             {/* Info Alert */}
             <Alert>
-              <Calendar className="h-4 w-4" />
+              <SpriteIcon name="calendar" className="h-4 w-4" />
               <AlertDescription className="text-xs">
                 <strong>How it works:</strong> Your event will be used as a template.
                 The system will automatically generate individual event instances based on

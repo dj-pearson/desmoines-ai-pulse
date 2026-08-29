@@ -10,23 +10,12 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Search,
-  Sparkles,
-  SlidersHorizontal,
-  Lightbulb,
-  AlertTriangle,
-  Calendar,
-  Utensils,
-  MapPin,
-  Star,
-  DollarSign,
-  ArrowRight,
-} from "lucide-react";
+import { Search, SlidersHorizontal, Lightbulb, AlertTriangle, Calendar, Utensils, MapPin, Star, DollarSign } from "lucide-react";
 import { useNLPSearch, NLP_SEARCH_EXAMPLES } from "@/hooks/useNLPSearch";
 import { useEvents } from "@/hooks/useEvents";
 import { useRestaurants } from "@/hooks/useRestaurants";
 import { useAttractions } from "@/hooks/useAttractions";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 type ResultType = "events" | "restaurants" | "attractions";
 
@@ -88,7 +77,7 @@ function ResultCard({ item, type }: { item: CardItem; type: ResultType }) {
           <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
             {(item.location || item.venue) && (
               <span className="flex items-center gap-1">
-                <MapPin className="h-3 w-3" />
+                <SpriteIcon name="map-pin" className="h-3 w-3" />
                 {item.venue || item.location}
               </span>
             )}
@@ -228,7 +217,7 @@ export default function SearchResults() {
           {/* Search input (primary, natural-language) */}
           <div className="mx-auto max-w-3xl">
             <h1 className="mb-2 flex items-center gap-2 text-2xl font-bold sm:text-3xl">
-              <Sparkles className="h-6 w-6 text-primary" />
+              <SpriteIcon name="sparkles" className="h-6 w-6 text-primary" />
               Search Des Moines
             </h1>
             <p className="mb-4 text-muted-foreground">
@@ -296,7 +285,7 @@ export default function SearchResults() {
               {/* Intent summary */}
               {!isSearching && !isError && intentSummary && (
                 <div className="mb-4 flex items-center gap-2 text-sm">
-                  <Sparkles className="h-4 w-4 text-primary" />
+                  <SpriteIcon name="sparkles" className="h-4 w-4 text-primary" />
                   <span className="text-muted-foreground">Understood:</span>
                   <span className="font-medium">{intentSummary}</span>
                   <span className="text-muted-foreground">· {totalResults} results</span>
@@ -342,7 +331,7 @@ export default function SearchResults() {
                       <Link to="/search/advanced">
                         <SlidersHorizontal className="mr-2 h-4 w-4" />
                         Advanced filters
-                        <ArrowRight className="ml-2 h-4 w-4" />
+                        <SpriteIcon name="arrow-right" className="ml-2 h-4 w-4" />
                       </Link>
                     </Button>
                   </CardContent>

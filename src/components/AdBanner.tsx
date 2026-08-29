@@ -6,8 +6,9 @@ import { AffiliateAdBanner } from "@/components/AffiliateAdBanner";
 import { HouseAd } from "@/components/HouseAd";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ExternalLink } from "lucide-react";
+
 import { openExternalUrl, isCapacitor } from "@/lib/capacitorUtils";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface AdBannerProps {
   placement: 'top_banner' | 'featured_spot' | 'below_fold' | 'sidebar';
@@ -132,7 +133,7 @@ export function AdBanner({ placement, className = "", fallback }: AdBannerProps)
               aria-label={ad.title ? `${ad.cta_text || 'Learn more'} - ${ad.title}` : "Learn more about this advertisement"}
             >
               {ad.cta_text || "Learn More"}
-              <ExternalLink className="ml-1 md:ml-1.5 h-3 w-3" />
+              <SpriteIcon name="external-link" className="ml-1 md:ml-1.5 h-3 w-3" />
             </Button>
           )}
         </div>

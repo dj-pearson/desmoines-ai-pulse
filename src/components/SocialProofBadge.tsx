@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, Eye, Users, Flame, Clock } from "lucide-react";
+import { Eye, Flame } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface SocialProofBadgeProps {
   type: "trending" | "popular" | "selling-fast" | "new" | "last-chance";
@@ -28,12 +29,12 @@ export function SocialProofBadge({
       className: "bg-orange-500/90 text-white border-orange-600 animate-pulse",
     },
     popular: {
-      icon: <TrendingUp className={cn("h-3 w-3 mr-1", size === "lg" && "h-4 w-4")} />,
+      icon: <SpriteIcon name="trending-up" className={cn("h-3 w-3 mr-1", size === "lg" && "h-4 w-4")} />,
       text: count ? `${count}+ interested` : "Popular",
       className: "bg-blue-500/90 text-white border-blue-600",
     },
     "selling-fast": {
-      icon: <Clock className={cn("h-3 w-3 mr-1", size === "lg" && "h-4 w-4")} />,
+      icon: <SpriteIcon name="clock" className={cn("h-3 w-3 mr-1", size === "lg" && "h-4 w-4")} />,
       text: count ? `Only ${count} tickets left` : "Selling Fast",
       className: "bg-red-500/90 text-white border-red-600 animate-pulse",
     },
@@ -43,7 +44,7 @@ export function SocialProofBadge({
       className: "bg-green-500/90 text-white border-green-600",
     },
     "last-chance": {
-      icon: <Clock className={cn("h-3 w-3 mr-1", size === "lg" && "h-4 w-4")} />,
+      icon: <SpriteIcon name="clock" className={cn("h-3 w-3 mr-1", size === "lg" && "h-4 w-4")} />,
       text: "Last Chance",
       className: "bg-purple-500/90 text-white border-purple-600",
     },
@@ -131,7 +132,7 @@ export function AttendeeAvatars({
         )}
       </div>
       <span className="text-sm text-muted-foreground">
-        <Users className="h-4 w-4 inline mr-1" />
+        <SpriteIcon name="users" className="h-4 w-4 inline mr-1" />
         {attendeeCount} {attendeeCount === 1 ? "person is" : "people are"}{" "}
         going
       </span>
@@ -159,7 +160,7 @@ export function TrendingIndicator({
       )}
     >
       <Flame className="h-3 w-3 mr-1 animate-pulse" />
-      <TrendingUp className="h-3 w-3 mr-1" />
+      <SpriteIcon name="trending-up" className="h-3 w-3 mr-1" />
       +{percentageIncrease}% views today
     </Badge>
   );

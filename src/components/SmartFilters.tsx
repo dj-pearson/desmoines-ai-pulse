@@ -3,8 +3,9 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { useUserPreferences } from '@/hooks/useUserPreferences';
 import { interestCategories } from '@/types/preferences';
-import { Sparkles, X, TrendingUp } from 'lucide-react';
+import { X } from "lucide-react";
 import { cn } from '@/lib/utils';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface SmartFiltersProps {
   onFilterSelect: (category: string) => void;
@@ -44,7 +45,7 @@ export function SmartFilters({
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-primary" />
+              <SpriteIcon name="sparkles" className="h-4 w-4 text-primary" />
               <h3 className="font-semibold text-sm">
                 Filters Based on Your Interests
               </h3>
@@ -119,7 +120,7 @@ export function SmartFilterChips({
   return (
     <div className={cn('flex items-center gap-2 flex-wrap', className)}>
       <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <Sparkles className="h-3.5 w-3.5 text-primary" />
+        <SpriteIcon name="sparkles" className="h-3.5 w-3.5 text-primary" />
         <span className="font-medium">For you:</span>
       </div>
       {suggestedFilters.map((filter) => {
@@ -171,7 +172,7 @@ export function SmartLocationFilters({
   return (
     <div className={cn('flex items-center gap-2 flex-wrap', className)}>
       <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <TrendingUp className="h-3.5 w-3.5 text-primary" />
+        <SpriteIcon name="trending-up" className="h-3.5 w-3.5 text-primary" />
         <span className="font-medium">Your areas:</span>
       </div>
       {preferredNeighborhoods.map((neighborhood) => {

@@ -7,19 +7,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Home, 
-  Search, 
-  Calendar, 
-  Utensils, 
-  MapPin, 
-  Camera,
-  ArrowRight,
-  Clock
-} from "lucide-react";
+import { Home, Search, Utensils, Camera } from "lucide-react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export default function Enhanced404() {
   const location = useLocation();
@@ -138,7 +130,7 @@ export default function Enhanced404() {
           <Link to="/events/today" className="group">
             <Card className="hover:shadow-lg transition-shadow">
               <CardContent className="p-6 text-center">
-                <Clock className="h-8 w-8 mx-auto mb-3 text-primary group-hover:scale-110 transition-transform" />
+                <SpriteIcon name="clock" className="h-8 w-8 mx-auto mb-3 text-primary group-hover:scale-110 transition-transform" />
                 <h3 className="font-semibold mb-2">Today's Events</h3>
                 <p className="text-sm text-muted-foreground">
                   See what's happening today
@@ -178,7 +170,7 @@ export default function Enhanced404() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Calendar className="h-5 w-5" />
+                <SpriteIcon name="calendar" className="h-5 w-5" />
                 Upcoming Events
               </CardTitle>
             </CardHeader>
@@ -200,7 +192,7 @@ export default function Enhanced404() {
                     to={`/events/${event.id}`}
                     className="text-primary hover:text-primary/80 ml-2"
                   >
-                    <ArrowRight className="h-4 w-4" />
+                    <SpriteIcon name="arrow-right" className="h-4 w-4" />
                   </Link>
                 </div>
               ))}
@@ -226,7 +218,7 @@ export default function Enhanced404() {
                   <div className="flex-1">
                     <h4 className="font-medium truncate">{restaurant.name}</h4>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <MapPin className="h-3 w-3" />
+                      <SpriteIcon name="map-pin" className="h-3 w-3" />
                       <span>{restaurant.city}</span>
                       {restaurant.cuisine && (
                         <Badge variant="outline" className="text-xs">
@@ -239,7 +231,7 @@ export default function Enhanced404() {
                     to={`/restaurants/${restaurant.id}`}
                     className="text-primary hover:text-primary/80 ml-2"
                   >
-                    <ArrowRight className="h-4 w-4" />
+                    <SpriteIcon name="arrow-right" className="h-4 w-4" />
                   </Link>
                 </div>
               ))}

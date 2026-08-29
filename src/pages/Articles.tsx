@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calendar, Eye, Search, Filter, Clock, User, Tag, BookOpen, TrendingUp, Grid, List } from 'lucide-react';
+import { Eye, Search, Filter, User, Tag, BookOpen, Grid, List } from "lucide-react";
 import { CardsGridSkeleton } from '@/components/ui/loading-skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ErrorState } from '@/components/ui/error-state';
@@ -16,6 +16,7 @@ import SEOHead from '@/components/SEOHead';
 import { FAQSection } from '@/components/FAQSection';
 import { BackToTop } from '@/components/BackToTop';
 import { Breadcrumbs } from '@/components/ui/breadcrumbs';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const Articles: React.FC = () => {
   const { articles, loading, error, loadArticles } = useArticles();
@@ -347,7 +348,7 @@ const Articles: React.FC = () => {
                           {article.category}
                         </Badge>
                         <span className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
+                          <SpriteIcon name="clock" className="h-3 w-3" />
                           {formatReadTime(article.content)}
                         </span>
                         <span className="text-xs text-muted-foreground flex items-center gap-1">
@@ -387,7 +388,7 @@ const Articles: React.FC = () => {
                       {/* Footer */}
                       <div className="flex items-center justify-between text-sm text-muted-foreground">
                         <div className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
+                          <SpriteIcon name="calendar" className="h-3 w-3" />
                           {formatDate(article.published_at || article.created_at)}
                         </div>
                         
@@ -406,7 +407,7 @@ const Articles: React.FC = () => {
           {filteredAndSortedArticles.length > 0 && (
             <div className="text-center mt-12">
               <Button variant="outline" size="lg" className="gap-2">
-                <TrendingUp className="h-4 w-4" />
+                <SpriteIcon name="trending-up" className="h-4 w-4" />
                 Explore More Topics
               </Button>
             </div>

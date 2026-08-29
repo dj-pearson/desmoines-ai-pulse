@@ -9,7 +9,7 @@ import { SocialEventCard } from "@/components/SocialEventCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Calendar, MapPin, Clock, Filter } from "lucide-react";
+import { Filter } from "lucide-react";
 import {
   format,
   isWeekend,
@@ -27,6 +27,7 @@ import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { EVENT_LIST_COLUMNS } from "@/lib/listColumns";
 import { formatCount } from "@/lib/pluralize";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 /**
  * WEB-PERF-023. The grid rendered every event in the weekend window and this
@@ -199,7 +200,7 @@ export default function EventsThisWeekend() {
         {/* Hero Section */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">
-            <Calendar className="h-6 w-6 text-primary" />
+            <SpriteIcon name="calendar" className="h-6 w-6 text-primary" />
             <h1 className="text-3xl font-bold">This Weekend in Des Moines</h1>
           </div>
 
@@ -220,11 +221,11 @@ export default function EventsThisWeekend() {
 
           <div className="flex items-center gap-4 text-muted-foreground mb-4">
             <div className="flex items-center gap-1">
-              <Clock className="h-4 w-4" />
+              <SpriteIcon name="clock" className="h-4 w-4" />
               <span>Weekend of {format(new Date(), "MMMM d, yyyy")}</span>
             </div>
             <div className="flex items-center gap-1">
-              <MapPin className="h-4 w-4" />
+              <SpriteIcon name="map-pin" className="h-4 w-4" />
               <span>Des Moines Metro Area</span>
             </div>
           </div>
@@ -452,7 +453,7 @@ export default function EventsThisWeekend() {
         ) : (
           <Card>
             <CardContent className="pt-6 text-center">
-              <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <SpriteIcon name="calendar" className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h2 className="text-xl font-semibold mb-2">
                 No Weekend Events Found
               </h2>

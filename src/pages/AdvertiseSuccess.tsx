@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('AdvertiseSuccess');
-import { CheckCircle, Upload, BarChart3, ArrowRight } from "lucide-react";
+import { CheckCircle, Upload, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -251,7 +252,7 @@ export default function AdvertiseSuccess() {
           <CardContent>
             <Button variant="outline" className="w-full">
               Get Started
-              <ArrowRight className="ml-2 h-4 w-4" />
+              <SpriteIcon name="arrow-right" className="ml-2 h-4 w-4" />
             </Button>
           </CardContent>
         </Card>
@@ -265,7 +266,7 @@ export default function AdvertiseSuccess() {
           <CardContent>
             <Button variant="outline" className="w-full">
               Go to Dashboard
-              <ArrowRight className="ml-2 h-4 w-4" />
+              <SpriteIcon name="arrow-right" className="ml-2 h-4 w-4" />
             </Button>
           </CardContent>
         </Card>

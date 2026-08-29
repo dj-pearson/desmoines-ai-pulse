@@ -8,8 +8,9 @@ import {
   DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { Calendar, Download, ChevronDown } from 'lucide-react';
+import { Download, ChevronDown } from "lucide-react";
 import { useCalendarExport } from '@/hooks/use-calendar-export';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface AddToCalendarButtonProps {
   event: {
@@ -51,7 +52,7 @@ export function AddToCalendarButton({
           size={size}
           className={`${fullWidth ? 'w-full' : ''} ${className}`}
         >
-          <Calendar className="w-4 h-4 mr-2" />
+          <SpriteIcon name="calendar" className="w-4 h-4 mr-2" />
           Add to Calendar
           <ChevronDown className="w-3 h-3 ml-2 opacity-50" />
         </Button>

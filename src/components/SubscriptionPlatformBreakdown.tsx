@@ -1,9 +1,10 @@
-import { Apple, ChevronRight, CreditCard, ExternalLink, Smartphone } from "lucide-react";
+import { Apple, ChevronRight, CreditCard, Smartphone } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useSubscription, type SubscriptionPlatform, type UserSubscription } from "@/hooks/useSubscription";
 import { usePayments } from "@/hooks/usePayments";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const PLATFORM_LABELS: Record<SubscriptionPlatform, string> = {
   web: "Website (Stripe)",
@@ -148,7 +149,7 @@ export function SubscriptionPlatformBreakdown({
                 ) : (
                   <>
                     Manage on {sub.platform === "ios" ? "App Store" : "Play Store"}
-                    <ExternalLink className="ml-1 h-4 w-4" aria-hidden="true" />
+                    <SpriteIcon name="external-link" className="ml-1 h-4 w-4" aria-hidden="true" />
                   </>
                 )}
               </Button>
