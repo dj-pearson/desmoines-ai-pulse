@@ -3877,3 +3877,27 @@ Files changed:
 - This is the ad-creative approval automation WEB-LEGAL-011 depends on, so pending creatives are being
   reviewed by nothing while the sweep reports success.
 ---
+
+## 2026-08-29 - Which of the 35 undeployed cron targets are actually live: five
+No code change. check-cron-targets.mjs already lists 35 and explicitly defers the "confirm against cron.job"
+step because it runs offline. This is that step.
+
+Files changed:
+- prd.json - WEB-OPS-007 notes
+
+**Learnings for future iterations:**
+- **35 is the backlog, 5 is the bill.** Only five of the undeployed cron targets have an ACTIVE cron.job
+  entry firing today: campaign-creative-review (*/10, 1106 runs), regenerate-sitemaps (0 */6, 31),
+  saved-search-alerts (0 7, 8), social-daily-poster (0 14, 8), web-vitals-weekly (0 6 * * 1, 1). The other
+  30 are scheduled by migrations whose entries are inactive.
+- **regenerate-sitemaps being on that list closes a loop with WEB-SEO-011**, which records it as 404 and
+  treats it as its own problem. It is this problem.
+- **Read the guard's own caveat before re-deriving its output.** I measured this from production and then
+  found check-cron-targets already reports the superset - and had already told me to do exactly the
+  narrowing I did. Run the existing check first; the value was in the half it says it cannot do.
+- The cron_ok column is far below runs on every row because these jobs also failed at the SQL level before
+  2026-08-27 on the missing app.settings.supabase_url. Since that fix they "succeed" into a 404, which is
+  worse - the earlier state at least left an ERROR in cron.job_run_details.
+- My own executive-digest cron migration schedules an undeployed function too. Applying it without deploying
+  would make a sixth; they go together.
+---
