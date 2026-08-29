@@ -1,6 +1,6 @@
 package com.desmoines.aipulse.ui.screens.profile
 
-import android.util.Log
+import com.desmoines.aipulse.util.AppLogger
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.desmoines.aipulse.data.model.UserProfile
@@ -26,9 +26,6 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import javax.inject.Inject
-
-private const val TAG = "ProfileViewModel"
-
 /**
  * ViewModel for Profile screen. Mirrors iOS ProfileViewModel.swift.
  * Manages profile editing, saving, deletion, and sign out.
@@ -261,7 +258,7 @@ class ProfileViewModel @Inject constructor(
 
                 authRepository.signOut()
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to delete account", e)
+                AppLogger.ui.error("Failed to delete account", e)
                 _errorMessage.value = e.message ?: "Failed to delete account."
             }
 

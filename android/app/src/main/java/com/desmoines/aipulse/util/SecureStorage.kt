@@ -2,7 +2,6 @@ package com.desmoines.aipulse.util
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -49,8 +48,6 @@ class SecureStorage internal constructor(
     ) : this(context, null, crashReporting)
 
     companion object {
-        private const val TAG = "DMI/SecureStorage"
-
         /**
          * Key for the biometric-lock preference, owned by [BiometricAuthService]
          * and named here so [DEVICE_SETTING_KEYS] can reference it.
@@ -94,7 +91,7 @@ class SecureStorage internal constructor(
             // Reporting must never be able to break storage, hence runCatching:
             // a crash-reporter failure that took out SecureStorage would lock
             // the user out of the app to tell us about a downgrade.
-            Log.w(TAG, "EncryptedSharedPreferences unavailable, falling back to regular SharedPreferences", e)
+            AppLogger.general.warning("EncryptedSharedPreferences unavailable, falling back to regular SharedPreferences", e)
             runCatching {
                 crashReporting?.recordError(
                     SecureStorageFallbackException(e),
@@ -202,7 +199,7 @@ class SecureStorage internal constructor(
                 // No other type is written through this class today. Dropping
                 // the key is the safe outcome, but say so rather than losing a
                 // setting silently -- that is the bug this method exists to fix.
-                else -> Log.w(TAG, "Dropping device setting '$key': unsupported type")
+                else -> AppLogger.general.warning("Dropping device setting '$key': unsupported type")
             }
         }
         editor.apply()

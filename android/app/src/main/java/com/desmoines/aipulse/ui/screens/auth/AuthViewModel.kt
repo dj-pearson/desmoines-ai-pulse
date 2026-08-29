@@ -1,6 +1,6 @@
 package com.desmoines.aipulse.ui.screens.auth
 
-import android.util.Log
+import com.desmoines.aipulse.util.AppLogger
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.desmoines.aipulse.data.model.UserProfile
@@ -20,9 +20,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-
-private const val TAG = "AuthViewModel"
-
 /**
  * ViewModel for authentication flows (sign in, sign up, profile management).
  * Mirrors iOS AuthViewModel.swift with identical validation, rate limiting, and state management.
@@ -159,7 +156,7 @@ class AuthViewModel @Inject constructor(
      */
     private suspend fun startOrExpireAdminSession() {
         if (!sessionTimeoutService.isSessionValid()) {
-            Log.i(TAG, "Admin session already expired while the app was closed; signing out")
+            AppLogger.auth.info("Admin session already expired while the app was closed; signing out")
             authRepository.signOut()
             return
         }

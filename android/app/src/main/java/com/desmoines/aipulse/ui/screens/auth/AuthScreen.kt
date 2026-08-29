@@ -1,5 +1,6 @@
 package com.desmoines.aipulse.ui.screens.auth
 
+import com.desmoines.aipulse.util.AppLogger
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.app.Activity
 import androidx.compose.animation.animateContentSize
@@ -634,7 +635,7 @@ private fun GoogleSignInButton(
                 } catch (_: GetCredentialCancellationException) {
                     // User cancelled — no action needed
                 } catch (e: Exception) {
-                    android.util.Log.e("AuthScreen", "Google Sign-In failed", e)
+                    AppLogger.auth.error("Google Sign-In failed", e)
                 }
             }
         },

@@ -1,7 +1,7 @@
 package com.desmoines.aipulse.data.repository
 
+import com.desmoines.aipulse.util.AppLogger
 import android.content.Context
-import android.util.Log
 import com.desmoines.aipulse.data.model.Event
 import com.desmoines.aipulse.data.model.Restaurant
 import com.desmoines.aipulse.data.model.SubscriptionTier
@@ -13,8 +13,6 @@ import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
-
-private const val TAG = "FavoritesRepository"
 private const val LOCAL_RESTAURANT_PREFS = "restaurant_favorites_prefs"
 private const val LOCAL_RESTAURANT_KEY = "localRestaurantFavorites"
 
@@ -49,7 +47,7 @@ class FavoritesRepositoryImpl @Inject constructor(
         _favoriteEventIds = try {
             remoteDataSource.loadEventFavoriteIds(userId)
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to load event favorites", e)
+            AppLogger.network.warning("Failed to load event favorites", e)
             emptySet()
         }
 
@@ -57,7 +55,7 @@ class FavoritesRepositoryImpl @Inject constructor(
         _favoriteRestaurantIds = try {
             remoteDataSource.loadRestaurantFavoriteIds(userId)
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to load restaurant favorites from remote, using local fallback", e)
+            AppLogger.network.warning("Failed to load restaurant favorites from remote, using local fallback", e)
             loadLocalRestaurantFavorites()
         }
 
@@ -65,7 +63,7 @@ class FavoritesRepositoryImpl @Inject constructor(
             favoriteEventIds = _favoriteEventIds,
             favoriteRestaurantIds = _favoriteRestaurantIds,
         )
-    }.onFailure { Log.e(TAG, "Failed to load favorites", it) }
+    }.onFailure { AppLogger.network.error("Failed to load favorites", it) }
 
     override suspend fun toggleEventFavorite(
         userId: String,
@@ -99,7 +97,7 @@ class FavoritesRepositoryImpl @Inject constructor(
                 false
             }
         }
-    }.onFailure { Log.e(TAG, "Failed to toggle event favorite", it) }
+    }.onFailure { AppLogger.network.error("Failed to toggle event favorite", it) }
 
     override suspend fun toggleRestaurantFavorite(
         userId: String,
@@ -136,15 +134,15 @@ class FavoritesRepositoryImpl @Inject constructor(
                 false
             }
         }
-    }.onFailure { Log.e(TAG, "Failed to toggle restaurant favorite", it) }
+    }.onFailure { AppLogger.network.error("Failed to toggle restaurant favorite", it) }
 
     override suspend fun fetchFavoriteEvents(eventIds: Set<String>): Result<List<Event>> =
         runCatching { remoteDataSource.fetchFavoriteEvents(eventIds) }
-            .onFailure { Log.e(TAG, "Failed to fetch favorite events", it) }
+            .onFailure { AppLogger.network.error("Failed to fetch favorite events", it) }
 
     override suspend fun fetchFavoriteRestaurants(restaurantIds: Set<String>): Result<List<Restaurant>> =
         runCatching { remoteDataSource.fetchFavoriteRestaurants(restaurantIds) }
-            .onFailure { Log.e(TAG, "Failed to fetch favorite restaurants", it) }
+            .onFailure { AppLogger.network.error("Failed to fetch favorite restaurants", it) }
 
     override fun isEventFavorited(eventId: String): Boolean = eventId in _favoriteEventIds
 

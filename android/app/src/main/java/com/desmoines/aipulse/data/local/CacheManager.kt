@@ -1,6 +1,6 @@
 package com.desmoines.aipulse.data.local
 
-import android.util.Log
+import com.desmoines.aipulse.util.AppLogger
 import com.desmoines.aipulse.data.local.dao.AttractionDao
 import com.desmoines.aipulse.data.local.dao.CacheMetadataDao
 import com.desmoines.aipulse.data.local.dao.EventDao
@@ -17,8 +17,6 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
-
-private const val TAG = "CacheManager"
 private const val PRUNE_AGE_HOURS = 24L
 
 /**
@@ -46,7 +44,7 @@ class CacheManager @Inject constructor(
         return try {
             eventDao.getAllByKey(cacheKey).map { json.decodeFromString<Event>(it.jsonData) }
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to deserialize cached events for $cacheKey", e)
+            AppLogger.cache.warning("Failed to deserialize cached events for $cacheKey", e)
             null
         }
     }
@@ -55,7 +53,7 @@ class CacheManager @Inject constructor(
         return try {
             eventDao.getById(id)?.let { json.decodeFromString<Event>(it.jsonData) }
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to deserialize cached event $id", e)
+            AppLogger.cache.warning("Failed to deserialize cached event $id", e)
             null
         }
     }
@@ -77,7 +75,7 @@ class CacheManager @Inject constructor(
                 CacheMetadata(cacheKey = cacheKey, cachedAt = now, ttlMinutes = ttlMinutes, itemCount = events.size)
             )
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to cache events for $cacheKey", e)
+            AppLogger.cache.error("Failed to cache events for $cacheKey", e)
         }
     }
 
@@ -91,7 +89,7 @@ class CacheManager @Inject constructor(
         return try {
             restaurantDao.getAllByKey(cacheKey).map { json.decodeFromString<Restaurant>(it.jsonData) }
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to deserialize cached restaurants for $cacheKey", e)
+            AppLogger.cache.warning("Failed to deserialize cached restaurants for $cacheKey", e)
             null
         }
     }
@@ -100,7 +98,7 @@ class CacheManager @Inject constructor(
         return try {
             restaurantDao.getById(id)?.let { json.decodeFromString<Restaurant>(it.jsonData) }
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to deserialize cached restaurant $id", e)
+            AppLogger.cache.warning("Failed to deserialize cached restaurant $id", e)
             null
         }
     }
@@ -122,7 +120,7 @@ class CacheManager @Inject constructor(
                 CacheMetadata(cacheKey = cacheKey, cachedAt = now, ttlMinutes = ttlMinutes, itemCount = restaurants.size)
             )
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to cache restaurants for $cacheKey", e)
+            AppLogger.cache.error("Failed to cache restaurants for $cacheKey", e)
         }
     }
 
@@ -136,7 +134,7 @@ class CacheManager @Inject constructor(
         return try {
             attractionDao.getAllByKey(cacheKey).map { json.decodeFromString<Attraction>(it.jsonData) }
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to deserialize cached attractions for $cacheKey", e)
+            AppLogger.cache.warning("Failed to deserialize cached attractions for $cacheKey", e)
             null
         }
     }
@@ -145,7 +143,7 @@ class CacheManager @Inject constructor(
         return try {
             attractionDao.getById(id)?.let { json.decodeFromString<Attraction>(it.jsonData) }
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to deserialize cached attraction $id", e)
+            AppLogger.cache.warning("Failed to deserialize cached attraction $id", e)
             null
         }
     }
@@ -167,7 +165,7 @@ class CacheManager @Inject constructor(
                 CacheMetadata(cacheKey = cacheKey, cachedAt = now, ttlMinutes = ttlMinutes, itemCount = attractions.size)
             )
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to cache attractions for $cacheKey", e)
+            AppLogger.cache.error("Failed to cache attractions for $cacheKey", e)
         }
     }
 
@@ -187,9 +185,9 @@ class CacheManager @Inject constructor(
             restaurantDao.deleteExpired(cutoff)
             attractionDao.deleteExpired(cutoff)
             cacheMetadataDao.deleteExpired()
-            Log.d(TAG, "Pruned expired cache entries older than ${PRUNE_AGE_HOURS}h")
+            AppLogger.cache.debug("Pruned expired cache entries older than ${PRUNE_AGE_HOURS}h")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to prune expired cache", e)
+            AppLogger.cache.error("Failed to prune expired cache", e)
         }
     }
 
@@ -199,9 +197,9 @@ class CacheManager @Inject constructor(
             restaurantDao.deleteAll()
             attractionDao.deleteAll()
             cacheMetadataDao.deleteAll()
-            Log.d(TAG, "Cleared all cache")
+            AppLogger.cache.debug("Cleared all cache")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to clear cache", e)
+            AppLogger.cache.error("Failed to clear cache", e)
         }
     }
 

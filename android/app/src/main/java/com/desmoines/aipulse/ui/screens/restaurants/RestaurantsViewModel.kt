@@ -1,6 +1,6 @@
 package com.desmoines.aipulse.ui.screens.restaurants
 
-import android.util.Log
+import com.desmoines.aipulse.util.AppLogger
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.desmoines.aipulse.data.model.Restaurant
@@ -26,9 +26,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-
-private const val TAG = "RestaurantsViewModel"
-
 /**
  * State holder for the Restaurants (Dining) screen.
  */
@@ -276,7 +273,7 @@ class RestaurantsViewModel @Inject constructor(
             val existingIds: Set<String> = if (reset) emptySet() else _allRestaurants.value.mapTo(HashSet()) { it.id }
             val check = PaginationGuard.validatePage(response.restaurants, pageSize, existingIds) { it.id }
             if (check is PaginationGuard.Result.Invalid) {
-                Log.w(TAG, "restaurants pagination guard tripped: ${check.reason}")
+                AppLogger.ui.warning("restaurants pagination guard tripped: ${check.reason}")
                 _hasMore.value = false
                 _errorMessage.value = "Something went wrong loading restaurants. Pull to refresh."
                 return@onSuccess
@@ -293,7 +290,7 @@ class RestaurantsViewModel @Inject constructor(
             // Surface this page to on-device system search (ANDP-070).
         }.onFailure { error ->
             if (!restaurantsFetch.isCurrent(token)) return@onFailure
-            Log.e(TAG, "fetchRestaurants failed: ${error.message}", error)
+            AppLogger.ui.error("fetchRestaurants failed: ${error.message}", error)
             if (_restaurants.value.isEmpty()) {
                 _errorMessage.value = error.localizedMessage ?: "Failed to load restaurants"
             }
@@ -327,7 +324,7 @@ class RestaurantsViewModel @Inject constructor(
         restaurantsRepository.fetchAvailableCuisines().onSuccess { cuisines ->
             _availableCuisines.value = cuisines
         }.onFailure {
-            Log.e(TAG, "loadCuisines failed: ${it.message}", it)
+            AppLogger.ui.error("loadCuisines failed: ${it.message}", it)
             _availableCuisines.value = emptyList()
         }
     }

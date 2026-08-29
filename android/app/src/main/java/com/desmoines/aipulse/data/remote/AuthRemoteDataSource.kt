@@ -1,6 +1,6 @@
 package com.desmoines.aipulse.data.remote
 
-import android.util.Log
+import com.desmoines.aipulse.util.AppLogger
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.Google
@@ -17,9 +17,6 @@ import kotlinx.serialization.json.put
 import com.desmoines.aipulse.data.model.UserProfile
 import javax.inject.Inject
 import javax.inject.Singleton
-
-private const val TAG = "AuthRemoteDataSource"
-
 /**
  * Remote data source for authentication operations.
  *
@@ -134,7 +131,7 @@ class AuthRemoteDataSource @Inject constructor(
                 }
                 .decodeSingle<UserProfile>()
         } catch (e: Exception) {
-            Log.d(TAG, "Profile not found for user $userId: ${e.message}")
+            AppLogger.auth.debug("Profile not found for user $userId: ${e.message}")
             null
         }
     }

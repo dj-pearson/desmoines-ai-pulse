@@ -6,7 +6,6 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
-import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.desmoines.aipulse.MainActivity
 import com.desmoines.aipulse.R
@@ -51,7 +50,7 @@ class PushNotificationService : FirebaseMessagingService() {
      */
     override fun onNewToken(token: String) {
         super.onNewToken(token)
-        Log.d(TAG, "FCM token refreshed")
+        AppLogger.network.debug("FCM token refreshed")
 
         // Update shared state
         _deviceToken.value = token
@@ -73,7 +72,7 @@ class PushNotificationService : FirebaseMessagingService() {
      */
     override fun onMessageReceived(message: RemoteMessage) {
         super.onMessageReceived(message)
-        Log.d(TAG, "Push notification received: ${message.messageId}")
+        AppLogger.network.debug("Push notification received: ${message.messageId}")
 
         val title = message.notification?.title ?: message.data["title"] ?: "Des Moines Insider"
         val body = message.notification?.body ?: message.data["body"] ?: return
@@ -133,7 +132,7 @@ class PushNotificationService : FirebaseMessagingService() {
             if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
                 != android.content.pm.PackageManager.PERMISSION_GRANTED
             ) {
-                Log.w(TAG, "POST_NOTIFICATIONS permission not granted, skipping notification display")
+                AppLogger.network.warning("POST_NOTIFICATIONS permission not granted, skipping notification display")
                 return
             }
         }
@@ -161,7 +160,6 @@ class PushNotificationService : FirebaseMessagingService() {
     }
 
     companion object {
-        private const val TAG = "PushNotificationService"
         const val CHANNEL_GENERAL = "general"
         private const val PREFS_NAME = "push_notification_prefs"
         private const val KEY_DEVICE_TOKEN = "fcm_device_token"
@@ -179,7 +177,7 @@ class PushNotificationService : FirebaseMessagingService() {
          */
         fun initialize(context: Context) {
             if (!Config.ENABLE_PUSH_NOTIFICATIONS) {
-                Log.d(TAG, "Push notifications disabled via Config")
+                AppLogger.network.debug("Push notifications disabled via Config")
                 return
             }
 
@@ -210,10 +208,10 @@ class PushNotificationService : FirebaseMessagingService() {
                     _deviceToken.value = token
                     _isRegistered.value = true
                     prefs.edit().putString(KEY_DEVICE_TOKEN, token).apply()
-                    Log.d(TAG, "FCM token obtained")
+                    AppLogger.network.debug("FCM token obtained")
                 }
                 .addOnFailureListener { e ->
-                    Log.e(TAG, "Failed to get FCM token: ${e.message}")
+                    AppLogger.network.error("Failed to get FCM token: ${e.message}")
                 }
         }
 
@@ -226,7 +224,7 @@ class PushNotificationService : FirebaseMessagingService() {
 
             try {
                 val client = com.desmoines.aipulse.data.remote.SupabaseClientProvider.client ?: run {
-                    Log.w(TAG, "Supabase client not configured, skipping token sync")
+                    AppLogger.network.warning("Supabase client not configured, skipping token sync")
                     return
                 }
 
@@ -235,9 +233,9 @@ class PushNotificationService : FirebaseMessagingService() {
                     put("platform", "android")
                 })
 
-                Log.d(TAG, "Device token synced to backend")
+                AppLogger.network.debug("Device token synced to backend")
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to sync device token: ${e.message}")
+                AppLogger.network.error("Failed to sync device token: ${e.message}")
             }
         }
 

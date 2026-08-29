@@ -1,9 +1,9 @@
 package com.desmoines.aipulse.ui.screens.map
 
+import com.desmoines.aipulse.util.AppLogger
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
-import android.util.Log
 import androidx.core.content.ContextCompat
 import com.desmoines.aipulse.data.model.Attraction
 import com.desmoines.aipulse.data.model.Event
@@ -36,9 +36,6 @@ import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
-
-private const val TAG = "MapViewModel"
-
 /**
  * Map screen state holder.
  * Mirrors iOS MapViewModel.swift.
@@ -242,7 +239,7 @@ class MapViewModel @Inject constructor(
                 currentLongitude = location.longitude
                 _cameraPosition.value = CameraPosition.fromLatLngZoom(location, 13f)
             } catch (e: Exception) {
-                Log.d(TAG, "Location unavailable, using Des Moines default: ${e.message}")
+                AppLogger.ui.debug("Location unavailable, using Des Moines default: ${e.message}")
                 currentLatitude = Config.DEFAULT_LATITUDE
                 currentLongitude = Config.DEFAULT_LONGITUDE
             }

@@ -3311,3 +3311,36 @@ gives "352 tests completed, 1 failed".
 - The source-scan test pattern is now used twice (locale, lifecycle). It is the right shape whenever the
   defect is "some call sites do it wrong" rather than "a function misbehaves".
 ---
+
+## 2026-08-29 - AND-AUDIT-023 (a logged error that reaches somebody)
+Did AC5 first - the story's own note says it is the only item with real value - and AC1 then stops being
+tidying, because with a sink installed a direct Log.e is an error that reports to nobody.
+
+Files changed:
+- util/AppLogger.kt - installable ErrorSink on error(); warning() gained a throwable param; LoggedError
+- DesMoinesInsiderApp.kt - sink installed straight after crashReportingService.install()
+- 22 files - all 98 direct android.util.Log calls routed through AppLogger
+- test/util/AppLoggerErrorSinkTest.kt - NEW, 5 sink tests + DirectLogUsageTest source scan
+- prd.json - AND-AUDIT-023 notes
+
+Verified: assembleDebug SUCCESS, 358 tests / 0 failures, lint clean. Reverting one LocalNotificationService
+call to a direct Log gives "358 tests completed, 1 failed".
+
+**Learnings for future iterations:**
+- **A settable sink beats injection for an `object`.** AppLogger is called from companion objects, Room
+  callbacks and BroadcastReceivers, none of which have a Hilt graph. Install it from Application.onCreate and
+  leave it null before that, so startup logging degrades to logging rather than crashing.
+- **Report at error level only.** 71 warning calls against 41 error calls - reporting warnings would bury the
+  errors in the signal they exist to provide. Pair the happy-path test with a negative control asserting
+  warning/info/debug do NOT reach the sink, or the sink could report everything and still pass.
+- **Check the destination API before a mechanical routing pass.** Nine Log.w call sites passed a throwable
+  and AppLogger.warning had no parameter for one, so a naive rewrite would have dropped nine stack traces
+  silently. Adding the defaulted parameter first is the difference.
+- **`Log.x(TAG, ...)` rewrites mechanically; hand-written tags do not.** 95 of 98 matched the TAG form; the
+  last three used literal strings ("AuthScreen", "DMI/notification") and had to be read. Expect a tail.
+- The only call in this app that logs an identifier is AuthRemoteDataSource:137 ($userId), at debug level,
+  and proguard-rules.pro:26-30 -assumenosideeffects strips d/i/v from release - so it does not ship. Verify
+  against that rule before calling any log line a leak, and do not promote it to warning.
+- Third and fourth use of the source-scan test shape (locale, lifecycle, direct-Log). Whenever the defect is
+  "some call sites do it wrong", scan the sources; a behavioural test cannot see a call site.
+---
