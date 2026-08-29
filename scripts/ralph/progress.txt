@@ -3344,3 +3344,35 @@ call to a direct Log gives "358 tests completed, 1 failed".
 - Third and fourth use of the source-scan test shape (locale, lifecycle, direct-Log). Whenever the defect is
   "some call sites do it wrong", scan the sources; a behavioural test cannot see a call site.
 ---
+
+## 2026-08-29 - WEB-PERF-020 verified, and the four URLs the prerender gate was rejecting
+Measured WEB-PERF-020 with a full build instead of reading its note. It is complete except AC5, and its own
+numbers are stale by 3.3x. The build then surfaced a real defect that belongs to WEB-SEO-006.
+
+Files changed:
+- src/pages/SeasonalGuide.tsx - <link rel="canonical"> on the success path
+- prd.json - WEB-PERF-020 and WEB-SEO-006 notes
+
+Verified: critical path 183.4 KB gz (goal 200), unchanged by the fix; prerender 1136 entities / 0 failed,
+was 1132 / 4; dist/guides/iowa-state-fair/index.html carries the canonical, real title and body text;
+tsc clean, eslint clean on the changed file.
+
+**Learnings for future iterations:**
+- **WEB-PERF-020's headline numbers are three years of drift out of date.** Critical path is 183.4 KB, not
+  610; vendor-icons 20.8 KB, not 131; entry 53.3 KB, not 160. Run `node scripts/check-bundle-budget.mjs`
+  after a build before believing any bundle claim in this PRD.
+- **Entity prerendering is ON.** A build emits 1136 entity pages (events 542, restaurants 480, playgrounds
+  67, attractions 22, articles 18, guides 4) with real titles, canonicals and addresses in the HTML.
+  WEB-SEO-006 is written as though none of that exists. Check dist/ before repeating "client-render only".
+- **Read the prerender gate's rejections; they are findings, not noise.** Four published seasonal guides were
+  refused on every build for a missing canonical, so /guides/:slug was the only sitemapped route a crawler
+  could not read. The message says "this is the guard working, not a build failure", which is true and is
+  also why nobody actioned it for however long.
+- A route that does not emit `<link rel="canonical">` cannot be prerendered by this project's strict gate -
+  there is no way to distinguish a rendered page from the SPA shell without it. Any new public route needs
+  one, and the gate will tell you at build time.
+- `npm run build` regenerates public/sitemap-*.xml as a side effect. The checked-in copies had drifted by
+  133 event URLs (400 added / 267 removed). They are build artifacts - the deployed sitemap comes from the
+  build - so revert them rather than committing the churn, but the size of that drift is WEB-SEO-011's
+  thesis measured.
+---
