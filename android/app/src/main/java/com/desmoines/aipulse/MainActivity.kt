@@ -12,6 +12,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.AlertDialog
+import androidx.compose.ui.window.Dialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -19,18 +20,21 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
 import com.desmoines.aipulse.ui.components.ForceUpdateScreen
+import com.desmoines.aipulse.ui.components.PermissionPrimingCard
 import com.desmoines.aipulse.ui.screens.MainScreen
 import com.desmoines.aipulse.ui.screens.onboarding.OnboardingScreen
 import com.desmoines.aipulse.ui.theme.DesMoinesInsiderTheme
@@ -146,17 +150,56 @@ class MainActivity : FragmentActivity() {
                 // Nothing requested it before, so on API 33+ the permission
                 // could never be granted and every event reminder and push was
                 // dropped by the permission check inside the notification code.
+                //
+                // AND-AUDIT-017: the system dialog is no longer the first thing
+                // the user sees. PermissionPrimingCard was built for exactly this
+                // and had no call sites, so the prompt shipped with no explanation
+                // of what it was for. Android only presents POST_NOTIFICATIONS a
+                // couple of times before it stops asking, so an unexplained prompt
+                // is not a neutral default - a decline here is close to permanent.
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    var showNotificationPriming by remember { mutableStateOf(false) }
                     val notificationPermission = rememberLauncherForActivityResult(
                         ActivityResultContracts.RequestPermission()
                     ) { /* Declining is fine; reminders stay off until enabled in Settings. */ }
 
                     LaunchedEffect(isCheckingOnboarding, showOnboarding) {
                         if (!isCheckingOnboarding && !showOnboarding &&
-                            !PushNotificationService.hasNotificationPermission(this@MainActivity)
+                            !PushNotificationService.hasNotificationPermission(this@MainActivity) &&
+                            !onboardingPreferences.hasAnsweredNotificationPriming.first()
                         ) {
-                            notificationPermission.launch(
-                                android.Manifest.permission.POST_NOTIFICATIONS
+                            showNotificationPriming = true
+                        }
+                    }
+
+                    if (showNotificationPriming) {
+                        val scope = rememberCoroutineScope()
+                        // Answered either way, so the card does not return on the
+                        // next launch. Persisted before the system dialog opens:
+                        // the launcher callback does not fire if the process dies
+                        // while the dialog is up, and re-priming someone who has
+                        // already been asked is the failure worth avoiding.
+                        val answer: (Boolean) -> Unit = { grantRequested ->
+                            showNotificationPriming = false
+                            scope.launch {
+                                onboardingPreferences.setNotificationPrimingAnswered()
+                            }
+                            if (grantRequested) {
+                                notificationPermission.launch(
+                                    android.Manifest.permission.POST_NOTIFICATIONS
+                                )
+                            }
+                        }
+                        Dialog(onDismissRequest = { answer(false) }) {
+                            PermissionPrimingCard(
+                                icon = Icons.Default.Notifications,
+                                title = "Never miss an event",
+                                body = "Turn on notifications and we will remind you before " +
+                                    "events you save, and tell you when something new lands " +
+                                    "in Des Moines.",
+                                primaryLabel = "Enable notifications",
+                                onPrimary = { answer(true) },
+                                onDismiss = { answer(false) },
                             )
                         }
                     }

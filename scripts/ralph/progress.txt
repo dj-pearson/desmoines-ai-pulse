@@ -3215,3 +3215,34 @@ Numbers, one keep removed at a time, all five builds succeeded:
 - Narrowing the app-wide `*** Companion;` keep to @Serializable types saves 8,600 bytes (0.07%). Worth doing
   for correctness, not for size.
 ---
+
+## 2026-08-29 - AND-AUDIT-017 (re-derived, and the one that cost something is wired)
+AC1 said re-derive rather than trust the list. It has not drifted down - it grew from 22 to 38, and nothing
+on it had been wired since the story was filed.
+
+Files changed:
+- android/app/src/main/java/com/desmoines/aipulse/MainActivity.kt - PermissionPrimingCard shown before the
+  POST_NOTIFICATIONS system dialog
+- .../util/OnboardingPreferences.kt - hasAnsweredNotificationPriming + setNotificationPrimingAnswered
+- prd.json - AND-AUDIT-017 notes
+
+Verified: assembleDebug SUCCESS, 346 tests / 0 failures, lint no new issues, and the re-derived count drops
+38 -> 37 with PermissionPrimingCard now referenced. Not seen on a device.
+
+**Learnings for future iterations:**
+- **The unreferenced-UI scan, as a recipe:** walk src/main for .kt; in ui/components and ui/theme match a
+  top-level `fun|val|class|object|interface` at column 0; skip anything with @Preview within four lines
+  above; keep it if no OTHER file contains a word-boundary match. 137 declarations, 38 unreferenced. Re-run
+  it after wiring something - the count dropping is how you prove the wiring, rather than assuming it.
+- **An unexplained POST_NOTIFICATIONS prompt is not a neutral default.** Android stops presenting the system
+  dialog after a couple of declines, so shipping it with no priming makes a decline close to permanent, and
+  everything downstream silently drops notifications. Priming UI existed in this repo the whole time with no
+  call sites.
+- **Persist "we asked" BEFORE opening the system dialog, not in the result callback.** The callback does not
+  fire if the process dies while the dialog is up, and re-priming someone who has already answered is worse
+  than losing one grant.
+- Do not delete design tokens to satisfy a reference count. The eleven Category* colours are a palette
+  defined ahead of use; that is deliberate work, and R8 already handles unused constants.
+- Revenue surfaces in the dead list (AffiliateAdBanner, SubscriptionTierCard, BillingCycleToggle,
+  PaywallSheet) are a product decision, not cleanup - the story says ask, so ask.
+---
