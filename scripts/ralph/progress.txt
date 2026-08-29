@@ -3600,3 +3600,29 @@ november 4489 -> 2425. numberOfItems 36 against 36 rendered cards. tsc and eslin
 - `npm run prerender` runs the prerender step alone against an existing dist/, far faster than a full
   `npm run build` when you only need to re-measure rendered output.
 ---
+
+## 2026-08-29 - WEB-SEO-006 AC5: an entity-coverage ratchet, and the categories that always lose
+Files changed:
+- scripts/check-entity-coverage.mjs - NEW
+- entity-coverage-baseline.json - NEW, 870 from a default-budget build
+- package.json, .github/workflows/pr-checks.yml - wired
+
+Verified: 870/1005 (86.6%). Control - moving 300 restaurant pages out of dist/ gives
+"restaurants: 478 -> 179 (299 fewer)" and exit 1; restoring returns OK.
+
+**Learnings for future iterations:**
+- **The entity prerender drops the SAME categories every time, not random ones.** articles 0/18, attractions
+  0/22, playgrounds 0/67, pseo 0/18 - which is 125 URLs, and with 6 events and 4 guides is exactly the 135
+  the prerenderer reports as over budget. It works the sitemaps in order and stops on the clock, so whatever
+  is last in the queue is systematically unreadable to JS-less crawlers. A 1500s budget renders all of them.
+  This is a queue-order problem dressed as a time-budget one, and the fix might be interleaving the sitemaps
+  rather than buying more seconds.
+- **Guard the thing nothing else can see.** prerender.mjs's strict gate refuses to WRITE a bad page and
+  check-prerender-content asserts properties of pages that exist; neither can see a URL that was never
+  attempted, which is the actual failure here.
+- **A ratchet on a wall-clock-bound process has to be loose or it becomes a flaky gate that gets switched
+  off** (WEB-CI-020/021 are the precedent). Fail on the cliff at half the baseline, print the exact number
+  every run so the variance stays visible, and say so explicitly when a run is below baseline but tolerated.
+- **Refuse to score an empty input.** A sitemap with no <loc> would give 0-of-0 = 100% and bank a generator
+  failure as a pass - the empty-scan trap WEB-CI-027 catalogued across 34 scripts.
+---

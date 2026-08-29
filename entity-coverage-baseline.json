@@ -1,0 +1,14 @@
+{
+  "$comment": "WEB-SEO-006 AC5. Prerendered entity URLs per sitemap. This may only go UP.",
+  "generated": "2026-08-29",
+  "total": 870,
+  "groups": {
+    "articles": 0,
+    "attractions": 0,
+    "events": 391,
+    "guides": 1,
+    "playgrounds": 0,
+    "pseo": 0,
+    "restaurants": 478
+  }
+}
