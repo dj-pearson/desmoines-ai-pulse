@@ -3436,3 +3436,30 @@ assembleDebug SUCCESS, 358 tests / 0 failures, lint clean.
   Moving to files first is provably behaviour-preserving; regrouping across the seams is a judgement change
   that cannot be verified the same way. Two commits, not one.
 ---
+
+## 2026-08-29 - Backlog sweep: what is actually left, and for whom
+No code change. After AND-AUDIT-021 the unblocked work ran out, so this pass re-probed the blockers instead
+of asserting them - three stories this week had stale ones.
+
+Files changed:
+- prd.json - IOS-AUDIT-REL-014 (AC2 verified) and WEB-QA-018 (blockers re-probed, still real)
+
+**Learnings for future iterations:**
+- **Re-probe a blocker before trusting it, and record the negative result too.** WEB-PERF-020 was 3.3x out,
+  WEB-SEO-006's premise was false, AND-AUDIT-009's "no stable version" had shipped. This time the missing
+  tables really are missing - device_tokens, user_preferences, trip_plans, crm_contacts, payments, api_keys,
+  event_analytics, both favourites tables, and known_venues.image_url. WEB-QA-018 is genuinely the
+  bottleneck.
+- **`node scripts/check-privacy-manifest.mjs` runs on any machine.** It reconciles required-reason APIs from
+  Swift source, so IOS-AUDIT-REL-014's AC2 is checkable without a Mac; only AC1's binary linter is not. Worth
+  checking which iOS stories have a source-level half before writing them off as macOS-gated.
+- **Of 74 open stories, 57 carry an explicit OWNER / DECISION / device / deployment blocker.** The single
+  highest-leverage unblock is SUPABASE_ACCESS_TOKEN on the Scrape environment: no edge function has ever
+  deployed, which is why regenerate-sitemaps, google-indexing-api, export-user-data and the crash-report
+  endpoint are all 404 across four stories that each record it as their own problem.
+- **Do not start the AOS-* agent builds to fill the gap.** They are priority 68-76 and their delivery
+  mechanism is pg_cron plus edge functions, neither of which currently runs (WEB-OPS-007: 57 of 61 cron jobs
+  have never succeeded; no function has ever deployed). Building more automation that cannot execute is
+  exactly the pattern WEB-OPS-007 AC5 records - 17 stories marked done whose code has never run in
+  production.
+---
