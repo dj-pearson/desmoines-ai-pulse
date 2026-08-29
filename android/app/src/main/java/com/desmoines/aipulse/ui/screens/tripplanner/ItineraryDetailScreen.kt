@@ -1,5 +1,6 @@
 package com.desmoines.aipulse.ui.screens.tripplanner
 
+import com.desmoines.aipulse.util.UiFormatLocale
 import android.location.Geocoder
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -403,7 +404,7 @@ private val timeInputFormats = listOf(
     DateTimeFormatter.ofPattern("HH:mm:ss"),
     DateTimeFormatter.ofPattern("HH:mm"),
 )
-private val timeDisplay = DateTimeFormatter.ofPattern("h:mm a")
+private val timeDisplay = DateTimeFormatter.ofPattern("h:mm a", UiFormatLocale)
 
 private fun startTimeDisplay(raw: String?): String? {
     if (raw.isNullOrBlank()) return null

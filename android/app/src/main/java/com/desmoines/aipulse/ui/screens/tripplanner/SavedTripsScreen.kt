@@ -1,5 +1,6 @@
 package com.desmoines.aipulse.ui.screens.tripplanner
 
+import com.desmoines.aipulse.util.UiFormatLocale
 import android.content.Intent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
@@ -179,7 +180,7 @@ private fun ErrorBanner(message: String, onDismiss: () -> Unit) {
 }
 
 private val isoDate = DateTimeFormatter.ISO_LOCAL_DATE
-private val prettyDate = DateTimeFormatter.ofPattern("MMM d")
+private val prettyDate = DateTimeFormatter.ofPattern("MMM d", UiFormatLocale)
 
 private fun dateRange(start: String?, end: String?): String {
     val s = start?.let { runCatching { LocalDate.parse(it, isoDate).format(prettyDate) }.getOrNull() } ?: start

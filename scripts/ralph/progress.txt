@@ -3246,3 +3246,39 @@ Verified: assembleDebug SUCCESS, 346 tests / 0 failures, lint no new issues, and
 - Revenue surfaces in the dead list (AffiliateAdBanner, SubscriptionTierCard, BillingCycleToggle,
   PaywallSheet) are a product decision, not cleanup - the story says ask, so ask.
 ---
+
+## 2026-08-29 - AND-AUDIT-019 AC5 (one locale for date text, and a scan that keeps it)
+AC1 is a product decision and blocks AC2-AC4. AC5 does not depend on it and had a user-visible defect behind
+it: six formatters passed Locale.US and eleven did not, so a non-English device showed "Saturday" on one
+screen and "samedi" on the next, inside an otherwise entirely English UI.
+
+Files changed:
+- util/UiFormatLocale.kt - NEW, one value
+- 12 files routed through it (11 that had no locale, 6 that hardcoded Locale.US)
+- test/util/UiFormatLocaleTest.kt - NEW, 5 tests including a source scan
+- prd.json - AND-AUDIT-019 notes
+
+Verified: 351 tests / 0 failures (up from 346), lint clean. Reverting one MapScreen call site to a bare
+ofPattern gives "351 tests completed, 1 failed".
+
+**Learnings for future iterations:**
+- **`DateTimeFormatter.ofPattern` is locale-SAFE for numeric patterns and locale-SENSITIVE for text ones.**
+  It uses DecimalStyle.STANDARD, not the locale's digits, so yyyy-MM-dd / HH:mm parse and format identically
+  under ar-EG and th-TH-u-nu-thai. I expected the opposite and checked before writing anything. Do not
+  sprinkle Locale.US onto wire-format parsers - it is noise, and the real rule has a boundary: MMM/EEE/a need
+  an explicit locale, digits do not.
+- **A top-level `val` is a snapshot taken at class load, which makes it useless as a mutation target.**
+  Changing `val UiFormatLocale = Locale.US` to `Locale.getDefault()` left the suite green, because the val
+  initialises before any test can move the default. If a mutation does not turn a test red, work out why
+  before concluding the test is fine.
+- **A behavioural test of a shared constant does not test its call sites, and the call sites are what
+  regress.** The fix was a source-scanning test: walk src/main, regex `ofPattern("...")`, and fail when a
+  text-bearing pattern has no Locale argument. Cheap, and it is the only one of the five that would have
+  caught the original bug.
+- Gradle unit tests run with the module directory (android/app) as the working directory, so a test can read
+  `src/main/...` directly. Guard it with Assumptions.assumeTrue(dir.isDirectory) so it degrades rather than
+  fails if that ever changes.
+- **verifyUnitTestExecution (AND-AUDIT-014) trips on any `--tests` filtered run**, since 4 tests is below the
+  340 floor. That is correct for CI and awkward locally: run the full suite when you need a real result, or
+  read the FAILED lines above the guard's own failure.
+---

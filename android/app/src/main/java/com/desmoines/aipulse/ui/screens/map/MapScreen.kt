@@ -1,5 +1,6 @@
 package com.desmoines.aipulse.ui.screens.map
 
+import com.desmoines.aipulse.util.UiFormatLocale
 import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
@@ -557,7 +558,7 @@ private fun EventPopup(
     onNavigate: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val dateFormatter = remember { DateTimeFormatter.ofPattern("MMM d, h:mm a") }
+    val dateFormatter = remember { DateTimeFormatter.ofPattern("MMM d, h:mm a", UiFormatLocale) }
 
     PopupCard {
         Row(
