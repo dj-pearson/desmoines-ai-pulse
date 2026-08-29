@@ -4098,3 +4098,29 @@ Codebase pattern: a test that reads source files escapes Gradle's input
 tracking. It will pass locally right after you break what it guards, and CI
 hides it because a fresh checkout always re-runs. Declare the files as inputs,
 then mutate WITHOUT --rerun-tasks to prove it.
+
+================================================================================
+2026-08-29  AND-AUDIT-014 AC4 - covering the Room cache found offline mode broken
+================================================================================
+CacheManager.pruneExpired() applied two clocks in one method: entity rows were
+kept for 24 hours, metadata was deleted on its 5-minute TTL. ttl_minutes is a
+freshness signal read at query time (what allowStale overrides), not a lifetime.
+
+So the prune deleted the row that ADDRESSES cached data while keeping the data.
+getCachedEvents begins `cacheMetadataDao.get(key) ?: return null`, and
+pruneExpired runs in Application.onCreate - so every offline launch more than
+five minutes after the last fetch reported nothing cached, with up to a day of
+rows sitting in the database unreachable.
+
+Fixed: one cutoff for all four tables. deleteExpired(nowMillis) replaced by
+deleteOlderThan(cutoffMillis) so a TTL-shaped delete is not left to be reused.
+
+Tests written FIRST and they fail on the unfixed code - 2 of 10 assertions.
+In-memory Room rather than mocked DAOs, because the bug is in what SQL each
+DELETE matches and a mock agrees with whatever you already believe.
+
+Codebase pattern: when a class prunes two tables that reference each other,
+check that both DELETEs use the same clock. And when every read returns null on
+error and every caller turns null into "could not load", there is no observable
+difference between a broken cache and no network - so the layer cannot be
+debugged from logs, only from tests.
