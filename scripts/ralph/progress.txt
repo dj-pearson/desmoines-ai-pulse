@@ -3376,3 +3376,31 @@ tsc clean, eslint clean on the changed file.
   build - so revert them rather than committing the churn, but the size of that drift is WEB-SEO-011's
   thesis measured.
 ---
+
+## 2026-08-29 - AND-AUDIT-012 (three pins that could never match, and one that has expired)
+Ran AC1 and AC2 against the live chain. AC1's worry (self-hosted host, wrong pin pattern) is unfounded here,
+and the real defect was inside the pin list.
+
+Files changed:
+- android/.../util/CertificatePinningService.kt - pin set 5 -> 2, KDoc rewritten with the measurement
+- prd.json - AND-AUDIT-012 and IOS-AUDIT-SEC-001 notes
+
+Verified: assembleDebug SUCCESS, 358 tests / 0 failures, lint clean. No behaviour change - pinning is
+report-only on every build type.
+
+**Learnings for future iterations:**
+- **A "fallback" pin that is not in the live chain WIDENS pinning, it does not back it up.** The check passes
+  when any chain cert matches any pin, so Let's Encrypt R3 / ISRG Root X1 / DigiCert Global Root G2 meant a
+  cert from any of three huge public CAs would satisfy it. Removing a pin that can never match is a strict
+  tightening with zero rotation cost - the opposite of how "fallback" reads.
+- **iOS fixed exactly this on 2026-07-18 and Android was missed.** When a story exists per platform, check
+  whether the other platform's fix was ever mirrored before re-deriving it. Same three names, same argument.
+- **Do not pin the leaf against a GTS-issued host.** The leaf iOS pinned in July has already rotated - the
+  live SPKI on 2026-08-29 is different. GTS issues short-lived certificates, so a leaf pin is dead weight
+  within a quarter. Issuer plus root is what survives, which is what Android now keeps.
+- The whole check is one command and worth running before trusting any pin note:
+    openssl s_client -connect HOST:443 -servername HOST -showcerts </dev/null |
+      awk '/BEGIN CERT/,/END CERT/' > chain.pem   # then per cert:
+    openssl x509 -in c.pem -pubkey -noout | openssl pkey -pubin -outform der |
+      openssl dgst -sha256 -binary | base64
+---
