@@ -3954,3 +3954,45 @@ answers 200. pg_net keeps status codes only. That is how the scrape outage hid.
 Codebase pattern to reuse: when a monitor and the thing it monitors disagree,
 find the table that stores the OUTCOME rather than the ATTEMPT. Success recorded
 at enqueue time is not success.
+
+================================================================================
+2026-08-29  WEB-SEO-006 - four content types were at exactly zero coverage
+================================================================================
+ENTITY_SITEMAPS is a strict priority order, so when the prerender budget binds
+the shortfall is not spread across categories - the tail gets all of it. The
+full-budget pass rendered restaurants 478/478 and events 391/397 while
+attractions, playgrounds, articles and pSEO each came out at ZERO.
+
+Small sitemaps (<= 100 URLs) now render first. 125 URLs, 13% of the list, about
+a minute of a 420-second budget. Coverage 870 -> 1064 of 1136, and every group
+that was zero is now at 100%.
+
+Events becomes the variance sink by construction, so check-entity-coverage.mjs
+gained a `floors` override (preserved across --update) set to 0 for events, plus
+a ratchet on the TOTAL so zeroing a group's floor does not leave it unpoliced.
+
+Codebase pattern: when a budgeted pass processes a priority list, the last item
+does not get "less". It gets nothing. Check the shape of a shortfall, not its
+size - "135 of 1004" hid four categories at zero.
+
+================================================================================
+2026-08-29  WEB-LEGAL-012 AC4 - the Android opt-out that showed the wrong state
+================================================================================
+AC4's premise was wrong: Android has the toggle. It wrote SecureStorage only, so
+it stopped no mail - every sender reads profiles.communication_preferences.
+
+The sharper defect nobody had written down: loadBoolean returns false for a key
+never set, and the server reads a missing key as CONSENT. So the screen showed
+every user opted OUT while the mail kept arriving, and toggling did not fix it.
+
+Now server-backed: read-then-merge (never replace - that is how PreferencesManager
+deleted the marketing key on web), rollback plus a visible error when the write
+fails, and a StateFlow that starts true because absence means consent.
+
+371 tests, 0 failures.
+
+Two traps worth reusing:
+  kotlinx booleanOrNull parses raw content, so the JSON STRING "false" reads as
+  false - while JS `"false" !== false` is true. Check isString first.
+  mockk(relaxed=true) cannot produce a Result<T>; it is a value class, so you get
+  a ClassCastException at the CALL SITE rather than at the stub.
