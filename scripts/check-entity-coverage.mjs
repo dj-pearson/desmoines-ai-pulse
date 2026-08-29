@@ -32,6 +32,15 @@
  *   node scripts/check-entity-coverage.mjs --update   # re-baseline deliberately
  *
  * Requires a build first: it reads public/sitemap-*.xml and dist/.
+ *
+ * IT MEASURES dist/ ON DISK, NOT THE LAST RUN. prerender.mjs writes pages and
+ * never removes them, so running it twice locally without clearing dist/ leaves
+ * the union of both passes and this check reports the better number. Verified:
+ * a deliberate 25-second budget rendered 35 entities and this still read 870,
+ * because the earlier full pass was still on disk.
+ *
+ * That is correct for CI, which builds from a fresh checkout every time, and a
+ * trap locally. `rm -rf dist` before a run you intend to measure.
  */
 import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';

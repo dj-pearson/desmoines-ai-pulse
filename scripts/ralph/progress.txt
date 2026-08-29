@@ -3626,3 +3626,26 @@ Verified: 870/1005 (86.6%). Control - moving 300 restaurant pages out of dist/ g
 - **Refuse to score an empty input.** A sitemap with no <loc> would give 0-of-0 = 100% and bank a generator
   failure as a pass - the empty-scan trap WEB-CI-027 catalogued across 34 scripts.
 ---
+
+## 2026-08-29 - The prerender log now names the categories it drops
+Files changed:
+- scripts/prerender.mjs - entitySource map; the INCOMPLETE warning breaks the shortfall down per sitemap
+- scripts/check-entity-coverage.mjs - header records the dist/-accumulation caveat
+- prd.json - WEB-SEO-006 notes
+
+Verified with a deliberate 25s budget: "Unrendered by sitemap: restaurants 443/478, events 397/397 (ALL),
+playgrounds 67/67 (ALL), attractions 22/22 (ALL), pseo 18/18 (ALL), articles 18/18 (ALL), guides 4/4 (ALL)".
+
+**Learnings for future iterations:**
+- **A count hides the shape of a loss.** "135 of 1004" and "four categories at zero" are the same number and
+  very different problems - one is 13% attrition, the other is four content types invisible to crawlers.
+  When a budget truncates a priority-ordered queue, report per-group with the all-or-nothing case marked.
+- **Do not re-order ENTITY_SITEMAPS on intuition.** The list is a documented product decision backed by a
+  Search Console pull (restaurants 6,794 impressions) and ends with "Re-check this against Search Console
+  rather than against intuition". Interleaving would give every category proportional coverage and is
+  probably better for crawlers, but it trades away the set that draws impressions - the owner's call, now
+  with the evidence in front of it.
+- **prerender.mjs never deletes from dist/, so a local re-run measures the UNION of passes.** A 25-second
+  budget rendering 35 entities still scored 870 on check-entity-coverage because the earlier full pass was
+  still on disk. Fine in CI, which builds fresh; `rm -rf dist` before any local run you intend to measure.
+---

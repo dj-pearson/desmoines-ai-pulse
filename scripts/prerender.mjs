@@ -164,6 +164,18 @@ const ENTITY_SITEMAPS = [
  * the timing has been confirmed on the real build host, and tune
  * PRERENDER_ENTITY_BUDGET_SECONDS / PRERENDER_CONCURRENCY from there.
  */
+/**
+ * Which sitemap each entity route came from, so an incomplete pass can say WHICH
+ * categories it dropped rather than only how many URLs.
+ *
+ * ENTITY_SITEMAPS is a strict priority order, so the shortfall is never spread
+ * evenly - the files at the end lose everything while the ones at the front lose
+ * nothing. A recent default-budget pass rendered restaurants 478/478 and events
+ * 391/397 while attractions, playgrounds, articles and pSEO came out at ZERO,
+ * and the log said only "135 of 1004". That number hides the shape of the loss.
+ */
+const entitySource = new Map();
+
 function collectEntityRoutes() {
   const seen = new Set();
   const routes = [];
@@ -192,6 +204,7 @@ function collectEntityRoutes() {
       // second render of it.
       if (seen.has(pathname) || ROUTES.includes(pathname)) continue;
       seen.add(pathname);
+      entitySource.set(pathname, file.replace(/^sitemap-|\.xml$/g, ''));
       routes.push(pathname);
     }
   }
@@ -799,10 +812,33 @@ const duplicateJsonLdRoutes = [];
       }
       if (entityUnrendered.length > 0) {
         // Loud on purpose. See renderPool's docstring.
+        // Name the categories, not just the count. ENTITY_SITEMAPS is a strict
+        // priority order, so a shortfall lands entirely on the files at the end -
+        // and a category at ZERO is invisible to crawlers in a way that a category
+        // at 90% is not. "135 of 1004" does not distinguish those two shapes.
+        const lostBySource = new Map();
+        for (const route of entityUnrendered) {
+          const src = entitySource.get(route) ?? 'unknown';
+          lostBySource.set(src, (lostBySource.get(src) ?? 0) + 1);
+        }
+        const totalBySource = new Map();
+        for (const src of entitySource.values()) {
+          totalBySource.set(src, (totalBySource.get(src) ?? 0) + 1);
+        }
+        const breakdown = [...lostBySource.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .map(([src, n]) => {
+            const total = totalBySource.get(src) ?? n;
+            return n === total ? `${src} ${n}/${total} (ALL)` : `${src} ${n}/${total}`;
+          })
+          .join(', ');
         warn(
           `ENTITY COVERAGE INCOMPLETE: ${entityUnrendered.length}/${entityTotal} entity URLs were not prerendered ` +
-            `within the ${ENTITY_BUDGET_SECONDS}s budget. Those URLs are in the sitemap but ship as an SPA shell, ` +
+            `within the ${ENTITY_BUDGET_SECONDS}s budget. Unrendered by sitemap: ${breakdown}. ` +
+            `Those URLs are in the sitemap but ship as an SPA shell, ` +
             `so JS-less crawlers (GPTBot, PerplexityBot, ClaudeBot, OAI-SearchBot) see nothing on them. ` +
+            `A category marked (ALL) is entirely unreadable, which the priority order in ENTITY_SITEMAPS ` +
+            `makes the normal outcome rather than an accident. ` +
             `Raise PRERENDER_ENTITY_BUDGET_SECONDS or PRERENDER_CONCURRENCY, minding the host's build timeout.`,
         );
       }
