@@ -81,7 +81,7 @@ if (buildsShippableArtifact) {
 
 android {
     namespace = "com.desmoines.aipulse"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.desmoines.aipulse"

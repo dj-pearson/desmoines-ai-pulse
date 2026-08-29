@@ -37,6 +37,14 @@ jobs:
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
+      # compileSdk is 37 and the runner image is not guaranteed to carry that
+      # platform. AGP would auto-download it, but silently and only if the
+      # licence happens to be accepted; install it explicitly so a missing
+      # platform fails here with a readable message instead of mid-build.
+      - name: Install Android SDK Platform 37
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0"
+
       - name: Create local.properties with placeholder credentials
         working-directory: android
         run: |

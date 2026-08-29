@@ -2934,3 +2934,42 @@ Three new deprecation warnings, no errors. Story stays open for AC3/AC4, the AGP
 - A version bump that compiles is not a verified version bump. checkDebugAarMetadata is a separate task from
   compileDebugKotlin and is the one that fails on a compileSdk floor - run assembleDebug, not just the compile.
 ---
+
+## 2026-08-29 - AND-AUDIT-005 (AC3/AC4: AGP 9.3.2, Gradle 9.5.0, compileSdk 37)
+Second half of the story, same day as the AC5 note above. The AGP move was the small half once the SDK
+platform question was answered.
+
+Files changed:
+- android/gradle/libs.versions.toml - agp 9.1.0 -> 9.3.2, coreKtx 1.18.0 -> 1.19.0,
+  lifecycleRuntimeKtx 2.10.0 -> 2.11.0, composeBom 2026.06.01 -> 2026.08.00,
+  composeNavigation 2.9.8 -> 2.10.0
+- android/gradle/wrapper/gradle-wrapper.properties - 9.3.1 -> 9.5.0 (AGP 9.3.2 refuses below it)
+- android/app/build.gradle.kts - compileSdk 36 -> 37 (targetSdk stays 36)
+- .github/workflows/android-ci.yml, android-release.yml - explicit platforms;android-37.0 install
+- prd.json - AND-AUDIT-005 notes
+
+Verified on JDK 17, the same JDK both workflows use:
+    :app:assembleDebug        SUCCESS 7m10s   (checkDebugAarMetadata included - the task that failed
+                                               with 16 issues on run 33179244127)
+    :app:testDebugUnitTest    SUCCESS
+    :app:minifyReleaseWithR8  SUCCESS 5m04s
+Still exactly three deprecation warnings, so 37 + newer AndroidX added none.
+
+**Learnings for future iterations:**
+- **The SDK package is `platforms;android-37.0`, not `platforms;android-37`.** `sdkmanager
+  "platforms;android-37"` answers "Warning: Failed to find package", which reads as "API 37 is not released"
+  and is not. `sdkmanager --list | grep platforms;android-3` shows 37.0, 37.1 and 37.2 on the DEFAULT
+  channel with only 37.2-beta* as previews. Android platforms are versioned with a minor now; check the list
+  before concluding an API level does not exist.
+- **AGP pins a minimum Gradle and says so precisely.** AGP 9.3.2 refuses to apply under Gradle 9.5.0 and the
+  failure names both the required version and the file to edit. Do not go looking for a compatibility table -
+  bump AGP, read the error, bump the wrapper.
+- Newest STABLE AGP is what you want: the maven-metadata tail is dominated by 9.4.0-rc / 9.5.0-alpha. Filter
+  alpha|beta|rc before taking the last entry.
+- **Neither Android workflow installs SDK platforms.** They inherit whatever ubuntu-latest ships. AGP will
+  auto-download a missing platform (android.builder.sdkDownload defaults on) but silently, and only where the
+  licence is accepted - so raising compileSdk is a CI change too, not just a build-file edit. Both workflows
+  now install the platform explicitly after Setup Gradle.
+- compileSdk above targetSdk is normal and supported. compileSdk 37 with targetSdk 36 builds clean; the Play
+  requirement is on targetSdk and is untouched by this.
+---
