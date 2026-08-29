@@ -2973,3 +2973,41 @@ Still exactly three deprecation warnings, so 37 + newer AndroidX added none.
 - compileSdk above targetSdk is normal and supported. compileSdk 37 with targetSdk 36 builds clean; the Play
   requirement is on targetSdk and is untouched by this.
 ---
+
+## 2026-08-29 - WEB-SEC-025 (AC7 sweep, and the step-3 window)
+Ran AC7's sweep, which had never been run, and it reframed step 3. Also found a live non-privacy bug while
+proving the fix.
+
+Files changed:
+- supabase/migrations/20260829000001_votes_ballot_privacy.sql - NEW, not applied (owner's call)
+- prd.json - WEB-SEC-025 notes
+
+Verified in BEGIN/ROLLBACK against production: a vote can now be CHANGED the Android way (was RLS-denied);
+another signed-in user and anon both read 0 rows; voting_category_tallies() and voting_results(uuid) still
+return the tally to anon, so the Best-Of leaderboard is untouched.
+
+**Learnings for future iterations:**
+- **Count the rows before accepting a story's phasing.** WEB-SEC-025 stages an RLS tightening across releases
+  behind MIN_SUPPORTED_APP_VERSION, which is correct reasoning about a table with data. public.votes holds 0
+  rows against 10 categories open since 2026-03-12, so every client already gets an empty array and gets the
+  same empty array after tightening - no read that succeeds today fails after. The CLAUDE.md rule is about
+  observable behaviour, not about the policy text. This window closes the moment the first row is written.
+- **A unique index plus an upsert needs an UPDATE policy, and INSERT+SELECT+DELETE looks complete.** votes had
+  three policies and no UPDATE; Android's `upsert(onConflict = ...)` becomes ON CONFLICT DO UPDATE and fails
+  with "new row violates row-level security policy". Web hid it by doing delete-then-insert. Any table where
+  one client upserts and another delete-inserts is worth checking for this.
+- **The USING(true)-over-user_id sweep, as one query** (18 hits in public, all currently 0 rows):
+    SELECT p.tablename, p.policyname FROM pg_policies p
+    JOIN information_schema.columns c ON c.table_schema=p.schemaname AND c.table_name=p.tablename
+    WHERE p.schemaname='public' AND p.cmd='SELECT'
+      AND coalesce(btrim(p.qual),'') IN ('true','(true)')
+      AND ('public'=ANY(p.roles) OR 'anon'=ANY(p.roles))
+      AND c.column_name IN ('user_id','profile_id','author_id','owner_id','created_by','email','phone')
+    GROUP BY 1,2;
+  Attributed UGC (event_photos/reviews/tips/live_feed, user_ratings) is public on purpose; check-ins,
+  reactions and helpful-votes are the ones shaped like votes.
+- **Simulate a role properly when testing RLS:** `SELECT set_config('request.jwt.claims',
+  json_build_object('sub', <uuid>, 'role','authenticated')::text, true); SET LOCAL ROLE authenticated;` then
+  `RESET ROLE` before switching identities. Wrap in BEGIN/ROLLBACK and \i the migration inside it - the
+  policy change and its proof then live in one transaction that touches nothing.
+---
