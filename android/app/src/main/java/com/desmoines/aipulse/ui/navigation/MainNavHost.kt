@@ -1,5 +1,6 @@
 package com.desmoines.aipulse.ui.navigation
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContentTransitionScope
@@ -7,7 +8,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -171,13 +171,13 @@ private fun NavGraphBuilder.addTabDestinations(
 ) {
     composable(Route.Home.route) {
         val viewModel: EventsViewModel = hiltViewModel()
-        val state by viewModel.uiState.collectAsState()
+        val state by viewModel.uiState.collectAsStateWithLifecycle()
         var showFilterSheet by remember { mutableStateOf(false) }
 
         // Filter state for the sheet
-        val showFreeOnly by viewModel.showFreeOnly.collectAsState()
-        val maxDistance by viewModel.maxDistance.collectAsState()
-        val minRating by viewModel.minRating.collectAsState()
+        val showFreeOnly by viewModel.showFreeOnly.collectAsStateWithLifecycle()
+        val maxDistance by viewModel.maxDistance.collectAsStateWithLifecycle()
+        val minRating by viewModel.minRating.collectAsStateWithLifecycle()
 
         // Load initial data on first composition
         androidx.compose.runtime.LaunchedEffect(Unit) {
@@ -273,7 +273,7 @@ private fun NavGraphBuilder.addTabDestinations(
 
     composable(Route.Dining.route) {
         val viewModel: RestaurantsViewModel = hiltViewModel()
-        val state by viewModel.uiState.collectAsState()
+        val state by viewModel.uiState.collectAsStateWithLifecycle()
         var showFilterSheet by remember { mutableStateOf(false) }
 
         androidx.compose.runtime.LaunchedEffect(Unit) {
@@ -319,8 +319,8 @@ private fun NavGraphBuilder.addTabDestinations(
     composable(Route.Search.route) {
         val viewModel: SearchViewModel = hiltViewModel()
         val savedSearchViewModel: SavedSearchViewModel = hiltViewModel()
-        val state by viewModel.uiState.collectAsState()
-        val savedSearchState by savedSearchViewModel.uiState.collectAsState()
+        val state by viewModel.uiState.collectAsStateWithLifecycle()
+        val savedSearchState by savedSearchViewModel.uiState.collectAsStateWithLifecycle()
 
         SearchScreen(
             state = state,
@@ -363,7 +363,7 @@ private fun NavGraphBuilder.addTabDestinations(
 
     composable(Route.Map.route) {
         val viewModel: MapViewModel = hiltViewModel()
-        val state by viewModel.uiState.collectAsState()
+        val state by viewModel.uiState.collectAsStateWithLifecycle()
 
         androidx.compose.runtime.LaunchedEffect(Unit) {
             viewModel.loadNearbyContent()
@@ -395,7 +395,7 @@ private fun NavGraphBuilder.addTabDestinations(
 
     composable(Route.Saved.route) {
         val viewModel: FavoritesViewModel = hiltViewModel()
-        val state by viewModel.uiState.collectAsState()
+        val state by viewModel.uiState.collectAsStateWithLifecycle()
 
         androidx.compose.runtime.LaunchedEffect(Unit) {
             viewModel.loadFavorites()
@@ -425,19 +425,19 @@ private fun NavGraphBuilder.addTabDestinations(
     composable(Route.Profile.route) {
         val viewModel: ProfileViewModel = hiltViewModel()
         val profileSubscriptionViewModel: SubscriptionViewModel = hiltViewModel()
-        val isAuthenticated by viewModel.isAuthenticated.collectAsState()
-        val profile by viewModel.profile.collectAsState()
-        val firstName by viewModel.firstName.collectAsState()
-        val lastName by viewModel.lastName.collectAsState()
-        val phone by viewModel.phone.collectAsState()
-        val location by viewModel.location.collectAsState()
-        val selectedInterests by viewModel.selectedInterests.collectAsState()
-        val isSaving by viewModel.isSaving.collectAsState()
-        val isDeleting by viewModel.isDeleting.collectAsState()
-        val showSaveSuccess by viewModel.showSaveSuccess.collectAsState()
-        val showDeleteConfirmation by viewModel.showDeleteConfirmation.collectAsState()
-        val errorMessage by viewModel.errorMessage.collectAsState()
-        val profileSubState by profileSubscriptionViewModel.uiState.collectAsState()
+        val isAuthenticated by viewModel.isAuthenticated.collectAsStateWithLifecycle()
+        val profile by viewModel.profile.collectAsStateWithLifecycle()
+        val firstName by viewModel.firstName.collectAsStateWithLifecycle()
+        val lastName by viewModel.lastName.collectAsStateWithLifecycle()
+        val phone by viewModel.phone.collectAsStateWithLifecycle()
+        val location by viewModel.location.collectAsStateWithLifecycle()
+        val selectedInterests by viewModel.selectedInterests.collectAsStateWithLifecycle()
+        val isSaving by viewModel.isSaving.collectAsStateWithLifecycle()
+        val isDeleting by viewModel.isDeleting.collectAsStateWithLifecycle()
+        val showSaveSuccess by viewModel.showSaveSuccess.collectAsStateWithLifecycle()
+        val showDeleteConfirmation by viewModel.showDeleteConfirmation.collectAsStateWithLifecycle()
+        val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
+        val profileSubState by profileSubscriptionViewModel.uiState.collectAsStateWithLifecycle()
         val context = androidx.compose.ui.platform.LocalContext.current
 
         ProfileScreen(
@@ -492,12 +492,12 @@ private fun NavGraphBuilder.addDetailDestinations(navController: NavHostControll
         val eventId = backStackEntry.arguments?.getString("eventId") ?: return@composable
         val viewModel: EventDetailViewModel = hiltViewModel()
         val eventSubViewModel: SubscriptionViewModel = hiltViewModel()
-        val event by viewModel.event.collectAsState()
-        val relatedEvents by viewModel.relatedEvents.collectAsState()
-        val isLoading by viewModel.isLoading.collectAsState()
-        val isFavorited by viewModel.isFavorited.collectAsState()
-        val calendarAdded by viewModel.calendarAdded.collectAsState()
-        val eventSubState by eventSubViewModel.uiState.collectAsState()
+        val event by viewModel.event.collectAsStateWithLifecycle()
+        val relatedEvents by viewModel.relatedEvents.collectAsStateWithLifecycle()
+        val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+        val isFavorited by viewModel.isFavorited.collectAsStateWithLifecycle()
+        val calendarAdded by viewModel.calendarAdded.collectAsStateWithLifecycle()
+        val eventSubState by eventSubViewModel.uiState.collectAsStateWithLifecycle()
         val context = androidx.compose.ui.platform.LocalContext.current
 
         androidx.compose.runtime.LaunchedEffect(eventId) {
@@ -506,7 +506,7 @@ private fun NavGraphBuilder.addDetailDestinations(navController: NavHostControll
 
         // A save can be rejected (signed out, or the free-tier limit reached).
         // Without this the heart just refuses to fill with no explanation.
-        val favoriteError by viewModel.favoriteError.collectAsState()
+        val favoriteError by viewModel.favoriteError.collectAsStateWithLifecycle()
         androidx.compose.runtime.LaunchedEffect(favoriteError) {
             favoriteError?.let {
                 android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_SHORT).show()
@@ -578,10 +578,10 @@ private fun NavGraphBuilder.addDetailDestinations(navController: NavHostControll
         val restaurantId = backStackEntry.arguments?.getString("restaurantId") ?: return@composable
         val viewModel: RestaurantDetailViewModel = hiltViewModel()
         val restSubViewModel: SubscriptionViewModel = hiltViewModel()
-        val restaurant by viewModel.restaurant.collectAsState()
-        val isLoading by viewModel.isLoading.collectAsState()
-        val isFavorited by viewModel.isFavorited.collectAsState()
-        val restSubState by restSubViewModel.uiState.collectAsState()
+        val restaurant by viewModel.restaurant.collectAsStateWithLifecycle()
+        val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+        val isFavorited by viewModel.isFavorited.collectAsStateWithLifecycle()
+        val restSubState by restSubViewModel.uiState.collectAsStateWithLifecycle()
         val context = androidx.compose.ui.platform.LocalContext.current
 
         androidx.compose.runtime.LaunchedEffect(restaurantId) {
@@ -589,7 +589,7 @@ private fun NavGraphBuilder.addDetailDestinations(navController: NavHostControll
         }
 
         // See the event-detail block: a rejected save needs to say why.
-        val restaurantFavoriteError by viewModel.favoriteError.collectAsState()
+        val restaurantFavoriteError by viewModel.favoriteError.collectAsStateWithLifecycle()
         androidx.compose.runtime.LaunchedEffect(restaurantFavoriteError) {
             restaurantFavoriteError?.let {
                 android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_SHORT).show()
@@ -657,8 +657,8 @@ private fun NavGraphBuilder.addDetailDestinations(navController: NavHostControll
     ) { backStackEntry ->
         val attractionId = backStackEntry.arguments?.getString("attractionId") ?: return@composable
         val viewModel: AttractionDetailViewModel = hiltViewModel()
-        val attraction by viewModel.attraction.collectAsState()
-        val isLoading by viewModel.isLoading.collectAsState()
+        val attraction by viewModel.attraction.collectAsStateWithLifecycle()
+        val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
         val context = androidx.compose.ui.platform.LocalContext.current
 
         androidx.compose.runtime.LaunchedEffect(attractionId) {
@@ -704,7 +704,7 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
 
     composable(Route.AskPulse.route) {
         val viewModel: AskPulseViewModel = hiltViewModel()
-        val state by viewModel.uiState.collectAsState()
+        val state by viewModel.uiState.collectAsStateWithLifecycle()
 
         AskPulseScreen(
             state = state,
@@ -727,7 +727,7 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
 
     composable(Route.Discover.route) {
         val viewModel: DiscoverViewModel = hiltViewModel()
-        val state by viewModel.uiState.collectAsState()
+        val state by viewModel.uiState.collectAsStateWithLifecycle()
 
         DiscoverScreen(
             state = state,
@@ -753,7 +753,7 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
 
     composable(Route.GroupSession.route) {
         val viewModel: GroupSessionViewModel = hiltViewModel()
-        val state by viewModel.uiState.collectAsState()
+        val state by viewModel.uiState.collectAsStateWithLifecycle()
 
         GroupSessionScreen(
             state = state,
@@ -781,7 +781,7 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
 
     composable(Route.Deals.route) {
         val viewModel: DealsViewModel = hiltViewModel()
-        val state by viewModel.uiState.collectAsState()
+        val state by viewModel.uiState.collectAsStateWithLifecycle()
 
         DealsScreen(
             state = state,
@@ -807,7 +807,7 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
 
     composable(Route.Hotels.route) {
         val viewModel: HotelsViewModel = hiltViewModel()
-        val state by viewModel.uiState.collectAsState()
+        val state by viewModel.uiState.collectAsStateWithLifecycle()
 
         HotelsScreen(
             state = state,
@@ -831,9 +831,9 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
     ) { backStackEntry ->
         val hotelId = backStackEntry.arguments?.getString("hotelId") ?: return@composable
         val viewModel: HotelDetailViewModel = hiltViewModel()
-        val hotel by viewModel.hotel.collectAsState()
-        val isLoading by viewModel.isLoading.collectAsState()
-        val errorMessage by viewModel.errorMessage.collectAsState()
+        val hotel by viewModel.hotel.collectAsStateWithLifecycle()
+        val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+        val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
         val context = androidx.compose.ui.platform.LocalContext.current
 
         androidx.compose.runtime.LaunchedEffect(hotelId) { viewModel.load(hotelId) }
@@ -872,7 +872,7 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
 
     composable(Route.BestOf.route) {
         val viewModel: BestOfViewModel = hiltViewModel()
-        val state by viewModel.uiState.collectAsState()
+        val state by viewModel.uiState.collectAsStateWithLifecycle()
 
         BestOfScreen(
             state = state,
@@ -889,7 +889,7 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
     ) { backStackEntry ->
         val categoryId = backStackEntry.arguments?.getString("categoryId") ?: return@composable
         val viewModel: BestOfCategoryViewModel = hiltViewModel()
-        val state by viewModel.uiState.collectAsState()
+        val state by viewModel.uiState.collectAsStateWithLifecycle()
 
         androidx.compose.runtime.LaunchedEffect(categoryId) { viewModel.load(categoryId) }
 
@@ -909,7 +909,7 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
 
     composable(Route.Articles.route) {
         val viewModel: ArticlesViewModel = hiltViewModel()
-        val state by viewModel.uiState.collectAsState()
+        val state by viewModel.uiState.collectAsStateWithLifecycle()
 
         ArticlesScreen(
             state = state,
@@ -929,7 +929,7 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
     ) { backStackEntry ->
         val articleId = backStackEntry.arguments?.getString("articleId") ?: return@composable
         val viewModel: ArticleDetailViewModel = hiltViewModel()
-        val state by viewModel.uiState.collectAsState()
+        val state by viewModel.uiState.collectAsStateWithLifecycle()
 
         androidx.compose.runtime.LaunchedEffect(articleId) { viewModel.load(articleId) }
 
@@ -948,8 +948,8 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
     composable(Route.Dashboard.route) {
         val viewModel: DashboardViewModel = hiltViewModel()
         val savedSearchViewModel: SavedSearchViewModel = hiltViewModel()
-        val state by viewModel.uiState.collectAsState()
-        val savedSearchState by savedSearchViewModel.uiState.collectAsState()
+        val state by viewModel.uiState.collectAsStateWithLifecycle()
+        val savedSearchState by savedSearchViewModel.uiState.collectAsStateWithLifecycle()
 
         DashboardScreen(
             state = state,
@@ -985,7 +985,7 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
     ) { backStackEntry ->
         val hubId = backStackEntry.arguments?.getString("hubId") ?: return@composable
         val viewModel: ContentHubViewModel = hiltViewModel()
-        val state by viewModel.uiState.collectAsState()
+        val state by viewModel.uiState.collectAsStateWithLifecycle()
 
         androidx.compose.runtime.LaunchedEffect(hubId) { viewModel.load(hubId) }
 
@@ -1012,7 +1012,7 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
     ) { backStackEntry ->
         val slug = backStackEntry.arguments?.getString("slug") ?: return@composable
         val viewModel: NeighborhoodDetailViewModel = hiltViewModel()
-        val state by viewModel.uiState.collectAsState()
+        val state by viewModel.uiState.collectAsStateWithLifecycle()
 
         androidx.compose.runtime.LaunchedEffect(slug) { viewModel.load(slug) }
 
@@ -1028,7 +1028,7 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
 
     composable(Route.Weekend.route) {
         val viewModel: WeekendViewModel = hiltViewModel()
-        val state by viewModel.uiState.collectAsState()
+        val state by viewModel.uiState.collectAsStateWithLifecycle()
 
         WeekendScreen(
             state = state,
@@ -1042,7 +1042,7 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
 
     composable(Route.SurpriseMe.route) {
         val viewModel: SurpriseMeViewModel = hiltViewModel()
-        val state by viewModel.uiState.collectAsState()
+        val state by viewModel.uiState.collectAsStateWithLifecycle()
 
         SurpriseMeScreen(
             state = state,
@@ -1069,7 +1069,7 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
 
     composable(Route.TripPlanner.route) {
         val viewModel: TripPlannerViewModel = hiltViewModel()
-        val state by viewModel.uiState.collectAsState()
+        val state by viewModel.uiState.collectAsStateWithLifecycle()
 
         // Hard paywall: VM requests the Subscription screen (free on cooldown, or quota exhausted).
         androidx.compose.runtime.LaunchedEffect(state.navigateToSubscription) {
@@ -1103,7 +1103,7 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
 
     composable(Route.SavedTrips.route) {
         val viewModel: SavedTripsViewModel = hiltViewModel()
-        val state by viewModel.uiState.collectAsState()
+        val state by viewModel.uiState.collectAsStateWithLifecycle()
 
         androidx.compose.runtime.LaunchedEffect(Unit) { viewModel.load() }
 
@@ -1124,7 +1124,7 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
     ) { backStackEntry ->
         val tripId = backStackEntry.arguments?.getString("tripId") ?: return@composable
         val viewModel: ItineraryDetailViewModel = hiltViewModel()
-        val state by viewModel.uiState.collectAsState()
+        val state by viewModel.uiState.collectAsStateWithLifecycle()
 
         androidx.compose.runtime.LaunchedEffect(tripId) { viewModel.load(tripId) }
 
@@ -1148,7 +1148,7 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
 
     composable(Route.Subscription.route) {
         val subscriptionViewModel: SubscriptionViewModel = hiltViewModel()
-        val state by subscriptionViewModel.uiState.collectAsState()
+        val state by subscriptionViewModel.uiState.collectAsStateWithLifecycle()
         val context = androidx.compose.ui.platform.LocalContext.current
 
         SubscriptionScreen(
@@ -1179,14 +1179,14 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
     composable(Route.Settings.route) {
         val profileViewModel: ProfileViewModel = hiltViewModel()
         val settingsSubscriptionViewModel: SubscriptionViewModel = hiltViewModel()
-        val isAuthenticated by profileViewModel.isAuthenticated.collectAsState()
-        val isDeleting by profileViewModel.isDeleting.collectAsState()
-        val showDeleteConfirmation by profileViewModel.showDeleteConfirmation.collectAsState()
-        val errorMessage by profileViewModel.errorMessage.collectAsState()
-        val subscriptionState by settingsSubscriptionViewModel.uiState.collectAsState()
-        val locationConsent by profileViewModel.locationConsent.collectAsState()
-        val emailConsent by profileViewModel.emailConsent.collectAsState()
-        val analyticsConsent by profileViewModel.analyticsConsent.collectAsState()
+        val isAuthenticated by profileViewModel.isAuthenticated.collectAsStateWithLifecycle()
+        val isDeleting by profileViewModel.isDeleting.collectAsStateWithLifecycle()
+        val showDeleteConfirmation by profileViewModel.showDeleteConfirmation.collectAsStateWithLifecycle()
+        val errorMessage by profileViewModel.errorMessage.collectAsStateWithLifecycle()
+        val subscriptionState by settingsSubscriptionViewModel.uiState.collectAsStateWithLifecycle()
+        val locationConsent by profileViewModel.locationConsent.collectAsStateWithLifecycle()
+        val emailConsent by profileViewModel.emailConsent.collectAsStateWithLifecycle()
+        val analyticsConsent by profileViewModel.analyticsConsent.collectAsStateWithLifecycle()
 
         SettingsScreen(
             isAuthenticated = isAuthenticated,

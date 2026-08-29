@@ -1,5 +1,6 @@
 package com.desmoines.aipulse
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -23,7 +24,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -93,7 +93,7 @@ class MainActivity : FragmentActivity() {
             ThemeCrossfadeContainer(themeMode = ThemeMode.System) { _ ->
                 // Launch-time version gate. Fails open; only blocks when the backend
                 // explicitly returns forceUpgrade=true.
-                val versionState by versionCheckService.state.collectAsState()
+                val versionState by versionCheckService.state.collectAsStateWithLifecycle()
                 LaunchedEffect(Unit) { versionCheckService.check() }
                 if (versionState.forceUpgrade) {
                     ForceUpdateScreen(message = versionState.message) {

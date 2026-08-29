@@ -127,3 +127,47 @@ class UiFormatLocaleTest {
         )
     }
 }
+
+/**
+ * Compose state collection stays lifecycle-aware (AND-AUDIT-020).
+ *
+ * 82 call sites used collectAsState() against 7 using collectAsStateWithLifecycle,
+ * so most flows kept collecting while the app was not visible. Worse, six
+ * ViewModels build their state with SharingStarted.WhileSubscribed(5_000) -
+ * which never fired, because collectAsState holds the subscription open for the
+ * life of the composition. The intent those authors wrote had never taken effect.
+ *
+ * A source scan rather than a behavioural test, for the same reason as the
+ * locale one above: the thing that regresses is a call site, and one new screen
+ * written from an old template puts it back.
+ */
+class LifecycleAwareCollectionTest {
+
+    @org.junit.jupiter.api.Test
+    fun `no composable collects a flow without lifecycle awareness`() {
+        val main = java.io.File("src/main/java/com/desmoines/aipulse")
+        org.junit.jupiter.api.Assumptions.assumeTrue(
+            main.isDirectory,
+            "source tree not reachable from the test working directory",
+        )
+
+        val offenders = main.walkTopDown()
+            .filter { it.extension == "kt" }
+            .flatMap { file ->
+                file.readLines().withIndex()
+                    // collectAsState( with an argument is the cold-Flow overload and
+                    // takes an initial value; the bare form is the StateFlow one.
+                    // Both should be lifecycle-aware in a composable.
+                    .filter { (_, line) -> Regex("""\bcollectAsState\(""").containsMatchIn(line) }
+                    .map { (i, line) -> "${file.name}:${i + 1}  ${line.trim()}" }
+            }
+            .toList()
+
+        assertEquals(
+            emptyList<String>(),
+            offenders,
+            "use collectAsStateWithLifecycle so collection stops when the app is " +
+                "backgrounded, and so SharingStarted.WhileSubscribed actually fires",
+        )
+    }
+}

@@ -1,5 +1,6 @@
 package com.desmoines.aipulse.ui.screens.auth
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.app.Activity
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.Arrangement
@@ -48,7 +49,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -97,13 +97,13 @@ fun AuthScreen(
     onNavigateBack: () -> Unit,
     viewModel: AuthViewModel = hiltViewModel(),
 ) {
-    val isAuthenticated by viewModel.isAuthenticated.collectAsState()
-    val isSigningIn by viewModel.isSigningIn.collectAsState()
-    val isSigningUp by viewModel.isSigningUp.collectAsState()
-    val errorMessage by viewModel.errorMessage.collectAsState()
-    val showVerificationAlert by viewModel.showVerificationAlert.collectAsState()
-    val lockoutSeconds by viewModel.lockoutSecondsRemaining.collectAsState()
-    val recoveryAction by viewModel.recoveryAction.collectAsState()
+    val isAuthenticated by viewModel.isAuthenticated.collectAsStateWithLifecycle()
+    val isSigningIn by viewModel.isSigningIn.collectAsStateWithLifecycle()
+    val isSigningUp by viewModel.isSigningUp.collectAsStateWithLifecycle()
+    val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
+    val showVerificationAlert by viewModel.showVerificationAlert.collectAsStateWithLifecycle()
+    val lockoutSeconds by viewModel.lockoutSecondsRemaining.collectAsStateWithLifecycle()
+    val recoveryAction by viewModel.recoveryAction.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val focusManager = LocalFocusManager.current

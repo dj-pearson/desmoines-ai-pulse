@@ -3282,3 +3282,32 @@ ofPattern gives "351 tests completed, 1 failed".
   340 floor. That is correct for CI and awkward locally: run the full suite when you need a real result, or
   read the FAILED lines above the guard's own failure.
 ---
+
+## 2026-08-29 - AND-AUDIT-020 (lifecycle-aware collection, and the WhileSubscribed that never fired)
+All 82 sites swapped in one commit. The story counts 81/13; it is 82/7, with 66 in MainNavHost.
+
+Files changed:
+- MainNavHost.kt (66), AuthScreen.kt (7), MainScreen.kt (6), OfflineBanner.kt (2), MainActivity.kt (1)
+- test/util/UiFormatLocaleTest.kt - LifecycleAwareCollectionTest source scan appended
+- prd.json - AND-AUDIT-020 notes
+
+Verified: assembleDebug SUCCESS, 352 tests / 0 failures, lint clean. Reverting one MainScreen call site
+gives "352 tests completed, 1 failed".
+
+**Learnings for future iterations:**
+- **SharingStarted.WhileSubscribed(5_000) does nothing while the UI uses collectAsState.** collectAsState
+  holds its subscription for the life of the composition, which does not end when the app is backgrounded,
+  so the timeout never fires. Six ViewModels here wrote that intent and none of it had ever taken effect. If
+  you see WhileSubscribed, check how the UI collects before believing the upstream stops.
+- **collectAsState() with NO argument is a StateFlow, always.** The cold-Flow overload requires an initial
+  value. That one observation classifies every call site without reading them: no timers, no uploads, only
+  retained screen state - which is what makes the swap safe rather than needing 82 judgement calls.
+- State cannot be lost by the swap: a StateFlow keeps its value with no collectors, and
+  collectAsStateWithLifecycle re-subscribes on ON_START and gets it immediately. Say that is an argument from
+  construction, not an observation, when there is no device.
+- AC2 suggested splitting MainNavHost (AND-AUDIT-021) first to make this easier. Not needed - the swap is a
+  mechanical replace plus one import, orthogonal to the split. Check a claimed dependency before sequencing
+  work behind a refactor.
+- The source-scan test pattern is now used twice (locale, lifecycle). It is the right shape whenever the
+  defect is "some call sites do it wrong" rather than "a function misbehaves".
+---
