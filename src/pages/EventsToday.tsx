@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 const log = createLogger('EventsToday');
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { ListFreshness } from "@/components/ListFreshness";
 import { FAQSection } from "@/components/FAQSection";
 import { SocialEventCard } from "@/components/SocialEventCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
@@ -145,6 +146,16 @@ export default function EventsToday() {
             <Calendar className="h-6 w-6 text-primary" />
             <h1 className="text-3xl font-bold">Events Today in Des Moines</h1>
           </div>
+
+          {/* SEO-009: a visible, absolute freshness date. These are the pages
+              somebody checks again next Friday, and the only freshness claim on
+              them lived in the meta description ("Updated daily"), where the
+              reader it is aimed at cannot check it. Absolute rather than
+              relative on purpose - these pages are prerendered, so a relative
+              string is computed once at build time and frozen, and would still
+              read "2 hours ago" days later. Renders nothing when no row carries
+              a usable date. */}
+          <ListFreshness rows={todaysEvents} className="mb-4" />
 
           <div className="flex items-center gap-4 text-muted-foreground mb-4">
             <div className="flex items-center gap-1">
