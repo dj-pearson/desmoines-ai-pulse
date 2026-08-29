@@ -249,6 +249,14 @@ jobs:
       - name: Sitemapped entity URLs still ship prerendered HTML
         run: node scripts/check-entity-coverage.mjs
 
+      # WEB-SEO-013 AC7. public/_redirects is hand-edited and the entity sitemaps
+      # are generated from the database, so the two have never been compared.
+      # Submitting a URL that 301s is a Search Console error; a 301 whose target
+      # no sitemap lists means the page that WON a duplication is the one nothing
+      # points at, which is what /visitors-guide was.
+      - name: Sitemaps and redirects agree
+        run: node scripts/check-sitemap-redirects.mjs
+
       # WEB-SEO-002 was "12 routes render no SEOHead" - pages shipping with the
       # shell's title, no canonical and the site-wide description. All 35 are
       # clean today and nothing was guarding it, so the property got fixed and

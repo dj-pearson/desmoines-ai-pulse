@@ -52,6 +52,12 @@ export const PRERENDER_ROUTES = [
   '/attractions',
   '/playgrounds',
   '/things-to-do',
+  // The target of the /things-to-do/tourists 301 (WEB-UX-016). That redirect was
+  // added because the generated pSEO page duplicated this hand-built one - so the
+  // page that WON the duplication was the one in no sitemap and no prerender
+  // list, and a crawler following the 301 landed on a JS-only page nothing
+  // declared. Found by cross-checking public/_redirects against the sitemaps.
+  '/visitors-guide',
   '/stay',
   '/articles',
   '/guides',
