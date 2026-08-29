@@ -99,7 +99,7 @@ export default function DateNightEvents() {
   const dateEvents = matchingEvents.slice(0, VISIBLE_EVENT_LIMIT);
   const hiddenEventCount = matchingEvents.length - dateEvents.length;
 
-  const pageTitle = "Date Night Ideas & Events in Des Moines - Romantic Activities | Des Moines AI Pulse";
+  const pageTitle = "Date Night Ideas & Events in Des Moines - Romantic Activities | Des Moines Insider";
   const pageDescription = `Find ${matchingEvents.length}+ romantic date night events in Des Moines. From live music to wine tastings, discover perfect couples activities. Evening entertainment, dinner shows, and special events for two.`;
 
   const breadcrumbs = [

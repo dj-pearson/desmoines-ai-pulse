@@ -509,7 +509,7 @@ export default function Index() {
                 More Than a Directory—Your AI-Powered City Companion
               </h2>
               <p className="text-lg text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
-                Des Moines AI Pulse goes beyond traditional event listings. We understand context, learn from your behavior, and proactively guide you to the best experiences across every channel.
+                Des Moines Insider goes beyond traditional event listings. We understand context, learn from your behavior, and proactively guide you to the best experiences across every channel.
               </p>
             </div>
 
@@ -721,7 +721,7 @@ export default function Index() {
         <section className="py-16 bg-background">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
             {/* WEB-SEO-012: these questions used to be about our own product —
-                "What makes Des Moines AI Pulse different from other event
+                "What makes Des Moines Insider different from other event
                 directories?", "How does behavioral learning improve my
                 experience?". Eight of eleven described the software rather than
                 the city, on the page with the most authority to spend. They now

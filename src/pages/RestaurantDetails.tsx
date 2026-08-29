@@ -360,7 +360,7 @@ export default function RestaurantDetails() {
     },
     ...(restaurant.rating ? [{
       question: `What is the rating for ${restaurant.name}?`,
-      answer: `${restaurant.name} has a rating of ${restaurant.rating.toFixed(1)} out of 5 stars based on local reviews. ${restaurant.rating >= 4.5 ? "It's one of the highest-rated restaurants in the Des Moines area." : restaurant.rating >= 4.0 ? "It's a highly-rated restaurant in Des Moines." : "Diners appreciate its " + (restaurant.cuisine || "diverse") + " cuisine offerings."} ${restaurant.is_featured ? "It's also featured as an editor's pick on Des Moines AI Pulse." : ""}`,
+      answer: `${restaurant.name} has a rating of ${restaurant.rating.toFixed(1)} out of 5 stars based on local reviews. ${restaurant.rating >= 4.5 ? "It's one of the highest-rated restaurants in the Des Moines area." : restaurant.rating >= 4.0 ? "It's a highly-rated restaurant in Des Moines." : "Diners appreciate its " + (restaurant.cuisine || "diverse") + " cuisine offerings."} ${restaurant.is_featured ? "It's also featured as an editor's pick on Des Moines Insider." : ""}`,
     }] : []),
   ];
 
@@ -781,7 +781,7 @@ export default function RestaurantDetails() {
                           {restaurant.rating ? ` Rated ${restaurant.rating.toFixed(1)} out of 5 stars by local diners.` : ""}
                           {restaurant.price_range ? ` The price range is ${restaurant.price_range} (${getPriceDescription(restaurant.price_range)}).` : ""}
                           {restaurant.phone ? ` Call ${restaurant.phone} for reservations.` : ""}
-                          {restaurant.is_featured ? " This restaurant is an editor's pick on Des Moines AI Pulse." : ""}
+                          {restaurant.is_featured ? " This restaurant is an editor's pick on Des Moines Insider." : ""}
                         </p>
                       </div>
                     </div>

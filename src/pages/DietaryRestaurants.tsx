@@ -118,8 +118,8 @@ export default function DietaryRestaurants() {
 
   const selectedOption = dietaryOptions.find(d => d.id === selectedDiet);
   const pageTitle = selectedDiet
-    ? `${selectedOption?.label} Restaurants in Des Moines - Dietary Options | Des Moines AI Pulse`
-    : "Dietary Restriction Friendly Restaurants Des Moines | Des Moines AI Pulse";
+    ? `${selectedOption?.label} Restaurants in Des Moines - Dietary Options | Des Moines Insider`
+    : "Dietary Restriction Friendly Restaurants Des Moines | Des Moines Insider";
 
   const pageDescription = selectedDiet
     ? `Find ${restaurants.length}+ ${selectedOption?.label.toLowerCase()} restaurants in Des Moines. Verified ${selectedOption?.label} menu options, dedicated kitchens, and dietary-conscious dining. Updated daily with new ${selectedOption?.label} friendly venues.`

@@ -28,7 +28,7 @@ export default function CMSDashboard() {
   return (
     <>
       <Helmet>
-        <title>CMS Dashboard | Des Moines AI Pulse</title>
+        <title>CMS Dashboard | Des Moines Insider</title>
         <meta name="robots" content="noindex, nofollow" />
       </Helmet>
 

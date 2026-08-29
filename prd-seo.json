@@ -106,7 +106,7 @@
       "title": "Old brand name leaks into the two places a machine reads first",
       "priority": 3,
       "phase": 1,
-      "passes": false,
+      "passes": true,
       "description": "As the product Des Moines Insider, I need one name, because /events/date-night serves the title '... | Des Moines AI Pulse' and robots.txt opens with '# Des Moines AI Pulse'.",
       "acceptanceCriteria": [
         "Find every occurrence of the old brand name in anything a crawler, a user or an AI reads: titles, meta descriptions, JSON-LD Organization and WebSite names, robots.txt, llms.txt, Open Graph tags, manifest.",
@@ -114,7 +114,7 @@
         "One declaration for the site name, imported, rather than a literal repeated per page.",
         "Verify with curl that no live page serves the old name in a title, a meta tag or a JSON-LD name field."
       ],
-      "notes": ""
+      "notes": "DONE 2026-08-29. The retired brand was in 38 code sites across 19 files plus three public files, and the two that mattered most are the two a machine reads first: /events/date-night served a <title> ending '| Des Moines AI Pulse', and public/manifest.json declared it as the PWA `name` - the string that lands on a phone home screen - with `short_name` 'DM AI Pulse'. brandConfig.ts already declared shortName 'DM Insider', so the manifest had simply drifted from the single declaration rather than disagreeing with it on purpose. Also fixed robots.txt and .well-known/security.txt. HISTORICAL COMMENTS WERE DELIBERATELY LEFT ALONE - four of them, in recommendationAlgorithm.ts, sentry.ts, FreeEvents.tsx and OpenNowRestaurants.tsx, record that a title 'used the retired Des Moines AI Pulse brand'. That is the history of an earlier fix; rewriting it would erase the record rather than correct the brand. The scan strips comments for that reason and carries counter-assertions proving it still fires on the name in real code and does NOT fire on either a line comment or a block comment recording the rename. Internal identifiers were left alone as the story asks: the repo is still desmoines-ai-pulse and the package name is unchanged, because those are not user-facing and renaming them is a separate, riskier job. 13 checks in scripts/__tests__/retired-brand.test.mjs, including two that stop the guard passing vacuously - it asserts it scanned more than 100 files, and that the CURRENT brand is actually present in source, so an empty or broken scan fails rather than reporting clean. It also pins manifest name and short_name to brandConfig's declaration in both fields, which is the drift that produced this. 16/16 offline suites, 364 unit tests, check-imports clean."
     },
     {
       "id": "SEO-007",

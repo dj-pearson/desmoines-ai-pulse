@@ -48,7 +48,7 @@ export const contentLocationPageType: PageTypeConfig = {
     `/${dimSlug(dims, 'content_type')}/${dimSlug(dims, 'location')}`,
 
   buildTitle: (dims) =>
-    `${dimName(dims, 'content_type')} in ${dimName(dims, 'location')} | Des Moines AI Pulse`,
+    `${dimName(dims, 'content_type')} in ${dimName(dims, 'location')} | Des Moines Insider`,
 
   buildH1: (dims) =>
     `Best ${dimName(dims, 'content_type')} in ${dimName(dims, 'location')}`,
@@ -73,7 +73,7 @@ export const contentAudiencePageType: PageTypeConfig = {
     `/${dimSlug(dims, 'content_type')}/${dimSlug(dims, 'audience')}`,
 
   buildTitle: (dims) =>
-    `${dimName(dims, 'content_type')} ${dimName(dims, 'audience')} in Des Moines | Des Moines AI Pulse`,
+    `${dimName(dims, 'content_type')} ${dimName(dims, 'audience')} in Des Moines | Des Moines Insider`,
 
   buildH1: (dims) =>
     `${dimName(dims, 'audience')} ${dimName(dims, 'content_type')} in Des Moines`,
@@ -100,7 +100,7 @@ export const contentTemporalPageType: PageTypeConfig = {
   buildTitle: (dims) => {
     const temporal = dimName(dims, 'temporal');
     const content = dimName(dims, 'content_type');
-    return `${content} ${temporal} in Des Moines | Des Moines AI Pulse`;
+    return `${content} ${temporal} in Des Moines | Des Moines Insider`;
   },
 
   buildH1: (dims) =>
@@ -126,7 +126,7 @@ export const contentCategoryPageType: PageTypeConfig = {
     `/${dimSlug(dims, 'content_type')}/${dimSlug(dims, 'category')}`,
 
   buildTitle: (dims) =>
-    `Best ${dimName(dims, 'category')} ${dimName(dims, 'content_type')} in Des Moines | Des Moines AI Pulse`,
+    `Best ${dimName(dims, 'category')} ${dimName(dims, 'content_type')} in Des Moines | Des Moines Insider`,
 
   buildH1: (dims) =>
     `Best ${dimName(dims, 'category')} ${dimName(dims, 'content_type')} in Des Moines`,
@@ -151,7 +151,7 @@ export const contentLocationAudiencePageType: PageTypeConfig = {
     `/${dimSlug(dims, 'content_type')}/${dimSlug(dims, 'location')}/${dimSlug(dims, 'audience')}`,
 
   buildTitle: (dims) =>
-    `${dimName(dims, 'audience')} ${dimName(dims, 'content_type')} in ${dimName(dims, 'location')} | Des Moines AI Pulse`,
+    `${dimName(dims, 'audience')} ${dimName(dims, 'content_type')} in ${dimName(dims, 'location')} | Des Moines Insider`,
 
   buildH1: (dims) =>
     `${dimName(dims, 'audience')} ${dimName(dims, 'content_type')} in ${dimName(dims, 'location')}`,
@@ -176,7 +176,7 @@ export const contentLocationTemporalPageType: PageTypeConfig = {
     `/${dimSlug(dims, 'content_type')}/${dimSlug(dims, 'location')}/${dimSlug(dims, 'temporal')}`,
 
   buildTitle: (dims) =>
-    `${dimName(dims, 'content_type')} in ${dimName(dims, 'location')} — ${dimName(dims, 'temporal')} | Des Moines AI Pulse`,
+    `${dimName(dims, 'content_type')} in ${dimName(dims, 'location')} — ${dimName(dims, 'temporal')} | Des Moines Insider`,
 
   buildH1: (dims) =>
     `${dimName(dims, 'content_type')} in ${dimName(dims, 'location')} ${dimName(dims, 'temporal')}`,
@@ -201,7 +201,7 @@ export const categoryLocationPageType: PageTypeConfig = {
     `/${dimSlug(dims, 'category')}/${dimSlug(dims, 'location')}`,
 
   buildTitle: (dims) =>
-    `Best ${dimName(dims, 'category')} in ${dimName(dims, 'location')} | Des Moines AI Pulse`,
+    `Best ${dimName(dims, 'category')} in ${dimName(dims, 'location')} | Des Moines Insider`,
 
   buildH1: (dims) =>
     `Best ${dimName(dims, 'category')} in ${dimName(dims, 'location')}`,
@@ -226,7 +226,7 @@ export const audienceTemporalPageType: PageTypeConfig = {
     `/things-to-do/${dimSlug(dims, 'audience')}/${dimSlug(dims, 'temporal')}`,
 
   buildTitle: (dims) =>
-    `${dimName(dims, 'audience')} Things to Do ${dimName(dims, 'temporal')} in Des Moines | Des Moines AI Pulse`,
+    `${dimName(dims, 'audience')} Things to Do ${dimName(dims, 'temporal')} in Des Moines | Des Moines Insider`,
 
   buildH1: (dims) =>
     `${dimName(dims, 'audience')} Things to Do ${dimName(dims, 'temporal')} in Des Moines`,
@@ -251,7 +251,7 @@ export const categoryTemporalPageType: PageTypeConfig = {
     `/${dimSlug(dims, 'category')}/${dimSlug(dims, 'temporal')}`,
 
   buildTitle: (dims) =>
-    `${dimName(dims, 'category')} ${dimName(dims, 'temporal')} in Des Moines | Des Moines AI Pulse`,
+    `${dimName(dims, 'category')} ${dimName(dims, 'temporal')} in Des Moines | Des Moines Insider`,
 
   buildH1: (dims) =>
     `Des Moines ${dimName(dims, 'category')} — ${dimName(dims, 'temporal')}`,
@@ -276,7 +276,7 @@ export const locationGuidePageType: PageTypeConfig = {
     `/guide/${dimSlug(dims, 'location')}`,
 
   buildTitle: (dims) =>
-    `${dimName(dims, 'location')} Guide — Things to Do, Eat & Explore | Des Moines AI Pulse`,
+    `${dimName(dims, 'location')} Guide — Things to Do, Eat & Explore | Des Moines Insider`,
 
   buildH1: (dims) =>
     `Your Complete Guide to ${dimName(dims, 'location')}`,

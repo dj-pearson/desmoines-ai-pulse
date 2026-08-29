@@ -1,4 +1,4 @@
-# Des Moines AI Pulse - Robots.txt
+# Des Moines Insider - Robots.txt
 # Optimized for search engine indexing and AI search crawlers
 # Last updated: 2026-03-16
 

@@ -230,7 +230,7 @@ export default function AttractionDetails() {
       ? [
           {
             question: `What is the rating for ${attraction.name}?`,
-            answer: `${attraction.name} has a rating of ${attraction.rating.toFixed(1)} out of 5 stars based on visitor reviews. ${attraction.rating >= 4.5 ? `It's one of the highest-rated attractions in ${BRAND.city}.` : attraction.rating >= 4.0 ? `It's a highly-rated attraction in the ${BRAND.region}.` : `Visitors appreciate its unique ${attraction.type?.toLowerCase()} experience.`} ${attraction.is_featured ? "It's also featured as an editor's pick on Des Moines AI Pulse." : ""}`,
+            answer: `${attraction.name} has a rating of ${attraction.rating.toFixed(1)} out of 5 stars based on visitor reviews. ${attraction.rating >= 4.5 ? `It's one of the highest-rated attractions in ${BRAND.city}.` : attraction.rating >= 4.0 ? `It's a highly-rated attraction in the ${BRAND.region}.` : `Visitors appreciate its unique ${attraction.type?.toLowerCase()} experience.`} ${attraction.is_featured ? "It's also featured as an editor's pick on Des Moines Insider." : ""}`,
           },
         ]
       : []),

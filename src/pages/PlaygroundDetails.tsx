@@ -186,7 +186,7 @@ export default function PlaygroundDetails() {
       ? [
           {
             question: `What is the rating for ${playground.name}?`,
-            answer: `${playground.name} has a rating of ${playground.rating.toFixed(1)} out of 5 stars based on family reviews. ${playground.rating >= 4.5 ? `It's one of the highest-rated playgrounds in ${BRAND.city}.` : playground.rating >= 4.0 ? `It's a highly-rated playground in the ${BRAND.region}.` : `Families appreciate the play experience here.`} ${playground.is_featured ? "It's also featured as an editor's pick on Des Moines AI Pulse." : ""}`,
+            answer: `${playground.name} has a rating of ${playground.rating.toFixed(1)} out of 5 stars based on family reviews. ${playground.rating >= 4.5 ? `It's one of the highest-rated playgrounds in ${BRAND.city}.` : playground.rating >= 4.0 ? `It's a highly-rated playground in the ${BRAND.region}.` : `Families appreciate the play experience here.`} ${playground.is_featured ? "It's also featured as an editor's pick on Des Moines Insider." : ""}`,
           },
         ]
       : []),

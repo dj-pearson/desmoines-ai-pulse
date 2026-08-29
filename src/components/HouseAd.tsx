@@ -64,7 +64,7 @@ export function HouseAd({ placement, className = "" }: HouseAdProps) {
       <Card
         ref={ref}
         role="complementary"
-        aria-label="Des Moines AI Pulse promotion"
+        aria-label="Des Moines Insider promotion"
         className={`${sizeClasses} overflow-hidden cursor-pointer relative group bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-transparent hover:shadow-lg transition-shadow ${className}`}
         onClick={() => {
           logAdClick("house", placement);

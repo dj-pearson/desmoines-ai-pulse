@@ -152,7 +152,7 @@ export default function Terms() {
 
             <h3 className="text-xl font-medium mt-6 mb-3">Trademarks</h3>
             <p>
-              "Des Moines Insider," "Des Moines AI Pulse," and related logos are trademarks of Des Moines Insider.
+              "Des Moines Insider," "Des Moines Insider," and related logos are trademarks of Des Moines Insider.
               You may not use our trademarks without prior written consent.
             </p>
           </section>

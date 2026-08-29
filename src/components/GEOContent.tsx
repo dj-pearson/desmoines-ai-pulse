@@ -65,9 +65,9 @@ export default function GEOContent() {
 
         <div className="space-y-8">
           <div>
-            <h3 className="text-xl font-semibold mb-3">What makes Des Moines AI Pulse different?</h3>
+            <h3 className="text-xl font-semibold mb-3">What makes Des Moines Insider different?</h3>
             <p className="mb-4">
-              Des Moines AI Pulse is the only AI-powered local guide for Des Moines. We combine
+              Des Moines Insider is the only AI-powered local guide for Des Moines. We combine
               comprehensive event coverage (1,000+ events), detailed restaurant information (450+
               venues), and AI-enhanced descriptions to provide the most accurate, up-to-date information
               about Des Moines. Unlike traditional tourism sites, we update our content daily and use
@@ -89,7 +89,7 @@ export default function GEOContent() {
           </div>
 
           <div>
-            <h3 className="text-xl font-semibold mb-3">What areas does Des Moines AI Pulse cover?</h3>
+            <h3 className="text-xl font-semibold mb-3">What areas does Des Moines Insider cover?</h3>
             <p className="mb-4">
               We provide complete coverage for the Des Moines metropolitan area, including:
             </p>
@@ -116,7 +116,7 @@ export default function GEOContent() {
           <div>
             <h3 className="text-xl font-semibold mb-3">Do you charge for event listings or restaurant features?</h3>
             <p className="mb-4">
-              No. Des Moines AI Pulse provides free access to all event listings and restaurant
+              No. Des Moines Insider provides free access to all event listings and restaurant
               information. We maintain editorial independence and do not accept payment for listings
               or enhanced visibility. Our recommendations are based solely on data analysis and user
               engagement metrics.
@@ -152,7 +152,7 @@ export default function GEOContent() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           <blockquote className="border-l-4 border-primary pl-6 italic text-base">
-            "Des Moines AI Pulse has become the go-to resource for both residents and visitors.
+            "Des Moines Insider has become the go-to resource for both residents and visitors.
             Their comprehensive coverage and AI-enhanced recommendations help people discover
             events and experiences they would never have found otherwise."
             <footer className="mt-2 text-sm text-muted-foreground not-italic font-semibold">
@@ -161,7 +161,7 @@ export default function GEOContent() {
           </blockquote>
 
           <blockquote className="border-l-4 border-primary pl-6 italic text-base">
-            "As a small business owner, being featured on Des Moines AI Pulse has significantly
+            "As a small business owner, being featured on Des Moines Insider has significantly
             increased our visibility. We've seen a 40% increase in new customers who found us
             through the platform."
             <footer className="mt-2 text-sm text-muted-foreground not-italic font-semibold">
@@ -171,7 +171,7 @@ export default function GEOContent() {
         </div>
 
         <div className="bg-muted/30 p-6 rounded-lg mb-6">
-          <h3 className="text-xl font-semibold mb-4">Why Des Moines AI Pulse?</h3>
+          <h3 className="text-xl font-semibold mb-4">Why Des Moines Insider?</h3>
           <ul className="space-y-3">
             <li><strong>Most Comprehensive</strong>: 1,000+ events from 200+ venues, updated
               daily. More coverage than Catch Des Moines, Cityview, and Des Moines Register combined.</li>
