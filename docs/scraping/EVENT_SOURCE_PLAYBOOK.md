@@ -3,18 +3,25 @@
 How each seeded event source is parsed, what was wrong, and what to do when one
 of them breaks.
 
-**Audit date**: 2026-07-29 · **Scope**: `ai-crawler`, `firecrawl-scraper`, and
+**Audit date**: 2026-07-29 (code) · **Live verification**: 2026-08-28 ·
+**Scope**: `ai-crawler`, `firecrawl-scraper`, and
 the shared `_shared/domain-adapters/` registry they both use.
 
-> **Verification status.** The bugs listed under "Findings" were all identified
-> from the code, the migrations, and the `n8n/` workflow definitions, and each
-> fix is covered by unit tests against fixtures. What could **not** be settled
-> from the repo is which extraction strategy each *live* site satisfies today —
-> the audit environment had no outbound access to these hosts. Run
-> `scripts/verify-event-sources.ts` from a machine that does, and fill in the
-> "Verified strategy" column of the table below. Sources marked
-> `needs live run` are implemented against the platform's documented contract
-> and fall through safely if that contract is not met.
+> **Verification status: RUN, 2026-08-28.** The bugs under "Findings" were
+> identified from the code, the migrations and the `n8n/` workflow definitions,
+> and each fix is covered by unit tests against fixtures. What could not be
+> settled from the repo is which strategy each *live* site satisfies — the audit
+> environment had no outbound access to these hosts, and for a month no machine
+> that did had run the harness.
+>
+> It has now been run, and every verdict in the table below comes from
+> **`docs/scraping/event-source-harness-2026-08-28.json`**, committed beside this
+> file so the table can be re-derived rather than retyped. Re-run with
+> `deno run --allow-net --allow-env scripts/verify-event-sources.ts --json`.
+>
+> The verdicts are about the CHEAP tiers only. A `TIER 3` row is not a broken
+> source — it is one that fetches fine and yields nothing to an API or to
+> structured data, so it costs a render and a model call every time it runs.
 
 ---
 
@@ -45,16 +52,66 @@ are relative to the seeded URL.
 | Iowa Barnstormers | `/sports/fball/2026/schedule` | `barnstormers.ts` | single page | ✅ PrestoSports cards |
 | Eventbrite (WDM) | `/d/ia--west-des-moines/events/` | `eventbrite.ts` | embedded `__SERVER_DATA__` | ✅ |
 | Vibrant Music Hall | `/shows` | `vibrantmusichall.ts` | single page ld+json | ✅ (was blocked by the allowlist — fixed) |
-| Hoyt Sherman Place | `/events/` | `tribeEvents.ts` → `venueProfile.ts` | REST, else list → detail | needs live run |
-| Des Moines Symphony | `/concerts-events/` | `tribeEvents.ts` → `venueProfile.ts` | season page → concert detail | needs live run |
-| DM Community Playhouse | `/` (root!) | `tribeEvents.ts` → `venueProfile.ts` | root → `/shows/` → production detail | needs live run |
-| Theater Des Moines | `/events/` | `tribeEvents.ts` → `venueProfile.ts` | list → detail | needs live run |
-| Horizon Events Center | `/upcoming-events/` | `tribeEvents.ts` → `venueProfile.ts` | list → detail | needs live run |
-| Wooly's / First Fleet | `/first-fleet-venues/woolys` | `venueProfile.ts` | venue page → `/events` → `/events/detail/<slug>` | needs live run |
-| Iowa Wild | `/games` | `venueProfile.ts` | list → detail, home-only | needs live run |
-| Iowa Wolves | `/schedule?month=3` | `venueProfile.ts` | list → detail, home-only | needs live run |
-| des-moines-theater.com | `/shows/concert` | `venueProfile.ts` | — | ⚠️ **review before enabling** |
+| Hoyt Sherman Place | `/events/` | `tribeEvents.ts` → `venueProfile.ts` | REST, else list → detail | TIER 3 - no cheap strategy. Listing fetched fine (172KB), 43 detail link(s), 0 events |
+| Des Moines Symphony | `/concerts-events/` | `tribeEvents.ts` → `venueProfile.ts` | season page → concert detail | TIER 3 - no cheap strategy. Listing fetched fine (46KB), 9 detail link(s), 0 events |
+| DM Community Playhouse | `/` (root!) | `tribeEvents.ts` → `venueProfile.ts` | root → `/shows/` → production detail | TIER 3 - no cheap strategy. Listing fetched fine (362KB), 23 detail link(s), 0 events |
+| Theater Des Moines | `/events/` | `tribeEvents.ts` → `venueProfile.ts` | list → detail | OK `listing-jsonld` - 84 events, 84 dated, 84 own-url, 8 image |
+| Horizon Events Center | `/upcoming-events/` | `tribeEvents.ts` → `venueProfile.ts` | list → detail | OK `tribe-rest` - 7 events, 7 dated, 7 own-url, 7 image |
+| Wooly's / First Fleet | `/first-fleet-venues/woolys` | `venueProfile.ts` | venue page → `/events` → `/events/detail/<slug>` | TIER 3 - no cheap strategy. Listing fetched fine (47KB), 6 detail link(s), 0 events |
+| Iowa Wild | `/games` | `venueProfile.ts` | list → detail, home-only | TIER 3 - no cheap strategy. Listing fetched fine (167KB), 0 detail link(s), 0 events |
+| Iowa Wolves | `/schedule?month=3` | `venueProfile.ts` | list → detail, home-only | TIER 3 - no cheap strategy. Listing fetched fine (105KB), 0 detail link(s), 0 events |
+| des-moines-theater.com | `/shows/concert` | `venueProfile.ts` | — | ⚠️ **review before enabling** — parses fine (`listing-jsonld`, 6 events, full coverage). The caution is about whether a RESALE site belongs in the feed, which the harness cannot answer |
 | Hy-Vee Tix | `evenue.net/list/CONC` | *(none — disabled)* | — | ⛔ PerimeterX bot wall |
+
+### 2a. The six that cost money (measured 2026-08-28)
+
+Six of the sixteen resolve to no cheap strategy at all. **They are not failing
+to fetch** — every one returns a full page, from 46KB to 362KB — and they are
+not failing at the network. They fail at *extraction*, which means each of them
+spends one Browserless render plus one Claude call on every run, while the other
+ten cost a single HTTP request.
+
+| Source | Listing size | Detail links found |
+|---|---|---|
+| `dm-symphony` | 46KB | 9 |
+| `first-fleet-woolys` | 47KB | 6 |
+| `iowa-wolves` | 105KB | 0 |
+| `iowa-wild` | 167KB | 0 |
+| `hoyt-sherman` | 172KB | 43 |
+| `dm-playhouse` | 362KB | 23 |
+
+That is the entire render and token bill for event ingestion, and it is the set
+the hub takes over (see the `dmi-hub-ingest` PRD in the Server repo).
+
+**`hoyt-sherman` finds 43 detail links and still extracts nothing**, which is
+the most promising row here: the links exist and something downstream is not
+following them. **`iowa-wild` and `iowa-wolves` find zero**, which is the
+signature of a client-rendered calendar — those two genuinely need a browser.
+
+### 2b. The WordPress REST assumption is false on four of five sources
+
+The playbook routes five venues through `tribeEvents.ts`, the WordPress "The
+Events Calendar" REST adapter. The harness probed each for
+`/wp-json/tribe/events/v1/events`:
+
+| Source | `tribeRest` | What it actually does |
+|---|---|---|
+| `horizon-events-center` | **hit** | The only one. 7 events, full date/url/image/venue coverage |
+| `theater-desmoines` | miss | Succeeds anyway via `listing-jsonld` — 84 events, full date and url coverage |
+| `hoyt-sherman` | miss | Falls all the way to tier 3 |
+| `dm-symphony` | miss | Falls all the way to tier 3 |
+| `dm-playhouse` | miss | Falls all the way to tier 3 |
+
+**One of the five venues assumed to be running The Events Calendar is running
+it.** The assumption was reasonable from the code and it is wrong, and it is
+stated here rather than quietly deleted, because the fallback chain is what
+saved three of the four — `theater-desmoines` lands on structured data and does
+better than the REST adapter would have, while the other three land on the
+expensive tier and nobody was told.
+
+`theater-desmoines` is also the proof that this class of site CAN be cheap: 84
+events with a real date and a real permalink each, from one request, on a venue
+whose adapter was pointed at the wrong contract.
 
 ### Catch Des Moines is deliberately frozen
 

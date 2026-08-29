@@ -26,6 +26,21 @@
  * events.
  */
 
+/**
+ * DMI-013 — which producer is responsible for scraping a source.
+ *
+ * `cloud` is scrape-events -> firecrawl-scraper, running on Supabase twice a
+ * day. `hub` is the local ADE Hub ingest run, which renders through Firecrawl
+ * keyless and hands rows to the ingest-events endpoint.
+ *
+ * The two sets must be DISJOINT — nothing scraped twice — and their union must
+ * be every profile — nothing dropped by both. The second failure is the quiet
+ * one: a source that falls out of both lists produces no error anywhere, just a
+ * calendar that is slightly less full than it was.
+ * `eventSourceOwnership.test.ts` asserts both directions.
+ */
+export type SourceOwnership = "cloud" | "hub";
+
 /** Extraction strategies, attempted in the order a profile lists them. */
 export type SourceStrategy =
   /** A dedicated DomainAdapter in domain-adapters/ owns this host. */
@@ -93,6 +108,18 @@ export interface EventSourceProfile {
    * "Visit Website" extraction is working and deliberately left untouched.
    */
   preserveSourceUrl?: boolean;
+  /**
+   * DMI-013 — which producer scrapes this source. REQUIRED, deliberately.
+   *
+   * Before this field the cloud path and the hub would each have kept their own
+   * list of what they own, and two hand-kept lists is how a source gets scraped
+   * twice or, worse and quieter, stops being scraped by both.
+   *
+   * OPTIONAL WOULD DEFEAT THE POINT. A missing value has to default to
+   * something, and whichever way it defaults is the direction a newly added
+   * source silently falls. Required means the compiler asks the question.
+   */
+  ownership: SourceOwnership;
   /** Operator-facing notes: quirks, blockers, and what still needs verifying. */
   notes?: string;
 }
@@ -107,6 +134,7 @@ export const EVENT_SOURCE_PROFILES: readonly EventSourceProfile[] = [
   // ── Aggregators / ticketing platforms ────────────────────────────────────
   {
     id: "catchdesmoines",
+    ownership: "cloud",
     label: "Catch Des Moines",
     hosts: ["catchdesmoines.com"],
     listingUrls: ["https://www.catchdesmoines.com/events/"],
@@ -120,6 +148,7 @@ export const EVENT_SOURCE_PROFILES: readonly EventSourceProfile[] = [
   },
   {
     id: "seatgeek",
+    ownership: "cloud",
     label: "SeatGeek (Des Moines radius)",
     hosts: ["seatgeek.com"],
     listingUrls: [
@@ -134,6 +163,7 @@ export const EVENT_SOURCE_PROFILES: readonly EventSourceProfile[] = [
   },
   {
     id: "eventbrite-wdm",
+    ownership: "cloud",
     label: "Eventbrite — West Des Moines",
     hosts: ["eventbrite.com"],
     listingUrls: ["https://www.eventbrite.com/d/ia--west-des-moines/events/"],
@@ -146,6 +176,7 @@ export const EVENT_SOURCE_PROFILES: readonly EventSourceProfile[] = [
   },
   {
     id: "hyveetix",
+    ownership: "cloud",
     label: "Hy-Vee Tix (AudienceView / evenue)",
     hosts: ["evenue.net", "hyveetix.com"],
     listingUrls: ["https://hyveetix.evenue.net/list/CONC"],
@@ -164,6 +195,7 @@ export const EVENT_SOURCE_PROFILES: readonly EventSourceProfile[] = [
   // ── Sports schedules ────────────────────────────────────────────────────
   {
     id: "iowa-cubs",
+    ownership: "cloud",
     label: "Iowa Cubs (MiLB Triple-A)",
     hosts: ["milb.com", "iowacubs.com"],
     listingUrls: ["https://www.milb.com/iowa/schedule/2026/fullseason"],
@@ -179,6 +211,7 @@ export const EVENT_SOURCE_PROFILES: readonly EventSourceProfile[] = [
   },
   {
     id: "iowa-barnstormers",
+    ownership: "cloud",
     label: "Iowa Barnstormers (IFL)",
     hosts: ["theiowabarnstormers.com"],
     listingUrls: ["https://theiowabarnstormers.com/sports/fball/2026/schedule"],
@@ -194,6 +227,7 @@ export const EVENT_SOURCE_PROFILES: readonly EventSourceProfile[] = [
   },
   {
     id: "iowa-wild",
+    ownership: "cloud",
     label: "Iowa Wild (AHL)",
     hosts: ["iowawild.com"],
     listingUrls: [
@@ -221,6 +255,8 @@ export const EVENT_SOURCE_PROFILES: readonly EventSourceProfile[] = [
   },
   {
     id: "iowa-wolves",
+    // gate 1 2026-08-28: markdown 3/3 against an HTML baseline of 0 - the Browserless render returned 330 chars, so this is markdown working where the paid path did not.
+    ownership: "hub",
     label: "Iowa Wolves (NBA G League)",
     hosts: ["gleague.nba.com"],
     listingUrls: [
@@ -247,6 +283,7 @@ export const EVENT_SOURCE_PROFILES: readonly EventSourceProfile[] = [
   // ── Theaters / performing arts ──────────────────────────────────────────
   {
     id: "dm-playhouse",
+    ownership: "cloud",
     label: "Des Moines Community Playhouse",
     hosts: ["dmplayhouse.com"],
     listingUrls: [
@@ -277,6 +314,7 @@ export const EVENT_SOURCE_PROFILES: readonly EventSourceProfile[] = [
   },
   {
     id: "theater-desmoines",
+    ownership: "cloud",
     label: "Theater Des Moines",
     hosts: ["theaterdesmoines.com"],
     listingUrls: ["https://www.theaterdesmoines.com/events/"],
@@ -291,6 +329,7 @@ export const EVENT_SOURCE_PROFILES: readonly EventSourceProfile[] = [
   },
   {
     id: "des-moines-theater-resale",
+    ownership: "cloud",
     label: "des-moines-theater.com (third-party resale listing)",
     hosts: ["des-moines-theater.com"],
     listingUrls: ["https://www.des-moines-theater.com/shows/concert"],
@@ -310,6 +349,8 @@ export const EVENT_SOURCE_PROFILES: readonly EventSourceProfile[] = [
   // ── Music venues ────────────────────────────────────────────────────────
   {
     id: "first-fleet-woolys",
+    // gate 1 2026-08-28: markdown 12/12, identical to the HTML baseline.
+    ownership: "hub",
     label: "Wooly's (First Fleet Concerts)",
     hosts: ["firstfleetconcerts.com", "woolysdm.com"],
     listingUrls: [
@@ -332,6 +373,7 @@ export const EVENT_SOURCE_PROFILES: readonly EventSourceProfile[] = [
   },
   {
     id: "vibrant-music-hall",
+    ownership: "cloud",
     label: "Vibrant Music Hall",
     hosts: ["vibrantmusichall.com"],
     listingUrls: ["https://www.vibrantmusichall.com/shows"],
@@ -345,6 +387,8 @@ export const EVENT_SOURCE_PROFILES: readonly EventSourceProfile[] = [
   },
   {
     id: "dm-symphony",
+    // gate 1 2026-08-28: markdown 10/10, identical to the HTML baseline.
+    ownership: "hub",
     label: "Des Moines Symphony",
     hosts: ["dmsymphony.org"],
     listingUrls: [
@@ -374,6 +418,8 @@ export const EVENT_SOURCE_PROFILES: readonly EventSourceProfile[] = [
   // ── Multi-purpose / community venues ────────────────────────────────────
   {
     id: "hoyt-sherman",
+    // gate 1 2026-08-28: markdown 38/38 against 33/33 for HTML.
+    ownership: "hub",
     label: "Hoyt Sherman Place",
     hosts: ["hoytsherman.org", "hoyt-sherman.org"],
     listingUrls: ["https://hoytsherman.org/events/"],
@@ -395,6 +441,7 @@ export const EVENT_SOURCE_PROFILES: readonly EventSourceProfile[] = [
   },
   {
     id: "horizon-events-center",
+    ownership: "cloud",
     label: "Horizon Events Center",
     hosts: ["horizoneventscenter.com"],
     listingUrls: [
@@ -429,6 +476,34 @@ function hostOf(rawUrl: string): string | null {
 }
 
 /** True when `host` equals `domain` or is a subdomain of it. */
+/**
+ * DMI-013 — the two producers' source sets, DERIVED from the one field.
+ *
+ * Neither side keeps a list. `scrape-events` skips what `isHubOwned` says is
+ * the hub's, and the hub run takes exactly what `hubOwnedProfiles` returns, so
+ * moving a source between them is one edit in one file and both sides follow.
+ */
+export function hubOwnedProfiles(): readonly EventSourceProfile[] {
+  return EVENT_SOURCE_PROFILES.filter((p) => p.ownership === "hub");
+}
+
+export function cloudOwnedProfiles(): readonly EventSourceProfile[] {
+  return EVENT_SOURCE_PROFILES.filter((p) => p.ownership === "cloud");
+}
+
+/**
+ * Is the source behind this URL the hub's to scrape?
+ *
+ * A URL matching NO profile is NOT hub-owned. That is the safe direction: an
+ * unrecognised source keeps being scraped by the cloud path, which is what it
+ * did before this field existed. Returning true would silently drop it, and a
+ * dropped source is the failure nobody sees.
+ */
+export function isHubOwned(rawUrl: string): boolean {
+  const profile = findEventSourceProfile(rawUrl);
+  return profile?.ownership === "hub";
+}
+
 export function hostMatches(host: string, domain: string): boolean {
   const d = domain.toLowerCase();
   return host === d || host.endsWith(`.${d}`);
