@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 const log = createLogger('EventsToday');
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { FAQSection } from "@/components/FAQSection";
 import { SocialEventCard } from "@/components/SocialEventCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
@@ -268,6 +269,13 @@ export default function EventsToday() {
             </div>
           </CardContent>
         </Card>
+        {/* SEO-003: the FAQ is rendered here, not only declared in the head.
+            This page used to pass faqData to EnhancedLocalSEO, which emitted a
+            FAQPage block into <Helmet> and nothing else - so it declared an FAQ
+            that no visitor could see, which Google's FAQPage guidance does not
+            allow. FAQSection renders the questions and emits the single block. */}
+        <FAQSection faqs={faqData} />
+
       </div>
 
       <Footer />

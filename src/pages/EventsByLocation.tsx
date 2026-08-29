@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 const log = createLogger('EventsByLocation');
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { FAQSection } from "@/components/FAQSection";
 import { SocialEventCard } from "@/components/SocialEventCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
@@ -457,20 +458,11 @@ export default function EventsByLocation() {
           </div>
         )}
 
-        {/* FAQ Section */}
-        <Card>
-          <CardHeader>
-            <CardTitle>About {suburbInfo.name}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {faqData.map((faq) => (
-              <div key={faq.question} className="border-b pb-4 last:border-b-0">
-                <h3 className="font-semibold mb-2">{faq.question}</h3>
-                <p className="text-muted-foreground">{faq.answer}</p>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+        {/* SEO-003: one component renders the questions and emits the single
+            FAQPage block, so the schema cannot describe content that is not on
+            the page. The heading stays "About <suburb>" — it is the visible
+            title, and the questions underneath are the same either way. */}
+        <FAQSection faqs={faqData} title={`About ${suburbInfo.name}`} />
       </div>
 
       <Footer />

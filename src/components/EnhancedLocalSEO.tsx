@@ -274,22 +274,35 @@ export default function EnhancedLocalSEO({
       }
     : null;
 
-  // FAQ Schema
-  const faqSchema =
-    faqData && faqData.length > 0
-      ? {
-          "@context": "https://schema.org",
-          "@type": "FAQPage",
-          mainEntity: faqData.map((faq) => ({
-            "@type": "Question",
-            name: faq.question,
-            acceptedAnswer: {
-              "@type": "Answer",
-              text: faq.answer,
-            },
-          })),
-        }
-      : null;
+  // SEO-003: THIS COMPONENT NO LONGER EMITS FAQPage, and `faqData` is now only
+  // a hint that the page HAS an FAQ (it feeds nothing here). <FAQSection> is the
+  // single emitter.
+  //
+  // TWO DEFECTS, ONE CAUSE. Search Console reported 30 invalid FAQ items against
+  // 8 valid, critical issue `Duplicate field "FAQPage"`. This component is
+  // head-only, so a page rendering both it and <FAQSection> shipped the block
+  // twice: FreeEvents and KidsEvents passed the SAME faqData to each, and
+  // Attractions and Playgrounds passed DIFFERENT question sets, which is worse -
+  // two contradictory FAQPage blocks on one URL.
+  //
+  // The second defect is why FAQSection wins rather than this one. Google's
+  // FAQPage guidance requires the question and answer to be VISIBLE on the page.
+  // This component renders into <Helmet> and nothing else, so on
+  // DateNightEvents, DietaryRestaurants, EventsByLocation, EventsThisWeekend,
+  // EventsToday and OpenNowRestaurants it was declaring an FAQ that no visitor
+  // could see. That is invalid whether or not it is also duplicated, so keeping
+  // this emitter and dropping FAQSection's would have fixed the count and left
+  // every remaining block non-compliant.
+  //
+  // Those six pages now render <FAQSection> with the same questions, so the
+  // content is on the page and the schema describes something real.
+  //
+  // Worth being straight about the payoff: Google restricted FAQ rich results to
+  // government and health sites in August 2023, and the report shows 0
+  // impressions from this enhancement across the whole window. This wins no
+  // clicks directly. It is worth doing because an invalid block is noise in
+  // every future validation run, and because AI search reads JSON-LD whether or
+  // not Google draws a widget.
 
   return (
     <Helmet>
@@ -372,9 +385,6 @@ export default function EnhancedLocalSEO({
         </script>
       )}
 
-      {faqSchema && (
-        <script type="application/ld+json">{JSON.stringify(faqSchema)}</script>
-      )}
     </Helmet>
   );
 }

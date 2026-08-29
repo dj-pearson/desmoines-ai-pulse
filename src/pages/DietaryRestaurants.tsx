@@ -6,6 +6,7 @@ import { useSearchParams, Link } from "react-router-dom";
 const log = createLogger('DietaryRestaurants');
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { FAQSection } from "@/components/FAQSection";
 import RestaurantCard from "@/components/RestaurantCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import RelatedContent from "@/components/RelatedContent";
@@ -442,6 +443,13 @@ export default function DietaryRestaurants() {
             </div>
           </CardContent>
         </Card>
+
+        {/* SEO-003: the FAQ is rendered here, not only declared in the head.
+            This page used to pass faqData to EnhancedLocalSEO, which emitted a
+            FAQPage block into <Helmet> and nothing else - so it declared an FAQ
+            that no visitor could see, which Google's FAQPage guidance does not
+            allow. FAQSection renders the questions and emits the single block. */}
+        <FAQSection faqs={faqData} />
 
         {/* Related Content for Internal Linking */}
         <RelatedContent

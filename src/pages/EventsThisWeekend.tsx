@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { FAQSection } from "@/components/FAQSection";
 import { SocialEventCard } from "@/components/SocialEventCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
@@ -137,12 +138,19 @@ export default function EventsThisWeekend() {
         canonicalUrl={getCanonicalUrl('/events/this-weekend')}
         pageType="website"
         breadcrumbs={breadcrumbs}
-        // Withheld until the data lands (WEB-SEO-008). Every answer here
-        // interpolates a live count, so the loading render and the loaded
-        // render produce DIFFERENT FAQPage JSON - and react-helmet-async
-        // appends script children that differ rather than replacing them, so
-        // the prerender captured both. Production served two FAQPage blocks
-        // on this page, one saying "0 events" and one saying "8 events".
+        // SEO-003: this prop no longer emits anything. EnhancedLocalSEO stopped
+        // emitting FAQPage - <FAQSection> below is the single emitter, and it
+        // renders the questions too, so the schema cannot describe content that
+        // is not on the page. Kept as a signal that this page has an FAQ.
+        //
+        // The WEB-SEO-008 hazard this comment used to describe is still real and
+        // is worth keeping written down: react-helmet-async APPENDS script
+        // children that differ rather than replacing them, so an FAQ answer
+        // interpolating a live count produces different JSON on the loading
+        // render and the loaded render, and the prerender captures BOTH.
+        // Production once served two FAQPage blocks here, one saying "0 events"
+        // and one saying "8 events". The answers below are static for that
+        // reason. Do not interpolate a count into them.
         faqData={faqData}
         isTimeSensitive={true}
       />
@@ -382,20 +390,14 @@ export default function EventsThisWeekend() {
               </CardContent>
             </Card>
 
-            {/* FAQ Section */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Frequently Asked Questions</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {faqData.map((faq) => (
-                  <div key={faq.question} className="border-b pb-4 last:border-b-0">
-                    <h3 className="font-semibold mb-2">{faq.question}</h3>
-                    <p className="text-muted-foreground">{faq.answer}</p>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
+            {/* SEO-003: FAQSection renders the questions AND emits the single
+                FAQPage block. It used to be hand-rolled markup here with the
+                schema emitted separately by EnhancedLocalSEO, which is how the
+                two could disagree — and on this page the markup sits inside a
+                conditional, so there were states that shipped FAQ schema for an
+                FAQ nobody could see. One component owning both makes "schema
+                only when the content is visible" true by construction. */}
+            <FAQSection faqs={faqData} />
           </>
         ) : (
           <Card>
