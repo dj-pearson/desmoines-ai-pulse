@@ -181,6 +181,29 @@ android {
         // silently-defaulted value, so verifyUnitTestExecution below covers the
         // failure mode that actually bit: a suite that runs nothing and passes.
         unitTests.isReturnDefaultValues = true
+
+        // AND-AUDIT-014 AC3. ArticleMarkdownTest has existed since the
+        // ClickableText -> LinkAnnotation migration and has never run anywhere:
+        // no workflow invokes connectedCheck, and nothing in this file described
+        // a device to run it on. Six tests covering composition, semantics and
+        // link hit-testing - the three things a JVM unit test cannot reach.
+        //
+        // aosp-atd is the Automated Test Device image: no Play services, no
+        // system UI, boots headless in a fraction of the time a full image
+        // takes, and is the image Google ships for exactly this. API 34 rather
+        // than compileSdk 37 because an ATD image is published for 34 and the
+        // test exercises Compose, not platform APIs.
+        //
+        // Run it with:  ./gradlew :app:pixel6api34DebugAndroidTest
+        managedDevices {
+            localDevices {
+                create("pixel6api34") {
+                    device = "Pixel 6"
+                    apiLevel = 34
+                    systemImageSource = "aosp-atd"
+                }
+            }
+        }
     }
 
     lint {

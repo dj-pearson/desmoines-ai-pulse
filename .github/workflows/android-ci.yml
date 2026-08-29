@@ -93,6 +93,39 @@ jobs:
         working-directory: android
         run: ./gradlew test
 
+      # AND-AUDIT-014 AC3. ArticleMarkdownTest has existed since the
+      # ClickableText -> LinkAnnotation migration and had never run anywhere: no
+      # workflow invoked connectedCheck and no device was configured to run it
+      # on. Its six tests cover composition, semantics and link hit-testing, the
+      # three things a JVM unit test cannot reach.
+      #
+      # A Gradle managed device rather than a hand-rolled emulator action: the
+      # device is declared in app/build.gradle.kts, so CI and a laptop run the
+      # same one. Verified locally before this step was written - 6 tests pass,
+      # 5m4s cold including the image download and 1m4s warm - and mutation
+      # tested by swallowing the link callback, which fails
+      # clickingALinkDispatchesItsUrl.
+      #
+      # KVM has to be opened up explicitly; without it the emulator falls back to
+      # software and the job times out rather than failing clearly.
+      - name: Enable KVM for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"'             | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run Instrumentation Tests
+        working-directory: android
+        run: ./gradlew :app:pixel6api34DebugAndroidTest
+
+      - name: Upload instrumentation results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: instrumentation-results
+          path: android/app/build/reports/androidTests/managedDevice/
+          retention-days: 7
+
       - name: Build Debug APK
         working-directory: android
         run: ./gradlew assembleDebug
