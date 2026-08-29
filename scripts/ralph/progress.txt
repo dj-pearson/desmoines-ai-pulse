@@ -3463,3 +3463,29 @@ Files changed:
   exactly the pattern WEB-OPS-007 AC5 records - 17 stories marked done whose code has never run in
   production.
 ---
+
+## 2026-08-29 - The CRM collision is a name, not data (WEB-QA-018 AC2)
+No code change. Chased the eight column findings in schema-baseline.json, which are the only entries in that
+file that are not a plain missing table, and they lead somewhere useful for the decision everything is
+waiting on.
+
+Files changed:
+- prd.json - WEB-QA-018 notes
+
+**Learnings for future iterations:**
+- **There are two CRMs and they collide on one table name.** The contact/deal CRM (crm_contacts, crm_deals,
+  ...) has hooks and UI and no tables. The opportunity/lead CRM (crm_accounts, crm_activities, crm_leads,
+  crm_opportunities, proposals, prospect_leads) has all six tables, intact foreign keys, edge functions that
+  write to it - and ZERO ROWS in every one. "The name is taken by the live opportunity CRM" is true about the
+  name and misleading about "live".
+- **Which means re-applying crm_infrastructure is a rename problem, not a migration problem.** Nothing to
+  preserve on either side. Worth knowing before pricing that decision as expensive.
+- **A `.delete().eq('id', ...)` has no schema to fail against.** Every other call in useCrmActivities names a
+  column the live table lacks and fails closed with 42703; deleteActivity names none, so it would execute
+  against whichever crm_activities exists. Safe today only because its mutation hook has no callers and the
+  failing reads yield no ids. Reconciling column names without re-pointing the table would arm it. When a
+  table name collides, audit the operations that reference NO columns first - they are the ones that will
+  silently hit the wrong table.
+- schema-baseline.json splits 61 table / 27 rpc / 8 column. Only the 8 column findings are actionable
+  independently of WEB-QA-018, and all 8 are this one collision.
+---
