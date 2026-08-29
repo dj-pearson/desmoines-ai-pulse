@@ -228,6 +228,24 @@ android {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+
+    // DeepLinkManifestParityTest reads AndroidManifest.xml and DeepLinkHandler.kt
+    // as TEXT rather than exercising compiled code, and neither is on the unit
+    // test runtime classpath - so Gradle sees no reason to re-run the suite when
+    // one of them changes. Measured: deleting a host from the manifest left the
+    // task UP-TO-DATE and the build green; the same edit under --rerun-tasks
+    // fails the test correctly.
+    //
+    // CI never noticed because it checks out fresh every run. Locally it means
+    // the guard goes green immediately after you break the thing it guards,
+    // which is worse than not having it. Declaring the files as inputs is the
+    // whole fix.
+    inputs.files(
+        layout.projectDirectory.file("src/main/AndroidManifest.xml"),
+        layout.projectDirectory.file("src/main/java/com/desmoines/aipulse/util/DeepLinkHandler.kt"),
+    )
+        .withPropertyName("deepLinkParitySources")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
 // AND-AUDIT-014: make a suite that ran nothing fail.
