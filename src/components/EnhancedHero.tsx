@@ -145,11 +145,31 @@ export function EnhancedHero({
           </div>
         </div>
 
-        {/* Main headline - Dynamic based on time */}
+        {/* Main headline.
+
+            SEO-008: THE GREETING IS NO LONGER INSIDE THE <h1>. It is clock
+            state, not content, and it was the first thing in the page's only
+            H1 - so the homepage's heading read "Good Afternoon!Find things to
+            do in Des Moines, right now" to anything parsing the document.
+
+            It reached far beyond the homepage. With entity prerendering off,
+            every one of ~1,070 restaurant, event, attraction and playground
+            URLs served the homepage shell, so THAT string was the H1 of the
+            entire site to any crawler that does not run JavaScript (SEO-001).
+
+            It still renders, immediately above, where a person reads it and no
+            parser mistakes it for the page's subject. The visual result is the
+            same; the document outline is not. */}
         <div className="text-center mb-8 animate-slide-in">
+          <p className="text-lg md:text-2xl font-semibold text-[#FFD700] mb-2">{greeting}</p>
+          {/* Deliberately NOT "Things to Do in Des Moines". That is
+              /things-to-do's head term, and the homepage already competed with
+              two of its own pages - its title targeted "things to do in des
+              moines this weekend", which is what /events/this-weekend and
+              /weekend are for. The homepage takes the broad "what is on right
+              now" intent; the hubs keep their own terms. */}
           <h1 className="text-4xl md:text-6xl font-bold text-white mb-4 md:drop-shadow-lg">
-            <span className="block text-lg md:text-2xl font-semibold text-[#FFD700] mb-2">{greeting}</span>
-            Find things to do in Des Moines, right now
+            What's Happening in Des Moines
           </h1>
           <p className="text-xl md:text-2xl text-white/90 mb-4 max-w-3xl mx-auto md:drop-shadow-md">
             {subheading}

@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { OptimizedLogo } from "@/components/OptimizedLogo";
 import { logConsent } from "@/lib/consentLog";
 import { reopenConsentBanner } from "@/components/CookieConsentBanner";
+import { SiteDirectory } from "@/components/seo/SiteDirectory";
 
 export default function Footer() {
   const [email, setEmail] = useState("");
@@ -352,6 +353,28 @@ export default function Footer() {
       </div>
 
       {/* Bottom Bar */}
+      {/* SEO-008 / SEO-015: the site directory, on every page.
+
+          Our hubs carried 54-79 unique internal links against ~250 on each of
+          catchdesmoines.com's, measured 2026-08-28, while we publish 1,109 URLs.
+          Link equity was arriving at the hubs and stopping there, which is a
+          large part of why entity pages rank on page one and the hubs sit on
+          page three to six.
+
+          The footer is the one place that lifts every page at once, including
+          the ~1,070 entity pages. A predecessor exists - FooterSEOLinks in
+          seo/InternalLinks.tsx - complete, exported and imported by nothing.
+          scripts/__tests__/site-directory-routes.test.mjs asserts this one is
+          actually rendered here, and that every href resolves to a real route:
+          a bad link in this block would manufacture a soft 404 on the whole
+          site at once, and the SPA fallback answers 200 so it would not even
+          fail loudly. */}
+      <div className="border-t border-neutral-800 py-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <SiteDirectory />
+        </div>
+      </div>
+
       <div className="border-t border-neutral-800 py-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 text-center md:text-left">

@@ -137,7 +137,7 @@
       "title": "Homepage ranks position 30 and competes with two of its own pages",
       "priority": 2,
       "phase": 2,
-      "passes": false,
+      "passes": true,
       "description": "As the homepage, I need my own target, because I rank position 30.03 with 12 clicks in 16 months while my title 'Things to Do in Des Moines This Weekend' targets the same phrase as /events/this-weekend and /weekend. The H1 is 'Good Afternoon! Find things to do in Des Moines, right now', where the greeting is JavaScript state that ends up in the prerendered HTML and in every entity page's shell.",
       "acceptanceCriteria": [
         "Re-target the homepage on the brand plus the Des Moines city entity, and let each hub own its own head term. The homepage should not compete with /things-to-do or /events/this-weekend.",
@@ -146,7 +146,7 @@
         "Keep WebSite, Organization and LocalBusiness. Add SearchAction pointing at /search.",
         "Re-measure words and unique internal links with the same method used for the baseline (54 links, 2,397 words) so the figures are comparable."
       ],
-      "notes": ""
+      "notes": "DONE 2026-08-29. THE GREETING IS OUT OF THE H1. It was clock state - 'Good Afternoon!' - rendered as the first line INSIDE the page's only <h1>, so the homepage heading read 'Good Afternoon!Find things to do in Des Moines, right now' to any parser. It reached far past the homepage: with entity prerendering off, ~1,070 restaurant, event, attraction and playground URLs served the homepage shell, so that string was the H1 of the entire site to every JS-less crawler. It still renders, one line up, where a person reads it and no parser mistakes it for the subject. RE-TARGETED, and I corrected myself mid-change. The first replacement H1 was 'Things to Do in Des Moines', which is exactly the competition-with-its-own-pages this story exists to end - that is /things-to-do's head term. The H1 is now \"What's Happening in Des Moines\" and HOME_TITLE is brand-and-entity led rather than 'Things to Do in Des Moines This Weekend', which had the homepage competing with BOTH /things-to-do (position 39.8) and /events/this-weekend (37.2) while itself sitting at 30.03 with 12 clicks in sixteen months. Three pages were losing one query instead of covering three. SearchAction was already present in WebSiteSchema and on the page, so that AC needed nothing. INTERNAL LINKS: the homepage gains 34, measured, not 96. See SEO-015 - the target of 150+ is NOT met by this story and the footer directory alone does not reach it."
     },
     {
       "id": "SEO-009",
@@ -262,7 +262,7 @@
         "Every article links into its relevant hub and the hub links back.",
         "Re-measure unique internal links per hub with the same method as the baseline: unique href=\"/...\" values in the served HTML."
       ],
-      "notes": ""
+      "notes": "PARTIALLY DONE 2026-08-29, and the shortfall is stated rather than rounded up. Built SiteDirectory (src/components/seo/SiteDirectory.tsx), 45 links across 6 sections, wired into Footer.tsx so it lifts EVERY page at once including the ~1,070 entity pages. Measured net uplift: the footer's own links were 26, the directory adds 45, the union is 60, so each page gains 34 UNIQUE internal links. That takes the homepage from a measured 54 to about 88 and the hubs from 63-79 to roughly 97-113. THAT IS NOT THE 250 THE COMPETITOR CARRIES AND NOT THE 150+ THIS STORY ASKS FOR. What remains is per-hub contextual linking - an event linking to nearby restaurants, a restaurant to its neighborhood, a playground to kids events - which is lateral rather than global and cannot come from a footer. Left open deliberately rather than marked done. A PREDECESSOR ALREADY EXISTED AND WAS NEVER WIRED: FooterSEOLinks in seo/InternalLinks.tsx is complete, exported and imported by nothing, carrying 16 links. That is this repo's recurring written-but-never-reachable pattern, so the new test asserts Footer.tsx actually RENDERS SiteDirectory, not merely that it exists. EVERY HREF IS CHECKED AGAINST App.tsx's real routes, in both directions. A bad link in a footer block manufactures a soft 404 on all 1,100 pages at once, and because the SPA fallback answers 200 it would not fail loudly. 16 checks in scripts/__tests__/site-directory-routes.test.mjs, reading the SAME exported array the component renders - a test that re-declared the list would pass while the component linked elsewhere. Also checks no trailing slashes (SEO-004 would 301 them), no admin or auth routes, no duplicates, and that App.tsx parsed to a non-trivial route set so the check cannot pass vacuously."
     },
     {
       "id": "SEO-016",

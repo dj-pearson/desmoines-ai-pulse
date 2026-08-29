@@ -102,9 +102,20 @@ const DashboardSkeleton = () => (
 
 // WEB-SEO-012: shared by the two head managers this page renders
 // (SEOEnhancedHead and SEOStructure) so they cannot disagree.
-const HOME_TITLE = 'Things to Do in Des Moines This Weekend | Des Moines Insider';
+//
+// SEO-008: RE-TARGETED. This was "Things to Do in Des Moines This Weekend",
+// which put the homepage in direct competition with two of its own pages:
+// /things-to-do owns "things to do in des moines" and /events/this-weekend
+// owns the weekend phrase (with /weekend 301'd onto it). Measured 2026-08-28,
+// the homepage sat at position 30.03 with 12 clicks in sixteen months while
+// /things-to-do sat at 39.8 and /events/this-weekend at 37.2, so all three were
+// losing the same query rather than covering three different ones.
+//
+// The homepage takes the brand and the city entity, and names the categories
+// without claiming any hub's exact head term. The hubs keep theirs.
+const HOME_TITLE = 'Des Moines Insider | Events, Restaurants and What to Do in Des Moines';
 const HOME_DESCRIPTION =
-  "Find what's happening in Des Moines, Iowa today and this weekend — live events, concerts, festivals, family activities, and the restaurants open right now. Updated daily across Des Moines, West Des Moines, Ankeny, Urbandale and the metro.";
+  "What's happening in Des Moines, Iowa right now: live events, concerts and festivals, restaurants open tonight, family activities and weekend plans. Updated daily across Des Moines, West Des Moines, Ankeny, Urbandale, Johnston, Altoona and the metro.";
 
 export default function Index() {
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
