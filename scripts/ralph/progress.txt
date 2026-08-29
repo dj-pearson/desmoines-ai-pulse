@@ -3725,3 +3725,30 @@ Files changed:
 - A test that fails can be the test's fault. Mine scoped an assertion to everything before a section header,
   which included the summary listing that names every job. Check which side is wrong before changing code.
 ---
+
+## 2026-08-29 - ai-article-pipeline: an agent calling a function that demanded a user session
+The AOS-MANAGE-007 report named this as the only job failing with an error attached. Root-caused and fixed.
+
+Files changed:
+- supabase/functions/suggest-article-topics/index.ts - hand-rolled auth.getUser replaced with
+  requireAdminOrApiKey
+- prd.json - AOS-MANAGE-007 notes
+
+Verified: tsc clean, check-edge-auth passing, npm run validate exit 0. Not verified end to end - the fix is
+not deployed and there is no CLAUDE_API key locally.
+
+**Learnings for future iterations:**
+- **`auth.getUser(token)` rejects the service-role key.** It resolves a USER access token; the service-role
+  key is a JWT with role service_role and no subject. Any function whose gate is a bare auth.getUser cannot
+  be called by pg_cron or by another edge function, which authenticate with the service-role bearer. That is
+  the whole of ai-article-pipeline's 3-of-3 failure: our own caller, our own callee, incompatible gates.
+- **Use requireAdminOrApiKey for anything an agent might call.** Clause 1b accepts the service-role bearer
+  explicitly for server-to-server callers, and it falls back to an ADMIN user JWT - which is usually a
+  tightening, not a loosening, for endpoints that spend money.
+- **verify_jwt=true does not mean the function is protected the way you think.** The gateway accepted the
+  service-role JWT here and the function's own gate then rejected it, so the request reached the handler and
+  failed at 500 rather than 401. Gateway auth and handler auth answer different questions.
+- moderate-content's 247 green runs with 0 items processed are CORRECT: user_ratings and contact_submissions
+  are both empty. Check the queue before calling a no-op a defect - the section that surfaces it is still
+  worth having, but this instance is benign.
+---
