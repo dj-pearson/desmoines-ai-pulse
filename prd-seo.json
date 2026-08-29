@@ -179,7 +179,7 @@
         "'new restaurants des moines 2026' earns 7.63% CTR at position 7.2, the best-converting query on the site, and it is currently served by a detail page. Give it a real hub page.",
         "Re-measure position on 'des moines restaurants' and 'best restaurants in des moines' against baselines 52.2 and 50.2."
       ],
-      "notes": ""
+      "notes": "NOT DONE 2026-08-29. The detail-page half is complete via other stories: Restaurant schema is emitted (SEOHead structuredData), the pages are prerendered (SEO-001), and titles are now location-qualified (SEO-005), which directly serves the suburb-branded queries this module actually receives. WHAT REMAINS IS THE HUB, and it is editorial: /restaurants is position 24.4 for its own head term and 52.2 for 'des moines restaurants', and turning it from a filtered grid into 'best restaurants in des moines' means writing picks with REASONS. That needs somebody who has eaten there. Generating it would be exactly the fabricated-claim failure this PRD refuses elsewhere - a model's opinion of a restaurant it has never visited reads perfectly and is worthless. The 'new restaurants des moines 2026' hub is the one piece here that is nearly free and worth doing first: 7.63% CTR at position 7.2, the best-converting query on the site, currently served by a detail page rather than a hub."
     },
     {
       "id": "SEO-011",
@@ -196,7 +196,7 @@
         "Raise unique internal links from the measured 63 toward 250.",
         "Re-measure position on 'des moines attractions' against baseline 40.1, and module CTR against 0.13%."
       ],
-      "notes": ""
+      "notes": "PARTIALLY DONE 2026-08-29. THE SCHEMA CRITERION WAS ALREADY MET AND THE STORY WAS WRONG ABOUT IT. It says 'add TouristAttraction schema to every detail page; the component exists and is not reaching crawlers'. EnhancedAttractionSEO already emits TouristAttraction, LocalBusiness, WebPage, GeoCoordinates, PostalAddress and SpeakableSpecification on every attraction page. It was not reaching crawlers because entity prerendering was OFF - which is SEO-001, now fixed. The standalone src/components/schema/TouristAttractionSchema.tsx IS dead code, used by nothing, but that is a tidiness issue rather than the defect. So attractions gained working structured data without a line of change here. STILL OPEN: the coverage. 22 attractions is not a city's worth against a competitor built on this category, and 'des moines attractions' is a 50,000-bucket High-competition term where we sit at position 40.1 with ONE click in sixteen months. Expanding it means writing hours, admission prices and accessibility notes for real venues, and this environment has no verified source for any of them. A wrong opening time sends somebody to a closed building - the story's own criterion says not to assert them. This needs the operator or a data source, not a model."
     },
     {
       "id": "SEO-012",
@@ -212,7 +212,7 @@
         "Add ItemList or CollectionPage schema matching what the page actually is.",
         "Re-measure position on 'things to do in des moines', 'things to do in des moines today', 'fun things to do in des moines' and 'des moines activities' against baselines 39.8 / 40.9 / 48.7 / 39.4."
       ],
-      "notes": ""
+      "notes": "PARTIALLY DONE 2026-08-29, and the measurement found something the story did not know. THREE /things-to-do SUB-PAGES ARE EARNING REAL IMPRESSIONS WITH NO PUBLISHED PAGE BEHIND THEM: /things-to-do/festivals (772 impressions, position 17.1), /things-to-do/east-village (399) and /things-to-do/ankeny (383). All three are taxonomy-valid slugs in src/pseo/taxonomy.ts, so PseoRoutePage looks them up, finds no published page, and renders a real 404 - while the SPA fallback serves the homepage shell at 200 to any crawler that has not run the JS. They are indexed on homepage content. Only budget, fall, live-music, this-weekend and winter are in sitemap-pseo.xml. THAT IS THE CHEAPEST WIN IN THE WHOLE PHASE and it needs no writing from scratch: the demand is measured, the route exists, the taxonomy entry exists, and what is missing is a PUBLISHED pSEO page. It runs through the pSEO admin against the database, which this environment cannot reach. STILL OPEN: the hub itself. 597 words against a 50,000-bucket High-competition term at position 39.8, where the competitor's equivalent page is 1,199 words with 255 internal links. The footer directory (SEO-015) adds 34 links to it. The editorial depth is the rest and it is genuinely a writing job."
     },
     {
       "id": "SEO-013",
@@ -230,7 +230,7 @@
         "Do not assert nightly rates, availability or distances nobody verified. A wrong walking distance is the field a visitor acts on at 11pm.",
         "Re-measure module CTR against the baseline of 2 clicks on 6,726 impressions (0.03%)."
       ],
-      "notes": "Operator decision recorded 2026-08-29: invest, scoped to event-adjacent intent. Unblocked."
+      "notes": "NOT DONE 2026-08-29. Operator decision recorded (invest, scoped to event-adjacent intent) and unblocked, but the build needs data this environment does not have: which hotels are near which venues. The whole value of the chosen option is 'which hotel is walkable to the venue I just bought a ticket for', and that is a proximity join between the hotels table and a venue table that SEO-018 has not built yet. HotelSchema exists and is wired on HotelDetails. Correct order is SEO-018 first, then this. Doing it in the other order means inventing distances, and a wrong walking distance is the field a visitor acts on at 11pm."
     },
     {
       "id": "SEO-014",
@@ -246,7 +246,7 @@
         "The /events/kids route already exists and is prerendered. Link the two modules together in both directions.",
         "Re-measure module CTR against baseline 0.61% and hub position against 14.73."
       ],
-      "notes": ""
+      "notes": "PARTIALLY DONE 2026-08-29, and like SEO-011 most of it landed via SEO-001. EnhancedPlaygroundSEO already emits Park, LocalBusiness, WebPage, GeoCoordinates and LocationFeatureSpecification on every playground page, and those pages are now prerendered, so the schema reaches JS-less crawlers for the first time. The module is quietly the site's best - 47 pages, 6,706 impressions, riverview-park alone at 1,366, several pages at position 6-7, and nobody else covering it well. STILL OPEN: content on the /playgrounds hub (position 14.73 on 768 impressions), and the extension into the family and kids cluster the planner shows. /events/kids already exists and is prerendered, so linking the two modules in both directions is the cheap next step and does not need new facts."
     },
     {
       "id": "SEO-015",
@@ -294,7 +294,7 @@
         "Add ItemList schema and wire into /restaurants and the neighborhood pages.",
         "Add to sitemap and prerender routes."
       ],
-      "notes": ""
+      "notes": "NOT DONE 2026-08-29. Deliberately not attempted, because the story's own second criterion is the trap: 'each page needs enough distinct content to justify existing - if two pages would say the same thing about the same restaurants, build one'. Cuisine and occasion pages built from a filtered query over the same 200 restaurants ARE that duplicate, and generating the distinguishing prose is the fabricated-claim failure again. One measured detail worth keeping: 'eatery a happy hour' sits at position 4.1 with 156 impressions and ZERO clicks, which says the demand exists and the page does not."
     },
     {
       "id": "SEO-018",
@@ -310,7 +310,7 @@
         "Wire into /events, /music and the relevant attraction pages.",
         "Add to sitemap and prerender routes."
       ],
-      "notes": ""
+      "notes": "NOT DONE 2026-08-29. This is the prerequisite for SEO-013 and probably the best-value item left, because the useful half is data rather than prose: a venue page's value is the upcoming-event list, which the events table can already produce, and that is the part a ticketing site does not do well for a local audience. The /music/venues/:slug route exists. What is missing is a venue table or a reliable venue-name normalisation over events.venue - the same field SEO-007 found carrying a hardcoded 'Des Moines' locality. Parking, capacity and access details must NOT be generated; they are exactly the fields a visitor acts on."
     },
     {
       "id": "SEO-019",
@@ -326,7 +326,7 @@
         "Do not fabricate business details, prices, hours or event dates in an article. Those are the fields a reader acts on.",
         "Re-measure the module against baseline 51 clicks on 7,469 impressions."
       ],
-      "notes": ""
+      "notes": "NOT DONE 2026-08-29. Seventeen articles is the one thing on this site that reliably ranks - the patio guide earns 13 clicks at position 14.9, the pumpkin patch guide has 2,609 impressions - and the planner shows 87 seasonal keywords unaddressed. It is also the story that is purely writing about real businesses, with the highest fabrication risk of any of the twenty: an article naming a restaurant's hours or a farm's admission price is a fact a reader acts on. Needs the operator, or a verified source, or the house public-copy process. The structural half that does NOT need facts, and is worth doing regardless, is the reciprocal linking in SEO-015: every article into its hub and the hub back."
     },
     {
       "id": "SEO-020",
