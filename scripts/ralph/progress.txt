@@ -3147,3 +3147,37 @@ back inline gives "Lint found 1 error ... aborting build. BUILD FAILED".
 - A permission finding on a class with no callers is a landmine, not a bug. HapticHelper would have thrown
   SecurityException on the first caller; grep for call sites before deciding how urgent a finding is.
 ---
+
+## 2026-08-29 - AND-AUDIT-014 (a suite that runs nothing now fails)
+AC1 answered precisely; AC2 attempted and reverted with the blocker recorded; the vacuous-pass half - the
+harm the story's own note describes - is guarded.
+
+Files changed:
+- android/app/build.gradle.kts - verifyUnitTestExecution task, finalizedBy testDebugUnitTest; the
+  isReturnDefaultValues flag kept with the audit result written above it
+- prd.json - AND-AUDIT-014 notes
+
+Verified: 346 tests / 0 skipped / 0 failures with the guard reporting them. Controls: deleting two report
+files gives "Only 337 unit tests executed; expected at least 340"; deleting all of them gives "No JUnit XML
+under ...". Both BUILD FAILED. Restored, green.
+
+**Learnings for future iterations:**
+- **A Gradle test task that executes zero tests SUCCEEDS.** That is why seven tests could vanish from
+  EventsRemoteDataSourceTest with every build staying green, and no testOptions setting could ever have
+  caught it. If you care that tests ran, assert on the JUnit XML - `verifyUnitTestExecution` now does, with
+  a floor of 340 and a zero-skipped check, wired finalizedBy so it cannot be bypassed.
+- **`unitTests.isReturnDefaultValues = true` here covers exactly android.util.Log.w and .e, nothing else.**
+  Measured: flag off gives 12 failures across 6 classes, 11 naming Log directly. Do not assume it is load-
+  bearing for framework behaviour generally - it is not, and Robolectric is not needed to remove it.
+- **A "not mocked" RuntimeException can surface as an assertion failure.** NetworkRetryTest wraps its call
+  in runCatching, so the framework exception became the captured result and the test failed on
+  `error is IOException` with no mention of Log. When auditing this flag, read the error TYPE across the
+  whole suite, not the message of the first failure.
+- **AGP 9.3.2 does not appear to put src/test/resources on the unit-test runtime classpath.** The files are
+  produced (build/intermediates/java_res/debugUnitTest/processDebugUnitTestJavaRes/out has them) and the
+  compiled test class arrives, but neither junit-platform.properties nor META-INF/services took effect;
+  the same extension applied with @ExtendWith works. Anything relying on test resources or ServiceLoader
+  registration needs checking on this AGP version before you trust it.
+- android-release.yml DOES run unit tests before building (./gradlew test --no-daemon). Several story ACs
+  claim otherwise. Read the workflow before repeating that.
+---

@@ -165,6 +165,21 @@ android {
 
     @Suppress("UnstableApiUsage")
     testOptions {
+        // AND-AUDIT-014. Audited 2026-08-29 by turning this off and running the
+        // suite: 12 failures across 6 classes, and exactly one cause -
+        // "Method w in android.util.Log not mocked" and the same for e. Nothing
+        // else in 346 tests depends on a defaulted framework return.
+        //
+        // Kept, because the alternative is worse than it looks: stubbing Log
+        // globally needs a JUnit 5 extension registered through
+        // META-INF/services, and AGP is not putting src/test/resources on the
+        // unit-test runtime classpath - the compiled extension class arrives,
+        // the services file and junit-platform.properties do not. Applied
+        // per-class with @ExtendWith it works. See the AND-AUDIT-014 notes.
+        //
+        // The real risk this flag carries is that a test can assert on a
+        // silently-defaulted value, so verifyUnitTestExecution below covers the
+        // failure mode that actually bit: a suite that runs nothing and passes.
         unitTests.isReturnDefaultValues = true
     }
 
@@ -190,6 +205,69 @@ android {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+}
+
+// AND-AUDIT-014: make a suite that ran nothing fail.
+//
+// EventsRemoteDataSourceTest's seven tests were discovered as ZERO for an
+// unknown length of time and every build stayed green, because a Gradle test
+// task that executes no tests succeeds. BUILD SUCCESSFUL is not a test result,
+// and until this task existed nothing in either workflow could tell the
+// difference between 346 passing tests and none.
+//
+// A floor rather than an exact count: adding tests must not need a build edit,
+// and deleting a class deliberately is a one-line ratchet. Set just below the
+// current total so the exact regression above - losing one class of seven -
+// fails here.
+val unitTestFloor = 340
+
+val verifyUnitTestExecution = tasks.register("verifyUnitTestExecution") {
+    description = "Fails if the unit test suite reported implausibly few tests, or skipped any."
+    group = "verification"
+    val resultsDir = layout.buildDirectory.dir("test-results/testDebugUnitTest")
+    val floor = unitTestFloor
+    doLast {
+        val dir = resultsDir.get().asFile
+        val reports = dir.listFiles { f: java.io.File ->
+            f.name.startsWith("TEST-") && f.name.endsWith(".xml")
+        }?.toList().orEmpty()
+
+        check(reports.isNotEmpty()) {
+            "No JUnit XML under $dir. The test task reported success without producing " +
+                "a single report, which is the exact shape of a suite that ran nothing."
+        }
+
+        val counts = Regex("""tests="(\d+)" skipped="(\d+)" failures="(\d+)" errors="(\d+)"""")
+        var tests = 0; var skipped = 0; var failures = 0; var errors = 0
+        reports.forEach { report ->
+            counts.find(report.readText())?.let {
+                tests += it.groupValues[1].toInt()
+                skipped += it.groupValues[2].toInt()
+                failures += it.groupValues[3].toInt()
+                errors += it.groupValues[4].toInt()
+            }
+        }
+
+        check(tests >= floor) {
+            "Only $tests unit tests executed; expected at least $floor. Either tests were " +
+                "lost to a discovery failure, or the floor in app/build.gradle.kts needs " +
+                "lowering deliberately."
+        }
+        check(skipped == 0) {
+            "$skipped unit test(s) were skipped. A skipped test is not a passing test."
+        }
+
+        logger.lifecycle(
+            "verifyUnitTestExecution: $tests tests, $skipped skipped, $failures failures, " +
+                "$errors errors (floor $floor)",
+        )
+    }
+}
+
+// finalizedBy, not dependsOn: this must also report when the suite itself fails,
+// and it must be impossible to run the tests without it.
+tasks.matching { it.name == "testDebugUnitTest" }.configureEach {
+    finalizedBy(verifyUnitTestExecution)
 }
 
 dependencies {
