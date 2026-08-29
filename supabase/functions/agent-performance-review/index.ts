@@ -249,7 +249,13 @@ Deno.serve(async (req) => {
     const { body, degraded } = composeDigest(reviewLines(runs, windowDays));
 
     ctx.processed(runs.length);
-    ctx.failed(failing.length + degradedJobs.length);
+    // NOT ctx.failed(failing.length + degradedJobs.length), which is the mistake
+    // this review exists to surface, made by the review itself. Finding that four
+    // jobs are unhealthy is this job SUCCEEDING; a review that reports partial
+    // whenever it has something to report is permanently amber and tells you
+    // nothing. Same defect as validate-source-urls counting every dead link it
+    // correctly flagged as a failed item. The counts are in ctx.meta below.
+    ctx.failed(0);
     ctx.meta({
       window_days: windowDays,
       runs: runs.length,

@@ -413,7 +413,23 @@ serve(async (req) => {
     // Record the run via the WEB-AUTO-001 jobRunner (recovery rate + counts).
     await runJob('validate-source-urls', async (ctx) => {
       ctx.processed(updatedCount);
-      ctx.failed(flaggedCount + errors.length);
+      // FLAGGING A DEAD LINK IS THIS JOB SUCCEEDING, NOT FAILING.
+      //
+      // This was `ctx.failed(flaggedCount + errors.length)`, which counted every
+      // event we correctly identified as having an unrecoverable source URL as a
+      // failed item. Finding and flagging those is WEB-AUTO-004's entire purpose,
+      // so the job reported status=partial on any run that did its job.
+      //
+      // It has done exactly that on all 22 runs in the ledger: every one records
+      // errors: 0 and flaggedBroken: 1, so items_failed was 100% flagged links
+      // and 0% errors, and the job has never once reported success. jobRunner
+      // treats partial as ok=true, so nothing alerted - it just sat permanently
+      // amber to anything reading run status, including WEB-AUTO-001's job
+      // observability and AOS-MANAGE-007's review.
+      //
+      // flaggedBroken is already carried in ctx.meta below, so nothing is lost by
+      // counting only real errors here.
+      ctx.failed(errors.length);
       ctx.meta({
         checked: aggregatorEvents.length,
         recovered: updatedCount,

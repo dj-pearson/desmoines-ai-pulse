@@ -3752,3 +3752,30 @@ not deployed and there is no CLAUDE_API key locally.
   are both empty. Check the queue before calling a no-op a defect - the section that surfaces it is still
   worth having, but this instance is benign.
 ---
+
+## 2026-08-29 - validate-source-urls was reporting its own success as failure
+Third and last of the jobs AOS-MANAGE-007 surfaced. It was never broken.
+
+Files changed:
+- supabase/functions/validate-source-urls/index.ts - ctx.failed(errors.length), was flaggedCount + errors
+- supabase/functions/agent-performance-review/index.ts - same mistake, mine, two iterations old
+- prd.json - AOS-MANAGE-007 notes
+
+Verified: every run's metadata records errors 0 and flaggedBroken 1, so items_failed was 100% correctly
+flagged links; production has 3 events with source_url_broken. tsc clean, 7/7 tests, validate exit 0.
+
+**Learnings for future iterations:**
+- **ctx.failed() means "items I could not process", not "unwelcome things I found".** validate-source-urls
+  counted every dead link it correctly flagged as a failed item, so it reported partial on all 22 runs while
+  its own metadata recorded errors: 0. A job that accurately reports a bad outcome has SUCCEEDED.
+- **jobRunner treats partial as ok=true, so this never alerted** - it just sat permanently amber to
+  everything reading run status. A job stuck at partial forever is worth investigating precisely because
+  nothing will tell you about it.
+- **I made the same mistake in the review that found it.** agent-performance-review did
+  ctx.failed(failing.length + degradedJobs.length) - counting its own findings as its own failures. Check
+  your instrumentation against the rule you just wrote.
+- Sweep pattern: `grep -rn "ctx.failed(" supabase/functions/` and look for arguments that are not error
+  counts. The other 10 call sites are inside catch blocks and are fine.
+- Still open on this job, as a quality question rather than a defect: recoveryRate is 0 on every run. It
+  flags dead links correctly and recovers none.
+---
