@@ -3804,3 +3804,26 @@ aggregator population. tsc clean, validate exit 0.
   events were recovered to web.archive.org snapshots. The single candidate per run happened to be
   unrecoverable. A rate computed over a denominator of 1 is not a rate.
 ---
+
+## 2026-08-29 - Event scraping is entirely down and reports success
+Chased why SeatGeek stopped ingesting on 2026-08-21 and found a live outage: all ten scrape sources failing,
+HTTP 200, success: true.
+
+Files changed:
+- supabase/functions/scrape-events/index.ts - total failure now returns success:false and 500
+- prd.json - WEB-OPS-007 notes
+
+**Learnings for future iterations:**
+- **net._http_response is where cron jobs actually report.** cron.job_run_details records that
+  net.http_post was ENQUEUED - "1 row", status succeeded - not what came back. The response table holds the
+  real answer, and in this project it currently holds: all ten scrape jobs failing, 38
+  "Requested function was not found" from cron posting to undeployed functions, a 42804 datatype error in
+  the reminders query, and a "Cannot read properties of undefined". None of it surfaces anywhere.
+- **A wrapper that returns success:true unconditionally erases everything under it.** scrape-events reported
+  "Scraping completed: 0 events found across 10 jobs" with total_errors: 10 and HTTP 200. Report total
+  failure as failure; leave partial alone, because losing one source of ten should not page anyone.
+- **scrape-events writes no automation_job_runs row at all** (0 rows for any %scrape% name), so the agent
+  ledger cannot see it either. A job outside the ledger is outside every report built on the ledger.
+- The trail worth reusing: source freshness by host (max(created_at) per source_url host) -> cron.job_run_details
+  for the schedule -> net._http_response for what actually happened. Three queries, one live outage.
+---
