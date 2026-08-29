@@ -3404,3 +3404,35 @@ report-only on every build type.
     openssl x509 -in c.pem -pubkey -noout | openssl pkey -pubin -outform der |
       openssl dgst -sha256 -binary | base64
 ---
+
+## 2026-08-29 - AND-AUDIT-021 (MainNavHost 1233 -> 87 lines)
+A move, not a rewrite: three NavGraphBuilder extension functions already existed inside MainNavHost.kt and
+just needed their own files.
+
+Files changed:
+- ui/navigation/MainNavHost.kt        1233 -> 87 lines, imports 87 -> 9
+- ui/navigation/TabDestinations.kt    NEW 356
+- ui/navigation/DetailDestinations.kt NEW 235
+- ui/navigation/FlowDestinations.kt   NEW 600
+- prd.json - AND-AUDIT-021 notes
+
+Verified: route set, composable count (34) and navArguments (10) byte-identical before and after;
+assembleDebug SUCCESS, 358 tests / 0 failures, lint clean.
+
+**Learnings for future iterations:**
+- **Make a big refactor reviewable by property, not by reading it.** AC3 said "if the diff touches a route
+  string, something went wrong" - so extract the route set, composable count and navArgument list before and
+  after and diff them. A 1,146-line deletion becomes checkable in one line. Script pattern is in the story
+  notes.
+- **Splitting a file breaks implicit imports that no symbol names.** `by viewModel.x.collectAsState...()`
+  needs androidx.compose.runtime.getValue, and a per-file "keep the imports whose symbol appears in the text"
+  filter drops it - the compiler then says "has no method getValue(...), so it cannot serve as a delegate".
+  Always carry getValue/setValue into a file containing a `by` delegate.
+- **Two stories claimed to depend on each other and neither did.** AND-AUDIT-021 AC4 says do this with
+  AND-AUDIT-020 because "both rewrite the same lines"; 020's AC2 says split the file first to make the swap
+  easier. 020 was a mechanical replace plus an import and this is a whole-function move. Check a claimed
+  dependency before sequencing around it - twice now in this PRD.
+- The existing seams were by KIND (tab/detail/flow); AC1 asked for by FEATURE (eventGraph, restaurantGraph).
+  Moving to files first is provably behaviour-preserving; regrouping across the seams is a judgement change
+  that cannot be verified the same way. Two commits, not one.
+---
