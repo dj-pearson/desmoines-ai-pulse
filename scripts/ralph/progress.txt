@@ -3079,3 +3079,34 @@ fails exactly the 2 assertions that should and no others.
 - Wrap failure REPORTING in runCatching when it sits in a constructor path. A reporter that throws would
   otherwise take the storage layer down with it.
 ---
+
+## 2026-08-29 - AND-AUDIT-009 (both security libraries off alpha)
+Two version bumps, no source changes, no migration. AC2's premise had expired: security-crypto 1.1.0 STABLE
+now exists, so the Keystore/Tink rewrite the story describes is not needed to get off alpha.
+
+Files changed:
+- android/gradle/libs.versions.toml - securityCrypto 1.1.0-alpha06 -> 1.1.0, biometric 1.2.0-alpha05 -> 1.1.0
+- prd.json - AND-AUDIT-009 notes
+
+Verified: assembleDebug SUCCESS, 346 tests / 0 skipped / 0 failures from the JUnit XML,
+minifyReleaseWithR8 SUCCESS. releaseRuntimeClasspath: biometric 1.1.0, security-crypto 1.1.0,
+tink-android 1.8.0. The catalog now has zero alpha/beta/rc pins.
+
+**Learnings for future iterations:**
+- **Re-check "there is no stable version" before doing the migration a story describes.** AC2 called for
+  picking a replacement crypto stack and writing a migrate-on-read path. security-crypto shipped 1.1.0 stable
+  after the story was filed, and the whole thing collapses to a one-line bump. These notes are months old;
+  the registry is not.
+- **Prove a storage-format claim from the artifacts, three ways.** Same tink dependency in both poms, same
+  EncryptedSharedPreferences public API, and a class-list diff showing only compiler-generated `$1` classes.
+  That is what makes "no migration needed" a finding rather than an assumption - and it is much cheaper than
+  writing the migration.
+- **`a:b:1.2.3-beta01 -> 1.2.3` in a Gradle dependency tree is a REQUEST THAT LOST, not a shipped version.**
+  I first counted three beta artifacts in the release classpath; two were arrows where our stable pin won.
+  Only lines with no arrow are resolved versions. Grep for pre-release in the catalog to find what is OURS,
+  and read the tree carefully to find what actually ships.
+- androidx.privacysandbox.ads:ads-adservices has NEVER had a stable release (newest is 1.1.0-beta12). It
+  arrives transitively via play-services-ads. Nothing to do about it; do not re-file it as a finding.
+- A stability downgrade can silently block a sibling story - check first. biometric 1.1.0 still has
+  Authenticators.DEVICE_CREDENTIAL, which AND-AUDIT-007's AC4 needs, so this bump does not cost that story.
+---
