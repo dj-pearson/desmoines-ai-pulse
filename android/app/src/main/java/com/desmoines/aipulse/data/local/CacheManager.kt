@@ -180,11 +180,15 @@ class CacheManager @Inject constructor(
 
     suspend fun pruneExpired() {
         try {
+            // ONE CUTOFF FOR ALL FOUR TABLES. The metadata used to be pruned on
+            // its TTL instead, which is five minutes against a 24-hour retention
+            // window - so a key's rows survived and the metadata that addresses
+            // them did not, and allowStale could never reach them again.
             val cutoff = System.currentTimeMillis() - PRUNE_AGE_HOURS * 3600_000L
             eventDao.deleteExpired(cutoff)
             restaurantDao.deleteExpired(cutoff)
             attractionDao.deleteExpired(cutoff)
-            cacheMetadataDao.deleteExpired()
+            cacheMetadataDao.deleteOlderThan(cutoff)
             AppLogger.cache.debug("Pruned expired cache entries older than ${PRUNE_AGE_HOURS}h")
         } catch (e: Exception) {
             AppLogger.cache.error("Failed to prune expired cache", e)
