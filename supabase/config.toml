@@ -115,6 +115,11 @@ verify_jwt = false
 [functions.executive-digest]
 verify_jwt = false
 
+# Weekly OS self-review (AOS-MANAGE-007). Cron: aggregates automation_job_runs.
+# Own auth gate via requireAdminOrApiKey.
+[functions.agent-performance-review]
+verify_jwt = false
+
 # Security anomaly detector (AOS-SEC-001). Cron: reads login/rate-limit/audit
 # signals and opens incident tasks. Does its own auth via requireAdminOrApiKey.
 [functions.agent-security-monitor]

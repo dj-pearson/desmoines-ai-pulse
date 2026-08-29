@@ -3679,3 +3679,25 @@ exit 0, and injecting aria-busy into one page still fails it.
   three functions were deployed. Run the CI list by hand periodically - a guard that crashes reports nothing,
   and nothing is what everyone sees.
 ---
+
+## 2026-08-29 - AOS-MANAGE-007: weekly agent review, and three jobs that have never succeeded
+Files changed:
+- supabase/functions/agent-performance-review/index.ts - NEW
+- supabase/functions/_tests/agent-performance-review.test.ts - NEW, 5 tests
+- supabase/config.toml, edge-deploy-baseline.json, prd.json
+
+Verified: esbuild parse clean, tsc -p tsconfig.functions.json clean, 5/5 tests, npm run validate exit 0.
+
+**Learnings for future iterations:**
+- **automation_job_runs is half unwritten.** Over 277 rows: agent_key populated on 1, and items_escalated,
+  tokens_used and cost_usd are ZERO on every row. Any report of escalations, tokens or spend is reporting an
+  absence. Group by job_name, not agent_key.
+- **Three of seven jobs have never succeeded in the ledger window** - validate-source-urls 0/21 with 32 items
+  failed, ai-article-pipeline 0/3, data-quality-heal 0/2. This is NOT WEB-OPS-007: those jobs never start,
+  these start and fail inside the function. Different fix, and cron-health cannot see it.
+- **Pair every "this is unavailable" assertion with a control that real data is NOT called unavailable.**
+  Otherwise the test passes for code that always says UNAVAILABLE, which fails in the other direction and
+  looks just as green.
+- A read error must throw rather than fall through to an empty list, or a broken query renders as a healthy
+  quiet week - the exact shape of the defect these reports exist to avoid.
+---
