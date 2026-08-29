@@ -65,6 +65,10 @@ export interface JobStats {
   job: string;
   runs: number;
   succeeded: number;
+  /** status === 'failed': the job itself threw. */
+  errored: number;
+  /** status === 'partial': the job ran to completion and its ITEMS failed. */
+  partial: number;
   processed: number;
   failed: number;
   avgSeconds: number | null;
@@ -93,6 +97,8 @@ export function summarise(runs: Run[]): JobStats[] {
       job,
       runs: list.length,
       succeeded: list.filter((r) => r.status === "success").length,
+      errored: list.filter((r) => r.status === "failed").length,
+      partial: list.filter((r) => r.status === "partial").length,
       processed: list.reduce((s, r) => s + (r.items_processed ?? 0), 0),
       failed: list.reduce((s, r) => s + (r.items_failed ?? 0), 0),
       avgSeconds:
@@ -134,16 +140,49 @@ export function reviewLines(runs: Run[], windowDays: number): string[] {
     );
   }
 
-  // AC2's "flags any agent trending worse", reduced to the version this ledger
-  // can actually support: a job that has never succeeded in the window is not a
-  // trend, it is a broken job, and it is the only claim the data carries.
-  const neverSucceeded = stats.filter((s) => s.runs > 0 && s.succeeded === 0);
-  lines.push("-- NEVER SUCCEEDED IN THIS WINDOW --");
-  if (neverSucceeded.length === 0) {
-    lines.push("none");
+  // THREE DIFFERENT CONDITIONS, NOT ONE. The first version of this file bucketed
+  // everything with status !== 'success' as "never succeeded", which reads as one
+  // problem and is three, with three different owners:
+  //
+  //   failed    the job threw. jobRunner reports ok=false. Something is broken.
+  //   partial   the job ran to completion and its ITEMS failed. jobRunner reports
+  //             ok=TRUE for this, so it is invisible to anything watching the
+  //             run's own success - and validate-source-urls has been partial on
+  //             22 of 22 runs with 33 items failed and no error recorded.
+  //   no-op     every run succeeded and processed nothing. A green job doing
+  //             nothing looks identical to a green job with nothing to do, which
+  //             is the empty-scan trap WEB-CI-027 catalogued across 34 scripts.
+  //
+  // Collapsing them hides the middle one entirely, which is the one nothing else
+  // in this project is watching.
+  const failing = stats.filter((s) => s.errored > 0);
+  lines.push("-- FAILING (the job itself threw) --");
+  if (failing.length === 0) lines.push("none");
+  for (const s of failing) {
+    lines.push(
+      `${s.job}: ${s.errored} of ${s.runs} runs failed` +
+        (s.lastError ? ` - ${s.lastError.slice(0, 160)}` : " - no error recorded"),
+    );
   }
-  for (const s of neverSucceeded) {
-    lines.push(`${s.job}: 0 of ${s.runs} runs succeeded` + (s.lastError ? ` - ${s.lastError.slice(0, 160)}` : ""));
+
+  const degraded = stats.filter((s) => s.errored === 0 && s.partial > 0 && s.failed > 0);
+  lines.push("-- DEGRADED (job ran, its items failed) --");
+  if (degraded.length === 0) lines.push("none");
+  for (const s of degraded) {
+    lines.push(
+      `${s.job}: ${s.partial} of ${s.runs} runs partial, ${s.failed} item(s) failed, ` +
+        `${s.processed} processed. jobRunner counts these as ok, so nothing watching run status sees them.`,
+    );
+  }
+
+  const noop = stats.filter((s) => s.runs > 0 && s.succeeded === s.runs && s.processed === 0);
+  lines.push("-- SUCCEEDING WITHOUT DOING ANYTHING --");
+  if (noop.length === 0) lines.push("none");
+  for (const s of noop) {
+    lines.push(
+      `${s.job}: ${s.runs} run(s), all succeeded, 0 items processed. ` +
+        `Cannot be told apart from a job with nothing to do - check it is finding its work.`,
+    );
   }
 
   lines.push("-- NOT SOURCED --");
@@ -205,28 +244,40 @@ Deno.serve(async (req) => {
 
     const runs = (data ?? []) as Run[];
     const stats = summarise(runs);
-    const broken = stats.filter((s) => s.runs > 0 && s.succeeded === 0);
+    const failing = stats.filter((s) => s.errored > 0);
+    const degradedJobs = stats.filter((s) => s.errored === 0 && s.partial > 0 && s.failed > 0);
     const { body, degraded } = composeDigest(reviewLines(runs, windowDays));
 
     ctx.processed(runs.length);
-    ctx.failed(broken.length);
+    ctx.failed(failing.length + degradedJobs.length);
     ctx.meta({
       window_days: windowDays,
       runs: runs.length,
       jobs: stats.length,
-      never_succeeded: broken.map((s) => s.job),
+      failing: failing.map((s) => s.job),
+      degraded: degradedJobs.map((s) => s.job),
       degraded_sections: degraded,
     });
 
     await notifyOps(supabase, {
-      severity: broken.length > 0 ? "medium" : "low",
-      title: `Agent performance review (${windowDays}d): ${broken.length} job(s) never succeeded`,
+      // A job that threw is worth waking someone for; items failing inside a
+      // job that completed is worth reading, not waking.
+      severity: failing.length > 0 ? "medium" : "low",
+      title:
+        `Agent performance review (${windowDays}d): ` +
+        `${failing.length} failing, ${degradedJobs.length} degraded`,
       body,
       dedupeKey: `agent-performance-review:${windowDays}d`,
       capWindowMs: windowDays * DAY,
     });
 
-    return { windowDays, runs: runs.length, jobs: stats.length, neverSucceeded: broken.map((s) => s.job) };
+    return {
+      windowDays,
+      runs: runs.length,
+      jobs: stats.length,
+      failing: failing.map((s) => s.job),
+      degraded: degradedJobs.map((s) => s.job),
+    };
   });
 
   return json(result, result.ok ? 200 : 500, cors);

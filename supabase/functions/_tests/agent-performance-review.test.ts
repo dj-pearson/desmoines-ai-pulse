@@ -66,21 +66,55 @@ Deno.test("NEGATIVE CONTROL - a column with real data is not called unsourced", 
   assertStringIncludes(lines, "every ledger column carries data");
 });
 
-Deno.test("a job that never succeeded is named, with its error", () => {
+Deno.test("a job that THREW is separated from a job whose ITEMS failed", () => {
+  // The first version of this report bucketed both as "never succeeded", which
+  // reads as one problem and is two with different owners. jobRunner reports
+  // ok=TRUE for partial, so the degraded case is invisible to anything watching
+  // run status - it is the one nothing else is looking at.
   const lines = reviewLines(
     [
-      run({ job_name: "validate-source-urls", status: "failed", error: "42P01 relation does not exist" }),
-      run({ job_name: "validate-source-urls", status: "failed" }),
-      run(),
+      run({ job_name: "ai-article-pipeline", status: "failed", error: "suggest-article-topics failed: 500" }),
+      run({ job_name: "validate-source-urls", status: "partial", items_failed: 3, items_processed: 0 }),
+      run({ job_name: "cleanup-old-events", status: "success", items_processed: 944 }),
     ],
     7,
   ).join("\n");
-  assertStringIncludes(lines, "validate-source-urls: 0 of 2 runs succeeded");
-  assertStringIncludes(lines, "42P01");
-  // A job that did succeed must not be listed as broken.
-  assert(!/moderate-content: 0 of/.test(lines));
+
+  // Scoped to the FAILING section, not everything before DEGRADED: the RUNS
+  // listing above it names every job, healthy ones included.
+  const failingBlock = lines.split("-- FAILING")[1].split("-- DEGRADED")[0];
+  assertStringIncludes(failingBlock, "ai-article-pipeline: 1 of 1 runs failed");
+  assertStringIncludes(failingBlock, "suggest-article-topics failed: 500");
+  assert(
+    !failingBlock.includes("validate-source-urls"),
+    "a partial run must not be reported as the job throwing",
+  );
+
+  const degradedBlock = lines.split("-- DEGRADED")[1].split("-- SUCCEEDING")[0];
+  assertStringIncludes(degradedBlock, "validate-source-urls");
+  assertStringIncludes(degradedBlock, "3 item(s) failed");
+
+  // A healthy job appears in neither bucket.
+  assert(!/cleanup-old-events: \d+ of/.test(lines));
 });
 
+Deno.test("a job that always succeeds while processing nothing is called out", () => {
+  // 247 green runs that processed 0 items is indistinguishable from 247 runs
+  // with nothing to do - the empty-scan trap, and the reason this section exists.
+  const lines = reviewLines(
+    [run({ job_name: "moderate-content", status: "success", items_processed: 0 }),
+     run({ job_name: "moderate-content", status: "success", items_processed: 0 })],
+    7,
+  ).join("\n");
+  const block = lines.split("-- SUCCEEDING WITHOUT DOING ANYTHING --")[1];
+  assertStringIncludes(block, "moderate-content: 2 run(s), all succeeded, 0 items processed");
+});
+
+Deno.test("NEGATIVE CONTROL - a job that processes work is not called a no-op", () => {
+  const lines = reviewLines([run({ job_name: "cleanup-old-events", items_processed: 944 })], 7).join("\n");
+  const block = lines.split("-- SUCCEEDING WITHOUT DOING ANYTHING --")[1];
+  assertStringIncludes(block, "none");
+});
 Deno.test("an empty window says so rather than reporting a clean sheet", () => {
   const lines = reviewLines([], 7).join("\n");
   assertStringIncludes(lines, "UNAVAILABLE");

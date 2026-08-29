@@ -3701,3 +3701,27 @@ Verified: esbuild parse clean, tsc -p tsconfig.functions.json clean, 5/5 tests, 
 - A read error must throw rather than fall through to an empty list, or a broken query renders as a healthy
   quiet week - the exact shape of the defect these reports exist to avoid.
 ---
+
+## 2026-08-29 - AOS-MANAGE-007 follow-up: failing, degraded and no-op are three things
+Correcting my own report from the previous entry, which called three jobs "never succeeded" and flattened
+three different conditions into one.
+
+Files changed:
+- supabase/functions/agent-performance-review/index.ts - JobStats gains errored/partial; three sections
+- supabase/functions/_tests/agent-performance-review.test.ts - 7 tests (was 5)
+- prd.json - AOS-MANAGE-007 notes
+
+**Learnings for future iterations:**
+- **status != 'success' is not one condition.** `failed` means the job threw; `partial` means it completed and
+  its ITEMS failed, and jobRunner reports ok=TRUE for partial - so a degraded job is invisible to anything
+  watching run status. validate-source-urls has been partial 22 of 22 times with 33 items failed and no error
+  recorded, and nothing in the project was looking at it.
+- **A job that always succeeds while processing nothing is its own failure mode.** moderate-content: 247 green
+  runs, 0 items processed. Indistinguishable from 247 runs with nothing to do - the empty-scan trap
+  WEB-CI-027 found across 34 check scripts, now found in the agent fleet.
+- **None of this is WEB-OPS-007.** That counts jobs that never START. These start, reach their function and
+  fail inside it, which cron_health cannot see. Two different problems that both look like "the automation
+  does not work".
+- A test that fails can be the test's fault. Mine scoped an assertion to everything before a section header,
+  which included the summary listing that names every job. Check which side is wrong before changing code.
+---
