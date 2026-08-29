@@ -229,21 +229,24 @@ android {
 tasks.withType<Test> {
     useJUnitPlatform()
 
-    // DeepLinkManifestParityTest reads AndroidManifest.xml and DeepLinkHandler.kt
-    // as TEXT rather than exercising compiled code, and neither is on the unit
-    // test runtime classpath - so Gradle sees no reason to re-run the suite when
-    // one of them changes. Measured: deleting a host from the manifest left the
-    // task UP-TO-DATE and the build green; the same edit under --rerun-tasks
-    // fails the test correctly.
+    // Three parity suites (DeepLinkManifestParityTest, ShortcutManifestParityTest,
+    // RouteRegistrationTest) read project files as TEXT rather than exercising
+    // compiled code, and Gradle cannot see that.
     //
-    // CI never noticed because it checks out fresh every run. Locally it means
-    // the guard goes green immediately after you break the thing it guards,
-    // which is worse than not having it. Declaring the files as inputs is the
-    // whole fix.
+    // ONLY THE NON-COMPILED ONES NEED DECLARING, which was worth measuring
+    // rather than listing everything the tests read. A .kt file under
+    // src/main/java is already an input by way of the classes it compiles to:
+    // renaming a host in DeepLinkHandler.kt fails the parity tests with no
+    // declaration at all. The manifest, res/xml and an androidTest source are
+    // on no unit-test classpath, so without these lines the task stays
+    // UP-TO-DATE when they change.
+    //
+    // Measured, because the failure is silent: deleting a host from the manifest
+    // left testDebugUnitTest UP-TO-DATE and the build GREEN, while the same edit
+    // under --rerun-tasks failed correctly. CI never sees it - it checks out
+    // fresh - so the only person the stale guard misleads is whoever is editing.
     inputs.files(
         layout.projectDirectory.file("src/main/AndroidManifest.xml"),
-        layout.projectDirectory.file("src/main/java/com/desmoines/aipulse/util/DeepLinkHandler.kt"),
-        layout.projectDirectory.file("src/main/java/com/desmoines/aipulse/util/ShortcutDispatcher.kt"),
         layout.projectDirectory.file("src/main/res/xml/shortcuts.xml"),
         layout.projectDirectory.file("src/androidTest/java/com/desmoines/aipulse/util/ShortcutDispatcherUriTest.kt"),
     )
