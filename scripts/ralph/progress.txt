@@ -3011,3 +3011,37 @@ return the tally to anon, so the Best-Of leaderboard is untouched.
   `RESET ROLE` before switching identities. Wrap in BEGIN/ROLLBACK and \i the migration inside it - the
   policy change and its proof then live in one transaction that touches nothing.
 ---
+
+## 2026-08-29 - WEB-SEC-024 (where SCRAPER_USER_AGENT actually goes)
+AC3's decision has been open for months as a question of appetite. It is also a question of feasibility, and
+nobody had checked: on the default backend, changing SCRAPER_USER_AGENT changes nothing a crawled site sees.
+
+Files changed:
+- supabase/functions/_shared/scraper.ts - config.userAgentDeclared, and the Firecrawl body now forwards the
+  UA via the documented `headers` field when (and only when) SCRAPER_USER_AGENT is set
+- supabase/functions/_tests/scraper-user-agent.test.ts - NEW, 4 cases
+- prd.json - WEB-SEC-024 notes
+
+Verified: 4/4 new tests pass, robots.test.ts still 13/13, scraper.ts parse-checked through esbuild.
+Ships no behaviour change on its own - with the env var unset the Firecrawl body is byte-identical.
+
+**Learnings for future iterations:**
+- **A User-Agent header on the request to a scraping SERVICE is not the User-Agent the crawled site sees.**
+  scraper.ts:110 sets it on the fetch to browserless.io; browserless then drives its own headless Chrome. Same
+  class of mistake as setting a header on a proxy and believing it reached the origin. Check which hop each
+  header is on before reasoning about what a third party observes.
+- **browserless REST cannot set the page User-Agent on non-enterprise plans.** Shared request config has no
+  userAgent and no setExtraHTTPHeaders; Chrome flags go via ?launch={"args":[...]} and --user-agent is not in
+  the publicly available flag set. Reaching it needs the WebSocket/puppeteer surface (page.setUserAgent) or a
+  plan change. Firecrawl's /v1/scrape DOES take a `headers` object.
+- **Gate a plumbing fix on an explicit opt-in when the default is a production behaviour.** userAgentDeclared
+  = !!Deno.env.get('SCRAPER_USER_AGENT') means the fix is inert until someone chooses an identity, so the
+  commit that makes a decision POSSIBLE is not the commit that takes it. Pin it with a negative-control test
+  asserting the default request has no `headers` key, or the test passes while production behaviour moves.
+- **url_sources is dead.** 38 active rows, every one last_crawled NULL / total_crawls 0 / success_rate 0.00.
+  Nothing writes it. Do not use it to reason about what the crawler visits (WEB-QA-017 shape).
+- Per-domain ingest recency is one query and worth running before believing any crawler claim:
+    select split_part(regexp_replace(source_url,'^https?://',''),'/',1) host, count(*), max(created_at)::date
+    from events where source_url is not null group by 1 order by 2 desc;
+  It showed seatgeek frozen at 2026-08-21 while four other sources ingested on 2026-08-29.
+---
