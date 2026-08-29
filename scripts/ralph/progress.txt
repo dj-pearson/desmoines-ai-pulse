@@ -4171,3 +4171,30 @@ the .kt entries and re-running the mutation.
 Codebase pattern: before doing work a story defers to another story for, MEASURE
 the blocker. This one had been fixed and not written down, and it was holding up
 two other stories.
+
+================================================================================
+2026-08-29  WEB-LEGAL-011 AC8 - bucket posture, provable with the anon key
+================================================================================
+check-bucket-posture.ts said the anon key "cannot distinguish posture at all".
+True of GET /storage/v1/bucket, which is what was measured. Not true of the
+public OBJECT endpoint:
+
+    public bucket, missing key   ->  NoSuchKey     (bucket resolved)
+    private bucket, missing key  ->  NoSuchBucket  (did not resolve)
+
+So ad-creatives-review is confirmed NOT anonymously readable in production -
+the guarantee WEB-LEGAL-011 was built to make, previously verified only by
+reading the migration. And user-uploads (WEB-QA-020) is confirmed closed.
+
+The asymmetry is the right way round: it proves PUBLIC positively and cannot
+tell private from absent, so it gates the direction that matters and only
+reports the other.
+
+New check runs in pr-checks.yml on the anon key. The service-role key is an
+ENVIRONMENT secret scoped to "Scrape", so the existing check can only run in the
+nightly audit - a PR that reopened a bucket had until morning.
+
+Codebase pattern: when a tool's header says a credential "cannot" do something,
+check WHICH endpoint that was measured on. The claim is usually true and
+narrower than it reads, and the cheaper credential often answers a differently
+shaped version of the same question.
