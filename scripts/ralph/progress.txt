@@ -4069,3 +4069,32 @@ at. Now in both, with check-sitemap-redirects.mjs gating both directions.
 Codebase pattern: when a redirect is added to resolve a duplication, check what
 happened to the winner. The loser gets the attention; the winner is the one that
 has to be reachable.
+
+================================================================================
+2026-08-29  AND-AUDIT-014 AC4 - deep-link routing now has device coverage
+================================================================================
+DeepLinkHandler had zero tests of either kind and is the entry point for every
+shared link, notification tap and app shortcut. It cannot be unit tested: every
+branch runs through android.net.Uri, which returns null under
+isReturnDefaultValues - the vacuous pass this story is named for.
+
+20 instrumentation tests (26 on the device now, 0 failures, 41s), plus a JVM
+test comparing DeepLinkHandler's hosts against AndroidManifest.xml in both
+directions - the rule the manifest states and nothing enforced.
+
+TWO THINGS MUTATION TESTING FOUND, both about my own work:
+
+  Removing the auth-callback passthrough failed only ONE of the two tests I
+  wrote for it. parseCustomScheme already rejects host "auth-callback", so the
+  guard is redundant on the path the app actually uses. I would have claimed
+  both tests covered it.
+
+  The parity test reads two files as TEXT, and neither is on the unit-test
+  runtime classpath - so Gradle left the task UP-TO-DATE and the build GREEN
+  after I deleted a host from the manifest. Same edit under --rerun-tasks
+  failed correctly. Fixed by declaring both files as Test task inputs.
+
+Codebase pattern: a test that reads source files escapes Gradle's input
+tracking. It will pass locally right after you break what it guards, and CI
+hides it because a fresh checkout always re-runs. Declare the files as inputs,
+then mutate WITHOUT --rerun-tasks to prove it.
