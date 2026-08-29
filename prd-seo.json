@@ -73,7 +73,7 @@
       "title": "Trailing-slash URLs are indexed separately and split impressions",
       "priority": 2,
       "phase": 1,
-      "passes": false,
+      "passes": true,
       "description": "As a hub page, I need one indexed URL, because /restaurants (20,789 impressions, position 24.4) and /restaurants/ (5,401 impressions, position 25.1) are both in the index. The same split exists on /events, /events/date-night, /playgrounds and /stay. Both forms return 200. The canonical on the slashed form correctly points at the unslashed one so Google will consolidate eventually, but it is currently splitting impressions across two URLs on our worst-performing pages.",
       "acceptanceCriteria": [
         "301 the trailing-slash form to the canonical unslashed form at the edge, in Cloudflare Pages _redirects or equivalent. Do not rely on the canonical alone; it is working and it is slow.",
@@ -82,7 +82,7 @@
         "Verify with curl that the slashed form returns 301 and the unslashed returns 200, on at least the five affected hubs.",
         "Confirm no redirect chain and no loop."
       ],
-      "notes": ""
+      "notes": "DONE 2026-08-29 (code); the 301 itself is verifiable on deploy. Re-measured first, because the original evidence was wrong in one place: my earlier probe used `curl -L`, which FOLLOWS redirects and reports the FINAL status, so /weekend read as 200 when it was already a working 301 from WEB-SEO-007. Re-run without -L, the genuine offenders are /restaurants/, /events/, /playgrounds/, /stay/ and /events/date-night/, all returning 200. Implemented as trailingSlashRedirect() in functions/_middleware.ts rather than a /*/ rule in public/_redirects. _redirects cannot express 'except assets', and the middleware already computes that exclusion one block above - a blanket splat rule would also catch asset paths and the directory-style requests Pages resolves itself. Unslashed is the convention because every canonical on the site already declares it; choosing the other direction would have meant rewriting every canonical instead of adding one redirect. Query strings and fragments are preserved, since a 301 that drops them loses the filter or UTM tag that brought the visitor - more traffic than the duplication costs. 23 checks in functions/__tests__/middleware-trailing-slash.test.mjs. The loop cases are asserted as hard as the redirect: '/' must not redirect (it is the one trailing slash on the site that is not a duplicate), a path of only slashes must not strip to an empty path that a browser resolves back to '/', and following the redirect once must reach a URL that does not redirect again - a chain leaks PageRank and reports as a soft error. VERIFIED NO COLLATERAL: public/_routes.json includes /* with no exclusions, so the middleware runs on these paths; all 8 sitemaps carry exactly ONE trailing-slash URL and it is the homepage, which is excluded; and no internal <Link to> in src ends in a slash. So nothing we publish or link now points at a redirect."
     },
     {
       "id": "SEO-005",

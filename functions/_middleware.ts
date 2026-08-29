@@ -214,6 +214,30 @@ function withSelfCanonical(shell: Response, pageUrl: string): Response {
   });
 }
 
+/**
+ * SEO-004: the absolute URL a trailing-slash request should 301 to, or null if
+ * the request is already canonical.
+ *
+ * Exported so it can be tested; the redirect itself is one line in onRequest.
+ *
+ * Returns null for "/" - the one trailing slash on the site that is not a
+ * duplicate - and preserves the query string and fragment, because a 301 that
+ * drops them loses the filter or the UTM tag that brought the visitor, which
+ * would cost more traffic than the duplication it fixes.
+ */
+export function trailingSlashRedirect(url: URL): string | null {
+  const pathname = url.pathname;
+  if (pathname.length <= 1 || !pathname.endsWith("/")) return null;
+  const target = new URL(url.toString());
+  const stripped = pathname.replace(/\/+$/, "");
+  // A path of only slashes strips to "", which serialises to a URL with no path
+  // that a browser resolves straight back to "/" - a redirect loop. Treat it as
+  // already canonical instead.
+  if (stripped === "") return null;
+  target.pathname = stripped;
+  return target.toString();
+}
+
 export async function onRequest(context: EventContext) {
   const url = new URL(context.request.url);
   const pathname = url.pathname;
@@ -225,6 +249,34 @@ export async function onRequest(context: EventContext) {
   ) {
     return context.next();
   }
+
+  // SEO-004: one URL per page. A trailing slash 301s to the unslashed form.
+  //
+  // Measured 2026-08-28: /restaurants and /restaurants/ were BOTH indexed and
+  // both returned 200 - 20,789 impressions at position 24.4 against 5,401 at
+  // 25.1, which is the same page competing with itself. /events, /playgrounds,
+  // /stay and /events/date-night had the same split.
+  //
+  // The canonical tag was already right (the slashed form points at the
+  // unslashed one), and it was already working in the sense that Google will
+  // consolidate eventually. Eventually is the problem: this is splitting
+  // impressions across our WORST-performing pages, the hubs, right now.
+  //
+  // Unslashed is the convention because that is what every canonical on the
+  // site already declares. Picking the other direction would have meant
+  // rewriting every canonical instead of adding one redirect.
+  //
+  // THIS RUNS AFTER THE ASSET BYPASS ON PURPOSE. A blanket /*/ rule in
+  // public/_redirects would also catch asset paths and directory-style requests
+  // that Pages resolves itself, and _redirects cannot express "except assets".
+  // Here the exclusion is already computed one block up.
+  //
+  // The root is excluded because "/" IS the canonical homepage - the one
+  // trailing slash on the site that is not a duplicate. Query strings and
+  // fragments are preserved, or a 301 would silently drop a filter or a UTM tag
+  // and the redirect would lose the very traffic it is meant to consolidate.
+  const slashRedirect = trailingSlashRedirect(url);
+  if (slashRedirect) return Response.redirect(slashRedirect, 301);
 
   // --- WEB-FEAT-008: per-entity OG meta for social crawlers on detail routes ---
   try {
