@@ -92,7 +92,7 @@ import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.MarkerComposable
-import com.google.maps.android.compose.MarkerState
+import com.google.maps.android.compose.rememberMarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -159,7 +159,7 @@ fun MapScreen(
                 val isSelected = state.selectedEvent?.id == annotation.event.id
                 MarkerComposable(
                     keys = arrayOf<Any>(annotation.id, isSelected),
-                    state = MarkerState(position = annotation.position),
+                    state = rememberMarkerState(key = annotation.id, position = annotation.position),
                     title = annotation.event.title,
                     onClick = {
                         onSelectEvent(annotation.event)
@@ -179,7 +179,7 @@ fun MapScreen(
                 val isSelected = state.selectedRestaurant?.id == annotation.restaurant.id
                 MarkerComposable(
                     keys = arrayOf<Any>(annotation.id, isSelected),
-                    state = MarkerState(position = annotation.position),
+                    state = rememberMarkerState(key = annotation.id, position = annotation.position),
                     title = annotation.restaurant.name,
                     onClick = {
                         onSelectRestaurant(annotation.restaurant)
@@ -195,7 +195,7 @@ fun MapScreen(
                 val isSelected = state.selectedAttraction?.id == annotation.attraction.id
                 MarkerComposable(
                     keys = arrayOf<Any>(annotation.id, isSelected),
-                    state = MarkerState(position = annotation.position),
+                    state = rememberMarkerState(key = annotation.id, position = annotation.position),
                     title = annotation.attraction.name,
                     onClick = {
                         onSelectAttraction(annotation.attraction)

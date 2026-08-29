@@ -58,7 +58,7 @@ import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Marker
-import com.google.maps.android.compose.MarkerState
+import com.google.maps.android.compose.rememberMarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -389,7 +389,11 @@ private fun TripMapPreview(locations: List<String>) {
             ),
         ) {
             markers.forEach { (name, position) ->
-                Marker(state = MarkerState(position = position), title = name)
+                // rememberMarkerState keyed by name: MarkerState(...) built inline was
+                // reallocated on every recomposition, which lint flags as an error
+                // (UnrememberedMutableState) because the marker loses any state it
+                // holds. AND-AUDIT-013.
+                Marker(state = rememberMarkerState(key = name, position = position), title = name)
             }
         }
     }

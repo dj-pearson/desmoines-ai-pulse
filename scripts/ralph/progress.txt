@@ -3110,3 +3110,40 @@ tink-android 1.8.0. The catalog now has zero alpha/beta/rc pins.
 - A stability downgrade can silently block a sibling story - check first. biometric 1.1.0 still has
   Authenticators.DEVICE_CREDENTIAL, which AND-AUDIT-007's AC4 needs, so this bump does not cost that story.
 ---
+
+## 2026-08-29 - AND-AUDIT-013 (lint can now fail the build, and it is proven to)
+The gate is up. The four error-severity findings - the only ones in the project - were fixed rather than
+baselined, so the baseline holds 198 warnings and one hint and nothing that could fail a build.
+
+Files changed:
+- android/app/build.gradle.kts - abortOnError/checkReleaseBuilds true, baseline declared
+- android/app/lint-baseline.xml - NEW, 198 entries
+- android/app/src/main/AndroidManifest.xml - VIBRATE declared
+- MapScreen.kt (3 sites) + ItineraryDetailScreen.kt (1) - rememberMarkerState instead of inline MarkerState
+- prd.json - AND-AUDIT-013 notes
+
+Verified: lint "no new issues", assembleDebug SUCCESS, 346 tests / 0 failures. Mutation: one MarkerState
+back inline gives "Lint found 1 error ... aborting build. BUILD FAILED".
+
+**Learnings for future iterations:**
+- **`abortOnError = true` fails on ERROR severity only; warnings never fail the build.** So the baseline is
+  not what makes turning the gate on safe - of 209 findings only 4 were errors. Check the severity split
+  before assuming a baseline is load-bearing, and remember the gate only ever catches new *errors*.
+- **Lint writes the baseline and then fails the build on purpose** ("Aborting build since new baseline file
+  was created"). That first failure is expected; re-run. Delete and regenerate the baseline after fixing
+  anything, or the fixed findings stay suppressed and the count lies.
+- **Prove a gate by breaking it.** Re-introducing one inline MarkerState turned lint red with the exact file
+  and line. A gate nobody has seen fail is indistinguishable from the abortOnError=false it replaced.
+- **Read the SARIF, not the HTML.** build/reports/lint-results-debug.sarif parses in a few lines of python
+  and gives counts by rule, category and severity. The HTML report is the thing nobody opens, which is how
+  this story exists.
+- **maps-compose 6.2.1 ships `rememberMarkerState(key, position)`.** Constructing `MarkerState(position=...)`
+  inline in a `forEach` is an error-level Compose defect (state reallocated per recomposition). Confirmed the
+  API from the AAR in ~/.gradle/caches rather than from docs - maps-compose is on Maven Central, not Google
+  Maven, so the dl.google.com probe used elsewhere returns 404 for it.
+- **"Correctness" in lint is not all defects.** 35 of 58 were NewerVersionAvailable / GradleDependency /
+  AndroidGradlePluginVersion / OldTargetApi - dependency-freshness nags. Triage by rule before promising to
+  fix a category.
+- A permission finding on a class with no callers is a landmine, not a bug. HapticHelper would have thrown
+  SecurityException on the first caller; grep for call sites before deciding how urgent a finding is.
+---

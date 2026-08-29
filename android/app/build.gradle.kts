@@ -169,8 +169,22 @@ android {
     }
 
     lint {
-        checkReleaseBuilds = false
-        abortOnError = false
+        // AND-AUDIT-013. Both of these were false, so `./gradlew lint` in
+        // android-ci.yml always passed and every finding landed in an HTML
+        // report nobody opened. Fifteen locale bugs, a missing
+        // POST_NOTIFICATIONS declaration and unguarded startActivity calls
+        // all shipped while lint knew about them.
+        //
+        // The release variant is the one that ships, so it is the one that
+        // most needs checking.
+        checkReleaseBuilds = true
+        abortOnError = true
+
+        // The 202 findings that existed when the gate went up. This exists
+        // so NEW findings fail the build; it is not a verdict that any of
+        // them is acceptable. See the AND-AUDIT-013 notes in prd.json for
+        // the per-category triage, and burn it down rather than growing it.
+        baseline = file("lint-baseline.xml")
     }
 }
 
