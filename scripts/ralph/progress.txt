@@ -30,6 +30,9 @@ Started: 2026-06-12T01:18:32.104Z
 - **Job Health re-run sends `{manual:true}`** (JobHealthPanel.rerun), not your custom body. A fn with multiple modes must treat `manual===true` as its default/safe mode (e.g. a sweep), else the re-run button 400s. Other single-purpose jobs just ignore the manual flag.
 - **PAUSE semantics for a GATING pipeline:** when the paused job is a visibility GATE (not a generator), pausing must TRUST-THROUGH (force-approve pending items) — otherwise pending content is stranded hidden forever. Contrast generator pipelines (article/digest) where pause just early-exits with no side effect.
 
+- **Android: gradlew fails on this machine until you override GRADLE_USER_HOME.** The env var points at `C:/Users/pears/scoop/apps/gradle/current/.gradle` - inside a scoop junction that moves on every gradle update - so the caches there are a mix of Gradle 8.13/9.6.1 artifacts while the wrapper is 9.3.1. Every invocation dies with `Unresolved reference 'plugins'` at settings.gradle.kts:14, which reads like a broken settings script and is not: the copy it compiles lives under that stale GRADLE_USER_HOME. `GRADLE_USER_HOME=$HOME/.gradle ./gradlew ...` builds clean (first run re-downloads the 9.3.1 distribution; ~5 min for a cold compileDebugKotlin). Several Android stories in this PRD are recorded as 'CI-only, cannot build here' - re-test that claim before repeating it.
+- **Verify a dependency bump against the shipped bytecode, not the release notes.** `javap` over the AAR's classes.jar answers questions no changelog does: whether a getter is still @RecentlyNullable, whether a new flag defaults to false, whether an AAR declares minCompileSdk at all (billing 9.1.0 ships NO aar-metadata.properties, so it does not force compileSdk 37). Download from dl.google.com/dl/android/maven2/<group path>/<artifact>/<ver>/<artifact>-<ver>.aar, unzip classes.jar, `javap -p -c -cp <dir> <FQCN>`. Google Maven IS reachable from this machine.
+
 ---
 ## 2026-06-12 - WEB-AUTO-006 (Stale-event lifecycle: soft-hide → archive → purge)
 Replaced the single-phase hard-delete with a two-phase, observable, recoverable lifecycle.
@@ -2856,3 +2859,40 @@ Left unfixed and recorded instead: the guard matches gradle.startParameter.taskN
 so `./gradlew build` reaches assembleRelease as a dependency with no matching
 string in the requested task names. Pre-existing, and fixing it means a
 variant-scoped check, which is a bigger change than this story asked for.
+
+## 2026-08-29 - AND-AUDIT-003 (Play Billing 7.1.1 -> 9.1.0)
+Bumped `playBilling` in android/gradle/libs.versions.toml. BillingService.kt is untouched, and that is the
+finding rather than the shortcut: every one of the 31 billing symbols it uses is present and unchanged in
+9.1.0, checked with javap against the shipped AAR before the build was trusted.
+
+Files changed:
+- android/gradle/libs.versions.toml - playBilling 7.1.1 -> 9.1.0 (one line)
+- prd.json - AND-AUDIT-003 notes
+
+Verified locally (first Android story in this PRD to actually build here - see the GRADLE_USER_HOME pattern
+above, which is what unblocked it):
+    :app:compileDebugKotlin   BUILD SUCCESSFUL 4m47s, zero new warnings
+    :app:testDebugUnitTest    BUILD SUCCESSFUL 2m
+    debugRuntimeClasspath     billing-ktx:9.1.0 -> billing:9.1.0, androidx.core 1.15.0 (9.x needs >= 1.9)
+
+**Learnings for future iterations:**
+- The 8.0.0 breaking change (onProductDetailsResponse now hands back QueryProductDetailsResult) only bites
+  callers who implement ProductDetailsResponseListener. BillingService uses the ktx suspend
+  `queryProductDetails`, and the ProductDetailsResult wrapper absorbed the change - .productDetailsList is
+  still there and still @RecentlyNullable in 9.1.0, same as 7.1.1, so the `?: emptyList()` is not a dead
+  elvis. Check which API surface you are actually on before pricing a "breaking" change.
+- The one real revenue risk was 8.1's suspended subscriptions: updatePurchasedProducts grants entitlement on
+  purchaseState == PURCHASED, so if queryPurchasesAsync had silently started returning suspended subs it
+  would have unlocked premium for people who stopped paying. It does not - decompiled
+  QueryPurchasesParams$Builder and the new includeSuspendedSubscriptions flag is a private field the
+  constructor sets to false, and build() throws if it is set on a non-subs query. Opt-in, not default.
+  Purchase.isSuspended() now exists and is unread, which is correct only while we stay opted out.
+- What the ktx path costs us: 8.0.0 added unfetchedProductList with per-product status codes, the wrapper
+  does not expose it, so a product that fails to fetch still looks identical to one that does not exist and
+  BillingService.kt:219 logs "No products found" for both. Diagnosable now, and not being diagnosed.
+- This bump is NOT gated on AND-AUDIT-005's AGP move. billing-9.1.0.aar carries no aar-metadata.properties,
+  so it declares no minCompileSdk and is happy on compileSdk 36. Do not sequence the two together.
+- AC7 (a real purchase on an internal-testing track) is the only criterion left and needs a device plus a
+  Play test account. passes stays false for that reason alone; nothing else in the story is open. Play's
+  deadline is 31 Aug 2026 and the library requirement itself is satisfied by this commit.
+---
