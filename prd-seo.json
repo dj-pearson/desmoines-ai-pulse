@@ -1,0 +1,348 @@
+{
+  "project": "Des Moines Insider - SEO uplift against Catch Des Moines",
+  "branchName": "main",
+  "description": "Derived from docs/seo-plan-2026-08-28.md. Baselines measured 2026-08-28 from the 16-month Search Console export and live fetches. Three phases in dependency order: fix what the crawler sees, rebuild the hubs to win discovery terms, then expand into uncovered query space. Phase 2 does not pay off until phase 1 lands, because a hub nobody can read is not a hub that ranks.",
+  "baselines": {
+    "measuredOn": "2026-08-28",
+    "window": "16 months",
+    "clicks": 2293,
+    "impressions": 236225,
+    "ctrPercent": 0.97,
+    "avgPosition": 13.8,
+    "validEventRichResults": 6,
+    "invalidFaqItems": 30,
+    "entityPagesServingOwnTitleToJsLessCrawler": 0,
+    "entityPagesTotal": 1070,
+    "discoveryIntentCtrPercent": 0.92,
+    "discoveryIntentWeightedPosition": 23.8,
+    "coreTermPositionRange": "30 to 57, zero clicks on all nine"
+  },
+  "userStories": [
+    {
+      "id": "SEO-001",
+      "title": "Entity pages serve the homepage to every crawler that does not run JavaScript",
+      "priority": 1,
+      "phase": 1,
+      "passes": false,
+      "description": "As an AI search crawler that robots.txt invites by name, I need each entity page to be itself, because right now /restaurants/atlas-caf, /restaurants/marvs-mainstreet-dive, /attractions/pappajohn-sculpture-park and /events/touch-a-truck-2026-05-22 all return the homepage title 'Things to Do in Des Moines This Weekend', the homepage H1 'Good Afternoon!...', and zero JSON-LD. scripts/prerender.mjs renders the 43 hub routes in PRERENDER_ROUTES and gates the entity pass behind PRERENDER_ENTITIES=true, which is off, so about 1,070 of the 1,109 URLs in our own sitemaps are near-identical copies of the homepage to GPTBot, OAI-SearchBot, ChatGPT-User, ClaudeBot, PerplexityBot and Applebot-Extended.",
+      "acceptanceCriteria": [
+        "Enable the entity prerender pass in the production build. Do NOT remove or weaken the per-page validation it already performs - the gate is fail-closed for a recorded reason: on a build with an unreachable database all 877 entity URLs produced the same ~1,370 characters of boilerplate with no title and no canonical, and publishing those would replace a page Google renders properly with static thin content.",
+        "The existing strict check that a page rendered AS ITSELF must still run and must still refuse to write a page that did not. Satisfy the check; do not bypass it.",
+        "Respect PRERENDER_ENTITY_BUDGET_SECONDS. Cloudflare Pages kills a build at 20 minutes and vite build already costs ~70s. Measured rate was ~0.94 s/route at concurrency 3. If the full set does not fit the budget, prioritise by sitemap: events first, then restaurants, then attractions and playgrounds.",
+        "Verify with curl and no JavaScript, on the deployed site, that a sample of at least 10 entity pages across all four types each return their OWN title, their OWN H1, and at least one ld+json block. Record the count that pass.",
+        "Counter-assertion: confirm at least one page correctly FAILS validation and is skipped when its data is missing, so the check is not vacuous.",
+        "Report the number of entity pages serving their own title as a measured figure against the baseline of 0 of ~1,070."
+      ],
+      "notes": ""
+    },
+    {
+      "id": "SEO-002",
+      "title": "Event rich results fell from 72 valid to 6 and nine required fields are missing",
+      "priority": 1,
+      "phase": 1,
+      "passes": false,
+      "description": "As a site publishing 462 event URLs, I need Google to credit more than 6 of them with a rich result. The committed Search Console report at desmoinesinsider.com-Events-2026-03-08/ shows valid items peaking at 72 in December, holding 57 on 2026-03-02, then dropping to 6 from 2026-03-03 onward with zero critical issues. The nine non-critical issues are missing endDate, image, eventStatus, description, performer, organizer, and availability/validFrom/url inside offers. The Search Appearance export for the entire 16 months is empty, which is consistent with the site earning no enhanced result of any kind.",
+      "acceptanceCriteria": [
+        "Add the missing fields to Event JSON-LD on detail pages AND in the ItemList on every listing page: endDate, eventStatus, eventAttendanceMode, offers (with url, availability, validFrom), organizer, performer, description, image.",
+        "eventStatus and eventAttendanceMode have been effectively required since 2020 and are absent everywhere. Default eventStatus to EventScheduled and eventAttendanceMode to OfflineEventAttendanceMode only where the data genuinely supports it.",
+        "A field with no data must be OMITTED, never filled with a placeholder. A fabricated performer or a guessed endDate is worse than a missing field: it is wrong data on a live page and Google will eventually treat it as such.",
+        "Investigate WHY valid items dropped 57 to 6 on 2026-03-03. That is a cliff, not a decay, and something changed. Find it before assuming the field work fixes it.",
+        "Validate the output against Google's Rich Results Test or the schema.org validator for at least 5 event pages, and record pass/fail per page.",
+        "Measure against the baseline of 6 valid items once Search Console re-crawls. State clearly that this figure lags and cannot be confirmed on ship day."
+      ],
+      "notes": ""
+    },
+    {
+      "id": "SEO-003",
+      "title": "Two FAQPage blocks on one page make 30 items invalid",
+      "priority": 2,
+      "phase": 1,
+      "passes": false,
+      "description": "As a page emitting structured data, I need exactly one FAQPage block, because the Search Console FAQ report shows 30 invalid against 8 valid with the critical issue 'Duplicate field FAQPage'. Seventeen source files reference FAQ schema and several pages compose both a page-level FAQ and a component that emits its own.",
+      "acceptanceCriteria": [
+        "Find every page that emits more than one FAQPage block. The candidates are the 17 files referencing FAQSchema or FAQPage, including ArticleDetails, DateNightEvents, DietaryRestaurants, EventsByLocation, EventsThisWeekend, EventsToday, FreeEvents, GettingAround, KidsEvents, OpenNowRestaurants, and the Enhanced*SEO components.",
+        "One declaration, imported. A page composes FAQ CONTENT; exactly one component renders the FAQPage block. Two components each emitting their own is how this drifted.",
+        "Add a test asserting no rendered page emits more than one FAQPage block, with a counter-assertion proving the test fires on a page that really does emit two.",
+        "Be honest about the value in the writeup: Google restricted FAQ rich results to government and health sites in August 2023 and this report shows 0 impressions from the enhancement across the window. This wins no clicks directly. It is worth doing because an invalid block is noise in every future validation run and because AI search reads JSON-LD whether or not Google draws a widget.",
+        "Measure against the baseline of 30 invalid, 8 valid."
+      ],
+      "notes": ""
+    },
+    {
+      "id": "SEO-004",
+      "title": "Trailing-slash URLs are indexed separately and split impressions",
+      "priority": 2,
+      "phase": 1,
+      "passes": false,
+      "description": "As a hub page, I need one indexed URL, because /restaurants (20,789 impressions, position 24.4) and /restaurants/ (5,401 impressions, position 25.1) are both in the index. The same split exists on /events, /events/date-night, /playgrounds and /stay. Both forms return 200. The canonical on the slashed form correctly points at the unslashed one so Google will consolidate eventually, but it is currently splitting impressions across two URLs on our worst-performing pages.",
+      "acceptanceCriteria": [
+        "301 the trailing-slash form to the canonical unslashed form at the edge, in Cloudflare Pages _redirects or equivalent. Do not rely on the canonical alone; it is working and it is slow.",
+        "Pick ONE convention and apply it everywhere. The canonicals already declare unslashed, so unslashed is the convention.",
+        "Do not break the prerender output paths, which write dist/<route>/index.html. Verify the redirect and the prerendered file do not fight: the file must still be served for the canonical form.",
+        "Verify with curl that the slashed form returns 301 and the unslashed returns 200, on at least the five affected hubs.",
+        "Confirm no redirect chain and no loop."
+      ],
+      "notes": ""
+    },
+    {
+      "id": "SEO-005",
+      "title": "Duplicate restaurant records produce -2 slugs that both rank",
+      "priority": 3,
+      "phase": 1,
+      "passes": false,
+      "description": "As a restaurant with one location, I need one page, because /restaurants/bonchon and /restaurants/bonchon-2 are both indexed and both earn clicks (87 and 33), as are /restaurants/daves-hot-chicken and /restaurants/daves-hot-chicken-2. The -2 suffix is the slug generator working around a duplicate row.",
+      "acceptanceCriteria": [
+        "Find every entity slug ending in -N where a base slug also exists, across restaurants, events, attractions and playgrounds.",
+        "Decide per pair whether it is a genuine second location or a duplicate row. Bonchon has both a Des Moines and a West Des Moines presence in the query data, so at least one of these may be legitimate and must not be merged blindly.",
+        "For true duplicates: keep the record with the better content and history, 301 the other, and merge any reviews or media rather than dropping them.",
+        "For genuine second locations: give each a distinct, location-qualified title and slug rather than a -2 suffix.",
+        "Add a guard so the slug generator surfaces a collision instead of silently suffixing it.",
+        "Report the count found and the count merged, split by which of the two cases each fell into."
+      ],
+      "notes": ""
+    },
+    {
+      "id": "SEO-006",
+      "title": "Old brand name leaks into the two places a machine reads first",
+      "priority": 3,
+      "phase": 1,
+      "passes": false,
+      "description": "As the product Des Moines Insider, I need one name, because /events/date-night serves the title '... | Des Moines AI Pulse' and robots.txt opens with '# Des Moines AI Pulse'.",
+      "acceptanceCriteria": [
+        "Find every occurrence of the old brand name in anything a crawler, a user or an AI reads: titles, meta descriptions, JSON-LD Organization and WebSite names, robots.txt, llms.txt, Open Graph tags, manifest.",
+        "Leave internal identifiers alone. A repo name, a package name and a database value are not user-facing and renaming them is a separate, riskier job.",
+        "One declaration for the site name, imported, rather than a literal repeated per page.",
+        "Verify with curl that no live page serves the old name in a title, a meta tag or a JSON-LD name field."
+      ],
+      "notes": ""
+    },
+    {
+      "id": "SEO-007",
+      "title": "Event location emits addressLocality Des Moines for venues that are not in Des Moines",
+      "priority": 2,
+      "phase": 1,
+      "passes": false,
+      "description": "As an event at Mickey's Irish Pub in Waukee, I need my structured data to say Waukee, because the ItemList on /events emits addressLocality 'Des Moines' with the Waukee venue's real geo coordinates. The locality looks hardcoded rather than read from the venue record.",
+      "acceptanceCriteria": [
+        "Read addressLocality from the venue record, not from a constant.",
+        "Where a venue has no locality, OMIT the field rather than defaulting it. A wrong city in structured data is worse than an absent one, and the suburbs are exactly where this site should be strongest against a downtown-focused competitor.",
+        "Check whether the same hardcoding affects addressRegion, postalCode and streetAddress, and whether it also appears on restaurants, attractions and playgrounds.",
+        "Add a test that a non-Des-Moines venue emits its own locality, with a counter-assertion that a venue with no locality emits no field at all.",
+        "Report how many event and venue records carried the wrong locality."
+      ],
+      "notes": ""
+    },
+    {
+      "id": "SEO-008",
+      "title": "Homepage ranks position 30 and competes with two of its own pages",
+      "priority": 2,
+      "phase": 2,
+      "passes": false,
+      "description": "As the homepage, I need my own target, because I rank position 30.03 with 12 clicks in 16 months while my title 'Things to Do in Des Moines This Weekend' targets the same phrase as /events/this-weekend and /weekend. The H1 is 'Good Afternoon! Find things to do in Des Moines, right now', where the greeting is JavaScript state that ends up in the prerendered HTML and in every entity page's shell.",
+      "acceptanceCriteria": [
+        "Re-target the homepage on the brand plus the Des Moines city entity, and let each hub own its own head term. The homepage should not compete with /things-to-do or /events/this-weekend.",
+        "Remove the time-of-day greeting from the H1. It is state, not content, and it is the string currently appearing as the H1 of about 1,070 entity pages.",
+        "Raise unique internal links from the measured 54 toward 150+, into every hub, the top neighborhoods, and the current weekend. Catch Des Moines runs about 250 per hub.",
+        "Keep WebSite, Organization and LocalBusiness. Add SearchAction pointing at /search.",
+        "Re-measure words and unique internal links with the same method used for the baseline (54 links, 2,397 words) so the figures are comparable."
+      ],
+      "notes": ""
+    },
+    {
+      "id": "SEO-009",
+      "title": "The events hub ranks 31.7 for des moines events with zero clicks",
+      "priority": 1,
+      "phase": 2,
+      "passes": false,
+      "description": "As the events hub of a Des Moines events site, I need to rank for 'des moines events', because I am position 31.7 on 177 impressions with zero clicks, and 'events in des moines iowa' is position 53.6, 'upcoming events in des moines' 54.3, 'des moines calendar of events' 52.4. The module has 462 URLs and 30,646 impressions, the best CTR on the site at 1.40%, and it is the single highest-value module.",
+      "acceptanceCriteria": [
+        "Rewrite /events as a real hub: an editorial intro that says what is actually happening in Des Moines, this month's highlights, and links to every sub-route, neighborhood and venue.",
+        "Raise unique internal links from the measured 72 toward 250.",
+        "/events/this-weekend and /events/today are the recurring-traffic pages. Both need a visible, accurate freshness date in the content, not only in the meta.",
+        "/weekend currently serves the same content as /events/this-weekend with a canonical pointing at it. Make it a 301 rather than a duplicate render.",
+        "Keep the ItemList and complete its Event objects per SEO-002.",
+        "Re-measure position on 'des moines events', 'events in des moines iowa', 'upcoming events in des moines' and 'des moines calendar of events' against baselines 31.7 / 53.6 / 54.3 / 52.4."
+      ],
+      "notes": ""
+    },
+    {
+      "id": "SEO-010",
+      "title": "The restaurants hub ranks 52 for its own head term while its detail pages rank 8",
+      "priority": 2,
+      "phase": 2,
+      "passes": false,
+      "description": "As the restaurants hub, I need to rank for 'des moines restaurants', because I am position 52.2 with zero clicks on 629 impressions and position 50.2 for 'best restaurants in des moines', while individual restaurant pages sit at position 7-11 for branded lookups that convert at 0.15%. The module carries 76% of all site impressions and 0.95% CTR. This is the inversion the whole plan is about.",
+      "acceptanceCriteria": [
+        "Rework /restaurants around 'best restaurants in des moines': editorial picks with reasons, not a filtered grid. The hub is the priority; the detail pages are not.",
+        "Raise unique internal links from the measured 77 toward 250.",
+        "Add Restaurant schema to detail pages so they can be cited, and prerender them per SEO-001, but do not invest further in ranking them for branded queries. That traffic is 87,019 impressions at 0.89% and it is structurally the wrong traffic.",
+        "'new restaurants des moines 2026' earns 7.63% CTR at position 7.2, the best-converting query on the site, and it is currently served by a detail page. Give it a real hub page.",
+        "Re-measure position on 'des moines restaurants' and 'best restaurants in des moines' against baselines 52.2 and 50.2."
+      ],
+      "notes": ""
+    },
+    {
+      "id": "SEO-011",
+      "title": "Attractions has produced one click in sixteen months",
+      "priority": 1,
+      "phase": 2,
+      "passes": false,
+      "description": "As the attractions module, I need to exist in a way Google can rank, because I have 22 URLs in the sitemap, 10 pages with any impressions, 760 impressions total and ONE click in 16 months, at 0.13% CTR. 'des moines attractions' is a 50,000-bucket High-competition term and we are position 40.1. This is the largest untouched opportunity on the site and currently its weakest module.",
+      "acceptanceCriteria": [
+        "Rebuild /attractions as a real guide rather than a thin listing. 22 attractions is not a city's worth and the competitor covers considerably more.",
+        "Add TouristAttraction schema to every detail page. The component exists at src/components/schema/TouristAttractionSchema.tsx and is not reaching crawlers.",
+        "Expand coverage to the venue and landmark queries the planner shows: Iowa Events Center, Civic Center, Val Air Ballroom, Wells Fargo Arena, Blank Park Zoo, Pappajohn Sculpture Park, Greater Des Moines Botanical Garden, State Capitol, Science Center of Iowa.",
+        "Do not generate attraction descriptions that assert facts nobody verified. Hours, admission prices and accessibility claims are the fields a visitor acts on and a wrong one sends somebody to a closed building.",
+        "Raise unique internal links from the measured 63 toward 250.",
+        "Re-measure position on 'des moines attractions' against baseline 40.1, and module CTR against 0.13%."
+      ],
+      "notes": ""
+    },
+    {
+      "id": "SEO-012",
+      "title": "The thinnest page on the site targets its most valuable term",
+      "priority": 1,
+      "phase": 2,
+      "passes": false,
+      "description": "As /things-to-do, I need editorial depth, because I am 597 visible words - the thinnest hub on the site - targeting 'things to do in des moines', a 50,000-bucket High-competition term, at position 39.8 with 29 clicks. The competitor's equivalent page is 1,199 words with 255 internal links.",
+      "acceptanceCriteria": [
+        "Rebuild as the top-of-funnel hub: by season, by audience, by neighborhood, by budget, by weather, each linking down into events, attractions, restaurants and outdoors.",
+        "The /things-to-do/:seg1/:seg2 route already exists and festivals, budget, east-village, ankeny and fall already earn impressions with no real content behind them. Give the ones with existing impressions real content first - they are already ranking on nothing.",
+        "Raise unique internal links from the measured 79 toward 250 and word count from 597 to competitive depth.",
+        "Add ItemList or CollectionPage schema matching what the page actually is.",
+        "Re-measure position on 'things to do in des moines', 'things to do in des moines today', 'fun things to do in des moines' and 'des moines activities' against baselines 39.8 / 40.9 / 48.7 / 39.4."
+      ],
+      "notes": ""
+    },
+    {
+      "id": "SEO-013",
+      "title": "Decide what the stay module is for, or stop paying for it",
+      "priority": 3,
+      "phase": 2,
+      "passes": false,
+      "description": "As the operator, I need a decision on /stay, because it is 70 pages producing 6,726 impressions and TWO clicks at 0.03% CTR, and /stay itself is position 52.7 with zero clicks on 2,718 impressions. Hotel search is owned by Booking, Expedia and Google's own hotel panel, and a directory does not break into it by trying harder.",
+      "acceptanceCriteria": [
+        "DECIDED 2026-08-29 by the operator: option (a), invest and scope tightly to event-adjacent intent. The other two options considered and not taken were cutting back to a handful of guide pages, and noindexing the module.",
+        "Build the event-adjacent angle: hotels near a venue, reachable from an event page. 'Which hotel is walkable to the venue I just bought a ticket for' is the one question a local events site can answer better than a booking engine.",
+        "Link venue pages (SEO-018) and event detail pages to the relevant hotels, and the hotels back to the venue. That reciprocal link is the whole value; a hotel page that does not name its nearby venues is the page we already have.",
+        "Do not compete on generic 'hotels in des moines'. That is Booking, Expedia and Google's hotel panel, and /stay is position 52.7 there with zero clicks on 2,718 impressions.",
+        "HotelSchema already exists at src/components/schema/HotelSchema.tsx and is half-wired. Complete it rather than leaving it.",
+        "Do not assert nightly rates, availability or distances nobody verified. A wrong walking distance is the field a visitor acts on at 11pm.",
+        "Re-measure module CTR against the baseline of 2 clicks on 6,726 impressions (0.03%)."
+      ],
+      "notes": "Operator decision recorded 2026-08-29: invest, scoped to event-adjacent intent. Unblocked."
+    },
+    {
+      "id": "SEO-014",
+      "title": "Playgrounds is the best-performing module and nobody is competing",
+      "priority": 3,
+      "phase": 2,
+      "passes": false,
+      "description": "As the playgrounds module, I am quietly the best thing on this site - 47 pages, 6,706 impressions, with riverview-park at 1,366 impressions and several pages at position 6-7 - and nobody else covers this well. I need the cheap wins taken.",
+      "acceptanceCriteria": [
+        "Complete schema on detail pages and prerender them per SEO-001.",
+        "Add real content to the /playgrounds hub, which is position 14.7 on 768 impressions.",
+        "Extend into the family and kids query cluster the planner shows and the site barely touches: 'family activities des moines', 'family things to do in des moines', 'des moines water park', 'kids activities'.",
+        "The /events/kids route already exists and is prerendered. Link the two modules together in both directions.",
+        "Re-measure module CTR against baseline 0.61% and hub position against 14.73."
+      ],
+      "notes": ""
+    },
+    {
+      "id": "SEO-015",
+      "title": "Internal linking runs at a third of the competitor's depth",
+      "priority": 2,
+      "phase": 2,
+      "passes": false,
+      "description": "As a hub page, I need to pass authority down and across, because our hubs carry 54 to 79 unique internal links while catchdesmoines.com hubs carry 242 to 255. The site has 1,109 URLs in its sitemaps and the hubs are not linking to them, which is a large part of why entity pages rank on page one and hubs rank on page three.",
+      "acceptanceCriteria": [
+        "Raise every hub to a comparable link count, using real navigational value rather than a link dump. A footer stuffed with 200 links is not what the competitor is doing.",
+        "Link laterally between modules, not only down: an event links to nearby restaurants, a restaurant links to its neighborhood, a playground links to kids events.",
+        "src/components/seo/InternalLinks.tsx already exists. Use it rather than adding a second mechanism.",
+        "Every article links into its relevant hub and the hub links back.",
+        "Re-measure unique internal links per hub with the same method as the baseline: unique href=\"/...\" values in the served HTML."
+      ],
+      "notes": ""
+    },
+    {
+      "id": "SEO-016",
+      "title": "Month pages for a calendar nobody can browse by month",
+      "priority": 3,
+      "phase": 3,
+      "passes": false,
+      "description": "As somebody planning ahead, I search 'des moines events september 2026', and the site has a MonthlyEventsPage route that serves nothing indexed. 'des moines festivals 2026' already earns 2.51% CTR at position 10.3 with no dedicated page, which is what the demand looks like before anyone has built for it.",
+      "acceptanceCriteria": [
+        "Build twelve rolling month pages plus the current and next year where events exist.",
+        "A month with no events must say so honestly and link onward, never render an empty grid that reads as a broken page.",
+        "Do not publish month pages for periods with no data. A thin page per month across two years is 24 near-empty pages, which is the pSEO trap this plan warns about.",
+        "Add them to the sitemap and the prerender route list.",
+        "Link from /events, /calendar and the weekend pages."
+      ],
+      "notes": ""
+    },
+    {
+      "id": "SEO-017",
+      "title": "Cuisine and occasion pages the query set asks for and the routes half-support",
+      "priority": 3,
+      "phase": 3,
+      "passes": false,
+      "description": "As somebody deciding where to eat, I search by cuisine and by occasion, not by restaurant name. The planner shows steakhouse, italian, mexican, brunch, breakfast, fine dining, patio, rooftop and happy hour demand in Des Moines, and the site has /asian, /bbq, /mexican, /brunch and /italian paths already picking up small impression counts with no real pages behind them.",
+      "acceptanceCriteria": [
+        "Build the cuisine and occasion pages with real editorial picks, not filtered grids of the same 200 restaurants.",
+        "'eatery a happy hour' sits at position 4.1 with 156 impressions and zero clicks, which says the demand is there and the page is not.",
+        "Each page needs enough distinct content to justify existing. If two pages would say the same thing about the same restaurants, build one.",
+        "Add ItemList schema and wire into /restaurants and the neighborhood pages.",
+        "Add to sitemap and prerender routes."
+      ],
+      "notes": ""
+    },
+    {
+      "id": "SEO-018",
+      "title": "Venue pages for the places every concert query names",
+      "priority": 3,
+      "phase": 3,
+      "passes": false,
+      "description": "As somebody searching 'iowa events center' or 'val air ballroom des moines', I want to know what is on there. The planner shows meaningful volume on Iowa Events Center, Wells Fargo Arena, Civic Center, Val Air Ballroom and Surf Ballroom, the /music/venues/:slug route already exists, and 'turnpike troubadours des moines' sits at position 11.3 with 269 impressions and zero clicks.",
+      "acceptanceCriteria": [
+        "Build venue pages carrying the upcoming event list, location, parking and access. The upcoming-events list is the part a ticketing site does not do well for a local audience.",
+        "Add Place and EventVenue schema, and link each event's location at the venue page.",
+        "Do not assert seating capacities, parking prices or access details nobody verified.",
+        "Wire into /events, /music and the relevant attraction pages.",
+        "Add to sitemap and prerender routes."
+      ],
+      "notes": ""
+    },
+    {
+      "id": "SEO-019",
+      "title": "Seasonal editorial is the only thing on this site that reliably ranks, and there are 17 of them",
+      "priority": 3,
+      "phase": 3,
+      "passes": false,
+      "description": "As the content programme, I am 18 URLs. The patio guide earns 13 clicks at position 14.9, the pumpkin patch guide has 2,609 impressions, the fall soups guide 798, the coffee crawl 558. Seasonal editorial ranks here and it is the lever for discovery terms the hubs cannot reach directly. The planner shows 87 seasonal keywords the site does not address.",
+      "acceptanceCriteria": [
+        "Publish against the seasonal cluster on a schedule rather than ad hoc. Fall and holiday are the near-term windows.",
+        "Every article links into its relevant hub and the hub links back, per SEO-015.",
+        "Use the house voice standard. This is public copy and it is the site's own name on it.",
+        "Do not fabricate business details, prices, hours or event dates in an article. Those are the fields a reader acts on.",
+        "Re-measure the module against baseline 51 clicks on 7,469 impressions."
+      ],
+      "notes": ""
+    },
+    {
+      "id": "SEO-020",
+      "title": "Desktop ranks twelve positions worse than mobile and nobody knows why",
+      "priority": 2,
+      "phase": 3,
+      "passes": false,
+      "description": "As the site, I rank position 9.48 on mobile across 136,583 impressions and position 21.41 on desktop across 96,689. A twelve-position gap on the same content is not normal and has not been diagnosed. Desktop is 41% of impressions and earns 27% of clicks.",
+      "acceptanceCriteria": [
+        "Diagnose before fixing. The usual causes are a desktop-breakpoint layout problem, a Core Web Vitals difference, or content that renders on mobile and not on desktop.",
+        "Check Core Web Vitals per device in Search Console and PageSpeed Insights for the same URL on both form factors.",
+        "Check whether any content is conditionally rendered by breakpoint, which would mean Googlebot's mobile-first index sees one page and desktop users another.",
+        "This story is a diagnosis, not a fix. Report the cause and open a separate story for the remedy.",
+        "If the cause cannot be established, say so rather than shipping a speculative change. An unexplained twelve-position gap is worth a real answer."
+      ],
+      "notes": ""
+    }
+  ]
+}
