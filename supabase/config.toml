@@ -110,6 +110,11 @@ verify_jwt = false
 [functions.agent-ops-digest]
 verify_jwt = false
 
+# Executive KPI roll-up (AOS-MANAGE-001). Cron: aggregate counts across
+# content/users/revenue/support/ops. Own auth gate via requireAdminOrApiKey.
+[functions.executive-digest]
+verify_jwt = false
+
 # Security anomaly detector (AOS-SEC-001). Cron: reads login/rate-limit/audit
 # signals and opens incident tasks. Does its own auth via requireAdminOrApiKey.
 [functions.agent-security-monitor]
