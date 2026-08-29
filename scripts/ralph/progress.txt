@@ -3181,3 +3181,37 @@ under ...". Both BUILD FAILED. Restored, green.
 - android-release.yml DOES run unit tests before building (./gradlew test --no-daemon). Several story ACs
   claim otherwise. Read the workflow before repeating that.
 ---
+
+## 2026-08-29 - AND-AUDIT-018 (priced, not narrowed)
+Measured what each whole-package keep costs instead of narrowing any of them. AC6 wants each narrowing
+exercised on a device against serialization, Supabase, billing and maps; R8 breakage is runtime, not compile,
+so shipping a narrowing from here would be shipping an unverified crash.
+
+Files changed:
+- prd.json - AND-AUDIT-018 notes (no code change; proguard-rules.pro restored byte-for-byte)
+
+Numbers, one keep removed at a time, all five builds succeeded:
+    baseline                       13,121,396 dex / 15,815 classes
+    io.ktor.**                     -1,120,396   -8.54%
+    io.github.jan.supabase.**        -772,592   -5.89%
+    com.google.firebase.**           -236,676   -1.80%
+    com.google.android.gms.**      -1,460,636  -11.13%
+    all four together              -3,720,312  -28.35%  (11,703 classes)
+
+**Learnings for future iterations:**
+- **You can price a ProGuard keep without shipping it, and without release credentials.** Comment out one
+  keep, run `:app:minifyReleaseWithR8`, sum
+  build/intermediates/dex/release/minifyReleaseWithR8/*.dex and count `grep -c '^[a-zA-Z]'` in
+  build/outputs/mapping/release/mapping.txt. minifyReleaseWithR8 does not trip the assembleRelease
+  credential guard (app/build.gradle.kts:29).
+- **These four keeps are worth 28% of the dex and 4,112 classes, and they are super-additive.** Individual
+  deltas sum to 3,590,300; removing all four saves 3,720,312, because one keep was holding code alive that
+  another also reached. Do not estimate the total by adding the parts.
+- **A successful minified build proves nothing about a narrowing.** All five builds compiled. R8 damage from
+  an over-narrow keep shows up as a reflective lookup or a serializer failing at runtime. Treat a size delta
+  as a budget for device work, not as a result.
+- Firebase is the SMALLEST of the four at 1.80%, not a headline win - AND-AUDIT-018's own AC3 groups it with
+  Play Services as "the biggest". Play Services is the biggest at 11.13%. Cheapest rehearsal is Firebase.
+- Narrowing the app-wide `*** Companion;` keep to @Serializable types saves 8,600 bytes (0.07%). Worth doing
+  for correctness, not for size.
+---
