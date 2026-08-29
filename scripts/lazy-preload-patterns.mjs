@@ -285,3 +285,81 @@ export function stripPrerenderSignal(html) {
   });
   return removed === 0 ? [html, 0] : [out, removed];
 }
+
+/**
+ * SEO-001: positive proof a captured page rendered as ITSELF, not as the SPA
+ * shell. Returns an array of human-readable failure reasons; empty means pass.
+ *
+ * WHY THIS EXISTS. prerender.mjs's header has always described "a strict check
+ * that the page rendered as ITSELF before it is written", and threaded a
+ * `strict` flag from renderPool() into renderRoute() to carry it. The check was
+ * never implemented: `strict` was never read and `shellTitle` was computed and
+ * never read. That is not an ordinary dead parameter — it is the mitigation the
+ * whole PRERENDER_ENTITIES=false decision rested on, so the entity pass stayed
+ * off to avoid a risk whose guard was a comment.
+ *
+ * THE FAILURE IT GUARDS AGAINST, measured. On a build with an unreachable
+ * database all 877 entity URLs produced the same ~1,370 characters of promo
+ * boilerplate with no title and no canonical of their own. In production with
+ * the pass off, every entity page served the homepage title and H1 with zero
+ * JSON-LD to any crawler that does not run JavaScript.
+ *
+ * WHAT IS DELIBERATELY NOT CHECKED: body length. Legitimate entity pages vary
+ * enormously — a playground has far less to say than a restaurant — so any
+ * threshold either rejects real pages or waves boilerplate through. The head is
+ * where the discriminator actually lives, and all three checks below are head
+ * checks for that reason.
+ *
+ * Live in this module rather than inline in prerender.mjs so it can be tested
+ * offline against captured HTML, which is how the two regressions in
+ * dedupeJsonLd were found.
+ *
+ * @param {string} html      the captured document
+ * @param {string} route     the pathname it was captured for
+ * @param {string|null} shellTitle  the <title> vite shipped in the build shell
+ * @returns {string[]} failure reasons, empty if the page is publishable
+ */
+export function strictGateFailures(html, route, shellTitle) {
+  const failures = [];
+
+  const renderedTitle = /<title[^>]*>(.*?)<\/title>/is.exec(html)?.[1]?.trim() ?? null;
+  if (!renderedTitle) {
+    failures.push('no <title> at all');
+  } else if (shellTitle && renderedTitle === shellTitle) {
+    // The exact production symptom: ~1,070 entity URLs serving the homepage
+    // title. A page still carrying the build shell's title never rendered
+    // itself, whatever else is on it.
+    failures.push(`still carrying the shell title (${JSON.stringify(renderedTitle)})`);
+  }
+
+  // A canonical that is not this route means Helmet either never committed or
+  // committed another page's value. Compare path-only: the build host and the
+  // production origin are not the same host, and a trailing slash is not a
+  // difference worth failing a build over.
+  const canonicalHref = /<link[^>]+rel=["']canonical["'][^>]*>/i
+    .exec(html)?.[0]
+    ?.match(/href=["']([^"']+)["']/i)?.[1];
+  if (!canonicalHref) {
+    failures.push('no canonical');
+  } else {
+    let canonicalPath = canonicalHref;
+    try {
+      canonicalPath = new URL(canonicalHref, 'https://desmoinesinsider.com').pathname;
+    } catch {
+      /* keep the raw value; the comparison below reports it as-is */
+    }
+    const norm = (p) => (p.length > 1 ? p.replace(/\/+$/, '') : p);
+    if (norm(canonicalPath) !== norm(route)) {
+      failures.push(`canonical points at ${canonicalPath}, not ${route}`);
+    }
+  }
+
+  // Entity pages are exactly what AI assistants cite by name, and JSON-LD is how
+  // they know what the page is about. An entity page with none is the shell with
+  // a title on it.
+  if ((html.match(/application\/ld\+json/g) || []).length === 0) {
+    failures.push('no JSON-LD');
+  }
+
+  return failures;
+}

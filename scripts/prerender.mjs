@@ -62,6 +62,7 @@ import {
   dedupeJsonLd,
   stripLeafletRuntime,
   stripPrerenderSignal,
+  strictGateFailures,
 } from './lazy-preload-patterns.mjs';
 import { PRERENDER_ROUTES } from './prerender-routes.mjs';
 import process from 'node:process';
@@ -81,9 +82,33 @@ const CONCURRENCY = Math.max(
   Number(process.env.PRERENDER_CONCURRENCY) || Math.min(6, Math.max(2, os.cpus().length - 1)),
 );
 
-// WEB-SEO-006: prerender entity detail pages (/events/:slug, /restaurants/:slug,
-// ...) as well as hubs. Off by default — see the note in collectEntityRoutes().
-const PRERENDER_ENTITIES = process.env.PRERENDER_ENTITIES === 'true';
+// WEB-SEO-006 / SEO-001: prerender entity detail pages (/events/:slug,
+// /restaurants/:slug, ...) as well as hubs.
+//
+// ON by default since SEO-001. It was off, and the cost of that was measured on
+// 2026-08-28: fetched as GPTBot, /restaurants/atlas-caf,
+// /restaurants/marvs-mainstreet-dive, /attractions/pappajohn-sculpture-park and
+// /events/touch-a-truck-2026-05-22 each returned the HOMEPAGE title, the
+// homepage H1 ("Good Afternoon!...") and zero JSON-LD. That is ~1,070 of the
+// 1,109 URLs in our own sitemaps serving a near-identical copy of the homepage
+// to every crawler that does not run JavaScript — while robots.txt invites six
+// of them by name.
+//
+// WHAT CHANGED, because the old default was not wrong when it was written. The
+// stated reason for off-by-default was that a bad build would publish 877 pages
+// of boilerplate, and the named guard against that was the strict gate. The
+// strict gate did not exist: `strict` was threaded into renderRoute() and never
+// read, `shellTitle` was computed and never read. It exists now (see renderRoute),
+// so a page that did not render as itself is REFUSED and keeps its SPA shell,
+// which is the pre-prerender behaviour rather than a regression.
+//
+// The other stated reason was build time, and that was already handled by
+// ENTITY_BUDGET_SECONDS: going over budget is reported as incomplete coverage,
+// not an error, so the worst case is fewer pages rather than a failed deploy.
+//
+// Opt out with PRERENDER_ENTITIES=false if a build host turns out to be slower
+// than the budget assumes.
+const PRERENDER_ENTITIES = process.env.PRERENDER_ENTITIES !== 'false';
 
 // Hard ceiling on the entity pass. Cloudflare Pages kills a build at 20 minutes,
 // and this step runs AFTER vite build (~70s), so the budget has to leave room.
@@ -370,6 +395,13 @@ const duplicateJsonLdRoutes = [];
   // never rendered itself — see the strict gate in renderRoute().
   const shellTitle = /<title>(.*?)<\/title>/is.exec(buildHtml)?.[1]?.trim() ?? null;
 
+  // SEO-001: routes the strict gate refused, with the reason. Reported at the
+  // end rather than only thrown, because a rejection is the interesting output
+  // here: it means a page is in the sitemap and is NOT publishable, which is a
+  // content or data problem somebody has to see. A silent skip reads identically
+  // to a page that was never in the list.
+  const strictRejections = [];
+
   /**
    * Render one route and write dist/<route>/index.html. Throws on failure.
    *
@@ -621,6 +653,43 @@ const duplicateJsonLdRoutes = [];
         );
       }
 
+      // SEO-001: THE STRICT GATE. Positive proof this page rendered as ITSELF.
+      //
+      // This block is new. Until now `strict` was threaded from renderPool into
+      // this function and never read, and `shellTitle` was computed and never
+      // read — so the check this file's own header describes ("gated by a strict
+      // check that the page rendered as ITSELF before it is written") did not
+      // exist. That matters more than an ordinary dead parameter, because it is
+      // the mitigation the PRERENDER_ENTITIES=false decision rests on: the
+      // header's argument for keeping the entity pass off is that a bad build
+      // would publish 877 pages of boilerplate, and the named guard against
+      // that was this. Enabling entities without building it first would have
+      // been enabling a feature whose safety catch was a comment.
+      //
+      // The checks below are the discriminators that actually separate "this
+      // page" from "the SPA shell", measured against the failure this guards:
+      // on a build with an unreachable database every entity URL produced the
+      // same ~1,370 characters with NO title of its own and NO canonical.
+      //
+      // Deliberately NOT checked: body word count. Legitimate entity pages vary
+      // enormously (a playground has far less to say than a restaurant), so any
+      // threshold either rejects real pages or passes boilerplate. The head is
+      // where the discriminator actually lives.
+      //
+      // Hub routes are exempt because they can legitimately share a title with
+      // the shell — the shell's title IS the homepage's — and because hub
+      // coverage is already verified on disk after the pass.
+      if (strict) {
+        const failures = strictGateFailures(html, route, shellTitle);
+        if (failures.length > 0) {
+          strictRejections.push(`${route}: ${failures.join('; ')}`);
+          throw new Error(
+            `strict gate: page did not render as itself (${failures.join('; ')}) — ` +
+              `refusing to publish it; the route keeps its SPA shell`,
+          );
+        }
+      }
+
       const outDir = route === '/' ? DIST : path.join(DIST, route);
       fs.mkdirSync(outDir, { recursive: true });
       fs.writeFileSync(path.join(outDir, 'index.html'), html);
@@ -710,6 +779,24 @@ const duplicateJsonLdRoutes = [];
       console.log(
         `[prerender] entities: ${ok - before} prerendered, ${entityUnrendered.length} left unrendered (budget)`,
       );
+      // SEO-001: the strict gate's own output. Two different facts that used to
+      // look alike in this log: "we ran out of time" (above) and "this page is
+      // not publishable" (here). They call for opposite reactions — raise the
+      // budget, versus go and fix the page's data — so they are reported apart.
+      if (strictRejections.length > 0) {
+        warn(
+          `STRICT GATE REJECTED ${strictRejections.length} entity URL(s). These are in the sitemap ` +
+            `and did NOT render as themselves, so they keep their SPA shell rather than being ` +
+            `frozen as boilerplate. This is the guard working, not a build failure — but each one ` +
+            `is a page a crawler cannot read, so it is worth fixing at the source:`,
+        );
+        for (const r of strictRejections.slice(0, 25)) warn(`  rejected: ${r}`);
+        if (strictRejections.length > 25) {
+          warn(`  ...and ${strictRejections.length - 25} more`);
+        }
+      } else {
+        console.log('[prerender] strict gate: 0 rejections');
+      }
       if (entityUnrendered.length > 0) {
         // Loud on purpose. See renderPool's docstring.
         warn(
