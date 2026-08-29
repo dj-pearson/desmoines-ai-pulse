@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import Header from "@/components/Header";
@@ -18,6 +18,27 @@ import { BRAND } from "@/lib/brandConfig";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { EVENT_LIST_COLUMNS } from "@/lib/listColumns";
 import { formatCount } from "@/lib/pluralize";
+
+/**
+ * WEB-PERF-023. The grid rendered every event in the month, which measured
+ * 14,857 DOM elements on /events/august-2026 (268 events) - the worst route on
+ * the site against a 1,189 median and a ~1,500 Lighthouse flag. The cost is
+ * about 53 elements per EventCard on top of ~460 of page chrome, derived from
+ * the four month pages: 268 events -> 14,857, 153 -> 8,438, 122 -> 6,806,
+ * 75 -> 4,489.
+ *
+ * 36 is twelve full rows of the lg:grid-cols-3 grid and puts August at roughly
+ * 2,400, in line with /restaurants (2,875) and / (2,314) rather than ten times
+ * worse than either. Matches VISIBLE_RESTAURANTS in DietaryRestaurants.tsx.
+ *
+ * THE TRADE-OFF IS REAL AND IS NOT MINE TO SETTLE ALONE: these are SEO landing
+ * pages that SEO-016 has only just started linking to, and a month page now
+ * lists 36 of 268 events. Every event remains reachable through /events, the
+ * month navigation and its own detail page, and 14,857 elements is itself a
+ * Core Web Vitals problem - but if the whole month must render, the fix is a
+ * cheaper card, not a bigger cap.
+ */
+const VISIBLE_EVENTS = 36;
 
 export default function MonthlyEventsPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -135,8 +156,14 @@ export default function MonthlyEventsPage() {
         breadcrumbs={breadcrumbs}
         isTimeSensitive={true}
       />
+      {/* The schema must describe what the page SHOWS. The grid is capped at
+          VISIBLE_EVENTS, and EventListJsonLd defaults maxItems to 50, so
+          passing the full month here would advertise events a reader cannot
+          see - the same defect already fixed on /restaurants, which declared
+          numberOfItems 478 against a 20-item list. */}
       <EventListJsonLd
-        events={events || []}
+        events={(events || []).slice(0, VISIBLE_EVENTS)}
+        maxItems={VISIBLE_EVENTS}
         listName={pageTitle}
         listDescription={pageDescription}
         listUrl={`${BRAND.baseUrl}/events/${monthYear}`}
@@ -279,11 +306,31 @@ export default function MonthlyEventsPage() {
           </div>
         ) : events && events.length > 0 ? (
           <>
+            {/* WEB-PERF-023: this rendered every event in the month, and
+                /events/august-2026 measured 14,857 DOM elements inside #root —
+                the worst route on the site, ten times the ~1,500 Lighthouse
+                flag and twelve times the 1,189 median across all 1,171
+                prerendered routes. The four month pages were the four worst.
+                Only the grid is capped; the heading and the month-navigation
+                count below still read events.length, so no displayed number
+                changes. */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-              {events.map((event) => (
+              {events.slice(0, VISIBLE_EVENTS).map((event) => (
                 <EventCard key={event.id} event={event} onViewDetails={() => {}} />
               ))}
             </div>
+
+            {events.length > VISIBLE_EVENTS && (
+              <div className="mb-12 text-center">
+                <p className="text-muted-foreground mb-3">
+                  Showing {VISIBLE_EVENTS} of {formatCount(events.length, 'event')} in{" "}
+                  {monthDisplayName}.
+                </p>
+                <Button asChild variant="outline">
+                  <Link to="/events">Browse all events</Link>
+                </Button>
+              </div>
+            )}
 
             {/* Monthly Navigation */}
             <Card className="mb-8">

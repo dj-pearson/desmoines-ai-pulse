@@ -3572,3 +3572,31 @@ root.querySelectorAll('*').length on 91 pages spanning hubs and every entity typ
 - Do not re-baseline a reporting check to make it quiet. It would have banked all 1,171 routes and buried
   the finding.
 ---
+
+## 2026-08-29 - WEB-PERF-023: month pages capped, 14,857 -> 2,531
+The work the repaired DOM guard exposed in the previous entry.
+
+Files changed:
+- src/pages/MonthlyEventsPage.tsx - VISIBLE_EVENTS = 36, grid capped, JSON-LD capped to match
+- prd.json - WEB-PERF-023 and WEB-SEO-006 notes
+
+Verified on a real build: august 14857 -> 2531, september 6806 -> 2439, october 8438 -> 2449,
+november 4489 -> 2425. numberOfItems 36 against 36 rendered cards. tsc and eslint clean.
+
+**Learnings for future iterations:**
+- **Derive the cost model before picking the cap.** Four month pages with known event counts give ~53
+  elements per EventCard on ~460 of chrome, so 36 cards predicts ~2,370 - and they landed at 2,425-2,531.
+  That is how you choose 36 rather than a round number and know in advance what you will get.
+- **Cap the JSON-LD with the grid, always.** EventListJsonLd defaults maxItems to 50; capping the grid alone
+  would have advertised 50 events against 36 rendered, which is the /restaurants numberOfItems-478-against-20
+  defect in a new place. Pass the sliced list AND a matching maxItems.
+- **A route missing from a report is not a route that improved.** One build dropped the month pages against
+  the prerender time budget, so they simply vanished from check-dom-budget's output and the worst-route line
+  looked fixed. Confirm the artifact exists before reading its absence as success.
+- **Entity prerender coverage varies build to build: 1,136 one run, 868 the next, same tree.** It is a
+  wall-clock race against PRERENDER_ENTITY_BUDGET_SECONDS (default 420) and the build exits 0 when it loses,
+  so which sitemapped URLs ship readable HTML is not stable between Cloudflare deploys.
+  PRERENDER_ENTITY_BUDGET_SECONDS=1500 rendered 1,161 here.
+- `npm run prerender` runs the prerender step alone against an existing dist/, far faster than a full
+  `npm run build` when you only need to re-measure rendered output.
+---
