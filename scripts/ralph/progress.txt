@@ -3489,3 +3489,31 @@ Files changed:
 - schema-baseline.json splits 61 table / 27 rpc / 8 column. Only the 8 column findings are actionable
   independently of WEB-QA-018, and all 8 are this one collision.
 ---
+
+## 2026-08-29 - WEB-SEO-008: the guard was crying wolf, and validate was red for everyone
+Found while running npm run validate for AOS-MANAGE-001's AC5. check-schema-dupes reported seven duplicate
+FAQPage offenders. All seven were false positives, from two causes, both introduced by SEO-003 - the commit
+that fixed the real duplication.
+
+Files changed:
+- scripts/check-duplicate-schema.mjs - stripComments() before scanning; EnhancedLocalSEO removed from
+  EMITTERS; assertModelMatchesSource() so the model cannot drift silently again
+- prd.json - WEB-SEO-008 and AOS-MANAGE-001 notes
+
+Verified: 562 components scanned, 23 emit FAQPage, 0 duplicates, and npm run validate exits 0 - it did not
+before, on a clean tree, verified by stashing.
+
+**Learnings for future iterations:**
+- **npm run validate has been failing on every branch since SEO-003 (0b9efd6c).** If you are about to record
+  "validate passes" for a story, run it on a stashed tree first and find out whose failure it is.
+- **A source scanner that does not strip comments will count the documentation of a fix as the bug.**
+  SEO-003 explained its fix in a comment naming the component three times, and the guard read that as three
+  emitters. Blank comments to spaces rather than deleting them, so offsets and line numbers still line up.
+- **A guard that models the implementation must check its own model.** EMITTERS still listed
+  EnhancedLocalSEO after its FAQPage block was removed, so five pages were counted as having an emitter that
+  no longer exists. assertModelMatchesSource now fails when a modelled component emits nothing. A model that
+  over-counts is worse than no guard: it makes validate red for everyone and teaches people to ignore it.
+- **Control a guard fix both ways.** Making a noisy check quiet is easy and worthless. Duplicating a live
+  FAQSection render must still fail, and re-adding the stale emitter must trip the new drift check - both
+  were run before believing the green.
+---
