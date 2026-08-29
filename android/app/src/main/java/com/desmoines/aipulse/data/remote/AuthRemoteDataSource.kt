@@ -14,6 +14,8 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import io.github.jan.supabase.postgrest.query.Columns
+import kotlinx.serialization.json.JsonObject
 import com.desmoines.aipulse.data.model.UserProfile
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -174,6 +176,52 @@ class AuthRemoteDataSource @Inject constructor(
                 filter {
                     eq("user_id", userId)
                 }
+            }
+    }
+
+    // MARK: - Communication Preferences (WEB-LEGAL-012)
+
+    @Serializable
+    private data class CommPrefRow(
+        @SerialName("communication_preferences") val communicationPreferences: JsonObject? = null,
+    )
+
+    @Serializable
+    private data class CommPrefUpdate(
+        @SerialName("communication_preferences") val communicationPreferences: JsonObject,
+    )
+
+    /**
+     * The stored bag, or an empty one when the profile has never had preferences.
+     *
+     * THROWS rather than returning empty on failure, and the difference decides
+     * whether a stored opt-out survives. An empty bag and a bag that could not be
+     * read are indistinguishable to a caller that merges into them, and merging
+     * into an empty bag is exactly the write that deleted the marketing key on
+     * web. See CommunicationPreferences.
+     */
+    suspend fun fetchCommunicationPreferences(userId: String): JsonObject {
+        val client = supabaseClient ?: throw AuthException.NotConfigured
+        val row = client.from("profiles")
+            .select(Columns.list("communication_preferences")) {
+                filter { eq("user_id", userId) }
+            }
+            .decodeSingleOrNull<CommPrefRow>()
+        return row?.communicationPreferences ?: JsonObject(emptyMap())
+    }
+
+    /**
+     * Set one key in the bag, preserving every other key.
+     *
+     * The read is not an optimisation. Skipping it, or swallowing its failure,
+     * turns one toggle into a destructive write across three unrelated features.
+     */
+    suspend fun setCommunicationPreference(userId: String, key: String, value: Boolean) {
+        val client = supabaseClient ?: throw AuthException.NotConfigured
+        val merged = CommunicationPreferences.merge(fetchCommunicationPreferences(userId), key, value)
+        client.from("profiles")
+            .update(CommPrefUpdate(communicationPreferences = merged)) {
+                filter { eq("user_id", userId) }
             }
     }
 

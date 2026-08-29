@@ -3,6 +3,7 @@ package com.desmoines.aipulse.data.repository
 import com.desmoines.aipulse.util.AppLogger
 import com.desmoines.aipulse.data.model.UserProfile
 import com.desmoines.aipulse.data.remote.AuthRemoteDataSource
+import com.desmoines.aipulse.data.remote.CommunicationPreferences
 import com.desmoines.aipulse.util.SignOutCleaner
 import dagger.Lazy
 import io.github.jan.supabase.auth.status.SessionStatus
@@ -78,6 +79,23 @@ class AuthRepositoryImpl @Inject constructor(
     ): Result<Unit> =
         runCatching { remoteDataSource.updateProfile(userId, firstName, lastName, phone, location, interests) }
             .onFailure { AppLogger.auth.warning("Update profile failed: ${it.message}") }
+
+    override suspend fun isEmailMarketingAllowed(userId: String): Result<Boolean> =
+        runCatching {
+            CommunicationPreferences.isOptedIn(
+                remoteDataSource.fetchCommunicationPreferences(userId),
+                CommunicationPreferences.EMAIL_NOTIFICATIONS,
+            )
+        }.onFailure { AppLogger.auth.warning("Read email preference failed: ${it.message}") }
+
+    override suspend fun setEmailMarketingAllowed(userId: String, allowed: Boolean): Result<Unit> =
+        runCatching {
+            remoteDataSource.setCommunicationPreference(
+                userId,
+                CommunicationPreferences.EMAIL_NOTIFICATIONS,
+                allowed,
+            )
+        }.onFailure { AppLogger.auth.warning("Write email preference failed: ${it.message}") }
 
     override suspend fun checkAdminRole(userId: String): Result<Boolean> =
         runCatching { remoteDataSource.checkAdminRole(userId) }
