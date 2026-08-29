@@ -31,6 +31,25 @@
  * They are tried in that order and the FIRST match wins, so the reported reason
  * is the strongest one that applied rather than the last one checked.
  *
+ * ── THE DATABASE IS STRICTER THAN THIS MODULE, AND IT WINS ──────────────────
+ *
+ * `public.events` carries a UNIQUE INDEX `events_title_venue_unique` on
+ * (title, venue) with NO DATE IN IT: one row per title per venue, forever.
+ * Tier 3 above is looser — it treats the same title and venue more than 24
+ * hours apart as a different event, which is right for a weekly residency and
+ * is not what this schema permits.
+ *
+ * Measured 2026-08-29 on the first live hub ingest: of 88 extracted events this
+ * module passed 60, and Postgres refused 16 of those on the constraint. A batch
+ * insert is ONE statement, so the first collision lost every row beside it.
+ *
+ * `ingest-events` therefore inserts with ON CONFLICT DO NOTHING and reports the
+ * two counts SEPARATELY — `duplicates` from here, `constraintDuplicates` from
+ * the index. The disagreement is REPORTED, not resolved: loosening the
+ * constraint changes what the live site shows, and tightening this module to
+ * match would merge a real weekly series into one row. Which is correct is an
+ * operator decision, and neither is made silently.
+ *
  * ── THE SIMILARITY FUNCTION IS POSITIONAL, AND THAT IS A KNOWN WEAKNESS ─────
  *
  * `calculateTitleSimilarity` compares character i to character i and divides by

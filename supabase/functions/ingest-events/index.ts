@@ -126,6 +126,7 @@ Deno.serve(async (req: Request) => {
   const plan = planIngest(items, existing, fallbackUrl);
 
   let inserted = 0;
+  let constraintDuplicates = 0;
   const writeErrors: string[] = [];
   if (plan.rows.length > 0) {
     const stamped = plan.rows.map((r) => ({
@@ -135,11 +136,33 @@ Deno.serve(async (req: Request) => {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }));
-    const { data, error } = await supabase.from("events").insert(stamped).select("id");
+    // THE DATABASE HAS A STRICTER RULE THAN THE SHARED DEDUP, AND IT WINS.
+    //
+    // `events_title_venue_unique` is a UNIQUE INDEX on (title, venue) with no
+    // date in it: this table permits exactly one row per title per venue,
+    // forever. `_shared/eventDedup.ts` is looser — its third tier treats the
+    // same title and venue more than 24 hours apart as a genuinely different
+    // event, which is right for a weekly residency and wrong for this schema.
+    //
+    // The first live run found this the expensive way: 88 events extracted, the
+    // shared dedup passed 60 of them, and Postgres rejected the whole statement
+    // with "duplicate key value violates unique constraint". A batch insert is
+    // ONE statement, so a single collision loses every row beside it.
+    //
+    // So the constraint does that tier of the deduplication, and the two counts
+    // are reported SEPARATELY rather than summed: `duplicates` is what the
+    // shared module caught before the write, `constraintDuplicates` is what the
+    // database caught during it. Summing them would hide the disagreement, and
+    // the disagreement is the finding — see the note in eventDedup.ts.
+    const { data, error } = await supabase
+      .from("events")
+      .upsert(stamped, { onConflict: "title,venue", ignoreDuplicates: true })
+      .select("id");
     if (error) {
       writeErrors.push(error.message);
     } else {
       inserted = (data || []).length;
+      constraintDuplicates = stamped.length - inserted;
     }
   }
 
@@ -151,6 +174,13 @@ Deno.serve(async (req: Request) => {
     updated: 0,
     updatedNote: "this endpoint only inserts — 0 is measured, not a placeholder",
     duplicates: plan.duplicates,
+    // Reported separately from `duplicates` on purpose: one is the shared
+    // module's verdict before the write, the other is the database's during it,
+    // and they disagree by design (see the comment on the upsert above).
+    constraintDuplicates,
+    constraintNote: constraintDuplicates > 0
+      ? `${constraintDuplicates} row(s) were refused by events_title_venue_unique, which permits one row per (title, venue) with no date in it. The shared dedup considers a same-title, same-venue event more than 24 hours later to be a different event; this table does not.`
+      : null,
     rejected: plan.rejected,
     provenance: { producedBy, renderProvider, renderMode: provenance.renderMode ?? null },
     ...(writeErrors.length ? { writeErrors } : {}),
