@@ -3779,3 +3779,28 @@ flagged links; production has 3 events with source_url_broken. tsc clean, 7/7 te
 - Still open on this job, as a quality question rather than a defect: recoveryRate is 0 on every run. It
   flags dead links correctly and recovers none.
 ---
+
+## 2026-08-29 - validate-source-urls: filtering after the limit, and no ordering
+Follow-up to the instrumentation fix. The low recovery rate was throughput, not quality.
+
+Files changed:
+- supabase/functions/validate-source-urls/index.ts - or(ilike) pre-filter in the query, order by
+  source_url_checked_at nulls first
+- prd.json - AOS-MANAGE-007 notes
+
+Measured against production: 3 aggregator candidates per 50-row batch before, 26 after - which is the whole
+aggregator population. tsc clean, validate exit 0.
+
+**Learnings for future iterations:**
+- **Filter before the limit, not after.** Taking 50 arbitrary rows and then keeping the 6% that match spends
+  94% of the batch on rows that were never candidates. 22 runs checked 5 distinct events out of 26.
+- **A query with no ORDER BY makes no progress.** Each run re-drew from the same pool and could re-check an
+  event it had already flagged. Order by the "when did we last look at this" column with nulls first, and the
+  job walks the backlog instead of milling.
+- **A pre-filter in the query should be a SUPERSET of the in-code predicate**, so the predicate still decides
+  and the semantics do not move. Here or(ilike) matches the domain anywhere in the URL while isAggregatorUrl
+  matches the hostname.
+- I had recorded "recoveryRate is 0 on every run" as a quality question. It was not: two of the five checked
+  events were recovered to web.archive.org snapshots. The single candidate per run happened to be
+  unrecoverable. A rate computed over a denominator of 1 is not a rate.
+---

@@ -281,10 +281,31 @@ serve(async (req) => {
     } = body;
 
     // Find events with aggregator URLs that are happening in the future
+    // NARROW TO AGGREGATORS IN THE QUERY, NOT AFTER IT.
+    //
+    // This used to take `limit` arbitrary future events and THEN filter to
+    // aggregator URLs, which is the wrong order: 26 of 416 future events carry
+    // one, so a batch of 50 yielded about 1 candidate. Across 22 recorded runs
+    // it checked FIVE distinct events, and every run reported checked: 1.
+    //
+    // The or(ilike) below is a deliberate SUPERSET of isAggregatorUrl - it
+    // matches the domain anywhere in the URL rather than in the hostname - so
+    // the in-code predicate still decides and the semantics do not change.
+    // It only stops the batch being spent on events that were never candidates.
+    //
+    // Ordering by source_url_checked_at with nulls first is the other half:
+    // the query had no order at all, so each run re-drew from the same pool and
+    // could re-check an event it had already flagged instead of advancing.
+    // Unchecked events now go first, then the least recently checked.
+    const aggregatorFilter = AGGREGATOR_DOMAINS
+      .map((d) => `source_url.ilike.*${d}*`)
+      .join(',');
     const { data: eventsToFix, error: fetchError } = await supabase
       .from('events')
       .select('id, title, date, source_url, venue')
       .gte('date', new Date().toISOString())
+      .or(aggregatorFilter)
+      .order('source_url_checked_at', { ascending: true, nullsFirst: true })
       .limit(limit);
 
     if (fetchError) {
