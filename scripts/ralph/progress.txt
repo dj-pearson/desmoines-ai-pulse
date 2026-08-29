@@ -4044,3 +4044,28 @@ Two of my own mistakes, both caught by existing guards:
 
 Pattern: when a note says "X is the next move but it needs a design decision",
 measure X first. Two thirds of this was waste, not design.
+
+================================================================================
+2026-08-29  AND-AUDIT-014 AC3 + WEB-SEO-013 AC7
+================================================================================
+The Android instrumentation test has now run. ArticleMarkdownTest's six tests
+had never executed anywhere - no workflow called connectedCheck and no device
+was declared. A Gradle managed device (Pixel 6, API 34, aosp-atd) is now in
+app/build.gradle.kts, so CI and a laptop run the same one.
+
+  6 tests, 0 failures. 5m04s cold (image download), 54s warm.
+  Mutation tested: swallowing the link callback fails exactly
+  clickingALinkDispatchesItsUrl.
+
+CI step added with the KVM udev rule runners need - without it the emulator
+falls back to software and the job times out instead of failing clearly.
+
+Separately: cross-checking public/_redirects against the sitemaps - which
+nothing had ever done - found /visitors-guide. It is the target of the
+/things-to-do/tourists 301, a live 225-line route, and it was in no sitemap and
+no prerender list. The page that WON a duplication was the one nothing pointed
+at. Now in both, with check-sitemap-redirects.mjs gating both directions.
+
+Codebase pattern: when a redirect is added to resolve a duplication, check what
+happened to the winner. The loser gets the attention; the winner is the one that
+has to be reachable.
