@@ -3045,3 +3045,37 @@ Ships no behaviour change on its own - with the env var unset the Firecrawl body
     from events where source_url is not null group by 1 order by 2 desc;
   It showed seatgeek frozen at 2026-08-21 while four other sources ingested on 2026-08-29.
 ---
+
+## 2026-08-29 - AND-AUDIT-008 (a Keystore failure now leaves a trace)
+The plaintext fallback reported nothing but a Log.w, which on a release build reaches nobody. It now reports
+to CrashReportingService, and the report carries the consequence rather than just the exception.
+
+Files changed:
+- android/app/src/main/java/com/desmoines/aipulse/util/SecureStorage.kt - crashReporting + an
+  encryptedPrefsFactory seam, SecureStorageFallbackException, file-name constants lifted to top level
+- android/app/src/test/java/com/desmoines/aipulse/util/SecureStorageFallbackTest.kt - NEW, 5 tests
+- prd.json - AND-AUDIT-008 notes
+
+Verified: 346 tests, 0 skipped, 0 failures, counted from the JUnit XML. Control run with the report disabled
+fails exactly the 2 assertions that should and no others.
+
+**Learnings for future iterations:**
+- **`BUILD SUCCESSFUL` is not a test result on this project.** AND-AUDIT-014 says the Android suite can pass
+  vacuously, so read android/app/build/test-results/testDebugUnitTest/*.xml and sum
+  tests/skipped/failures/errors. A filtered run that matches no class also reports BUILD SUCCESSFUL.
+- **Mutate the code and re-run before believing a new test.** Disabling the recordError call turned the run
+  into "5 tests completed, 2 failed" - the two that assert reporting, and not the other three. That is the
+  difference between a test that passes and a test that would catch the regression.
+- **Pair every "it reports" test with a negative control that it does NOT report on the happy path.** Without
+  it the assertion also passes for code that reports unconditionally, which here would file a crash record on
+  every healthy launch.
+- **A JVM test cannot reach an Android Keystore path; add a factory seam rather than mocking statics.**
+  SecureStorage now takes `encryptedPrefsFactory: (Context) -> SharedPreferences` defaulting to the real
+  builder, so tests drive the failure branch through the same code production runs.
+- **Two SharedPreferences files means a Keystore failure silently resets device settings.** The fallback file
+  starts empty, so biometric_enabled reads false and the biometric lock turns itself off with no prompt. Any
+  "fall back to a different store" design has this shape - check what the empty store means, not just that
+  writes keep working.
+- Wrap failure REPORTING in runCatching when it sits in a constructor path. A reporter that throws would
+  otherwise take the storage layer down with it.
+---
