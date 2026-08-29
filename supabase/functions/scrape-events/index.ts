@@ -5,6 +5,11 @@
  * Risk level: MEDIUM
  */
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import {
+  generateEventFingerprint,
+  isDuplicateEvent,
+  type ExistingEvent,
+} from "../_shared/eventDedup.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -52,132 +57,6 @@ interface ScrapedEvent {
   enhanced_description?: string;
   is_enhanced?: boolean;
   fingerprint?: string;
-}
-
-interface ExistingEvent {
-  id: string;
-  title: string;
-  date: string;
-  venue: string;
-  source_url: string;
-  fingerprint?: string;
-}
-
-// Generate a unique fingerprint for an event to detect duplicates
-function generateEventFingerprint(event: {
-  title: string;
-  date: Date;
-  venue: string;
-  source_url: string;
-}): string {
-  // Normalize the data for consistent comparison
-  const normalizedTitle = event.title
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "") // Remove special chars and spaces
-    .substring(0, 50); // Limit length
-
-  const normalizedVenue = event.venue
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "")
-    .substring(0, 30);
-
-  const dateString = event.date.toISOString().split("T")[0]; // YYYY-MM-DD format
-  const domain = event.source_url.replace(/^https?:\/\//, "").split("/")[0];
-
-  return `${normalizedTitle}_${dateString}_${normalizedVenue}_${domain}`;
-}
-
-// Check if an event is likely a duplicate based on multiple criteria
-function isDuplicateEvent(
-  newEvent: ScrapedEvent,
-  existingEvents: ExistingEvent[]
-): { isDuplicate: boolean; reason?: string; existingEvent?: ExistingEvent } {
-  for (const existing of existingEvents) {
-    // 1. Exact fingerprint match (most reliable)
-    if (
-      newEvent.fingerprint &&
-      existing.fingerprint &&
-      newEvent.fingerprint === existing.fingerprint
-    ) {
-      return {
-        isDuplicate: true,
-        reason: "exact_fingerprint_match",
-        existingEvent: existing,
-      };
-    }
-
-    // 2. Same source URL, same date, similar title
-    if (existing.source_url === newEvent.source_url) {
-      const existingDate = new Date(existing.date);
-      const sameDate =
-        existingDate.toDateString() === newEvent.date.toDateString();
-
-      if (sameDate) {
-        // Calculate title similarity (simple approach)
-        const titleSimilarity = calculateTitleSimilarity(
-          newEvent.title,
-          existing.title
-        );
-
-        if (titleSimilarity > 0.8) {
-          // 80% similar
-          return {
-            isDuplicate: true,
-            reason: "same_source_date_similar_title",
-            existingEvent: existing,
-          };
-        }
-      }
-    }
-
-    // 3. Same title, same venue, date within 1 day (for recurring events)
-    const titleMatch =
-      newEvent.title.toLowerCase().trim() ===
-      existing.title.toLowerCase().trim();
-    const venueMatch =
-      newEvent.venue.toLowerCase().trim() ===
-      existing.venue.toLowerCase().trim();
-
-    if (titleMatch && venueMatch) {
-      const existingDate = new Date(existing.date);
-      const timeDiff = Math.abs(
-        newEvent.date.getTime() - existingDate.getTime()
-      );
-      const hoursDiff = timeDiff / (1000 * 60 * 60);
-
-      // If same title/venue and within 24 hours, likely duplicate
-      if (hoursDiff < 24) {
-        return {
-          isDuplicate: true,
-          reason: "same_title_venue_within_24h",
-          existingEvent: existing,
-        };
-      }
-    }
-  }
-
-  return { isDuplicate: false };
-}
-
-// Simple title similarity calculation using character overlap
-function calculateTitleSimilarity(title1: string, title2: string): number {
-  const normalize = (str: string) =>
-    str.toLowerCase().replace(/[^a-z0-9]/g, "");
-  const norm1 = normalize(title1);
-  const norm2 = normalize(title2);
-
-  if (norm1.length === 0 || norm2.length === 0) return 0;
-
-  // Simple character overlap ratio
-  const minLength = Math.min(norm1.length, norm2.length);
-  const maxLength = Math.max(norm1.length, norm2.length);
-
-  let matches = 0;
-  for (let i = 0; i < minLength; i++) {
-    if (norm1[i] === norm2[i]) matches++;
-  }
-
-  return matches / maxLength;
 }
 
 // Check if we should skip scraping a job based on recent scraping history
