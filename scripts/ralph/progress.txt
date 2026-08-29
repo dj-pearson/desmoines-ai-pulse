@@ -3827,3 +3827,29 @@ Files changed:
 - The trail worth reusing: source freshness by host (max(created_at) per source_url host) -> cron.job_run_details
   for the schedule -> net._http_response for what actually happened. Three queries, one live outage.
 ---
+
+## 2026-08-29 - The reminders fix is written, correct and unapplied
+Second item from the net._http_response sweep. No code change - the fix already exists; what was missing was
+proof it works.
+
+Files changed:
+- prd.json - WEB-OPS-007 notes
+
+Verified in BEGIN/ROLLBACK against production: get_pending_reminders() raises 42804 today and executes
+cleanly with migration 20260828000001 applied, signature unchanged. The hourly cron job has run 184 times
+since 2026-08-22 and errored on every one.
+
+**Learnings for future iterations:**
+- **PostgreSQL will not coerce a RETURNS TABLE column.** Declaring user_email TEXT while selecting
+  auth.users.email, which Supabase defines as varchar(255), raises 42804 and the function returns nothing at
+  all. Any RETURNS TABLE that reads a column this project does not own is worth checking against the real
+  type.
+- **Verify an unapplied migration rather than just noting it exists.** Running it inside BEGIN/ROLLBACK and
+  calling the function before and after turns "someone wrote a fix" into "the fix is correct and the
+  signature is unchanged", which is what makes applying it a decision instead of a risk.
+- **Say what the fix does NOT buy.** user_event_reminders holds 0 rows, so no reminder has actually been
+  missed. The fix means the feature works when the first one is created. Overselling a fix is its own kind of
+  inaccuracy.
+- 184 hourly runs, every one a 500, and cron_health reports the job healthy - because net.http_post succeeds
+  on enqueue, not on landing. Same blind spot as the scrape outage.
+---
