@@ -243,8 +243,11 @@ tasks.withType<Test> {
     inputs.files(
         layout.projectDirectory.file("src/main/AndroidManifest.xml"),
         layout.projectDirectory.file("src/main/java/com/desmoines/aipulse/util/DeepLinkHandler.kt"),
+        layout.projectDirectory.file("src/main/java/com/desmoines/aipulse/util/ShortcutDispatcher.kt"),
+        layout.projectDirectory.file("src/main/res/xml/shortcuts.xml"),
+        layout.projectDirectory.file("src/androidTest/java/com/desmoines/aipulse/util/ShortcutDispatcherUriTest.kt"),
     )
-        .withPropertyName("deepLinkParitySources")
+        .withPropertyName("sourceParityInputs")
         .withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
