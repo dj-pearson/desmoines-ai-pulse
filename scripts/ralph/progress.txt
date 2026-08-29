@@ -4198,3 +4198,30 @@ Codebase pattern: when a tool's header says a credential "cannot" do something,
 check WHICH endpoint that was measured on. The claim is usually true and
 narrower than it reads, and the cheaper credential often answers a differently
 shaped version of the same question.
+
+================================================================================
+2026-08-29  WEB-SEO-008 - a duplicate the prerenderer was hiding
+================================================================================
+Every pSEO page emitted TWO BreadcrumbList blocks: SEOHead builds one from the
+`breadcrumbs` prop, and PseoPage built another into structuredData from the same
+source, with identical URLs.
+
+It never reached the static HTML because dedupeJsonLd drops duplicate @types -
+its header warns it "can mask a source defect" and it was masking this one. The
+full build's "dropped 16 duplicate JSON-LD block(s)" against exactly 16 pSEO
+URLs is what gave it away.
+
+Worse than untidy: dedupeJsonLd types a block by its FIRST "@type" and the pSEO
+schemas ship as one array in one <script>. With BreadcrumbList first, the whole
+array was typed BreadcrumbList - only SEOHead's render order stopped the dedup
+deleting that page's FAQPage and ItemList too.
+
+I also read RestaurantDetails as having the same defect. It does not: its two
+blocks are byte-identical and react-helmet-async collapses them. 214 prerendered
+pages, one BreadcrumbList each. The drop count had already said so.
+
+Codebase patterns:
+  A cleanup step that fixes something silently is a place defects go to hide.
+  Read what it REPORTS having fixed - that number is a defect log.
+  When a count disagrees with a code read (16 drops, but 478 pages "should" be
+  affected), the count is the evidence. Go find why, do not average them.
