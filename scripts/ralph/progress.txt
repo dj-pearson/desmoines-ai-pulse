@@ -3928,3 +3928,29 @@ Verified: esbuild, tsc, npm run validate all clean.
   selector with an explicit budget or the schedules should go; inventing the behaviour would have committed
   the project to spend nobody chose.
 ---
+
+================================================================================
+2026-08-29  WEB-OPS-007 AC4 - the cron-to-function contract now has a check
+================================================================================
+Four production defects came out of one read of net._http_response. They had
+nothing in common except that nothing had ever read that table.
+
+cron.job_run_details is written when net.http_post ENQUEUES, not when the call
+lands. A job posting at a function that was never deployed reports "succeeded"
+forever. campaign-creative-review-sweep did that 1,105 times.
+
+Shipped: cron_http_failures() RPC (20260829000003), a ratcheting check script
+with a 3-signature baseline, and a CI step in rls-config-audit.yml (the job that
+declares environment: Scrape, so it actually has the service-role key).
+
+Control-tested in four states against a stub RPC before trusting it green:
+matches -> 0, new signature -> 1, signature disappeared -> 0 + advisory,
+RPC missing -> 1 naming the migration. Migration itself verified in a rolled-back
+transaction against production; returned exactly the three known signatures.
+
+Blind spot that remains, on purpose and in writing: a function that fails and
+answers 200. pg_net keeps status codes only. That is how the scrape outage hid.
+
+Codebase pattern to reuse: when a monitor and the thing it monitors disagree,
+find the table that stores the OUTCOME rather than the ATTEMPT. Success recorded
+at enqueue time is not success.

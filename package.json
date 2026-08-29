@@ -84,6 +84,7 @@
     "check-media-drift": "node scripts/check-media-url-drift.mjs",
     "check-edge-auth": "node scripts/check-edge-auth.mjs",
     "check-cron-targets": "node scripts/check-cron-targets.mjs",
+    "check-cron-http": "tsx scripts/check-cron-http-responses.ts",
     "merge-duplicate-events": "tsx scripts/merge-duplicate-events.ts",
     "check-mobile-schema": "node scripts/check-mobile-schema-usage.mjs",
     "check-migration-drift": "node scripts/check-migration-drift.mjs",
