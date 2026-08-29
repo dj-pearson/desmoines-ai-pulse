@@ -4124,3 +4124,26 @@ check that both DELETEs use the same clock. And when every read returns null on
 error and every caller turns null into "could not load", there is no observable
 difference between a broken cache and no network - so the layer cannot be
 debugged from logs, only from tests.
+
+================================================================================
+2026-08-29  AND-AUDIT-014 AC4 - app shortcuts, and a mocked boundary that hid
+================================================================================
+ShortcutDispatcher had a JVM test that MOCKS Uri, so the string -> Uri contract
+had never run. The launcher ships a percent-encoded query; whether it arrives as
+a sentence or as raw escapes is decided by the class the mock replaces.
+
+10 instrumentation tests. openNow is true only for the exact lowercase "true"
+(toBooleanStrictOrNull is case-sensitive), so an Assistant sending "True" drops
+the filter silently.
+
+I ASSERTED THE WRONG THING AND THE DEVICE CORRECTED ME: `+` in a query is
+converted to a space by getQueryParameter, not left literal. Second mocked-
+boundary assumption to be wrong this week in the plausible direction.
+
+ShortcutManifestParityTest ties shortcuts.xml, the manifest and the dispatcher
+together, plus checks the instrumentation test still quotes the shipped URI.
+
+Codebase pattern: a mock at a framework boundary does not just skip that
+boundary's bugs, it makes them unaskable. When a test stubs Uri, JSON, or a
+clock, ask what the real one does that the stub cannot express - and then go and
+measure it rather than reasoning about it.
