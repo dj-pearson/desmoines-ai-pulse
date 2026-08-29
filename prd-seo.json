@@ -50,7 +50,7 @@
         "Validate the output against Google's Rich Results Test or the schema.org validator for at least 5 event pages, and record pass/fail per page.",
         "Measure against the baseline of 6 valid items once Search Console re-crawls. State clearly that this figure lags and cannot be confirmed on ship day."
       ],
-      "notes": ""
+      "notes": "CODE COMPLETE 2026-08-29. FIRST, A CORRECTION TO THE STORY'S OWN PREMISE. It said eventStatus and eventAttendanceMode were absent everywhere; they are not. That came from a read truncated at 900 characters. Re-measured in full on 2026-08-28 across all items: /events 30/30, /events/this-weekend 40/40, /events/today 23/23 all carry both, and none is missing a REQUIRED field. THE REAL DEFECT IS DRIFT. Ten places in this repo build an Event node and they disagreed: /events shipped 30 nodes with NO endDate while the other two hubs shipped theirs with it, from the same rows on the same site, because EventsPage.tsx carried a second inline copy of the builder that had never gained the field. Consolidated into src/lib/eventSchema.ts (rule 24) and both callers now import it. organizer/performer stay omitted (WEB-SEO-010: the events table has no such column, and the old fallback claimed we organize touring Broadway shows); offers stays omitted on an unreadable price (WEB-SEO-018). ALSO DISPROVEN: that expired events explain the 57-to-6 collapse. The sitemap is clean - 462 URLs, 344 future, 118 past all within the last 9 days, none older. The likeliest remaining explanation is SEO-001: with entity prerendering off, event DETAIL pages served no Event schema to a crawler at all, so only the handful of prerendered hub pages carried Event data, and 6 valid items is about the number of those pages. That is a hypothesis, not a measurement - it is testable once SEO-001 deploys. 16 unit tests in src/lib/__tests__/eventSchema.test.ts; 332 existing tests still pass; check-imports clean; eslint 0 errors on the changed files."
     },
     {
       "id": "SEO-003",
@@ -121,7 +121,7 @@
       "title": "Event location emits addressLocality Des Moines for venues that are not in Des Moines",
       "priority": 2,
       "phase": 1,
-      "passes": false,
+      "passes": true,
       "description": "As an event at Mickey's Irish Pub in Waukee, I need my structured data to say Waukee, because the ItemList on /events emits addressLocality 'Des Moines' with the Waukee venue's real geo coordinates. The locality looks hardcoded rather than read from the venue record.",
       "acceptanceCriteria": [
         "Read addressLocality from the venue record, not from a constant.",
@@ -130,7 +130,7 @@
         "Add a test that a non-Des-Moines venue emits its own locality, with a counter-assertion that a venue with no locality emits no field at all.",
         "Report how many event and venue records carried the wrong locality."
       ],
-      "notes": ""
+      "notes": "DONE 2026-08-29, in the same change as SEO-002 because it is the same code. EventsPage.tsx hardcoded `addressLocality: event.city || \"Des Moines\"` and `addressRegion: \"Iowa\"`, which is how a trivia night at Mickey's Irish Pub in WAUKEE shipped with addressLocality Des Moines beside Waukee's real geo coordinates. buildEventLocation() in src/lib/eventSchema.ts now reads the city and OMITS the field when there is none, rather than defaulting. A wrong city is worse than a missing one, and the suburbs are exactly where a local events site should beat a downtown-focused competitor. Asserted in BOTH directions - a real city is emitted, an absent or whitespace-only one is omitted - plus a counter-assertion that omitting the locality does not blank addressRegion and addressCountry with it. The equivalent check for restaurants, attractions and playgrounds is NOT done and is not covered by this story."
     },
     {
       "id": "SEO-008",

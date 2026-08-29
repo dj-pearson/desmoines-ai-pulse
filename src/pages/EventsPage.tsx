@@ -56,7 +56,7 @@ import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { SearchAutocomplete, addRecentSearch } from "@/components/SearchAutocomplete";
 import { formatCount } from "@/lib/pluralize";
-import { eventOfferProperties } from "@/lib/eventOffers";
+import { buildEventJsonLd } from "@/lib/eventSchema";
 
 // Lazy load heavy map component (includes Leaflet library ~150KB)
 const EventsMap = lazy(() => import("@/components/EventsMap"));
@@ -557,37 +557,22 @@ export default function EventsPage() {
       url: BRAND.baseUrl,
       areaServed: { "@type": "City", name: "Des Moines", addressRegion: "Iowa" },
     },
-    itemListElement: events?.slice(0, 30).map((event, index) => ({
+    // SEO-002: built by src/lib/eventSchema.ts rather than inline here.
+    //
+    // This block used to be a second, divergent copy of the builder in
+    // EventListJsonLd.tsx, and the divergence was live: measured 2026-08-28,
+    // /events shipped 30 Event nodes with NO endDate while /events/this-weekend
+    // and /events/today shipped theirs WITH it, from the same event rows. Google's
+    // Events report names endDate among the fields it wants, and /events is the
+    // hub for the term this site most needs to rank for.
+    //
+    // It also hardcoded `addressLocality: event.city || "Des Moines"`, which is
+    // how a trivia night in Waukee shipped as being in Des Moines (SEO-007).
+    itemListElement: (events?.slice(0, 30) || []).map((event, index) => ({
       "@type": "ListItem",
       position: index + 1,
-      item: {
-        "@type": "Event",
-        "@id": `${BRAND.baseUrl}/events/${createEventSlugWithCentralTime(event.title, event)}`,
-        name: event.title,
-        description: event.enhanced_description || event.original_description || `${event.title} - ${event.category} event in Des Moines, Iowa`,
-        startDate: event.event_start_utc || event.date,
-        location: {
-          "@type": "Place",
-          name: event.venue || event.location || "Des Moines Area",
-          address: {
-            "@type": "PostalAddress",
-            addressLocality: event.city || "Des Moines",
-            addressRegion: "Iowa",
-            addressCountry: "US",
-          },
-          ...(event.latitude && event.longitude && {
-            geo: { "@type": "GeoCoordinates", latitude: event.latitude, longitude: event.longitude },
-          }),
-        },
-        image: [event.image_url || `${BRAND.baseUrl}/default-event-image.jpg`],
-        url: `${BRAND.baseUrl}/events/${createEventSlugWithCentralTime(event.title, event)}`,
-        eventStatus: "https://schema.org/EventScheduled",
-        eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
-        // WEB-SEO-018: a range yields an AggregateOffer, and an unreadable
-        // price ("Varies") yields neither key rather than a fabricated 0.
-        ...eventOfferProperties(event.price),
-      },
-    })) || [],
+      item: buildEventJsonLd(event),
+    })),
   };
 
   // Loading state
