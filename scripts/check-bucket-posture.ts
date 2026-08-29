@@ -13,10 +13,20 @@
  * restating them, so there is exactly one list and the two checks cannot drift
  * apart.
  *
- * Credentials: a service-role key is required and this was measured, not
- * assumed. With the anon key, GET /storage/v1/bucket returns [] and
- * GET /storage/v1/bucket/<id> returns 400 NoSuchBucket for every bucket,
- * public and private alike -- anon cannot distinguish posture at all.
+ * Credentials: a service-role key is required for THIS endpoint and that was
+ * measured, not assumed. With the anon key, GET /storage/v1/bucket returns []
+ * and GET /storage/v1/bucket/<id> returns 400 NoSuchBucket for every bucket,
+ * public and private alike.
+ *
+ * CORRECTION, 2026-08-29: that is true of the bucket endpoint and it used to say
+ * "anon cannot distinguish posture at all", which is not. The public OBJECT
+ * endpoint does discriminate - a public bucket resolves and fails on the missing
+ * key (NoSuchKey) while a private one refuses to resolve (NoSuchBucket). It
+ * proves PUBLIC positively and cannot tell private from absent, which is the
+ * useful direction, so scripts/check-bucket-public-anon.ts runs that question on
+ * the anon key and gates pull requests. This script stays: it reads posture
+ * directly rather than inferring it, and it is the only one that can see a
+ * bucket that is private AND expected to exist.
  *
  * Runs in .github/workflows/rls-config-audit.yml, which is scheduled daily
  * rather than gating pull requests. That is on purpose: a PR gate that depends

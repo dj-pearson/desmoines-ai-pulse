@@ -257,6 +257,18 @@ jobs:
       - name: Sitemaps and redirects agree
         run: node scripts/check-sitemap-redirects.mjs
 
+      # WEB-LEGAL-011 AC8 / WEB-QA-020. check-bucket-posture.ts asks the same
+      # question but needs the service-role key, which is an ENVIRONMENT secret
+      # scoped to "Scrape" - so it only runs in the daily audit and a PR that
+      # reopens a bucket is not caught until the next morning. The public object
+      # endpoint answers it on the anon key: a public bucket resolves and fails
+      # on the missing key, a private one does not resolve at all.
+      - name: No closed storage bucket is publicly readable
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: npx tsx scripts/check-bucket-public-anon.ts
+
       # WEB-SEO-002 was "12 routes render no SEOHead" - pages shipping with the
       # shell's title, no canonical and the site-wide description. All 35 are
       # clean today and nothing was guarding it, so the property got fixed and

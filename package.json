@@ -104,6 +104,7 @@
     "ralph:android:resume": "node scripts/ralph/ralph.mjs --tool claude --prd prd-android.json --instructions scripts/ralph/CLAUDE-android.md --resume",
     "check-seo-routes": "node scripts/check-seo-route-parity.mjs",
     "check-sitemap-redirects": "node scripts/check-sitemap-redirects.mjs",
+    "check-bucket-anon": "tsx scripts/check-bucket-public-anon.ts",
     "icons:sprite": "node scripts/generate-icon-sprite.mjs",
     "check-pseo-inventory": "tsx scripts/check-pseo-inventory.ts",
     "check-pseo-collisions": "tsx scripts/check-pseo-collisions.ts",
