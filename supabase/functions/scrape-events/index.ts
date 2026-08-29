@@ -10,6 +10,7 @@ import {
   isDuplicateEvent,
   type ExistingEvent,
 } from "../_shared/eventDedup.ts";
+import { isHubOwned } from "../_shared/eventSourceProfiles.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -2030,6 +2031,23 @@ serve(async (req) => {
         last_run: jobRow.last_run,
         events_found: jobRow.events_found,
       };
+
+      // DMI-013 — a hub-owned source is not this producer's to scrape.
+      //
+      // Derived from `ownership` on the profile, never from a list kept here.
+      // The check runs BEFORE the recency check so a hub-owned job is reported
+      // as "not ours" rather than as "scraped too recently", which are different
+      // facts and would send an operator to the wrong place.
+      //
+      // A url matching no profile falls through and is scraped as before: an
+      // unrecognised source keeps its old behaviour rather than being silently
+      // dropped by both producers.
+      if (job.config?.url && isHubOwned(job.config.url)) {
+        const reason = "owned by the ADE Hub ingest run (eventSourceProfiles.ownership = 'hub')";
+        console.log(`⏭️ Skipping ${job.name}: ${reason}`);
+        skippedJobs.push({ name: job.name, reason });
+        continue;
+      }
 
       const skipCheck = shouldSkipJobScraping(job, isAdminDashboard);
       if (skipCheck.skip) {
