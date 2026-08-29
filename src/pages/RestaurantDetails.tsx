@@ -22,6 +22,7 @@ import { BackToTop } from "@/components/BackToTop";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import SpeakableSchema from "@/components/schema/SpeakableSchema";
 import { getCanonicalUrl } from "@/lib/brandConfig";
+import { qualifyTitleWithCity } from "@/lib/seoTitleLocation";
 import {
   MapPin,
   Phone,
@@ -219,8 +220,29 @@ export default function RestaurantDetails() {
     : cityName;
 
   // Comprehensive SEO
-  const seoTitle = restaurant.seo_title ||
-    `${restaurant.name} - ${restaurant.cuisine || "Restaurant"} in ${cityName}, Iowa | Menu, Hours & Reviews`;
+  //
+  // SEO-005: a hand-set seo_title overrides the generated fallback, and the
+  // fallback is the only one of the two that names the city. Texas Roadhouse has
+  // two real Des Moines-area locations - Johnston and Mills Civic Pkwy in West
+  // Des Moines - and BOTH rows carry seo_title "Texas Roadhouse", so two
+  // different restaurants served one identical title and neither told a searcher
+  // which branch they had found.
+  //
+  // qualifyTitleWithCity fills that gap and never overrides an editor: a title
+  // that already names a place is returned untouched, and a row with no city
+  // gets nothing appended rather than an invented one.
+  //
+  // This is worth doing beyond the one collision. The suburb-qualified branded
+  // lookup is one of the most common query shapes this site receives -
+  // "dave's hot chicken west des moines" at 1,184 impressions, "bonchon west
+  // des moines" at 1,391, "atlas cafe west des moines" at 282, plus marvs
+  // norwalk, bubbies bbq pleasant hill and others - and a title with no suburb
+  // in it cannot match any of them well.
+  const seoTitle = qualifyTitleWithCity(
+    restaurant.seo_title ||
+      `${restaurant.name} - ${restaurant.cuisine || "Restaurant"} in ${cityName}, Iowa | Menu, Hours & Reviews`,
+    restaurant.city,
+  );
 
   const seoDescription = restaurant.seo_description ||
     (restaurant.description

@@ -21,6 +21,27 @@
 /restaurants/daves-hot-chicken   /restaurants/daves-hot-chicken-2   301
 /restaurants/outback-steakhouse  /restaurants/outback-steakhouse-2  301
 
+# SEO-005: NO REDIRECT HERE, DELIBERATELY, and this note is the point of the
+# entry. Both remaining -2 pairs on this site are TWO REAL RESTAURANTS:
+#
+#   texas-roadhouse        Johnston        texas-roadhouse-2        West Des Moines
+#   flipn-jacks-...        Des Moines      flipn-jacks-...-2        Altoona
+#
+# A first pass here nearly 301'd the Flip'N Jacks pair as a duplicate. The
+# evidence for that was an og:description read through a regex that stopped at
+# the apostrophe in "Flip'N", so both pages appeared to say only "Discover
+# Flip". Read in full they name different cities. The two rows DO spell the
+# apostrophe differently - one U+0027, one U+2019 - which is why the slug
+# collided and took a -2, but a slug collision is not a duplicate record.
+#
+# scripts/check-duplicate-entities.ts already says this in its own header and
+# matches on name AND address for exactly this reason. It runs in CI
+# (rls-config-audit.yml). Trust it over a slug that looks suspicious.
+#
+# What these pairs actually needed was distinct TITLES - both branches served
+# one identical <title> - and that is qualifyTitleWithCity in
+# src/lib/seoTitleLocation.ts, not a redirect.
+
 # WEB-SEO-019: the slug generator used to DELETE accented letters instead of
 # folding them, so "Cafe" with an acute e became "caf". These eight had no
 # Search Console impressions at all, so renaming them costs nothing; the six
