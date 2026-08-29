@@ -3853,3 +3853,27 @@ since 2026-08-22 and errored on every one.
 - 184 hourly runs, every one a 500, and cron_health reports the job healthy - because net.http_post succeeds
   on enqueue, not on landing. Same blind spot as the scrape outage.
 ---
+
+## 2026-08-29 - campaign-creative-review-sweep has fired 1,105 times into a 404
+Third item from the net._http_response sweep. No code change - the fix is a deploy.
+
+Files changed:
+- prd.json - WEB-OPS-007 notes
+
+**Learnings for future iterations:**
+- **A cron job posting to an undeployed function looks healthy from every angle.** cron.job_run_details
+  records the enqueue, so it says succeeded (376 times); the function never runs, so it writes no
+  automation_job_runs row; and the agent observability watches automation_job_runs. Green cron row plus no
+  agent row is indistinguishable from an agent with nothing to do. Only net._http_response knows.
+- **Probing deployment: send the Authorization header and read the BODY.** A POST with only an apikey can
+  return 401 before the gateway resolves the function, so 401 alone does not prove deployment. With
+  `Authorization: Bearer <anon>`, an absent function returns the gateway's
+  {"code":"NOT_FOUND","message":"Requested function was not found"} and a deployed one returns its own gate's
+  message.
+- **Cross-check cron targets against the undeployed baseline.** One query finds them:
+    select jobname, substring(command from 'functions/v1/([a-z0-9-]+)') from cron.job where active;
+  then probe each. campaign-creative-review is in edge-deploy-baseline.json's 64 and has an active */10 job
+  pointed at it.
+- This is the ad-creative approval automation WEB-LEGAL-011 depends on, so pending creatives are being
+  reviewed by nothing while the sweep reports success.
+---
