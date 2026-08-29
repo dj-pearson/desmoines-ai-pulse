@@ -3649,3 +3649,33 @@ playgrounds 67/67 (ALL), attractions 22/22 (ALL), pseo 18/18 (ALL), articles 18/
   budget rendering 35 entities still scored 870 on check-entity-coverage because the earlier full pass was
   still on disk. Fine in CI, which builds fresh; `rm -rf dist` before any local run you intend to measure.
 ---
+
+## 2026-08-29 - Two more CI guards were crashing, not passing
+Ran the pr-checks list by hand after the check-dom-budget repair, on the theory that if dist/ growing killed
+one guard it had probably killed others. It had.
+
+Files changed:
+- scripts/check-prerender-head.mjs - jsdom replaced with a head parser, proven equivalent on 121 pages
+- scripts/check-prerender-content.mjs - keeps jsdom, shards across child processes of 250 files
+- prd.json - WEB-SEO-006 notes
+
+Verified: head 40s crash -> 0.98s / 904 pages / exit 0. content 40s crash -> 57s / 904 pages / 4 shards /
+exit 0, and injecting aria-busy into one page still fails it.
+
+**Learnings for future iterations:**
+- **jsdom cannot process ~1,000 documents in one node process, and window.close() does not save you.**
+  Measured both ways over dist/; both exhaust the heap. Either stop using it (tag-level facts) or shard
+  across child processes (tree questions). Exiting the process is the only reliable way to return the heap.
+- **Pick the remedy per file from what the file actually asserts.** check-prerender-head wanted canonical,
+  title and description - no tree, so a parser works. check-prerender-content wants accessible names and
+  nesting, and its own header says a regex cannot answer those - so it shards and keeps its semantics.
+- **When replacing a parser, the equivalence run is where you find your bugs.** 121 pages caught two: the
+  attribute delimiter has to be the same quote that opened it, because accepting either at both ends
+  truncates any description containing an apostrophe; and entities have to be decoded because jsdom decodes
+  them.
+- **Three crashed guards and two false ones this session, all broken by something else changing underneath.**
+  check-dom-budget, check-prerender-head and check-prerender-content died when entity prerendering grew
+  dist/ 33x; check-duplicate-schema went false when a comment was added; check-edge-deploys went stale when
+  three functions were deployed. Run the CI list by hand periodically - a guard that crashes reports nothing,
+  and nothing is what everyone sees.
+---
