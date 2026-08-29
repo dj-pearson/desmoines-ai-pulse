@@ -3546,3 +3546,29 @@ Files changed:
   rls-config-audit.yml declares `environment: Scrape` at :19 so it gets them - but it means a local run
   proves nothing.
 ---
+
+## 2026-08-29 - WEB-PERF-023: the DOM guard was crashing, and it hid a 14,857-element page
+Third broken guard this session. check-dom-budget.mjs was OOMing at exit 134 - in CI too - so it reported
+nothing at all.
+
+Files changed:
+- scripts/check-dom-budget.mjs - jsdom replaced with a tag scanner, proven equivalent on 91 pages
+- prd.json - WEB-PERF-023 notes
+
+Verified: 40s crash -> 1.7s clean run over 1,171 routes. Equivalence checked against
+root.querySelectorAll('*').length on 91 pages spanning hubs and every entity type: 91 exact, 0 mismatched.
+
+**Learnings for future iterations:**
+- **A guard written against 35 pages will not survive 1,171.** Entity prerendering multiplied dist/ by 33x
+  and every per-page jsdom parse became a heap allocation nobody freed. window.close() and counting once
+  were not enough. When a check reads dist/, check how big dist/ has become since it was written.
+- **When replacing a parser, prove equivalence on a sample before trusting the new numbers.** 91 pages
+  across every route type, exact match on all of them - that is what makes it a refactor rather than a new
+  and differently-wrong metric. Blank script/style bodies first: JSON-LD contains "<" inside strings.
+- **/events/august-2026 ships 14,857 DOM elements**, ten times the Lighthouse flag and twelve times the
+  1,189 median. The four month pages are the four worst routes on the site, they render a month of events
+  uncapped, and SEO-016 has just started linking to them from the footer - discoverable and heaviest at the
+  same time. WEB-PERF-023 names three routes at 5,000-6,600; it is worse than the story thinks.
+- Do not re-baseline a reporting check to make it quiet. It would have banked all 1,171 routes and buried
+  the finding.
+---
