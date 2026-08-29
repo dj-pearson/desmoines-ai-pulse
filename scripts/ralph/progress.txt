@@ -3901,3 +3901,30 @@ Files changed:
 - My own executive-digest cron migration schedules an undeployed function too. Applying it without deploying
   would make a sixth; they go together.
 ---
+
+## 2026-08-29 - enhance-events: the cron invented a request shape the function never had
+Fourth and last item from the net._http_response sweep.
+
+Files changed:
+- supabase/functions/batch-enhance-events/index.ts - validate eventIds/fields, 400 instead of a TypeError
+- prd.json - WEB-OPS-007 notes
+
+Verified: esbuild, tsc, npm run validate all clean.
+
+**Learnings for future iterations:**
+- **Three schedulers, three callees, three different mismatches, all in one day** - and all invisible for the
+  same reason, that net.http_post succeeds on enqueue:
+    ai-article-pipeline -> suggest-article-topics  auth (service-role bearer vs a user-session gate)
+    scrape-events       -> firecrawl-scraper       inner non-2xx wrapped in success: true
+    enhance-events-*    -> batch-enhance-events    payload (cron posts {limit, forceRefresh}, handler wants
+                                                   eventIds)
+  When a cron job posts to an edge function, the contract between them is checked by nothing at all.
+- **Destructure then validate, before the first property access.** `const { eventIds } = await req.json()`
+  followed by `eventIds.length` turns a contract mismatch into "Cannot read properties of undefined", which
+  names neither the field nor the caller. A 400 naming the field makes the next failure readable from
+  net._http_response alone.
+- **Do not infer a cost decision from a cron payload.** {"limit": 50} implies a selection mode this function
+  has never had, and each event costs a Claude call plus up to three Google Search calls. Either it grows a
+  selector with an explicit budget or the schedules should go; inventing the behaviour would have committed
+  the project to spend nobody chose.
+---
