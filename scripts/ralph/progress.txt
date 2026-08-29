@@ -3996,3 +3996,27 @@ Two traps worth reusing:
   false - while JS `"false" !== false` is true. Check isString first.
   mockk(relaxed=true) cannot produce a Result<T>; it is a value class, so you get
   a ClassCastException at the CALL SITE rather than at the stub.
+
+================================================================================
+2026-08-29  AND-AUDIT-007 - the biometric lock only locked once per process
+================================================================================
+The gate lived in LaunchedEffect(Unit), which runs once per composition. Every
+unlock after the first was theatre. Lock state now lives in a @Singleton
+controller driven by ON_STOP/ON_START, raised in onCreate before setContent.
+
+Grace period is zero, deliberately: ON_STOP does not fire for the notification
+shade, so the case a grace period protects against does not arise. iOS reached
+the same answer independently (IOS-AUDIT-SEC-016).
+
+DEVICE_CREDENTIAL added, with the two constraints that crash if ignored -
+BIOMETRIC_STRONG|DEVICE_CREDENTIAL is illegal below API 30, and it cannot be
+combined with setNegativeButtonText.
+
+385 tests, 0 failures. Lint clean.
+
+WORTH REMEMBERING: I added an in-flight guard against the PIN UI re-locking
+underneath a successful unlock, with three tests. Mutation-testing it showed all
+three passed with the guard disabled - the prompt only shows while already
+locked, so re-locking on return is a no-op. Removed the guard, its tests and its
+comment. Mutation-test a guard before trusting the tests that surround it; a
+green test next to speculative code proves nothing about the code.
