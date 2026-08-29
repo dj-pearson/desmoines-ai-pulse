@@ -5,6 +5,7 @@
  * Risk level: MEDIUM
  */
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { parseEventDateTime } from "../_shared/eventDateTime.ts";
 import { renderExtractionPrompt, contentWindowFor } from "../_shared/prompts/index.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -27,7 +28,6 @@ import {
 import { resolveEventImage } from "../_shared/venueImage.ts";
 
 // Marker time for events without specific times (7:31:58 PM Central)
-const NO_TIME_MARKER = "19:31:58";
 
 // Sports schedule domains - use domain-specific prompt and ticket URL handling
 const SPORTS_SCHEDULE_DOMAINS = [
@@ -178,68 +178,6 @@ async function findMatchingKnownVenue(venueName: string): Promise<KnownVenueData
     }
   }
 
-  return null;
-}
-
-// Enhanced time parsing for events with Central Time handling 
-interface ParsedDateTime { 
-  event_start_local: string; 
-  event_timezone: string; 
-  event_start_utc: Date; 
-} 
-
-function parseEventDateTime(dateStr: string): ParsedDateTime | null { 
-  if (!dateStr) return null; 
- 
-  const eventTimeZone = "America/Chicago"; // Default to Central Time 
- 
-  try { 
-    console.log(`🕐 Parsing date string: "${dateStr}"`);
-    
-    let centralTimeString: string;
-    
-    // Match YYYY-MM-DD HH:MM:SS format
-    if (dateStr.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)) {
-      centralTimeString = dateStr;
-    } 
-    // Match YYYY-MM-DD format (use marker time to indicate no specific time)
-    else if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
-      centralTimeString = `${dateStr} ${NO_TIME_MARKER}`;
-    }
-    // Fallback: try to parse and reformat
-    else {
-      const fallbackDate = new Date(dateStr);
-      if (isNaN(fallbackDate.getTime())) {
-        console.log(`⚠️ Could not parse date: ${dateStr}`);
-        return null;
-      }
-      // Assume the parsed date is in Central Time
-      const year = fallbackDate.getFullYear();
-      const month = (fallbackDate.getMonth() + 1).toString().padStart(2, '0');
-      const day = fallbackDate.getDate().toString().padStart(2, '0');
-      const hours = fallbackDate.getHours().toString().padStart(2, '0');
-      const minutes = fallbackDate.getMinutes().toString().padStart(2, '0');
-      const seconds = fallbackDate.getSeconds().toString().padStart(2, '0');
-      centralTimeString = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-    }
-    
-    // Convert Central Time to UTC
-    const localDate = parseISO(centralTimeString);
-    const utcDate = fromZonedTime(localDate, eventTimeZone);
-    
-    console.log(`🕐 Parsed: ${dateStr} -> Central: ${centralTimeString} -> UTC: ${utcDate.toISOString()}`);
- 
-    if (!isNaN(utcDate.getTime())) { 
-      return { 
-        event_start_local: centralTimeString, 
-        event_timezone: eventTimeZone, 
-        event_start_utc: utcDate, 
-      }; 
-    } 
-  } catch (error) { 
-    console.log(`⚠️ Could not parse date: ${dateStr}`, error); 
-  } 
- 
   return null;
 }
 
