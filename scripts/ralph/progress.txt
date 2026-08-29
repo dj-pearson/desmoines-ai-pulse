@@ -2896,3 +2896,41 @@ above, which is what unblocked it):
   Play test account. passes stays false for that reason alone; nothing else in the story is open. Play's
   deadline is 31 Aug 2026 and the library requirement itself is satisfied by this commit.
 ---
+
+## 2026-08-29 - AND-AUDIT-005 (AndroidX to the compileSdk-36 ceiling)
+Took AC5, the "alternative worth pricing first" the story could never price because Google Maven was said to
+be unreachable. It is reachable from this machine, so the ceiling was read from each AAR's own
+aar-metadata.properties rather than from release notes.
+
+Files changed:
+- android/gradle/libs.versions.toml - five versions, no source changes
+    coreKtx 1.15.0 -> 1.18.0, lifecycleRuntimeKtx 2.8.7 -> 2.10.0, activityCompose 1.9.3 -> 1.13.0,
+    composeBom 2024.12.01 -> 2026.06.01, composeNavigation 2.8.5 -> 2.9.8
+- prd.json - AND-AUDIT-005 notes
+
+Verified:
+    :app:checkDebugAarMetadata  SUCCESS  (the task that reported 16 issues on CI run 33179244127)
+    :app:assembleDebug          SUCCESS
+    :app:testDebugUnitTest      SUCCESS
+    :app:minifyReleaseWithR8    SUCCESS  4m16s
+Three new deprecation warnings, no errors. Story stays open for AC3/AC4, the AGP move.
+
+**Learnings for future iterations:**
+- The compileSdk ceiling is per-artifact and machine-readable. `minCompileSdk` in
+  META-INF/com/android/build/gradle/aar-metadata.properties inside the AAR is the authority; an AAR with no
+  such file imposes no constraint at all. Under compileSdk 36 the walls are navigation-compose 2.10.0,
+  lifecycle 2.11.0, compose ui 1.12.0 and core-ktx 1.19.0 - each exactly one stable release past what now
+  ships. Do not read this off release notes; they do not carry the number.
+- **The KMP artifacts are where the metadata lives.** Probing `androidx.navigation:navigation-compose` finds
+  a pom-only wrapper and reports "no constraint", which is wrong and would have shipped a broken bump. The
+  real AAR is `navigation-compose-android`. Same for lifecycle-*-android, ui-android, material3-android.
+  Always probe the `-android` variant.
+- **compose-bom is the hidden constraint.** The BOM pins compose ui, so picking the wrong BOM drags the build
+  over the wall even when every explicitly named version is fine. 2026.06.01 is the last BOM mapping to ui
+  1.11.4; 2026.08.00 maps to 1.12.0. Read the BOM's pom before choosing it.
+- **To exercise R8 locally without release credentials, run `:app:minifyReleaseWithR8`.** The guard in
+  app/build.gradle.kts:29 matches gradle.startParameter.taskNames against "assemblerelease"/"bundlerelease"/
+  "publish", and that task name contains none of them. Same hole AND-AUDIT-024 records as unfixed, useful here.
+- A version bump that compiles is not a verified version bump. checkDebugAarMetadata is a separate task from
+  compileDebugKotlin and is the one that fails on a compileSdk floor - run assembleDebug, not just the compile.
+---
