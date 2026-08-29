@@ -176,9 +176,32 @@ const ENTITY_SITEMAPS = [
  */
 const entitySource = new Map();
 
+// WEB-SEO-006. A strict priority order does not spread the shortfall, it hands
+// the whole of it to the tail: the last full-budget pass rendered restaurants
+// 478/478 and events 391/397 while attractions, playgrounds, articles and pSEO
+// each came out at exactly ZERO. Those four hold 125 URLs between them, 13% of
+// the list, and a category with no prerendered pages at all is not thinly
+// covered - it is invisible to every crawler that does not run JS, which is the
+// entire reason this pass exists.
+//
+// So sitemaps small enough to be a rounding error render first. The priority
+// order above still decides who loses when the budget binds; this only stops the
+// cheapest categories from being the ones who lose everything. At the measured
+// ~2 URLs/sec the 130 tail URLs cost about a minute of a 420-second budget.
+//
+// THE TRADE, said plainly rather than buried: events loses roughly the same 130.
+// That is the right side of it on the evidence recorded above - event URLs drew
+// far fewer impressions than restaurants and converted zero clicks - and events
+// is the half of the list that goes stale, so a prerendered event page has the
+// shortest useful life of anything here.
+//
+// Self-limiting: a sitemap that grows past this stops being cheap and drops back
+// to its own place in the priority order.
+const SMALL_SITEMAP_MAX = 100;
+
 function collectEntityRoutes() {
   const seen = new Set();
-  const routes = [];
+  const buckets = new Map();
   for (const file of ENTITY_SITEMAPS) {
     const full = path.join(DIST, file);
     if (!fs.existsSync(full)) {
@@ -205,10 +228,23 @@ function collectEntityRoutes() {
       if (seen.has(pathname) || ROUTES.includes(pathname)) continue;
       seen.add(pathname);
       entitySource.set(pathname, file.replace(/^sitemap-|\.xml$/g, ''));
-      routes.push(pathname);
+      if (!buckets.has(file)) buckets.set(file, []);
+      buckets.get(file).push(pathname);
     }
   }
-  return routes;
+
+  const size = (f) => (buckets.get(f) || []).length;
+  const present = ENTITY_SITEMAPS.filter((f) => size(f) > 0);
+  const ordered = [
+    ...present.filter((f) => size(f) <= SMALL_SITEMAP_MAX),
+    ...present.filter((f) => size(f) > SMALL_SITEMAP_MAX),
+  ];
+  // Print the order the budget will be spent in. When a pass comes back short,
+  // this line is what says which categories were ever going to be reached.
+  console.log(
+    `[prerender] entity order: ${ordered.map((f) => `${f.replace(/^sitemap-|\.xml$/g, '')}(${size(f)})`).join(' -> ')}`,
+  );
+  return ordered.flatMap((f) => buckets.get(f));
 }
 
 const MIME = {

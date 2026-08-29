@@ -120,9 +120,27 @@ for (const [name, g] of groups) {
 
 if (UPDATE) {
   const routes = Object.fromEntries([...groups].map(([k, g]) => [k, g.rendered]));
+  // Carry `floors` forward. It is set by hand, for the reason in $floors below,
+  // and re-baselining is exactly when it would otherwise be silently lost.
+  const prior = existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, 'utf8')) : {};
   writeFileSync(
     BASELINE,
-    JSON.stringify({ $comment: 'WEB-SEO-006 AC5. Prerendered entity URLs per sitemap. This may only go UP.', generated: new Date().toISOString().slice(0, 10), total: totals.rendered, groups: routes }, null, 2) + '\n',
+    JSON.stringify(
+      {
+        $comment: 'WEB-SEO-006 AC5. Prerendered entity URLs per sitemap. This may only go UP.',
+        $floors:
+          'Optional per-group override of the computed floor. The LAST sitemap in prerender.mjs ' +
+          "ENTITY_SITEMAPS absorbs all of the budget's variance - every other group either fits or " +
+          'does not - so its per-build number is weather, not health, and policing it fails on a slow ' +
+          'runner. Set that group to 0 and let the total ratchet catch the cliff.',
+        generated: new Date().toISOString().slice(0, 10),
+        total: totals.rendered,
+        groups: routes,
+        ...(prior.floors ? { floors: prior.floors } : {}),
+      },
+      null,
+      2,
+    ) + '\n',
   );
   console.log(`[entity-coverage] baseline written: ${totals.rendered} rendered.`);
   process.exit(0);
@@ -153,13 +171,42 @@ const baseline = JSON.parse(readFileSync(BASELINE, 'utf8'));
  */
 const FLOOR = 0.5;
 
+/**
+ * The floor for one group. An explicit `floors` entry wins, including 0.
+ *
+ * Zero does not mean "give up on this group". The LAST sitemap in prerender.mjs
+ * ENTITY_SITEMAPS is the only one whose number moves with how busy the machine
+ * was - the ones ahead of it either fit inside the budget or the build is
+ * broken - so its per-build count measures the runner, not the site. Policing it
+ * fails on a slow runner and teaches everyone to ignore this check. The total
+ * ratchet below is what catches a real collapse, and it catches one in this
+ * group too.
+ */
+const floorFor = (name, before) =>
+  baseline.floors?.[name] !== undefined ? baseline.floors[name] : Math.floor(before * FLOOR);
+
 const drops = [];
 for (const [name, g] of groups) {
   const before = baseline.groups?.[name];
   if (before === undefined) continue;
-  if (g.rendered < Math.floor(before * FLOOR)) {
+  if (g.rendered < floorFor(name, before)) {
     drops.push({ name, before, now: g.rendered, missing: g.missing });
   }
+}
+
+// The total, at the same loose floor. Without it, zeroing a group's floor would
+// leave that group unpoliced outright; with it, entity prerendering breaking
+// still fails the build whichever group it broke in.
+if (typeof baseline.total === 'number' && totals.rendered < Math.floor(baseline.total * FLOOR)) {
+  console.error(
+    `\nEntity prerendering collapsed: ${totals.rendered} URLs against a baseline of ${baseline.total} (WEB-SEO-006)\n`,
+  );
+  console.error(
+    `  That is past the ${FLOOR * 100}% floor this check tolerates for wall-clock variance, so it is\n` +
+      '  the pass failing rather than the runner being slow. Check that PRERENDER_ENTITIES is not\n' +
+      '  false, that the sitemaps are populated, and that the strict gate is not rejecting everything.\n',
+  );
+  process.exit(1);
 }
 
 const softer = [...groups].filter(([name, g]) => {
