@@ -9,6 +9,8 @@ import coil3.memory.MemoryCache
 import coil3.request.crossfade
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import com.desmoines.aipulse.data.local.CacheManager
+import com.desmoines.aipulse.util.AppLogger
+import com.desmoines.aipulse.util.LoggedError
 import com.desmoines.aipulse.util.CrashReportingService
 import com.desmoines.aipulse.util.CrashUploader
 import com.desmoines.aipulse.util.LocalNotificationService
@@ -40,6 +42,16 @@ class DesMoinesInsiderApp : Application(), SingletonImageLoader.Factory {
         super.onCreate()
         // Install the crash handler as early as possible.
         crashReportingService.install()
+        // AND-AUDIT-023: an error someone caught and logged reached nobody -
+        // AppLogger.error only wrote to logcat, on a device we are not holding.
+        // Installed straight after the crash handler and before any other
+        // startup work, so the first thing that fails is already reportable.
+        AppLogger.installErrorSink { category, message, throwable ->
+            crashReportingService.recordError(
+                throwable ?: LoggedError(message),
+                mapOf("source" to "AppLogger", "category" to category, "message" to message),
+            )
+        }
         // Drain whatever the previous run recorded. Every crash the app has
         // ever captured stayed on the device until now (XPLAT-004 AC1).
         // Silent on failure, and records survive a failed attempt.

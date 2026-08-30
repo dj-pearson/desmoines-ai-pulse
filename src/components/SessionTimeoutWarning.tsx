@@ -11,7 +11,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSessionManager } from "@/hooks/useSessionManager";
-import { Clock } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
+
 
 interface SessionTimeoutWarningProps {
   /** Minutes of inactivity before showing warning (default: 25) */
@@ -93,7 +94,7 @@ export function SessionTimeoutWarning({
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
-            <Clock className="h-5 w-5 text-amber-500" />
+            <SpriteIcon name="clock" className="h-5 w-5 text-amber-500" />
             Session Timeout Warning
           </AlertDialogTitle>
           <AlertDialogDescription className="space-y-2">

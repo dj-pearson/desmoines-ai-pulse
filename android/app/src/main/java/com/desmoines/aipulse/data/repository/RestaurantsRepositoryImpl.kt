@@ -1,6 +1,6 @@
 package com.desmoines.aipulse.data.repository
 
-import android.util.Log
+import com.desmoines.aipulse.util.AppLogger
 import com.desmoines.aipulse.data.local.CacheManager
 import com.desmoines.aipulse.data.model.Restaurant
 import com.desmoines.aipulse.data.remote.RestaurantsQuery
@@ -8,9 +8,6 @@ import com.desmoines.aipulse.data.remote.RestaurantsRemoteDataSource
 import com.desmoines.aipulse.data.remote.RestaurantsResponse
 import javax.inject.Inject
 import javax.inject.Singleton
-
-private const val TAG = "RestaurantsRepository"
-
 /**
  * Repository implementation wrapping [RestaurantsRemoteDataSource] with cache-first strategy.
  * Returns cached data immediately if fresh, fetches from remote otherwise.
@@ -40,7 +37,7 @@ class RestaurantsRepositoryImpl @Inject constructor(
                 cacheManager.cacheRestaurants(cacheKey, response.restaurants)
             }
         }.recoverCatching { error ->
-            Log.e(TAG, "fetchRestaurants failed, trying stale cache: ${error.message}", error)
+            AppLogger.network.error("fetchRestaurants failed, trying stale cache: ${error.message}", error)
             val stale = cacheManager.getCachedRestaurants(cacheKey, allowStale = true)
                 ?: throw error
             RestaurantsResponse(restaurants = stale, totalCount = stale.size, hasMore = false)
@@ -56,7 +53,7 @@ class RestaurantsRepositoryImpl @Inject constructor(
             remoteDataSource.fetchRestaurant(id).also { restaurant ->
                 cacheManager.cacheRestaurants(CacheManager.restaurantsKey("single", id), listOf(restaurant))
             }
-        }.onFailure { Log.e(TAG, "fetchRestaurant($id) failed: ${it.message}", it) }
+        }.onFailure { AppLogger.network.error("fetchRestaurant($id) failed: ${it.message}", it) }
     }
 
     override suspend fun fuzzySearchRestaurants(query: String, limit: Int): Result<List<Restaurant>> {
@@ -71,7 +68,7 @@ class RestaurantsRepositoryImpl @Inject constructor(
                 cacheManager.cacheRestaurants(cacheKey, restaurants)
             }
         }.recoverCatching { error ->
-            Log.e(TAG, "fuzzySearchRestaurants failed, trying stale cache: ${error.message}", error)
+            AppLogger.network.error("fuzzySearchRestaurants failed, trying stale cache: ${error.message}", error)
             cacheManager.getCachedRestaurants(cacheKey, allowStale = true) ?: throw error
         }
     }
@@ -93,7 +90,7 @@ class RestaurantsRepositoryImpl @Inject constructor(
                 cacheManager.cacheRestaurants(cacheKey, restaurants)
             }
         }.recoverCatching { error ->
-            Log.e(TAG, "fetchNearbyRestaurants failed, trying stale cache: ${error.message}", error)
+            AppLogger.network.error("fetchNearbyRestaurants failed, trying stale cache: ${error.message}", error)
             cacheManager.getCachedRestaurants(cacheKey, allowStale = true) ?: throw error
         }
     }
@@ -102,6 +99,6 @@ class RestaurantsRepositoryImpl @Inject constructor(
         // Cuisines are a simple list, cache with a fixed key
         return runCatching {
             remoteDataSource.fetchAvailableCuisines()
-        }.onFailure { Log.e(TAG, "fetchAvailableCuisines failed: ${it.message}", it) }
+        }.onFailure { AppLogger.network.error("fetchAvailableCuisines failed: ${it.message}", it) }
     }
 }

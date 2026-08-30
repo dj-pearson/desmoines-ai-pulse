@@ -3,9 +3,10 @@ import { useEffect } from "react";
 import { Helmet } from "react-helmet-async";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Home, Calendar, MapPin, Search } from "lucide-react";
+import { Home, Search } from "lucide-react";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('NotFound');
 
@@ -52,14 +53,14 @@ const NotFound = () => {
             
             <Button asChild variant="outline">
               <Link to="/events">
-                <Calendar className="w-4 h-4 mr-2" />
+                <SpriteIcon name="calendar" className="w-4 h-4 mr-2" />
                 Browse Events
               </Link>
             </Button>
             
             <Button asChild variant="outline">
               <Link to="/restaurants">
-                <MapPin className="w-4 h-4 mr-2" />
+                <SpriteIcon name="map-pin" className="w-4 h-4 mr-2" />
                 Find Restaurants
               </Link>
             </Button>

@@ -30,6 +30,9 @@ Started: 2026-06-12T01:18:32.104Z
 - **Job Health re-run sends `{manual:true}`** (JobHealthPanel.rerun), not your custom body. A fn with multiple modes must treat `manual===true` as its default/safe mode (e.g. a sweep), else the re-run button 400s. Other single-purpose jobs just ignore the manual flag.
 - **PAUSE semantics for a GATING pipeline:** when the paused job is a visibility GATE (not a generator), pausing must TRUST-THROUGH (force-approve pending items) — otherwise pending content is stranded hidden forever. Contrast generator pipelines (article/digest) where pause just early-exits with no side effect.
 
+- **Android: gradlew fails on this machine until you override GRADLE_USER_HOME.** The env var points at `C:/Users/pears/scoop/apps/gradle/current/.gradle` - inside a scoop junction that moves on every gradle update - so the caches there are a mix of Gradle 8.13/9.6.1 artifacts while the wrapper is 9.3.1. Every invocation dies with `Unresolved reference 'plugins'` at settings.gradle.kts:14, which reads like a broken settings script and is not: the copy it compiles lives under that stale GRADLE_USER_HOME. `GRADLE_USER_HOME=$HOME/.gradle ./gradlew ...` builds clean (first run re-downloads the 9.3.1 distribution; ~5 min for a cold compileDebugKotlin). Several Android stories in this PRD are recorded as 'CI-only, cannot build here' - re-test that claim before repeating it.
+- **Verify a dependency bump against the shipped bytecode, not the release notes.** `javap` over the AAR's classes.jar answers questions no changelog does: whether a getter is still @RecentlyNullable, whether a new flag defaults to false, whether an AAR declares minCompileSdk at all (billing 9.1.0 ships NO aar-metadata.properties, so it does not force compileSdk 37). Download from dl.google.com/dl/android/maven2/<group path>/<artifact>/<ver>/<artifact>-<ver>.aar, unzip classes.jar, `javap -p -c -cp <dir> <FQCN>`. Google Maven IS reachable from this machine.
+
 ---
 ## 2026-06-12 - WEB-AUTO-006 (Stale-event lifecycle: soft-hide → archive → purge)
 Replaced the single-phase hard-delete with a two-phase, observable, recoverable lifecycle.
@@ -2856,3 +2859,1369 @@ Left unfixed and recorded instead: the guard matches gradle.startParameter.taskN
 so `./gradlew build` reaches assembleRelease as a dependency with no matching
 string in the requested task names. Pre-existing, and fixing it means a
 variant-scoped check, which is a bigger change than this story asked for.
+
+## 2026-08-29 - AND-AUDIT-003 (Play Billing 7.1.1 -> 9.1.0)
+Bumped `playBilling` in android/gradle/libs.versions.toml. BillingService.kt is untouched, and that is the
+finding rather than the shortcut: every one of the 31 billing symbols it uses is present and unchanged in
+9.1.0, checked with javap against the shipped AAR before the build was trusted.
+
+Files changed:
+- android/gradle/libs.versions.toml - playBilling 7.1.1 -> 9.1.0 (one line)
+- prd.json - AND-AUDIT-003 notes
+
+Verified locally (first Android story in this PRD to actually build here - see the GRADLE_USER_HOME pattern
+above, which is what unblocked it):
+    :app:compileDebugKotlin   BUILD SUCCESSFUL 4m47s, zero new warnings
+    :app:testDebugUnitTest    BUILD SUCCESSFUL 2m
+    debugRuntimeClasspath     billing-ktx:9.1.0 -> billing:9.1.0, androidx.core 1.15.0 (9.x needs >= 1.9)
+
+**Learnings for future iterations:**
+- The 8.0.0 breaking change (onProductDetailsResponse now hands back QueryProductDetailsResult) only bites
+  callers who implement ProductDetailsResponseListener. BillingService uses the ktx suspend
+  `queryProductDetails`, and the ProductDetailsResult wrapper absorbed the change - .productDetailsList is
+  still there and still @RecentlyNullable in 9.1.0, same as 7.1.1, so the `?: emptyList()` is not a dead
+  elvis. Check which API surface you are actually on before pricing a "breaking" change.
+- The one real revenue risk was 8.1's suspended subscriptions: updatePurchasedProducts grants entitlement on
+  purchaseState == PURCHASED, so if queryPurchasesAsync had silently started returning suspended subs it
+  would have unlocked premium for people who stopped paying. It does not - decompiled
+  QueryPurchasesParams$Builder and the new includeSuspendedSubscriptions flag is a private field the
+  constructor sets to false, and build() throws if it is set on a non-subs query. Opt-in, not default.
+  Purchase.isSuspended() now exists and is unread, which is correct only while we stay opted out.
+- What the ktx path costs us: 8.0.0 added unfetchedProductList with per-product status codes, the wrapper
+  does not expose it, so a product that fails to fetch still looks identical to one that does not exist and
+  BillingService.kt:219 logs "No products found" for both. Diagnosable now, and not being diagnosed.
+- This bump is NOT gated on AND-AUDIT-005's AGP move. billing-9.1.0.aar carries no aar-metadata.properties,
+  so it declares no minCompileSdk and is happy on compileSdk 36. Do not sequence the two together.
+- AC7 (a real purchase on an internal-testing track) is the only criterion left and needs a device plus a
+  Play test account. passes stays false for that reason alone; nothing else in the story is open. Play's
+  deadline is 31 Aug 2026 and the library requirement itself is satisfied by this commit.
+---
+
+## 2026-08-29 - AND-AUDIT-005 (AndroidX to the compileSdk-36 ceiling)
+Took AC5, the "alternative worth pricing first" the story could never price because Google Maven was said to
+be unreachable. It is reachable from this machine, so the ceiling was read from each AAR's own
+aar-metadata.properties rather than from release notes.
+
+Files changed:
+- android/gradle/libs.versions.toml - five versions, no source changes
+    coreKtx 1.15.0 -> 1.18.0, lifecycleRuntimeKtx 2.8.7 -> 2.10.0, activityCompose 1.9.3 -> 1.13.0,
+    composeBom 2024.12.01 -> 2026.06.01, composeNavigation 2.8.5 -> 2.9.8
+- prd.json - AND-AUDIT-005 notes
+
+Verified:
+    :app:checkDebugAarMetadata  SUCCESS  (the task that reported 16 issues on CI run 33179244127)
+    :app:assembleDebug          SUCCESS
+    :app:testDebugUnitTest      SUCCESS
+    :app:minifyReleaseWithR8    SUCCESS  4m16s
+Three new deprecation warnings, no errors. Story stays open for AC3/AC4, the AGP move.
+
+**Learnings for future iterations:**
+- The compileSdk ceiling is per-artifact and machine-readable. `minCompileSdk` in
+  META-INF/com/android/build/gradle/aar-metadata.properties inside the AAR is the authority; an AAR with no
+  such file imposes no constraint at all. Under compileSdk 36 the walls are navigation-compose 2.10.0,
+  lifecycle 2.11.0, compose ui 1.12.0 and core-ktx 1.19.0 - each exactly one stable release past what now
+  ships. Do not read this off release notes; they do not carry the number.
+- **The KMP artifacts are where the metadata lives.** Probing `androidx.navigation:navigation-compose` finds
+  a pom-only wrapper and reports "no constraint", which is wrong and would have shipped a broken bump. The
+  real AAR is `navigation-compose-android`. Same for lifecycle-*-android, ui-android, material3-android.
+  Always probe the `-android` variant.
+- **compose-bom is the hidden constraint.** The BOM pins compose ui, so picking the wrong BOM drags the build
+  over the wall even when every explicitly named version is fine. 2026.06.01 is the last BOM mapping to ui
+  1.11.4; 2026.08.00 maps to 1.12.0. Read the BOM's pom before choosing it.
+- **To exercise R8 locally without release credentials, run `:app:minifyReleaseWithR8`.** The guard in
+  app/build.gradle.kts:29 matches gradle.startParameter.taskNames against "assemblerelease"/"bundlerelease"/
+  "publish", and that task name contains none of them. Same hole AND-AUDIT-024 records as unfixed, useful here.
+- A version bump that compiles is not a verified version bump. checkDebugAarMetadata is a separate task from
+  compileDebugKotlin and is the one that fails on a compileSdk floor - run assembleDebug, not just the compile.
+---
+
+## 2026-08-29 - AND-AUDIT-005 (AC3/AC4: AGP 9.3.2, Gradle 9.5.0, compileSdk 37)
+Second half of the story, same day as the AC5 note above. The AGP move was the small half once the SDK
+platform question was answered.
+
+Files changed:
+- android/gradle/libs.versions.toml - agp 9.1.0 -> 9.3.2, coreKtx 1.18.0 -> 1.19.0,
+  lifecycleRuntimeKtx 2.10.0 -> 2.11.0, composeBom 2026.06.01 -> 2026.08.00,
+  composeNavigation 2.9.8 -> 2.10.0
+- android/gradle/wrapper/gradle-wrapper.properties - 9.3.1 -> 9.5.0 (AGP 9.3.2 refuses below it)
+- android/app/build.gradle.kts - compileSdk 36 -> 37 (targetSdk stays 36)
+- .github/workflows/android-ci.yml, android-release.yml - explicit platforms;android-37.0 install
+- prd.json - AND-AUDIT-005 notes
+
+Verified on JDK 17, the same JDK both workflows use:
+    :app:assembleDebug        SUCCESS 7m10s   (checkDebugAarMetadata included - the task that failed
+                                               with 16 issues on run 33179244127)
+    :app:testDebugUnitTest    SUCCESS
+    :app:minifyReleaseWithR8  SUCCESS 5m04s
+Still exactly three deprecation warnings, so 37 + newer AndroidX added none.
+
+**Learnings for future iterations:**
+- **The SDK package is `platforms;android-37.0`, not `platforms;android-37`.** `sdkmanager
+  "platforms;android-37"` answers "Warning: Failed to find package", which reads as "API 37 is not released"
+  and is not. `sdkmanager --list | grep platforms;android-3` shows 37.0, 37.1 and 37.2 on the DEFAULT
+  channel with only 37.2-beta* as previews. Android platforms are versioned with a minor now; check the list
+  before concluding an API level does not exist.
+- **AGP pins a minimum Gradle and says so precisely.** AGP 9.3.2 refuses to apply under Gradle 9.5.0 and the
+  failure names both the required version and the file to edit. Do not go looking for a compatibility table -
+  bump AGP, read the error, bump the wrapper.
+- Newest STABLE AGP is what you want: the maven-metadata tail is dominated by 9.4.0-rc / 9.5.0-alpha. Filter
+  alpha|beta|rc before taking the last entry.
+- **Neither Android workflow installs SDK platforms.** They inherit whatever ubuntu-latest ships. AGP will
+  auto-download a missing platform (android.builder.sdkDownload defaults on) but silently, and only where the
+  licence is accepted - so raising compileSdk is a CI change too, not just a build-file edit. Both workflows
+  now install the platform explicitly after Setup Gradle.
+- compileSdk above targetSdk is normal and supported. compileSdk 37 with targetSdk 36 builds clean; the Play
+  requirement is on targetSdk and is untouched by this.
+---
+
+## 2026-08-29 - WEB-SEC-025 (AC7 sweep, and the step-3 window)
+Ran AC7's sweep, which had never been run, and it reframed step 3. Also found a live non-privacy bug while
+proving the fix.
+
+Files changed:
+- supabase/migrations/20260829000001_votes_ballot_privacy.sql - NEW, not applied (owner's call)
+- prd.json - WEB-SEC-025 notes
+
+Verified in BEGIN/ROLLBACK against production: a vote can now be CHANGED the Android way (was RLS-denied);
+another signed-in user and anon both read 0 rows; voting_category_tallies() and voting_results(uuid) still
+return the tally to anon, so the Best-Of leaderboard is untouched.
+
+**Learnings for future iterations:**
+- **Count the rows before accepting a story's phasing.** WEB-SEC-025 stages an RLS tightening across releases
+  behind MIN_SUPPORTED_APP_VERSION, which is correct reasoning about a table with data. public.votes holds 0
+  rows against 10 categories open since 2026-03-12, so every client already gets an empty array and gets the
+  same empty array after tightening - no read that succeeds today fails after. The CLAUDE.md rule is about
+  observable behaviour, not about the policy text. This window closes the moment the first row is written.
+- **A unique index plus an upsert needs an UPDATE policy, and INSERT+SELECT+DELETE looks complete.** votes had
+  three policies and no UPDATE; Android's `upsert(onConflict = ...)` becomes ON CONFLICT DO UPDATE and fails
+  with "new row violates row-level security policy". Web hid it by doing delete-then-insert. Any table where
+  one client upserts and another delete-inserts is worth checking for this.
+- **The USING(true)-over-user_id sweep, as one query** (18 hits in public, all currently 0 rows):
+    SELECT p.tablename, p.policyname FROM pg_policies p
+    JOIN information_schema.columns c ON c.table_schema=p.schemaname AND c.table_name=p.tablename
+    WHERE p.schemaname='public' AND p.cmd='SELECT'
+      AND coalesce(btrim(p.qual),'') IN ('true','(true)')
+      AND ('public'=ANY(p.roles) OR 'anon'=ANY(p.roles))
+      AND c.column_name IN ('user_id','profile_id','author_id','owner_id','created_by','email','phone')
+    GROUP BY 1,2;
+  Attributed UGC (event_photos/reviews/tips/live_feed, user_ratings) is public on purpose; check-ins,
+  reactions and helpful-votes are the ones shaped like votes.
+- **Simulate a role properly when testing RLS:** `SELECT set_config('request.jwt.claims',
+  json_build_object('sub', <uuid>, 'role','authenticated')::text, true); SET LOCAL ROLE authenticated;` then
+  `RESET ROLE` before switching identities. Wrap in BEGIN/ROLLBACK and \i the migration inside it - the
+  policy change and its proof then live in one transaction that touches nothing.
+---
+
+## 2026-08-29 - WEB-SEC-024 (where SCRAPER_USER_AGENT actually goes)
+AC3's decision has been open for months as a question of appetite. It is also a question of feasibility, and
+nobody had checked: on the default backend, changing SCRAPER_USER_AGENT changes nothing a crawled site sees.
+
+Files changed:
+- supabase/functions/_shared/scraper.ts - config.userAgentDeclared, and the Firecrawl body now forwards the
+  UA via the documented `headers` field when (and only when) SCRAPER_USER_AGENT is set
+- supabase/functions/_tests/scraper-user-agent.test.ts - NEW, 4 cases
+- prd.json - WEB-SEC-024 notes
+
+Verified: 4/4 new tests pass, robots.test.ts still 13/13, scraper.ts parse-checked through esbuild.
+Ships no behaviour change on its own - with the env var unset the Firecrawl body is byte-identical.
+
+**Learnings for future iterations:**
+- **A User-Agent header on the request to a scraping SERVICE is not the User-Agent the crawled site sees.**
+  scraper.ts:110 sets it on the fetch to browserless.io; browserless then drives its own headless Chrome. Same
+  class of mistake as setting a header on a proxy and believing it reached the origin. Check which hop each
+  header is on before reasoning about what a third party observes.
+- **browserless REST cannot set the page User-Agent on non-enterprise plans.** Shared request config has no
+  userAgent and no setExtraHTTPHeaders; Chrome flags go via ?launch={"args":[...]} and --user-agent is not in
+  the publicly available flag set. Reaching it needs the WebSocket/puppeteer surface (page.setUserAgent) or a
+  plan change. Firecrawl's /v1/scrape DOES take a `headers` object.
+- **Gate a plumbing fix on an explicit opt-in when the default is a production behaviour.** userAgentDeclared
+  = !!Deno.env.get('SCRAPER_USER_AGENT') means the fix is inert until someone chooses an identity, so the
+  commit that makes a decision POSSIBLE is not the commit that takes it. Pin it with a negative-control test
+  asserting the default request has no `headers` key, or the test passes while production behaviour moves.
+- **url_sources is dead.** 38 active rows, every one last_crawled NULL / total_crawls 0 / success_rate 0.00.
+  Nothing writes it. Do not use it to reason about what the crawler visits (WEB-QA-017 shape).
+- Per-domain ingest recency is one query and worth running before believing any crawler claim:
+    select split_part(regexp_replace(source_url,'^https?://',''),'/',1) host, count(*), max(created_at)::date
+    from events where source_url is not null group by 1 order by 2 desc;
+  It showed seatgeek frozen at 2026-08-21 while four other sources ingested on 2026-08-29.
+---
+
+## 2026-08-29 - AND-AUDIT-008 (a Keystore failure now leaves a trace)
+The plaintext fallback reported nothing but a Log.w, which on a release build reaches nobody. It now reports
+to CrashReportingService, and the report carries the consequence rather than just the exception.
+
+Files changed:
+- android/app/src/main/java/com/desmoines/aipulse/util/SecureStorage.kt - crashReporting + an
+  encryptedPrefsFactory seam, SecureStorageFallbackException, file-name constants lifted to top level
+- android/app/src/test/java/com/desmoines/aipulse/util/SecureStorageFallbackTest.kt - NEW, 5 tests
+- prd.json - AND-AUDIT-008 notes
+
+Verified: 346 tests, 0 skipped, 0 failures, counted from the JUnit XML. Control run with the report disabled
+fails exactly the 2 assertions that should and no others.
+
+**Learnings for future iterations:**
+- **`BUILD SUCCESSFUL` is not a test result on this project.** AND-AUDIT-014 says the Android suite can pass
+  vacuously, so read android/app/build/test-results/testDebugUnitTest/*.xml and sum
+  tests/skipped/failures/errors. A filtered run that matches no class also reports BUILD SUCCESSFUL.
+- **Mutate the code and re-run before believing a new test.** Disabling the recordError call turned the run
+  into "5 tests completed, 2 failed" - the two that assert reporting, and not the other three. That is the
+  difference between a test that passes and a test that would catch the regression.
+- **Pair every "it reports" test with a negative control that it does NOT report on the happy path.** Without
+  it the assertion also passes for code that reports unconditionally, which here would file a crash record on
+  every healthy launch.
+- **A JVM test cannot reach an Android Keystore path; add a factory seam rather than mocking statics.**
+  SecureStorage now takes `encryptedPrefsFactory: (Context) -> SharedPreferences` defaulting to the real
+  builder, so tests drive the failure branch through the same code production runs.
+- **Two SharedPreferences files means a Keystore failure silently resets device settings.** The fallback file
+  starts empty, so biometric_enabled reads false and the biometric lock turns itself off with no prompt. Any
+  "fall back to a different store" design has this shape - check what the empty store means, not just that
+  writes keep working.
+- Wrap failure REPORTING in runCatching when it sits in a constructor path. A reporter that throws would
+  otherwise take the storage layer down with it.
+---
+
+## 2026-08-29 - AND-AUDIT-009 (both security libraries off alpha)
+Two version bumps, no source changes, no migration. AC2's premise had expired: security-crypto 1.1.0 STABLE
+now exists, so the Keystore/Tink rewrite the story describes is not needed to get off alpha.
+
+Files changed:
+- android/gradle/libs.versions.toml - securityCrypto 1.1.0-alpha06 -> 1.1.0, biometric 1.2.0-alpha05 -> 1.1.0
+- prd.json - AND-AUDIT-009 notes
+
+Verified: assembleDebug SUCCESS, 346 tests / 0 skipped / 0 failures from the JUnit XML,
+minifyReleaseWithR8 SUCCESS. releaseRuntimeClasspath: biometric 1.1.0, security-crypto 1.1.0,
+tink-android 1.8.0. The catalog now has zero alpha/beta/rc pins.
+
+**Learnings for future iterations:**
+- **Re-check "there is no stable version" before doing the migration a story describes.** AC2 called for
+  picking a replacement crypto stack and writing a migrate-on-read path. security-crypto shipped 1.1.0 stable
+  after the story was filed, and the whole thing collapses to a one-line bump. These notes are months old;
+  the registry is not.
+- **Prove a storage-format claim from the artifacts, three ways.** Same tink dependency in both poms, same
+  EncryptedSharedPreferences public API, and a class-list diff showing only compiler-generated `$1` classes.
+  That is what makes "no migration needed" a finding rather than an assumption - and it is much cheaper than
+  writing the migration.
+- **`a:b:1.2.3-beta01 -> 1.2.3` in a Gradle dependency tree is a REQUEST THAT LOST, not a shipped version.**
+  I first counted three beta artifacts in the release classpath; two were arrows where our stable pin won.
+  Only lines with no arrow are resolved versions. Grep for pre-release in the catalog to find what is OURS,
+  and read the tree carefully to find what actually ships.
+- androidx.privacysandbox.ads:ads-adservices has NEVER had a stable release (newest is 1.1.0-beta12). It
+  arrives transitively via play-services-ads. Nothing to do about it; do not re-file it as a finding.
+- A stability downgrade can silently block a sibling story - check first. biometric 1.1.0 still has
+  Authenticators.DEVICE_CREDENTIAL, which AND-AUDIT-007's AC4 needs, so this bump does not cost that story.
+---
+
+## 2026-08-29 - AND-AUDIT-013 (lint can now fail the build, and it is proven to)
+The gate is up. The four error-severity findings - the only ones in the project - were fixed rather than
+baselined, so the baseline holds 198 warnings and one hint and nothing that could fail a build.
+
+Files changed:
+- android/app/build.gradle.kts - abortOnError/checkReleaseBuilds true, baseline declared
+- android/app/lint-baseline.xml - NEW, 198 entries
+- android/app/src/main/AndroidManifest.xml - VIBRATE declared
+- MapScreen.kt (3 sites) + ItineraryDetailScreen.kt (1) - rememberMarkerState instead of inline MarkerState
+- prd.json - AND-AUDIT-013 notes
+
+Verified: lint "no new issues", assembleDebug SUCCESS, 346 tests / 0 failures. Mutation: one MarkerState
+back inline gives "Lint found 1 error ... aborting build. BUILD FAILED".
+
+**Learnings for future iterations:**
+- **`abortOnError = true` fails on ERROR severity only; warnings never fail the build.** So the baseline is
+  not what makes turning the gate on safe - of 209 findings only 4 were errors. Check the severity split
+  before assuming a baseline is load-bearing, and remember the gate only ever catches new *errors*.
+- **Lint writes the baseline and then fails the build on purpose** ("Aborting build since new baseline file
+  was created"). That first failure is expected; re-run. Delete and regenerate the baseline after fixing
+  anything, or the fixed findings stay suppressed and the count lies.
+- **Prove a gate by breaking it.** Re-introducing one inline MarkerState turned lint red with the exact file
+  and line. A gate nobody has seen fail is indistinguishable from the abortOnError=false it replaced.
+- **Read the SARIF, not the HTML.** build/reports/lint-results-debug.sarif parses in a few lines of python
+  and gives counts by rule, category and severity. The HTML report is the thing nobody opens, which is how
+  this story exists.
+- **maps-compose 6.2.1 ships `rememberMarkerState(key, position)`.** Constructing `MarkerState(position=...)`
+  inline in a `forEach` is an error-level Compose defect (state reallocated per recomposition). Confirmed the
+  API from the AAR in ~/.gradle/caches rather than from docs - maps-compose is on Maven Central, not Google
+  Maven, so the dl.google.com probe used elsewhere returns 404 for it.
+- **"Correctness" in lint is not all defects.** 35 of 58 were NewerVersionAvailable / GradleDependency /
+  AndroidGradlePluginVersion / OldTargetApi - dependency-freshness nags. Triage by rule before promising to
+  fix a category.
+- A permission finding on a class with no callers is a landmine, not a bug. HapticHelper would have thrown
+  SecurityException on the first caller; grep for call sites before deciding how urgent a finding is.
+---
+
+## 2026-08-29 - AND-AUDIT-014 (a suite that runs nothing now fails)
+AC1 answered precisely; AC2 attempted and reverted with the blocker recorded; the vacuous-pass half - the
+harm the story's own note describes - is guarded.
+
+Files changed:
+- android/app/build.gradle.kts - verifyUnitTestExecution task, finalizedBy testDebugUnitTest; the
+  isReturnDefaultValues flag kept with the audit result written above it
+- prd.json - AND-AUDIT-014 notes
+
+Verified: 346 tests / 0 skipped / 0 failures with the guard reporting them. Controls: deleting two report
+files gives "Only 337 unit tests executed; expected at least 340"; deleting all of them gives "No JUnit XML
+under ...". Both BUILD FAILED. Restored, green.
+
+**Learnings for future iterations:**
+- **A Gradle test task that executes zero tests SUCCEEDS.** That is why seven tests could vanish from
+  EventsRemoteDataSourceTest with every build staying green, and no testOptions setting could ever have
+  caught it. If you care that tests ran, assert on the JUnit XML - `verifyUnitTestExecution` now does, with
+  a floor of 340 and a zero-skipped check, wired finalizedBy so it cannot be bypassed.
+- **`unitTests.isReturnDefaultValues = true` here covers exactly android.util.Log.w and .e, nothing else.**
+  Measured: flag off gives 12 failures across 6 classes, 11 naming Log directly. Do not assume it is load-
+  bearing for framework behaviour generally - it is not, and Robolectric is not needed to remove it.
+- **A "not mocked" RuntimeException can surface as an assertion failure.** NetworkRetryTest wraps its call
+  in runCatching, so the framework exception became the captured result and the test failed on
+  `error is IOException` with no mention of Log. When auditing this flag, read the error TYPE across the
+  whole suite, not the message of the first failure.
+- **AGP 9.3.2 does not appear to put src/test/resources on the unit-test runtime classpath.** The files are
+  produced (build/intermediates/java_res/debugUnitTest/processDebugUnitTestJavaRes/out has them) and the
+  compiled test class arrives, but neither junit-platform.properties nor META-INF/services took effect;
+  the same extension applied with @ExtendWith works. Anything relying on test resources or ServiceLoader
+  registration needs checking on this AGP version before you trust it.
+- android-release.yml DOES run unit tests before building (./gradlew test --no-daemon). Several story ACs
+  claim otherwise. Read the workflow before repeating that.
+---
+
+## 2026-08-29 - AND-AUDIT-018 (priced, not narrowed)
+Measured what each whole-package keep costs instead of narrowing any of them. AC6 wants each narrowing
+exercised on a device against serialization, Supabase, billing and maps; R8 breakage is runtime, not compile,
+so shipping a narrowing from here would be shipping an unverified crash.
+
+Files changed:
+- prd.json - AND-AUDIT-018 notes (no code change; proguard-rules.pro restored byte-for-byte)
+
+Numbers, one keep removed at a time, all five builds succeeded:
+    baseline                       13,121,396 dex / 15,815 classes
+    io.ktor.**                     -1,120,396   -8.54%
+    io.github.jan.supabase.**        -772,592   -5.89%
+    com.google.firebase.**           -236,676   -1.80%
+    com.google.android.gms.**      -1,460,636  -11.13%
+    all four together              -3,720,312  -28.35%  (11,703 classes)
+
+**Learnings for future iterations:**
+- **You can price a ProGuard keep without shipping it, and without release credentials.** Comment out one
+  keep, run `:app:minifyReleaseWithR8`, sum
+  build/intermediates/dex/release/minifyReleaseWithR8/*.dex and count `grep -c '^[a-zA-Z]'` in
+  build/outputs/mapping/release/mapping.txt. minifyReleaseWithR8 does not trip the assembleRelease
+  credential guard (app/build.gradle.kts:29).
+- **These four keeps are worth 28% of the dex and 4,112 classes, and they are super-additive.** Individual
+  deltas sum to 3,590,300; removing all four saves 3,720,312, because one keep was holding code alive that
+  another also reached. Do not estimate the total by adding the parts.
+- **A successful minified build proves nothing about a narrowing.** All five builds compiled. R8 damage from
+  an over-narrow keep shows up as a reflective lookup or a serializer failing at runtime. Treat a size delta
+  as a budget for device work, not as a result.
+- Firebase is the SMALLEST of the four at 1.80%, not a headline win - AND-AUDIT-018's own AC3 groups it with
+  Play Services as "the biggest". Play Services is the biggest at 11.13%. Cheapest rehearsal is Firebase.
+- Narrowing the app-wide `*** Companion;` keep to @Serializable types saves 8,600 bytes (0.07%). Worth doing
+  for correctness, not for size.
+---
+
+## 2026-08-29 - AND-AUDIT-017 (re-derived, and the one that cost something is wired)
+AC1 said re-derive rather than trust the list. It has not drifted down - it grew from 22 to 38, and nothing
+on it had been wired since the story was filed.
+
+Files changed:
+- android/app/src/main/java/com/desmoines/aipulse/MainActivity.kt - PermissionPrimingCard shown before the
+  POST_NOTIFICATIONS system dialog
+- .../util/OnboardingPreferences.kt - hasAnsweredNotificationPriming + setNotificationPrimingAnswered
+- prd.json - AND-AUDIT-017 notes
+
+Verified: assembleDebug SUCCESS, 346 tests / 0 failures, lint no new issues, and the re-derived count drops
+38 -> 37 with PermissionPrimingCard now referenced. Not seen on a device.
+
+**Learnings for future iterations:**
+- **The unreferenced-UI scan, as a recipe:** walk src/main for .kt; in ui/components and ui/theme match a
+  top-level `fun|val|class|object|interface` at column 0; skip anything with @Preview within four lines
+  above; keep it if no OTHER file contains a word-boundary match. 137 declarations, 38 unreferenced. Re-run
+  it after wiring something - the count dropping is how you prove the wiring, rather than assuming it.
+- **An unexplained POST_NOTIFICATIONS prompt is not a neutral default.** Android stops presenting the system
+  dialog after a couple of declines, so shipping it with no priming makes a decline close to permanent, and
+  everything downstream silently drops notifications. Priming UI existed in this repo the whole time with no
+  call sites.
+- **Persist "we asked" BEFORE opening the system dialog, not in the result callback.** The callback does not
+  fire if the process dies while the dialog is up, and re-priming someone who has already answered is worse
+  than losing one grant.
+- Do not delete design tokens to satisfy a reference count. The eleven Category* colours are a palette
+  defined ahead of use; that is deliberate work, and R8 already handles unused constants.
+- Revenue surfaces in the dead list (AffiliateAdBanner, SubscriptionTierCard, BillingCycleToggle,
+  PaywallSheet) are a product decision, not cleanup - the story says ask, so ask.
+---
+
+## 2026-08-29 - AND-AUDIT-019 AC5 (one locale for date text, and a scan that keeps it)
+AC1 is a product decision and blocks AC2-AC4. AC5 does not depend on it and had a user-visible defect behind
+it: six formatters passed Locale.US and eleven did not, so a non-English device showed "Saturday" on one
+screen and "samedi" on the next, inside an otherwise entirely English UI.
+
+Files changed:
+- util/UiFormatLocale.kt - NEW, one value
+- 12 files routed through it (11 that had no locale, 6 that hardcoded Locale.US)
+- test/util/UiFormatLocaleTest.kt - NEW, 5 tests including a source scan
+- prd.json - AND-AUDIT-019 notes
+
+Verified: 351 tests / 0 failures (up from 346), lint clean. Reverting one MapScreen call site to a bare
+ofPattern gives "351 tests completed, 1 failed".
+
+**Learnings for future iterations:**
+- **`DateTimeFormatter.ofPattern` is locale-SAFE for numeric patterns and locale-SENSITIVE for text ones.**
+  It uses DecimalStyle.STANDARD, not the locale's digits, so yyyy-MM-dd / HH:mm parse and format identically
+  under ar-EG and th-TH-u-nu-thai. I expected the opposite and checked before writing anything. Do not
+  sprinkle Locale.US onto wire-format parsers - it is noise, and the real rule has a boundary: MMM/EEE/a need
+  an explicit locale, digits do not.
+- **A top-level `val` is a snapshot taken at class load, which makes it useless as a mutation target.**
+  Changing `val UiFormatLocale = Locale.US` to `Locale.getDefault()` left the suite green, because the val
+  initialises before any test can move the default. If a mutation does not turn a test red, work out why
+  before concluding the test is fine.
+- **A behavioural test of a shared constant does not test its call sites, and the call sites are what
+  regress.** The fix was a source-scanning test: walk src/main, regex `ofPattern("...")`, and fail when a
+  text-bearing pattern has no Locale argument. Cheap, and it is the only one of the five that would have
+  caught the original bug.
+- Gradle unit tests run with the module directory (android/app) as the working directory, so a test can read
+  `src/main/...` directly. Guard it with Assumptions.assumeTrue(dir.isDirectory) so it degrades rather than
+  fails if that ever changes.
+- **verifyUnitTestExecution (AND-AUDIT-014) trips on any `--tests` filtered run**, since 4 tests is below the
+  340 floor. That is correct for CI and awkward locally: run the full suite when you need a real result, or
+  read the FAILED lines above the guard's own failure.
+---
+
+## 2026-08-29 - AND-AUDIT-020 (lifecycle-aware collection, and the WhileSubscribed that never fired)
+All 82 sites swapped in one commit. The story counts 81/13; it is 82/7, with 66 in MainNavHost.
+
+Files changed:
+- MainNavHost.kt (66), AuthScreen.kt (7), MainScreen.kt (6), OfflineBanner.kt (2), MainActivity.kt (1)
+- test/util/UiFormatLocaleTest.kt - LifecycleAwareCollectionTest source scan appended
+- prd.json - AND-AUDIT-020 notes
+
+Verified: assembleDebug SUCCESS, 352 tests / 0 failures, lint clean. Reverting one MainScreen call site
+gives "352 tests completed, 1 failed".
+
+**Learnings for future iterations:**
+- **SharingStarted.WhileSubscribed(5_000) does nothing while the UI uses collectAsState.** collectAsState
+  holds its subscription for the life of the composition, which does not end when the app is backgrounded,
+  so the timeout never fires. Six ViewModels here wrote that intent and none of it had ever taken effect. If
+  you see WhileSubscribed, check how the UI collects before believing the upstream stops.
+- **collectAsState() with NO argument is a StateFlow, always.** The cold-Flow overload requires an initial
+  value. That one observation classifies every call site without reading them: no timers, no uploads, only
+  retained screen state - which is what makes the swap safe rather than needing 82 judgement calls.
+- State cannot be lost by the swap: a StateFlow keeps its value with no collectors, and
+  collectAsStateWithLifecycle re-subscribes on ON_START and gets it immediately. Say that is an argument from
+  construction, not an observation, when there is no device.
+- AC2 suggested splitting MainNavHost (AND-AUDIT-021) first to make this easier. Not needed - the swap is a
+  mechanical replace plus one import, orthogonal to the split. Check a claimed dependency before sequencing
+  work behind a refactor.
+- The source-scan test pattern is now used twice (locale, lifecycle). It is the right shape whenever the
+  defect is "some call sites do it wrong" rather than "a function misbehaves".
+---
+
+## 2026-08-29 - AND-AUDIT-023 (a logged error that reaches somebody)
+Did AC5 first - the story's own note says it is the only item with real value - and AC1 then stops being
+tidying, because with a sink installed a direct Log.e is an error that reports to nobody.
+
+Files changed:
+- util/AppLogger.kt - installable ErrorSink on error(); warning() gained a throwable param; LoggedError
+- DesMoinesInsiderApp.kt - sink installed straight after crashReportingService.install()
+- 22 files - all 98 direct android.util.Log calls routed through AppLogger
+- test/util/AppLoggerErrorSinkTest.kt - NEW, 5 sink tests + DirectLogUsageTest source scan
+- prd.json - AND-AUDIT-023 notes
+
+Verified: assembleDebug SUCCESS, 358 tests / 0 failures, lint clean. Reverting one LocalNotificationService
+call to a direct Log gives "358 tests completed, 1 failed".
+
+**Learnings for future iterations:**
+- **A settable sink beats injection for an `object`.** AppLogger is called from companion objects, Room
+  callbacks and BroadcastReceivers, none of which have a Hilt graph. Install it from Application.onCreate and
+  leave it null before that, so startup logging degrades to logging rather than crashing.
+- **Report at error level only.** 71 warning calls against 41 error calls - reporting warnings would bury the
+  errors in the signal they exist to provide. Pair the happy-path test with a negative control asserting
+  warning/info/debug do NOT reach the sink, or the sink could report everything and still pass.
+- **Check the destination API before a mechanical routing pass.** Nine Log.w call sites passed a throwable
+  and AppLogger.warning had no parameter for one, so a naive rewrite would have dropped nine stack traces
+  silently. Adding the defaulted parameter first is the difference.
+- **`Log.x(TAG, ...)` rewrites mechanically; hand-written tags do not.** 95 of 98 matched the TAG form; the
+  last three used literal strings ("AuthScreen", "DMI/notification") and had to be read. Expect a tail.
+- The only call in this app that logs an identifier is AuthRemoteDataSource:137 ($userId), at debug level,
+  and proguard-rules.pro:26-30 -assumenosideeffects strips d/i/v from release - so it does not ship. Verify
+  against that rule before calling any log line a leak, and do not promote it to warning.
+- Third and fourth use of the source-scan test shape (locale, lifecycle, direct-Log). Whenever the defect is
+  "some call sites do it wrong", scan the sources; a behavioural test cannot see a call site.
+---
+
+## 2026-08-29 - WEB-PERF-020 verified, and the four URLs the prerender gate was rejecting
+Measured WEB-PERF-020 with a full build instead of reading its note. It is complete except AC5, and its own
+numbers are stale by 3.3x. The build then surfaced a real defect that belongs to WEB-SEO-006.
+
+Files changed:
+- src/pages/SeasonalGuide.tsx - <link rel="canonical"> on the success path
+- prd.json - WEB-PERF-020 and WEB-SEO-006 notes
+
+Verified: critical path 183.4 KB gz (goal 200), unchanged by the fix; prerender 1136 entities / 0 failed,
+was 1132 / 4; dist/guides/iowa-state-fair/index.html carries the canonical, real title and body text;
+tsc clean, eslint clean on the changed file.
+
+**Learnings for future iterations:**
+- **WEB-PERF-020's headline numbers are three years of drift out of date.** Critical path is 183.4 KB, not
+  610; vendor-icons 20.8 KB, not 131; entry 53.3 KB, not 160. Run `node scripts/check-bundle-budget.mjs`
+  after a build before believing any bundle claim in this PRD.
+- **Entity prerendering is ON.** A build emits 1136 entity pages (events 542, restaurants 480, playgrounds
+  67, attractions 22, articles 18, guides 4) with real titles, canonicals and addresses in the HTML.
+  WEB-SEO-006 is written as though none of that exists. Check dist/ before repeating "client-render only".
+- **Read the prerender gate's rejections; they are findings, not noise.** Four published seasonal guides were
+  refused on every build for a missing canonical, so /guides/:slug was the only sitemapped route a crawler
+  could not read. The message says "this is the guard working, not a build failure", which is true and is
+  also why nobody actioned it for however long.
+- A route that does not emit `<link rel="canonical">` cannot be prerendered by this project's strict gate -
+  there is no way to distinguish a rendered page from the SPA shell without it. Any new public route needs
+  one, and the gate will tell you at build time.
+- `npm run build` regenerates public/sitemap-*.xml as a side effect. The checked-in copies had drifted by
+  133 event URLs (400 added / 267 removed). They are build artifacts - the deployed sitemap comes from the
+  build - so revert them rather than committing the churn, but the size of that drift is WEB-SEO-011's
+  thesis measured.
+---
+
+## 2026-08-29 - AND-AUDIT-012 (three pins that could never match, and one that has expired)
+Ran AC1 and AC2 against the live chain. AC1's worry (self-hosted host, wrong pin pattern) is unfounded here,
+and the real defect was inside the pin list.
+
+Files changed:
+- android/.../util/CertificatePinningService.kt - pin set 5 -> 2, KDoc rewritten with the measurement
+- prd.json - AND-AUDIT-012 and IOS-AUDIT-SEC-001 notes
+
+Verified: assembleDebug SUCCESS, 358 tests / 0 failures, lint clean. No behaviour change - pinning is
+report-only on every build type.
+
+**Learnings for future iterations:**
+- **A "fallback" pin that is not in the live chain WIDENS pinning, it does not back it up.** The check passes
+  when any chain cert matches any pin, so Let's Encrypt R3 / ISRG Root X1 / DigiCert Global Root G2 meant a
+  cert from any of three huge public CAs would satisfy it. Removing a pin that can never match is a strict
+  tightening with zero rotation cost - the opposite of how "fallback" reads.
+- **iOS fixed exactly this on 2026-07-18 and Android was missed.** When a story exists per platform, check
+  whether the other platform's fix was ever mirrored before re-deriving it. Same three names, same argument.
+- **Do not pin the leaf against a GTS-issued host.** The leaf iOS pinned in July has already rotated - the
+  live SPKI on 2026-08-29 is different. GTS issues short-lived certificates, so a leaf pin is dead weight
+  within a quarter. Issuer plus root is what survives, which is what Android now keeps.
+- The whole check is one command and worth running before trusting any pin note:
+    openssl s_client -connect HOST:443 -servername HOST -showcerts </dev/null |
+      awk '/BEGIN CERT/,/END CERT/' > chain.pem   # then per cert:
+    openssl x509 -in c.pem -pubkey -noout | openssl pkey -pubin -outform der |
+      openssl dgst -sha256 -binary | base64
+---
+
+## 2026-08-29 - AND-AUDIT-021 (MainNavHost 1233 -> 87 lines)
+A move, not a rewrite: three NavGraphBuilder extension functions already existed inside MainNavHost.kt and
+just needed their own files.
+
+Files changed:
+- ui/navigation/MainNavHost.kt        1233 -> 87 lines, imports 87 -> 9
+- ui/navigation/TabDestinations.kt    NEW 356
+- ui/navigation/DetailDestinations.kt NEW 235
+- ui/navigation/FlowDestinations.kt   NEW 600
+- prd.json - AND-AUDIT-021 notes
+
+Verified: route set, composable count (34) and navArguments (10) byte-identical before and after;
+assembleDebug SUCCESS, 358 tests / 0 failures, lint clean.
+
+**Learnings for future iterations:**
+- **Make a big refactor reviewable by property, not by reading it.** AC3 said "if the diff touches a route
+  string, something went wrong" - so extract the route set, composable count and navArgument list before and
+  after and diff them. A 1,146-line deletion becomes checkable in one line. Script pattern is in the story
+  notes.
+- **Splitting a file breaks implicit imports that no symbol names.** `by viewModel.x.collectAsState...()`
+  needs androidx.compose.runtime.getValue, and a per-file "keep the imports whose symbol appears in the text"
+  filter drops it - the compiler then says "has no method getValue(...), so it cannot serve as a delegate".
+  Always carry getValue/setValue into a file containing a `by` delegate.
+- **Two stories claimed to depend on each other and neither did.** AND-AUDIT-021 AC4 says do this with
+  AND-AUDIT-020 because "both rewrite the same lines"; 020's AC2 says split the file first to make the swap
+  easier. 020 was a mechanical replace plus an import and this is a whole-function move. Check a claimed
+  dependency before sequencing around it - twice now in this PRD.
+- The existing seams were by KIND (tab/detail/flow); AC1 asked for by FEATURE (eventGraph, restaurantGraph).
+  Moving to files first is provably behaviour-preserving; regrouping across the seams is a judgement change
+  that cannot be verified the same way. Two commits, not one.
+---
+
+## 2026-08-29 - Backlog sweep: what is actually left, and for whom
+No code change. After AND-AUDIT-021 the unblocked work ran out, so this pass re-probed the blockers instead
+of asserting them - three stories this week had stale ones.
+
+Files changed:
+- prd.json - IOS-AUDIT-REL-014 (AC2 verified) and WEB-QA-018 (blockers re-probed, still real)
+
+**Learnings for future iterations:**
+- **Re-probe a blocker before trusting it, and record the negative result too.** WEB-PERF-020 was 3.3x out,
+  WEB-SEO-006's premise was false, AND-AUDIT-009's "no stable version" had shipped. This time the missing
+  tables really are missing - device_tokens, user_preferences, trip_plans, crm_contacts, payments, api_keys,
+  event_analytics, both favourites tables, and known_venues.image_url. WEB-QA-018 is genuinely the
+  bottleneck.
+- **`node scripts/check-privacy-manifest.mjs` runs on any machine.** It reconciles required-reason APIs from
+  Swift source, so IOS-AUDIT-REL-014's AC2 is checkable without a Mac; only AC1's binary linter is not. Worth
+  checking which iOS stories have a source-level half before writing them off as macOS-gated.
+- **Of 74 open stories, 57 carry an explicit OWNER / DECISION / device / deployment blocker.** The single
+  highest-leverage unblock is SUPABASE_ACCESS_TOKEN on the Scrape environment: no edge function has ever
+  deployed, which is why regenerate-sitemaps, google-indexing-api, export-user-data and the crash-report
+  endpoint are all 404 across four stories that each record it as their own problem.
+- **Do not start the AOS-* agent builds to fill the gap.** They are priority 68-76 and their delivery
+  mechanism is pg_cron plus edge functions, neither of which currently runs (WEB-OPS-007: 57 of 61 cron jobs
+  have never succeeded; no function has ever deployed). Building more automation that cannot execute is
+  exactly the pattern WEB-OPS-007 AC5 records - 17 stories marked done whose code has never run in
+  production.
+---
+
+## 2026-08-29 - The CRM collision is a name, not data (WEB-QA-018 AC2)
+No code change. Chased the eight column findings in schema-baseline.json, which are the only entries in that
+file that are not a plain missing table, and they lead somewhere useful for the decision everything is
+waiting on.
+
+Files changed:
+- prd.json - WEB-QA-018 notes
+
+**Learnings for future iterations:**
+- **There are two CRMs and they collide on one table name.** The contact/deal CRM (crm_contacts, crm_deals,
+  ...) has hooks and UI and no tables. The opportunity/lead CRM (crm_accounts, crm_activities, crm_leads,
+  crm_opportunities, proposals, prospect_leads) has all six tables, intact foreign keys, edge functions that
+  write to it - and ZERO ROWS in every one. "The name is taken by the live opportunity CRM" is true about the
+  name and misleading about "live".
+- **Which means re-applying crm_infrastructure is a rename problem, not a migration problem.** Nothing to
+  preserve on either side. Worth knowing before pricing that decision as expensive.
+- **A `.delete().eq('id', ...)` has no schema to fail against.** Every other call in useCrmActivities names a
+  column the live table lacks and fails closed with 42703; deleteActivity names none, so it would execute
+  against whichever crm_activities exists. Safe today only because its mutation hook has no callers and the
+  failing reads yield no ids. Reconciling column names without re-pointing the table would arm it. When a
+  table name collides, audit the operations that reference NO columns first - they are the ones that will
+  silently hit the wrong table.
+- schema-baseline.json splits 61 table / 27 rpc / 8 column. Only the 8 column findings are actionable
+  independently of WEB-QA-018, and all 8 are this one collision.
+---
+
+## 2026-08-29 - WEB-SEO-008: the guard was crying wolf, and validate was red for everyone
+Found while running npm run validate for AOS-MANAGE-001's AC5. check-schema-dupes reported seven duplicate
+FAQPage offenders. All seven were false positives, from two causes, both introduced by SEO-003 - the commit
+that fixed the real duplication.
+
+Files changed:
+- scripts/check-duplicate-schema.mjs - stripComments() before scanning; EnhancedLocalSEO removed from
+  EMITTERS; assertModelMatchesSource() so the model cannot drift silently again
+- prd.json - WEB-SEO-008 and AOS-MANAGE-001 notes
+
+Verified: 562 components scanned, 23 emit FAQPage, 0 duplicates, and npm run validate exits 0 - it did not
+before, on a clean tree, verified by stashing.
+
+**Learnings for future iterations:**
+- **npm run validate has been failing on every branch since SEO-003 (0b9efd6c).** If you are about to record
+  "validate passes" for a story, run it on a stashed tree first and find out whose failure it is.
+- **A source scanner that does not strip comments will count the documentation of a fix as the bug.**
+  SEO-003 explained its fix in a comment naming the component three times, and the guard read that as three
+  emitters. Blank comments to spaces rather than deleting them, so offsets and line numbers still line up.
+- **A guard that models the implementation must check its own model.** EMITTERS still listed
+  EnhancedLocalSEO after its FAQPage block was removed, so five pages were counted as having an emitter that
+  no longer exists. assertModelMatchesSource now fails when a modelled component emits nothing. A model that
+  over-counts is worse than no guard: it makes validate red for everyone and teaches people to ignore it.
+- **Control a guard fix both ways.** Making a noisy check quiet is easy and worthless. Duplicating a live
+  FAQSection render must still fail, and re-adding the stale emitter must trip the new drift check - both
+  were run before believing the green.
+---
+
+## 2026-08-29 - Guard sweep, and a correction: most edge functions ARE deployed
+Ran the project's own check-* scripts looking for more red-but-ignored gates after the WEB-SEO-008 fix. One
+was red - on my own new function - and re-baselining it turned up a claim I had repeated three times and
+never checked.
+
+Files changed:
+- edge-deploy-baseline.json - executive-digest added; gsc-fetch-properties, gsc-sync-data and
+  subscription-lifecycle removed, because they are deployed
+- prd.json - XPLAT-007 correction
+
+**Learnings for future iterations:**
+- **97 of 162 edge functions ARE deployed.** XPLAT-007 says "NO edge function has ever deployed", and
+  WEB-SEO-011 and XPLAT-008 repeat it. What has never succeeded is the deploy WORKFLOW. The live product
+  surface answers today: discover-chat, generate-itinerary, image-transform, validate-ios-receipt,
+  version-check, og-image. Undeployed are the newer agent/automation ones - regenerate-sitemaps,
+  export-user-data, crm-console, outreach-reply, agent-ops-digest, get-active-ads.
+- **Which means a single function can ship without the GitHub secret.** `npx supabase functions deploy <slug>
+  --project-ref <ref>` is how the 97 got there. SUPABASE_ACCESS_TOKEN unblocks AUTOMATED deploys, not all
+  deploys. Do not tell the owner a one-function fix is blocked on CI.
+- **The 401-vs-404 discriminator is the cheap probe:** POST {} with the anon key; 404 means undeployed,
+  anything else (401/400/405/302) means deployed. Same test check-edge-deploys.ts uses.
+- **`npm run validate` is not the full gate.** check-edge-deploys, check-bundle-budget, check-cron-health,
+  check-anon-exposure and others run only in CI workflows, so a green validate can still leave a guard red -
+  which is exactly what the AOS-MANAGE-001 commit did. Run the CI check list, not just validate.
+- check-cron-health skips silently without SUPABASE_URL / SERVICE_ROLE_KEY. That is fine in CI -
+  rls-config-audit.yml declares `environment: Scrape` at :19 so it gets them - but it means a local run
+  proves nothing.
+---
+
+## 2026-08-29 - WEB-PERF-023: the DOM guard was crashing, and it hid a 14,857-element page
+Third broken guard this session. check-dom-budget.mjs was OOMing at exit 134 - in CI too - so it reported
+nothing at all.
+
+Files changed:
+- scripts/check-dom-budget.mjs - jsdom replaced with a tag scanner, proven equivalent on 91 pages
+- prd.json - WEB-PERF-023 notes
+
+Verified: 40s crash -> 1.7s clean run over 1,171 routes. Equivalence checked against
+root.querySelectorAll('*').length on 91 pages spanning hubs and every entity type: 91 exact, 0 mismatched.
+
+**Learnings for future iterations:**
+- **A guard written against 35 pages will not survive 1,171.** Entity prerendering multiplied dist/ by 33x
+  and every per-page jsdom parse became a heap allocation nobody freed. window.close() and counting once
+  were not enough. When a check reads dist/, check how big dist/ has become since it was written.
+- **When replacing a parser, prove equivalence on a sample before trusting the new numbers.** 91 pages
+  across every route type, exact match on all of them - that is what makes it a refactor rather than a new
+  and differently-wrong metric. Blank script/style bodies first: JSON-LD contains "<" inside strings.
+- **/events/august-2026 ships 14,857 DOM elements**, ten times the Lighthouse flag and twelve times the
+  1,189 median. The four month pages are the four worst routes on the site, they render a month of events
+  uncapped, and SEO-016 has just started linking to them from the footer - discoverable and heaviest at the
+  same time. WEB-PERF-023 names three routes at 5,000-6,600; it is worse than the story thinks.
+- Do not re-baseline a reporting check to make it quiet. It would have banked all 1,171 routes and buried
+  the finding.
+---
+
+## 2026-08-29 - WEB-PERF-023: month pages capped, 14,857 -> 2,531
+The work the repaired DOM guard exposed in the previous entry.
+
+Files changed:
+- src/pages/MonthlyEventsPage.tsx - VISIBLE_EVENTS = 36, grid capped, JSON-LD capped to match
+- prd.json - WEB-PERF-023 and WEB-SEO-006 notes
+
+Verified on a real build: august 14857 -> 2531, september 6806 -> 2439, october 8438 -> 2449,
+november 4489 -> 2425. numberOfItems 36 against 36 rendered cards. tsc and eslint clean.
+
+**Learnings for future iterations:**
+- **Derive the cost model before picking the cap.** Four month pages with known event counts give ~53
+  elements per EventCard on ~460 of chrome, so 36 cards predicts ~2,370 - and they landed at 2,425-2,531.
+  That is how you choose 36 rather than a round number and know in advance what you will get.
+- **Cap the JSON-LD with the grid, always.** EventListJsonLd defaults maxItems to 50; capping the grid alone
+  would have advertised 50 events against 36 rendered, which is the /restaurants numberOfItems-478-against-20
+  defect in a new place. Pass the sliced list AND a matching maxItems.
+- **A route missing from a report is not a route that improved.** One build dropped the month pages against
+  the prerender time budget, so they simply vanished from check-dom-budget's output and the worst-route line
+  looked fixed. Confirm the artifact exists before reading its absence as success.
+- **Entity prerender coverage varies build to build: 1,136 one run, 868 the next, same tree.** It is a
+  wall-clock race against PRERENDER_ENTITY_BUDGET_SECONDS (default 420) and the build exits 0 when it loses,
+  so which sitemapped URLs ship readable HTML is not stable between Cloudflare deploys.
+  PRERENDER_ENTITY_BUDGET_SECONDS=1500 rendered 1,161 here.
+- `npm run prerender` runs the prerender step alone against an existing dist/, far faster than a full
+  `npm run build` when you only need to re-measure rendered output.
+---
+
+## 2026-08-29 - WEB-SEO-006 AC5: an entity-coverage ratchet, and the categories that always lose
+Files changed:
+- scripts/check-entity-coverage.mjs - NEW
+- entity-coverage-baseline.json - NEW, 870 from a default-budget build
+- package.json, .github/workflows/pr-checks.yml - wired
+
+Verified: 870/1005 (86.6%). Control - moving 300 restaurant pages out of dist/ gives
+"restaurants: 478 -> 179 (299 fewer)" and exit 1; restoring returns OK.
+
+**Learnings for future iterations:**
+- **The entity prerender drops the SAME categories every time, not random ones.** articles 0/18, attractions
+  0/22, playgrounds 0/67, pseo 0/18 - which is 125 URLs, and with 6 events and 4 guides is exactly the 135
+  the prerenderer reports as over budget. It works the sitemaps in order and stops on the clock, so whatever
+  is last in the queue is systematically unreadable to JS-less crawlers. A 1500s budget renders all of them.
+  This is a queue-order problem dressed as a time-budget one, and the fix might be interleaving the sitemaps
+  rather than buying more seconds.
+- **Guard the thing nothing else can see.** prerender.mjs's strict gate refuses to WRITE a bad page and
+  check-prerender-content asserts properties of pages that exist; neither can see a URL that was never
+  attempted, which is the actual failure here.
+- **A ratchet on a wall-clock-bound process has to be loose or it becomes a flaky gate that gets switched
+  off** (WEB-CI-020/021 are the precedent). Fail on the cliff at half the baseline, print the exact number
+  every run so the variance stays visible, and say so explicitly when a run is below baseline but tolerated.
+- **Refuse to score an empty input.** A sitemap with no <loc> would give 0-of-0 = 100% and bank a generator
+  failure as a pass - the empty-scan trap WEB-CI-027 catalogued across 34 scripts.
+---
+
+## 2026-08-29 - The prerender log now names the categories it drops
+Files changed:
+- scripts/prerender.mjs - entitySource map; the INCOMPLETE warning breaks the shortfall down per sitemap
+- scripts/check-entity-coverage.mjs - header records the dist/-accumulation caveat
+- prd.json - WEB-SEO-006 notes
+
+Verified with a deliberate 25s budget: "Unrendered by sitemap: restaurants 443/478, events 397/397 (ALL),
+playgrounds 67/67 (ALL), attractions 22/22 (ALL), pseo 18/18 (ALL), articles 18/18 (ALL), guides 4/4 (ALL)".
+
+**Learnings for future iterations:**
+- **A count hides the shape of a loss.** "135 of 1004" and "four categories at zero" are the same number and
+  very different problems - one is 13% attrition, the other is four content types invisible to crawlers.
+  When a budget truncates a priority-ordered queue, report per-group with the all-or-nothing case marked.
+- **Do not re-order ENTITY_SITEMAPS on intuition.** The list is a documented product decision backed by a
+  Search Console pull (restaurants 6,794 impressions) and ends with "Re-check this against Search Console
+  rather than against intuition". Interleaving would give every category proportional coverage and is
+  probably better for crawlers, but it trades away the set that draws impressions - the owner's call, now
+  with the evidence in front of it.
+- **prerender.mjs never deletes from dist/, so a local re-run measures the UNION of passes.** A 25-second
+  budget rendering 35 entities still scored 870 on check-entity-coverage because the earlier full pass was
+  still on disk. Fine in CI, which builds fresh; `rm -rf dist` before any local run you intend to measure.
+---
+
+## 2026-08-29 - Two more CI guards were crashing, not passing
+Ran the pr-checks list by hand after the check-dom-budget repair, on the theory that if dist/ growing killed
+one guard it had probably killed others. It had.
+
+Files changed:
+- scripts/check-prerender-head.mjs - jsdom replaced with a head parser, proven equivalent on 121 pages
+- scripts/check-prerender-content.mjs - keeps jsdom, shards across child processes of 250 files
+- prd.json - WEB-SEO-006 notes
+
+Verified: head 40s crash -> 0.98s / 904 pages / exit 0. content 40s crash -> 57s / 904 pages / 4 shards /
+exit 0, and injecting aria-busy into one page still fails it.
+
+**Learnings for future iterations:**
+- **jsdom cannot process ~1,000 documents in one node process, and window.close() does not save you.**
+  Measured both ways over dist/; both exhaust the heap. Either stop using it (tag-level facts) or shard
+  across child processes (tree questions). Exiting the process is the only reliable way to return the heap.
+- **Pick the remedy per file from what the file actually asserts.** check-prerender-head wanted canonical,
+  title and description - no tree, so a parser works. check-prerender-content wants accessible names and
+  nesting, and its own header says a regex cannot answer those - so it shards and keeps its semantics.
+- **When replacing a parser, the equivalence run is where you find your bugs.** 121 pages caught two: the
+  attribute delimiter has to be the same quote that opened it, because accepting either at both ends
+  truncates any description containing an apostrophe; and entities have to be decoded because jsdom decodes
+  them.
+- **Three crashed guards and two false ones this session, all broken by something else changing underneath.**
+  check-dom-budget, check-prerender-head and check-prerender-content died when entity prerendering grew
+  dist/ 33x; check-duplicate-schema went false when a comment was added; check-edge-deploys went stale when
+  three functions were deployed. Run the CI list by hand periodically - a guard that crashes reports nothing,
+  and nothing is what everyone sees.
+---
+
+## 2026-08-29 - AOS-MANAGE-007: weekly agent review, and three jobs that have never succeeded
+Files changed:
+- supabase/functions/agent-performance-review/index.ts - NEW
+- supabase/functions/_tests/agent-performance-review.test.ts - NEW, 5 tests
+- supabase/config.toml, edge-deploy-baseline.json, prd.json
+
+Verified: esbuild parse clean, tsc -p tsconfig.functions.json clean, 5/5 tests, npm run validate exit 0.
+
+**Learnings for future iterations:**
+- **automation_job_runs is half unwritten.** Over 277 rows: agent_key populated on 1, and items_escalated,
+  tokens_used and cost_usd are ZERO on every row. Any report of escalations, tokens or spend is reporting an
+  absence. Group by job_name, not agent_key.
+- **Three of seven jobs have never succeeded in the ledger window** - validate-source-urls 0/21 with 32 items
+  failed, ai-article-pipeline 0/3, data-quality-heal 0/2. This is NOT WEB-OPS-007: those jobs never start,
+  these start and fail inside the function. Different fix, and cron-health cannot see it.
+- **Pair every "this is unavailable" assertion with a control that real data is NOT called unavailable.**
+  Otherwise the test passes for code that always says UNAVAILABLE, which fails in the other direction and
+  looks just as green.
+- A read error must throw rather than fall through to an empty list, or a broken query renders as a healthy
+  quiet week - the exact shape of the defect these reports exist to avoid.
+---
+
+## 2026-08-29 - AOS-MANAGE-007 follow-up: failing, degraded and no-op are three things
+Correcting my own report from the previous entry, which called three jobs "never succeeded" and flattened
+three different conditions into one.
+
+Files changed:
+- supabase/functions/agent-performance-review/index.ts - JobStats gains errored/partial; three sections
+- supabase/functions/_tests/agent-performance-review.test.ts - 7 tests (was 5)
+- prd.json - AOS-MANAGE-007 notes
+
+**Learnings for future iterations:**
+- **status != 'success' is not one condition.** `failed` means the job threw; `partial` means it completed and
+  its ITEMS failed, and jobRunner reports ok=TRUE for partial - so a degraded job is invisible to anything
+  watching run status. validate-source-urls has been partial 22 of 22 times with 33 items failed and no error
+  recorded, and nothing in the project was looking at it.
+- **A job that always succeeds while processing nothing is its own failure mode.** moderate-content: 247 green
+  runs, 0 items processed. Indistinguishable from 247 runs with nothing to do - the empty-scan trap
+  WEB-CI-027 found across 34 check scripts, now found in the agent fleet.
+- **None of this is WEB-OPS-007.** That counts jobs that never START. These start, reach their function and
+  fail inside it, which cron_health cannot see. Two different problems that both look like "the automation
+  does not work".
+- A test that fails can be the test's fault. Mine scoped an assertion to everything before a section header,
+  which included the summary listing that names every job. Check which side is wrong before changing code.
+---
+
+## 2026-08-29 - ai-article-pipeline: an agent calling a function that demanded a user session
+The AOS-MANAGE-007 report named this as the only job failing with an error attached. Root-caused and fixed.
+
+Files changed:
+- supabase/functions/suggest-article-topics/index.ts - hand-rolled auth.getUser replaced with
+  requireAdminOrApiKey
+- prd.json - AOS-MANAGE-007 notes
+
+Verified: tsc clean, check-edge-auth passing, npm run validate exit 0. Not verified end to end - the fix is
+not deployed and there is no CLAUDE_API key locally.
+
+**Learnings for future iterations:**
+- **`auth.getUser(token)` rejects the service-role key.** It resolves a USER access token; the service-role
+  key is a JWT with role service_role and no subject. Any function whose gate is a bare auth.getUser cannot
+  be called by pg_cron or by another edge function, which authenticate with the service-role bearer. That is
+  the whole of ai-article-pipeline's 3-of-3 failure: our own caller, our own callee, incompatible gates.
+- **Use requireAdminOrApiKey for anything an agent might call.** Clause 1b accepts the service-role bearer
+  explicitly for server-to-server callers, and it falls back to an ADMIN user JWT - which is usually a
+  tightening, not a loosening, for endpoints that spend money.
+- **verify_jwt=true does not mean the function is protected the way you think.** The gateway accepted the
+  service-role JWT here and the function's own gate then rejected it, so the request reached the handler and
+  failed at 500 rather than 401. Gateway auth and handler auth answer different questions.
+- moderate-content's 247 green runs with 0 items processed are CORRECT: user_ratings and contact_submissions
+  are both empty. Check the queue before calling a no-op a defect - the section that surfaces it is still
+  worth having, but this instance is benign.
+---
+
+## 2026-08-29 - validate-source-urls was reporting its own success as failure
+Third and last of the jobs AOS-MANAGE-007 surfaced. It was never broken.
+
+Files changed:
+- supabase/functions/validate-source-urls/index.ts - ctx.failed(errors.length), was flaggedCount + errors
+- supabase/functions/agent-performance-review/index.ts - same mistake, mine, two iterations old
+- prd.json - AOS-MANAGE-007 notes
+
+Verified: every run's metadata records errors 0 and flaggedBroken 1, so items_failed was 100% correctly
+flagged links; production has 3 events with source_url_broken. tsc clean, 7/7 tests, validate exit 0.
+
+**Learnings for future iterations:**
+- **ctx.failed() means "items I could not process", not "unwelcome things I found".** validate-source-urls
+  counted every dead link it correctly flagged as a failed item, so it reported partial on all 22 runs while
+  its own metadata recorded errors: 0. A job that accurately reports a bad outcome has SUCCEEDED.
+- **jobRunner treats partial as ok=true, so this never alerted** - it just sat permanently amber to
+  everything reading run status. A job stuck at partial forever is worth investigating precisely because
+  nothing will tell you about it.
+- **I made the same mistake in the review that found it.** agent-performance-review did
+  ctx.failed(failing.length + degradedJobs.length) - counting its own findings as its own failures. Check
+  your instrumentation against the rule you just wrote.
+- Sweep pattern: `grep -rn "ctx.failed(" supabase/functions/` and look for arguments that are not error
+  counts. The other 10 call sites are inside catch blocks and are fine.
+- Still open on this job, as a quality question rather than a defect: recoveryRate is 0 on every run. It
+  flags dead links correctly and recovers none.
+---
+
+## 2026-08-29 - validate-source-urls: filtering after the limit, and no ordering
+Follow-up to the instrumentation fix. The low recovery rate was throughput, not quality.
+
+Files changed:
+- supabase/functions/validate-source-urls/index.ts - or(ilike) pre-filter in the query, order by
+  source_url_checked_at nulls first
+- prd.json - AOS-MANAGE-007 notes
+
+Measured against production: 3 aggregator candidates per 50-row batch before, 26 after - which is the whole
+aggregator population. tsc clean, validate exit 0.
+
+**Learnings for future iterations:**
+- **Filter before the limit, not after.** Taking 50 arbitrary rows and then keeping the 6% that match spends
+  94% of the batch on rows that were never candidates. 22 runs checked 5 distinct events out of 26.
+- **A query with no ORDER BY makes no progress.** Each run re-drew from the same pool and could re-check an
+  event it had already flagged. Order by the "when did we last look at this" column with nulls first, and the
+  job walks the backlog instead of milling.
+- **A pre-filter in the query should be a SUPERSET of the in-code predicate**, so the predicate still decides
+  and the semantics do not move. Here or(ilike) matches the domain anywhere in the URL while isAggregatorUrl
+  matches the hostname.
+- I had recorded "recoveryRate is 0 on every run" as a quality question. It was not: two of the five checked
+  events were recovered to web.archive.org snapshots. The single candidate per run happened to be
+  unrecoverable. A rate computed over a denominator of 1 is not a rate.
+---
+
+## 2026-08-29 - Event scraping is entirely down and reports success
+Chased why SeatGeek stopped ingesting on 2026-08-21 and found a live outage: all ten scrape sources failing,
+HTTP 200, success: true.
+
+Files changed:
+- supabase/functions/scrape-events/index.ts - total failure now returns success:false and 500
+- prd.json - WEB-OPS-007 notes
+
+**Learnings for future iterations:**
+- **net._http_response is where cron jobs actually report.** cron.job_run_details records that
+  net.http_post was ENQUEUED - "1 row", status succeeded - not what came back. The response table holds the
+  real answer, and in this project it currently holds: all ten scrape jobs failing, 38
+  "Requested function was not found" from cron posting to undeployed functions, a 42804 datatype error in
+  the reminders query, and a "Cannot read properties of undefined". None of it surfaces anywhere.
+- **A wrapper that returns success:true unconditionally erases everything under it.** scrape-events reported
+  "Scraping completed: 0 events found across 10 jobs" with total_errors: 10 and HTTP 200. Report total
+  failure as failure; leave partial alone, because losing one source of ten should not page anyone.
+- **scrape-events writes no automation_job_runs row at all** (0 rows for any %scrape% name), so the agent
+  ledger cannot see it either. A job outside the ledger is outside every report built on the ledger.
+- The trail worth reusing: source freshness by host (max(created_at) per source_url host) -> cron.job_run_details
+  for the schedule -> net._http_response for what actually happened. Three queries, one live outage.
+---
+
+## 2026-08-29 - The reminders fix is written, correct and unapplied
+Second item from the net._http_response sweep. No code change - the fix already exists; what was missing was
+proof it works.
+
+Files changed:
+- prd.json - WEB-OPS-007 notes
+
+Verified in BEGIN/ROLLBACK against production: get_pending_reminders() raises 42804 today and executes
+cleanly with migration 20260828000001 applied, signature unchanged. The hourly cron job has run 184 times
+since 2026-08-22 and errored on every one.
+
+**Learnings for future iterations:**
+- **PostgreSQL will not coerce a RETURNS TABLE column.** Declaring user_email TEXT while selecting
+  auth.users.email, which Supabase defines as varchar(255), raises 42804 and the function returns nothing at
+  all. Any RETURNS TABLE that reads a column this project does not own is worth checking against the real
+  type.
+- **Verify an unapplied migration rather than just noting it exists.** Running it inside BEGIN/ROLLBACK and
+  calling the function before and after turns "someone wrote a fix" into "the fix is correct and the
+  signature is unchanged", which is what makes applying it a decision instead of a risk.
+- **Say what the fix does NOT buy.** user_event_reminders holds 0 rows, so no reminder has actually been
+  missed. The fix means the feature works when the first one is created. Overselling a fix is its own kind of
+  inaccuracy.
+- 184 hourly runs, every one a 500, and cron_health reports the job healthy - because net.http_post succeeds
+  on enqueue, not on landing. Same blind spot as the scrape outage.
+---
+
+## 2026-08-29 - campaign-creative-review-sweep has fired 1,105 times into a 404
+Third item from the net._http_response sweep. No code change - the fix is a deploy.
+
+Files changed:
+- prd.json - WEB-OPS-007 notes
+
+**Learnings for future iterations:**
+- **A cron job posting to an undeployed function looks healthy from every angle.** cron.job_run_details
+  records the enqueue, so it says succeeded (376 times); the function never runs, so it writes no
+  automation_job_runs row; and the agent observability watches automation_job_runs. Green cron row plus no
+  agent row is indistinguishable from an agent with nothing to do. Only net._http_response knows.
+- **Probing deployment: send the Authorization header and read the BODY.** A POST with only an apikey can
+  return 401 before the gateway resolves the function, so 401 alone does not prove deployment. With
+  `Authorization: Bearer <anon>`, an absent function returns the gateway's
+  {"code":"NOT_FOUND","message":"Requested function was not found"} and a deployed one returns its own gate's
+  message.
+- **Cross-check cron targets against the undeployed baseline.** One query finds them:
+    select jobname, substring(command from 'functions/v1/([a-z0-9-]+)') from cron.job where active;
+  then probe each. campaign-creative-review is in edge-deploy-baseline.json's 64 and has an active */10 job
+  pointed at it.
+- This is the ad-creative approval automation WEB-LEGAL-011 depends on, so pending creatives are being
+  reviewed by nothing while the sweep reports success.
+---
+
+## 2026-08-29 - Which of the 35 undeployed cron targets are actually live: five
+No code change. check-cron-targets.mjs already lists 35 and explicitly defers the "confirm against cron.job"
+step because it runs offline. This is that step.
+
+Files changed:
+- prd.json - WEB-OPS-007 notes
+
+**Learnings for future iterations:**
+- **35 is the backlog, 5 is the bill.** Only five of the undeployed cron targets have an ACTIVE cron.job
+  entry firing today: campaign-creative-review (*/10, 1106 runs), regenerate-sitemaps (0 */6, 31),
+  saved-search-alerts (0 7, 8), social-daily-poster (0 14, 8), web-vitals-weekly (0 6 * * 1, 1). The other
+  30 are scheduled by migrations whose entries are inactive.
+- **regenerate-sitemaps being on that list closes a loop with WEB-SEO-011**, which records it as 404 and
+  treats it as its own problem. It is this problem.
+- **Read the guard's own caveat before re-deriving its output.** I measured this from production and then
+  found check-cron-targets already reports the superset - and had already told me to do exactly the
+  narrowing I did. Run the existing check first; the value was in the half it says it cannot do.
+- The cron_ok column is far below runs on every row because these jobs also failed at the SQL level before
+  2026-08-27 on the missing app.settings.supabase_url. Since that fix they "succeed" into a 404, which is
+  worse - the earlier state at least left an ERROR in cron.job_run_details.
+- My own executive-digest cron migration schedules an undeployed function too. Applying it without deploying
+  would make a sixth; they go together.
+---
+
+## 2026-08-29 - enhance-events: the cron invented a request shape the function never had
+Fourth and last item from the net._http_response sweep.
+
+Files changed:
+- supabase/functions/batch-enhance-events/index.ts - validate eventIds/fields, 400 instead of a TypeError
+- prd.json - WEB-OPS-007 notes
+
+Verified: esbuild, tsc, npm run validate all clean.
+
+**Learnings for future iterations:**
+- **Three schedulers, three callees, three different mismatches, all in one day** - and all invisible for the
+  same reason, that net.http_post succeeds on enqueue:
+    ai-article-pipeline -> suggest-article-topics  auth (service-role bearer vs a user-session gate)
+    scrape-events       -> firecrawl-scraper       inner non-2xx wrapped in success: true
+    enhance-events-*    -> batch-enhance-events    payload (cron posts {limit, forceRefresh}, handler wants
+                                                   eventIds)
+  When a cron job posts to an edge function, the contract between them is checked by nothing at all.
+- **Destructure then validate, before the first property access.** `const { eventIds } = await req.json()`
+  followed by `eventIds.length` turns a contract mismatch into "Cannot read properties of undefined", which
+  names neither the field nor the caller. A 400 naming the field makes the next failure readable from
+  net._http_response alone.
+- **Do not infer a cost decision from a cron payload.** {"limit": 50} implies a selection mode this function
+  has never had, and each event costs a Claude call plus up to three Google Search calls. Either it grows a
+  selector with an explicit budget or the schedules should go; inventing the behaviour would have committed
+  the project to spend nobody chose.
+---
+
+================================================================================
+2026-08-29  WEB-OPS-007 AC4 - the cron-to-function contract now has a check
+================================================================================
+Four production defects came out of one read of net._http_response. They had
+nothing in common except that nothing had ever read that table.
+
+cron.job_run_details is written when net.http_post ENQUEUES, not when the call
+lands. A job posting at a function that was never deployed reports "succeeded"
+forever. campaign-creative-review-sweep did that 1,105 times.
+
+Shipped: cron_http_failures() RPC (20260829000003), a ratcheting check script
+with a 3-signature baseline, and a CI step in rls-config-audit.yml (the job that
+declares environment: Scrape, so it actually has the service-role key).
+
+Control-tested in four states against a stub RPC before trusting it green:
+matches -> 0, new signature -> 1, signature disappeared -> 0 + advisory,
+RPC missing -> 1 naming the migration. Migration itself verified in a rolled-back
+transaction against production; returned exactly the three known signatures.
+
+Blind spot that remains, on purpose and in writing: a function that fails and
+answers 200. pg_net keeps status codes only. That is how the scrape outage hid.
+
+Codebase pattern to reuse: when a monitor and the thing it monitors disagree,
+find the table that stores the OUTCOME rather than the ATTEMPT. Success recorded
+at enqueue time is not success.
+
+================================================================================
+2026-08-29  WEB-SEO-006 - four content types were at exactly zero coverage
+================================================================================
+ENTITY_SITEMAPS is a strict priority order, so when the prerender budget binds
+the shortfall is not spread across categories - the tail gets all of it. The
+full-budget pass rendered restaurants 478/478 and events 391/397 while
+attractions, playgrounds, articles and pSEO each came out at ZERO.
+
+Small sitemaps (<= 100 URLs) now render first. 125 URLs, 13% of the list, about
+a minute of a 420-second budget. Coverage 870 -> 1064 of 1136, and every group
+that was zero is now at 100%.
+
+Events becomes the variance sink by construction, so check-entity-coverage.mjs
+gained a `floors` override (preserved across --update) set to 0 for events, plus
+a ratchet on the TOTAL so zeroing a group's floor does not leave it unpoliced.
+
+Codebase pattern: when a budgeted pass processes a priority list, the last item
+does not get "less". It gets nothing. Check the shape of a shortfall, not its
+size - "135 of 1004" hid four categories at zero.
+
+================================================================================
+2026-08-29  WEB-LEGAL-012 AC4 - the Android opt-out that showed the wrong state
+================================================================================
+AC4's premise was wrong: Android has the toggle. It wrote SecureStorage only, so
+it stopped no mail - every sender reads profiles.communication_preferences.
+
+The sharper defect nobody had written down: loadBoolean returns false for a key
+never set, and the server reads a missing key as CONSENT. So the screen showed
+every user opted OUT while the mail kept arriving, and toggling did not fix it.
+
+Now server-backed: read-then-merge (never replace - that is how PreferencesManager
+deleted the marketing key on web), rollback plus a visible error when the write
+fails, and a StateFlow that starts true because absence means consent.
+
+371 tests, 0 failures.
+
+Two traps worth reusing:
+  kotlinx booleanOrNull parses raw content, so the JSON STRING "false" reads as
+  false - while JS `"false" !== false` is true. Check isString first.
+  mockk(relaxed=true) cannot produce a Result<T>; it is a value class, so you get
+  a ClassCastException at the CALL SITE rather than at the stub.
+
+================================================================================
+2026-08-29  AND-AUDIT-007 - the biometric lock only locked once per process
+================================================================================
+The gate lived in LaunchedEffect(Unit), which runs once per composition. Every
+unlock after the first was theatre. Lock state now lives in a @Singleton
+controller driven by ON_STOP/ON_START, raised in onCreate before setContent.
+
+Grace period is zero, deliberately: ON_STOP does not fire for the notification
+shade, so the case a grace period protects against does not arise. iOS reached
+the same answer independently (IOS-AUDIT-SEC-016).
+
+DEVICE_CREDENTIAL added, with the two constraints that crash if ignored -
+BIOMETRIC_STRONG|DEVICE_CREDENTIAL is illegal below API 30, and it cannot be
+combined with setNegativeButtonText.
+
+385 tests, 0 failures. Lint clean.
+
+WORTH REMEMBERING: I added an in-flight guard against the PIN UI re-locking
+underneath a successful unlock, with three tests. Mutation-testing it showed all
+three passed with the guard disabled - the prompt only shows while already
+locked, so re-locking on return is a no-op. Removed the guard, its tests and its
+comment. Mutation-test a guard before trusting the tests that surround it; a
+green test next to speculative code proves nothing about the code.
+
+================================================================================
+2026-08-29  WEB-PERF-023 - the cheaper card, measured instead of designed
+================================================================================
+The previous note reserved "a cheaper card" as a design change. Counting the
+built HTML first showed most of the cost was not design: 3 of a card's 50 tags
+were elements rendered and then hidden, and 41% of the homepage was inline SVG
+icon internals.
+
+SocialEventCard 50 -> 43 tags. 665 lucide JSX uses converted to SpriteIcon
+across 185 files. Three icons added to the sprite on arithmetic the old comments
+had skipped - building-2 saves 180 nodes on /stay against a 7-node symbol.
+
+9 routes: 20697 -> 18977 elements (-8.3%), bundle +0.4 KB gz.
+/events/kids drops under the 1,500 Lighthouse flag. 10 of 35 still over it.
+
+Two of my own mistakes, both caught by existing guards:
+  a const placed above the declaration it referenced (TDZ) blanked every event
+  route - prerender's strict gate refused to publish the error page.
+  the codemod's import landed inside a multi-line import block in 4 files -
+  check-import-exports.mjs caught it.
+
+Pattern: when a note says "X is the next move but it needs a design decision",
+measure X first. Two thirds of this was waste, not design.
+
+================================================================================
+2026-08-29  AND-AUDIT-014 AC3 + WEB-SEO-013 AC7
+================================================================================
+The Android instrumentation test has now run. ArticleMarkdownTest's six tests
+had never executed anywhere - no workflow called connectedCheck and no device
+was declared. A Gradle managed device (Pixel 6, API 34, aosp-atd) is now in
+app/build.gradle.kts, so CI and a laptop run the same one.
+
+  6 tests, 0 failures. 5m04s cold (image download), 54s warm.
+  Mutation tested: swallowing the link callback fails exactly
+  clickingALinkDispatchesItsUrl.
+
+CI step added with the KVM udev rule runners need - without it the emulator
+falls back to software and the job times out instead of failing clearly.
+
+Separately: cross-checking public/_redirects against the sitemaps - which
+nothing had ever done - found /visitors-guide. It is the target of the
+/things-to-do/tourists 301, a live 225-line route, and it was in no sitemap and
+no prerender list. The page that WON a duplication was the one nothing pointed
+at. Now in both, with check-sitemap-redirects.mjs gating both directions.
+
+Codebase pattern: when a redirect is added to resolve a duplication, check what
+happened to the winner. The loser gets the attention; the winner is the one that
+has to be reachable.
+
+================================================================================
+2026-08-29  AND-AUDIT-014 AC4 - deep-link routing now has device coverage
+================================================================================
+DeepLinkHandler had zero tests of either kind and is the entry point for every
+shared link, notification tap and app shortcut. It cannot be unit tested: every
+branch runs through android.net.Uri, which returns null under
+isReturnDefaultValues - the vacuous pass this story is named for.
+
+20 instrumentation tests (26 on the device now, 0 failures, 41s), plus a JVM
+test comparing DeepLinkHandler's hosts against AndroidManifest.xml in both
+directions - the rule the manifest states and nothing enforced.
+
+TWO THINGS MUTATION TESTING FOUND, both about my own work:
+
+  Removing the auth-callback passthrough failed only ONE of the two tests I
+  wrote for it. parseCustomScheme already rejects host "auth-callback", so the
+  guard is redundant on the path the app actually uses. I would have claimed
+  both tests covered it.
+
+  The parity test reads two files as TEXT, and neither is on the unit-test
+  runtime classpath - so Gradle left the task UP-TO-DATE and the build GREEN
+  after I deleted a host from the manifest. Same edit under --rerun-tasks
+  failed correctly. Fixed by declaring both files as Test task inputs.
+
+Codebase pattern: a test that reads source files escapes Gradle's input
+tracking. It will pass locally right after you break what it guards, and CI
+hides it because a fresh checkout always re-runs. Declare the files as inputs,
+then mutate WITHOUT --rerun-tasks to prove it.
+
+================================================================================
+2026-08-29  AND-AUDIT-014 AC4 - covering the Room cache found offline mode broken
+================================================================================
+CacheManager.pruneExpired() applied two clocks in one method: entity rows were
+kept for 24 hours, metadata was deleted on its 5-minute TTL. ttl_minutes is a
+freshness signal read at query time (what allowStale overrides), not a lifetime.
+
+So the prune deleted the row that ADDRESSES cached data while keeping the data.
+getCachedEvents begins `cacheMetadataDao.get(key) ?: return null`, and
+pruneExpired runs in Application.onCreate - so every offline launch more than
+five minutes after the last fetch reported nothing cached, with up to a day of
+rows sitting in the database unreachable.
+
+Fixed: one cutoff for all four tables. deleteExpired(nowMillis) replaced by
+deleteOlderThan(cutoffMillis) so a TTL-shaped delete is not left to be reused.
+
+Tests written FIRST and they fail on the unfixed code - 2 of 10 assertions.
+In-memory Room rather than mocked DAOs, because the bug is in what SQL each
+DELETE matches and a mock agrees with whatever you already believe.
+
+Codebase pattern: when a class prunes two tables that reference each other,
+check that both DELETEs use the same clock. And when every read returns null on
+error and every caller turns null into "could not load", there is no observable
+difference between a broken cache and no network - so the layer cannot be
+debugged from logs, only from tests.
+
+================================================================================
+2026-08-29  AND-AUDIT-014 AC4 - app shortcuts, and a mocked boundary that hid
+================================================================================
+ShortcutDispatcher had a JVM test that MOCKS Uri, so the string -> Uri contract
+had never run. The launcher ships a percent-encoded query; whether it arrives as
+a sentence or as raw escapes is decided by the class the mock replaces.
+
+10 instrumentation tests. openNow is true only for the exact lowercase "true"
+(toBooleanStrictOrNull is case-sensitive), so an Assistant sending "True" drops
+the filter silently.
+
+I ASSERTED THE WRONG THING AND THE DEVICE CORRECTED ME: `+` in a query is
+converted to a space by getQueryParameter, not left literal. Second mocked-
+boundary assumption to be wrong this week in the plausible direction.
+
+ShortcutManifestParityTest ties shortcuts.xml, the manifest and the dispatcher
+together, plus checks the instrumentation test still quotes the shipped URI.
+
+Codebase pattern: a mock at a framework boundary does not just skip that
+boundary's bugs, it makes them unaskable. When a test stubs Uri, JSON, or a
+clock, ask what the real one does that the stub cannot express - and then go and
+measure it rather than reasoning about it.
+
+================================================================================
+2026-08-29  AND-AUDIT-014 AC4 complete - and AND-AUDIT-021's premise is stale
+================================================================================
+MainNavHost.kt is 87 lines, not 1,208. The package was split into NavGraph,
+DetailDestinations, FlowDestinations and TabDestinations and nobody recorded it,
+so TWO stories were still deferring to AND-AUDIT-021 as a blocker.
+
+Navigation measured before writing anything: 34 routes declared, 34 registered,
+0 raw-string navigate() calls. Nothing for a device test to find, so AC4's
+navigation item ships as static guards for the two failures that stay possible -
+a route never registered, and a createRoute that no longer builds its pattern.
+Both crash at tap time and both compile.
+
+Four mutations, each caught by exactly one test.
+
+Corrected my own inputs block from two commits back: a .kt file under
+src/main/java is already a test input via its compiled classes. Only the
+manifest, res/xml and androidTest sources needed declaring. Verified by dropping
+the .kt entries and re-running the mutation.
+
+Codebase pattern: before doing work a story defers to another story for, MEASURE
+the blocker. This one had been fixed and not written down, and it was holding up
+two other stories.
+
+================================================================================
+2026-08-29  WEB-LEGAL-011 AC8 - bucket posture, provable with the anon key
+================================================================================
+check-bucket-posture.ts said the anon key "cannot distinguish posture at all".
+True of GET /storage/v1/bucket, which is what was measured. Not true of the
+public OBJECT endpoint:
+
+    public bucket, missing key   ->  NoSuchKey     (bucket resolved)
+    private bucket, missing key  ->  NoSuchBucket  (did not resolve)
+
+So ad-creatives-review is confirmed NOT anonymously readable in production -
+the guarantee WEB-LEGAL-011 was built to make, previously verified only by
+reading the migration. And user-uploads (WEB-QA-020) is confirmed closed.
+
+The asymmetry is the right way round: it proves PUBLIC positively and cannot
+tell private from absent, so it gates the direction that matters and only
+reports the other.
+
+New check runs in pr-checks.yml on the anon key. The service-role key is an
+ENVIRONMENT secret scoped to "Scrape", so the existing check can only run in the
+nightly audit - a PR that reopened a bucket had until morning.
+
+Codebase pattern: when a tool's header says a credential "cannot" do something,
+check WHICH endpoint that was measured on. The claim is usually true and
+narrower than it reads, and the cheaper credential often answers a differently
+shaped version of the same question.
+
+================================================================================
+2026-08-29  WEB-SEO-008 - a duplicate the prerenderer was hiding
+================================================================================
+Every pSEO page emitted TWO BreadcrumbList blocks: SEOHead builds one from the
+`breadcrumbs` prop, and PseoPage built another into structuredData from the same
+source, with identical URLs.
+
+It never reached the static HTML because dedupeJsonLd drops duplicate @types -
+its header warns it "can mask a source defect" and it was masking this one. The
+full build's "dropped 16 duplicate JSON-LD block(s)" against exactly 16 pSEO
+URLs is what gave it away.
+
+Worse than untidy: dedupeJsonLd types a block by its FIRST "@type" and the pSEO
+schemas ship as one array in one <script>. With BreadcrumbList first, the whole
+array was typed BreadcrumbList - only SEOHead's render order stopped the dedup
+deleting that page's FAQPage and ItemList too.
+
+I also read RestaurantDetails as having the same defect. It does not: its two
+blocks are byte-identical and react-helmet-async collapses them. 214 prerendered
+pages, one BreadcrumbList each. The drop count had already said so.
+
+Codebase patterns:
+  A cleanup step that fixes something silently is a place defects go to hide.
+  Read what it REPORTS having fixed - that number is a defect log.
+  When a count disagrees with a code read (16 drops, but 478 pages "should" be
+  affected), the count is the evidence. Go find why, do not average them.

@@ -163,7 +163,7 @@ class LocalNotificationService @Inject constructor(
             return true
         } catch (e: SecurityException) {
             // Exact alarm permission denied
-            android.util.Log.w("DMI/notification", "Cannot schedule exact alarm: ${e.message}")
+            AppLogger.general.warning("Cannot schedule exact alarm", e)
             return false
         }
     }
@@ -287,7 +287,7 @@ class LocalNotificationService @Inject constructor(
             ids.removeAll(toRemove.toSet())
             prefs.edit().putStringSet(KEY_SCHEDULED_IDS, ids).apply()
             toRemove.forEach { removeReminderRecord(it) }
-            android.util.Log.d("DMI/notification", "Pruned ${before - ids.size} expired reminders")
+            AppLogger.general.debug("Pruned ${before - ids.size} expired reminders")
         }
     }
 

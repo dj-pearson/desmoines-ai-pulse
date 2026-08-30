@@ -10,16 +10,8 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FavoriteButton } from '@/components/FavoriteButton';
 import { createEventSlugWithCentralTime, formatEventDateShort } from '@/lib/timezone';
-import {
-  Sparkles,
-  TrendingUp,
-  Calendar,
-  MapPin,
-  ChevronRight,
-  Info,
-  Settings,
-  Zap,
-} from 'lucide-react';
+import { ChevronRight, Info, Settings, Zap } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface PersonalizedRecommendationsProps {
   userLocation?: { latitude: number; longitude: number } | null;
@@ -102,7 +94,7 @@ export function PersonalizedRecommendations({
           <div className="flex items-center gap-3">
             {isPersonalized ? (
               <div className="relative">
-                <Sparkles className="h-6 w-6 text-primary" />
+                <SpriteIcon name="sparkles" className="h-6 w-6 text-primary" />
                 {hasPreferences && (
                   <div className="absolute -top-1 -right-1">
                     <span className="relative flex h-3 w-3">
@@ -113,7 +105,7 @@ export function PersonalizedRecommendations({
                 )}
               </div>
             ) : (
-              <TrendingUp className="h-6 w-6 text-primary" />
+              <SpriteIcon name="trending-up" className="h-6 w-6 text-primary" />
             )}
             <div>
               <div className="flex items-center gap-2">
@@ -227,7 +219,7 @@ export function PersonalizedRecommendations({
 
                 <div className="space-y-2 text-sm text-muted-foreground">
                   <div className="flex items-center">
-                    <Calendar className="h-4 w-4 mr-2 flex-shrink-0" />
+                    <SpriteIcon name="calendar" className="h-4 w-4 mr-2 flex-shrink-0" />
                     <span className="line-clamp-1">
                       {formatEventDateShort(event)}
                     </span>
@@ -235,7 +227,7 @@ export function PersonalizedRecommendations({
 
                   {event.location && (
                     <div className="flex items-center">
-                      <MapPin className="h-4 w-4 mr-2 flex-shrink-0" />
+                      <SpriteIcon name="map-pin" className="h-4 w-4 mr-2 flex-shrink-0" />
                       <span className="line-clamp-1">{event.location}</span>
                     </div>
                   )}
@@ -286,7 +278,7 @@ export function PersonalizedRecommendations({
       {isPersonalized && showTitle && (
         <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
           <div className="flex items-start gap-3">
-            <Sparkles className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+            <SpriteIcon name="sparkles" className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
             <div className="space-y-1 flex-1">
               {hasPreferences ? (
                 <>
@@ -323,7 +315,7 @@ export function PersonalizedRecommendations({
                       onClick={() => navigate('/profile?tab=settings')}
                       className="h-7 text-xs"
                     >
-                      <Sparkles className="h-3 w-3 mr-1" />
+                      <SpriteIcon name="sparkles" className="h-3 w-3 mr-1" />
                       Set Your Preferences
                     </Button>
                   </div>

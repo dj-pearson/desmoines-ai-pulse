@@ -1,5 +1,6 @@
 package com.desmoines.aipulse.ui.screens.tripplanner
 
+import com.desmoines.aipulse.util.UiFormatLocale
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -138,7 +139,7 @@ class ItineraryDetailViewModel @Inject constructor(
 
     companion object {
         private val isoDate = java.time.format.DateTimeFormatter.ISO_LOCAL_DATE
-        private val prettyDate = java.time.format.DateTimeFormatter.ofPattern("MMM d")
+        private val prettyDate = java.time.format.DateTimeFormatter.ofPattern("MMM d", UiFormatLocale)
 
         private fun fmt(value: String?): String? =
             value?.let { runCatching { java.time.LocalDate.parse(it.take(10), isoDate).format(prettyDate) }.getOrNull() ?: it }

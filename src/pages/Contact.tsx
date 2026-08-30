@@ -10,19 +10,8 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
-import {
-  Mail,
-  Phone,
-  MapPin,
-  Send,
-  MessageSquare,
-  Building2,
-  Megaphone,
-  HelpCircle,
-  ThumbsUp,
-  Clock,
-  CheckCircle
-} from "lucide-react";
+import { Mail, Phone, Send, MessageSquare, Megaphone, HelpCircle, ThumbsUp, CheckCircle } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const inquiryTypes: { value: InquiryType; label: string; icon: React.ReactNode; description: string }[] = [
   {
@@ -46,7 +35,7 @@ const inquiryTypes: { value: InquiryType; label: string; icon: React.ReactNode; 
   {
     value: 'business',
     label: 'Business Inquiry',
-    icon: <Building2 className="w-5 h-5" />,
+    icon: <SpriteIcon name="building-2" className="w-5 h-5" />,
     description: 'Partnership or collaboration opportunities'
   },
   {
@@ -149,7 +138,7 @@ export default function Contact() {
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
-                      <MapPin className="w-5 h-5 text-primary mt-0.5" />
+                      <SpriteIcon name="map-pin" className="w-5 h-5 text-primary mt-0.5" />
                       <div>
                         <p className="font-medium">Mailing address</p>
                         <address className="not-italic text-muted-foreground">
@@ -159,7 +148,7 @@ export default function Contact() {
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
-                      <Clock className="w-5 h-5 text-primary mt-0.5" />
+                      <SpriteIcon name="clock" className="w-5 h-5 text-primary mt-0.5" />
                       <div>
                         <p className="font-medium">Response time</p>
                         <p className="text-muted-foreground">Within 24-48 hours</p>
@@ -287,7 +276,7 @@ export default function Contact() {
                       href="/business-partnership"
                       className="block p-2 rounded hover:bg-muted transition-colors text-sm"
                     >
-                      <Building2 className="w-4 h-4 inline mr-2" />
+                      <SpriteIcon name="building-2" className="w-4 h-4 inline mr-2" />
                       Business Partnership
                     </a>
                     <a

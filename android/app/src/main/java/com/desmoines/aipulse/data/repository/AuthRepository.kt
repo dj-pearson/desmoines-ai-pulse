@@ -60,5 +60,17 @@ interface AuthRepository {
     ): Result<Unit>
 
     /** Check if user has admin role. */
+    /**
+     * Whether marketing email is allowed for this user, read from the server.
+     *
+     * WEB-LEGAL-012: absence means opted IN, because every sender tests
+     * `!== false`. A failed read returns the failure rather than a default, so a
+     * caller never shows "opted out" it cannot back up.
+     */
+    suspend fun isEmailMarketingAllowed(userId: String): Result<Boolean>
+
+    /** Persist the email opt-in/out into profiles.communication_preferences. */
+    suspend fun setEmailMarketingAllowed(userId: String, allowed: Boolean): Result<Unit>
+
     suspend fun checkAdminRole(userId: String): Result<Boolean>
 }

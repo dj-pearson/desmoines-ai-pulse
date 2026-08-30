@@ -1,7 +1,8 @@
-import { Clock, ExternalLink } from 'lucide-react';
+
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { getRestaurantOpenStatus } from '@/lib/restaurantHours';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface OpenStatusChipProps {
   /** Free-form hours text (same format the open/closed parser understands). */
@@ -42,7 +43,7 @@ export function OpenStatusChip({
   if (status !== 'unknown') {
     return (
       <Badge variant="outline" className={cn('gap-1', STATUS_STYLES[status], className)}>
-        <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+        <SpriteIcon name="clock" className="h-3.5 w-3.5" aria-hidden="true" />
         {STATUS_LABELS[status]}
       </Badge>
     );
@@ -59,16 +60,16 @@ export function OpenStatusChip({
           className
         )}
       >
-        <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+        <SpriteIcon name="clock" className="h-3.5 w-3.5" aria-hidden="true" />
         {fallbackLabel}
-        <ExternalLink className="h-3 w-3" aria-hidden="true" />
+        <SpriteIcon name="external-link" className="h-3 w-3" aria-hidden="true" />
       </a>
     );
   }
 
   return (
     <span className={cn('inline-flex items-center gap-1 text-sm text-muted-foreground', className)}>
-      <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+      <SpriteIcon name="clock" className="h-3.5 w-3.5" aria-hidden="true" />
       {fallbackLabel}
     </span>
   );

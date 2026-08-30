@@ -7,25 +7,12 @@ import { Label } from "./ui/label";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
-import { 
-  Clock, 
-  CheckCircle, 
-  XCircle, 
-  AlertTriangle, 
-  Eye, 
-  Calendar,
-  MapPin,
-  Tag,
-  User,
-  Mail,
-  Phone,
-  Globe,
-  DollarSign
-} from "lucide-react";
+import { CheckCircle, XCircle, AlertTriangle, Eye, Tag, User, Mail, Phone, Globe, DollarSign } from "lucide-react";
 import { useAllSubmittedEvents, useReviewEvent } from "@/hooks/useUserSubmittedEvents";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('EventReviewSystem');
 
@@ -46,7 +33,7 @@ export default function EventReviewSystem() {
       case "needs_revision":
         return <AlertTriangle className="h-4 w-4 text-yellow-500" />;
       default:
-        return <Clock className="h-4 w-4 text-blue-500" />;
+        return <SpriteIcon name="clock" className="h-4 w-4 text-blue-500" />;
     }
   };
 
@@ -115,7 +102,7 @@ export default function EventReviewSystem() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Pending Review</CardTitle>
-            <Clock className="h-4 w-4 text-blue-500" />
+            <SpriteIcon name="clock" className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{pendingCount}</div>
@@ -205,13 +192,13 @@ export default function EventReviewSystem() {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-muted-foreground mb-3">
                               {event.venue && (
                                 <div className="flex items-center gap-1">
-                                  <MapPin className="h-3 w-3" />
+                                  <SpriteIcon name="map-pin" className="h-3 w-3" />
                                   {event.venue}
                                 </div>
                               )}
                               {event.date && (
                                 <div className="flex items-center gap-1">
-                                  <Calendar className="h-3 w-3" />
+                                  <SpriteIcon name="calendar" className="h-3 w-3" />
                                   {format(new Date(event.date), "MMM d, yyyy")}
                                 </div>
                               )}

@@ -23,11 +23,12 @@ import {
   TableHeader,
   TableRow,
 } from './ui/table';
-import { Search, Download, Filter, User, Calendar, FileText } from 'lucide-react';
+import { Search, Download, Filter, User, FileText } from "lucide-react";
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { useDataExport } from '@/hooks/useDataExport';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface AdminActionLog {
   id: string;
@@ -309,7 +310,7 @@ export function ActivityLogViewer() {
                     <TableRow key={log.id}>
                       <TableCell className="whitespace-nowrap">
                         <div className="flex items-center gap-2">
-                          <Calendar className="h-4 w-4 text-muted-foreground" />
+                          <SpriteIcon name="calendar" className="h-4 w-4 text-muted-foreground" />
                           {format(new Date(log.created_at), 'MMM dd, yyyy HH:mm')}
                         </div>
                       </TableCell>

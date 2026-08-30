@@ -1,5 +1,6 @@
 package com.desmoines.aipulse.ui.screens.eventdetail
 
+import com.desmoines.aipulse.util.UiFormatLocale
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
@@ -184,7 +185,7 @@ class EventDetailViewModel @Inject constructor(
             val event = _event.value ?: return ""
             val parts = mutableListOf(event.title)
             event.parsedDate?.let { date ->
-                val formatter = DateTimeFormatter.ofPattern("MMM d, yyyy h:mm a")
+                val formatter = DateTimeFormatter.ofPattern("MMM d, yyyy h:mm a", UiFormatLocale)
                 parts.add(date.format(formatter))
             }
             parts.add("at ${event.displayLocation}")

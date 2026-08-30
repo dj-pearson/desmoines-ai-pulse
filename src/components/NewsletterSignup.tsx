@@ -4,8 +4,9 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useNewsletterSubscription, NewsletterPreferences } from "@/hooks/useNewsletterSubscription";
-import { Mail, CheckCircle, Sparkles, Calendar, Utensils, Tag } from "lucide-react";
+import { Mail, CheckCircle, Utensils, Tag } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface NewsletterSignupProps {
   variant?: 'default' | 'compact' | 'hero' | 'footer' | 'modal';
@@ -132,7 +133,7 @@ export function NewsletterSignup({
       <div className={cn("bg-primary/5 rounded-2xl p-8 text-center", className)}>
         <div className="flex justify-center mb-4">
           <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
-            <Sparkles className="w-7 h-7 text-primary" />
+            <SpriteIcon name="sparkles" className="w-7 h-7 text-primary" />
           </div>
         </div>
         <h2 className="text-2xl font-bold mb-2">
@@ -205,7 +206,7 @@ export function NewsletterSignup({
                     checked={preferences.event_alerts}
                     onCheckedChange={() => togglePreference('event_alerts')}
                   />
-                  <Calendar className="w-4 h-4 text-muted-foreground" />
+                  <SpriteIcon name="calendar" className="w-4 h-4 text-muted-foreground" />
                   Event updates
                 </label>
                 <label className="flex items-center gap-2 text-sm cursor-pointer">

@@ -7,8 +7,11 @@
 
 export const SPRITE_ICON_NAMES = [
   'arrow-right',
+  'building-2',
   'calendar',
+  'chef-hat',
   'clock',
+  'external-link',
   'map-pin',
   'share-2',
   'sparkles',
@@ -35,15 +38,33 @@ export function LucideSprite() {
       <path d="M5 12h14" key="1ays0h" />
       <path d="m12 5 7 7-7 7" key="xquz4c" />
     </symbol>
+    <symbol id="lu-building-2" viewBox="0 0 24 24">
+      <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z" key="1b4qmf" />
+      <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" key="i71pzd" />
+      <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" key="10jefs" />
+      <path d="M10 6h4" key="1itunk" />
+      <path d="M10 10h4" key="tcdvrf" />
+      <path d="M10 14h4" key="kelpxr" />
+      <path d="M10 18h4" key="1ulq68" />
+    </symbol>
     <symbol id="lu-calendar" viewBox="0 0 24 24">
       <path d="M8 2v4" key="1cmpym" />
       <path d="M16 2v4" key="4m81vk" />
       <rect width="18" height="18" x="3" y="4" rx="2" key="1hopcy" />
       <path d="M3 10h18" key="8toen8" />
     </symbol>
+    <symbol id="lu-chef-hat" viewBox="0 0 24 24">
+      <path d="M17 21a1 1 0 0 0 1-1v-5.35c0-.457.316-.844.727-1.041a4 4 0 0 0-2.134-7.589 5 5 0 0 0-9.186 0 4 4 0 0 0-2.134 7.588c.411.198.727.585.727 1.041V20a1 1 0 0 0 1 1Z" key="1qvrer" />
+      <path d="M6 17h12" key="1jwigz" />
+    </symbol>
     <symbol id="lu-clock" viewBox="0 0 24 24">
       <circle cx="12" cy="12" r="10" key="1mglay" />
       <polyline points="12 6 12 12 16 14" key="68esgv" />
+    </symbol>
+    <symbol id="lu-external-link" viewBox="0 0 24 24">
+      <path d="M15 3h6v6" key="1q9fwt" />
+      <path d="M10 14 21 3" key="gplh6r" />
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" key="a6xqqp" />
     </symbol>
     <symbol id="lu-map-pin" viewBox="0 0 24 24">
       <path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0" key="1r0f0z" />

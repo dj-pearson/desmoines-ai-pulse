@@ -1,14 +1,9 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import {
-  Calendar,
-  Sparkles,
-  Sun,
-  Navigation,
-  Clock,
-} from "lucide-react";
+import { Sun, Navigation } from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface QuickActionProps {
   icon: React.ReactNode;
@@ -110,7 +105,7 @@ export function QuickActions({ className, onAIPlanClick }: QuickActionsProps) {
       {/* AI Plan My Night — featured, routes to the working /trip-planner */}
       <div className="max-w-4xl mx-auto mb-3 md:mb-4">
         <QuickAction
-          icon={<Sparkles className="h-6 w-6" aria-hidden="true" />}
+          icon={<SpriteIcon name="sparkles" className="h-6 w-6" aria-hidden="true" />}
           label="AI Plan My Night"
           // "Let AI build your itinerary" promised something a logged-out
           // visitor cannot have: /trip-planner wraps the planner in
@@ -130,7 +125,7 @@ export function QuickActions({ className, onAIPlanClick }: QuickActionsProps) {
       {/* Consolidated "right now" action row — every item is a real link */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 max-w-4xl mx-auto">
         <QuickAction
-          icon={<Calendar className="h-6 w-6" aria-hidden="true" />}
+          icon={<SpriteIcon name="calendar" className="h-6 w-6" aria-hidden="true" />}
           label="Today"
           sublabel="Happening today"
           href="/events/today"
@@ -151,7 +146,7 @@ export function QuickActions({ className, onAIPlanClick }: QuickActionsProps) {
           variant="default"
         />
         <QuickAction
-          icon={<Clock className="h-6 w-6" aria-hidden="true" />}
+          icon={<SpriteIcon name="clock" className="h-6 w-6" aria-hidden="true" />}
           label="Open Now"
           sublabel="Dining open now"
           href="/restaurants/open-now"
@@ -189,7 +184,7 @@ export function QuickActionsMobile({
         className="h-16 w-full bg-[#FFC107] bg-gradient-to-r from-[#FFD700] to-[#FFA500] hover:from-[#FFA500] hover:to-[#FFD700] text-[#2D1B69] font-bold shadow-lg gap-2"
         aria-label="AI Plan My Night - itinerary planning, included with Insider"
       >
-        <Sparkles className="h-5 w-5" aria-hidden="true" />
+        <SpriteIcon name="sparkles" className="h-5 w-5" aria-hidden="true" />
         <span className="text-sm">AI Plan My Night</span>
         {/* The requirement rides on the button itself here: the mobile layout
             has no sublabel slot, and sending someone to a paywall from an
@@ -203,7 +198,7 @@ export function QuickActionsMobile({
       <div className="grid grid-cols-2 gap-2">
         <Link to="/events/today">
           <Button size="sm" variant="ghost" className="h-16 w-full flex-col gap-1 text-white hover:bg-white/10" aria-label="View today's events">
-            <Calendar className="h-4 w-4" aria-hidden="true" />
+            <SpriteIcon name="calendar" className="h-4 w-4" aria-hidden="true" />
             <span className="text-xs">Today</span>
           </Button>
         </Link>
@@ -221,7 +216,7 @@ export function QuickActionsMobile({
         </Link>
         <Link to="/restaurants/open-now">
           <Button size="sm" variant="ghost" className="h-16 w-full flex-col gap-1 text-white hover:bg-white/10" aria-label="Restaurants open now">
-            <Clock className="h-4 w-4" aria-hidden="true" />
+            <SpriteIcon name="clock" className="h-4 w-4" aria-hidden="true" />
             <span className="text-xs">Open Now</span>
           </Button>
         </Link>

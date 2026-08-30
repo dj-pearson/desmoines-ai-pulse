@@ -5,7 +5,8 @@ import SeasonalContent from "@/components/SeasonalContent";
 import { FAQSection } from "@/components/FAQSection";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Calendar, Star, Utensils, Car, Bed } from "lucide-react";
+import { Star, Utensils, Car, Bed } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 /**
  * Iowa State Fair dates. Confirmed by the site owner: 13-23 August.
@@ -150,11 +151,11 @@ export default function IowaStateFairPage() {
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-2xl mx-auto text-white">
             <div className="flex items-center gap-2 justify-center">
-              <Calendar className="h-5 w-5" />
+              <SpriteIcon name="calendar" className="h-5 w-5" />
               <span>{FAIR.rangeLabel}</span>
             </div>
             <div className="flex items-center gap-2 justify-center">
-              <MapPin className="h-5 w-5" />
+              <SpriteIcon name="map-pin" className="h-5 w-5" />
               <span>Des Moines, Iowa</span>
             </div>
             <div className="flex items-center gap-2 justify-center">

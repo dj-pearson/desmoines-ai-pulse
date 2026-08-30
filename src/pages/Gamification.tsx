@@ -11,8 +11,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
-import { Trophy, Target, Users, Award, Star, Camera, MapPin, Share2 } from "lucide-react";
+import { Trophy, Target, Award, Star, Camera, MapPin, Share2 } from "lucide-react";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 // Sample XP activities for demo
 const XP_ACTIVITIES = [
@@ -101,7 +102,7 @@ export default function Gamification() {
               <Card className="text-left">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <Users className="h-5 w-5 text-blue-500" />
+                    <SpriteIcon name="users" className="h-5 w-5 text-blue-500" />
                     Community Challenges
                   </CardTitle>
                 </CardHeader>

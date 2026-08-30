@@ -4,24 +4,14 @@ import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Heart,
-  Calendar,
-  MapPin,
-  ExternalLink,
-  Loader2,
-  Trash2,
-  UtensilsCrossed,
-  Landmark,
-  Play,
-  Hotel as HotelIcon
-} from "lucide-react";
+import { Heart, Loader2, Trash2, UtensilsCrossed, Landmark, Play, Hotel as HotelIcon } from "lucide-react";
 import { format } from "date-fns";
 import { useFavorites } from "@/hooks/useFavorites";
 import { Badge } from "@/components/ui/badge";
 import { createSlug } from "@/lib/slug";
 import { favoritedListQueryKey } from "@/hooks/useContentFavorites";
 import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('FavoritesView');
 
@@ -270,7 +260,7 @@ export function FavoritesView() {
         <div className="flex gap-3 justify-center">
           <Button asChild>
             <a href="/events">
-              <Calendar className="h-4 w-4 mr-2" />
+              <SpriteIcon name="calendar" className="h-4 w-4 mr-2" />
               Browse Events
             </a>
           </Button>
@@ -289,7 +279,7 @@ export function FavoritesView() {
     <Tabs defaultValue="events" className="w-full">
       <TabsList className="grid w-full grid-cols-5">
         <TabsTrigger value="events" className="flex items-center gap-2">
-          <Calendar className="h-4 w-4" />
+          <SpriteIcon name="calendar" className="h-4 w-4" />
           Events ({events?.length || 0})
         </TabsTrigger>
         <TabsTrigger value="restaurants" className="flex items-center gap-2">
@@ -341,7 +331,7 @@ export function FavoritesView() {
 
                   {event.date && (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-                      <Calendar className="h-4 w-4" />
+                      <SpriteIcon name="calendar" className="h-4 w-4" />
                       <span>{format(new Date(event.date), "MMM d, yyyy")}</span>
                       {event.time && <span>at {event.time}</span>}
                     </div>
@@ -349,7 +339,7 @@ export function FavoritesView() {
 
                   {event.venue && (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
-                      <MapPin className="h-4 w-4" />
+                      <SpriteIcon name="map-pin" className="h-4 w-4" />
                       <span className="line-clamp-1">{event.venue}</span>
                     </div>
                   )}
@@ -363,7 +353,7 @@ export function FavoritesView() {
                     {event.url && (
                       <Button asChild size="sm" variant="outline">
                         <a href={event.url} target="_blank" rel="noopener noreferrer">
-                          <ExternalLink className="h-4 w-4" />
+                          <SpriteIcon name="external-link" className="h-4 w-4" />
                         </a>
                       </Button>
                     )}
@@ -374,7 +364,7 @@ export function FavoritesView() {
           </div>
         ) : (
           <div className="text-center py-8">
-            <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+            <SpriteIcon name="calendar" className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
             <p className="text-muted-foreground">No favorite events yet</p>
           </div>
         )}
@@ -402,7 +392,7 @@ export function FavoritesView() {
 
                   {restaurant.address && (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
-                      <MapPin className="h-4 w-4" />
+                      <SpriteIcon name="map-pin" className="h-4 w-4" />
                       <span className="line-clamp-1">{restaurant.address}</span>
                     </div>
                   )}
@@ -452,7 +442,7 @@ export function FavoritesView() {
 
                   {attraction.address && (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
-                      <MapPin className="h-4 w-4" />
+                      <SpriteIcon name="map-pin" className="h-4 w-4" />
                       <span className="line-clamp-1">{attraction.address}</span>
                     </div>
                   )}
@@ -502,7 +492,7 @@ export function FavoritesView() {
 
                   {playground.location && (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
-                      <MapPin className="h-4 w-4" />
+                      <SpriteIcon name="map-pin" className="h-4 w-4" />
                       <span className="line-clamp-1">{playground.location}</span>
                     </div>
                   )}
@@ -552,7 +542,7 @@ export function FavoritesView() {
 
                   {hotel.address && (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
-                      <MapPin className="h-4 w-4" />
+                      <SpriteIcon name="map-pin" className="h-4 w-4" />
                       <span className="line-clamp-1">{hotel.address}</span>
                     </div>
                   )}

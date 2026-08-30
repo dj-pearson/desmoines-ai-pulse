@@ -42,9 +42,55 @@ const SRC = path.resolve('src');
 const EMITTERS = [
   { component: 'FAQSection', mode: 'default-on', disabledBy: 'showSchema' },
   { component: 'EnhancedEventSEO', mode: 'always' },
-  { component: 'EnhancedLocalSEO', mode: 'opt-in', enabledBy: 'faqData' },
+  // EnhancedLocalSEO is NOT here. SEO-003 removed its FAQPage block and left
+  // faqData as a hint that the page has an FAQ; the prop still exists and
+  // feeds nothing. Modelling it as an opt-in emitter made five pages look like
+  // duplicates when each has exactly one. assertModelMatchesSource below now
+  // fails if any component listed here stops emitting, so this cannot drift
+  // silently again.
   { component: 'FAQSchema', mode: 'always' },
 ];
+
+/**
+ * Blanks comments so a component NAMED in prose is not counted as rendered.
+ *
+ * This is the bug that made the guard cry wolf. SEO-003 fixed the real
+ * duplication and, in the same commit, explained the fix in a comment
+ * containing the literal text <FAQSection> three times - so the scanner read
+ * EnhancedLocalSEO.tsx as rendering three FAQPage blocks. EventsThisWeekend
+ * had one mention and one real render and was reported as two.
+ *
+ * Replaced with spaces rather than removed, so every offset and line number in
+ * a later match still points at the right place.
+ */
+function stripComments(source) {
+  const blank = (m) => m.replace(new RegExp("[^\n]", "g"), " ");
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, blank)
+    .replace(/(^|[^:])\/\/.*/g, (m, p) => p + " ".repeat(m.length - p.length));
+}
+
+/**
+ * Fails when a modelled emitter no longer emits (WEB-SEO-008 AC5).
+ *
+ * The EMITTERS table is a model of the implementation, and a model that drifts
+ * is worse than no guard: this one reported seven duplications that did not
+ * exist, which made `npm run validate` red for everyone and trained people to
+ * ignore it. If a component here stops emitting FAQPage, say so loudly instead
+ * of over-counting every page that renders it.
+ */
+function assertModelMatchesSource(files) {
+  const stale = [];
+  for (const emitter of EMITTERS) {
+    const own = files.find((f) => f.endsWith(`${emitter.component}.tsx`));
+    if (!own) continue;
+    const src = stripComments(fs.readFileSync(own, 'utf8'));
+    if (!/["']@type["']\s*:\s*["']FAQPage["']/.test(src)) {
+      stale.push(`${emitter.component} is modelled as an FAQPage emitter but ${path.relative(process.cwd(), own)} emits none`);
+    }
+  }
+  return stale;
+}
 
 function walk(dir, out = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -100,12 +146,19 @@ function emitterState(source, emitter) {
 
 function main() {
   const files = walk(SRC);
+  const stale = assertModelMatchesSource(files);
+  if (stale.length) {
+    console.error('\n❌ The FAQPage emitter model has drifted from the source (WEB-SEO-008 AC5)\n');
+    for (const s of stale) console.error(`  ${s}`);
+    console.error('\nUpdate EMITTERS in this file. A stale model over-counts and makes the guard cry wolf.\n');
+    process.exit(1);
+  }
   const offenders = [];
   let scanned = 0;
   let withFaq = 0;
 
   for (const file of files) {
-    const source = fs.readFileSync(file, 'utf8');
+    const source = stripComments(fs.readFileSync(file, 'utf8'));
     // An inline FAQPage literal in the file itself counts as an emitter too.
     const inline = (source.match(/["']@type["']\s*:\s*["']FAQPage["']/g) || []).length;
 

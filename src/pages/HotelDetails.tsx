@@ -6,19 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Building2,
-  MapPin,
-  Phone,
-  Globe,
-  Mail,
-  Star,
-  Clock,
-  ExternalLink,
-  ChevronRight,
-  ArrowLeft,
-  Navigation,
-} from "lucide-react";
+import { Phone, Globe, Mail, Star, ChevronRight, ArrowLeft, Navigation } from "lucide-react";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import AffiliateDisclosureBanner from "@/components/AffiliateDisclosureBanner";
 import Header from "@/components/Header";
@@ -30,6 +18,7 @@ import { OpenStatusChip } from "@/components/OpenStatusChip";
 import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { getCanonicalUrl } from "@/lib/brandConfig";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 function StarRating({ rating }: { rating: number }) {
   const stars = [];
@@ -95,7 +84,7 @@ export default function HotelDetails() {
         <Header />
         <div className="flex items-center justify-center flex-1 py-24">
           <div className="text-center">
-            <Building2 className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
+            <SpriteIcon name="building-2" className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
             <h1 className="text-2xl font-bold mb-2">Hotel Not Found</h1>
             <p className="text-muted-foreground mb-6">
               The hotel you're looking for doesn't exist or has been removed.
@@ -202,7 +191,7 @@ export default function HotelDetails() {
               />
             ) : (
               <div className="w-full h-full bg-gradient-to-br from-[#1a0f3c] via-[#2D1B69] to-[#DC143C] flex items-center justify-center">
-                <Building2 className="h-20 w-20 text-white/50" />
+                <SpriteIcon name="building-2" className="h-20 w-20 text-white/50" />
               </div>
             )}
             {hotel.is_featured && (
@@ -333,7 +322,7 @@ export default function HotelDetails() {
                     >
                       <Button className="w-full h-12 text-base" size="lg">
                         Book Now
-                        <ExternalLink className="h-4 w-4 ml-2" />
+                        <SpriteIcon name="external-link" className="h-4 w-4 ml-2" />
                       </Button>
                     </a>
                   )}
@@ -353,7 +342,7 @@ export default function HotelDetails() {
                 <CardContent className="space-y-4">
                   {/* Address */}
                   <div className="flex items-start gap-3">
-                    <MapPin className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                    <SpriteIcon name="map-pin" className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
                     <div>
                       <p className="text-sm">{hotel.address}</p>
                       <p className="text-sm text-muted-foreground">
@@ -435,7 +424,7 @@ export default function HotelDetails() {
                   {/* Check in/out */}
                   {(hotel.check_in_time || hotel.check_out_time) && (
                     <div className="flex items-start gap-3">
-                      <Clock className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                      <SpriteIcon name="clock" className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
                       <div className="text-sm">
                         {hotel.check_in_time && <p>Check-in: {hotel.check_in_time}</p>}
                         {hotel.check_out_time && <p>Check-out: {hotel.check_out_time}</p>}
@@ -446,7 +435,7 @@ export default function HotelDetails() {
                   {/* Rooms */}
                   {hotel.total_rooms && (
                     <div className="flex items-center gap-3 text-sm">
-                      <Building2 className="h-5 w-5 text-primary flex-shrink-0" />
+                      <SpriteIcon name="building-2" className="h-5 w-5 text-primary flex-shrink-0" />
                       {hotel.total_rooms} rooms
                     </div>
                   )}

@@ -1,9 +1,10 @@
 import { Link } from "react-router-dom";
-import { Clock, X, Calendar, UtensilsCrossed, Landmark } from "lucide-react";
+import { X, Calendar, UtensilsCrossed, Landmark } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRecentlyViewedFeed } from "@/hooks/useRecentlyViewedFeed";
 import type { RecentlyViewedType } from "@/lib/recentlyViewed";
 import { cn } from "@/lib/utils";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const TYPE_ICON: Record<RecentlyViewedType, typeof Calendar> = {
   event: Calendar,
@@ -31,7 +32,7 @@ export function RecentlyViewedRail({ limit = 12 }: { limit?: number }) {
     <section className="py-6 bg-background" aria-labelledby="recently-viewed-heading">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-2 mb-4">
-          <Clock className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+          <SpriteIcon name="clock" className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
           <h2 id="recently-viewed-heading" className="text-lg font-semibold">
             Recently viewed
           </h2>

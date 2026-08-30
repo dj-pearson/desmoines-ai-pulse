@@ -21,25 +21,10 @@ import EnhancedPlaygroundSEO from "@/components/EnhancedPlaygroundSEO";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { Helmet } from "react-helmet-async";
-import {
-  MapPin,
-  Star,
-  ArrowLeft,
-  Navigation,
-  Share2,
-  Heart,
-  Sparkles,
-  Check,
-  Info,
-  Users,
-  Zap,
-  ChevronRight,
-  TreePine,
-  Baby,
-  Shield,
-} from "lucide-react";
+import { Star, ArrowLeft, Navigation, Heart, Check, Info, Zap, ChevronRight, TreePine, Baby, Shield } from "lucide-react";
 import { useState } from "react";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export default function PlaygroundDetails() {
   const { slug } = useParams();
@@ -238,7 +223,7 @@ export default function PlaygroundDetails() {
                 url={typeof window !== "undefined" ? window.location.href : ""}
                 trigger={
                   <Button variant="outline" size="sm" className="rounded-xl">
-                    <Share2 className="h-4 w-4 mr-1.5" />
+                    <SpriteIcon name="share-2" className="h-4 w-4 mr-1.5" />
                     Share
                   </Button>
                 }
@@ -284,7 +269,7 @@ export default function PlaygroundDetails() {
               <div className="absolute top-4 left-4 flex gap-2 z-10">
                 {playground.is_featured && (
                   <Badge className="bg-amber-500 text-white border-0 shadow-lg text-sm font-semibold px-3 py-1">
-                    <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                    <SpriteIcon name="sparkles" className="h-3.5 w-3.5 mr-1.5" />
                     Featured
                   </Badge>
                 )}
@@ -314,13 +299,13 @@ export default function PlaygroundDetails() {
                     )}
                     {playground.age_range && (
                       <div className="flex items-center gap-1.5 bg-white/20 backdrop-blur-sm rounded-full px-3 py-1">
-                        <Users className="h-4 w-4" />
+                        <SpriteIcon name="users" className="h-4 w-4" />
                         <span className="text-sm">Ages {playground.age_range}</span>
                       </div>
                     )}
                     {playground.location && (
                       <div className="flex items-center gap-1.5 bg-white/20 backdrop-blur-sm rounded-full px-3 py-1">
-                        <MapPin className="h-4 w-4" />
+                        <SpriteIcon name="map-pin" className="h-4 w-4" />
                         <span className="text-sm">{playground.location}</span>
                       </div>
                     )}
@@ -396,13 +381,13 @@ export default function PlaygroundDetails() {
                 {/* Location & Access */}
                 <div>
                   <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                    <MapPin className="h-5 w-5 text-[#2D1B69]" />
+                    <SpriteIcon name="map-pin" className="h-5 w-5 text-[#2D1B69]" />
                     Location & Access
                   </h2>
                   <div className="space-y-3">
                     {playground.location && (
                       <div className="flex items-start gap-3 p-4 bg-gray-50 rounded-xl">
-                        <MapPin className="h-5 w-5 text-gray-500 mt-0.5 shrink-0" />
+                        <SpriteIcon name="map-pin" className="h-5 w-5 text-gray-500 mt-0.5 shrink-0" />
                         <div>
                           <p className="text-gray-900 font-medium">{playground.location}</p>
                           <p className="text-sm text-gray-500">{BRAND.city}, {BRAND.state}</p>
@@ -451,7 +436,7 @@ export default function PlaygroundDetails() {
                       <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
                         <span className="text-gray-600">Age Range</span>
                         <Badge variant="secondary" className="bg-[#2D1B69]/10 text-[#2D1B69] font-medium">
-                          <Users className="h-3 w-3 mr-1" />
+                          <SpriteIcon name="users" className="h-3 w-3 mr-1" />
                           Ages {playground.age_range}
                         </Badge>
                       </div>
@@ -472,7 +457,7 @@ export default function PlaygroundDetails() {
                     {playground.is_featured && (
                       <div className="p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200">
                         <div className="flex items-center text-amber-700">
-                          <Sparkles className="h-5 w-5 mr-2" />
+                          <SpriteIcon name="sparkles" className="h-5 w-5 mr-2" />
                           <span className="font-medium">Editor's Pick - Featured Playground</span>
                         </div>
                         <p className="text-sm text-amber-600 mt-1">

@@ -6,10 +6,11 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ExternalLink, AlertTriangle, CheckCircle2, XCircle, Loader2, Link, RefreshCw, AlertCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, XCircle, Loader2, Link, RefreshCw, AlertCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('CatchDesmoinUrlExtractor');
 
@@ -228,7 +229,7 @@ export default function CatchDesmoinUrlExtractor() {
               </>
             ) : (
               <>
-                <ExternalLink className="h-4 w-4" />
+                <SpriteIcon name="external-link" className="h-4 w-4" />
                 Dry Run (Test)
               </>
             )}
@@ -246,7 +247,7 @@ export default function CatchDesmoinUrlExtractor() {
               </>
             ) : (
               <>
-                <ExternalLink className="h-4 w-4" />
+                <SpriteIcon name="external-link" className="h-4 w-4" />
                 Extract URLs
               </>
             )}

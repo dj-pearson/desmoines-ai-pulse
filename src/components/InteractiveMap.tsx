@@ -5,9 +5,10 @@ import L from 'leaflet';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Navigation, ZoomIn, ZoomOut, Maximize2, List, Star } from 'lucide-react';
+import { Navigation, ZoomIn, ZoomOut, Maximize2, List, Star } from "lucide-react";
 import { cn } from '@/lib/utils';
 import { getCategoryHex } from '@/lib/categoryColors';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 // Fix for default marker icon issue with bundlers
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -242,7 +243,7 @@ export function InteractiveMap({
                 )}
                 {location.distance_miles !== undefined && (
                   <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <MapPin className="h-3 w-3" />
+                    <SpriteIcon name="map-pin" className="h-3 w-3" />
                     {location.distance_miles.toFixed(1)} mi away
                   </div>
                 )}
@@ -427,7 +428,7 @@ export function InteractiveMap({
                         )}
                       </div>
                     </div>
-                    <MapPin className="h-4 w-4 text-muted-foreground flex-shrink-0 ml-2" />
+                    <SpriteIcon name="map-pin" className="h-4 w-4 text-muted-foreground flex-shrink-0 ml-2" />
                   </Link>
                 </li>
               ))}

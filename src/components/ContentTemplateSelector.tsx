@@ -13,11 +13,12 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Sparkles, FileText, Plus, Lightbulb, X } from 'lucide-react';
+import { FileText, Plus, Lightbulb, X } from "lucide-react";
 import {
   getTemplatesByCategory,
   type ContentTemplate,
 } from '@/lib/contentTemplates';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface ContentTemplateSelectorProps {
   open: boolean;
@@ -59,7 +60,7 @@ export default function ContentTemplateSelector({
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" />
+            <SpriteIcon name="sparkles" className="h-5 w-5 text-primary" />
             Choose a Template
           </DialogTitle>
           <DialogDescription>

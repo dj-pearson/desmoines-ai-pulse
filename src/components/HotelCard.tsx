@@ -1,9 +1,10 @@
 import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Star, MapPin, Wifi, Car, Coffee, Dumbbell, PawPrint, Building2, ExternalLink } from "lucide-react";
+import { Star, Wifi, Car, Coffee, Dumbbell, PawPrint } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
 import { getHotelTypeGradient, STATUS_BADGE } from "@/lib/categoryStyles";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 type Hotel = Database["public"]["Tables"]["hotels"]["Row"];
 
@@ -56,7 +57,7 @@ export default function HotelCard({ hotel, variant = "default", showBookButton =
             />
           ) : (
             <div className={`w-full h-full bg-gradient-to-br ${getHotelTypeGradient(hotel.hotel_type)} flex items-center justify-center`} role="img" aria-label={`No image available for ${hotel.name}`}>
-              <Building2 className="h-12 w-12 text-white/70" />
+              <SpriteIcon name="building-2" className="h-12 w-12 text-white/70" />
             </div>
           )}
 
@@ -106,7 +107,7 @@ export default function HotelCard({ hotel, variant = "default", showBookButton =
           {/* Area / location */}
           {hotel.area && (
             <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <MapPin className="h-3 w-3 flex-shrink-0" />
+              <SpriteIcon name="map-pin" className="h-3 w-3 flex-shrink-0" />
               <span className="truncate">{hotel.area}</span>
             </div>
           )}
@@ -151,7 +152,7 @@ export default function HotelCard({ hotel, variant = "default", showBookButton =
                 onClick={(e) => e.stopPropagation()}
               >
                 Book Now
-                <ExternalLink className="h-3 w-3" />
+                <SpriteIcon name="external-link" className="h-3 w-3" />
               </a>
             )}
           </div>

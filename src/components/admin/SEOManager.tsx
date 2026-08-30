@@ -9,31 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import {
-  Search,
-  TrendingUp,
-  Users,
-  FileText,
-  Bell,
-  Globe,
-  Bot,
-  FileCode2,
-  Sparkles,
-  Code,
-  Gauge,
-  Link2,
-  AlertTriangle,
-  Network,
-  FileCheck,
-  Map,
-  Image,
-  ArrowRight,
-  Copy,
-  Shield,
-  Smartphone,
-  Zap,
-  BarChart3,
-} from "lucide-react";
+import { Search, TrendingUp, Users, FileText, Bell, Globe, Bot, FileCode2, Code, Gauge, Link2, AlertTriangle, Network, FileCheck, Map, Image, ArrowRight, Copy, Shield, Smartphone, Zap, BarChart3 } from "lucide-react";
 import { createLogger } from '@/lib/logger';
 import { GscPerformancePanel } from "@/components/admin/GscPerformancePanel";
 

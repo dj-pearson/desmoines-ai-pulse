@@ -7,19 +7,9 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { 
-  RefreshCw, 
-  MapPin, 
-  Star, 
-  Phone, 
-  Globe, 
-  Camera, 
-  AlertCircle, 
-  CheckCircle,
-  Clock,
-  Database
-} from 'lucide-react';
+import { RefreshCw, MapPin, Star, Phone, Globe, Camera, AlertCircle, CheckCircle, Database } from "lucide-react";
 import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('RestaurantBulkUpdaterSimple');
 
@@ -139,7 +129,7 @@ export function RestaurantBulkUpdaterSimple() {
           {(isLoading || progress) && (
             <div className="space-y-4">
               <h3 className="text-lg font-semibold flex items-center gap-2">
-                <Clock className="h-4 w-4" />
+                <SpriteIcon name="clock" className="h-4 w-4" />
                 Progress
               </h3>
               

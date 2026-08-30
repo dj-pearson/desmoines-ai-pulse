@@ -6,8 +6,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ExternalLink, Calendar, MapPin } from "lucide-react";
+
 import { Link } from "react-router-dom";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 // Helper to create slug from restaurant name
 const createSlug = (name: string): string => {
   return name
@@ -138,7 +139,7 @@ export function RestaurantOpenings() {
                   <div className="flex flex-col gap-2 text-mobile-caption text-muted-foreground">
                     {restaurant.location && (
                       <div className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4 flex-shrink-0" />
+                        <SpriteIcon name="map-pin" className="h-4 w-4 flex-shrink-0" />
                         <span className="truncate">{restaurant.location}</span>
                       </div>
                     )}
@@ -154,7 +155,7 @@ export function RestaurantOpenings() {
                     {(restaurant.openingDate ||
                       restaurant.openingTimeframe) && (
                       <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                        <SpriteIcon name="calendar" className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
                         {/* Label the date (WEB-QA-004). This chip rendered as a
                             bare "3/30/2026" next to a calendar glyph, which reads
                             ambiguously as the date the listing was added — the
@@ -195,7 +196,7 @@ export function RestaurantOpenings() {
                         aria-label={`Read more about ${restaurant.name} (opens in new tab)`}
                       >
                         <span aria-hidden="true">Read More</span>
-                        <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                        <SpriteIcon name="external-link" className="h-3 w-3" aria-hidden="true" />
                       </a>
                     )}
                   </div>

@@ -88,7 +88,51 @@ function walk(dir, out = []) {
   return out;
 }
 
-const files = walk(DIST).filter((f) => !f.includes(`${sep}assets${sep}`));
+const allFiles = walk(DIST).filter((f) => !f.includes(`${sep}assets${sep}`));
+
+/**
+ * Shard the work across child processes, because jsdom cannot survive dist/.
+ *
+ * This file needs a real DOM - accessible names and nesting are tree questions
+ * and the header says so - so it cannot take check-dom-budget.mjs's way out of
+ * regexing the markup. But dist/ now holds over a thousand prerendered pages and
+ * jsdom retains enough per document that the run dies with "Reached heap limit
+ * Allocation failed" and exit 134, in CI as well as locally. Measured: closing
+ * each window does NOT help, so this is not a leak to plug.
+ *
+ * So the parent re-runs itself over slices and each child exits, which is the
+ * only thing that reliably returns the heap. Assertions are unchanged; the child
+ * is this same file with SHARD set.
+ */
+const SHARD = process.env.PRERENDER_CONTENT_SHARD;
+const SHARD_COUNT = Number(process.env.PRERENDER_CONTENT_SHARDS || 0);
+const FILES_PER_SHARD = 250;
+
+if (!SHARD && allFiles.length > FILES_PER_SHARD) {
+  const shards = Math.ceil(allFiles.length / FILES_PER_SHARD);
+  const { spawnSync } = await import('node:child_process');
+  let failed = false;
+  for (let i = 0; i < shards; i += 1) {
+    const r = spawnSync(process.execPath, [process.argv[1]], {
+      stdio: ['ignore', 'pipe', 'inherit'],
+      env: { ...process.env, PRERENDER_CONTENT_SHARD: String(i), PRERENDER_CONTENT_SHARDS: String(shards) },
+    });
+    const out = (r.stdout || '').toString();
+    // Only the last shard prints the summary; the rest print findings or nothing.
+    if (out.trim() && i === shards - 1) process.stdout.write(out);
+    else if (out.includes('FAIL')) process.stdout.write(out);
+    if (r.status !== 0) failed = true;
+  }
+  console.log(
+    `[prerender-content] ${allFiles.length} page(s) checked across ${shards} shard(s) of ${FILES_PER_SHARD}.`,
+  );
+  process.exit(failed ? 1 : 0);
+}
+
+const files =
+  SHARD === undefined
+    ? allFiles
+    : allFiles.filter((_, i) => i % SHARD_COUNT === Number(SHARD));
 
 if (files.length === 0) {
   // A checker that finds no pages must not report success over them.

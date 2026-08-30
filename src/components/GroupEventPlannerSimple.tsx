@@ -5,19 +5,11 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Textarea } from "@/components/ui/textarea";
-import { 
-  Users, 
-  MessageCircle, 
-  Calendar, 
-  MapPin,
-  CheckCircle,
-  XCircle,
-  PlusCircle,
-  Eye
-} from "lucide-react";
+import { MessageCircle, CheckCircle, XCircle, PlusCircle, Eye } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('GroupEventPlanner');
 
@@ -118,7 +110,7 @@ export function GroupEventPlanner({ group, onClose }: GroupEventPlannerProps) {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="flex items-center gap-2">
-                <Users className="w-5 h-5" />
+                <SpriteIcon name="users" className="w-5 h-5" />
                 {group.name} - Event Planning
               </CardTitle>
               <p className="text-sm text-muted-foreground mt-1">
@@ -180,11 +172,11 @@ export function GroupEventPlanner({ group, onClose }: GroupEventPlannerProps) {
                               {event.title}
                             </h5>
                             <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
-                              <Calendar className="w-3 h-3" />
+                              <SpriteIcon name="calendar" className="w-3 h-3" />
                               {new Date(event.date).toLocaleDateString()}
                               {event.venue && (
                                 <>
-                                  <MapPin className="w-3 h-3" />
+                                  <SpriteIcon name="map-pin" className="w-3 h-3" />
                                   <span className="truncate">{event.venue}</span>
                                 </>
                               )}
@@ -217,11 +209,11 @@ export function GroupEventPlanner({ group, onClose }: GroupEventPlannerProps) {
                             <div>
                               <h5 className="font-medium text-sm">{event.title}</h5>
                               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <Calendar className="w-3 h-3" />
+                                <SpriteIcon name="calendar" className="w-3 h-3" />
                                 {new Date(event.date).toLocaleDateString()}
                                 {event.venue && (
                                   <>
-                                    <MapPin className="w-3 h-3" />
+                                    <SpriteIcon name="map-pin" className="w-3 h-3" />
                                     <span>{event.venue}</span>
                                   </>
                                 )}

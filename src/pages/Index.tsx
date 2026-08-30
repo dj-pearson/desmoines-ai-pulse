@@ -8,7 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Calendar, MapPin, ExternalLink, Sparkles, CalendarPlus, Brain, Zap, TrendingUp, Share2, ArrowRight } from "lucide-react";
+import { CalendarPlus, Brain, Zap } from "lucide-react";
 import { downloadICS } from "@/lib/calendar";
 import { createEventSlugWithCentralTime } from "@/lib/timezone";
 import { FavoriteButton } from "@/components/FavoriteButton";
@@ -33,6 +33,7 @@ import { BackToTop } from "@/components/BackToTop";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import SpeakableSchema from "@/components/schema/SpeakableSchema";
 import { AdBanner } from "@/components/AdBanner";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 // Lazy load below-the-fold and heavy components to improve initial load
 const Footer = lazy(() => import("@/components/Footer"));
@@ -538,10 +539,10 @@ export default function Index() {
                 </p>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400">
-                    <Sparkles className="h-4 w-4" />
+                    <SpriteIcon name="sparkles" className="h-4 w-4" />
                     <span>Semantic search understands intent</span>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-blue-600 dark:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <SpriteIcon name="arrow-right" className="h-4 w-4 text-blue-600 dark:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
               </Link>
 
@@ -561,7 +562,7 @@ export default function Index() {
                     <Brain className="h-4 w-4" />
                     <span>Learns from your behavior</span>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-green-600 dark:text-green-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <SpriteIcon name="arrow-right" className="h-4 w-4 text-green-600 dark:text-green-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
               </Link>
 
@@ -569,7 +570,7 @@ export default function Index() {
               <Link to="/events/today" className="group bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all hover:border-orange-300 dark:hover:border-orange-600">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="bg-orange-100 dark:bg-orange-900/30 rounded-full p-3">
-                    <TrendingUp className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+                    <SpriteIcon name="trending-up" className="h-6 w-6 text-orange-600 dark:text-orange-400" />
                   </div>
                   <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Proactive Intelligence</h3>
                 </div>
@@ -578,10 +579,10 @@ export default function Index() {
                 </p>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-sm text-orange-700 dark:text-orange-400">
-                    <Sparkles className="h-4 w-4" />
+                    <SpriteIcon name="sparkles" className="h-4 w-4" />
                     <span>Smart notifications & alerts</span>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-orange-600 dark:text-orange-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <SpriteIcon name="arrow-right" className="h-4 w-4 text-orange-600 dark:text-orange-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
               </Link>
 
@@ -589,7 +590,7 @@ export default function Index() {
               <Link to="/restaurants" className="group bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all hover:border-red-300 dark:hover:border-red-600">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="bg-red-100 dark:bg-red-900/30 rounded-full p-3">
-                    <TrendingUp className="h-6 w-6 text-red-600 dark:text-red-400" />
+                    <SpriteIcon name="trending-up" className="h-6 w-6 text-red-600 dark:text-red-400" />
                   </div>
                   <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Predictive Insights</h3>
                 </div>
@@ -598,10 +599,10 @@ export default function Index() {
                 </p>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
-                    <TrendingUp className="h-4 w-4" />
+                    <SpriteIcon name="trending-up" className="h-4 w-4" />
                     <span>Real-time demand analytics</span>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-red-600 dark:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <SpriteIcon name="arrow-right" className="h-4 w-4 text-red-600 dark:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
               </Link>
 
@@ -609,7 +610,7 @@ export default function Index() {
               <Link to="/trip-planner" className="group bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all hover:border-indigo-300 dark:hover:border-indigo-600">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="bg-indigo-100 dark:bg-indigo-900/30 rounded-full p-3">
-                    <Calendar className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
+                    <SpriteIcon name="calendar" className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
                   </div>
                   <h3 className="text-xl font-semibold text-gray-900 dark:text-white">AI Trip Planner</h3>
                 </div>
@@ -618,10 +619,10 @@ export default function Index() {
                 </p>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-sm text-indigo-600 dark:text-indigo-400">
-                    <Sparkles className="h-4 w-4" />
+                    <SpriteIcon name="sparkles" className="h-4 w-4" />
                     <span>Automated itinerary generation</span>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-indigo-600 dark:text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <SpriteIcon name="arrow-right" className="h-4 w-4 text-indigo-600 dark:text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
               </Link>
 
@@ -629,7 +630,7 @@ export default function Index() {
               <Link to="/attractions" className="group bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all hover:border-purple-300 dark:hover:border-purple-600">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="bg-purple-100 dark:bg-purple-900/30 rounded-full p-3">
-                    <MapPin className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                    <SpriteIcon name="map-pin" className="h-6 w-6 text-purple-600 dark:text-purple-400" />
                   </div>
                   <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Attractions & More</h3>
                 </div>
@@ -638,10 +639,10 @@ export default function Index() {
                 </p>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-sm text-purple-600 dark:text-purple-400">
-                    <Sparkles className="h-4 w-4" />
+                    <SpriteIcon name="sparkles" className="h-4 w-4" />
                     <span>50+ attractions mapped</span>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-purple-600 dark:text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <SpriteIcon name="arrow-right" className="h-4 w-4 text-purple-600 dark:text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
               </Link>
             </div>
@@ -832,12 +833,12 @@ export default function Index() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="flex items-start text-neutral-600 dark:text-neutral-400">
-                    <Calendar className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0" />
+                    <SpriteIcon name="calendar" className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0" />
                     <span className="text-sm sm:text-base">{formatEventDate(selectedEvent.date)}</span>
                   </div>
 
                   <div className="flex items-start text-neutral-600 dark:text-neutral-400">
-                    <MapPin className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0" />
+                    <SpriteIcon name="map-pin" className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0" />
                     <span className="text-sm sm:text-base">{selectedEvent.location}</span>
                   </div>
                 </div>
@@ -867,7 +868,7 @@ export default function Index() {
                   </p>
                   {selectedEvent.is_enhanced && (
                     <p className="text-xs text-accent mt-2 flex items-center">
-                      <Sparkles className="h-3 w-3 mr-1" />
+                      <SpriteIcon name="sparkles" className="h-3 w-3 mr-1" />
                       Enhanced with AI
                     </p>
                   )}
@@ -881,7 +882,7 @@ export default function Index() {
                       onClick={() => setShowEventDetails(false)}
                     >
                       View Full Event Details
-                      <ArrowRight className="h-4 w-4 ml-2" />
+                      <SpriteIcon name="arrow-right" className="h-4 w-4 ml-2" />
                     </Link>
                   </Button>
 
@@ -899,7 +900,7 @@ export default function Index() {
                       className="w-full"
                       onClick={() => handleShareEvent(selectedEvent)}
                     >
-                      <Share2 className="h-4 w-4 mr-2" />
+                      <SpriteIcon name="share-2" className="h-4 w-4 mr-2" />
                       Share
                     </Button>
                   </div>
@@ -919,7 +920,7 @@ export default function Index() {
                       className="w-full"
                       onClick={() => openExternalUrl(selectedEvent.source_url!)}
                     >
-                      <ExternalLink className="h-4 w-4 mr-2" />
+                      <SpriteIcon name="external-link" className="h-4 w-4 mr-2" />
                       View Original Event
                     </Button>
                   )}

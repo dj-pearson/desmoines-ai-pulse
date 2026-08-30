@@ -13,25 +13,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Globe,
-  FileText,
-  Bot,
-  Search,
-  Share2,
-  Rss,
-  Copy,
-  Download,
-  CheckCircle,
-  ExternalLink,
-  MapPin,
-  Calendar,
-  Utensils,
-  Camera,
-  Play,
-  Sparkles,
-  Zap,
-} from "lucide-react";
+import { Globe, FileText, Bot, Search, Rss, Copy, Download, CheckCircle, Utensils, Camera, Play, Zap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useEvents } from "@/hooks/useEvents";
 import { useRestaurants } from "@/hooks/useRestaurants";
@@ -40,6 +22,7 @@ import { createEventSlugWithCentralTime } from "@/lib/timezone";
 import { usePlaygrounds } from "@/hooks/usePlaygrounds";
 import { supabase } from "@/integrations/supabase/client";
 import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('SEOTools');
 
@@ -110,7 +93,7 @@ export default function SEOTools() {
       id: "opengraph",
       title: "Open Graph Tags",
       description: "Social media sharing optimization",
-      icon: <Share2 className="h-5 w-5" />,
+      icon: <SpriteIcon name="share-2" className="h-5 w-5" />,
       category: "meta",
     },
     {
@@ -647,7 +630,7 @@ ${JSON.stringify(eventListSchema, null, 2)}
       <div className="mobile-grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <Card className="text-center">
           <CardContent className="pt-4">
-            <Calendar className="h-8 w-8 mx-auto text-[#DC143C] mb-2" />
+            <SpriteIcon name="calendar" className="h-8 w-8 mx-auto text-[#DC143C] mb-2" />
             <div className="text-2xl font-bold">{events.length}</div>
             <div className="text-sm text-muted-foreground">Events</div>
           </CardContent>
@@ -915,7 +898,7 @@ ${JSON.stringify(eventListSchema, null, 2)}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5" />
+            <SpriteIcon name="sparkles" className="h-5 w-5" />
             AI SEO Content Generation
           </CardTitle>
           <CardDescription>
@@ -936,7 +919,7 @@ ${JSON.stringify(eventListSchema, null, 2)}
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center gap-2 text-lg">
-                    <Calendar className="h-5 w-5" />
+                    <SpriteIcon name="calendar" className="h-5 w-5" />
                     Event Pages SEO
                   </CardTitle>
                   <CardDescription>

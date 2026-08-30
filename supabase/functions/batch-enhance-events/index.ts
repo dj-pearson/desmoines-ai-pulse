@@ -229,7 +229,44 @@ serve(async (req) => {
 
   try {
     const { eventIds, fields, baseQuery } = await req.json();
-    
+
+    // SAY WHAT IS WRONG INSTEAD OF THROWING A TypeError.
+    //
+    // This went straight to eventIds.length, so a request without eventIds died
+    // with "Cannot read properties of undefined (reading 'length')" and a 500 -
+    // which names neither the field nor the caller.
+    //
+    // It is not hypothetical. The enhance-events-morning and -evening pg_cron
+    // jobs post `{"limit": 50, "forceRefresh": false}`, a shape this function has
+    // never supported: it selects with .in('id', eventIds) and has no path that
+    // chooses events for itself. Both jobs have run twice daily since 2026-08-22
+    // and every run has produced exactly that TypeError, while cron recorded
+    // success because net.http_post succeeded in ENQUEUEING the request.
+    //
+    // A 400 naming the missing field makes the next run diagnosable from
+    // net._http_response alone. Giving this function a selection mode is a
+    // separate decision, not a bug fix: it spends a Claude call and up to three
+    // Google Search calls per event, so "enhance 50 events" is a cost choice
+    // somebody has to make deliberately.
+    if (!Array.isArray(eventIds) || eventIds.length === 0) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error:
+            'eventIds must be a non-empty array. This function enhances a caller-chosen set ' +
+            'and has no mode that selects events itself.',
+          received: { eventIds: typeof eventIds, fields: typeof fields, baseQuery: typeof baseQuery },
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+    if (!Array.isArray(fields) || fields.length === 0) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'fields must be a non-empty array' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
     console.log(`Batch enhancing ${eventIds.length} events with fields: ${fields.join(', ')}`);
     console.log('Environment check - Claude API Key exists:', !!claudeApiKey);
     console.log('Environment check - Google Search API Key exists:', !!googleSearchApiKey);

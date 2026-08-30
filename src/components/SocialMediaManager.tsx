@@ -39,27 +39,13 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
-import {
-  Loader2,
-  Plus,
-  Send,
-  Edit,
-  Trash2,
-  Globe,
-  Calendar,
-  Bot,
-  ExternalLink,
-  Repeat,
-  Clock,
-  Settings,
-  Play,
-  Pause,
-} from "lucide-react";
+import { Loader2, Plus, Send, Edit, Trash2, Globe, Bot, Repeat, Settings, Play, Pause } from "lucide-react";
 import { useSocialMediaManager } from "@/hooks/useSocialMediaManager";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('SocialMediaManager');
 
@@ -351,13 +337,13 @@ const SocialMediaManager = () => {
                               rel="noopener noreferrer"
                               className="flex items-center hover:text-primary"
                             >
-                              <ExternalLink className="h-3 w-3 mr-1" />
+                              <SpriteIcon name="external-link" className="h-3 w-3 mr-1" />
                               View Content
                             </a>
                           )}
                           {post.scheduled_for && (
                             <div className="flex items-center">
-                              <Calendar className="h-3 w-3 mr-1" />
+                              <SpriteIcon name="calendar" className="h-3 w-3 mr-1" />
                               Scheduled:{" "}
                               {format(
                                 new Date(post.scheduled_for),
@@ -367,7 +353,7 @@ const SocialMediaManager = () => {
                           )}
                           {post.posted_at && (
                             <div className="flex items-center">
-                              <Calendar className="h-3 w-3 mr-1" />
+                              <SpriteIcon name="calendar" className="h-3 w-3 mr-1" />
                               Posted:{" "}
                               {format(
                                 new Date(post.posted_at),
@@ -517,7 +503,7 @@ const SocialMediaManager = () => {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center">
-                <Clock className="h-5 w-5 mr-2" />
+                <SpriteIcon name="clock" className="h-5 w-5 mr-2" />
                 Daily Automation Schedule
               </CardTitle>
               <CardDescription>
@@ -558,7 +544,7 @@ const SocialMediaManager = () => {
                 <div className="space-y-3">
                   <Label htmlFor="event-time">Event Posts (Morning)</Label>
                   <div className="flex items-center space-x-2">
-                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <SpriteIcon name="calendar" className="h-4 w-4 text-muted-foreground" />
                     <Input
                       id="event-time"
                       type="time"
@@ -582,7 +568,7 @@ const SocialMediaManager = () => {
                 <div className="space-y-3">
                   <Label htmlFor="restaurant-time">Restaurant Posts (Evening)</Label>
                   <div className="flex items-center space-x-2">
-                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <SpriteIcon name="calendar" className="h-4 w-4 text-muted-foreground" />
                     <Input
                       id="restaurant-time"
                       type="time"

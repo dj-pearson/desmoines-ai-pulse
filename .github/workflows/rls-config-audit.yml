@@ -178,6 +178,17 @@ jobs:
 
         run: npx tsx scripts/check-cron-health.ts
 
+      # WEB-OPS-007 AC4. The step above reads cron.job_run_details, which says
+      # the POST was ENQUEUED. This reads net._http_response, which says what
+      # came back. Reading it for the first time on 2026-08-29 found three
+      # scheduled jobs getting 404s and 500s while every other monitor was
+      # green. Ratchets: fails on a failure signature that is not baselined.
+      - name: What the scheduled POSTs got back
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npx tsx scripts/check-cron-http-responses.ts
+
 
 
       - name: Diff against committed baselines and report drift

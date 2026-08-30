@@ -10,17 +10,8 @@ import AIArticleGenerator from '@/components/AIArticleGenerator';
 import { AuthorManager } from '@/components/cms/AuthorManager';
 import { ContentQueue } from '@/components/cms/ContentQueue';
 import { CategoryTagManager } from '@/components/cms/CategoryTagManager';
-import {
-  FileText,
-  Users,
-  ClipboardList,
-  Tags,
-  Sparkles,
-  Plus,
-  LayoutDashboard,
-  Settings,
-  ArrowLeft,
-} from 'lucide-react';
+import { FileText, ClipboardList, Tags, Plus, LayoutDashboard, Settings, ArrowLeft } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export default function CMSDashboard() {
   const [activeTab, setActiveTab] = useTabState('articles');
@@ -76,7 +67,7 @@ export default function CMSDashboard() {
                 <span className="hidden sm:inline text-xs sm:text-sm">Queue</span>
               </TabsTrigger>
               <TabsTrigger value="authors" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2">
-                <Users className="h-4 w-4 flex-shrink-0" />
+                <SpriteIcon name="users" className="h-4 w-4 flex-shrink-0" />
                 <span className="hidden sm:inline text-xs sm:text-sm">Authors</span>
               </TabsTrigger>
               <TabsTrigger value="taxonomy" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2">
@@ -84,7 +75,7 @@ export default function CMSDashboard() {
                 <span className="hidden sm:inline text-xs sm:text-sm">Tags</span>
               </TabsTrigger>
               <TabsTrigger value="ai" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2">
-                <Sparkles className="h-4 w-4 flex-shrink-0" />
+                <SpriteIcon name="sparkles" className="h-4 w-4 flex-shrink-0" />
                 <span className="hidden sm:inline text-xs sm:text-sm">AI</span>
               </TabsTrigger>
             </TabsList>

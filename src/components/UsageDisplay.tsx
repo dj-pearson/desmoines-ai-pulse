@@ -3,7 +3,8 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useUsage, UsageEventType } from "@/hooks/useUsage";
-import { Sparkles, Mail, FileText, Zap, AlertTriangle } from "lucide-react";
+import { Mail, FileText, Zap, AlertTriangle } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface UsageDisplayProps {
   showDetails?: boolean;
@@ -16,7 +17,7 @@ const eventTypeConfig: Record<
 > = {
   ai_generation: {
     label: "AI Generations",
-    icon: <Sparkles className="h-4 w-4" />,
+    icon: <SpriteIcon name="sparkles" className="h-4 w-4" />,
     color: "text-purple-500",
   },
   email_sent: {

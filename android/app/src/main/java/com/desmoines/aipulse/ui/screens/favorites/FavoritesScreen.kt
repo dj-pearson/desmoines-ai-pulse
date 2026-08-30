@@ -1,5 +1,6 @@
 package com.desmoines.aipulse.ui.screens.favorites
 
+import com.desmoines.aipulse.util.UiFormatLocale
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
@@ -444,7 +445,7 @@ private fun FavoriteEventRow(
                             tint = if (isPast) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
-                            text = date.format(DateTimeFormatter.ofPattern("MMM d, h:mm a")),
+                            text = date.format(DateTimeFormatter.ofPattern("MMM d, h:mm a", UiFormatLocale)),
                             style = MaterialTheme.typography.labelSmall,
                             color = if (isPast) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurfaceVariant,
                         )

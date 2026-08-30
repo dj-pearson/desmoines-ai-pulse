@@ -11,12 +11,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useAuthSecurity } from "@/hooks/useAuthSecurity";
-import { User, LogIn, UserPlus, MapPin, Heart, Calendar, Music, Coffee, Camera, Gamepad2, Palette, AlertCircle } from "lucide-react";
+import { User, LogIn, UserPlus, Heart, Calendar, Music, Coffee, Camera, Gamepad2, Palette, AlertCircle } from "lucide-react";
 import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
 import { MFAVerificationDialog } from "@/components/auth/MFAVerificationDialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { SecurityUtils } from "@/lib/securityUtils";
 import { logConsent } from "@/lib/consentLog";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 // Google Logo SVG Component (official colors)
 const GoogleLogo = ({ className }: { className?: string }) => (
@@ -998,7 +999,7 @@ export default function Auth() {
                       {LOCATIONS.map((location) => (
                         <SelectItem key={location} value={location}>
                           <div className="flex items-center gap-2">
-                            <MapPin className="h-4 w-4" />
+                            <SpriteIcon name="map-pin" className="h-4 w-4" />
                             {location}
                           </div>
                         </SelectItem>

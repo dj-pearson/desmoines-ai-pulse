@@ -1,6 +1,6 @@
 package com.desmoines.aipulse.data.repository
 
-import android.util.Log
+import com.desmoines.aipulse.util.AppLogger
 import com.desmoines.aipulse.data.local.CacheManager
 import com.desmoines.aipulse.data.model.Attraction
 import com.desmoines.aipulse.data.remote.AttractionsQuery
@@ -8,9 +8,6 @@ import com.desmoines.aipulse.data.remote.AttractionsRemoteDataSource
 import com.desmoines.aipulse.data.remote.AttractionsResponse
 import javax.inject.Inject
 import javax.inject.Singleton
-
-private const val TAG = "AttractionsRepository"
-
 /**
  * Repository implementation wrapping [AttractionsRemoteDataSource] with cache-first strategy.
  * Returns cached data immediately if fresh, fetches from remote otherwise.
@@ -39,7 +36,7 @@ class AttractionsRepositoryImpl @Inject constructor(
                 cacheManager.cacheAttractions(cacheKey, response.attractions)
             }
         }.recoverCatching { error ->
-            Log.e(TAG, "fetchAttractions failed, trying stale cache: ${error.message}", error)
+            AppLogger.network.error("fetchAttractions failed, trying stale cache: ${error.message}", error)
             val stale = cacheManager.getCachedAttractions(cacheKey, allowStale = true)
                 ?: throw error
             AttractionsResponse(attractions = stale, totalCount = stale.size, hasMore = false)
@@ -55,7 +52,7 @@ class AttractionsRepositoryImpl @Inject constructor(
             remoteDataSource.fetchAttraction(id).also { attraction ->
                 cacheManager.cacheAttractions(CacheManager.attractionsKey("single", id), listOf(attraction))
             }
-        }.onFailure { Log.e(TAG, "fetchAttraction($id) failed: ${it.message}", it) }
+        }.onFailure { AppLogger.network.error("fetchAttraction($id) failed: ${it.message}", it) }
     }
 
     override suspend fun fetchNearbyAttractions(
@@ -74,7 +71,7 @@ class AttractionsRepositoryImpl @Inject constructor(
                 cacheManager.cacheAttractions(cacheKey, attractions)
             }
         }.recoverCatching { error ->
-            Log.e(TAG, "fetchNearbyAttractions failed, trying stale cache: ${error.message}", error)
+            AppLogger.network.error("fetchNearbyAttractions failed, trying stale cache: ${error.message}", error)
             cacheManager.getCachedAttractions(cacheKey, allowStale = true) ?: throw error
         }
     }

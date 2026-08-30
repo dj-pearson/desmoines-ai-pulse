@@ -13,9 +13,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Check, X, DollarSign, Calendar, User, Image as ImageIcon, ExternalLink, AlertCircle } from "lucide-react";
+import { ArrowLeft, Check, X, DollarSign, User, Image as ImageIcon, AlertCircle } from "lucide-react";
 import { CampaignCreative } from "@/hooks/useCampaigns";
 import { CreativePreview } from "@/components/advertising/CreativePreview";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export default function AdminCampaignDetail() {
   const { campaignId } = useParams<{ campaignId: string }>();
@@ -207,7 +208,7 @@ export default function AdminCampaignDetail() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Calendar className="h-4 w-4" />
+              <SpriteIcon name="calendar" className="h-4 w-4" />
               Campaign Duration
             </CardTitle>
           </CardHeader>
@@ -330,7 +331,7 @@ export default function AdminCampaignDetail() {
                               className="text-sm text-primary hover:underline inline-flex items-center gap-1"
                             >
                               {creative.link_url}
-                              <ExternalLink className="h-3 w-3" />
+                              <SpriteIcon name="external-link" className="h-3 w-3" />
                             </a>
                           )}
                           <div className="mt-2 text-xs text-muted-foreground">

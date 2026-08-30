@@ -13,16 +13,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import EventCard from "@/components/EventCard";
-import {
-  Heart,
-  TrendingUp,
-  MapPin,
-  Calendar,
-  Brain,
-  Sparkles,
-  RefreshCw,
-} from "lucide-react";
+import { Heart, Brain, RefreshCw } from "lucide-react";
 import { Event } from "@/lib/types";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface PersonalizedDashboardProps {
   onViewEventDetails: (event: Event) => void;
@@ -114,7 +107,7 @@ export default function PersonalizedDashboard({
 
           {confidence > 0 && (
             <div className="flex items-center justify-center gap-2 mb-6">
-              <Sparkles className="h-4 w-4 text-accent" />
+              <SpriteIcon name="sparkles" className="h-4 w-4 text-accent" />
               <span className="text-sm text-neutral-500">
                 {Math.round(confidence * 100)}% confidence • Hybrid AI
                 recommendations
@@ -172,7 +165,7 @@ export default function PersonalizedDashboard({
                     </Badge>
                     {rec.score > 0.8 && (
                       <Badge variant="secondary" className="text-xs">
-                        <Sparkles className="h-3 w-3 mr-1" />
+                        <SpriteIcon name="sparkles" className="h-3 w-3 mr-1" />
                         {Math.round(rec.score * 100)}% match
                       </Badge>
                     )}
@@ -205,7 +198,7 @@ export default function PersonalizedDashboard({
                 Refresh Recommendations
               </Button>
               <Button variant="ghost">
-                <MapPin className="h-4 w-4 mr-2" />
+                <SpriteIcon name="map-pin" className="h-4 w-4 mr-2" />
                 Update Preferences
               </Button>
             </div>

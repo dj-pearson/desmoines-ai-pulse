@@ -1,6 +1,6 @@
 package com.desmoines.aipulse.data.remote
 
-import android.util.Log
+import com.desmoines.aipulse.util.AppLogger
 import com.desmoines.aipulse.BuildConfig
 import com.desmoines.aipulse.util.CertificatePinningService
 import com.desmoines.aipulse.util.Config
@@ -16,9 +16,6 @@ import io.github.jan.supabase.annotations.SupabaseInternal
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.DefaultRequest
 import io.ktor.client.request.header
-
-private const val TAG = "SupabaseClient"
-
 /**
  * Provides the configured Supabase client singleton.
  * Mirrors iOS SupabaseService.swift — graceful fallback when credentials are missing.
@@ -52,11 +49,11 @@ object SupabaseClientProvider {
         val key = BuildConfig.SUPABASE_ANON_KEY
 
         if (url.isBlank()) {
-            Log.w(TAG, "SUPABASE_URL is missing or empty. Ensure it is set in local.properties.")
+            AppLogger.network.warning("SUPABASE_URL is missing or empty. Ensure it is set in local.properties.")
             return null
         }
         if (key.isBlank()) {
-            Log.w(TAG, "SUPABASE_ANON_KEY is missing or empty. Ensure it is set in local.properties.")
+            AppLogger.network.warning("SUPABASE_ANON_KEY is missing or empty. Ensure it is set in local.properties.")
             return null
         }
 
@@ -88,10 +85,10 @@ object SupabaseClientProvider {
                 install(Realtime)
                 install(Storage)
             }.also {
-                Log.i(TAG, "Supabase client initialized successfully.")
+                AppLogger.network.info("Supabase client initialized successfully.")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to create Supabase client: ${e.message}", e)
+            AppLogger.network.error("Failed to create Supabase client: ${e.message}", e)
             null
         }
     }

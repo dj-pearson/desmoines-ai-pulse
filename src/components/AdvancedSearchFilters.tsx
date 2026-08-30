@@ -24,20 +24,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  MapPin,
-  Star,
-  Clock,
-  DollarSign,
-  Filter,
-  X,
-  Heart,
-  Calendar,
-  Navigation,
-  Zap
-} from "lucide-react";
+import { Star, DollarSign, Filter, X, Heart, Navigation, Zap } from "lucide-react";
 import { createLogger } from '@/lib/logger';
 import { PremiumGate } from "@/components/PremiumGate";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('AdvancedSearchFilters');
 
@@ -291,7 +281,7 @@ export function AdvancedSearchFilters({
         {/* Location & Radius */}
         <div className="space-y-3">
           <Label className="flex items-center gap-2">
-            <MapPin className="h-4 w-4" />
+            <SpriteIcon name="map-pin" className="h-4 w-4" />
             Location & Distance
           </Label>
           <div className="flex gap-2">
@@ -381,7 +371,7 @@ export function AdvancedSearchFilters({
         {/* Time of Day */}
         <div className="space-y-3">
           <Label className="flex items-center gap-2">
-            <Clock className="h-4 w-4" />
+            <SpriteIcon name="clock" className="h-4 w-4" />
             Time of Day
           </Label>
           <div className="flex flex-wrap gap-2">
@@ -485,7 +475,7 @@ export function AdvancedSearchFilters({
         {/* Date Range */}
         <div className="space-y-3">
           <Label className="flex items-center gap-2">
-            <Calendar className="h-4 w-4" />
+            <SpriteIcon name="calendar" className="h-4 w-4" />
             Date Range
           </Label>
           <div className="flex gap-2">

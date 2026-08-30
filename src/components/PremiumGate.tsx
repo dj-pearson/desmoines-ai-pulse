@@ -1,12 +1,13 @@
 import { useState, ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { Lock, Crown, Sparkles } from "lucide-react";
+import { Lock, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useSubscription } from "@/hooks/useSubscription";
 import { UpgradeModal } from "@/components/UpgradeModal";
 import { FeatureTag } from "@/components/PremiumBadge";
 import { cn } from "@/lib/utils";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface PremiumGateProps {
   children: ReactNode;
@@ -86,7 +87,7 @@ export function PremiumGate({
               {requiredTier === "vip" ? (
                 <Crown className="h-4 w-4 mr-1" />
               ) : (
-                <Sparkles className="h-4 w-4 mr-1" />
+                <SpriteIcon name="sparkles" className="h-4 w-4 mr-1" />
               )}
               Unlock
             </Button>
@@ -137,7 +138,7 @@ export function PremiumGate({
             {requiredTier === "vip" ? (
               <Crown className="h-6 w-6 text-purple-500" />
             ) : (
-              <Sparkles className="h-6 w-6 text-amber-500" />
+              <SpriteIcon name="sparkles" className="h-6 w-6 text-amber-500" />
             )}
           </div>
           <FeatureTag requiredTier={requiredTier} size="md" />
@@ -156,7 +157,7 @@ export function PremiumGate({
             {requiredTier === "vip" ? (
               <Crown className="h-4 w-4 mr-2" />
             ) : (
-              <Sparkles className="h-4 w-4 mr-2" />
+              <SpriteIcon name="sparkles" className="h-4 w-4 mr-2" />
             )}
             Upgrade to Unlock
           </Button>

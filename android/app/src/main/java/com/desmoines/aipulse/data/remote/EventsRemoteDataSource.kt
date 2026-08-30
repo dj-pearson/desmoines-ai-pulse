@@ -1,6 +1,6 @@
 package com.desmoines.aipulse.data.remote
 
-import android.util.Log
+import com.desmoines.aipulse.util.AppLogger
 import com.desmoines.aipulse.data.model.Event
 import com.desmoines.aipulse.util.Config
 import io.github.jan.supabase.SupabaseClient
@@ -16,9 +16,6 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
-
-private const val TAG = "EventsRemoteDataSource"
-
 /**
  * Query parameters for fetching events.
  * Mirrors iOS EventsService.EventsQuery.
@@ -104,7 +101,7 @@ class EventsRemoteDataSource @Inject constructor(
         val events = result.decodeList<Event>()
         val total = result.countOrNull()?.toInt() ?: events.size
 
-        Log.d(TAG, "fetchEvents: ${events.size} events, total=$total, offset=${query.offset}")
+        AppLogger.network.debug("fetchEvents: ${events.size} events, total=$total, offset=${query.offset}")
 
         return EventsResponse(
             events = events,
@@ -224,7 +221,7 @@ class EventsRemoteDataSource @Inject constructor(
             val rpcResults = fetchNearbyEventsViaRPC(latitude, longitude, radiusMiles, limit)
             if (rpcResults.isNotEmpty()) return rpcResults
         } catch (e: Exception) {
-            Log.w(TAG, "Nearby events RPC failed, falling back to table query: ${e.message}")
+            AppLogger.network.warning("Nearby events RPC failed, falling back to table query: ${e.message}")
         }
 
         // Fallback: direct table query with client-side distance filtering

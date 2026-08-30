@@ -6,8 +6,9 @@ import { useItineraries, getThemeLabel, getDurationLabel } from '@/hooks/useItin
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { MapPin, Clock, Heart, Users, Palette, Dumbbell, Utensils, Compass } from 'lucide-react';
+import { Heart, Users, Palette, Dumbbell, Utensils, Compass } from "lucide-react";
 import { getCanonicalUrl } from '@/lib/brandConfig';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const THEME_ICONS: Record<string, typeof Heart> = {
   romance: Heart,
@@ -57,7 +58,7 @@ export default function Itineraries() {
           {/* Hero */}
           <div className="text-center mb-10">
             <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full mb-4">
-              <MapPin className="h-5 w-5" />
+              <SpriteIcon name="map-pin" className="h-5 w-5" />
               <span className="font-semibold">Curated by Locals</span>
             </div>
             <h1 className="text-4xl md:text-5xl font-bold mb-3">
@@ -108,7 +109,7 @@ export default function Itineraries() {
                             )}
                             <div className="flex items-center gap-2 flex-wrap">
                               <Badge variant="secondary">
-                                <Clock className="h-3 w-3 mr-1" />
+                                <SpriteIcon name="clock" className="h-3 w-3 mr-1" />
                                 {getDurationLabel(it.duration)}
                               </Badge>
                               <Badge variant="outline">

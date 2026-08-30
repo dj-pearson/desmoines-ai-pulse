@@ -1,5 +1,6 @@
 package com.desmoines.aipulse.ui.screens.articles
 
+import com.desmoines.aipulse.util.UiFormatLocale
 import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -199,7 +200,7 @@ private fun RelatedCard(article: Article, onClick: () -> Unit) {
     }
 }
 
-private val prettyDate = DateTimeFormatter.ofPattern("MMM d, yyyy")
+private val prettyDate = DateTimeFormatter.ofPattern("MMM d, yyyy", UiFormatLocale)
 
 private fun formatDate(iso: String?): String? {
     if (iso.isNullOrBlank()) return null

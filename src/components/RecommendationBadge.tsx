@@ -5,8 +5,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { Info, Sparkles, TrendingUp, MapPin, Clock, Heart } from 'lucide-react';
+import { Info, Heart } from "lucide-react";
 import { cn } from '@/lib/utils';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface RecommendationBadgeProps {
   reason?: string;
@@ -31,22 +32,22 @@ export function RecommendationBadge({
   if (!reason && !score) return null;
 
   const getReasonIcon = () => {
-    if (!reason) return <Sparkles className="h-3 w-3" />;
+    if (!reason) return <SpriteIcon name="sparkles" className="h-3 w-3" />;
 
     const lowerReason = reason.toLowerCase();
     if (lowerReason.includes('interest') || lowerReason.includes('matches your')) {
       return <Heart className="h-3 w-3" />;
     }
     if (lowerReason.includes('location') || lowerReason.includes('neighborhood')) {
-      return <MapPin className="h-3 w-3" />;
+      return <SpriteIcon name="map-pin" className="h-3 w-3" />;
     }
     if (lowerReason.includes('time') || lowerReason.includes('soon')) {
-      return <Clock className="h-3 w-3" />;
+      return <SpriteIcon name="clock" className="h-3 w-3" />;
     }
     if (lowerReason.includes('trending') || lowerReason.includes('popular')) {
-      return <TrendingUp className="h-3 w-3" />;
+      return <SpriteIcon name="trending-up" className="h-3 w-3" />;
     }
-    return <Sparkles className="h-3 w-3" />;
+    return <SpriteIcon name="sparkles" className="h-3 w-3" />;
   };
 
   const badge = (
@@ -78,7 +79,7 @@ export function RecommendationBadge({
         <TooltipContent className="max-w-xs">
           <div className="space-y-2">
             <div className="font-semibold text-sm flex items-center gap-2">
-              <Sparkles className="h-4 w-4" />
+              <SpriteIcon name="sparkles" className="h-4 w-4" />
               Why we recommend this
             </div>
             <div className="space-y-1 text-xs">
@@ -94,7 +95,7 @@ export function RecommendationBadge({
               {signals.locationMatch && signals.locationMatch > 0 && (
                 <div className="flex items-center justify-between">
                   <span className="flex items-center gap-1">
-                    <MapPin className="h-3 w-3" />
+                    <SpriteIcon name="map-pin" className="h-3 w-3" />
                     Location match
                   </span>
                   <span className="font-medium">+{signals.locationMatch}</span>
@@ -103,7 +104,7 @@ export function RecommendationBadge({
               {signals.timeMatch && signals.timeMatch > 0 && (
                 <div className="flex items-center justify-between">
                   <span className="flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
+                    <SpriteIcon name="clock" className="h-3 w-3" />
                     Time preference
                   </span>
                   <span className="font-medium">+{signals.timeMatch}</span>
@@ -112,7 +113,7 @@ export function RecommendationBadge({
               {signals.popularityBoost && signals.popularityBoost > 0 && (
                 <div className="flex items-center justify-between">
                   <span className="flex items-center gap-1">
-                    <TrendingUp className="h-3 w-3" />
+                    <SpriteIcon name="trending-up" className="h-3 w-3" />
                     Popularity
                   </span>
                   <span className="font-medium">+{signals.popularityBoost}</span>
@@ -162,7 +163,7 @@ export function RecommendationDot({
         </TooltipTrigger>
         <TooltipContent>
           <div className="flex items-center gap-2">
-            <Sparkles className="h-3 w-3" />
+            <SpriteIcon name="sparkles" className="h-3 w-3" />
             <span className="text-xs">{reason}</span>
           </div>
         </TooltipContent>

@@ -4,7 +4,8 @@ import RealTimeBusinessInfo, { RealTimeSearch } from '@/components/RealTimeBusin
 import UserGeneratedContent, { QuickUpdateWidget } from '@/components/UserGeneratedContent';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Clock, Users, MessageSquare, TrendingUp } from 'lucide-react';
+import { MessageSquare } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 /**
  * Real-time information hub page
@@ -104,7 +105,7 @@ export default function RealTimePage() {
         <Card className="mb-8">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5 text-blue-600" />
+              <SpriteIcon name="clock" className="h-5 w-5 text-blue-600" />
               Find What's Open Now
             </CardTitle>
           </CardHeader>
@@ -131,7 +132,7 @@ export default function RealTimePage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-start gap-3">
-                  <Clock className="h-5 w-5 text-blue-500 mt-1" />
+                  <SpriteIcon name="clock" className="h-5 w-5 text-blue-500 mt-1" />
                   <div>
                     <div className="font-medium text-sm">Live Hours</div>
                     <div className="text-xs text-gray-600">Current operating status, not outdated listings</div>
@@ -139,7 +140,7 @@ export default function RealTimePage() {
                 </div>
                 
                 <div className="flex items-start gap-3">
-                  <Users className="h-5 w-5 text-green-500 mt-1" />
+                  <SpriteIcon name="users" className="h-5 w-5 text-green-500 mt-1" />
                   <div>
                     <div className="font-medium text-sm">Wait Times</div>
                     <div className="text-xs text-gray-600">Know before you go - avoid disappointment</div>
@@ -155,7 +156,7 @@ export default function RealTimePage() {
                 </div>
                 
                 <div className="flex items-start gap-3">
-                  <TrendingUp className="h-5 w-5 text-orange-500 mt-1" />
+                  <SpriteIcon name="trending-up" className="h-5 w-5 text-orange-500 mt-1" />
                   <div>
                     <div className="font-medium text-sm">Special Offers</div>
                     <div className="text-xs text-gray-600">Current deals and happy hour specials</div>

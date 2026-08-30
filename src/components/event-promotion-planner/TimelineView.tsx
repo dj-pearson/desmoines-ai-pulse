@@ -5,7 +5,7 @@
 
 import { useState, useMemo } from 'react';
 import { format, addDays } from 'date-fns';
-import { Calendar, CheckCircle2, Circle, Clock, ChevronDown, ChevronUp } from 'lucide-react';
+import { CheckCircle2, Circle, Clock, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';

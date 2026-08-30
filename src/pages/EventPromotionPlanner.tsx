@@ -6,10 +6,11 @@
 import { useState, useEffect } from 'react';
 import { createLogger } from '@/lib/logger';
 import { Helmet } from 'react-helmet-async';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('EventPromotionPlanner');
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Calendar, Download, Share2, TrendingUp, Zap, ArrowRight } from 'lucide-react';
+import { Download, Zap } from "lucide-react";
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -202,7 +203,7 @@ export default function EventPromotionPlanner() {
                 className="h-14 px-8 text-lg bg-gradient-to-r from-primary to-blue-600"
               >
                 Create My Free Timeline
-                <ArrowRight className="ml-2 h-5 w-5" />
+                <SpriteIcon name="arrow-right" className="ml-2 h-5 w-5" />
               </Button>
             </div>
 
@@ -233,12 +234,12 @@ export default function EventPromotionPlanner() {
             {/* Features */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
               <FeatureCard
-                icon={<Calendar className="h-8 w-8" />}
+                icon={<SpriteIcon name="calendar" className="h-8 w-8" />}
                 title="Week-by-Week Plan"
                 description="Detailed timeline from 8 weeks out to event day"
               />
               <FeatureCard
-                icon={<TrendingUp className="h-8 w-8" />}
+                icon={<SpriteIcon name="trending-up" className="h-8 w-8" />}
                 title="Channel Strategy"
                 description="Know exactly where and when to promote"
               />
@@ -294,7 +295,7 @@ export default function EventPromotionPlanner() {
                 className="h-14 px-8 text-lg bg-gradient-to-r from-primary to-blue-600"
               >
                 Start Creating My Timeline
-                <ArrowRight className="ml-2 h-5 w-5" />
+                <SpriteIcon name="arrow-right" className="ml-2 h-5 w-5" />
               </Button>
               <p className="text-sm text-gray-500 mt-4">
                 No credit card required • 100% Free • 2-minute setup

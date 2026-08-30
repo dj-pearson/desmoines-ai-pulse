@@ -1,5 +1,6 @@
 package com.desmoines.aipulse.ui.screens.eventdetail
 
+import com.desmoines.aipulse.util.UiFormatLocale
 import android.content.Intent
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
@@ -349,8 +350,8 @@ private fun EventDetailHeader(
 private fun EventDetailDateTime(event: Event) {
     val date = event.parsedDate ?: return
 
-    val dateFormat = DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy")
-    val timeFormat = DateTimeFormatter.ofPattern("h:mm a")
+    val dateFormat = DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy", UiFormatLocale)
+    val timeFormat = DateTimeFormatter.ofPattern("h:mm a", UiFormatLocale)
 
     Row(
         modifier = Modifier
@@ -946,7 +947,7 @@ private fun RelatedEventCard(
         )
         event.parsedDate?.let { date ->
             Text(
-                text = date.format(DateTimeFormatter.ofPattern("MMM d")),
+                text = date.format(DateTimeFormatter.ofPattern("MMM d", UiFormatLocale)),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

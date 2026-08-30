@@ -17,25 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CardsGridSkeleton, LoadingSpinner } from "@/components/ui/loading-skeleton";
-import {
-  Star,
-  DollarSign,
-  ChefHat,
-  Search,
-  SearchX,
-  Utensils,
-  X,
-  Sparkles,
-  Clock,
-  List,
-  Map,
-  SlidersHorizontal,
-  TrendingUp,
-  ArrowRight,
-  Leaf,
-  ChevronDown,
-  Shuffle,
-} from "lucide-react";
+import { Star, DollarSign, Search, SearchX, Utensils, X, Sparkles, Clock, List, Map, SlidersHorizontal, TrendingUp, Leaf, ChevronDown, Shuffle } from "lucide-react";
 import { useState, lazy, Suspense, useMemo, useCallback, useRef, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -67,6 +49,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 // Lazy load map component to prevent react-leaflet bundling issues
 const RestaurantsMap = lazy(() => import("@/components/RestaurantsMap"));
@@ -460,7 +443,7 @@ export default function Restaurants() {
                       : "bg-white/15 hover:bg-white/25 text-white border-white/20"
                   }`}
                 >
-                  <Clock className="h-3.5 w-3.5 mr-1.5" />
+                  <SpriteIcon name="clock" className="h-3.5 w-3.5 mr-1.5" />
                   Open Now
                 </Button>
                 <Button
@@ -473,7 +456,7 @@ export default function Restaurants() {
                       : "bg-white/15 hover:bg-white/25 text-white border-white/20"
                   }`}
                 >
-                  <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                  <SpriteIcon name="sparkles" className="h-3.5 w-3.5 mr-1.5" />
                   Featured
                 </Button>
 
@@ -619,7 +602,7 @@ export default function Restaurants() {
               <section aria-labelledby="featured-heading">
                 <div className="flex items-center justify-between mb-4">
                   <h2 id="featured-heading" className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                    <Sparkles className="h-6 w-6 text-amber-500" />
+                    <SpriteIcon name="sparkles" className="h-6 w-6 text-amber-500" />
                     Featured Restaurants
                   </h2>
                   <Button
@@ -632,7 +615,7 @@ export default function Restaurants() {
                     className="text-primary hover:text-primary/80"
                   >
                     View All
-                    <ArrowRight className="h-4 w-4 ml-1" />
+                    <SpriteIcon name="arrow-right" className="h-4 w-4 ml-1" />
                   </Button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -843,7 +826,7 @@ export default function Restaurants() {
                       }}
                       className="inline-flex items-center gap-1.5 px-4 py-2 min-h-[44px] rounded-full text-sm font-medium border border-gray-200 dark:border-gray-700 bg-white dark:bg-card text-gray-700 dark:text-gray-300 hover:border-[#2D1B69] dark:hover:border-primary hover:bg-[#2D1B69]/5 dark:hover:bg-primary/10 transition-all duration-200 shadow-sm"
                     >
-                      <ChefHat className="h-3.5 w-3.5 text-muted-foreground" />
+                      <SpriteIcon name="chef-hat" className="h-3.5 w-3.5 text-muted-foreground" />
                       {cuisine}
                       <span className="text-xs text-muted-foreground ml-0.5">({count})</span>
                     </button>
@@ -861,7 +844,7 @@ export default function Restaurants() {
 
                 <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/50 dark:to-indigo-950/50 p-6 rounded-2xl mb-8 border border-blue-100 dark:border-blue-900">
                   <h3 className="text-xl font-semibold mb-3 flex items-center gap-2 text-gray-900 dark:text-gray-100">
-                    <ChefHat className="h-5 w-5 text-blue-600" />
+                    <SpriteIcon name="chef-hat" className="h-5 w-5 text-blue-600" />
                     Des Moines Dining at a Glance
                   </h3>
                   <p className="text-lg leading-relaxed text-gray-700">
@@ -930,7 +913,7 @@ export default function Restaurants() {
                 <div className="space-y-4 mb-8 not-prose">
                   <div className="bg-white p-5 rounded-xl border flex gap-4 items-start">
                     <div className="bg-amber-100 rounded-full p-2 shrink-0 mt-0.5">
-                      <Clock className="h-5 w-5 text-amber-600" />
+                      <SpriteIcon name="clock" className="h-5 w-5 text-amber-600" />
                     </div>
                     <div>
                       <h4 className="font-semibold text-gray-900 mb-1">Peak Hours & Reservations</h4>

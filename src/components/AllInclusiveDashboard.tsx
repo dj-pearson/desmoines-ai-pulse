@@ -18,16 +18,7 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { Event, RestaurantOpening } from "@/lib/types";
-import {
-  Calendar,
-  MapPin,
-  ExternalLink,
-  Utensils,
-  Palette,
-  TreePine,
-  Search,
-  X,
-} from "lucide-react";
+import { Calendar, Utensils, Palette, TreePine, Search, X } from "lucide-react";
 import {
   format,
   isToday,
@@ -46,6 +37,7 @@ import { useNavigate } from "react-router-dom";
 import { useAnalytics } from "@/hooks/useAnalytics";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { openExternalUrl } from "@/lib/capacitorUtils";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 // Type definitions for dashboard items
 type DashboardItem = {
@@ -724,13 +716,13 @@ export default function AllInclusiveDashboard({
           <div className="space-y-2">
             {item.location && (
               <div className="flex items-start text-mobile-caption text-muted-foreground">
-                <MapPin className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
+                <SpriteIcon name="map-pin" className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
                 <span className="mobile-safe-text">{item.location}</span>
               </div>
             )}
             {item.date && (
               <div className="flex items-start text-mobile-caption text-muted-foreground">
-                <Calendar className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
+                <SpriteIcon name="calendar" className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
                 <span className="mobile-safe-text">
                   {formatDate(item.date)}
                 </span>
@@ -738,7 +730,7 @@ export default function AllInclusiveDashboard({
             )}
             {(item.opening_date || item.openingTimeframe) && (
               <div className="flex items-start text-mobile-caption text-muted-foreground">
-                <Calendar className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
+                <SpriteIcon name="calendar" className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
                 <span className="mobile-safe-text">
                   Opens:{" "}
                   {item.opening_date
@@ -775,7 +767,7 @@ export default function AllInclusiveDashboard({
                 }}
                 aria-label={`Learn more about ${item.title || item.name}`}
               >
-                <ExternalLink className="h-3 w-3 mr-1" />
+                <SpriteIcon name="external-link" className="h-3 w-3 mr-1" />
                 <span aria-hidden="true">Learn More</span>
                 <span className="sr-only"> about {item.title || item.name}</span>
               </Button>

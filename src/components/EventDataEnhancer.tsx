@@ -11,11 +11,12 @@ import { Progress } from "./ui/progress";
 import { ScrollArea } from "./ui/scroll-area";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
-import { Search, Brain, AlertTriangle, CheckCircle, XCircle, Loader2, Sparkles, Globe, Filter } from "lucide-react";
+import { Search, Brain, AlertTriangle, CheckCircle, XCircle, Loader2, Globe, Filter } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Event } from "@/lib/types";
 import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('EventDataEnhancer');
 
@@ -416,7 +417,7 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
       <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5" />
+            <SpriteIcon name="sparkles" className="w-5 h-5" />
             Event Data Enhancer
           </DialogTitle>
           <DialogDescription>
