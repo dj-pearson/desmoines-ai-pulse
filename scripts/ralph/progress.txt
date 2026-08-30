@@ -4225,3 +4225,83 @@ Codebase patterns:
   Read what it REPORTS having fixed - that number is a defect log.
   When a count disagrees with a code read (16 drops, but 478 pages "should" be
   affected), the count is the evidence. Go find why, do not average them.
+
+================================================================================
+2026-08-30  The paid tiers, checked bullet by bullet against the code
+================================================================================
+Audited the subscription module the way a customer would: took every feature
+bullet Pricing.tsx sells and traced it to a consumer. 19 paid bullets, and the
+result splits three ways.
+
+WORKS (6): unlimited favorites (content_favorites, FavoriteButton gates on it),
+advanced search filters (AdvancedSearchFilters), ad-free (AdBanner + HouseAd
+both call hasFeature('ad_free')), write reviews and ratings (user_ratings and
+event_reviews are both live), saved searches (saved_searches is live), VIP
+badge (PremiumBadge).
+
+BUILT BUT CANNOT RUN (2):
+  * AI Trip Planner, the Insider headline at $4.99/mo and the VIP headline at
+    $12.99/mo. trip_plans, trip_plan_items and get_trip_itinerary do not exist
+    in production. generate-itinerary's preflight catches it and answers
+    "Trip planning is temporarily unavailable" without spending the model call.
+  * Event alerts. The searches save; saved-search-alerts has never been
+    deployed, so the nightly cron 404s and no alert has ever been sent.
+
+ADVERTISED, NEVER BUILT (8): early_access, daily_digest, priority_support,
+vip_events, reservation_assistance, sms_alerts, concierge, local_perks. Each
+one appears in exactly three places - the hasFeature switch in
+useSubscription.ts, the PREMIUM_FEATURES map in _shared/entitlements.ts, and
+the upsell copy in UpgradeModal.tsx - and nowhere else. Nothing in the app ever
+asks for them. The "2x XP" and "3x XP" bullets are the same story with no flag
+at all: the only two hits in the repo are the Pricing.tsx strings and the
+subscription_plans.features JSON in 20260316000001. useGamification.ts has no
+reference to tier, subscription or multiplier.
+
+VIP is the sharp end: 5 of its 9 bullets are in that last group, and a sixth is
+the trip planner. There is a real sold-versus-shipped decision here and it is
+the owner's, not mine, so it is written up rather than acted on.
+
+FIXED: the trip planner, because its cause is mechanical.
+20251126000001_add_ai_trip_planner_nlp_search.sql sits in the ledger and
+produced NOTHING - not the two tables, not the function, and not the three
+columns it adds to search_analytics. db-snapshot.json (2026-08-24) is missing
+all six objects, so the file aborted at or before its first statement or was
+never run and only the ledger row was written. Either way db push will never
+touch it again. 20260830000002_reapply_trip_planner_schema.sql re-applies the
+whole set idempotently.
+
+The second casualty of that same file, which nobody had connected to it:
+nlp-search's analytics insert names nlp_parsed, model_used and response_time_ms
+and is wrapped in .catch(console.warn). Every NLP search has been failing that
+insert since the feature shipped. search_analytics has no NLP row at all, which
+is also why any question of the form "how is NLP search performing" has been
+unanswerable. The re-apply adds those three columns.
+
+One deliberate change while re-creating: get_trip_itinerary was SECURITY
+DEFINER with no authorization check and no pinned search_path, so any caller
+holding a trip id could read a private itinerary straight past RLS. It is
+SECURITY INVOKER now, which puts the trip_plan_items policies back in charge.
+Safe to change silently because the function has never existed in production,
+so nothing can depend on the old behavior.
+
+Validation: pglast (libpg_query, real PostgreSQL grammar) parses the file as 39
+statements, and both non-trivial plpgsql bodies parse. The two trigger bodies
+throw a JSONDecodeError inside pglast that a minimal known-good trigger
+function reproduces exactly, so that is the tool, not the SQL.
+check-migration-safety and check-migration-drift both pass; the drift checker
+skips the new file because it is not ledgered yet.
+
+Still needed from a human: `supabase db push`, then regenerate
+src/integrations/supabase/types.ts, then re-capture db-snapshot.json. The
+20251126000001 entry in .github/migration-drift-baseline.json can come out
+after that recapture - it will no longer be drifted, since the objects it
+defines will exist.
+
+Codebase patterns:
+  A feature flag with no consumer is marketing copy wearing a switch. Grep the
+  flag name: if the only hits are the switch that defines it and the modal that
+  sells it, the feature does not exist.
+  When a ledgered migration produced nothing, look for its OTHER casualties.
+  This one owns a table nobody could reach AND three columns in a table
+  everybody can, and the second failure was invisible because the writer
+  swallows its own error.
