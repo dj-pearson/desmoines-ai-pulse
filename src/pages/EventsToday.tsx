@@ -32,6 +32,14 @@ interface EventItem {
   original_description: string;
   image_url: string;
   event_start_utc: string;
+  /**
+   * Read by ListFreshness, which is what renders the visible "updated" date.
+   * It has to be selected below as well: PostgREST returns exactly the
+   * projection it is given, so a column named here but not there is simply
+   * absent at runtime and newestTimestamp returns null - the component then
+   * renders nothing, silently, which is the state this page shipped in.
+   */
+  updated_at: string | null;
 }
 
 export default function EventsToday() {
@@ -53,7 +61,7 @@ export default function EventsToday() {
         
         const { data, error } = await supabase
           .from("events")
-          .select("id, title, date, location, venue, price, category, enhanced_description, original_description, image_url, event_start_utc")
+          .select("id, title, date, location, venue, price, category, enhanced_description, original_description, image_url, event_start_utc, updated_at")
           .gte("date", startUtc)
           .lte("date", endUtc)
           .order("event_start_utc", { ascending: true, nullsFirst: false });

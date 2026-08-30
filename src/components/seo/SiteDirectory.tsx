@@ -150,7 +150,15 @@ export function SiteDirectory({ className = "" }: { className?: string }) {
               <li key={link.href}>
                 <Link
                   to={link.href}
-                  className="text-sm text-muted-foreground hover:text-primary hover:underline"
+                  // This renders inside Footer's bg-neutral-900, and
+                  // text-muted-foreground is a THEME token: dark mode is
+                  // class-based here, so on a page without .dark it resolves to
+                  // the light value #525C7A and lands on #171717 at 2.71:1
+                  // against a 4.5:1 requirement. axe flagged it on every route
+                  // and it is why the required a11y check went red.
+                  // neutral-400 is what the other 19 links in this footer use,
+                  // and it measures 7.11:1.
+                  className="text-sm text-neutral-400 hover:text-white hover:underline transition-colors"
                 >
                   {link.title}
                 </Link>
