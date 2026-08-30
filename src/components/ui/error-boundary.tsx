@@ -3,6 +3,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, RefreshCw, Home } from "lucide-react";
 import { Link } from "react-router-dom";
+import { sessionStore } from "@/lib/safeStorage";
+import { createLogger } from "@/lib/logger";
+import { captureHandledError } from '@/lib/errorHandler';
+
+const logger = createLogger('ErrorBoundary');
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -41,20 +46,27 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     };
 
     // Log detailed error information
-    console.error('🔴 Error Boundary caught an error:', errorDetails);
+    logger.error('componentDidCatch', 'Error Boundary caught an error', errorDetails);
 
-    // In production, you would send this to an error tracking service
-    // Example: Sentry.captureException(error, { contexts: { react: errorInfo } });
+    // AND REPORT IT. This used to be a comment reading "In production, you
+    // would send this to an error tracking service" - so every React render
+    // error this boundary caught was written to sessionStorage and nowhere
+    // else. Only the Sentry.ErrorBoundary at the root reported anything, and
+    // that one was removed when Sentry moved off the critical path
+    // (WEB-PERF-020), which would have left React errors reported by nothing.
+    // captureHandledError rather than handleError: the fallback UI below is
+    // already telling the user, and handleError would add a toast on top.
+    captureHandledError(error, {
+      component: 'ErrorBoundary',
+      action: 'componentDidCatch',
+      metadata: { componentStack: errorInfo.componentStack, url: errorDetails.url },
+    });
 
     // Store error in sessionStorage for debugging (cleared on successful navigation)
-    try {
-      const recentErrors = JSON.parse(sessionStorage.getItem('app_errors') || '[]');
-      recentErrors.push(errorDetails);
-      // Keep only last 10 errors
-      sessionStorage.setItem('app_errors', JSON.stringify(recentErrors.slice(-10)));
-    } catch (storageError) {
-      console.error('Failed to store error details:', storageError);
-    }
+    const recentErrors = sessionStore.get<unknown[]>('app_errors', []) ?? [];
+    recentErrors.push(errorDetails);
+    // Keep only last 10 errors
+    sessionStore.set('app_errors', recentErrors.slice(-10));
   }
 
   resetError = () => {

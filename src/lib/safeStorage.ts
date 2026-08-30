@@ -34,25 +34,33 @@ class MemoryStorage implements StorageInterface {
   }
 }
 
+type Backing = 'local' | 'session';
+
 class SafeStorage implements StorageInterface {
   private storage: Storage | MemoryStorage;
-  private isLocalStorageAvailable: boolean;
+  private isNativeAvailable: boolean;
+  private readonly backing: Backing;
 
-  constructor() {
-    this.isLocalStorageAvailable = this.checkLocalStorage();
-    this.storage = this.isLocalStorageAvailable
-      ? window.localStorage
+  constructor(backing: Backing = 'local') {
+    this.backing = backing;
+    this.isNativeAvailable = this.checkNativeStorage();
+    this.storage = this.isNativeAvailable
+      ? (backing === 'session' ? window.sessionStorage : window.localStorage)
       : new MemoryStorage();
   }
 
-  private checkLocalStorage(): boolean {
+  private nativeStore(): Storage {
+    return this.backing === 'session' ? window.sessionStorage : window.localStorage;
+  }
+
+  private checkNativeStorage(): boolean {
     try {
       const test = '__storage_test__';
-      window.localStorage.setItem(test, test);
-      window.localStorage.removeItem(test);
+      this.nativeStore().setItem(test, test);
+      this.nativeStore().removeItem(test);
       return true;
     } catch (e) {
-      logger.warn('checkLocalStorage', 'localStorage is not available, falling back to memory storage', { error: String(e) });
+      logger.warn('checkNativeStorage', `${this.backing}Storage is not available, falling back to memory storage`, { error: String(e) });
       return false;
     }
   }
@@ -71,8 +79,8 @@ class SafeStorage implements StorageInterface {
       this.storage.setItem(key, value);
     } catch (e) {
       logger.warn('setItem', `Failed to set item "${key}" in storage`, { error: String(e) });
-      // If localStorage is full, try to clear old items
-      if (this.isLocalStorageAvailable && e instanceof DOMException) {
+      // If storage is full, try to clear old items
+      if (this.isNativeAvailable && e instanceof DOMException) {
         if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
           this.clearOldItems();
           try {
@@ -127,50 +135,55 @@ class SafeStorage implements StorageInterface {
    * Check if storage is available
    */
   isAvailable(): boolean {
-    return this.isLocalStorageAvailable;
+    return this.isNativeAvailable;
   }
 }
 
-// Export a singleton instance
-export const safeStorage = new SafeStorage();
+// Export singleton instances. `safeStorage` is localStorage-backed (persistent);
+// `safeSessionStorage` is sessionStorage-backed (cleared when the tab closes).
+// Both fall back to in-memory storage when the native store is blocked
+// (private mode, disabled cookies) instead of throwing.
+export const safeStorage = new SafeStorage('local');
+export const safeSessionStorage = new SafeStorage('session');
+
+/** Typed JSON/string helpers over a SafeStorage instance. */
+function makeStore(backing: SafeStorage) {
+  return {
+    get<T>(key: string, defaultValue?: T): T | null {
+      const item = backing.getItem(key);
+      if (item === null) return defaultValue ?? null;
+      try {
+        return JSON.parse(item) as T;
+      } catch {
+        logger.warn('get', `Failed to parse JSON from storage key "${key}"`);
+        return defaultValue ?? null;
+      }
+    },
+    set<T>(key: string, value: T): void {
+      try {
+        backing.setItem(key, JSON.stringify(value));
+      } catch (e) {
+        logger.warn('set', `Failed to serialize value for storage key "${key}"`, { error: String(e) });
+      }
+    },
+    remove(key: string): void {
+      backing.removeItem(key);
+    },
+    clear(): void {
+      backing.clear();
+    },
+    getString(key: string, defaultValue?: string): string | null {
+      return backing.getItem(key) ?? defaultValue ?? null;
+    },
+    setString(key: string, value: string): void {
+      backing.setItem(key, value);
+    },
+  };
+}
 
 // Also export typed helper functions for JSON storage
-export const storage = {
-  get<T>(key: string, defaultValue?: T): T | null {
-    const item = safeStorage.getItem(key);
-    if (item === null) {
-      return defaultValue ?? null;
-    }
-    try {
-      return JSON.parse(item) as T;
-    } catch {
-      logger.warn('get', `Failed to parse JSON from storage key "${key}"`);
-      return defaultValue ?? null;
-    }
-  },
+/** Persistent (localStorage-backed) typed JSON/string storage. */
+export const storage = makeStore(safeStorage);
 
-  set<T>(key: string, value: T): void {
-    try {
-      const serialized = JSON.stringify(value);
-      safeStorage.setItem(key, serialized);
-    } catch (e) {
-      logger.warn('set', `Failed to serialize value for storage key "${key}"`, { error: String(e) });
-    }
-  },
-
-  remove(key: string): void {
-    safeStorage.removeItem(key);
-  },
-
-  clear(): void {
-    safeStorage.clear();
-  },
-
-  getString(key: string, defaultValue?: string): string | null {
-    return safeStorage.getItem(key) ?? defaultValue ?? null;
-  },
-
-  setString(key: string, value: string): void {
-    safeStorage.setItem(key, value);
-  },
-};
+/** Session-scoped (sessionStorage-backed) typed JSON/string storage. */
+export const sessionStore = makeStore(safeSessionStorage);

@@ -1,6 +1,6 @@
 package com.desmoines.aipulse.ui.screens.home
 
-import android.util.Log
+import com.desmoines.aipulse.util.AppLogger
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.desmoines.aipulse.data.model.DateFilterPreset
@@ -8,14 +8,21 @@ import com.desmoines.aipulse.data.model.Event
 import com.desmoines.aipulse.data.model.EventCategory
 import com.desmoines.aipulse.data.model.Restaurant
 import com.desmoines.aipulse.data.model.SubscriptionTier
+import com.desmoines.aipulse.data.remote.BillingService
 import com.desmoines.aipulse.data.remote.EventsQuery
 import com.desmoines.aipulse.data.model.RestaurantSortOption
 import com.desmoines.aipulse.data.remote.RestaurantsQuery
+import com.desmoines.aipulse.data.model.PaywallContext
 import com.desmoines.aipulse.data.repository.EventsRepository
 import com.desmoines.aipulse.data.repository.RestaurantsRepository
 import com.desmoines.aipulse.util.Config
+import com.desmoines.aipulse.util.FetchGeneration
 import com.desmoines.aipulse.util.LocationService
+import com.desmoines.aipulse.util.PaginationGuard
 import com.desmoines.aipulse.util.NetworkMonitor
+import com.desmoines.aipulse.util.RECONNECT_DEBOUNCE_MS
+import com.desmoines.aipulse.util.SoftPaywallService
+import com.desmoines.aipulse.util.onReconnect
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -29,9 +36,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
-
-private const val TAG = "EventsViewModel"
-
 /**
  * ViewModel for the Home screen / events feed.
  * Mirrors iOS EventsViewModel.swift — handles fetching, filtering, pagination, caching.
@@ -42,6 +46,8 @@ class EventsViewModel @Inject constructor(
     private val restaurantsRepository: RestaurantsRepository,
     private val networkMonitor: NetworkMonitor,
     private val locationService: LocationService,
+    private val softPaywallService: SoftPaywallService,
+    private val billingService: BillingService,
 ) : ViewModel() {
 
     // region State
@@ -170,6 +176,12 @@ class EventsViewModel @Inject constructor(
     private var debounceJob: Job? = null
     private var hasLoadedInitialData = false
 
+    // Stale-result guard: a reset supersedes any in-flight events fetch (ANDP-061).
+    private val eventsFetch = FetchGeneration()
+
+    // Raw (pre-premium-filter) ids seen this query, for pagination overlap detection (ANDP-062).
+    private val seenEventIds = HashSet<String>()
+
     // endregion
 
     // region Public API
@@ -178,6 +190,23 @@ class EventsViewModel @Inject constructor(
      * Load initial data — serve cached data immediately, fetch fresh in background.
      * Skip network if offline with cache hit. Mirrors iOS loadInitialData().
      */
+    init {
+        // Auto-refetch the visible first page when connectivity returns (ANDP-069).
+        viewModelScope.launch {
+            networkMonitor.isConnected.onReconnect().collect {
+                delay(RECONNECT_DEBOUNCE_MS)
+                if (hasLoadedInitialData && networkMonitor.isConnected.value) refresh()
+            }
+        }
+
+        // Mirror the live entitlement. This flow was a MutableStateFlow pinned
+        // to FREE with no writer, so paying subscribers were shown the
+        // free-tier UI (locked advanced filters, ad banners, the save cap).
+        viewModelScope.launch {
+            billingService.currentTier.collect { _currentTier.value = it }
+        }
+    }
+
     fun loadInitialData() {
         if (hasLoadedInitialData) return
         hasLoadedInitialData = true
@@ -245,8 +274,20 @@ class EventsViewModel @Inject constructor(
         resetAndFetch()
     }
 
-    fun setCurrentTier(tier: SubscriptionTier) {
+    /**
+     * Overrides the entitlement mirrored from [BillingService]. Only for tests
+     * and previews; production state comes from the collector in `init`.
+     */
+    internal fun setCurrentTier(tier: SubscriptionTier) {
         _currentTier.value = tier
+    }
+
+    /**
+     * A free user tapped a locked premium filter — open the contextual soft
+     * paywall (ANDP-043/074) rather than jumping straight to the store screen.
+     */
+    fun requestFilterUpgrade() {
+        softPaywallService.present(PaywallContext.PREMIUM_FILTERS)
     }
 
     fun clearFilters() {
@@ -282,6 +323,10 @@ class EventsViewModel @Inject constructor(
      * Fetch events from repository. Mirrors iOS fetchEvents(reset:).
      */
     private suspend fun fetchEvents(reset: Boolean) {
+        // A reset supersedes any in-flight fetch; a load-more rides the current token
+        // and is dropped if a reset lands while it's in flight.
+        val token = if (reset) eventsFetch.bump() else eventsFetch.current()
+
         if (reset) {
             currentOffset = 0
             if (_events.value.isEmpty()) {
@@ -306,6 +351,21 @@ class EventsViewModel @Inject constructor(
 
         eventsRepository.fetchEvents(query)
             .onSuccess { response ->
+                if (!eventsFetch.isCurrent(token)) return@onSuccess // superseded — drop stale result
+                // Reject a desynced page (oversized, or overlapping the loaded list) rather
+                // than corrupting the feed — surface a retry instead. Overlap is checked on
+                // raw ids since premium filters thin the displayed list. (ANDP-062)
+                val existingIds: Set<String> = if (reset) emptySet() else seenEventIds
+                val check = PaginationGuard.validatePage(response.events, pageSize, existingIds) { it.id }
+                if (check is PaginationGuard.Result.Invalid) {
+                    AppLogger.ui.warning("events pagination guard tripped: ${check.reason}")
+                    _hasMore.value = false
+                    _errorMessage.value = "Something went wrong loading events. Pull to refresh."
+                    return@onSuccess
+                }
+                if (reset) seenEventIds.clear()
+                seenEventIds.addAll(response.events.map { it.id })
+
                 val filtered = applyPremiumFilters(response.events)
                 if (reset) {
                     _events.value = filtered
@@ -314,18 +374,25 @@ class EventsViewModel @Inject constructor(
                 }
                 _totalCount.value = response.totalCount
                 _hasMore.value = response.hasMore
-                currentOffset = _events.value.size
+                // Offset tracks raw rows fetched (not the premium-filtered display size).
+                currentOffset += response.events.size
+                // Surface this page to on-device system search (ANDP-070).
             }
             .onFailure { error ->
-                Log.e(TAG, "fetchEvents failed: ${error.message}", error)
+                if (!eventsFetch.isCurrent(token)) return@onFailure
+                AppLogger.ui.error("fetchEvents failed: ${error.message}", error)
                 // If offline and we have cached data, don't overwrite with an error
                 if (_events.value.isEmpty()) {
                     _errorMessage.value = error.message ?: "Failed to load events"
                 }
             }
 
-        _isLoading.value = false
-        _isLoadingMore.value = false
+        // Only the latest request owns the loading flags; a superseded one leaves
+        // them for the newer fetch to clear.
+        if (eventsFetch.isCurrent(token)) {
+            _isLoading.value = false
+            _isLoadingMore.value = false
+        }
     }
 
     /**
@@ -337,7 +404,7 @@ class EventsViewModel @Inject constructor(
                 _featuredEvents.value = featured
             }
             .onFailure { error ->
-                Log.e(TAG, "fetchFeaturedEvents failed: ${error.message}", error)
+                AppLogger.ui.error("fetchFeaturedEvents failed: ${error.message}", error)
                 // Keep existing cached featured events on failure
             }
     }
@@ -356,7 +423,7 @@ class EventsViewModel @Inject constructor(
         ).onSuccess { response ->
             _restaurants.value = response.restaurants
         }.onFailure { error ->
-            Log.e(TAG, "fetchPopularRestaurants failed: ${error.message}", error)
+            AppLogger.ui.error("fetchPopularRestaurants failed: ${error.message}", error)
         }
     }
 

@@ -114,7 +114,7 @@ export function createEventShareData(event: {
   const url = `${window.location.origin}/events/${event.slug}`;
   return {
     title: event.title,
-    text: event.description || `Check out ${event.title} on Des Moines AI Pulse!`,
+    text: event.description || `Check out ${event.title} on Des Moines Insider!`,
     url,
   };
 }
@@ -130,7 +130,7 @@ export function createRestaurantShareData(restaurant: {
   const url = `${window.location.origin}/restaurants/${restaurant.slug}`;
   return {
     title: restaurant.name,
-    text: restaurant.description || `Check out ${restaurant.name} on Des Moines AI Pulse!`,
+    text: restaurant.description || `Check out ${restaurant.name} on Des Moines Insider!`,
     url,
   };
 }

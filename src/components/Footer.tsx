@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Heart, Mail, Calendar, Utensils, MapPin, Building2, Crown, ArrowRight, Facebook, Twitter, Instagram, PlusCircle, Users, Sparkles } from "lucide-react";
+import { Heart, Mail, Utensils, Map, Crown, Facebook, Twitter, Instagram, PlusCircle, DollarSign } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,6 +7,9 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { OptimizedLogo } from "@/components/OptimizedLogo";
 import { logConsent } from "@/lib/consentLog";
+import { reopenConsentBanner } from "@/components/CookieConsentBanner";
+import { SiteDirectory } from "@/components/seo/SiteDirectory";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export default function Footer() {
   const [email, setEmail] = useState("");
@@ -81,7 +84,7 @@ export default function Footer() {
               <Button size="lg" variant="secondary" className="font-semibold">
                 <Crown className="h-4 w-4 mr-2" />
                 View Plans
-                <ArrowRight className="h-4 w-4 ml-2" />
+                <SpriteIcon name="arrow-right" className="h-4 w-4 ml-2" />
               </Button>
             </Link>
           </div>
@@ -104,13 +107,13 @@ export default function Footer() {
               />
               <p className="text-neutral-400 mb-4 text-sm">
                 Your AI-powered guide to discovering the best events, dining, and attractions
-                in Des Moines.{/* WEB-LEGAL-002: "Join 15,000+ locals who trust us" removed;
-                nothing counts users. */}
+                in Des Moines. {/* WEB-SEO-016: "Join 15,000+ locals" removed — nothing
+                measures it. */}
               </p>
 
               {/* Newsletter Benefit Line */}
               <p className="text-neutral-300 text-sm mb-2 flex items-center gap-1.5">
-                <Sparkles className="h-3.5 w-3.5 text-amber-400 flex-shrink-0" aria-hidden="true" />
+                <SpriteIcon name="sparkles" className="h-3.5 w-3.5 text-amber-400 flex-shrink-0" aria-hidden="true" />
                 Weekly digest of trending events + AI-powered recommendations
               </p>
 
@@ -123,7 +126,7 @@ export default function Footer() {
                   placeholder="Get your weekly Des Moines plan"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="bg-neutral-800 border-neutral-700 text-white placeholder:text-neutral-500 h-10"
+                  className="bg-neutral-800 border-neutral-700 text-white placeholder:text-neutral-400 h-10"
                   required
                   aria-describedby="newsletter-description"
                 />
@@ -135,12 +138,11 @@ export default function Footer() {
 
               {/* Social Proof + CAN-SPAM disclosure. Submitting the form is an
                   affirmative opt-in; we log it to consent_records. */}
-              <p className="text-neutral-500 text-xs mb-1 flex items-center gap-1">
-                <Users className="h-3 w-3" aria-hidden="true" />
-                {/* WEB-LEGAL-002: dropped an unmeasured "15,000+" subscriber count. */}
+              <p className="text-neutral-400 text-xs mb-1 flex items-center gap-1">
+                <SpriteIcon name="users" className="h-3 w-3" aria-hidden="true" />
                 Free forever, unsubscribe anytime.
               </p>
-              <p className="text-neutral-500 text-[11px] mb-4 leading-snug">
+              <p className="text-neutral-400 text-[11px] mb-4 leading-snug">
                 By subscribing you agree to receive marketing emails from Des Moines Insider and acknowledge our{" "}
                 <Link to="/privacy-policy" className="underline hover:text-neutral-300">
                   Privacy Policy
@@ -152,17 +154,17 @@ export default function Footer() {
               <div className="flex gap-3" role="group" aria-label="Social media links">
                 <a href="https://facebook.com" target="_blank" rel="noopener noreferrer"
                    aria-label="Follow us on Facebook (opens in new tab)"
-                   className="w-9 h-9 rounded-full bg-neutral-800 hover:bg-neutral-700 flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-neutral-900">
+                   className="tap-area-44 w-9 h-9 rounded-full bg-neutral-800 hover:bg-neutral-700 flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-neutral-900">
                   <Facebook className="h-4 w-4" aria-hidden="true" />
                 </a>
                 <a href="https://twitter.com" target="_blank" rel="noopener noreferrer"
                    aria-label="Follow us on Twitter (opens in new tab)"
-                   className="w-9 h-9 rounded-full bg-neutral-800 hover:bg-neutral-700 flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-neutral-900">
+                   className="tap-area-44 w-9 h-9 rounded-full bg-neutral-800 hover:bg-neutral-700 flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-neutral-900">
                   <Twitter className="h-4 w-4" aria-hidden="true" />
                 </a>
                 <a href="https://instagram.com" target="_blank" rel="noopener noreferrer"
                    aria-label="Follow us on Instagram (opens in new tab)"
-                   className="w-9 h-9 rounded-full bg-neutral-800 hover:bg-neutral-700 flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-neutral-900">
+                   className="tap-area-44 w-9 h-9 rounded-full bg-neutral-800 hover:bg-neutral-700 flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-neutral-900">
                   <Instagram className="h-4 w-4" aria-hidden="true" />
                 </a>
               </div>
@@ -190,7 +192,7 @@ export default function Footer() {
               <ul className="space-y-2">
                 <li>
                   <Link to="/events" className="text-neutral-400 hover:text-white transition-colors text-sm flex items-center gap-2">
-                    <Calendar className="h-3.5 w-3.5" /> Events
+                    <SpriteIcon name="calendar" className="h-3.5 w-3.5" /> Events
                   </Link>
                 </li>
                 <li>
@@ -215,12 +217,22 @@ export default function Footer() {
                 </li>
                 <li>
                   <Link to="/attractions" className="text-neutral-400 hover:text-white transition-colors text-sm flex items-center gap-2">
-                    <MapPin className="h-3.5 w-3.5" /> Attractions
+                    <SpriteIcon name="map-pin" className="h-3.5 w-3.5" /> Attractions
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/map" className="text-neutral-400 hover:text-white transition-colors text-sm flex items-center gap-2">
+                    <Map className="h-3.5 w-3.5" /> Discover Map
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/deals" className="text-neutral-400 hover:text-white transition-colors text-sm flex items-center gap-2">
+                    <DollarSign className="h-3.5 w-3.5" /> Deals & Coupons
                   </Link>
                 </li>
                 <li>
                   <Link to="/stay" className="text-neutral-400 hover:text-white transition-colors text-sm flex items-center gap-2">
-                    <Building2 className="h-3.5 w-3.5" /> Hotels & Stay
+                    <SpriteIcon name="building-2" className="h-3.5 w-3.5" /> Hotels & Stay
                   </Link>
                 </li>
                 <li>
@@ -313,9 +325,27 @@ export default function Footer() {
                   </Link>
                 </li>
                 <li>
+                  <Link to="/support" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                    Help &amp; Support
+                  </Link>
+                </li>
+                <li>
                   <Link to="/affiliate-disclosure" className="text-neutral-400 hover:text-white transition-colors text-sm">
                     Affiliate Disclosure
                   </Link>
+                </li>
+                <li>
+                  {/* CPRA §1798.135 requires a clear, conspicuous "Do Not Sell or
+                      Share" / privacy-choices link. Reopens the consent panel
+                      (pre-filled) so the opt-out is functional site-wide, logged
+                      out or in — without wiping any existing choice. */}
+                  <button
+                    type="button"
+                    onClick={reopenConsentBanner}
+                    className="text-neutral-400 hover:text-white transition-colors text-sm text-left focus:outline-none focus:ring-2 focus:ring-primary rounded-sm"
+                  >
+                    Your Privacy Choices
+                  </button>
                 </li>
               </ul>
             </nav>
@@ -324,6 +354,28 @@ export default function Footer() {
       </div>
 
       {/* Bottom Bar */}
+      {/* SEO-008 / SEO-015: the site directory, on every page.
+
+          Our hubs carried 54-79 unique internal links against ~250 on each of
+          catchdesmoines.com's, measured 2026-08-28, while we publish 1,109 URLs.
+          Link equity was arriving at the hubs and stopping there, which is a
+          large part of why entity pages rank on page one and the hubs sit on
+          page three to six.
+
+          The footer is the one place that lifts every page at once, including
+          the ~1,070 entity pages. A predecessor exists - FooterSEOLinks in
+          seo/InternalLinks.tsx - complete, exported and imported by nothing.
+          scripts/__tests__/site-directory-routes.test.mjs asserts this one is
+          actually rendered here, and that every href resolves to a real route:
+          a bad link in this block would manufacture a soft 404 on the whole
+          site at once, and the SPA fallback answers 200 so it would not even
+          fail loudly. */}
+      <div className="border-t border-neutral-800 py-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <SiteDirectory />
+        </div>
+      </div>
+
       <div className="border-t border-neutral-800 py-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 text-center md:text-left">
@@ -332,7 +384,7 @@ export default function Footer() {
               <Heart className="h-4 w-4 mx-1 text-red-500 fill-red-500" />
               <span>for Des Moines</span>
             </div>
-            <div className="text-neutral-500 text-xs space-y-1">
+            <div className="text-neutral-400 text-xs space-y-1">
               <p>
                 © {new Date().getFullYear()} Des Moines Insider. All rights reserved.
               </p>

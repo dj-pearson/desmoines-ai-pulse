@@ -4,7 +4,13 @@ import Foundation
 @MainActor
 @Observable
 final class RestaurantsViewModel {
-    private(set) var restaurants: [Restaurant] = []
+    private(set) var restaurants: [Restaurant] = [] {
+        didSet { recomputeArrangedRestaurants() }
+    }
+    /// Sponsored-arranged view of `restaurants`, cached so the arrangement
+    /// (SponsoredArranger.arrange) runs only when `restaurants` changes — not
+    /// on every SwiftUI body pass (IOS-AUDIT-PERF-010).
+    private(set) var arrangedRestaurants: [Restaurant] = []
     private(set) var isLoading = false
     private(set) var isLoadingMore = false
     private(set) var hasMore = false
@@ -14,19 +20,19 @@ final class RestaurantsViewModel {
     private(set) var availableLocations: [String] = []
 
     var searchText = "" {
-        didSet { resetAndFetch() }
+        didSet { if oldValue != searchText { resetAndFetch() } }
     }
     var selectedCuisines: Set<String> = [] {
-        didSet { resetAndFetch() }
+        didSet { if oldValue != selectedCuisines { resetAndFetch() } }
     }
     var selectedPriceRanges: Set<String> = [] {
-        didSet { resetAndFetch() }
+        didSet { if oldValue != selectedPriceRanges { resetAndFetch() } }
     }
     var selectedLocations: Set<String> = [] {
-        didSet { resetAndFetch() }
+        didSet { if oldValue != selectedLocations { resetAndFetch() } }
     }
     var selectedDietary: Set<String> = [] {
-        didSet { resetAndFetch() }
+        didSet { if oldValue != selectedDietary { resetAndFetch() } }
     }
     var minRating: Double = 0 {
         didSet { if oldValue != minRating { resetAndFetch() } }
@@ -35,12 +41,18 @@ final class RestaurantsViewModel {
         didSet { if oldValue != featuredOnly { resetAndFetch() } }
     }
     var sortBy: RestaurantSortOption = .popularity {
-        didSet { resetAndFetch() }
+        didSet { if oldValue != sortBy { resetAndFetch() } }
     }
     var showOpenNowOnly = false {
         didSet { if oldValue != showOpenNowOnly { scheduleClientFilters() } }
     }
     var activePreset: RestaurantPreset? = nil
+
+    /// Set while a bulk update (`clearFilters` / `applyPreset`) mutates many
+    /// filter properties at once, so each individual `didSet` skips its own
+    /// debounced work. The bulk operation fires exactly one fetch at the end
+    /// (IOS-AUDIT-PERF-004).
+    private var isBulkUpdating = false
 
     private var currentOffset = 0
     private let pageSize = Config.defaultPageSize
@@ -61,7 +73,10 @@ final class RestaurantsViewModel {
 
         if let cached: [Restaurant] = await cache.get(cacheKey, allowStale: isOffline) {
             allRestaurants = cached
-            restaurants = showOpenNowOnly ? cached.filter { $0.isOpenNow() == true } : cached
+            // Apply BOTH active client-side filters (open-now AND dietary) to the
+            // cached list, not just open-now — otherwise a cold start with a
+            // dietary filter active briefly shows non-matching restaurants.
+            restaurants = Self.applyClientSide(to: cached, openNow: showOpenNowOnly, dietary: selectedDietary)
             isLoading = false
         }
 
@@ -106,6 +121,10 @@ final class RestaurantsViewModel {
             if reset {
                 allRestaurants = response.restaurants
                 await cache.set(restaurantsCacheKey(), value: response.restaurants)
+                // Keep Spotlight in sync so restaurants show up in system search
+                // (IOS-AUDIT-FEAT-026).
+                let toIndex = response.restaurants
+                Task { await SpotlightService.shared.indexRestaurants(toIndex) }
             } else {
                 allRestaurants.append(contentsOf: response.restaurants)
             }
@@ -171,6 +190,7 @@ final class RestaurantsViewModel {
     /// the actual filter off the main thread. Matches the 150ms target in
     /// IOS-AUDIT-2026-007 acceptance criteria.
     private func scheduleClientFilters() {
+        guard !isBulkUpdating else { return }
         clientFilterTask?.cancel()
         clientFilterTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(150))
@@ -236,6 +256,15 @@ final class RestaurantsViewModel {
         }
     }
 
+    // MARK: - Sponsored Arrangement (IOS-AUDIT-PERF-010)
+
+    /// Recomputes `arrangedRestaurants` off the render path whenever
+    /// `restaurants` changes. Sponsored listings are pulled to the front;
+    /// organic order is otherwise preserved.
+    private func recomputeArrangedRestaurants() {
+        arrangedRestaurants = SponsoredArranger.arrange(restaurants, isSponsored: { $0.isActivelySponsored })
+    }
+
     // MARK: - Filter Summary
 
     var activeFilterCount: Int {
@@ -252,6 +281,9 @@ final class RestaurantsViewModel {
     }
 
     func clearFilters() {
+        // Coalesce the many property mutations into a single fetch
+        // (IOS-AUDIT-PERF-004).
+        isBulkUpdating = true
         selectedCuisines = []
         selectedPriceRanges = []
         selectedLocations = []
@@ -262,6 +294,8 @@ final class RestaurantsViewModel {
         sortBy = .popularity
         showOpenNowOnly = false
         activePreset = nil
+        isBulkUpdating = false
+        resetAndFetch()
     }
 
     // MARK: - Smart Presets
@@ -273,7 +307,9 @@ final class RestaurantsViewModel {
             clearFilters()
             return
         }
-        // Reset first so presets don't compound
+        // Reset first so presets don't compound. Coalesce into one fetch
+        // (IOS-AUDIT-PERF-004).
+        isBulkUpdating = true
         selectedCuisines = []
         selectedPriceRanges = Set(preset.priceRanges)
         selectedLocations = []
@@ -283,9 +319,14 @@ final class RestaurantsViewModel {
         showOpenNowOnly = preset.openNow
         sortBy = preset.sortBy
         activePreset = preset
+        isBulkUpdating = false
+        resetAndFetch()
     }
 
     private func resetAndFetch() {
+        // Bulk updates (clearFilters / applyPreset) mutate many properties in
+        // one go; suppress their per-property fetches and fire one at the end.
+        guard !isBulkUpdating else { return }
         fetchTask?.cancel()
         fetchTask = Task {
             try? await Task.sleep(for: .milliseconds(300))

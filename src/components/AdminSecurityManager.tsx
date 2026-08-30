@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTabState } from "@/hooks/useTabState";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,23 +9,11 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  Shield,
-  AlertTriangle,
-  Ban,
-  Eye,
-  Lock,
-  Users,
-  Activity,
-  Globe,
-  Settings,
-  Clock,
-  UserX,
-  Mail,
-} from "lucide-react";
+import { Shield, AlertTriangle, Ban, Eye, Lock, Activity, Globe, Settings, UserX, Mail } from "lucide-react";
 import { createLogger } from '@/lib/logger';
 import { storage } from '@/lib/safeStorage';
 import BlockedEmailDomainsManager from '@/components/admin/BlockedEmailDomainsManager';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('AdminSecurityManager');
 
@@ -62,6 +51,9 @@ export default function AdminSecurityManager() {
     suspiciousActivityThreshold: 10,
   });
   
+  const [activeTab, setActiveTab] = useTabState("settings", {
+    validTabs: ["settings", "monitoring", "access-control", "email-domains", "logs"],
+  });
   const [securityLogs, setSecurityLogs] = useState<SecurityLog[]>([]);
   const [blockedIPs, setBlockedIPs] = useState<string[]>([]);
   const [newWhitelistIP, setNewWhitelistIP] = useState("");
@@ -250,7 +242,7 @@ export default function AdminSecurityManager() {
         </Button>
       </div>
 
-      <Tabs defaultValue="settings" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="settings">Settings</TabsTrigger>
           <TabsTrigger value="monitoring">Monitoring</TabsTrigger>
@@ -580,7 +572,7 @@ export default function AdminSecurityManager() {
                           {getSeverityBadge(log.severity)}
                         </div>
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Clock className="h-4 w-4" />
+                          <SpriteIcon name="clock" className="h-4 w-4" />
                           {new Date(log.created_at).toLocaleString()}
                         </div>
                       </div>

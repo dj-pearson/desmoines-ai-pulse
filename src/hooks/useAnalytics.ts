@@ -5,6 +5,14 @@ import { createLogger } from '@/lib/logger';
 const log = createLogger('useAnalytics');
 const ENABLE_DIRECT_CONTENT_METRICS = false;
 
+/**
+ * Ceiling on the in-memory analytics queue when flushes are failing. Prevents a
+ * backend outage from growing the queue unboundedly in a long-lived tab; the
+ * oldest events are dropped first, since stale analytics matter less than the
+ * page staying responsive.
+ */
+const MAX_QUEUED_EVENTS = 500;
+
 interface AnalyticsData {
   sessionId: string;
   userId?: string;
@@ -41,7 +49,7 @@ export function useAnalytics() {
   
   // Queue for batching analytics events
   const eventQueue = useRef<Record<string, unknown>[]>([]);
-  const flushTimer = useRef<NodeJS.Timeout | null>(null);
+  const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     // Get current user
@@ -129,13 +137,16 @@ export function useAnalytics() {
   const flushEventQueue = useCallback(async () => {
     if (eventQueue.current.length === 0) return;
 
+    // Hoisted out of the try so the catch can actually re-queue what failed.
+    // While it was scoped inside, the error path could not see it (see below).
+    const eventsToFlush = [...eventQueue.current];
+
     try {
-      const eventsToFlush = [...eventQueue.current];
       eventQueue.current = []; // Clear queue
 
       // Try to insert to enhanced analytics table (graceful fallback if table doesn't exist yet)
       try {
-        await supabase.from('user_interactions_enhanced' as any).insert(eventsToFlush);
+        await supabase.from('user_interactions_enhanced').insert(eventsToFlush);
         log.debug('flushEventQueue', `Flushed ${eventsToFlush.length} enhanced analytics events`);
       } catch (enhancedError) {
         log.debug('flushEventQueue', 'Enhanced analytics table not available yet, using fallback');
@@ -153,7 +164,9 @@ export function useAnalytics() {
         }));
         
         for (const event of fallbackEvents) {
-          await supabase.from('user_analytics').insert(event);
+          // Queue items are loosely typed (Record<string, unknown>); the row
+          // shape is correct at runtime, so bypass the generated-row check.
+          await supabase.from('user_analytics').insert(event as never);
         }
         log.debug('flushEventQueue', `Flushed ${fallbackEvents.length} analytics events to fallback table`);
       }
@@ -161,7 +174,7 @@ export function useAnalytics() {
       // Batch content metrics to Edge Function (reduces overhead)
       try {
         const isUuid = (v: unknown) => typeof v === 'string' && /[0-9a-fA-F-]{36}/.test(v);
-        const allowedTypes = new Set(['view','search','click','share','bookmark','hover','scroll','filter']);
+        const allowedTypes = new Set(['view','search','click','share','bookmark','favorite','hover','scroll','filter']);
         const allowedContent = new Set(['event','restaurant','attraction','playground','page','search_result']);
 
         const metricEvents = eventsToFlush
@@ -171,7 +184,7 @@ export function useAnalytics() {
             metric_type: e.interaction_type,
             metric_value: 1,
           }))
-          .filter(e => allowedTypes.has(e.metric_type) && allowedContent.has(e.content_type) && isUuid(e.content_id));
+          .filter(e => allowedTypes.has(e.metric_type as string) && allowedContent.has(e.content_type as string) && isUuid(e.content_id));
 
         if (metricEvents.length > 0) {
           await supabase.functions.invoke('log-content-metrics', {
@@ -183,8 +196,22 @@ export function useAnalytics() {
       }
     } catch (error) {
       log.error('flushEventQueue', 'Error flushing analytics queue', { error });
-      // If flush fails, keep events in queue for next attempt
-      eventQueue.current = [...eventQueue.current, ...eventQueue.current];
+      // Re-queue the events that actually failed, ahead of anything enqueued
+      // while the flush was in flight.
+      //
+      // This previously read `[...eventQueue.current, ...eventQueue.current]`,
+      // which did the opposite of its comment: eventsToFlush had already been
+      // cleared from the queue and was out of scope here, so the failed events
+      // were LOST while whatever arrived during the flush was DUPLICATED — and
+      // duplicated again on every subsequent failure, doubling the queue each
+      // time. A backend outage therefore produced exponential memory growth and
+      // inflated counts for the events that survived.
+      //
+      // Bounded so a persistent outage cannot grow the queue without limit;
+      // dropping the oldest analytics events is strictly better than pinning
+      // the tab's memory.
+      const requeued = [...eventsToFlush, ...eventQueue.current];
+      eventQueue.current = requeued.slice(-MAX_QUEUED_EVENTS);
     }
   }, []);
 
@@ -206,17 +233,30 @@ export function useAnalytics() {
   // Enhanced search tracking with user journey data
   const trackSearch = async (query: string, filters: Record<string, string | undefined>, resultsCount: number, clickedResultId?: string) => {
     try {
-      // Track in existing search analytics table
+      // Track in existing search analytics table.
+      //
+      // The facet values (category/location/date/price) and the session id have
+      // no dedicated columns - they belong in the `search_filters` JSON column.
+      // This insert previously named them as top-level columns and was silenced
+      // by an `as never` cast, so it failed with 42703 on every search and no
+      // search analytics was ever recorded (WEB-QA-012).
+      //
+      // clickedResultId is deliberately NOT written to `clicked_event_id`: that
+      // column is a foreign key to events, and a search result can be a
+      // restaurant or attraction, which would violate the constraint. It stays
+      // in search_filters until a content-type-agnostic column exists.
       await supabase.from('search_analytics').insert({
-        session_id: sessionId,
-        user_id: userId,
-        query: query,
-        category: filters.category,
-        location: filters.location,
-        date_filter: filters.dateFilter,
-        price_filter: filters.priceRange,
+        user_id: userId ?? null,
+        search_query: query,
         results_count: resultsCount,
-        clicked_result_id: clickedResultId
+        search_filters: {
+          sessionId,
+          category: filters.category ?? null,
+          location: filters.location ?? null,
+          dateFilter: filters.dateFilter ?? null,
+          priceRange: filters.priceRange ?? null,
+          clickedResultId: clickedResultId ?? null,
+        },
       });
 
       // Track as enhanced interaction
@@ -241,7 +281,7 @@ export function useAnalytics() {
     try {
       // Try to use enhanced preference profiles table
       try {
-        await supabase.from('user_preference_profiles' as any).upsert({
+        await supabase.from('user_preference_profiles').upsert({
           user_id: userId,
           session_id: userId ? null : sessionId,
           [`preferred_${category}s`]: [value],
@@ -271,7 +311,7 @@ export function useAnalytics() {
     try {
       // Try to update user journey with conversion
       try {
-        await supabase.from('user_journeys' as any).upsert({
+        await supabase.from('user_journeys').upsert({
           session_id: sessionId,
           user_id: userId,
           converted: true,

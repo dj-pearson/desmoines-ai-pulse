@@ -95,7 +95,7 @@ export function PlatformMetrics() {
         <div>
           <h3 className="text-base font-semibold">Platform Reach</h3>
           <p className="text-sm text-muted-foreground">
-            Real audience data from Des Moines AI Pulse — last 30 days
+            Real audience data from Des Moines Insider — last 30 days
           </p>
         </div>
         {estimated && (

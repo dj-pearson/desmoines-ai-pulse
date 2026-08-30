@@ -3,20 +3,9 @@ import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-  ChefHat,
-  DollarSign,
-  MapPin,
-  Star,
-  Clock,
-  Leaf,
-  X,
-  ChevronDown,
-  Check,
-  Sparkles,
-  SlidersHorizontal,
-} from "lucide-react";
+import { ChefHat, DollarSign, MapPin, Star, Leaf, X, ChevronDown, Check, SlidersHorizontal } from "lucide-react";
 import type { RestaurantFilterOptions } from "@/components/RestaurantFilters";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface RestaurantInlineFiltersProps {
   filters: RestaurantFilterOptions;
@@ -62,7 +51,7 @@ function FilterPill({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
-          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border transition-all whitespace-nowrap ${
+          className={`flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-xl text-sm font-medium border transition-all whitespace-nowrap ${
             isActive || activeCount > 0
               ? "bg-[#2D1B69] text-white border-[#2D1B69] shadow-md"
               : "bg-white dark:bg-card text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-gray-300 shadow-sm"
@@ -352,7 +341,7 @@ export function RestaurantInlineFilters({
             <div className="space-y-2">
               <label className="flex items-center justify-between p-2.5 rounded-xl bg-gray-50 dark:bg-gray-800 cursor-pointer">
                 <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-emerald-500" />
+                  <SpriteIcon name="clock" className="h-4 w-4 text-emerald-500" />
                   <div>
                     <span className="text-sm font-medium">Open Now</span>
                     <p className="text-[11px] text-muted-foreground">Currently serving</p>
@@ -367,7 +356,7 @@ export function RestaurantInlineFilters({
               </label>
               <label className="flex items-center justify-between p-2.5 rounded-xl bg-gray-50 dark:bg-gray-800 cursor-pointer">
                 <div className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-amber-500" />
+                  <SpriteIcon name="sparkles" className="h-4 w-4 text-amber-500" />
                   <div>
                     <span className="text-sm font-medium">Featured Only</span>
                     <p className="text-[11px] text-muted-foreground">Editor's picks</p>

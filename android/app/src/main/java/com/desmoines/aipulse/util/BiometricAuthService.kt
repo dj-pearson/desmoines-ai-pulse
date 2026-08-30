@@ -3,6 +3,8 @@ package com.desmoines.aipulse.util
 import android.content.Context
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG
+import androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
+import android.os.Build
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
@@ -25,7 +27,10 @@ class BiometricAuthService @Inject constructor(
 ) {
 
     companion object {
-        private const val KEY_BIOMETRIC_ENABLED = "biometric_auth_enabled"
+        // Declared on SecureStorage so its DEVICE_SETTING_KEYS allowlist and
+        // this class cannot drift apart -- if they did, sign-out would go back
+        // to silently clearing the lock.
+        private const val KEY_BIOMETRIC_ENABLED = SecureStorage.KEY_BIOMETRIC_ENABLED
     }
 
     /**
@@ -42,6 +47,33 @@ class BiometricAuthService @Inject constructor(
             val manager = BiometricManager.from(context)
             return manager.canAuthenticate(BIOMETRIC_STRONG) == BiometricManager.BIOMETRIC_SUCCESS
         }
+
+    /**
+     * Whether an unlock prompt can be presented at all, biometrics or PIN.
+     *
+     * AND-AUDIT-007 AC4. isAvailable asks only about strong biometrics, and a
+     * user whose fingerprint sensor has failed or whose enrolment was wiped by an
+     * OS update would fail that check while still having a working PIN. Gating
+     * the lock on isAvailable alone is what leaves someone on a screen with no
+     * way forward.
+     */
+    val canUnlock: Boolean
+        get() {
+            val manager = BiometricManager.from(context)
+            return manager.canAuthenticate(unlockAuthenticators()) == BiometricManager.BIOMETRIC_SUCCESS
+        }
+
+    /**
+     * The authenticator set to use for unlocking.
+     *
+     * BIOMETRIC_STRONG or DEVICE_CREDENTIAL is only a legal combination from API
+     * 30. On 28 and 29 PromptInfo.Builder.build() throws
+     * IllegalArgumentException for it, so those devices get biometrics with a
+     * negative button and reach their PIN by signing out instead.
+     */
+    private fun unlockAuthenticators(): Int =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) BIOMETRIC_STRONG or DEVICE_CREDENTIAL
+        else BIOMETRIC_STRONG
 
     /**
      * Human-readable status for the biometric hardware.
@@ -98,8 +130,15 @@ class BiometricAuthService @Inject constructor(
         title: String = "Sign in to Des Moines Insider",
         subtitle: String? = "Use your fingerprint or face to unlock",
         negativeButtonText: String = "Use Password",
+        allowDeviceCredential: Boolean = false,
     ): Boolean {
-        if (!isAvailable) {
+        // AND-AUDIT-007 AC4. When the caller will accept a PIN, availability has
+        // to be judged on the same authenticator set the prompt will request -
+        // otherwise a user with a broken sensor but a working PIN is turned away
+        // before the prompt they could actually satisfy is ever shown.
+        val authenticators = if (allowDeviceCredential) unlockAuthenticators() else BIOMETRIC_STRONG
+        val useDeviceCredential = allowDeviceCredential && (authenticators and DEVICE_CREDENTIAL) != 0
+        if (BiometricManager.from(context).canAuthenticate(authenticators) != BiometricManager.BIOMETRIC_SUCCESS) {
             AppLogger.auth.warning("Biometric auth not available: ${statusMessage}")
             return false
         }
@@ -164,9 +203,17 @@ class BiometricAuthService @Inject constructor(
 
             val promptInfoBuilder = BiometricPrompt.PromptInfo.Builder()
                 .setTitle(title)
-                .setNegativeButtonText(negativeButtonText)
-                .setAllowedAuthenticators(BIOMETRIC_STRONG)
+                .setAllowedAuthenticators(authenticators)
                 .setConfirmationRequired(false)
+
+            // setNegativeButtonText and DEVICE_CREDENTIAL are mutually exclusive:
+            // build() throws IllegalArgumentException if both are set, because
+            // the system supplies its own "Use PIN" affordance. Setting it
+            // unconditionally would crash the unlock prompt on every API 30+
+            // device, which is the whole point of adding the credential path.
+            if (!useDeviceCredential) {
+                promptInfoBuilder.setNegativeButtonText(negativeButtonText)
+            }
 
             if (subtitle != null) {
                 promptInfoBuilder.setSubtitle(subtitle)
@@ -174,14 +221,5 @@ class BiometricAuthService @Inject constructor(
 
             biometricPrompt.authenticate(promptInfoBuilder.build())
         }
-    }
-
-    // MARK: - Cleanup
-
-    /**
-     * Disables biometric auth and clears preference. Call on sign out.
-     */
-    fun reset() {
-        disable()
     }
 }

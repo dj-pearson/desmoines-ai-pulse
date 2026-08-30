@@ -6,8 +6,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ExternalLink, Calendar, MapPin } from "lucide-react";
+
 import { Link } from "react-router-dom";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 // Helper to create slug from restaurant name
 const createSlug = (name: string): string => {
   return name
@@ -17,17 +18,21 @@ const createSlug = (name: string): string => {
 };
 import { useRestaurantOpenings } from "@/hooks/useSupabase";
 
+// WEB-UX-030: every value here carries white text. On the -500/-600 ramp that
+// measured 1.92:1 (yellow-500), 2.28:1 (green-500), 3.68:1 (blue-500) and
+// 3.30:1 (green-600) against the 4.5:1 AA floor. -700 is the first shade where
+// white clears it across all of them; the hues are unchanged.
 const statusConfig = {
-  opening_soon: { label: "Opening Soon", color: "bg-yellow-500" },
-  newly_opened: { label: "Newly Opened", color: "bg-green-500" },
-  announced: { label: "Announced", color: "bg-blue-500" },
-  open: { label: "Open", color: "bg-green-600" },
-  closed: { label: "Closed", color: "bg-red-500" },
+  opening_soon: { label: "Opening Soon", color: "bg-yellow-700" },
+  newly_opened: { label: "Newly Opened", color: "bg-green-700" },
+  announced: { label: "Announced", color: "bg-blue-700" },
+  open: { label: "Open", color: "bg-green-700" },
+  closed: { label: "Closed", color: "bg-red-700" },
 };
 
 const getStatusConfig = (status: string | undefined) => {
   if (!status || !statusConfig[status as keyof typeof statusConfig]) {
-    return { label: "Status Unknown", color: "bg-gray-500" };
+    return { label: "Status Unknown", color: "bg-gray-600" };
   }
   return statusConfig[status as keyof typeof statusConfig];
 };
@@ -92,16 +97,33 @@ export function RestaurantOpenings() {
         {restaurants.slice(0, 6).map((restaurant) => {
           const slug = createSlug(restaurant.name);
           return (
-            <Link
-              to={`/restaurants/${slug}`}
+            /* THE CARD IS NOT AN <a>, AND IT USED TO BE. This whole Card was
+               wrapped in <Link className="block">, with the "Read More" anchor
+               below nested inside it. An <a> inside an <a> is invalid, and
+               Chromium does not render it as written - it SPLITS the anchors,
+               so the prerendered /restaurants shipped three empty
+               <a class="block" href="/restaurants/..."></a> elements and
+               duplicate hrefs for the same restaurant. An empty link is a WCAG
+               2.4.4 failure and a crawler following it lands nowhere.
+
+               The stretched-link pattern keeps both destinations as real links:
+               the title's ::after overlays the whole card so the card stays
+               clickable, and "Read More" sits above it because it is positioned
+               and comes later in the DOM. Card is `relative` for the overlay to
+               anchor to. */
+            <Card
               key={restaurant.id}
-              className="block"
+              className="relative smooth-transition hover:shadow-lg hover:scale-[1.02] touch-target"
             >
-              <Card className="smooth-transition hover:shadow-lg hover:scale-[1.02] touch-target">
-                <CardHeader className="space-y-3 mobile-padding">
+              <CardHeader className="space-y-3 mobile-padding">
                   <div className="flex items-start justify-between gap-3">
                     <CardTitle className="text-mobile-body md:text-lg leading-tight flex-1 min-w-0">
-                      {restaurant.name}
+                      <Link
+                        to={`/restaurants/${slug}`}
+                        className="after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+                      >
+                        {restaurant.name}
+                      </Link>
                     </CardTitle>
                     <Badge
                       variant="secondary"
@@ -117,7 +139,7 @@ export function RestaurantOpenings() {
                   <div className="flex flex-col gap-2 text-mobile-caption text-muted-foreground">
                     {restaurant.location && (
                       <div className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4 flex-shrink-0" />
+                        <SpriteIcon name="map-pin" className="h-4 w-4 flex-shrink-0" />
                         <span className="truncate">{restaurant.location}</span>
                       </div>
                     )}
@@ -133,13 +155,17 @@ export function RestaurantOpenings() {
                     {(restaurant.openingDate ||
                       restaurant.openingTimeframe) && (
                       <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 flex-shrink-0" />
+                        <SpriteIcon name="calendar" className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                        {/* Label the date (WEB-QA-004). This chip rendered as a
+                            bare "3/30/2026" next to a calendar glyph, which reads
+                            ambiguously as the date the listing was added — the
+                            footer below genuinely is "Added <date>". */}
                         <span>
                           {restaurant.openingDate
-                            ? new Date(
+                            ? `Opens ${new Date(
                                 restaurant.openingDate
-                              ).toLocaleDateString()
-                            : restaurant.openingTimeframe}
+                              ).toLocaleDateString()}`
+                            : `Opens ${restaurant.openingTimeframe}`}
                         </span>
                       </div>
                     )}
@@ -157,22 +183,25 @@ export function RestaurantOpenings() {
                       Added{" "}
                       {new Date(restaurant.createdAt).toLocaleDateString()}
                     </span>
+                    {/* WEB-UX-030: this was text-[#DC143C], the brand crimson
+                        hardcoded past the theme, which reads 3.4:1 on the dark
+                        card. --primary carries a dark value (5.92:1) and is
+                        already the link colour everywhere else. */}
                     {restaurant.sourceUrl && (
                       <a
                         href={restaurant.sourceUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-[#DC143C] hover:text-[#8B0000] smooth-transition touch-target self-start"
+                        className="relative inline-flex items-center gap-1 text-xs text-primary hover:underline smooth-transition touch-target self-start"
                         aria-label={`Read more about ${restaurant.name} (opens in new tab)`}
                       >
                         <span aria-hidden="true">Read More</span>
-                        <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                        <SpriteIcon name="external-link" className="h-3 w-3" aria-hidden="true" />
                       </a>
                     )}
                   </div>
                 </CardContent>
-              </Card>
-            </Link>
+            </Card>
           );
         })}
       </div>

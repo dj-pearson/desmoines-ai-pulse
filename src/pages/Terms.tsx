@@ -152,7 +152,7 @@ export default function Terms() {
 
             <h3 className="text-xl font-medium mt-6 mb-3">Trademarks</h3>
             <p>
-              "Des Moines Insider," "Des Moines AI Pulse," and related logos are trademarks of Des Moines Insider.
+              "Des Moines Insider," "Des Moines Insider," and related logos are trademarks of Des Moines Insider.
               You may not use our trademarks without prior written consent.
             </p>
           </section>
@@ -229,7 +229,7 @@ export default function Terms() {
             <p>
               You can manage or cancel your subscription at any time through your Apple ID account settings. Navigate
               to Settings &gt; [your name] &gt; Subscriptions on your iOS device, or visit{" "}
-              <a href="https://apps.apple.com/account/subscriptions" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">
+              <a href="https://apps.apple.com/account/subscriptions" className="text-primary underline" target="_blank" rel="noopener noreferrer">
                 Apple Subscription Management
               </a>. Cancellation takes effect at the end of the current billing period. No refunds are provided for
               partial billing periods.
@@ -257,7 +257,7 @@ export default function Terms() {
             <p>
               All subscription purchases are processed by Apple. Refund requests must be submitted through Apple's
               support channels at{" "}
-              <a href="https://reportaproblem.apple.com" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">
+              <a href="https://reportaproblem.apple.com" className="text-primary underline" target="_blank" rel="noopener noreferrer">
                 reportaproblem.apple.com
               </a>. Des Moines Insider does not process refunds directly for App Store purchases.
             </p>
@@ -388,7 +388,7 @@ export default function Terms() {
           <section className="mt-12 pt-8 border-t">
             <p className="text-sm text-muted-foreground">
               By using Des Moines Insider, you acknowledge that you have read, understood, and agree to be bound
-              by these Terms of Service. Please also review our <Link to="/privacy-policy" className="text-primary hover:underline">Privacy Policy</Link>.
+              by these Terms of Service. Please also review our <Link to="/privacy-policy" className="text-primary underline">Privacy Policy</Link>.
             </p>
           </section>
         </article>

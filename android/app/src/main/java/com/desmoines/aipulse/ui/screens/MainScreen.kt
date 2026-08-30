@@ -1,10 +1,14 @@
 package com.desmoines.aipulse.ui.screens
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -14,11 +18,12 @@ import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,11 +43,19 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.desmoines.aipulse.ui.components.OfflineBanner
+import com.desmoines.aipulse.ui.components.PaywallHost
+import com.desmoines.aipulse.ui.components.SessionTimeoutBanner
+import com.desmoines.aipulse.ui.components.ads.InterstitialAdView
+import com.desmoines.aipulse.ui.components.ads.InterstitialAdViewModel
+import com.desmoines.aipulse.ui.components.bestof.BestOfWinnersViewModel
+import com.desmoines.aipulse.ui.components.bestof.LocalBestOfAwards
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.desmoines.aipulse.ui.navigation.BottomNavTab
 import com.desmoines.aipulse.ui.navigation.MainNavHost
 import com.desmoines.aipulse.ui.navigation.Route
 import com.desmoines.aipulse.util.DeepLinkHandler
 import com.desmoines.aipulse.util.NetworkMonitor
+import com.desmoines.aipulse.util.ShortcutDispatcher
 
 /**
  * Main screen with bottom navigation bar matching iOS MainTabView.swift.
@@ -54,6 +67,7 @@ import com.desmoines.aipulse.util.NetworkMonitor
 fun MainScreen(
     networkMonitor: NetworkMonitor,
     deepLinkHandler: DeepLinkHandler,
+    shortcutDispatcher: ShortcutDispatcher,
     widthSizeClass: WindowWidthSizeClass = WindowWidthSizeClass.Compact,
 ) {
     val useNavRail = widthSizeClass != WindowWidthSizeClass.Compact
@@ -61,6 +75,35 @@ fun MainScreen(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
     val haptic = rememberHapticPerformer()
+
+    // Admin session timeout (AND-AUDIT-006). Navigation is the activity signal:
+    // the app is single-Activity Compose, so the service's own
+    // onActivityResumed callback only fires on returning to the app and would
+    // never see someone who is actively using it.
+    val sessionTimeoutViewModel: SessionTimeoutViewModel = hiltViewModel()
+    val sessionMinutesRemaining by sessionTimeoutViewModel.minutesRemaining.collectAsStateWithLifecycle()
+    val sessionExpired by sessionTimeoutViewModel.expiredNotice.collectAsStateWithLifecycle()
+    LaunchedEffect(navBackStackEntry) {
+        sessionTimeoutViewModel.recordActivity()
+    }
+
+    if (sessionExpired) {
+        AlertDialog(
+            onDismissRequest = { sessionTimeoutViewModel.acknowledgeExpiry() },
+            title = { Text("Signed out") },
+            text = {
+                Text(
+                    "Your admin session timed out, so you have been signed out on " +
+                        "this device. Sign in again to continue."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { sessionTimeoutViewModel.acknowledgeExpiry() }) {
+                    Text("OK")
+                }
+            },
+        )
+    }
 
     // Shared backdrop blur state: any screen presenting a sheet can set
     // isBlurred = true and the entire nav host below will pick up a
@@ -72,7 +115,7 @@ fun MainScreen(
     var scrollToTopTrigger by remember { mutableStateOf(0) }
 
     // Observe pending deep link destinations
-    val pendingDestination by deepLinkHandler.pendingDestination.collectAsState()
+    val pendingDestination by deepLinkHandler.pendingDestination.collectAsStateWithLifecycle()
 
     // Consume and navigate to pending deep link destination
     LaunchedEffect(pendingDestination) {
@@ -91,6 +134,11 @@ fun MainScreen(
             }
             is DeepLinkHandler.Destination.Attraction -> {
                 navController.navigate(Route.AttractionDetail.createRoute(destination.id)) {
+                    launchSingleTop = true
+                }
+            }
+            is DeepLinkHandler.Destination.Hotel -> {
+                navController.navigate(Route.HotelDetail.createRoute(destination.id)) {
                     launchSingleTop = true
                 }
             }
@@ -114,9 +162,41 @@ fun MainScreen(
         }
     }
 
+    // App Shortcut / Assistant deep links (ANDP-015): route to the host screen.
+    // The destination's ViewModel consumes the payload and applies the params,
+    // so we only navigate here (no consume) — once consumed, pending goes null.
+    val pendingShortcut by shortcutDispatcher.pending.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingShortcut) {
+        when (pendingShortcut) {
+            is ShortcutDispatcher.Pending.AskPulse -> {
+                navController.navigate(Route.AskPulse.route) { launchSingleTop = true }
+            }
+            is ShortcutDispatcher.Pending.FindRestaurants,
+            is ShortcutDispatcher.Pending.FindEvents -> {
+                navController.navigate(Route.Search.route) {
+                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                    launchSingleTop = true
+                    restoreState = true
+                }
+            }
+            null -> Unit
+        }
+    }
+
     // Routes where the bottom bar should be visible (tab routes only)
     val tabRoutes = BottomNavTab.entries.map { it.route }.toSet()
     val showBottomBar = currentDestination?.route in tabRoutes
+
+    // Launch the Ask Pulse AI discovery surface (single-top so re-taps don't stack).
+    val onAskPulseClick: () -> Unit = {
+        haptic.light()
+        navController.navigate(Route.AskPulse.route) { launchSingleTop = true }
+    }
+
+    // Full-screen interstitial (ANDP-044): counts the session on creation and is
+    // offered only at a tab switch — a stable boundary, never mid-read/mid-flow.
+    val interstitialViewModel: InterstitialAdViewModel = hiltViewModel()
+    val pendingInterstitial by interstitialViewModel.pending.collectAsStateWithLifecycle()
 
     // Shared tab click handler
     val onTabClick: (BottomNavTab, Boolean) -> Unit = { tab, isSelected ->
@@ -132,11 +212,18 @@ fun MainScreen(
                 launchSingleTop = true
                 restoreState = true
             }
+            interstitialViewModel.onBoundary()
         }
     }
 
+    // App-wide Best Of winner badges (ANDP-039): provided once so cards anywhere
+    // can show "Best {Category}" without per-screen plumbing.
+    val bestOfWinnersViewModel: BestOfWinnersViewModel = hiltViewModel()
+    val bestOfAwards by bestOfWinnersViewModel.winners.collectAsStateWithLifecycle()
+
     CompositionLocalProvider(
         LocalBackdropBlurState provides backdropBlur,
+        LocalBestOfAwards provides bestOfAwards,
     ) {
     if (useNavRail) {
         // Tablet / landscape: NavigationRail on the left + content on the right
@@ -146,6 +233,18 @@ fun MainScreen(
                     containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
                     contentColor = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.fillMaxHeight(),
+                    header = {
+                        FloatingActionButton(
+                            onClick = onAskPulseClick,
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.semantics {
+                                contentDescription = "Ask Pulse, AI discovery"
+                            },
+                        ) {
+                            Icon(Icons.Filled.AutoAwesome, contentDescription = null)
+                        }
+                    },
                 ) {
                     val tabs = BottomNavTab.entries
                     tabs.forEachIndexed { index, tab ->
@@ -186,6 +285,10 @@ fun MainScreen(
             }
             Column(modifier = Modifier.weight(1f)) {
                 OfflineBanner(networkMonitor = networkMonitor)
+                SessionTimeoutBanner(
+                    minutesRemaining = sessionMinutesRemaining,
+                    onStaySignedIn = { sessionTimeoutViewModel.recordActivity() },
+                )
                 MainNavHost(
                     navController = navController,
                     scrollToTopTrigger = scrollToTopTrigger,
@@ -200,6 +303,20 @@ fun MainScreen(
         // Phone: standard bottom NavigationBar
         Scaffold(
             modifier = Modifier.fillMaxSize(),
+            floatingActionButton = {
+                if (showBottomBar) {
+                    FloatingActionButton(
+                        onClick = onAskPulseClick,
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.semantics {
+                            contentDescription = "Ask Pulse, AI discovery"
+                        },
+                    ) {
+                        Icon(Icons.Filled.AutoAwesome, contentDescription = null)
+                    }
+                }
+            },
             bottomBar = {
                 if (showBottomBar) {
                     NavigationBar(
@@ -248,6 +365,10 @@ fun MainScreen(
         ) { innerPadding ->
             Column(modifier = Modifier.padding(innerPadding)) {
                 OfflineBanner(networkMonitor = networkMonitor)
+                SessionTimeoutBanner(
+                    minutesRemaining = sessionMinutesRemaining,
+                    onStaySignedIn = { sessionTimeoutViewModel.recordActivity() },
+                )
                 MainNavHost(
                     navController = navController,
                     scrollToTopTrigger = scrollToTopTrigger,
@@ -259,5 +380,21 @@ fun MainScreen(
             }
         }
     }
+
+        // Soft paywall: shown as a bottom sheet whenever SoftPaywallService has a
+        // pending context. Consumers (favorites cap, Trip Planner, etc.) trigger it.
+        PaywallHost(
+            onNavigateToSubscription = { navController.navigate(Route.Subscription.route) },
+        )
+
+        // Frequency-capped full-screen interstitial (ANDP-044), free tier only.
+        pendingInterstitial?.let { ad ->
+            InterstitialAdView(
+                ad = ad,
+                onImpression = interstitialViewModel::onImpression,
+                onClick = interstitialViewModel::onClick,
+                onDismiss = interstitialViewModel::dismiss,
+            )
+        }
     } // CompositionLocalProvider
 }

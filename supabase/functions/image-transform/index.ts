@@ -6,6 +6,12 @@
  */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { validateURLForSSRF } from "../_shared/validation.ts";
+import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
+import { errorResponse } from "../_shared/errorResponse.ts";
+import { isImageHostAllowed, fetchArrayBufferWithSizeCap } from "../_shared/fetchGuard.ts";
+
+// Cap the bytes the proxy will pull from any single upstream image (10 MB).
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
 // CORS headers for cross-origin requests
 const corsHeaders = {
@@ -57,7 +63,7 @@ function parseOptions(searchParams: URLSearchParams): TransformOptions {
     throw new Error("Missing required 'url' parameter");
   }
 
-  // SSRF Protection: Validate URL before processing
+  // SSRF Protection: Validate URL before processing (rejects private/encoded IPs).
   const validation = validateURLForSSRF(url, {
     allowedProtocols: ['https:', 'http:'],
     blockPrivateIPs: true,
@@ -65,6 +71,13 @@ function parseOptions(searchParams: URLSearchParams): TransformOptions {
 
   if (!validation.valid) {
     throw new Error(validation.error || "URL validation failed");
+  }
+
+  // Domain allowlist: the proxy may only fetch approved image hosts so it can't
+  // be used as an open SSRF/bandwidth proxy even for public addresses.
+  const hostCheck = isImageHostAllowed(url);
+  if (!hostCheck.allowed) {
+    throw new Error(hostCheck.reason || "Image host not allowed");
   }
 
   const width = searchParams.get("width")
@@ -158,23 +171,31 @@ function getContentType(format: string): string {
 async function fetchAndTransformImage(
   options: TransformOptions
 ): Promise<{ buffer: ArrayBuffer; contentType: string }> {
-  const { url, format, width, height } = options;
+  const { url, format } = options;
 
-  // Fetch the original image
-  const response = await fetch(url, {
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      Accept: "image/*",
+  // Fetch the original image with a streaming size cap so an oversized/hostile
+  // upstream can't stream unbounded bytes through the proxy.
+  const fetched = await fetchArrayBufferWithSizeCap(
+    url,
+    {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        Accept: "image/*",
+      },
     },
-  });
+    MAX_IMAGE_BYTES,
+  );
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+  if (!fetched.ok) {
+    throw new Error(`Failed to fetch image: ${fetched.status}`);
   }
 
-  const originalContentType = response.headers.get("content-type") || "image/jpeg";
-  const buffer = await response.arrayBuffer();
+  const originalContentType = fetched.contentType || "image/jpeg";
+  const buffer = fetched.bytes.buffer.slice(
+    fetched.bytes.byteOffset,
+    fetched.bytes.byteOffset + fetched.bytes.byteLength,
+  );
 
   // Determine output format
   let outputFormat = format;
@@ -231,6 +252,18 @@ serve(async (req) => {
     });
   }
 
+  // Generous per-IP rate limit so a page full of images loads fine (strong
+  // immutable caching + 304s mean repeat loads rarely reach the function), but
+  // the proxy can't be abused as an unbounded transform/bandwidth amplifier.
+  // Fails OPEN on a rate-limit DB miss so image serving never breaks.
+  const rl = await checkRateLimitPersistent(req, {
+    endpoint: "image-transform",
+    windowMs: 60 * 1000,
+    max: 300,
+    message: "Image request rate limit exceeded.",
+  });
+  if (!rl.success && rl.response) return rl.response;
+
   try {
     const url = new URL(req.url);
     const options = parseOptions(url.searchParams);
@@ -262,16 +295,14 @@ serve(async (req) => {
       },
     });
   } catch (error) {
-    console.error("Image transform error:", error);
-
-    const errorMessage =
-      error instanceof Error ? error.message : "Unknown error occurred";
-
-    return new Response(JSON.stringify({ error: errorMessage }), {
-      status: error instanceof Error && error.message.includes("Missing")
-        ? 400
-        : 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    // Sanitized client response (no internal detail); full error logged
+    // server-side. Status logic preserved for backward compat.
+    const isBadRequest = error instanceof Error && error.message.includes("Missing");
+    return errorResponse(error, {
+      status: isBadRequest ? 400 : 500,
+      clientMessage: isBadRequest ? "Invalid image request." : "Image transformation failed.",
+      headers: corsHeaders,
+      logContext: "image-transform",
     });
   }
 });

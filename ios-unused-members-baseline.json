@@ -1,0 +1,7 @@
+{
+  "unused": [
+    "ios/DesMoinesInsider/Views/Auth/AuthView.swift roundedInput",
+    "ios/DesMoinesInsider/Views/Components/SearchSuggestions.swift defaultInterval",
+    "ios/DesMoinesInsider/Views/Map/EventMapView.swift isSearchFocused"
+  ]
+}

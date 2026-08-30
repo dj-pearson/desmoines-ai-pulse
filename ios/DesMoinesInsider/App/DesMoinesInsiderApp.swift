@@ -1,21 +1,40 @@
 import SwiftUI
 import StoreKit
+import CoreSpotlight
 
 @main
 struct DesMoinesInsiderApp: App {
+    /// Installs the APNs / notification delegate so push registration and
+    /// notification taps actually work (IOS-AUDIT-FEAT-001 / FEAT-003).
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
+    @Environment(\.scenePhase) private var scenePhase
+
     @State private var authService = AuthService.shared
     @State private var favoritesService = FavoritesService.shared
     @State private var locationService = LocationService.shared
     @State private var biometricService = BiometricAuthService.shared
     @State private var consent = ConsentService.shared
     @State private var sessionTimeout = SessionTimeoutService.shared
+    @State private var versionCheck = VersionCheckService.shared
 
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage("appLaunchCount") private var launchCount = 0
     @AppStorage("themeMode") private var themeModeRaw: String = ThemeMode.system.rawValue
     @State private var showJailbreakWarning = false
     @State private var awaitingBiometric = false
+    /// True once the app has actually entered the background, so a return to
+    /// `.active` re-engages the biometric lock — while a transient `.inactive`
+    /// (Control Center, the Face ID system sheet, a banner) does not.
+    @State private var didEnterBackground = false
     @State private var sessionExpiredMessage: String?
+    /// Tracks in-session consent completion. ConsentService stores its state in
+    /// UserDefaults via computed properties, which `@Observable` cannot track, so
+    /// mutating `hasCompletedConsent` does not re-evaluate `needsConsentPrompt`
+    /// below. This locally-observed flag advances the gate once the user chooses
+    /// (IOS-AUDIT-FEAT-015). The persisted flag still suppresses the prompt on
+    /// the next launch.
+    @State private var consentCompleted = false
 
     /// MetricKit subscriber — retained for the lifetime of the app.
     private let metricKit = MetricKitSubscriber.shared
@@ -35,12 +54,16 @@ struct DesMoinesInsiderApp: App {
                         error: SupabaseService.shared.configurationError
                             ?? "Supabase credentials are missing."
                     )
+                } else if versionCheck.forceUpgrade {
+                    // Binary is below the server's minimum-supported version —
+                    // block until the user updates (IOS-AUDIT-REL-001).
+                    ForceUpdateView(message: versionCheck.message, storeURL: versionCheck.storeURL)
                 } else if authService.isLoading {
                     LaunchScreenView()
                 } else if !hasCompletedOnboarding {
                     OnboardingView(hasCompletedOnboarding: $hasCompletedOnboarding)
-                } else if consent.needsConsentPrompt {
-                    ConsentView { }
+                } else if consent.needsConsentPrompt && !consentCompleted {
+                    ConsentView { consentCompleted = true }
                 } else if awaitingBiometric {
                     BiometricLockView {
                         awaitingBiometric = false
@@ -81,12 +104,68 @@ struct DesMoinesInsiderApp: App {
                     try? await authService.signOut()
                 }
             }
+            .onChange(of: scenePhase) { _, newPhase in
+                switch newPhase {
+                case .background:
+                    didEnterBackground = true
+                case .active:
+                    // Re-engage the biometric lock after a real background cycle,
+                    // not just on cold launch (IOS-AUDIT-SEC-016). Ignores
+                    // transient .inactive so the Face ID sheet / Control Center
+                    // don't re-lock mid-session.
+                    if didEnterBackground {
+                        didEnterBackground = false
+                        if biometricService.isEnabled && authService.isAuthenticated {
+                            awaitingBiometric = true
+                        }
+                    }
+                    // Returning to the foreground counts as user activity.
+                    if authService.isAuthenticated {
+                        sessionTimeout.recordActivity()
+                    }
+                default:
+                    break
+                }
+            }
             .onOpenURL { url in
                 // Handle auth callbacks (email verification, OAuth redirects, etc.)
                 SupabaseService.shared.client?.handle(url)
+                // Then route content deep links (events/restaurants/attractions);
+                // auth-callback URLs are ignored by the handler (IOS-AUDIT-FEAT-002).
+                DeepLinkHandler.shared.handle(url)
+            }
+            .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+                // Universal links (https://desmoinesinsider.com/...) (IOS-AUDIT-FEAT-002).
+                if let url = activity.webpageURL {
+                    DeepLinkHandler.shared.handle(url)
+                }
+            }
+            .onContinueUserActivity(CSSearchableItemActionType) { activity in
+                // Spotlight result tap → route to the item's detail screen
+                // (IOS-AUDIT-FEAT-027). MainTabView observes pendingDestination.
+                if let id = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String {
+                    DeepLinkHandler.shared.handleSpotlightIdentifier(id)
+                }
             }
             .task {
                 launchCount += 1
+
+                // Install crash/non-fatal capture handlers as early as possible so
+                // an early-launch crash is still recorded (IOS-AUDIT-FEAT-010).
+                CrashReportingService.shared.configure()
+                if authService.isAuthenticated, let uid = authService.currentUser?.id.uuidString {
+                    CrashReportingService.shared.setUserId(uid)
+                }
+
+                // Drain whatever the previous run recorded. Every crash since
+                // IOS-AUDIT-FEAT-010 has been captured to disk and never sent
+                // anywhere; this is the upload half (XPLAT-004 AC1). Silent on
+                // failure, and records survive a failed attempt.
+                await CrashUploader.uploadPending()
+
+                // Launch-time minimum-supported-version gate (IOS-AUDIT-REL-001).
+                // Fails open, so a backend hiccup never blocks a supported build.
+                await versionCheck.checkOnLaunch()
 
                 // One-time migration of Keychain items to the stricter
                 // WhenUnlockedThisDeviceOnly accessibility flag. Runs before
@@ -95,6 +174,9 @@ struct DesMoinesInsiderApp: App {
 
                 // Prune expired cache entries on launch
                 await QueryCache.shared.pruneExpired()
+
+                // Flush any ad telemetry that queued while offline (IOS-ADS-014).
+                await AdTrackingService.shared.flushPendingEvents()
 
                 // Jailbreak check (soft warning, non-blocking)
                 if JailbreakDetector.isJailbroken {
@@ -120,7 +202,15 @@ struct DesMoinesInsiderApp: App {
                     await favoritesService.loadFavorites()
 
                     // Request review after engagement thresholds
-                    requestReviewIfEligible()
+                    await requestReviewIfEligible()
+                }
+
+                // Deliberate, one-time push-permission prompt after onboarding
+                // (IOS-AUDIT-FEAT-001) — not only when a saved-search alert is
+                // enabled. Gated on the feature flag; never re-prompts a user
+                // who already decided.
+                if Config.enablePushNotifications, hasCompletedOnboarding, authService.isAuthenticated {
+                    await PushNotificationService.shared.requestPermissionIfAppropriate()
                 }
             }
             } // ThemeCrossfadeContainer
@@ -129,7 +219,7 @@ struct DesMoinesInsiderApp: App {
 
     // MARK: - App Review
 
-    private func requestReviewIfEligible() {
+    private func requestReviewIfEligible() async {
         // Require at least 3 launches and 1+ favorites before prompting
         guard launchCount >= 3,
               favoritesService.favoriteEventIds.count + favoritesService.favoriteRestaurantIds.count >= 1
@@ -137,16 +227,21 @@ struct DesMoinesInsiderApp: App {
 
         // Only prompt once (AppStore rate-limits this, but we gate on our side too)
         guard !UserDefaults.standard.bool(forKey: "hasRequestedReview") else { return }
-        UserDefaults.standard.set(true, forKey: "hasRequestedReview")
 
-        // Delay slightly so the app is fully visible
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            guard let scene = UIApplication.shared.connectedScenes
-                .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene else {
-                return
-            }
-            AppStore.requestReview(in: scene)
+        // Delay slightly so the app is fully visible. Structured + cancellable
+        // with the view's .task — no fire-and-forget asyncAfter on the launch
+        // path (IOS-AUDIT-PERF-013).
+        try? await Task.sleep(for: .seconds(2))
+        guard !Task.isCancelled else { return }
+
+        // Only prompt when a foreground-active scene still exists, and only mark
+        // as requested once we actually show it.
+        guard let scene = UIApplication.shared.connectedScenes
+            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene else {
+            return
         }
+        UserDefaults.standard.set(true, forKey: "hasRequestedReview")
+        AppStore.requestReview(in: scene)
     }
 }
 

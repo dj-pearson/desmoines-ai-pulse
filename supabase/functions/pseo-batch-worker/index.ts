@@ -29,6 +29,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -210,6 +211,17 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Runs as service_role and had no caller check. verify_jwt defaults to
+  // true, which only means "a valid Supabase JWT" - the publishable anon
+  // key is one and ships in every client bundle.
+  //
+  // Callers, enumerated before guarding:
+  //   NO caller anywhere in src/, migrations, edge functions, workflows or mobile
+  // requireAdminOrApiKey accepts EDGE_FUNCTION_API_KEY, the service-role
+  // key and an admin JWT, so a manual or server-to-server call still works.
+  const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+  if (authFailure) return authFailure;
+
   // ── Auth ──────────────────────────────────────────────────────────────────
   const workerSecret = Deno.env.get("PSEO_WORKER_SECRET");
   if (workerSecret) {
@@ -256,21 +268,35 @@ serve(async (req) => {
 
   // ── Step 1: Unstick items — reset in_progress items older than 5 min ──────
   const stuckCutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-  const { count: unstuckCount } = await supabase
+  const { count: unstuckCount, error: unstuckError } = await supabase
     .from("pseo_generation_queue")
     .update({ status: "pending", started_at: null, error_message: "Reset after timeout" })
     .eq("status", "in_progress")
     .lt("started_at", stuckCutoff)
     .select("*", { count: "exact", head: true } as never);
 
-  if (unstuckCount && unstuckCount > 0) {
+  if (unstuckError) {
+    console.error("pseo-batch-worker: could not reset stuck items:", unstuckError.message);
+  } else if (unstuckCount && unstuckCount > 0) {
     console.log(`pseo-batch-worker: reset ${unstuckCount} stuck in_progress items back to pending`);
   }
 
   // ── Step 2: Seed queue if needed ──────────────────────────────────────────
-  const { count: totalCount } = await supabase
+  // AN UNREADABLE COUNT MUST NOT LOOK LIKE AN EMPTY QUEUE. `!totalCount` was
+  // true for a failed read as well as for zero, and the next line seeds the
+  // queue - so a transient error re-seeded a queue that already had items,
+  // duplicating generation jobs and the model spend behind them.
+  const { count: totalCount, error: totalError } = await supabase
     .from("pseo_generation_queue")
     .select("*", { count: "exact", head: true });
+
+  if (totalError) {
+    console.error("pseo-batch-worker: could not size the queue:", totalError.message);
+    return jsonResponse(
+      { error: "Could not read the generation queue", details: totalError.message },
+      503,
+    );
+  }
 
   const queueIsEmpty = !totalCount || totalCount === 0;
   const forceSeed = body.seed === true;
@@ -331,12 +357,20 @@ serve(async (req) => {
   }
 
   if (!pendingItems || pendingItems.length === 0) {
-    const { count: remainingCount } = await supabase
+    // A COUNT THAT FAILED IS NOT A COUNT OF ZERO. `remainingCount ?? 0` below
+    // logged "remaining=0" whether the queue was drained or the count errored,
+    // which reads as "the backlog is clear" either way. The main queue fetch
+    // above already checks its own error and 500s, so this is reporting only -
+    // but a reporting number that lies about a backlog is how a stuck queue
+    // goes unnoticed.
+    const { count: remainingCount, error: remainingError } = await supabase
       .from("pseo_generation_queue")
       .select("*", { count: "exact", head: true })
       .eq("status", "pending");
 
-    console.log(`pseo-batch-worker: no pending items, remaining=${remainingCount ?? 0}`);
+    console.log(
+      `pseo-batch-worker: no pending items, remaining=${remainingError ? 'UNKNOWN (' + remainingError.message + ')' : remainingCount ?? 0}`,
+    );
     return jsonResponse({
       success: true,
       processed: 0,
@@ -452,7 +486,8 @@ serve(async (req) => {
   );
 
   // ── Step 5: Count remaining ───────────────────────────────────────────────
-  const { count: remainingCount } = await supabase
+  // Same as above: distinguish a failed count from a drained queue.
+  const { count: remainingCount, error: remainingError } = await supabase
     .from("pseo_generation_queue")
     .select("*", { count: "exact", head: true })
     .eq("status", "pending");
@@ -461,7 +496,7 @@ serve(async (req) => {
   const skippedCount = results.filter((r) => r.status === "skipped").length;
   const failed = results.filter((r) => r.status === "failed").length;
 
-  console.log(`pseo-batch-worker: done — succeeded=${succeeded}, skipped=${skippedCount}, failed=${failed}, remaining=${remainingCount ?? 0}`);
+  console.log(`pseo-batch-worker: done — succeeded=${succeeded}, skipped=${skippedCount}, failed=${failed}, remaining=${remainingError ? 'UNKNOWN' : remainingCount ?? 0}`);
 
   return jsonResponse({
     success: true,

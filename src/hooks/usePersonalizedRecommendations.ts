@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { createLogger } from '@/lib/logger';
 import { useAuth } from './useAuth';
+
+const logger = createLogger('usePersonalizedRecommendations');
 
 interface RecommendationItem {
   id: string;
@@ -69,19 +72,28 @@ export function usePersonalizedRecommendations() {
   const getUserPreferences = useCallback(async () => {
     try {
       // Use existing search_analytics table to derive preferences
-      const { data: searches } = await supabase
+      const { data: searches, error: searchesError } = await supabase
         .from('search_analytics')
-        .select('query, category, location, price_filter')
+        // Facets live in the `search_filters` JSON, not as columns (WEB-QA-012).
+        .select('search_query, search_filters')
         .eq('user_id', user?.id)
         .order('created_at', { ascending: false })
         .limit(50);
+      // A strategy that FAILED contributes nothing, exactly like a strategy
+      // with no matches - and the user just sees fewer recommendations. One
+      // broken strategy must not take the whole rail down, so this logs
+      // rather than throwing; a permanently dead strategy is then visible.
+      if (searchesError) logger.error('recommendations', 'A recommendation query failed', { error: searchesError });
 
       if (!searches || searches.length === 0) return null;
 
       // Derive preferences from search history
-      const categories = searches.map(s => s.category).filter(Boolean);
-      const locations = searches.map(s => s.location).filter(Boolean);
-      const priceFilters = searches.map(s => s.price_filter).filter(Boolean);
+      // Facets live inside the `search_filters` JSON, not as columns (WEB-QA-012).
+      const facets = (s: { search_filters: unknown }) =>
+        (s.search_filters ?? {}) as Record<string, string | null | undefined>;
+      const categories = searches.map(s => facets(s).category).filter(Boolean);
+      const locations = searches.map(s => facets(s).location).filter(Boolean);
+      const priceFilters = searches.map(s => facets(s).priceRange).filter(Boolean);
 
       const preferredCategories = getTopItems(categories, 3);
       const preferredLocations = getTopItems(locations, 3);
@@ -93,7 +105,7 @@ export function usePersonalizedRecommendations() {
         preferred_price_ranges: preferredPrices
       };
     } catch (error) {
-      console.log('No preferences found, using defaults');
+      logger.debug('getUserPreferences', 'No preferences found, using defaults', { error: String(error) });
       return null;
     }
   }, [user?.id]);
@@ -118,6 +130,7 @@ export function usePersonalizedRecommendations() {
         .from('events')
         .select('*')
         .gte('date', new Date().toISOString().split('T')[0])
+        .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
         .order('date', { ascending: true })
         .limit(10);
 
@@ -184,7 +197,7 @@ export function usePersonalizedRecommendations() {
 
       return scoredEvents.sort((a, b) => b.score - a.score).slice(0, 6);
     } catch (error) {
-      console.error('Error generating event recommendations:', error);
+      logger.error('getPersonalizedEvents', 'Error generating event recommendations', { error });
       return [];
     }
   }, []);
@@ -267,7 +280,7 @@ export function usePersonalizedRecommendations() {
 
       return scoredRestaurants.sort((a, b) => b.score - a.score).slice(0, 6);
     } catch (error) {
-      console.error('Error generating restaurant recommendations:', error);
+      logger.error('getPersonalizedRestaurants', 'Error generating restaurant recommendations', { error });
       return [];
     }
   }, []);
@@ -290,13 +303,18 @@ export function usePersonalizedRecommendations() {
       // Fetch content for each trending item
       for (const trending of trendingData || []) {
         try {
-          const { data: content } = await supabase
+          const { data: content, error: contentError } = await supabase
             .from(trending.content_type === 'event' ? 'events' : 
                   trending.content_type === 'restaurant' ? 'restaurants' :
                   trending.content_type === 'attraction' ? 'attractions' : 'playgrounds')
             .select('*')
             .eq('id', trending.content_id)
             .single();
+          // A strategy that FAILED contributes nothing, exactly like a strategy
+          // with no matches - and the user just sees fewer recommendations. One
+          // broken strategy must not take the whole rail down, so this logs
+          // rather than throwing; a permanently dead strategy is then visible.
+          if (contentError) logger.error('recommendations', 'A recommendation query failed', { error: contentError });
 
           if (content) {
             trendingItems.push({
@@ -310,20 +328,26 @@ export function usePersonalizedRecommendations() {
             });
           }
         } catch (contentError) {
-          console.error('Error fetching trending content:', contentError);
+          logger.error('getTrendingRecommendations', 'Error fetching trending content', { error: contentError });
         }
       }
 
       return trendingItems.slice(0, 8);
     } catch (error) {
-      console.error('Error generating trending recommendations:', error);
-      
+      logger.error('getTrendingRecommendations', 'Error generating trending recommendations', { error });
+
       // Fallback to featured content if trending fails
-      const { data: featuredEvents } = await supabase
+      const { data: featuredEvents, error: featuredEventsError } = await supabase
         .from('events')
         .select('*')
         .eq('is_featured', true)
+        .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
         .limit(4);
+      // A strategy that FAILED contributes nothing, exactly like a strategy
+      // with no matches - and the user just sees fewer recommendations. One
+      // broken strategy must not take the whole rail down, so this logs
+      // rather than throwing; a permanently dead strategy is then visible.
+      if (featuredEventsError) logger.error('recommendations', 'A recommendation query failed', { error: featuredEventsError });
 
       return (featuredEvents || []).map(event => ({
         id: `trending-event-${event.id}`,
@@ -352,11 +376,16 @@ export function usePersonalizedRecommendations() {
       ]);
 
       // Simple attraction recommendations
-      const { data: attractions } = await supabase
+      const { data: attractions, error: attractionsError } = await supabase
         .from('attractions')
         .select('*')
         .eq('is_featured', true)
         .limit(4);
+      // A strategy that FAILED contributes nothing, exactly like a strategy
+      // with no matches - and the user just sees fewer recommendations. One
+      // broken strategy must not take the whole rail down, so this logs
+      // rather than throwing; a permanently dead strategy is then visible.
+      if (attractionsError) logger.error('recommendations', 'A recommendation query failed', { error: attractionsError });
 
       const attractionRecommendations = (attractions || []).map(attraction => ({
         id: `attraction-${attraction.id}`,
@@ -375,7 +404,7 @@ export function usePersonalizedRecommendations() {
         trending
       });
 
-      console.log('Personalized recommendations generated:', {
+      logger.debug('generateRecommendations', 'Personalized recommendations generated', {
         events: events.length,
         restaurants: restaurants.length,
         attractions: attractionRecommendations.length,
@@ -385,7 +414,7 @@ export function usePersonalizedRecommendations() {
       });
 
     } catch (error) {
-      console.error('Error generating recommendations:', error);
+      logger.error('generateRecommendations', 'Error generating recommendations', { error });
     } finally {
       setIsLoading(false);
     }
@@ -406,9 +435,9 @@ export function usePersonalizedRecommendations() {
         page_url: window.location.href
       });
 
-      console.log('Recommendation interaction tracked:', { recommendationId, action });
+      logger.debug('trackRecommendationInteraction', 'Recommendation interaction tracked', { recommendationId, action });
     } catch (error) {
-      console.error('Error tracking recommendation interaction:', error);
+      logger.error('trackRecommendationInteraction', 'Error tracking recommendation interaction', { error });
     }
   }, [sessionId, user?.id]);
 

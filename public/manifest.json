@@ -1,6 +1,6 @@
 {
-  "name": "Des Moines AI Pulse",
-  "short_name": "DM AI Pulse",
+  "name": "Des Moines Insider",
+  "short_name": "DM Insider",
   "description": "Your AI-powered guide to Des Moines events, restaurants, and local discoveries",
   "start_url": "/",
   "display": "standalone",

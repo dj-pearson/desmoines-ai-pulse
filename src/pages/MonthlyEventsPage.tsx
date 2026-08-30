@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import Header from "@/components/Header";
@@ -11,11 +11,35 @@ import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar, MapPin, ChevronLeft, ChevronRight, Clock } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { format, startOfMonth, endOfMonth, parseISO, isValid } from "date-fns";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { BRAND } from "@/lib/brandConfig";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { EVENT_LIST_COLUMNS } from "@/lib/listColumns";
+import { formatCount } from "@/lib/pluralize";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
+
+/**
+ * WEB-PERF-023. The grid rendered every event in the month, which measured
+ * 14,857 DOM elements on /events/august-2026 (268 events) - the worst route on
+ * the site against a 1,189 median and a ~1,500 Lighthouse flag. The cost is
+ * about 53 elements per EventCard on top of ~460 of page chrome, derived from
+ * the four month pages: 268 events -> 14,857, 153 -> 8,438, 122 -> 6,806,
+ * 75 -> 4,489.
+ *
+ * 36 is twelve full rows of the lg:grid-cols-3 grid and puts August at roughly
+ * 2,400, in line with /restaurants (2,875) and / (2,314) rather than ten times
+ * worse than either. Matches VISIBLE_RESTAURANTS in DietaryRestaurants.tsx.
+ *
+ * THE TRADE-OFF IS REAL AND IS NOT MINE TO SETTLE ALONE: these are SEO landing
+ * pages that SEO-016 has only just started linking to, and a month page now
+ * lists 36 of 268 events. Every event remains reachable through /events, the
+ * month navigation and its own detail page, and 14,857 elements is itself a
+ * Core Web Vitals problem - but if the whole month must render, the fix is a
+ * cheaper card, not a bigger cap.
+ */
+const VISIBLE_EVENTS = 36;
 
 export default function MonthlyEventsPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -37,45 +61,43 @@ export default function MonthlyEventsPage() {
   const monthStart = startOfMonth(targetDate);
   const monthEnd = endOfMonth(targetDate);
   
-  const { data: events, isLoading } = useQuery({
-    queryKey: ["monthly-events", monthYear, selectedCategory],
+  // Fetch the full month once; category filtering + category list are derived
+  // in memory to avoid a second full-range query (WEB-PERF-011).
+  const { data: allEvents, isLoading } = useQuery({
+    queryKey: ["monthly-events", monthYear],
     queryFn: async () => {
-      let query = supabase
+      const { data, error } = await supabase
         .from("events")
-        .select("*")
+        .select(EVENT_LIST_COLUMNS)
         .gte("date", format(monthStart, "yyyy-MM-dd"))
         .lte("date", format(monthEnd, "yyyy-MM-dd"))
         .order("date", { ascending: true })
-        .order("time", { ascending: true });
+        // `time` is not a column on public.events; ordering by it made PostgREST
+        // reject the query with 42703 and the month grid rendered empty.
+        // event_start_local is the intended intra-day ordering key.
+        .order("event_start_local", { ascending: true, nullsFirst: false });
 
-      if (selectedCategory !== "all") {
-        query = query.eq("category", selectedCategory);
-      }
-
-      const { data, error } = await query;
       if (error) throw error;
       return data || [];
     },
     enabled: isValidDate, // Only run query if date is valid
   });
 
-  const { data: categories } = useQuery({
-    queryKey: ["monthly-event-categories", monthYear],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("events")
-        .select("category")
-        .gte("date", format(monthStart, "yyyy-MM-dd"))
-        .lte("date", format(monthEnd, "yyyy-MM-dd"));
+  // Category filter applied in memory (preserves the previous grid behavior).
+  const events = useMemo(() => {
+    if (!allEvents) return allEvents;
+    if (selectedCategory === "all") return allEvents;
+    return allEvents.filter((event) => event.category === selectedCategory);
+  }, [allEvents, selectedCategory]);
 
-      if (error) throw error;
-      const uniqueCategories = [
-        ...new Set(data.map((event) => event.category)),
-      ].filter(Boolean);
-      return uniqueCategories.sort();
-    },
-    enabled: isValidDate, // Only run query if date is valid
-  });
+  // Distinct category list derived from the already-fetched rows.
+  const categories = useMemo(
+    () =>
+      [...new Set((allEvents || []).map((event) => event.category))]
+        .filter(Boolean)
+        .sort(),
+    [allEvents]
+  );
 
   useDocumentTitle(isValidDate ? `${format(targetDate, "MMMM yyyy")} Events` : "Monthly Events");
 
@@ -109,7 +131,7 @@ export default function MonthlyEventsPage() {
   const faqData = [
     {
       question: `What events are happening in ${monthDisplayName} in Des Moines?`,
-      answer: `We have ${events?.length || 0} events scheduled for ${monthDisplayName} in Des Moines and surrounding areas. Browse our complete calendar with dates, times, locations, and ticket information.`,
+      answer: `We have ${formatCount(events?.length || 0, 'event')} scheduled for ${monthDisplayName} in Des Moines and surrounding areas. Browse our complete calendar with dates, times, locations, and ticket information.`,
     },
     {
       question: "How often is the monthly calendar updated?",
@@ -135,8 +157,14 @@ export default function MonthlyEventsPage() {
         breadcrumbs={breadcrumbs}
         isTimeSensitive={true}
       />
+      {/* The schema must describe what the page SHOWS. The grid is capped at
+          VISIBLE_EVENTS, and EventListJsonLd defaults maxItems to 50, so
+          passing the full month here would advertise events a reader cannot
+          see - the same defect already fixed on /restaurants, which declared
+          numberOfItems 478 against a 20-item list. */}
       <EventListJsonLd
-        events={events || []}
+        events={(events || []).slice(0, VISIBLE_EVENTS)}
+        maxItems={VISIBLE_EVENTS}
         listName={pageTitle}
         listDescription={pageDescription}
         listUrl={`${BRAND.baseUrl}/events/${monthYear}`}
@@ -167,16 +195,16 @@ export default function MonthlyEventsPage() {
             
             <div className="text-center">
               <div className="flex items-center gap-2 mb-2">
-                <Calendar className="h-6 w-6 text-primary" />
+                <SpriteIcon name="calendar" className="h-6 w-6 text-primary" />
                 <h1 className="text-3xl font-bold">{monthDisplayName} Events</h1>
               </div>
               <div className="flex items-center gap-4 text-muted-foreground">
                 <div className="flex items-center gap-1">
-                  <MapPin className="h-4 w-4" />
+                  <SpriteIcon name="map-pin" className="h-4 w-4" />
                   <span>Des Moines Metro Area</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Clock className="h-4 w-4" />
+                  <SpriteIcon name="clock" className="h-4 w-4" />
                   <span>{events?.length || 0} Events This Month</span>
                 </div>
               </div>
@@ -279,11 +307,31 @@ export default function MonthlyEventsPage() {
           </div>
         ) : events && events.length > 0 ? (
           <>
+            {/* WEB-PERF-023: this rendered every event in the month, and
+                /events/august-2026 measured 14,857 DOM elements inside #root —
+                the worst route on the site, ten times the ~1,500 Lighthouse
+                flag and twelve times the 1,189 median across all 1,171
+                prerendered routes. The four month pages were the four worst.
+                Only the grid is capped; the heading and the month-navigation
+                count below still read events.length, so no displayed number
+                changes. */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-              {events.map((event) => (
+              {events.slice(0, VISIBLE_EVENTS).map((event) => (
                 <EventCard key={event.id} event={event} onViewDetails={() => {}} />
               ))}
             </div>
+
+            {events.length > VISIBLE_EVENTS && (
+              <div className="mb-12 text-center">
+                <p className="text-muted-foreground mb-3">
+                  Showing {VISIBLE_EVENTS} of {formatCount(events.length, 'event')} in{" "}
+                  {monthDisplayName}.
+                </p>
+                <Button asChild variant="outline">
+                  <Link to="/events">Browse all events</Link>
+                </Button>
+              </div>
+            )}
 
             {/* Monthly Navigation */}
             <Card className="mb-8">
@@ -300,7 +348,7 @@ export default function MonthlyEventsPage() {
                   
                   <div className="text-center">
                     <div className="text-lg font-semibold">{monthDisplayName}</div>
-                    <div className="text-sm text-muted-foreground">{events.length} events</div>
+                    <div className="text-sm text-muted-foreground">{formatCount(events.length, 'event')}</div>
                   </div>
                   
                   <Button
@@ -318,7 +366,7 @@ export default function MonthlyEventsPage() {
         ) : (
           <Card className="text-center py-12">
             <CardContent>
-              <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <SpriteIcon name="calendar" className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h2 className="text-xl font-semibold mb-2">
                 No Events Found for {monthDisplayName}
               </h2>

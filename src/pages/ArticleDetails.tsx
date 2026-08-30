@@ -10,28 +10,18 @@ import { Separator } from '@/components/ui/separator';
 import { Breadcrumbs } from '@/components/ui/breadcrumbs';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { 
-  Calendar, 
-  Eye, 
-  ArrowLeft, 
-  Share2, 
-  Clock, 
-  User, 
-  Tag, 
-  BookOpen,
-  ThumbsUp,
-  MessageCircle,
-  Bookmark
-} from 'lucide-react';
+import { Eye, ArrowLeft, User, Tag, BookOpen, ThumbsUp, MessageCircle, Bookmark } from "lucide-react";
 import { LoadingSpinner } from '@/components/ui/loading-skeleton';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import SEOHead from '@/components/SEOHead';
+import { ogImageUrl } from '@/lib/ogImage';
 import ShareDialog from '@/components/ShareDialog';
 import { Helmet } from 'react-helmet-async';
 import { BRAND } from '@/lib/brandConfig';
 import SpeakableSchema from '@/components/schema/SpeakableSchema';
 import FAQSchema from '@/components/schema/FAQSchema';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const ArticleDetails: React.FC = () => {
   const { slug } = useParams();
@@ -155,6 +145,7 @@ const ArticleDetails: React.FC = () => {
         description={article.seo_description || article.excerpt || `Read ${article.title} on ${BRAND.name}`}
         keywords={article.seo_keywords || article.tags || []}
         type="article"
+        imageUrl={ogImageUrl("article", article.id)}
         canonicalUrl={`${BRAND.baseUrl}/articles/${article.slug}`}
       />
       <Helmet>
@@ -236,11 +227,11 @@ const ArticleDetails: React.FC = () => {
                   )}
                   <div className="flex items-center gap-4 text-sm text-muted-foreground">
                     <span className="flex items-center gap-1">
-                      <Calendar className="h-4 w-4" />
+                      <SpriteIcon name="calendar" className="h-4 w-4" />
                       {formatDate(article.published_at || article.created_at)}
                     </span>
                     <span className="flex items-center gap-1">
-                      <Clock className="h-4 w-4" />
+                      <SpriteIcon name="clock" className="h-4 w-4" />
                       {formatReadTime(article.content)}
                     </span>
                     <span className="flex items-center gap-1">
@@ -286,7 +277,7 @@ const ArticleDetails: React.FC = () => {
                     url={window.location.href}
                     trigger={
                       <Button variant="outline" size="sm" className="gap-2">
-                        <Share2 className="h-4 w-4" />
+                        <SpriteIcon name="share-2" className="h-4 w-4" />
                         Share
                       </Button>
                     }
@@ -369,7 +360,7 @@ const ArticleDetails: React.FC = () => {
                         url={window.location.href}
                         trigger={
                           <Button variant="default" size="sm" className="gap-2">
-                            <Share2 className="h-4 w-4" />
+                            <SpriteIcon name="share-2" className="h-4 w-4" />
                             Share Article
                           </Button>
                         }

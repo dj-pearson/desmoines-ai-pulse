@@ -1,8 +1,76 @@
 # Security Audit: Unauthenticated Edge Functions
 
-**Last Updated**: 2026-02-21
+**Last Updated**: 2026-06-12
 **Auditor**: Automated Security Review
 **Scope**: All Supabase edge functions with `verify_jwt = false`
+
+---
+
+## WEB-SEC-001 — Admin/AI function lockdown (2026-06-12)
+
+Every `verify_jwt = false` function was re-classified as **public-by-design**
+(called by web/mobile clients or anonymous visitors) or **admin/internal
+tooling** (cron- or admin-triggered, runs expensive AI / Google Places / DB
+service-role work). All admin/internal functions now reject unauthenticated
+callers **before** any external API call or DB write.
+
+### Auth model
+
+Admin/internal functions call `requireAdminOrApiKey()`
+(`supabase/functions/_shared/apiKeyAuth.ts`), which accepts, in order:
+
+1. `X-API-Key` / `Authorization: Bearer <key>` matching the `EDGE_FUNCTION_API_KEY` secret (admin scripts / GitHub Actions),
+2. `Authorization: Bearer <SUPABASE_SERVICE_ROLE_KEY>` — **how pg_cron jobs authenticate** (the service-role key is already a full-access secret, so accepting it grants no extra privilege and means the existing cron migrations keep working unchanged),
+3. a verified user JWT whose `user_roles.role` / `profiles.user_role` is `admin` or `root_admin` (the admin web UI; the Supabase client auto-attaches the signed-in admin's token to `functions.invoke`).
+
+Anything else gets a `401`/`403` with no work performed.
+
+### Classification + middleware table
+
+| Function | Classification | Control |
+|----------|---------------|---------|
+| get-sponsored-pick | public-by-design (web/iOS ads) | untouched |
+| log-content-metrics | public-by-design (anon analytics) | untouched |
+| image-transform | public-by-design (render path) | untouched (rate limit → WEB-SEC-007) |
+| geocode-location | public utility (public `LocationAutocomplete`) | untouched (rate limit → WEB-SEC-002) |
+| personalized-recommendations | user data (resolves tier from token) | untouched here |
+| publish-article-webhook | webhook | already `requireApiKey` |
+| generate-seo-content | admin/internal | already `requireAdminOrApiKey` |
+| ai-crawler | admin/internal (**HIGH**) | `requireAdminOrApiKey` + host allowlist |
+| analyze-competitor | admin/internal (**HIGH**) | `requireAdminOrApiKey` + host allowlist + response-size cap |
+| bulk-enhance-events | admin/internal | `requireAdminOrApiKey` |
+| scrape-events | admin/internal | `requireAdminOrApiKey` |
+| bulk-event-updater | admin/internal | `requireAdminOrApiKey` |
+| restaurant-opening-scraper | admin/internal | `requireAdminOrApiKey` |
+| firecrawl-scraper | admin/internal | `requireAdminOrApiKey` |
+| backfill-coordinates | admin/internal | `requireAdminOrApiKey` |
+| backfill-all-coordinates-force | admin/internal | `requireAdminOrApiKey` |
+| populate-playgrounds | admin/internal | `requireAdminOrApiKey` |
+| extract-catchdesmoines-urls | admin/internal | `requireAdminOrApiKey` |
+| test-article-webhook | admin/internal | `requireAdminOrApiKey` (HMAC → WEB-SEC-007) |
+
+### SSRF / cost-proxy hardening for the HIGH functions
+
+`supabase/functions/_shared/fetchGuard.ts` adds, for `ai-crawler` and
+`analyze-competitor`:
+
+- **`isHostAllowed(url)`** — the target host must equal or be a subdomain of a
+  domain in `DEFAULT_CRAWL_ALLOWLIST` (known Des Moines event/venue sources).
+  Operators extend it at runtime with the `CRAWLER_DOMAIN_ALLOWLIST` secret
+  (comma-separated) or open it for a one-off admin crawl with
+  `CRAWLER_ALLOW_ALL=true`. So a leaked key still can't aim the crawler at
+  arbitrary internal/third-party hosts.
+- **`fetchTextWithSizeCap(url, init, maxBytes)`** — streams the response and
+  aborts past the cap (default 10 MB), used for `analyze-competitor`'s direct
+  fetch so an oversized target can't amplify outbound bandwidth.
+
+### Backward compatibility
+
+- Public-by-design functions and the cron-invoked paths are behaviorally
+  unchanged; no request/response shapes were altered.
+- pg_cron continues to authenticate with its existing service-role bearer — no
+  migration rewrite was needed (and none was done), avoiding the risk of
+  breaking a live scheduled job mid-release.
 
 ---
 
@@ -234,6 +302,61 @@ Located in `supabase/functions/_shared/`:
 | `aiConfig.ts` | AI service configuration and key management |
 
 ---
+
+## SECURITY DEFINER search_path (WEB-DB-001)
+
+SECURITY DEFINER functions run with the definer's privileges. Any such function
+that does not pin `search_path` is exposed to schema-shadowing privilege
+escalation (a caller who can create objects in an earlier-searched schema can
+substitute the tables/functions the body references). `is_admin()` — which gates
+admin RLS — was in this state, alongside ~40 other definer functions.
+
+**Fix:** migration `20260711000000_pin_search_path_and_close_role_escalation.sql`
+
+1. `is_admin()` is `CREATE OR REPLACE`'d with `SET search_path = public, pg_temp`
+   (matching its sibling `user_has_role_or_higher()`), body unchanged.
+2. Every remaining `public` SECURITY DEFINER function **without** a pinned
+   `search_path` is fixed additively via
+   `ALTER FUNCTION … SET search_path = public, pg_temp` (no body/signature
+   change), driven by a catalog loop so the set stays complete as functions are
+   added.
+
+**Verify the status of every definer function (should return zero rows after the
+migration):**
+
+```sql
+SELECT n.nspname, p.proname, pg_get_function_identity_arguments(p.oid) AS args
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public'
+  AND p.prosecdef = TRUE
+  AND NOT EXISTS (
+    SELECT 1 FROM unnest(COALESCE(p.proconfig, ARRAY[]::text[])) cfg
+    WHERE cfg LIKE 'search_path=%'
+  )
+ORDER BY p.proname;
+```
+
+To list every definer function **with** its pinned value:
+
+```sql
+SELECT p.proname,
+       (SELECT cfg FROM unnest(COALESCE(p.proconfig, ARRAY[]::text[])) cfg
+        WHERE cfg LIKE 'search_path=%') AS search_path
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public' AND p.prosecdef = TRUE
+ORDER BY p.proname;
+```
+
+## profiles.role self-escalation (WEB-DB-002)
+
+`is_admin()` trusts `profiles.role`, but the `validate_profile_user_id()`
+escalation-prevention trigger only guarded `profiles.user_role` — leaving a
+self-service path to admin via `UPDATE profiles SET role='admin'`. The same
+migration extends the trigger to reject a non-admin setting/raising
+`profiles.role` to a non-`user` value (benign self-updates still pass).
+Regression test: `supabase/tests/web_db_002_role_escalation.sql`.
 
 ## Action Items
 

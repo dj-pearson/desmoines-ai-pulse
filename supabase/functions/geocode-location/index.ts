@@ -5,6 +5,8 @@
  * Risk level: LOW
  */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { instrument } from "../_shared/instrument.ts"
+import { checkRateLimitPersistent } from "../_shared/rateLimit.ts"
 
 const NOMINATIM_API = "https://nominatim.openstreetmap.org/search";
 const APP_USER_AGENT = "DesMoinesInsider/1.0 (https://desmoinesinsider.com; mailto:admin@desmoinesinsider.com)";
@@ -14,13 +16,28 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-serve(async (req) => {
+serve(instrument("geocode-location", async (req) => {
   console.log(`Geocode request: ${req.method} ${req.url}`);
   
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     console.log('Handling CORS preflight');
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // Generous per-IP rate limit: this is verify_jwt=false and proxies a free
+  // public API (Nominatim) that has its own usage policy, so throttle abuse.
+  // Fails OPEN on a rate-limit DB miss so geocoding never breaks.
+  const rl = await checkRateLimitPersistent(req, {
+    endpoint: "geocode-location",
+    windowMs: 60_000,
+    max: 60,
+    message: "Too many geocoding requests. Please try again shortly.",
+  });
+  if (!rl.success && rl.response) {
+    const headers = new Headers(rl.response.headers);
+    for (const [k, v] of Object.entries(corsHeaders)) headers.set(k, v);
+    return new Response(rl.response.body, { status: rl.response.status, headers });
   }
 
   try {
@@ -107,10 +124,11 @@ serve(async (req) => {
       { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
+    // Sanitized: full error logged server-side; generic message to clients.
     console.error(`Geocoding error:`, error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: "Geocoding failed" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     )
   }
-})
+}))

@@ -65,8 +65,17 @@ struct SearchView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     micButton
                 }
+                // IOS-PARITY-008 — save the current search (gated to Insider+).
+                if viewModel.hasSearched && !viewModel.searchText.isEmpty {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        SaveSearchButton(query: viewModel.searchText, tab: viewModel.selectedTab.rawValue)
+                    }
+                }
             }
-            .disabled(!NetworkMonitor.shared.isConnected && !viewModel.hasSearched)
+            // Don't freeze the whole screen offline — the searchable prompt and
+            // the "You're Offline" empty state already communicate the state, and
+            // typing / tapping suggestions / recents are local-only actions
+            // (IOS-AUDIT-UX-026).
             .navigationTitle("Search")
             .onChange(of: dictation.transcript) { _, newValue in
                 // Live-update the search field as the user dictates
@@ -77,6 +86,13 @@ struct SearchView: View {
             }
             .task {
                 applyIntent(dispatcher.pending)
+            }
+            .onDisappear {
+                // Navigating away mid-dictation left the recogniser running and
+                // the audio session active - the mic indicator stayed on and other
+                // apps stayed ducked until the app was killed (IOS-AUDIT-PERF-016
+                // AC3, 'and on view dismissal'). stop() is idempotent.
+                dictation.stop()
             }
             .alert("Microphone access needed", isPresented: $showDictationDeniedAlert) {
                 Button("Open Settings") { SpeechDictationService.openSettings() }
@@ -145,8 +161,11 @@ struct SearchView: View {
             parts.append("events")
             if let datePreset, !datePreset.isEmpty { parts.append(datePreset) }
             viewModel.searchText = parts.joined(separator: " ")
-        case .askPulse(let query):
-            viewModel.searchText = query
+        case .askPulse:
+            // Ask Pulse opens the AI chat surface, presented by MainTabView —
+            // not a keyword search (IOS-AUDIT-FEAT-028). Leave the payload for
+            // MainTabView to consume; don't handle it here.
+            return
         }
         // Clear the pending payload — handled.
         _ = dispatcher.consume()
@@ -282,6 +301,17 @@ struct SearchView: View {
         ScrollView {
             LazyVStack(spacing: 12) {
                 Color.clear.frame(height: 0).id("top")
+
+                // IOS-AUDIT-UX-051 AC2. The whole-search empty state above fires
+                // only when EVERY tab is empty, so a search matching 6 events and
+                // 0 restaurants rendered the Restaurants tab as a blank scroll
+                // view - indistinguishable from a tab that had not finished
+                // loading. The tab bar already shows a per-tab count; this says
+                // the same thing where the user is actually looking.
+                if countFor(viewModel.selectedTab) == 0 {
+                    emptyTabState
+                }
+
                 switch viewModel.selectedTab {
                 case .events:
                     ForEach(Array(viewModel.eventResults.enumerated()), id: \.element.id) { index, event in
@@ -320,7 +350,7 @@ struct SearchView: View {
             .padding()
             .trackScrollOffset(showScrollToTop: $showScrollToTop)
         }
-        .coordinateSpace(name: "scroll")
+        .scrollOffsetCoordinateSpace()
         .overlay(alignment: .bottomTrailing) {
             ScrollToTopButton(isVisible: showScrollToTop) {
                 withAnimation { proxy.scrollTo("top") }
@@ -348,7 +378,7 @@ struct SearchView: View {
                 }
                 .padding(.horizontal)
 
-                ForEach(Array(history.recentSearches.enumerated()), id: \.offset) { index, query in
+                ForEach(history.recentSearches, id: \.self) { query in
                     HStack {
                         Button {
                             UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -369,12 +399,16 @@ struct SearchView: View {
                         .buttonStyle(.plain)
 
                         Button {
-                            withAnimation { history.remove(at: index) }
+                            withAnimation { history.remove(query) }
                         } label: {
                             Image(systemName: "xmark")
                                 .font(.caption2)
                                 .foregroundStyle(.tertiary)
                         }
+                        .buttonStyle(.plain)
+                        // 44pt target so the glyph-sized delete isn't mis-tapped
+                        // next to the apply-search row (IOS-AUDIT-UX-043).
+                        .minHitTarget()
                         .accessibilityLabel("Remove \(query) from recent searches")
                     }
                     .padding(.horizontal)
@@ -398,6 +432,34 @@ struct SearchView: View {
 
     // MARK: - Helpers
 
+    /// Shown when the SELECTED tab has no matches but the search itself did.
+    ///
+    /// Names the other tabs that do have results, so the user can act on it
+    /// rather than concluding the search failed.
+    private var emptyTabState: some View {
+        let others = SearchViewModel.SearchTab.allCases
+            .filter { $0 != viewModel.selectedTab && countFor($0) > 0 }
+
+        return VStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.title)
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            Text("No \(viewModel.selectedTab.rawValue.lowercased()) match this search.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            if !others.isEmpty {
+                Text("Results in \(others.map(\.rawValue).joined(separator: " and ")).")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 32)
+    }
+
     private func countFor(_ tab: SearchViewModel.SearchTab) -> Int {
         switch tab {
         case .events: return viewModel.eventResults.count
@@ -409,63 +471,13 @@ struct SearchView: View {
 
 // MARK: - Attraction Card (used in search results)
 
+/// IOS-IA-003: thin wrapper over the unified `ContentCard` (`.listRow`) so
+/// search attraction results match the Attractions tab and Home rails.
 struct AttractionCardView: View {
     let attraction: Attraction
 
     var body: some View {
-        HStack(spacing: 14) {
-            CachedAsyncImage(url: attraction.imageUrl) {
-                ZStack {
-                    Rectangle().fill(Color.teal.opacity(0.1))
-                    Image(systemName: attraction.attractionType.icon)
-                        .foregroundStyle(.teal.opacity(0.4))
-                }
-            }
-            .frame(width: 80, height: 80)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(attraction.name)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-
-                HStack(spacing: 6) {
-                    Label(attraction.type, systemImage: attraction.attractionType.icon)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                if let rating = attraction.rating {
-                    HStack(spacing: 3) {
-                        Image(systemName: "star.fill")
-                            .font(.caption2)
-                            .foregroundStyle(.yellow)
-                        Text(String(format: "%.1f", rating))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                if let location = attraction.location {
-                    Text(location)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                }
-            }
-
-            Spacer()
-
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-        }
-        .padding(10)
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 1)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(attraction.name), \(attraction.type)")
+        ContentCard(attraction.cardData, variant: .listRow)
     }
 }
 

@@ -28,9 +28,13 @@
 import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import { handleCors, getCorsHeaders, isOriginAllowed } from '../_shared/cors.ts';
-import { checkRateLimit, addRateLimitHeaders } from '../_shared/rateLimit.ts';
-import { getAIConfig } from '../_shared/aiConfig.ts';
+import { conversationHasCrisisIntent, crisisPayload } from '../_shared/crisisSupport.ts';
+import { checkRateLimitPersistent, addRateLimitHeaders } from '../_shared/rateLimit.ts';
+import { getAIConfig, getAnthropicApiKey } from '../_shared/aiConfig.ts';
 import { sanitizePostgrestPattern } from '../_shared/validation.ts';
+import { runToolLoop, type ToolSchema, type RunToolLoopResult } from '../_shared/agentRuntime.ts';
+import { resolveEntitledTier } from '../_shared/entitlements.ts';
+import { recordProviderUsage } from '../_shared/providerUsage.ts';
 
 // ---------------------------------------------------------------------------
 // Tier-gated daily quotas — mirror web /trip-planner gating
@@ -142,7 +146,10 @@ async function execTool(
       const limit = Math.min((input.limit as number | undefined) ?? 10, 20);
       let q = supabase
         .from('events')
-        .select('id, title, description, category, date, end_date, venue, location, image_url')
+        // events has NO `description`. It carries enhanced_description (AI-written)
+        // and original_description (as crawled) - the same pair fuzzy_search_events
+        // was repaired to COALESCE over under WEB-QA-019.
+        .select('id, title, enhanced_description, original_description, category, date, end_date, venue, location, image_url')
         .limit(limit)
         .order('date', { ascending: true });
 
@@ -152,7 +159,11 @@ async function execTool(
       if (input.category) q = q.ilike('category', `%${sanitizePostgrestPattern(input.category as string)}%`);
       if (input.query) {
         const term = sanitizePostgrestPattern(input.query as string);
-        q = q.or(`title.ilike.%${term}%,description.ilike.%${term}%`);
+        // Both description columns are searched, so a query matching only the raw
+        // crawler text still finds the row.
+        q = q.or(
+          `title.ilike.%${term}%,enhanced_description.ilike.%${term}%,original_description.ilike.%${term}%`,
+        );
       }
 
       const { data, error } = await q;
@@ -164,12 +175,14 @@ async function execTool(
       const limit = Math.min((input.limit as number | undefined) ?? 10, 20);
       let q = supabase
         .from('restaurants')
-        .select('id, name, description, cuisine, price_level, hours, location, image_url')
+        // price_level -> price_range, and `hours` is dropped entirely: restaurants
+        // has no opening-hours column, so asking for it failed the whole select.
+        .select('id, name, description, cuisine, price_range, location, image_url')
         .limit(limit)
         .order('rating', { ascending: false });
 
       if (input.cuisine) q = q.ilike('cuisine', `%${sanitizePostgrestPattern(input.cuisine as string)}%`);
-      if (input.priceLevel) q = q.eq('price_level', input.priceLevel as string);
+      if (input.priceLevel) q = q.eq('price_range', input.priceLevel as string);
       if (input.query) {
         const term = sanitizePostgrestPattern(input.query as string);
         q = q.or(`name.ilike.%${term}%,description.ilike.%${term}%`);
@@ -184,11 +197,13 @@ async function execTool(
       const limit = Math.min((input.limit as number | undefined) ?? 10, 20);
       let q = supabase
         .from('attractions')
-        .select('id, name, description, category, location, image_url')
+        // attractions stores the kind in `type`, not `category` - the same rename
+        // the og-image function already documents.
+        .select('id, name, description, type, location, image_url')
         .limit(limit)
         .order('rating', { ascending: false });
 
-      if (input.type) q = q.ilike('category', `%${sanitizePostgrestPattern(input.type as string)}%`);
+      if (input.type) q = q.ilike('type', `%${sanitizePostgrestPattern(input.type as string)}%`);
       if (input.query) {
         const term = sanitizePostgrestPattern(input.query as string);
         q = q.or(`name.ilike.%${term}%,description.ilike.%${term}%`);
@@ -208,21 +223,10 @@ async function execTool(
 // Tier resolution + quota tracking
 // ---------------------------------------------------------------------------
 
-async function resolveTier(supabase: SupabaseLike, userId: string): Promise<'free' | 'insider' | 'vip'> {
-  const { data } = await supabase
-    .from('user_subscriptions')
-    .select('status, plan:subscription_plans(name)')
-    .eq('user_id', userId)
-    .eq('status', 'active');
-
-  let best: 'free' | 'insider' | 'vip' = 'free';
-  for (const row of (data ?? []) as Array<{ plan?: { name?: string } }>) {
-    const name = (row.plan?.name ?? '').toLowerCase();
-    if (name === 'vip') return 'vip';
-    if (name === 'insider') best = 'insider';
-  }
-  return best;
-}
+// Tier resolution uses the shared _shared/entitlements.ts helper so AI quota
+// gating agrees with the rest of the app — including trialing users and the
+// past_due grace window (the old local version only counted status=active,
+// under-throttling trialing/grace users to the free quota).
 
 async function consumeQuota(
   supabase: SupabaseLike,
@@ -264,106 +268,50 @@ async function consumeQuota(
 // Claude orchestration
 // ---------------------------------------------------------------------------
 
-interface ClaudeContentBlock {
-  type: string;
-  text?: string;
-  id?: string;
-  name?: string;
-  input?: Record<string, unknown>;
-  tool_use_id?: string;
-  content?: unknown;
-}
-
-interface ClaudeResponse {
-  content: ClaudeContentBlock[];
-  stop_reason: string;
-}
-
 async function runClaudeLoop(
   apiKey: string,
   model: string,
   anthropicVersion: string,
   messages: Array<{ role: string; content: unknown }>,
   supabase: SupabaseLike,
-): Promise<{ picks: unknown[]; followUpSuggestions: string[] } | { error: string }> {
-  const headers = {
-    'Content-Type': 'application/json',
-    'x-api-key': apiKey,
-    'anthropic-version': anthropicVersion,
-    // Enable prompt caching beta — costs ~25% less on cached prefix.
-    'anthropic-beta': 'prompt-caching-2024-07-31',
-  };
+): Promise<
+  ({ picks: unknown[]; followUpSuggestions: string[] } | { error: string })
+  & { spend?: { costUsd: number; usage: RunToolLoopResult['usage']['raw'] } }
+> {
+  // Delegate to the shared runtime harness (AOS-CORE-003) instead of a bespoke
+  // copy-pasted loop. Behavior is preserved: same tools, prompt caching, up to
+  // 6 turns, and the return_picks terminating tool. This is user-facing chat,
+  // so it uses the ungated runToolLoop (NOT the autonomous, kill-switch-gated
+  // runAgent).
+  const loop = await runToolLoop({
+    apiKey,
+    model,
+    anthropicVersion,
+    system: SYSTEM_PROMPT,
+    tools: TOOLS as unknown as ToolSchema[],
+    messages: [...messages],
+    maxSteps: 6,
+    maxTokensPerStep: 1024,
+    enableCaching: true,
+    finalToolName: 'return_picks',
+    dispatch: (name, input) => execTool(supabase, name, input),
+  });
 
-  const conversation: Array<{ role: string; content: unknown }> = [...messages];
+  // Attached to every branch, including the failures. A loop that burned six
+  // steps and then gave up still cost money, and a cost recorder that only sees
+  // the happy path under-reports exactly when spend is worst.
+  const spend = { costUsd: loop.usage.costUsd, usage: loop.usage.raw };
 
-  // Up to 6 turns of tool use before we bail out — guards against runaway loops.
-  for (let turn = 0; turn < 6; turn++) {
-    const body = {
-      model,
-      max_tokens: 1024,
-      // System + tools are cached so the per-request cost drops sharply on
-      // anything past the first user query.
-      system: [
-        {
-          type: 'text',
-          text: SYSTEM_PROMPT,
-          cache_control: { type: 'ephemeral' },
-        },
-      ],
-      tools: TOOLS.map((t, i) =>
-        // Mark only the last tool with cache_control — Anthropic caches the
-        // whole tools array up to that boundary.
-        i === TOOLS.length - 1 ? { ...t, cache_control: { type: 'ephemeral' } } : t,
-      ),
-      messages: conversation,
+  if (loop.stopReason === 'final_tool' && loop.finalToolInput) {
+    return {
+      picks: (loop.finalToolInput.picks as unknown[]) ?? [],
+      followUpSuggestions: (loop.finalToolInput.followUpSuggestions as string[]) ?? [],
+      spend,
     };
-
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-    });
-
-    if (!res.ok) {
-      const errBody = await res.text().catch(() => '');
-      return { error: `Claude API ${res.status}: ${errBody.slice(0, 300)}` };
-    }
-
-    const reply = (await res.json()) as ClaudeResponse;
-    conversation.push({ role: 'assistant', content: reply.content });
-
-    // If the model called return_picks, pull the result out and finish.
-    const finalCall = reply.content.find(
-      (b) => b.type === 'tool_use' && b.name === 'return_picks',
-    );
-    if (finalCall?.input) {
-      const input = finalCall.input as Record<string, unknown>;
-      return {
-        picks: (input.picks as unknown[]) ?? [],
-        followUpSuggestions: (input.followUpSuggestions as string[]) ?? [],
-      };
-    }
-
-    // Otherwise, run any other tool_use blocks and feed results back.
-    const toolUses = reply.content.filter((b) => b.type === 'tool_use');
-    if (toolUses.length === 0) {
-      // No more tool calls and no return_picks → bail
-      return { error: 'Model finished without returning picks' };
-    }
-
-    const toolResults = [];
-    for (const call of toolUses) {
-      const result = await execTool(supabase, call.name ?? '', call.input ?? {});
-      toolResults.push({
-        type: 'tool_result',
-        tool_use_id: call.id,
-        content: JSON.stringify(result),
-      });
-    }
-    conversation.push({ role: 'user', content: toolResults });
   }
-
-  return { error: 'Conversation exceeded turn limit' };
+  if (!loop.ok) return { error: loop.error ?? 'Claude API error', spend };
+  if (loop.stopReason === 'max_steps') return { error: 'Conversation exceeded turn limit', spend };
+  return { error: 'Model finished without returning picks', spend };
 }
 
 // ---------------------------------------------------------------------------
@@ -384,15 +332,17 @@ serve(async (req) => {
     });
   }
 
-  // Rate limit (per-IP, defense in depth on top of per-user quota)
-  const rl = checkRateLimit(req, {
+  // Rate limit (per-IP burst, persistent across cold starts; defense in depth
+  // on top of the per-user daily quota enforced below).
+  const rl = await checkRateLimitPersistent(req, {
+    endpoint: 'discover-chat',
     windowMs: 15 * 60 * 1000,
     max: 30,
     message: 'Too many discover-chat requests. Please slow down.',
   });
   if (!rl.success && rl.response) return addRateLimitHeaders(rl.response, rl);
 
-  const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
+  const apiKey = getAnthropicApiKey();
   if (!apiKey) {
     return new Response(JSON.stringify({ error: 'Server configuration error' }), {
       status: 500,
@@ -442,8 +392,29 @@ serve(async (req) => {
     });
   }
 
+  // Crisis check, before the quota and before the model (WEB-LEGAL-005).
+  //
+  // Ahead of the quota deliberately: someone in distress must not be turned
+  // away because they ran out of daily searches. Ahead of the model because
+  // SYSTEM_PROMPT forces every answer through the return_picks tool, so the
+  // model has no channel to say anything other than venue recommendations.
+  //
+  // picks and followUpSuggestions stay present and empty: shipped iOS and
+  // Android binaries decode both as non-optional, so dropping them would break
+  // parsing on clients that predate the crisis field. Those clients render an
+  // empty result rather than the card, which is degraded but not harmful. The
+  // important part is that they no longer answer distress with restaurants.
+  //
+  // Nothing about the message is logged, stored or counted.
+  if (conversationHasCrisisIntent(messages)) {
+    return new Response(
+      JSON.stringify({ picks: [], followUpSuggestions: [], ...crisisPayload() }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    );
+  }
+
   // Tier + per-day quota
-  const tier = await resolveTier(supabase, userId);
+  const tier = await resolveEntitledTier(supabase, userId);
   const quota = await consumeQuota(supabase, userId, tier);
   if (!quota.allowed) {
     return new Response(
@@ -485,6 +456,21 @@ serve(async (req) => {
     conversation,
     supabase,
   );
+
+  // AOS-MANAGE-005: this function calls Claude without going through runAgent,
+  // so nothing else books what it spends. Awaited rather than fired and
+  // forgotten - Deno kills the isolate when the response resolves, and a
+  // detached insert would be dropped mid-flight most of the time.
+  if (result.spend && result.spend.costUsd > 0) {
+    await recordProviderUsage(supabase, {
+      provider: 'anthropic',
+      costUsd: result.spend.costUsd,
+      source: 'discover-chat',
+      model,
+      usage: result.spend.usage,
+      extra: { tier, outcome: 'error' in result ? 'error' : 'ok' },
+    });
+  }
 
   if ('error' in result) {
     console.error('discover-chat error:', result.error);

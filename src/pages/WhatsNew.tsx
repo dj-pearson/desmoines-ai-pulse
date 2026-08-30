@@ -6,7 +6,8 @@ import { useSceneUpdates } from '@/hooks/useSceneUpdates';
 import { SceneUpdateCard } from '@/components/SceneUpdateCard';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Sparkles } from 'lucide-react';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
+
 
 const UPDATE_TYPES = [
   { value: '', label: 'All Updates' },
@@ -36,7 +37,7 @@ export default function WhatsNew() {
           {/* Header */}
           <div className="mb-8">
             <div className="inline-flex items-center gap-2 text-primary mb-2">
-              <Sparkles className="h-5 w-5" />
+              <SpriteIcon name="sparkles" className="h-5 w-5" />
               <span className="text-sm font-semibold uppercase tracking-wide">Scene Updates</span>
             </div>
             <h1 className="text-3xl md:text-4xl font-bold mb-2">What's New in Des Moines</h1>
@@ -68,7 +69,7 @@ export default function WhatsNew() {
             </div>
           ) : !updates || updates.length === 0 ? (
             <div className="text-center py-16">
-              <Sparkles className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <SpriteIcon name="sparkles" className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-lg font-medium">No updates yet</p>
               <p className="text-muted-foreground">Check back soon for the latest Des Moines scene updates.</p>
             </div>

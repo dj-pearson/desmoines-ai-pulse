@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Dialog,
@@ -9,6 +9,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import {
   Crown,
   Sparkles,
@@ -21,7 +23,9 @@ import {
   X,
 } from "lucide-react";
 import { useSubscription } from "@/hooks/useSubscription";
+import { logPaywallEvent } from "@/lib/paywallAnalytics";
 import { cn } from "@/lib/utils";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface UpgradeModalProps {
   open: boolean;
@@ -75,8 +79,13 @@ const featureDescriptions: Record<
     tier: "insider",
   },
   create_alerts: {
-    title: "Event Alerts",
+    title: "Custom Event Alerts",
     description: "Set up alerts to be notified when events match your interests",
+    tier: "insider",
+  },
+  insider_tips: {
+    title: "Insider & Dining Tips",
+    description: "Unlock curated local dining tips and insider picks for the best of Des Moines",
     tier: "insider",
   },
   vip_events: {
@@ -118,6 +127,27 @@ const vipFeatures = [
   { icon: Sparkles, text: "Monthly local business perks" },
 ];
 
+// Plan prices — must match the Pricing page + iOS SKUs (WEB-FEAT-002).
+const PLAN_PRICING: Record<"insider" | "vip", { monthly: number; yearly: number }> = {
+  insider: { monthly: 4.99, yearly: 49.99 },
+  vip: { monthly: 12.99, yearly: 129.99 },
+};
+
+function yearlySavingsPct(plan: "insider" | "vip"): number {
+  const { monthly, yearly } = PLAN_PRICING[plan];
+  return Math.round((1 - yearly / (monthly * 12)) * 100);
+}
+
+// Largest annual discount across paid plans — drives the toggle badge.
+const MAX_YEARLY_SAVINGS_PCT = Math.max(
+  yearlySavingsPct("insider"),
+  yearlySavingsPct("vip"),
+);
+
+function formatPlanPrice(plan: "insider" | "vip", billing: "monthly" | "yearly"): string {
+  return `$${PLAN_PRICING[plan][billing].toFixed(2)}`;
+}
+
 export function UpgradeModal({
   open,
   onOpenChange,
@@ -128,15 +158,40 @@ export function UpgradeModal({
   const [selectedPlan, setSelectedPlan] = useState<"insider" | "vip">(
     requiredTier
   );
+  const [billing, setBilling] = useState<"monthly" | "yearly">("monthly");
 
   const featureInfo = feature ? featureDescriptions[feature] : null;
+  // Context id for funnel logging — the feature key, or "generic".
+  const contextId = feature || "generic";
+  const checkoutStartedRef = useRef(false);
+
+  // Log present once per open; log dismiss on close unless checkout started.
+  useEffect(() => {
+    if (open) {
+      checkoutStartedRef.current = false;
+      logPaywallEvent("paywall_present", contextId);
+    }
+  }, [open, contextId]);
+
+  const handleOpenChange = (next: boolean) => {
+    if (!next && open && !checkoutStartedRef.current) {
+      logPaywallEvent("paywall_dismiss", contextId);
+    }
+    onOpenChange(next);
+  };
+
+  const handleCheckoutStart = (plan: "insider" | "vip") => {
+    checkoutStartedRef.current = true;
+    logPaywallEvent("paywall_checkout_start", contextId, { plan, billing });
+    onOpenChange(false);
+  };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">
-            <Sparkles className="h-5 w-5 text-amber-500" />
+            <SpriteIcon name="sparkles" className="h-5 w-5 text-amber-500" />
             Unlock Premium Features
           </DialogTitle>
           <DialogDescription>
@@ -155,6 +210,37 @@ export function UpgradeModal({
         </DialogHeader>
 
         <div className="mt-4 space-y-4">
+          {/* Billing interval toggle */}
+          <div className="flex items-center justify-center gap-3">
+            <Label
+              htmlFor="paywall-billing-toggle"
+              className={cn(
+                "text-sm cursor-pointer",
+                billing === "monthly" ? "font-semibold" : "text-muted-foreground"
+              )}
+            >
+              Monthly
+            </Label>
+            <Switch
+              id="paywall-billing-toggle"
+              checked={billing === "yearly"}
+              onCheckedChange={(checked) => setBilling(checked ? "yearly" : "monthly")}
+              aria-label="Toggle annual billing"
+            />
+            <Label
+              htmlFor="paywall-billing-toggle"
+              className={cn(
+                "text-sm cursor-pointer flex items-center gap-2",
+                billing === "yearly" ? "font-semibold" : "text-muted-foreground"
+              )}
+            >
+              Yearly
+              <Badge variant="secondary" className="bg-green-100 text-green-800 text-[10px]">
+                Save up to {MAX_YEARLY_SAVINGS_PCT}%
+              </Badge>
+            </Label>
+          </div>
+
           {/* Plan Selection */}
           <div className="grid grid-cols-2 gap-3">
             {/* Insider Plan */}
@@ -174,17 +260,19 @@ export function UpgradeModal({
                 </div>
               )}
               <div className="flex items-center gap-2 mb-2">
-                <Sparkles className="h-4 w-4 text-amber-500" />
+                <SpriteIcon name="sparkles" className="h-4 w-4 text-amber-500" />
                 <span className="font-semibold">Insider</span>
               </div>
               <div className="text-2xl font-bold">
-                $4.99
+                {formatPlanPrice("insider", billing)}
                 <span className="text-sm font-normal text-muted-foreground">
-                  /mo
+                  /{billing === "yearly" ? "yr" : "mo"}
                 </span>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                Save 17% yearly
+                {billing === "yearly"
+                  ? `Save ${yearlySavingsPct("insider")}% vs monthly`
+                  : `or ${formatPlanPrice("insider", "yearly")}/yr`}
               </p>
             </button>
 
@@ -212,13 +300,15 @@ export function UpgradeModal({
                 <span className="font-semibold">VIP</span>
               </div>
               <div className="text-2xl font-bold">
-                $12.99
+                {formatPlanPrice("vip", billing)}
                 <span className="text-sm font-normal text-muted-foreground">
-                  /mo
+                  /{billing === "yearly" ? "yr" : "mo"}
                 </span>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                Everything included
+                {billing === "yearly"
+                  ? `Save ${yearlySavingsPct("vip")}% vs monthly`
+                  : `or ${formatPlanPrice("vip", "yearly")}/yr`}
               </p>
             </button>
           </div>
@@ -228,7 +318,7 @@ export function UpgradeModal({
             <h4 className="font-medium mb-3 flex items-center gap-2">
               {selectedPlan === "insider" ? (
                 <>
-                  <Sparkles className="h-4 w-4 text-amber-500" />
+                  <SpriteIcon name="sparkles" className="h-4 w-4 text-amber-500" />
                   Insider Features
                 </>
               ) : (
@@ -262,13 +352,16 @@ export function UpgradeModal({
                   : "bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
               )}
             >
-              <Link to="/pricing" onClick={() => onOpenChange(false)}>
+              <Link
+                to={`/pricing?plan=${selectedPlan}&billing=${billing}`}
+                onClick={() => handleCheckoutStart(selectedPlan)}
+              >
                 Upgrade to {selectedPlan === "insider" ? "Insider" : "VIP"}
               </Link>
             </Button>
             <Button
               variant="ghost"
-              onClick={() => onOpenChange(false)}
+              onClick={() => handleOpenChange(false)}
               className="text-muted-foreground"
             >
               Maybe later

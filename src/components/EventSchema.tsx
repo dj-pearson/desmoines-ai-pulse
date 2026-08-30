@@ -2,6 +2,7 @@ import { Helmet } from "react-helmet-async";
 import { Event } from "@/lib/types";
 import { createEventSlugWithCentralTime } from "@/lib/timezone";
 import { BRAND } from "@/lib/brandConfig";
+import { buildEventOffers, isEventAccessibleForFree } from "@/lib/eventOffers";
 
 interface EventSchemaProps {
   event: Event;
@@ -9,6 +10,9 @@ interface EventSchemaProps {
 }
 
 export default function EventSchema({ event, isUpcoming = true }: EventSchemaProps) {
+  const offers = buildEventOffers(event.price);
+  const accessibleForFree = isEventAccessibleForFree(event.price);
+
   // Comprehensive Google Events Schema
   const eventSchema = {
     "@context": "https://schema.org",
@@ -67,27 +71,19 @@ export default function EventSchema({ event, isUpcoming = true }: EventSchemaPro
       name: BRAND.name,
       url: BRAND.baseUrl
     },
-    offers: event.price && event.price.toLowerCase() !== 'free'
-      ? {
-          "@type": "Offer",
-          price: event.price.replace(/[^0-9.]/g, '') || "0",
-          priceCurrency: "USD",
-          availability: "https://schema.org/InStock",
-          url: event.source_url || `${BRAND.baseUrl}/events/${createEventSlugWithCentralTime(event.title, event)}`,
-          validFrom: new Date().toISOString(),
-          seller: {
-            "@type": "Organization",
-            name: event.venue || "Des Moines Insider"
-          }
-        }
-      : {
-          "@type": "Offer",
-          price: "0",
-          priceCurrency: "USD",
-          availability: "https://schema.org/InStock",
-          url: event.source_url || `${BRAND.baseUrl}/events/${createEventSlugWithCentralTime(event.title, event)}`,
-          validFrom: new Date().toISOString()
-        },
+    // WEB-SEO-018: one offers node built from the parsed price, not two hand-
+    // written branches. A range yields an AggregateOffer; "Varies" yields
+    // nothing, because a fabricated 0 reads to Google as a free event.
+    ...(offers && {
+      offers: {
+        ...offers,
+        url: event.source_url || `${BRAND.baseUrl}/events/${createEventSlugWithCentralTime(event.title, event)}`,
+        validFrom: new Date().toISOString(),
+        ...(event.venue && {
+          seller: { "@type": "Organization", name: event.venue }
+        }),
+      },
+    }),
     performer: event.venue
       ? { "@type": "Organization", name: event.venue }
       : { "@type": "Organization", name: BRAND.name, url: BRAND.baseUrl },
@@ -111,7 +107,7 @@ export default function EventSchema({ event, isUpcoming = true }: EventSchemaPro
         name: "Des Moines, Iowa"
       }
     ],
-    isAccessibleForFree: !event.price || event.price.toLowerCase().includes('free'),
+    ...(accessibleForFree !== undefined && { isAccessibleForFree: accessibleForFree }),
     inLanguage: "en-US",
     audience: {
       "@type": "Audience",

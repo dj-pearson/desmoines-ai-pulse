@@ -3,8 +3,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useCommunityFeatures } from "@/hooks/useCommunityFeatures";
-import { Check, Clock, Users, Heart, X } from "lucide-react";
+import { Check, Heart, X } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface EventCheckInProps {
   eventId: string;
@@ -54,7 +55,7 @@ export function EventCheckIn({ eventId, eventTitle }: EventCheckInProps) {
     switch (status) {
       case 'going': return <Check className="w-4 h-4" />;
       case 'interested': return <Heart className="w-4 h-4" />;
-      case 'maybe': return <Clock className="w-4 h-4" />;
+      case 'maybe': return <SpriteIcon name="clock" className="w-4 h-4" />;
       case 'not_going': return <X className="w-4 h-4" />;
       default: return null;
     }
@@ -74,7 +75,7 @@ export function EventCheckIn({ eventId, eventTitle }: EventCheckInProps) {
     return (
       <Card>
         <CardContent className="p-6 text-center">
-          <Users className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+          <SpriteIcon name="users" className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
           <p className="text-muted-foreground">Sign in to check in to events</p>
         </CardContent>
       </Card>
@@ -85,7 +86,7 @@ export function EventCheckIn({ eventId, eventTitle }: EventCheckInProps) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Users className="w-5 h-5" />
+          <SpriteIcon name="users" className="w-5 h-5" />
           Event Check-In
         </CardTitle>
       </CardHeader>
@@ -118,7 +119,7 @@ export function EventCheckIn({ eventId, eventTitle }: EventCheckInProps) {
               variant={userStatus === 'maybe' ? 'default' : 'outline'}
               className={`gap-2 ${userStatus === 'maybe' ? getStatusColor('maybe') : ''}`}
             >
-              <Clock className="w-4 h-4" />
+              <SpriteIcon name="clock" className="w-4 h-4" />
               Maybe
             </Button>
             <Button
@@ -160,7 +161,7 @@ export function EventCheckIn({ eventId, eventTitle }: EventCheckInProps) {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
-                  <Clock className="w-3 h-3 mr-1" />
+                  <SpriteIcon name="clock" className="w-3 h-3 mr-1" />
                   Maybe
                 </Badge>
                 <span className="text-sm text-muted-foreground">{checkInCounts.maybe} people</span>

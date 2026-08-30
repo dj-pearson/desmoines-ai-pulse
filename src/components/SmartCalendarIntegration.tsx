@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { Helmet } from 'react-helmet-async';
+import { getCanonicalUrl } from '@/lib/brandConfig';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -209,6 +211,29 @@ export default function SmartCalendarIntegration() {
 
   return (
     <div className="container mx-auto py-6">
+      {/* WEB-SEO-002: /calendar rendered no head tags at all, so it inherited
+          index.html's shell title and description and showed up as a duplicate
+          of /articles in the audit. It is a scheduling utility rather than an
+          events calendar, so it does not target "Des Moines events calendar" —
+          that query belongs to /events and /events/today. Give it an honest,
+          distinct description rather than keyword-stretching it. */}
+      <Helmet>
+        <title>Smart Calendar — Sync Des Moines Events | Des Moines Insider</title>
+        <meta
+          name="description"
+          content="Add Des Moines events to your own calendar and get suggestions that fit around your existing schedule."
+        />
+        <link rel="canonical" href={getCanonicalUrl('/calendar')} />
+        {/* WEB-SEO-002: these pages set only title/description, so index.html's
+            static og: and twitter: tags were the only ones shipping — pinned to the
+            homepage on every route. Emitting them here lets the static copies be
+            marked data-rh and replaced rather than duplicated. */}
+        <meta property="og:title" content="Smart Calendar — Sync Des Moines Events | Des Moines Insider" />
+        <meta property="og:description" content="Add Des Moines events to your own calendar and get suggestions that fit around your existing schedule." />
+        <meta property="og:url" content={getCanonicalUrl('/calendar')} />
+        <meta name="twitter:title" content="Smart Calendar — Sync Des Moines Events | Des Moines Insider" />
+        <meta name="twitter:description" content="Add Des Moines events to your own calendar and get suggestions that fit around your existing schedule." />
+      </Helmet>
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold">Smart Calendar</h1>

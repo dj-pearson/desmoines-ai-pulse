@@ -272,5 +272,18 @@ export default {
 			}
 		}
 	},
-	plugins: [require("tailwindcss-animate")],
+	plugins: [
+		require("tailwindcss-animate"),
+		/*
+		 * `coarse:` variant — applies only on touch pointers (WEB-QA-009).
+		 *
+		 * Lets shared primitives carry a 44px minimum tap height on phones and
+		 * tablets without changing their compact desktop sizing, which is what made
+		 * a blanket min-height unattractive: growing every h-9/h-10 control on
+		 * desktop would visibly loosen dense admin and toolbar layouts.
+		 */
+		function ({ addVariant }: { addVariant: (name: string, def: string) => void }) {
+			addVariant("coarse", "@media (pointer: coarse)");
+		},
+	],
 } satisfies Config;

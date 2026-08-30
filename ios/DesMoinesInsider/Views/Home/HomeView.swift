@@ -26,6 +26,8 @@ struct HomeView: View {
     @State private var showDiscover = false
     @State private var showAskPulse = false
     @State private var showSurpriseMe = false
+    /// IOS-PARITY-001 — Home entry point into the native Trip Planner.
+    @State private var showTripPlanner = false
     /// Optional override applied when the user opens DiscoverView via the
     /// "Right Now" ribbon (IOS-DISCOVER-2026-005). Cleared after the sheet
     /// is presented so subsequent toolbar Swipe taps go back to the
@@ -57,6 +59,11 @@ struct HomeView: View {
                     )
                     .padding(.top, 12)
 
+                    // Trip Planner Home entry point (IOS-PARITY-001).
+                    TripPlannerHomeCard { showTripPlanner = true }
+                        .padding(.horizontal)
+                        .padding(.top, 10)
+
                     // Smart Presets — one-tap event scenarios
                     EventSmartPresets(viewModel: viewModel)
                         .padding(.top, 10)
@@ -65,8 +72,9 @@ struct HomeView: View {
                     EventInlineFilters(viewModel: viewModel)
                         .padding(.top, 2)
 
-                    // Error banner
-                    if let error = viewModel.errorMessage {
+                    // Stale-data error note (feed has content but a refresh failed);
+                    // the empty+error case is handled by eventsList's ErrorStateView.
+                    if let error = viewModel.errorMessage, !viewModel.events.isEmpty {
                         errorBanner(error)
                     }
 
@@ -79,19 +87,29 @@ struct HomeView: View {
                             restaurantsVM: restaurantsVM,
                             attractionsVM: attractionsVM,
                             weekendVM: weekendVM,
-                            onSeeAll: handleSeeAll
+                            onSeeAll: handleSeeAll,
+                            order: HomeRailOrdering.current()
                         )
                     }
 
-                    activeFiltersBar
                     eventsList
                 }
                 .trackScrollOffset(showScrollToTop: $showScrollToTop)
             }
-            .coordinateSpace(name: "scroll")
+            .scrollOffsetCoordinateSpace()
             .overlay(alignment: .bottomTrailing) {
                 ScrollToTopButton(isVisible: showScrollToTop) {
                     withAnimation { proxy.scrollTo("top") }
+                }
+            }
+            // Home is a content-first feed (IOS-IA-001), so the discovery
+            // controls (presets, filter pills) stay in-flow. What pins under the
+            // nav title is the sticky search (.searchable below) plus — once the
+            // user is actively filtering — the removable active-filter chips, so
+            // they can review/clear filters without scrolling back up (IOS-IA-004).
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if viewModel.activeFilterCount > 0 {
+                    StickyFilterBar { activeFiltersBar }
                 }
             }
             } // ScrollViewReader
@@ -109,7 +127,17 @@ struct HomeView: View {
             }
             .navigationTitle("Des Moines Insider")
             .navigationBarTitleDisplayMode(.large)
+            .searchable(
+                text: $viewModel.searchText,
+                placement: .navigationBarDrawer(displayMode: .always),
+                prompt: "Search events"
+            )
             .toolbar {
+                if viewModel.activeFilterCount > 0 {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        filterToolbarButton
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     sortMenu
                 }
@@ -139,6 +167,9 @@ struct HomeView: View {
             .fullScreenCover(isPresented: $showSurpriseMe) {
                 SurpriseMeView()
             }
+            .sheet(isPresented: $showTripPlanner) {
+                TripPlannerView(showsCloseButton: true)
+            }
             .navigationDestination(for: Event.self) { event in
                 EventDetailView(event: event)
             }
@@ -155,6 +186,9 @@ struct HomeView: View {
                     // Pushed within Home's NavigationStack, so the hub borrows
                     // this ambient stack rather than nesting its own.
                     DiscoverHubView(ownsNavigationStack: false)
+                case .weekend:
+                    // IOS-PARITY-004 — the dedicated This Weekend guide.
+                    WeekendView(ownsNavigationStack: false)
                 }
             }
             .task {
@@ -166,6 +200,9 @@ struct HomeView: View {
                 if weekendVM.events.isEmpty {
                     weekendVM.selectedDatePreset = .thisWeekend
                 }
+                // IOS-PARITY-005 — warm the Best-Of winners cache so award
+                // badges surface on cards across the app (fail-soft).
+                await BestOfViewModel.refreshWinners()
             }
             .toastOverlay(message: $toast)
         }
@@ -183,12 +220,32 @@ struct HomeView: View {
         case .featured:
             viewModel.showFeaturedOnly = true
         case .thisWeekend:
-            viewModel.selectedDatePreset = .thisWeekend
+            // IOS-PARITY-004 — deep-link into the dedicated weekend guide
+            // instead of just filtering the events list.
+            navigationPath.append(HomeDestination.weekend)
         case .popularRestaurants, .trendingAttractions:
             navigationPath.append(HomeDestination.attractions)
         case .forYou:
             break
         }
+    }
+
+    // MARK: - Filter Entry Point (IOS-AUDIT-UX-007)
+
+    /// Filter glyph in the toolbar with a count badge so the number of active
+    /// filters is visible at a glance. Tapping clears all filters (mirrors the
+    /// "Clear all" affordance in the active-filter chip bar).
+    private var filterToolbarButton: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            withAnimation { viewModel.clearFilters() }
+        } label: {
+            Image(systemName: "line.3.horizontal.decrease.circle")
+                .overlay(alignment: .topTrailing) {
+                    FilterCountBadge(count: viewModel.activeFilterCount)
+                }
+        }
+        .accessibilityLabel("Filters, \(viewModel.activeFilterCount) active")
     }
 
     // MARK: - Sort Menu (IOS-DISCOVER-2026-003)
@@ -350,6 +407,13 @@ struct HomeView: View {
                     action: { Task { await viewModel.refresh() } }
                 )
                 .padding(.top, 40)
+            } else if viewModel.events.isEmpty, let error = viewModel.errorMessage {
+                // Genuine load error (online) — show the shared error/retry state
+                // instead of a misleading "No Events Found" (UX-005).
+                ErrorStateView(message: error) {
+                    Task { await viewModel.refresh() }
+                }
+                .padding(.top, 40)
             } else if viewModel.events.isEmpty {
                 EmptyStateView(
                     icon: "calendar.badge.exclamationmark",
@@ -361,16 +425,30 @@ struct HomeView: View {
                 .padding(.top, 40)
             } else {
                 LazyVStack(spacing: 12) {
-                    ForEach(Array(viewModel.events.enumerated()), id: \.element.id) { index, event in
+                    ForEach(Array(viewModel.arrangedEvents.enumerated()), id: \.element.id) { index, event in
                         Button {
+                            if event.isActivelySponsored {
+                                AdTrackingService.shared.logSponsoredClick(listingType: "event", listingId: event.id)
+                            }
                             navigationPath.append(event)
                         } label: {
                             EventCardView(event: event, toast: $toast)
                         }
                         .buttonStyle(.pressableCard)
                         .entranceAnimation(index: index)
+                        .onAppear {
+                            if event.isActivelySponsored {
+                                AdTrackingService.shared.logSponsoredImpression(listingType: "event", listingId: event.id)
+                            }
+                        }
                         .task {
                             await viewModel.loadMoreIfNeeded(currentItem: event)
+                        }
+
+                        // Native in-feed ad card at deterministic indices
+                        // (IOS-ADS-012). AdSlot renders nothing for subscribers.
+                        if shouldInsertInFeedAd(after: index) {
+                            AdSlot(.feed)
                         }
                     }
 
@@ -386,6 +464,15 @@ struct HomeView: View {
         .padding(.bottom, 20)
     }
 
+    /// Native in-feed ad cadence (IOS-ADS-012): the first ad appears after
+    /// `inFeedFirstSlot` items, then every `inFeedInterval` thereafter. Indices
+    /// come from the central AdConfig.
+    private func shouldInsertInFeedAd(after index: Int) -> Bool {
+        let position = index + 1
+        guard position >= AdConfig.inFeedFirstSlot else { return false }
+        return (position - AdConfig.inFeedFirstSlot) % AdConfig.inFeedInterval == 0
+    }
+
 }
 
 // MARK: - Navigation
@@ -396,6 +483,7 @@ struct HomeView: View {
 enum HomeDestination: Hashable {
     case attractions
     case discoverHub
+    case weekend
 }
 
 #Preview {

@@ -26,7 +26,7 @@ const DEFAULT_FLAGS: Record<string, boolean> = {
 
 async function fetchFlags(): Promise<FeatureFlagRow[]> {
   const { data, error } = await supabase
-    .from('feature_flags' as string)
+    .from('feature_flags')
     .select('flag_key, enabled, description, target_tiers');
 
   if (error) {

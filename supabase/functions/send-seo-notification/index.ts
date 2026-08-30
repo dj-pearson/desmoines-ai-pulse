@@ -8,6 +8,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
+import { errorResponse } from "../_shared/errorResponse.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -18,6 +22,17 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+
+  // Runs as service_role and had no caller check. verify_jwt defaults to
+  // true, which only means "a valid Supabase JWT" - the publishable anon
+  // key is one and ships in every client bundle.
+  //
+  // Callers, enumerated before guarding:
+  //   run-scheduled-audit only, which sends Bearer ${supabaseServiceKey} (index.ts:225)
+  // requireAdminOrApiKey accepts EDGE_FUNCTION_API_KEY, the service-role
+  // key and an admin JWT, so a manual or server-to-server call still works.
+  const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+  if (authFailure) return authFailure;
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -100,7 +115,7 @@ View details in the SEO Dashboard: ${Deno.env.get("VITE_SITE_URL") || "https://d
           const recipients = preferences?.map((p) => p.email_address).filter(Boolean) || [];
 
           if (recipients.length > 0) {
-            const emailResponse = await fetch("https://api.resend.com/emails", {
+            const emailResponse = await fetchWithTimeout("https://api.resend.com/emails", {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -177,7 +192,7 @@ View details in the SEO Dashboard: ${Deno.env.get("VITE_SITE_URL") || "https://d
           ],
         };
 
-        const slackResponse = await fetch(slackWebhookUrl, {
+        const slackResponse = await fetchWithTimeout(slackWebhookUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -237,7 +252,7 @@ View details in the SEO Dashboard: ${Deno.env.get("VITE_SITE_URL") || "https://d
           ],
         };
 
-        const discordResponse = await fetch(discordWebhookUrl, {
+        const discordResponse = await fetchWithTimeout(discordWebhookUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -279,15 +294,10 @@ View details in the SEO Dashboard: ${Deno.env.get("VITE_SITE_URL") || "https://d
   } catch (error) {
     console.error("Error in send-seo-notification function:", error);
 
-    return new Response(
-      JSON.stringify({
-        error: error.message,
-        details: error.stack,
-      }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+    return errorResponse(error, {
+      status: 500,
+      headers: corsHeaders,
+      logContext: "send-seo-notification",
+    });
   }
 });

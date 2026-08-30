@@ -1,10 +1,11 @@
 import { useEventHotels, useHotels } from "@/hooks/useHotels";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Building2, ExternalLink, MapPin, Star } from "lucide-react";
+import { Star } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Database } from "@/integrations/supabase/types";
 import AffiliateDisclosureBanner from "@/components/AffiliateDisclosureBanner";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 type Hotel = Database["public"]["Tables"]["hotels"]["Row"];
 
@@ -27,7 +28,7 @@ function HotelMiniCard({ hotel, distance, notes }: { hotel: Hotel; distance?: nu
               <img src={hotel.image_url} alt={hotel.name} width={80} height={80} className="w-full h-full object-cover" loading="lazy" decoding="async" />
             ) : (
               <div className="w-full h-full bg-gradient-to-br from-[#2D1B69] to-[#DC143C] flex items-center justify-center" role="img" aria-label={`No image available for ${hotel.name}`}>
-                <Building2 className="h-6 w-6 text-white/70" />
+                <SpriteIcon name="building-2" className="h-6 w-6 text-white/70" />
               </div>
             )}
           </div>
@@ -71,7 +72,7 @@ function HotelMiniCard({ hotel, distance, notes }: { hotel: Hotel; distance?: nu
                   rel="noopener noreferrer sponsored"
                   className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80"
                 >
-                  Book <ExternalLink className="h-3 w-3" />
+                  Book <SpriteIcon name="external-link" className="h-3 w-3" />
                 </a>
               )}
             </div>
@@ -99,7 +100,7 @@ export default function EventHotelCallout({ eventId, eventArea }: EventHotelCall
   return (
     <section className="mt-8">
       <div className="flex items-center gap-2 mb-4">
-        <Building2 className="h-5 w-5 text-primary" />
+        <SpriteIcon name="building-2" className="h-5 w-5 text-primary" />
         <h2 className="text-lg font-semibold">
           {linkedHotels.length > 0 ? "Stay Nearby" : "Make It a Weekend"}
         </h2>

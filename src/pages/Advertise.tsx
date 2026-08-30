@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, Star, Eye, Target, Megaphone, Zap, TrendingUp } from "lucide-react";
+import { CalendarIcon, Star, Eye, Target, Megaphone, Zap, PanelRight } from "lucide-react";
 import { format, addDays, differenceInDays } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useCampaigns, fetchRateCard } from "@/hooks/useCampaigns";
@@ -24,6 +24,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ListingPicker } from "@/components/advertising/ListingPicker";
 import type { LinkedListing } from "@/components/advertising/ListingPicker";
 import { PlatformMetrics } from "@/components/advertising/PlatformMetrics";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 /** Minimum number of days from today before a campaign can start.
  *  Gives time for creative upload + admin review. */
@@ -33,6 +34,7 @@ const ICON_MAP: Record<PlacementType, React.ElementType> = {
   top_banner: Star,
   featured_spot: Eye,
   below_fold: Target,
+  sidebar: PanelRight,
   sponsored_listing: Megaphone,
 };
 
@@ -41,7 +43,9 @@ const PLACEMENT_OPTIONS = (Object.values(PLACEMENT_SPECS) as typeof PLACEMENT_SP
   name: spec.name,
   description: spec.description,
   dailyCost: spec.dailyCost,
-  icon: ICON_MAP[spec.type],
+  // Fallback keeps a future unmapped placement from rendering `undefined` as a
+  // component, which throws React #130 and takes down the whole page (WEB-QA-001).
+  icon: ICON_MAP[spec.type] ?? Star,
   features: spec.features,
   noCreativeRequired: spec.noCreativeRequired ?? false,
   assetRequirements: {
@@ -55,6 +59,7 @@ const PLACEMENT_OPTIONS = (Object.values(PLACEMENT_SPECS) as typeof PLACEMENT_SP
 
 export default function Advertise() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const { user } = useAuth();
   const { createCampaign, createCheckoutSession, isLoading } = useCampaigns();
@@ -71,6 +76,21 @@ export default function Advertise() {
   useEffect(() => {
     fetchRateCard().then(setRateCard);
   }, []);
+
+  // Pre-fill the linked listing when arriving from the in-app "Promote this
+  // listing" entry (IOS-ADS-016): /advertise?listingType=event&listingId=…&listingName=…
+  useEffect(() => {
+    const listingType = searchParams.get("listingType");
+    const listingId = searchParams.get("listingId");
+    const listingName = searchParams.get("listingName");
+    if (
+      (listingType === "event" || listingType === "restaurant") &&
+      listingId &&
+      listingName
+    ) {
+      setLinkedListing({ type: listingType, id: listingId, name: listingName });
+    }
+  }, [searchParams]);
 
   const hasSponsoredListing = selectedPlacements.some(p => p.type === 'sponsored_listing');
 
@@ -334,7 +354,20 @@ export default function Advertise() {
                   return (
                     <div key={option.type} className="border rounded-lg p-4">
                       <div className="flex items-start space-x-3">
+                        {/*
+                          Radix renders Checkbox as a <button role="checkbox">
+                          whose only child is an icon, so without an explicit
+                          label it has NO accessible name — a screen reader
+                          announced all five of these as just "checkbox,
+                          unchecked", with no way to tell which ad placement
+                          was being selected. The visible name lives in the
+                          sibling <h3>, which is not programmatically
+                          associated. Labelling by id keeps the visual layout
+                          untouched. WCAG 4.1.2.
+                        */}
                         <Checkbox
+                          id={`placement-${option.type}`}
+                          aria-labelledby={`placement-label-${option.type}`}
                           checked={isSelected}
                           onCheckedChange={(checked) =>
                             handlePlacementToggle(option.type, checked as boolean)
@@ -342,8 +375,10 @@ export default function Advertise() {
                         />
                         <div className="flex-1">
                           <div className="flex items-center space-x-2 mb-2">
-                            <Icon className="h-5 w-5 text-primary" />
-                            <h3 className="font-semibold">{option.name}</h3>
+                            <Icon className="h-5 w-5 text-primary" aria-hidden="true" />
+                            <h3 className="font-semibold" id={`placement-label-${option.type}`}>
+                              {option.name}
+                            </h3>
                             <span className="text-sm text-muted-foreground">
                               ${option.dailyCost}/day
                             </span>
@@ -451,7 +486,7 @@ export default function Advertise() {
                                   </div>
                                 ) : (
                                   <div className="rounded-md border border-border bg-muted/30 p-3 text-xs flex items-center gap-1.5 text-muted-foreground">
-                                    <TrendingUp className="h-3.5 w-3.5 shrink-0" />
+                                    <SpriteIcon name="trending-up" className="h-3.5 w-3.5 shrink-0" />
                                     <span>
                                       <span className="font-medium text-foreground">Flat Rate</span>
                                       {" "}— Standard visibility. Upgrade to a higher-tier placement for CPM-based impression estimates.

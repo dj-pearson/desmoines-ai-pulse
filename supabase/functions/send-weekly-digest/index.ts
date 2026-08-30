@@ -5,6 +5,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { escapeHtml } from "../_shared/escapeHtml.ts";
 import { renderEmail } from "../_shared/emailLayout.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -31,14 +33,20 @@ interface DigestContent {
 
 serve(async (req) => {
   try {
-    // Verify authorization
-    const authHeader = req.headers.get("authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
+    // A REAL CHECK. This was:
+    //     const authHeader = req.headers.get("authorization");
+    //     if (!authHeader) return 401
+    // which only tests that a header is PRESENT and never looks at it. The
+    // gateway already requires a valid JWT (no config.toml entry, so verify_jwt
+    // defaults to true) and the publishable ANON KEY is a valid JWT - so the
+    // check passed for anyone who had loaded the site, and this function mails
+    // the weekly digest to every eligible recipient. The comment above it said
+    // "Verify authorization", which is how it read as guarded for months.
+    //
+    // Only pg_cron calls it (20251110000006), sending
+    // Bearer <service_role_key>, which requireAdminOrApiKey accepts.
+    const authFailure = await requireAdminOrApiKey(req, {});
+    if (authFailure) return authFailure;
 
     // Create Supabase client with service role
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -143,7 +151,7 @@ async function sendDigestEmail(recipient: Recipient, supabase: any) {
     });
 
     // Send email via Resend
-    const resendResponse = await fetch("https://api.resend.com/emails", {
+    const resendResponse = await fetchWithTimeout("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

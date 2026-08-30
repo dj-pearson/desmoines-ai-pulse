@@ -2,13 +2,30 @@ name: PR Checks
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, develop, "release/**"]
 
 concurrency:
   group: pr-checks-${{ github.head_ref }}
   cancel-in-progress: true
 
 jobs:
+  secret-scan:
+    name: Secret Scanning (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # Full history so gitleaks can scan the whole diff range of the PR.
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Fail the build when any secret is detected (default behavior).
+          GITLEAKS_CONFIG: .gitleaks.toml
+
   validate:
     name: Lint, Type Check, Test & Build
     runs-on: ubuntu-latest
@@ -32,8 +49,404 @@ jobs:
       - name: Run TypeScript type check
         run: npm run type-check
 
-      - name: Run unit tests with coverage
-        run: npm run test:unit -- --coverage
+      # scripts/ was in NO tsconfig, so the type-checker never read a line of it:
+      # `npm run type-check` exited 0 on a script containing
+      # `const x: number = "nope"`, verified by adding exactly that. WEB-CI-027
+      # already records the consequence - a stray closing brace in
+      # scripts/run-migration.ts reaching CI, under the note "tsconfig does not
+      # include scripts/, so the file is invisible to the type-checker entirely".
+      # Clean at zero errors from the first run, so it gates rather than ratchets.
+      - name: Type-check the scripts directory
+        run: npm run type-check:scripts
 
+      # functions/ is the Cloudflare Pages middleware and it was in no tsconfig
+      # either - so the file that runs on EVERY production request, decides what
+      # a social crawler is served and rewrites the canonical on the SPA
+      # fallback, had never been read by the compiler. Its only import,
+      # EventContext from @cloudflare/workers-types, resolves to nothing because
+      # that package is not installed; functions/_typecheck/cloudflare.d.ts
+      # declares it rather than adding a dependency (see the file for why).
+      # WEB-SEO-006 already notes the HTMLRewriter transform "cannot be executed
+      # in CI", which makes static checking most of the coverage available here.
+      - name: Type-check the Pages Functions
+        run: npm run type-check:functions
+
+      # Edge functions are excluded from tsconfig.json, and no workflow runs
+      # `deno check`, so until now NOTHING type-checked supabase/functions -
+      # eslint parses them and runs no type-aware rules. A wrong property on a
+      # locally-typed object reached production unchallenged, which is exactly
+      # the class of edit WEB-BE-032's fixes have been making by the dozen.
+      #
+      # Scoped to _shared/ deliberately. That is where every agent module, the
+      # crisis floor, the trial notice and the consent classifier live, and it
+      # comes back CLEAN at zero errors. The other ~120 function directories
+      # report 132 errors that are overwhelmingly shim imprecision rather than
+      # defects, so gating on them would be red from the first run - the trap
+      # WEB-CI-020 and WEB-CI-021 already taught this repo twice.
+      - name: Type-check the shared edge modules
+        run: npm run type-check:edge
+
+      # The other half: the same compiler over ALL of supabase/functions, as a
+      # per-file ratchet. The ~120 individual function directories cannot reach
+      # zero today (166 errors, many of them shim artifacts), so this fails only
+      # when a file GAINS an error. That is what catches the assign-role shape:
+      # a named import with no matching export, which Deno throws on at module
+      # load, in the one directory npm run check-imports does not cover.
+      - name: Edge functions gained no type errors
+        run: npm run check-edge-types
+
+      # The offline suites for the edge/script helpers that have no other
+      # coverage: the venue-image reclaim, the /media route, the image_url
+      # rewrite and the provider-spend pricing. Each one decides a number or a
+      # deletion against a database this repo's CI cannot reach, so unit-testing
+      # the pure part is the only check they get. They were written and then not
+      # wired up, which is the same as not having them.
+      # Every *.test.mjs under scripts/__tests__ and functions/__tests__,
+      # DISCOVERED rather than listed. This step used to run a hand-maintained
+      # chain of four; an audit found ten suites, two of which had never run in
+      # CI at all - including the only guard on the WEB-SEO-006 canonical
+      # rewrite, which that story says cannot be verified any other way.
+      - name: Offline helper suites
+        run: npm run test:offline
+
+      # Named-import integrity: a named import with no matching export is not a
+      # type error, and esbuild strips types without checking, so it reaches
+      # production as an undefined component (React #130). See WEB-QA-001.
+      - name: Check import/export integrity
+        run: npm run check-imports
+
+      # Supabase schema-usage ratchet (WEB-QA-017). A query naming a table,
+      # column, or RPC that does not exist is not a type error — it 400s at
+      # runtime, the hook catches, and the UI renders an empty state, so the
+      # feature silently does nothing. A single stale column took the homepage
+      # events feed to zero rows in production. Known findings are frozen in
+      # schema-baseline.json; this fails only on NEW ones. The baseline must
+      # only ever shrink.
+      - name: Check Supabase schema usage
+        run: npm run check-schema
+
+      # strictNullChecks migration ratchet (WEB-CI-007). The strict project
+      # cannot pass yet (~88 real errors), so this does not gate on zero — it
+      # fails only if a file gets WORSE or a new file starts erroring. Baseline
+      # lives in strict-baseline.json; re-baseline with
+      # `npm run type-check:strict:update` after improving.
+      - name: strictNullChecks ratchet
+        run: npm run type-check:strict:ratchet
+
+      # WEB-CI-025. Was `npm run test:unit -- --coverage`, which could never pass:
+      # vitest.config.ts declares coverage.provider 'v8' but @vitest/coverage-v8
+      # is in neither dependencies nor devDependencies, so the step died with
+      # "MISSING DEPENDENCY Cannot find dependency '@vitest/coverage-v8'". It was
+      # invisible for six months because this workflow was disabled, and
+      # `npm run validate` never runs the unit tests.
+      #
+      # Adding the provider is NOT a one-line fix, and two attempts proved it
+      # (4192d32e, 8451fca3, both reverted). package-lock.json carries an invalid
+      # dedupe -- `npm ls esbuild` reports
+      #   esbuild@0.25.12 deduped invalid: "^0.27.0 || ^0.28.0"
+      #   from node_modules/vitest/node_modules/vite
+      # Nothing exercises that path while the provider is absent. Add any
+      # dependency and npm resolves it honestly, pulls esbuild 0.28.2, and the
+      # lockfile no longer satisfies `npm ci` on the runner: "Missing:
+      # esbuild@0.28.2 from lock file". Local npm 11 and the runner's npm 10
+      # (node 20) also disagree about what to write.
+      #
+      # Coverage was never gated -- vitest.config.ts sets no thresholds, and the
+      # measured figure is 2.26% of statements. So the flag cost the gate its
+      # ability to run at all in exchange for a number nobody checks. Dropped.
+      # The 223 unit tests, which are the point, now actually run.
+      #
+      # Fixing the dedupe is worth doing on its own, with npm 10 to match the
+      # runner and `npm ci` verified before pushing rather than after.
+      - name: Run unit tests
+        run: npm run test:unit
+
+      # WEB-CI-025. This step CANNOT PASS without these. vite.config.ts has an
+      # assert-html-env-placeholders plugin that fails the build outright when
+      # VITE_SUPABASE_URL is absent, because index.html interpolates it as a
+      # %VAR% placeholder and the literal reaches vite's HTML parser. Measured
+      # by clearing the variable locally: "Build failed in 4ms", before
+      # generate-sitemaps output and long before prerender.
+      #
+      # The prerenderer then needs them for real: it renders each hub route with
+      # headless Chromium and refuses to publish a route that captured a loading
+      # or error state, so a credential-less build produces either a hard
+      # failure or 35 empty shells. Same secrets e2e.yml already reads.
+      #
+      # This job was disabled_manually on GitHub from 2026-02-12 until it was
+      # re-enabled, which is why the gap went unnoticed — the step never ran.
       - name: Build production bundle
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_SITE_URL: ${{ secrets.VITE_SITE_URL || 'https://desmoinesinsider.com' }}
         run: npm run build
+
+      # WEB-PERF-020 AC4. Runs after the build because it measures dist/. A
+      # RATCHET, not the 200 KB budget itself -- the critical path is 370 KB, so
+      # enforcing the goal outright would be red on day one, which is how the
+      # accessibility lane (WEB-CI-021) and the unit lane (WEB-CI-020) both
+      # ended up on continue-on-error. It fails on growth past the baseline and
+      # prints the distance to 200 KB every run so the goal stays visible.
+      # WEB-LEGAL-009 AC1: analytics that loads before consent lives in
+      # index.html - not TypeScript, not tested, not linted - which is how
+      # WEB-LEGAL-001 shipped while a document said it was fixed.
+      - name: Consent gate on third-party tags
+        run: node scripts/check-consent-gate.mjs
+
+      # WEB-SEO-006: the SPA fallback serves the prerendered HOMEPAGE for every
+      # unmatched route, so 884 sitemapped URLs answered with the homepage
+      # canonical - an instruction to treat them all as one page. Runs after the
+      # build so it can also confirm the rewrite still has a canonical to target.
+      - name: SPA fallback does not claim to be the homepage
+        run: node scripts/check-spa-fallback-canonical.mjs
+
+      # WEB-SEO-013 AC7: pseo_pages rows are DATA, so a generated page landing on
+      # a hand-built route is invisible to every static check here - nothing
+      # compares a database row to src/App.tsx. Offline; reads a committed slug
+      # list, and ratchets rather than gating, because each existing collision
+      # needs a per-slug decision.
+      - name: pSEO slugs do not collide with real routes
+        run: node scripts/check-pseo-route-collisions.mjs
+
+      # The forward-looking half of AC7. The check above compares PUBLISHED slugs
+      # against routes; this one compares everything the taxonomy COULD generate,
+      # so a new dimension value that would collide is visible before a
+      # generation run rather than after. Offline - reads src/pseo/taxonomy.ts,
+      # src/App.tsx and public/_redirects. Reports, does not gate: the 10 literal
+      # collisions and 257 shadowed URLs are decisions about which layer owns a
+      # prefix, and gating on them would be red from the first run.
+      - name: pSEO taxonomy collisions
+        run: npx tsx scripts/check-pseo-collisions.ts
+
+      - name: Critical-path JS budget
+        run: node scripts/check-bundle-budget.mjs
+
+      # WEB-PERF-023 AC1. The prerenderer has a "budget" and it is a TIME budget,
+      # so nothing in this repo has ever counted an element - the numbers in that
+      # story were measured by hand once and went stale immediately. This counts
+      # #root descendants with jsdom, which is Lighthouse's own definition, and
+      # ratchets per route with a wide tolerance: these pages render live data,
+      # so a tight gate on a data-driven number is a flake, and a flaky gate gets
+      # switched off (see WEB-CI-020, WEB-CI-021).
+      # WEB-SEO-006. No prerendered page may ship a loading skeleton. /restaurants
+      # shipped "Loading restaurants..." and an ItemList of numberOfItems 0 on
+      # every build until 2026-08-28, and nothing caught it because every other
+      # guard here measures a DIFFERENCE against a baseline - a route that has
+      # always been wrong looks stable. This asserts an absolute property, so it
+      # gates where check-dom-budget cannot: a shipped skeleton is never correct
+      # on any data, so there is no quiet week that makes it fire.
+      - name: No prerendered page ships a skeleton
+        run: node scripts/check-prerender-content.mjs
+
+      # WEB-SEO-006 AC5. The strict gate refuses to WRITE a page that did not
+      # render as itself, and the skeleton check asserts properties of the pages
+      # that do get written - neither can see a URL that was never attempted.
+      # The entity pass is a wall-clock race against a 420s budget and the build
+      # exits 0 when it loses: two local builds of one tree differed by 268 URLs,
+      # each of which then ships an SPA shell to GPTBot and friends. Loose floor
+      # on purpose, so it catches the cliff and not the weather.
+      - name: Sitemapped entity URLs still ship prerendered HTML
+        run: node scripts/check-entity-coverage.mjs
+
+      # WEB-SEO-013 AC7. public/_redirects is hand-edited and the entity sitemaps
+      # are generated from the database, so the two have never been compared.
+      # Submitting a URL that 301s is a Search Console error; a 301 whose target
+      # no sitemap lists means the page that WON a duplication is the one nothing
+      # points at, which is what /visitors-guide was.
+      - name: Sitemaps and redirects agree
+        run: node scripts/check-sitemap-redirects.mjs
+
+      # WEB-LEGAL-011 AC8 / WEB-QA-020. check-bucket-posture.ts asks the same
+      # question but needs the service-role key, which is an ENVIRONMENT secret
+      # scoped to "Scrape" - so it only runs in the daily audit and a PR that
+      # reopens a bucket is not caught until the next morning. The public object
+      # endpoint answers it on the anon key: a public bucket resolves and fails
+      # on the missing key, a private one does not resolve at all.
+      - name: No closed storage bucket is publicly readable
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: npx tsx scripts/check-bucket-public-anon.ts
+
+      # WEB-SEO-002 was "12 routes render no SEOHead" - pages shipping with the
+      # shell's title, no canonical and the site-wide description. All 35 are
+      # clean today and nothing was guarding it, so the property got fixed and
+      # the comment in prerender.mjs went stale. None of these move with live
+      # data, so this gates.
+      - name: Every prerendered page declares its own head
+        run: node scripts/check-prerender-head.mjs
+
+      - name: Prerendered DOM size
+        run: node scripts/check-dom-budget.mjs
+
+      # WEB-SEO-006. /og-image.png was never in public/, and Cloudflare answers a
+      # missing static file with the SPA shell - 200 text/html where an image
+      # belongs. Six pages advertised it as their og:image and nothing errored.
+      # Offline: an asset this site serves must be present in the build.
+      - name: Advertised assets exist in the build
+        run: node scripts/check-asset-content-types.mjs
+
+      # WEB-LEGAL-009 AC2. Also runs after the build, because Vite rewrites
+      # index.html and the CSP has to match what is SERVED, not the source.
+      # Guards the pinning WEB-LEGAL-001 depends on: editing the inline consent
+      # bootstrap without regenerating its hash makes the browser refuse to run
+      # it, and nothing else in the build would say so.
+      - name: CSP inline-script hashes
+        run: node scripts/check-csp-hashes.mjs
+
+  # WEB-CI-023. `npm run type-check` above runs `tsc --noEmit` against the root
+  # tsconfig, which is `"files": []` plus project references — so it compiles
+  # ZERO files and has always exited 0. Two P1 crashes shipped straight through
+  # it in one week: /stay called getCanonicalUrl with no import (TS2304), and
+  # useSocialFeatures returned a bare `loading` after an unused-var autofix
+  # renamed the binding (TS2552). Both are one-line errors that
+  # `tsc -p tsconfig.app.json` reports.
+  #
+  # It cannot gate on zero: the app project has 400 pre-existing errors, mostly
+  # PostgREST generic-instantiation noise. So it ratchets per-file, exactly like
+  # the strict one — a file that gets worse, or a new file that starts erroring,
+  # fails the build.
+  #
+  # Its own job rather than a step in `validate`: tsc over this project takes
+  # several minutes (the generated Supabase types provoke a lot of TS2589), and
+  # it must not sit in front of the build. Deliberately NOT in `npm run
+  # validate` for the same reason — local validate has to stay usable.
+  app-type-ratchet:
+    name: App project type ratchet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: tsconfig.app.json ratchet
+        run: npm run type-check:app:ratchet
+      # tsconfig.node.json is clean today, so this one is a real gate, not a
+      # ratchet. Keep it that way.
+      - name: tsconfig.node.json must stay clean
+        run: npx tsc -p tsconfig.node.json --noEmit
+
+  migration-safety:
+    name: Migration Safety
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # THESE TWO WERE WRITTEN TO BLOCK A REGRESSION AT REVIEW TIME AND COULD NOT.
+      # Both live in rls-config-audit.yml, which runs on a daily cron and on
+      # workflow_dispatch only - never on a pull request. So the guard for
+      # WEB-BE-032 and the guard for WEB-SEC-025 both reported the morning AFTER
+      # the change they exist to stop had already merged. Both are offline and
+      # take seconds, so they run here too; the nightly copies stay, because
+      # neither surface should lose coverage over this.
+      #
+      # WEB-BE-032 AC4: `const { data } = await supabase...` cannot tell 42P01
+      # from an empty table, which is how 33 dead tables stayed invisible.
+      - name: No new discarded Supabase errors
+        run: node scripts/check-discarded-supabase-errors.mjs
+
+      # Every AOS agent exists twice - as an agent-* edge function and as a
+      # _shared/agents module - and both are deployable. Three fixes landed on
+      # one copy only, two of them in stories marked done: WEB-LEGAL-005's
+      # crisis floor, WEB-LEGAL-006's trial-conversion notice, and
+      # compliance-monitor's null-count gate. In each case the story's AC, the
+      # fix and the test all named the same single file, so the second
+      # implementation was invisible from every angle at once. Node builtins
+      # only, like the check above, so this job needs no npm ci.
+      - name: Duplicated agents have not drifted apart
+        run: node scripts/check-agent-pair-drift.mjs
+
+      # WEB-SEC-025 step 3 replaces the USING (true) SELECT policy on votes. A
+      # read that is not scoped to the caller returns ballots today and an empty
+      # array after - silently, because a denied SELECT under RLS is an empty
+      # result, not an error.
+      - name: Ballot reads stay own-row
+        run: bash scripts/check-ballot-reads.sh
+
+      # XPLAT-013: check-schema-usage.mjs scans src/ and supabase/functions/ and
+      # compares against the GENERATED TYPES. Swift and Kotlin have no generated
+      # types, so nothing had ever checked what the two shipped mobile clients
+      # query - 18 call sites across 4 nonexistent tables had accumulated. Offline;
+      # reads scripts/db-snapshot.json.
+      - name: Mobile clients query tables that exist
+        run: node scripts/check-mobile-schema-usage.mjs
+
+      # A service-role edge function must check WHO is calling. verify_jwt only
+      # means "a valid Supabase JWT", which the publishable anon key is - so it
+      # separates a site visitor from nobody and nothing more. Two functions were
+      # reachable that way: one dispatched mail, one started a paid geocoding
+      # batch. Baselined; this stops the list growing.
+      - name: Service-role functions verify their caller
+        run: node scripts/check-edge-auth.mjs
+
+      # profiles.communication_preferences is one JSONB column with four owners,
+      # and a PostgREST update REPLACES it. PreferencesManager sent a fresh
+      # literal, so Save Preferences deleted taste_preferences, ui_preferences
+      # and the marketing opt-out - and every consent gate reads !== false, so
+      # deleting an explicit false opts the user back in silently. Offline.
+      - name: Shared JSONB bags are merged, not replaced
+        run: node scripts/check-jsonb-bag-writes.mjs
+
+      # check-schema-usage compares code against src/integrations/supabase/types.ts,
+      # which makes types.ts the reference - and nothing checked the reference. A
+      # column declared there but absent in production type-checks, PASSES
+      # check-schema-usage, and 42703s at runtime. Offline; same snapshot as above.
+      - name: Generated types claim nothing production lacks
+        run: node scripts/check-types-drift.mjs
+
+      # IOS-AUDIT-REL-007: universal links, Sign in with Apple webcredentials and
+      # App Clip invocation all fail SILENTLY when the AASA disagrees with the
+      # app - no build error, no test, the link just opens Safari and you find
+      # out at review. Nothing compared them, so the file shipped with no
+      # appclips section while the Clip declared appclip:<domain> and handled
+      # invocation URLs. Offline. The placeholder team id is reported, not
+      # gated: the real value is not in the repo (IOS-AUDIT-REL-006), and a
+      # permanently red check is the failure mode WEB-CI-027 collects.
+      - name: AASA matches the iOS project
+        run: node scripts/check-aasa.mjs
+
+      # WEB-PERF-007 / WEB-FEAT-006: a module in src/lib that nothing imports is
+      # usually a DEAD TWIN - a second implementation of a live feature, writing
+      # the same table, that no longer runs. Four of the fourteen baselined are
+      # exactly that, and two cost real debugging time on 2026-08-24: the better
+      # written copy of the favourites funnel was the dead one, so reading it
+      # suggested errors were handled when the live copy discarded them. Fails on
+      # a NEW one, which is the moment a replacement was written and the old copy
+      # left behind.
+      - name: No new unimported module in src/lib
+        run: node scripts/check-dead-lib-modules.mjs
+
+      # WEB-CI-027: a workflow that fails to PARSE does not skip - it produces a
+      # startup_failure on every push regardless of its triggers, with no failing
+      # step to read. release-notes.yml did exactly that for three days in August
+      # after a bare `---` at column 1 (from an inlined PR body) split it into two
+      # YAML documents. The column-0 separator check is dependency-free; the full
+      # parse runs only when js-yaml resolves, since it is transitive here.
+      - name: Workflows are single parseable YAML documents
+        run: node scripts/check-workflow-yaml.mjs
+
+      # WEB-QA-017: catch a migration recorded as applied that produced nothing.
+      # The ledger row is what stops `supabase db push` from ever re-running the
+      # file, so a bad row makes the miss permanent and silent - 144 of the 147
+      # dead table references in the schema-usage baseline trace to 29 such rows.
+      # Offline; reads scripts/db-snapshot.json. Ratchets against
+      # .github/migration-drift-baseline.json, because each known one needs its
+      # own decision (WEB-QA-018).
+      - name: Ledgered migrations produced what they define
+        run: node scripts/check-migration-drift.mjs
+
+      # WEB-DB-008: block destructive single-release migration changes. Attach the
+      # `migration-override` label to the PR to bypass when the change is genuinely safe.
+      - name: Check new migrations for destructive changes
+        env:
+          MIGRATION_SAFETY_OVERRIDE: ${{ contains(github.event.pull_request.labels.*.name, 'migration-override') }}
+        run: node scripts/check-migration-safety.mjs

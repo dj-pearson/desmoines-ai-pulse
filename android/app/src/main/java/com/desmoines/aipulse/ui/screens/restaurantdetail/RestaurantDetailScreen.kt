@@ -73,6 +73,7 @@ import com.desmoines.aipulse.data.model.Restaurant
 import com.desmoines.aipulse.data.model.SubscriptionTier
 import com.desmoines.aipulse.ui.components.AdBannerView
 import com.desmoines.aipulse.ui.components.CachedAsyncImage
+import com.desmoines.aipulse.ui.components.reviews.ReviewsSection
 import com.desmoines.aipulse.ui.components.FullScreenImageViewer
 import com.desmoines.aipulse.ui.components.HeartBurst
 import com.desmoines.aipulse.ui.components.LoadingView
@@ -84,6 +85,7 @@ import com.desmoines.aipulse.ui.theme.BrandOrange
 import com.desmoines.aipulse.ui.theme.CategoryFood
 import com.desmoines.aipulse.ui.theme.DesMoinesInsiderTheme
 import com.desmoines.aipulse.ui.theme.StatusSuccess
+import java.util.Locale
 
 /**
  * Restaurant Detail screen matching iOS RestaurantDetailView.swift.
@@ -104,6 +106,7 @@ fun RestaurantDetailScreen(
     onOpenWebsite: () -> Unit,
     onOpenDirections: () -> Unit,
     onShowSubscription: () -> Unit,
+    onNavigateToAuth: () -> Unit = {},
 ) {
     var showImageViewer by remember { mutableStateOf(false) }
     val haptic = rememberHapticPerformer()
@@ -201,6 +204,15 @@ fun RestaurantDetailScreen(
                 hasPremiumAccess = hasPremiumAccess,
                 currentTier = currentTier,
                 onShowSubscription = onShowSubscription
+            )
+
+            // Reviews (ANDP-035 / ANDP-036)
+            Spacer(modifier = Modifier.height(8.dp))
+            ReviewsSection(
+                contentType = "restaurant",
+                contentId = restaurant.id,
+                onNavigateToSubscription = onShowSubscription,
+                onNavigateToAuth = onNavigateToAuth,
             )
 
             // Ad Banner
@@ -358,7 +370,7 @@ private fun RestaurantDetailInfo(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.semantics {
-                        contentDescription = "${String.format("%.1f", rating)} out of 5 stars"
+                        contentDescription = "${String.format(Locale.US, "%.1f", rating)} out of 5 stars"
                     }
                 ) {
                     // Star icons
@@ -383,7 +395,7 @@ private fun RestaurantDetailInfo(
                         }
                     }
                     Text(
-                        text = String.format("%.1f", rating),
+                        text = String.format(Locale.US, "%.1f", rating),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold
                     )

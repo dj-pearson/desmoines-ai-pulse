@@ -8,6 +8,8 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -37,6 +39,17 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+
+  // Runs as service_role and had no caller check. verify_jwt is not a gate:
+  // it defaults to true, and true only means "a valid Supabase JWT" - which
+  // the publishable anon key is, in every client bundle.
+  //
+  // Every caller is admin-gated already: SEOManager, mounted at
+  // /admin/seo behind <ProtectedRoute requireAdmin>. No cron job posts here.
+  // So the route assumed admin and the server did not enforce it; the admin
+  // JWT that functions.invoke sends is what requireAdminOrApiKey checks.
+  const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+  if (authFailure) return authFailure;
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -86,7 +99,7 @@ serve(async (req) => {
 
     // Call PageSpeed Insights API
     console.log("Calling PageSpeed Insights API...");
-    const response = await fetch(apiUrl.toString());
+    const response = await fetchWithTimeout(apiUrl.toString());
 
     if (!response.ok) {
       const errorText = await response.text();

@@ -1,7 +1,5 @@
 package com.desmoines.aipulse.ui.components
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -63,8 +61,8 @@ fun AffiliateAdBanner(
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .clickable {
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(partner.affiliateUrl))
-                context.startActivity(intent)
+                // Validate against the affiliate allowlist + crash-safe launch (ANDP-065).
+                affiliateAdService.safeOpen(context, partner.affiliateUrl)
             }
             .semantics {
                 contentDescription = "Advertisement from ${partner.name}. Tap to learn more."

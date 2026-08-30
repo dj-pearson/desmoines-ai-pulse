@@ -9,18 +9,9 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import {
-  Calendar,
-  Search,
-  Heart,
-  Share2,
-  Sparkles,
-  MapPin,
-  ChevronRight,
-  ChevronLeft,
-  Check,
-} from 'lucide-react';
+import { Calendar, Search, Heart, Sparkles, ChevronRight, ChevronLeft, Check } from "lucide-react";
 import { useUserPreferences } from '@/hooks/use-user-preferences';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface WelcomeStep {
   title: string;
@@ -180,7 +171,7 @@ export function WelcomeModal() {
             {isLastStep ? (
               <>
                 Get Started
-                <Sparkles className="w-4 h-4 ml-2" />
+                <SpriteIcon name="sparkles" className="w-4 h-4 ml-2" />
               </>
             ) : (
               <>

@@ -22,17 +22,25 @@
 
 name: iOS CI
 
+# The workflow file is in its own paths list so that editing THIS FILE runs it.
+# Without that line an edit to the CI definition gets no feedback until some
+# unrelated ios/** change lands - which is how a too-tight timeout on the UI-test
+# step went unnoticed until it turned main red (run 32651998578), and how the fix
+# for it could not be verified by the PR that made it. android-ci.yml and
+# subscription-sync-tests.yml already do this; ios-ci was the odd one out.
 on:
   push:
     branches: [main]
     paths:
       - 'ios/**'
+      - '.github/workflows/ios-ci.yml'
       - '!ios/README.md'
       - '!ios/fastlane/metadata/**'
   pull_request:
     branches: [main]
     paths:
       - 'ios/**'
+      - '.github/workflows/ios-ci.yml'
       - '!ios/README.md'
       - '!ios/fastlane/metadata/**'
   workflow_dispatch:
@@ -73,12 +81,15 @@ jobs:
   version-bump:
     name: Auto Version Bump
     runs-on: ubuntu-latest
-    # Only bump version on push to main (not PRs, not [skip ci])
-    if: >
-      github.event_name == 'push' &&
-      github.ref == 'refs/heads/main' &&
-      !contains(github.event.head_commit.message, '[skip ci]') &&
-      !contains(github.event.head_commit.message, '[version bump]')
+    # Auto version-bump DISABLED. The marketing version and build number are
+    # now managed manually in ios/project.yml and via the release workflow's
+    # `version` / `build_number` inputs, so the version no longer marches ahead
+    # of the build under test. To re-enable automatic patch bumps on push to
+    # main, restore the previous guard:
+    #   github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+    #   !contains(github.event.head_commit.message, '[skip ci]') &&
+    #   !contains(github.event.head_commit.message, '[version bump]')
+    if: false
     outputs:
       new_version: ${{ steps.bump.outputs.new_version }}
       new_build: ${{ steps.bump.outputs.new_build }}
@@ -298,6 +309,54 @@ jobs:
             }
           echo "✅ Unit tests passed"
 
+      # IOS-AUDIT-REL-015: DesMoinesInsiderUITests existed and ran only in the
+      # screenshot lane, which is manual. These are navigation tests that happen
+      # to take screenshots - they tap a tab and wait for content - so they catch
+      # the two failures unit tests structurally cannot: the app not launching at
+      # all, and a tab or screen disappearing.
+      #
+      # Same job as the unit tests on purpose: the simulator is already booted
+      # and the SPM cache is warm, so this costs a UI-test build rather than a
+      # whole extra job.
+      # Bounded so a hung UI test fails this step instead of eating the job's
+      # 30 minutes and taking the already-passed unit-test result down with it.
+      # A UI test that waits on an element which never appears does not fail on
+      # its own - it waits until something outside kills it.
+      #
+      # 12 WAS TOO TIGHT AND COST A RED MAIN. Run 32651998578 on main failed with
+      # "The action 'Run UI tests' has timed out after 12 minutes" - not an
+      # assertion, just the cap. Measured across the four most recent successes
+      # this step takes 6, 7, 8 and 9 minutes, so 12 left three minutes of
+      # headroom against a simulator suite whose runtime varies with runner
+      # performance and simulator boot. That is not enough margin to be a hang
+      # detector; it is a coin flip.
+      #
+      # 20 KEEPS THE ORIGINAL INTENT AND STILL BOUNDS A HANG. The job's own
+      # numbers: total 14 minutes, of which build 2 and unit tests 3, against a
+      # 30-minute job cap. So 5 + 20 = 25 leaves the job timeout as a real
+      # backstop, and 20 is over twice the slowest observed run.
+      - name: Run UI tests
+        timeout-minutes: 20
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project DesMoinesInsider.xcodeproj \
+            -scheme DesMoinesInsiderUITests \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,name=iPhone 16,OS=latest" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cache" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee "$RUNNER_TEMP/xcodebuild-uitest.log" | xcpretty --color --test || {
+              echo ""
+              echo "::error::UI tests failed!"
+              grep -E "(Test Case.*failed|error:)" "$RUNNER_TEMP/xcodebuild-uitest.log" | head -30
+              exit 1
+            }
+          echo "UI tests passed"
+
       - name: Report version
         if: needs.version-bump.outputs.bumped == 'true'
         run: |
@@ -346,6 +405,18 @@ jobs:
           grep 'MARKETING_VERSION:' ios/project.yml
           grep 'CURRENT_PROJECT_VERSION:' ios/project.yml
 
+          # IOS-AUDIT-REL-016: the iOS MARKETING_VERSION and the backend
+          # LATEST_APP_VERSION.ios (consumed by the version-check flow) must stay
+          # in lock-step. Fail the job if they drift so a release can't ship a
+          # binary the backend doesn't recognize as current.
+          MKT_VERSION=$(grep 'MARKETING_VERSION:' ios/project.yml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          BACKEND_VERSION=$(grep -A3 'const LATEST_APP_VERSION' supabase/functions/_shared/minSupportedVersions.ts | grep -m1 'ios:' | sed 's/.*"\(.*\)".*/\1/')
+          echo "iOS MARKETING_VERSION: $MKT_VERSION | backend LATEST_APP_VERSION.ios: $BACKEND_VERSION"
+          if [ "$MKT_VERSION" != "$BACKEND_VERSION" ]; then
+            echo "::error::Version drift: project.yml MARKETING_VERSION ($MKT_VERSION) != minSupportedVersions.ts LATEST_APP_VERSION.ios ($BACKEND_VERSION)"
+            ERRORS=$((ERRORS + 1))
+          fi
+
           echo ""
           SWIFT_COUNT=$(find ios/DesMoinesInsider -name "*.swift" | wc -l | xargs)
           echo "Swift files: $SWIFT_COUNT"
@@ -355,3 +426,31 @@ jobs:
             exit 1
           fi
           echo "✅ Configuration validation passed"
+
+      # IOS-AUDIT-SEC-013 AC5: certificate pins are the one thing in this app
+      # that can take every installed binary offline with no server-side remedy,
+      # and they drift on their own schedule - the Supabase leaf reissues about
+      # every 90 days. This fails when fewer than two declared pins appear in
+      # the live chain, which is the point at which one more rotation would lock
+      # out every enforcing client. See docs/CERT_PIN_ROTATION.md.
+      # IOS-AUDIT-REL-014: a required-reason API used but not declared is what
+      # gets a submission rejected, and the reviewer is the one who finds it.
+      # Offline; no credentials needed.
+      # IOS-AUDIT-UX-060: Swift has no warning for an unused internal property,
+      # and every one found here so far was a MISSING SURFACE rather than dead
+      # code - state a screen needed that no screen read.
+      - name: Unread view-model and service members
+        run: node scripts/check-unused-members.mjs
+
+      - name: Privacy manifest reconciliation
+        run: node scripts/check-privacy-manifest.mjs
+
+      # IOS-AUDIT-REL-008: the Snapfile already SAID the three device lists must
+      # match and nothing enforced it. The screenshot lane is workflow_dispatch-
+      # only, so a drift produces no failure at all - the first symptom is a
+      # submission missing a required size. Offline; reads three files.
+      - name: Screenshot device lists agree
+        run: node scripts/check-screenshot-devices.mjs
+
+      - name: Verify certificate pins against the live host
+        run: bash scripts/verify-cert-pins.sh

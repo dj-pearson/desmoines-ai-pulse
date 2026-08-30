@@ -79,7 +79,7 @@ export default function BestOfCategory() {
                               {index === 0 ? (
                                 <Medal className="h-6 w-6 text-yellow-500 mx-auto" />
                               ) : index === 1 ? (
-                                <Medal className="h-6 w-6 text-gray-400 mx-auto" />
+                                <Medal className="h-6 w-6 text-gray-500 mx-auto" />
                               ) : index === 2 ? (
                                 <Medal className="h-6 w-6 text-amber-700 mx-auto" />
                               ) : (

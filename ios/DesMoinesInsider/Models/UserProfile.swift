@@ -59,28 +59,6 @@ struct UserEventInteraction: Codable {
     }
 }
 
-// MARK: - User Rating
-
-struct UserRating: Codable {
-    let id: String?
-    let userId: String
-    let contentId: String
-    let contentType: String
-    let rating: String
-    var reviewText: String?
-    var createdAt: String?
-
-    enum CodingKeys: String, CodingKey {
-        case id
-        case userId = "user_id"
-        case contentId = "content_id"
-        case contentType = "content_type"
-        case rating
-        case reviewText = "review_text"
-        case createdAt = "created_at"
-    }
-}
-
 // MARK: - Preview Helpers
 
 extension UserProfile {

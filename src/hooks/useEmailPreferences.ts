@@ -2,7 +2,18 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { createLogger } from '@/lib/logger';
 
+const log = createLogger('useEmailPreferences');
+
+/**
+ * The weekly-digest half of user_email_preferences.
+ *
+ * event_alerts_enabled lives in the same table and is deliberately absent here:
+ * it is owned by useSavedSearchAlerts + the dashboard's Saved searches tab, and
+ * a second writer for one column would give the user two switches for one
+ * setting that disagree with each other (WEB-LEGAL-012 AC2).
+ */
 interface EmailPreferences {
   id?: string;
   user_id?: string;
@@ -56,12 +67,19 @@ export function useEmailPreferences() {
     mutationFn: async (newPreferences: Partial<EmailPreferences>) => {
       if (!user?.id) throw new Error('User not authenticated');
 
-      // Check if preferences exist
-      const { data: existing } = await supabase
+      // Check if preferences exist. maybeSingle, and the error is checked:
+      // .single() raises PGRST116 for "no row", so the previous read could not
+      // tell "this user has no preferences yet" from a network or RLS failure -
+      // and both took the INSERT branch, where a real existing row then failed
+      // the unique constraint and reported "Failed to update preferences" to a
+      // user whose row was there all along (WEB-BE-032).
+      const { data: existing, error: existingError } = await supabase
         .from('user_email_preferences')
         .select('id')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
+
+      if (existingError) throw existingError;
 
       if (existing) {
         // Update existing
@@ -96,8 +114,10 @@ export function useEmailPreferences() {
         description: 'Your email preferences have been updated',
       });
     },
-    onError: (error: any) => {
-      console.error('Error updating email preferences:', error);
+    onError: (error: Error) => {
+      // console.* is stripped from production builds, so this was invisible in
+      // exactly the environment where it mattered.
+      log.error('updatePreferences', 'Error updating email preferences', { error });
       toast({
         title: 'Failed to update preferences',
         description: error.message || 'Please try again',

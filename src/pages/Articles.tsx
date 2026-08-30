@@ -6,14 +6,17 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calendar, Eye, Search, Filter, Clock, User, Tag, BookOpen, TrendingUp, Grid, List } from 'lucide-react';
-import { LoadingSpinner } from '@/components/ui/loading-skeleton';
+import { Eye, Search, Filter, User, Tag, BookOpen, Grid, List } from "lucide-react";
+import { CardsGridSkeleton } from '@/components/ui/loading-skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
+import { ErrorState } from '@/components/ui/error-state';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import SEOHead from '@/components/SEOHead';
 import { FAQSection } from '@/components/FAQSection';
 import { BackToTop } from '@/components/BackToTop';
 import { Breadcrumbs } from '@/components/ui/breadcrumbs';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const Articles: React.FC = () => {
   const { articles, loading, error, loadArticles } = useArticles();
@@ -79,9 +82,21 @@ const Articles: React.FC = () => {
         <Header />
         <div className="min-h-screen bg-background">
           <div className="container mx-auto px-4 py-8">
-            <div className="flex items-center justify-center min-h-[400px]">
-              <LoadingSpinner />
-            </div>
+            <CardsGridSkeleton count={6} label="Loading articles..." />
+          </div>
+        </div>
+        <Footer />
+      </>
+    );
+  }
+
+  if (error) {
+    return (
+      <>
+        <Header />
+        <div className="min-h-screen bg-background">
+          <div className="container mx-auto px-4 py-8">
+            <ErrorState error={error} onRetry={loadArticles} />
           </div>
         </div>
         <Footer />
@@ -207,7 +222,7 @@ const Articles: React.FC = () => {
                   <div>
                     <label className="text-sm font-medium mb-2 block">Category</label>
                     <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                      <SelectTrigger>
+                      <SelectTrigger aria-label="Filter articles by category">
                         <SelectValue placeholder="All Categories" />
                       </SelectTrigger>
                       <SelectContent>
@@ -224,7 +239,7 @@ const Articles: React.FC = () => {
                   <div>
                     <label className="text-sm font-medium mb-2 block">Sort By</label>
                     <Select value={sortBy} onValueChange={setSortBy}>
-                      <SelectTrigger>
+                      <SelectTrigger aria-label="Sort articles">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -272,27 +287,29 @@ const Articles: React.FC = () => {
 
           {/* Articles Grid/List */}
           {filteredAndSortedArticles.length === 0 ? (
-            <div className="text-center py-16">
-              <BookOpen className="h-16 w-16 text-muted-foreground mx-auto mb-4 opacity-50" />
-              <h3 className="text-xl font-semibold mb-2">No articles found</h3>
-              <p className="text-muted-foreground mb-6">
-                {searchQuery || selectedCategory !== 'all' 
-                  ? 'Try adjusting your search criteria or browse all articles.'
-                  : 'No articles have been published yet. Check back soon!'
-                }
-              </p>
-              {(searchQuery || selectedCategory !== 'all') && (
-                <Button 
-                  variant="outline" 
-                  onClick={() => {
-                    setSearchQuery('');
-                    setSelectedCategory('all');
-                  }}
-                >
-                  Clear Filters
-                </Button>
-              )}
-            </div>
+            (searchQuery || selectedCategory !== 'all') ? (
+              <EmptyState
+                icon={BookOpen}
+                title="No articles found"
+                description="Try adjusting your search criteria or browse all articles."
+                actions={[
+                  {
+                    label: 'Clear Filters',
+                    variant: 'outline',
+                    onClick: () => {
+                      setSearchQuery('');
+                      setSelectedCategory('all');
+                    },
+                  },
+                ]}
+              />
+            ) : (
+              <EmptyState
+                icon={BookOpen}
+                title="No articles published yet"
+                description="No articles have been published yet. Check back soon!"
+              />
+            )
           ) : (
             <div className={
               viewMode === 'grid' 
@@ -331,7 +348,7 @@ const Articles: React.FC = () => {
                           {article.category}
                         </Badge>
                         <span className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
+                          <SpriteIcon name="clock" className="h-3 w-3" />
                           {formatReadTime(article.content)}
                         </span>
                         <span className="text-xs text-muted-foreground flex items-center gap-1">
@@ -371,7 +388,7 @@ const Articles: React.FC = () => {
                       {/* Footer */}
                       <div className="flex items-center justify-between text-sm text-muted-foreground">
                         <div className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
+                          <SpriteIcon name="calendar" className="h-3 w-3" />
                           {formatDate(article.published_at || article.created_at)}
                         </div>
                         
@@ -390,7 +407,7 @@ const Articles: React.FC = () => {
           {filteredAndSortedArticles.length > 0 && (
             <div className="text-center mt-12">
               <Button variant="outline" size="lg" className="gap-2">
-                <TrendingUp className="h-4 w-4" />
+                <SpriteIcon name="trending-up" className="h-4 w-4" />
                 Explore More Topics
               </Button>
             </div>

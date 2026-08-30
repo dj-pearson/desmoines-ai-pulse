@@ -1,0 +1,44 @@
+# gitleaks configuration (WEB-SEC-008).
+# Uses the full default ruleset and FAILS CI on any newly-introduced secret.
+#
+# The allowlist below covers ONLY pre-existing, already-public exposures so that
+# CI gates *new* leaks rather than blocking every PR on history we can't unship.
+# Each allowlisted item is tracked for rotation in docs/SECRETS_ROTATION.md.
+
+title = "Des Moines AI Pulse secret scanning"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Known historical exposures — see docs/SECRETS_ROTATION.md (rotate, do not add new)."
+regexTarget = "match"
+paths = [
+  # .env.example contains only placeholder values.
+  '''\.env\.example''',
+  # Docs reference key *prefixes* / placeholders, not live secrets.
+  '''.*\.md''',
+  '''\.gitleaks\.toml''',
+
+  # CRITICAL — committed service_role JWT in these historical (already-applied)
+  # migrations. The key MUST be rotated (docs/SECRETS_ROTATION.md). Allowlisted
+  # because the value is already in git history; rotation is the real fix.
+  '''supabase/migrations/20250820173146_.*\.sql''',
+  '''supabase/migrations/20250822015522_.*\.sql''',
+  '''supabase/migrations/20250823012338_.*\.sql''',
+  '''supabase/migrations/20250825174423_.*\.sql''',
+  '''supabase/migrations/20250830035320_.*\.sql''',
+  '''supabase/migrations/20250830035336_.*\.sql''',
+  '''supabase/migrations/20250830144003_.*\.sql''',
+  '''supabase/migrations/20250831045616_.*\.sql''',
+  '''supabase/migrations/20250903031613_.*\.sql''',
+  '''supabase/migrations/20250903140840_.*\.sql''',
+  '''supabase/migrations/20251004030356_.*\.sql''',
+
+  # Public anon keys (safe by design — shipped in the browser bundle) embedded in
+  # old debug/helper scripts. Still recommended to remove; not sensitive.
+  '''debug-browser\.js''',
+  '''debug-catchdesmoines\.js''',
+  '''invoke-populate-playgrounds\.cjs''',
+  '''scripts/event-datetime-sql-generator\.ts''',
+]

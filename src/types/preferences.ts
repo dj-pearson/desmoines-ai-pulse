@@ -182,7 +182,7 @@ export const defaultPreferences: Omit<UserPreferences, 'userId'> = {
 export const onboardingSteps = [
   {
     id: 'welcome',
-    title: 'Welcome to Des Moines AI Pulse',
+    title: 'Welcome to Des Moines Insider',
     description: 'Let\'s personalize your experience',
   },
   {

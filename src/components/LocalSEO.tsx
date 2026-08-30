@@ -23,10 +23,22 @@ export default function LocalSEO({
   canonicalPath,
 }: LocalSEOProps) {
 
-  // Enhanced local title with neighborhood if provided
-  const enhancedTitle = neighborhood
-    ? `${pageTitle} in ${neighborhood}, Des Moines | ${BRAND.name}`
-    : `${pageTitle} | Des Moines, Iowa | ${BRAND.name}`;
+  // WEB-SEO-002: this used to append unconditionally, producing
+  // "Events & Activities in Highland Park in Highland Park, Des Moines |
+  // Des Moines Insider" (86 chars) because NeighborhoodPage already names the
+  // neighborhood in pageTitle. The no-neighborhood branch was similarly
+  // doubled: "... | Des Moines, Iowa | Des Moines Insider".
+  //
+  // Only add what is not already there, and add the brand once. Google
+  // truncates around 60 characters, so every wasted repetition costs a real
+  // word in the SERP.
+  const withLocality =
+    neighborhood && !pageTitle.includes(neighborhood)
+      ? `${pageTitle} in ${neighborhood}, ${BRAND.city}`
+      : pageTitle;
+  const enhancedTitle = withLocality.includes(BRAND.name)
+    ? withLocality
+    : `${withLocality} | ${BRAND.name}`;
 
   // Canonical URL
   const canonicalUrl = canonicalPath
@@ -164,12 +176,9 @@ export default function LocalSEO({
         "addressRegion": "IA", 
         "addressCountry": "US"
       }
-    },
-    "organizer": {
-      "@type": "Organization",
-      "name": BRAND.name,
-      "url": BRAND.baseUrl,
     }
+    // WEB-SEO-010: no "organizer". This named BRAND.name as the organizer of
+    // whatever event the neighbourhood pages passed in, which is never true.
   } : null;
 
   // Generate Breadcrumb Schema

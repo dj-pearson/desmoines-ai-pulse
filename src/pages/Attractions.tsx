@@ -3,9 +3,12 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { AdBanner } from "@/components/AdBanner";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
+import ItemListSchema from "@/components/schema/ItemListSchema";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { FAQSection } from "@/components/FAQSection";
 import { useAttractions } from "@/hooks/useAttractions";
+import { useUrlFilters } from "@/hooks/useUrlFilters";
+import { ActiveFilterChips } from "@/components/filters/ActiveFilterChips";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 import { useToast } from "@/hooks/use-toast";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
@@ -29,8 +32,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CardsGridSkeleton } from "@/components/ui/loading-skeleton";
-import { MapPin, Star, Filter, List, Map, SlidersHorizontal, Landmark, ChevronRight, SearchX, X, AlertCircle, ChevronDown, Shuffle } from "lucide-react";
+import { Star, Filter, List, Map, SlidersHorizontal, Landmark, ChevronRight, SearchX, X, ChevronDown, Shuffle } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { SortDropdown, ATTRACTION_SORT_OPTIONS } from "@/components/SortDropdown";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -44,8 +48,13 @@ import {
 } from "@/components/ui/pagination";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { OptimizedImage } from "@/components/OptimizedImage";
+import { FavoriteButton } from "@/components/FavoriteButton";
+import { SponsoredBadge } from "@/components/SponsoredBadge";
+import { SponsoredImpressionMarker } from "@/components/SponsoredImpressionMarker";
+import { arrangeSponsored, isSponsoredActive, logSponsoredClick } from "@/lib/sponsored";
 import { SearchAutocomplete, addRecentSearch } from "@/components/SearchAutocomplete";
 import { usePrefetchAttraction } from "@/hooks/usePrefetchDetail";
+import { formatCount } from "@/lib/pluralize";
 import {
   Sheet,
   SheetContent,
@@ -53,6 +62,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 // Lazy load map to prevent react-leaflet bundling issues
 const AttractionsMap = lazy(() => import("@/components/AttractionsMap"));
@@ -72,21 +82,53 @@ export default function Attractions() {
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const prefetchAttraction = usePrefetchAttraction();
-  // Filter states
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedType, setSelectedType] = useState("all");
-  const [minRating, setMinRating] = useState("any-rating");
+  // Filter states — URL-synced (WEB-UX-001) so views are shareable and survive
+  // back/forward. Discrete filters are URL-derived; search keeps a local state
+  // for responsive typing and writes to the URL debounced.
+  const { getStr, getNum, setParam, clearParams } = useUrlFilters();
+  const selectedType = getStr("type", "all");
+  const minRating = getStr("rating", "any-rating");
+  const featuredOnly = getStr("featured", "all");
+  const sortBy = getStr("sort", "rating");
+  const setSelectedType = (v: string) => setParam("type", v, { def: "all", resetsPage: true });
+  const setMinRating = (v: string) => setParam("rating", v, { def: "any-rating", resetsPage: true });
+  const setFeaturedOnly = (v: string) => setParam("featured", v, { def: "all", resetsPage: true });
+  const setSortBy = (v: string) => setParam("sort", v, { def: "rating", resetsPage: true });
+
+  const urlQ = getStr("q", "");
+  const [searchQuery, setSearchQuery] = useState(() => urlQ);
+  // Debounced URL write (replace, so typing doesn't spam history).
+  useEffect(() => {
+    if (searchQuery === urlQ) return;
+    const t = setTimeout(
+      () => setParam("q", searchQuery, { def: "", resetsPage: true, replace: true }),
+      300
+    );
+    return () => clearTimeout(t);
+  }, [searchQuery, urlQ, setParam]);
+  // Back/forward & shared links: pull URL changes back into the input.
+  useEffect(() => {
+    if (urlQ !== searchQuery) setSearchQuery(urlQ);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlQ]);
+
   const [showFilters, setShowFilters] = useState(true); // Show filters by default
   const [showMobileFilters, setShowMobileFilters] = useState(false);
-  const [featuredOnly, setFeaturedOnly] = useState("all");
-  const [sortBy, setSortBy] = useState("rating");
   const [viewMode, setViewMode] = useState('list');
 
   const ITEMS_PER_PAGE = 30;
-  const [page, setPage] = useState(1);
+  const page = getNum("page", 1);
+  /** Accepts a number OR a React-style updater. Three call sites below pass an
+   *  updater (Load More / Previous / Next), and before this signature existed
+   *  that function was handed straight to setParam, which does String(value) —
+   *  serialising the function SOURCE into the ?page= param. getNum then parsed
+   *  NaN and fell back to 1, so those controls silently did nothing. Surfaced by
+   *  the strict type-check (WEB-CI-007). */
+  const setPage = (v: number | ((prev: number) => number)) =>
+    setParam("page", typeof v === "function" ? v(page) : v, { def: 1 });
 
   // Get all attractions first
-  const { attractions: allAttractions, isLoading, error } = useAttractions({});
+  const { attractions: allAttractions, isLoading, error, refetch } = useAttractions({});
   const { announce, announcement, regionProps } = useAnnounce();
 
   // Get unique types for filter options
@@ -147,7 +189,8 @@ export default function Attractions() {
         sorted.sort((a, b) => (b.rating || 0) - (a.rating || 0));
         break;
     }
-    return sorted;
+    // Boost up to 2 active sponsored listings to the top (WEB-FEAT-005).
+    return arrangeSponsored(sorted);
   }, [filteredAttractions, sortBy]);
 
   const handleSurpriseMe = () => {
@@ -170,10 +213,7 @@ export default function Attractions() {
     ? page * ITEMS_PER_PAGE < sortedAttractions.length
     : page < totalPages;
 
-  // Reset page when filters change
-  useEffect(() => {
-    setPage(1);
-  }, [searchQuery, selectedType, minRating, featuredOnly, sortBy]);
+  // Page reset on filter change is handled by setParam({ resetsPage: true }).
 
   // Announce result count to screen readers
   useEffect(() => {
@@ -197,9 +237,7 @@ export default function Attractions() {
 
   const handleClearFilters = () => {
     setSearchQuery("");
-    setSelectedType("all");
-    setMinRating("any-rating");
-    setFeaturedOnly("all");
+    clearParams(["q", "type", "rating", "featured", "sort"]);
     toast({
       title: "Filters Cleared",
       description: "All filters have been reset",
@@ -234,8 +272,26 @@ export default function Attractions() {
     },
   ];
 
+  // The rendered set, capped, so every URL here is a link the crawler can
+  // also see on the page. createSlug above is the same function the cards
+  // use, so the schema URL and the href cannot drift apart.
+  const SCHEMA_LIMIT = 20;
+  const schemaItems = paginatedAttractions
+    .slice(0, SCHEMA_LIMIT)
+    .map((item) => ({
+      name: item.name,
+      url: getCanonicalUrl(`/attractions/${createSlug(item.name)}`),
+      ...(item.image_url && { image: item.image_url }),
+      ...(item.description && { description: item.description }),
+    }));
+
   return (
     <div className="min-h-screen bg-background">
+      <ItemListSchema
+        name="Attractions in Des Moines, Iowa"
+        description="Museums, parks, landmarks and family attractions in the Greater Des Moines area."
+        items={schemaItems}
+      />
       <EnhancedLocalSEO
         pageTitle={pageTitle}
         pageDescription={pageDescription}
@@ -455,7 +511,7 @@ export default function Attractions() {
                   Attraction Type
                 </label>
                 <Select value={selectedType} onValueChange={setSelectedType}>
-                  <SelectTrigger>
+                  <SelectTrigger aria-label="Attraction Type">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -475,7 +531,7 @@ export default function Attractions() {
                   Minimum Rating
                 </label>
                 <Select value={minRating} onValueChange={setMinRating}>
-                  <SelectTrigger>
+                  <SelectTrigger aria-label="Minimum Rating">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -494,7 +550,7 @@ export default function Attractions() {
                   Featured
                 </label>
                 <Select value={featuredOnly} onValueChange={setFeaturedOnly}>
-                  <SelectTrigger>
+                  <SelectTrigger aria-label="Featured">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -510,7 +566,7 @@ export default function Attractions() {
                 Clear Filters
               </Button>
               <div className="text-sm text-gray-500">
-                {filteredAttractions?.length || 0} attractions found
+                {formatCount(filteredAttractions?.length || 0, 'attraction')} found
               </div>
             </div>
           </div>
@@ -519,8 +575,18 @@ export default function Attractions() {
         {/* Screen reader announcement for result count changes */}
         <div {...regionProps}>{announcement}</div>
 
-        {/* Results Header */}
-        <div className="flex items-center justify-between mb-6">
+        {/* Results Header.
+            WEB-UX-031: this was a non-wrapping flex row, and at 320px it could
+            not fit. Measured: the row is 288px wide, the h2 shrinks to its
+            min-content 124.97px, and SortDropdown is a hard w-[180px] that
+            cannot shrink below its own min-content — 124.97 + 180 = 304.97
+            against 288 available. The overflow escaped to the document, whose
+            scrollWidth then ceiled 320.97 to 321, which is the "1px horizontal
+            scroll" this story reported. The 1px was rounding; the real overflow
+            was 17px.
+            flex-wrap lets the dropdown drop to its own line at that width and
+            changes nothing wider, since a row that fits never wraps. */}
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
           <h2 className="text-2xl font-bold">
             {searchQuery
               ? `Search results for "${searchQuery}"`
@@ -535,51 +601,37 @@ export default function Attractions() {
           />
         </div>
 
-        {/* Active Filter Badges */}
-        {hasActiveFilters && (
-          <div className="flex flex-wrap items-center gap-2 mb-4">
-            <span className="text-sm text-muted-foreground">Active filters:</span>
-            {searchQuery && (
-              <Badge variant="secondary" className="gap-1 pr-1">
-                Search: &quot;{searchQuery}&quot;
-                <button onClick={() => setSearchQuery("")} className="ml-1 hover:bg-accent rounded-full p-0.5" aria-label={`Remove search filter "${searchQuery}"`}><X className="h-3 w-3" /></button>
-              </Badge>
-            )}
-            {selectedType !== "all" && (
-              <Badge variant="secondary" className="gap-1 pr-1">
-                Type: {selectedType}
-                <button onClick={() => setSelectedType("all")} className="ml-1 hover:bg-accent rounded-full p-0.5" aria-label={`Remove type filter "${selectedType}"`}><X className="h-3 w-3" /></button>
-              </Badge>
-            )}
-            {minRating !== "any-rating" && (
-              <Badge variant="secondary" className="gap-1 pr-1">
-                Rating: {minRating}+
-                <button onClick={() => setMinRating("any-rating")} className="ml-1 hover:bg-accent rounded-full p-0.5" aria-label="Remove rating filter"><X className="h-3 w-3" /></button>
-              </Badge>
-            )}
-            {featuredOnly !== "all" && (
-              <Badge variant="secondary" className="gap-1 pr-1">
-                Featured Only
-                <button onClick={() => setFeaturedOnly("all")} className="ml-1 hover:bg-accent rounded-full p-0.5" aria-label="Remove featured filter"><X className="h-3 w-3" /></button>
-              </Badge>
-            )}
-            <Button variant="ghost" size="sm" onClick={handleClearFilters} className="text-muted-foreground h-7 text-xs">
-              Clear All
-            </Button>
-          </div>
-        )}
+        {/* Sticky filter bar: result count + removable chips (WEB-UX-003) */}
+        <div className="sticky top-16 z-30 py-2 mb-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b">
+          <span className="text-sm font-medium" aria-live="polite">
+            {filteredAttractions?.length || 0} result{(filteredAttractions?.length || 0) === 1 ? "" : "s"}
+          </span>
+          <ActiveFilterChips
+            className="mt-2"
+            onClearAll={handleClearFilters}
+            chips={[
+              ...(searchQuery
+                ? [{ key: "q", label: `Search: "${searchQuery}"`, onRemove: () => { setSearchQuery(""); setParam("q", "", { resetsPage: true }); } }]
+                : []),
+              ...(selectedType !== "all"
+                ? [{ key: "type", label: `Type: ${selectedType}`, onRemove: () => setSelectedType("all") }]
+                : []),
+              ...(minRating !== "any-rating"
+                ? [{ key: "rating", label: `Rating: ${minRating}+`, onRemove: () => setMinRating("any-rating") }]
+                : []),
+              ...(featuredOnly !== "all"
+                ? [{ key: "featured", label: "Featured only", onRemove: () => setFeaturedOnly("all") }]
+                : []),
+            ]}
+          />
+        </div>
 
         {viewMode === 'map' ? (
           <AttractionsMap attractions={sortedAttractions} />
         ) : isLoading ? (
           <CardsGridSkeleton count={6} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" label={searchQuery ? `Searching for "${searchQuery}"...` : selectedType !== "all" ? `Loading ${selectedType} attractions...` : "Loading attractions..."} />
         ) : error ? (
-          <EmptyState
-            icon={AlertCircle}
-            title="Unable to load attractions"
-            description="We're having trouble loading attractions. Please check your connection and try again."
-            actions={[{ label: "Try Again", onClick: () => window.location.reload() }]}
-          />
+          <ErrorState error={error} onRetry={() => refetch()} />
         ) : sortedAttractions.length === 0 ? (
           <EmptyState
             icon={searchQuery || selectedType !== "all" || minRating !== "any-rating" || featuredOnly !== "all" ? SearchX : Landmark}
@@ -614,24 +666,57 @@ export default function Attractions() {
                   key={attraction.id}
                   to={`/attractions/${createSlug(attraction.name)}`}
                   className="block"
+                  aria-label={`${isSponsoredActive(attraction) ? "Sponsored: " : ""}${attraction.name}`}
                   onMouseEnter={() => prefetchAttraction(createSlug(attraction.name))}
+                  onClick={() => {
+                    if (isSponsoredActive(attraction))
+                      logSponsoredClick("attraction", attraction.id);
+                  }}
                 >
-                  <Card className="h-full hover:shadow-lg transition-all duration-200 hover:-translate-y-1 rounded-2xl overflow-hidden">
-                    {attraction.image_url ? (
-                      <OptimizedImage
-                        src={attraction.image_url}
-                        alt={`${attraction.name} - ${attraction.type} in Des Moines`}
-                        width={640}
-                        height={360}
-                        className="transition-transform duration-200 hover:scale-105 object-cover"
-                        containerClassName="aspect-video overflow-hidden"
-                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                  <Card
+                    className={`h-full hover:shadow-lg transition-all duration-200 hover:-translate-y-1 rounded-2xl overflow-hidden ${
+                      isSponsoredActive(attraction) ? "ring-2 ring-amber-400 shadow-lg" : ""
+                    }`}
+                  >
+                    <div className="relative">
+                      {attraction.image_url ? (
+                        <OptimizedImage
+                          src={attraction.image_url}
+                          alt={`${attraction.name} - ${attraction.type} in Des Moines`}
+                          width={640}
+                          height={360}
+                          className="transition-transform duration-200 hover:scale-105 object-cover"
+                          containerClassName="aspect-video overflow-hidden"
+                          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                        />
+                      ) : (
+                        <div className="aspect-video bg-gradient-to-br from-[#2D1B69] to-[#DC143C] flex items-center justify-center" role="img" aria-label={`No image available for ${attraction.name}`}>
+                          <Landmark className="h-12 w-12 text-white/40" />
+                        </div>
+                      )}
+                      {/* Sponsored listing treatment (WEB-FEAT-005) */}
+                      {isSponsoredActive(attraction) && (
+                        <div className="absolute top-3 left-3 z-20">
+                          <SponsoredBadge className="shadow-lg" />
+                        </div>
+                      )}
+                      <SponsoredImpressionMarker
+                        contentType="attraction"
+                        contentId={attraction.id}
+                        active={isSponsoredActive(attraction)}
                       />
-                    ) : (
-                      <div className="aspect-video bg-gradient-to-br from-[#2D1B69] to-[#DC143C] flex items-center justify-center" role="img" aria-label={`No image available for ${attraction.name}`}>
-                        <Landmark className="h-12 w-12 text-white/40" />
+                      {/* Save (favorite) overlay — stopPropagation handled inside */}
+                      <div className="absolute top-3 right-3 z-20">
+                        <FavoriteButton
+                          contentType="attraction"
+                          contentId={attraction.id}
+                          itemName={attraction.name}
+                          size="icon"
+                          variant="ghost"
+                          className="h-9 w-9 rounded-full bg-white/90 hover:bg-white shadow-md backdrop-blur"
+                        />
                       </div>
-                    )}
+                    </div>
                     <CardContent className="p-5">
                       <div className="flex items-center justify-between mb-2">
                         <Badge
@@ -657,7 +742,7 @@ export default function Attractions() {
                         )}
                         {attraction.location && (
                           <div className="flex items-center gap-2">
-                            <MapPin className="h-4 w-4" />
+                            <SpriteIcon name="map-pin" className="h-4 w-4" />
                             <span className="line-clamp-1">{attraction.location}</span>
                           </div>
                         )}
@@ -796,7 +881,7 @@ export default function Attractions() {
                       </span>
                       <span className="block text-xs text-gray-500">{count} attractions</span>
                     </div>
-                    <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-[#2D1B69]" />
+                    <ChevronRight className="h-4 w-4 text-gray-500 group-hover:text-[#2D1B69]" />
                   </button>
                 );
               })}

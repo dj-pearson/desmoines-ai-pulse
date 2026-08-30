@@ -43,6 +43,9 @@ export interface CampaignCreative {
   link_url?: string;
   cta_text?: string;
   is_approved: boolean;
+  /** Object path in the private ad-creatives-review bucket while unapproved.
+   *  image_url stays null until approval publishes the file (WEB-LEGAL-011). */
+  review_path?: string | null;
   file_size?: number;
   file_type?: string;
   dimensions_width?: number;

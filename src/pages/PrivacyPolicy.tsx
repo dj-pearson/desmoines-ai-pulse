@@ -1,18 +1,31 @@
+/**
+ * Privacy Policy
+ *
+ * ⚠️ LEGAL REVIEW REQUIRED — This policy was expanded during the 2026 compliance
+ * audit to close specific GDPR / CPRA / US-state gaps (legal bases, EU/UK
+ * representative, right to object & restriction, right to correct, right to
+ * limit sensitive PI, and a functional Do-Not-Sell-or-Share mechanism). The
+ * wording is a good-faith draft, NOT legal advice — have counsel review before
+ * relying on it, and fill in the bracketed placeholders (EU/UK representative,
+ * registered postal address) with real values.
+ */
 import { Link } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
 import { BackToTop } from "@/components/BackToTop";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { Button } from "@/components/ui/button";
+import { reopenConsentBanner } from "@/components/CookieConsentBanner";
 
 export default function PrivacyPolicy() {
-  const lastUpdated = "November 25, 2025";
+  const lastUpdated = "July 23, 2026";
 
   return (
     <div className="min-h-screen bg-background">
       <SEOHead
         title="Privacy Policy | Des Moines Insider"
-        description="Learn how Des Moines Insider collects, uses, and protects your personal information. Our privacy policy explains your rights and our data practices."
+        description="Learn how Des Moines Insider collects, uses, and protects your personal information. Our privacy policy explains your rights under GDPR, CCPA/CPRA, and US state privacy laws."
         url="https://desmoinesinsider.com/privacy-policy"
         type="website"
       />
@@ -44,6 +57,22 @@ export default function PrivacyPolicy() {
               and local experiences in the Des Moines, Iowa metropolitan area. By using our Site, you agree to the collection
               and use of information in accordance with this policy.
             </p>
+            <p>
+              This policy should be read together with our{" "}
+              <Link to="/cookie-policy" className="text-primary underline">Cookie Policy</Link>{" "}
+              (which describes the specific cookies and similar technologies we use and how to control them) and, for business
+              customers, our{" "}
+              <Link to="/dpa" className="text-primary underline">Data Processing Agreement</Link>.
+            </p>
+          </section>
+
+          <section className="mb-8">
+            <h2 className="text-2xl font-semibold mt-8 mb-4">Who We Are (Data Controller)</h2>
+            <p>
+              For the purposes of the EU and UK General Data Protection Regulation ("GDPR"), Des Moines Insider is the
+              <strong> data controller</strong> of the personal information described in this policy. You can reach our
+              privacy team at <a href="mailto:privacy@desmoinesinsider.com" className="text-primary underline">privacy@desmoinesinsider.com</a>.
+            </p>
           </section>
 
           <section className="mb-8">
@@ -69,6 +98,19 @@ export default function PrivacyPolicy() {
               <li><strong>Location Data:</strong> General geographic location based on IP address (not precise GPS)</li>
               <li><strong>Cookies and Similar Technologies:</strong> Session cookies, preference cookies, and analytics cookies</li>
             </ul>
+            <p>
+              Usage and analytics data described above are collected only where you have granted the relevant cookie consent.
+              See <strong>Your Privacy Choices</strong> below and our{" "}
+              <Link to="/cookie-policy" className="text-primary underline">Cookie Policy</Link>.
+            </p>
+
+            <h3 className="text-xl font-medium mt-6 mb-3">Sensitive Personal Information</h3>
+            <p>
+              We do not intentionally collect "sensitive personal information" as defined by the California Privacy Rights Act
+              (CPRA) — such as precise geolocation, government identifiers, race, religion, health, or biometric data — for the
+              purpose of inferring characteristics about you. Account credentials are used solely to authenticate you and secure
+              your account.
+            </p>
 
             <h3 className="text-xl font-medium mt-6 mb-3">Information from Third-Party Services</h3>
             <p>If you choose to link your account with third-party services, we may receive:</p>
@@ -93,6 +135,32 @@ export default function PrivacyPolicy() {
           </section>
 
           <section className="mb-8">
+            <h2 className="text-2xl font-semibold mt-8 mb-4">Legal Bases for Processing (GDPR)</h2>
+            <p>
+              If you are in the European Economic Area (EEA) or the United Kingdom, we process your personal information only
+              where we have a valid legal basis to do so under Article 6 of the GDPR:
+            </p>
+            <ul className="list-disc pl-6 space-y-2">
+              <li>
+                <strong>Performance of a contract (Art. 6(1)(b)):</strong> to create and operate your account and provide the
+                features you request.
+              </li>
+              <li>
+                <strong>Consent (Art. 6(1)(a)):</strong> for non-essential analytics and advertising cookies, marketing emails,
+                and personalized recommendations. You may withdraw consent at any time (see Your Privacy Choices) without
+                affecting the lawfulness of processing before withdrawal.
+              </li>
+              <li>
+                <strong>Legitimate interests (Art. 6(1)(f)):</strong> to secure our Site, prevent fraud and abuse, and improve
+                our services — balanced against your rights and freedoms. You may object to this processing (see Your Rights).
+              </li>
+              <li>
+                <strong>Legal obligation (Art. 6(1)(c)):</strong> to comply with tax, accounting, and other legal requirements.
+              </li>
+            </ul>
+          </section>
+
+          <section className="mb-8">
             <h2 className="text-2xl font-semibold mt-8 mb-4">AI-Powered Features</h2>
             <p>
               Des Moines Insider uses artificial intelligence to enhance your experience. This includes:
@@ -105,7 +173,8 @@ export default function PrivacyPolicy() {
             </ul>
             <p>
               All AI processing is designed to improve your experience. Your personal data is not used to train external AI models.
-              You can disable personalized recommendations in your account settings.
+              We do not use your personal data to make decisions that produce legal or similarly significant effects about you
+              without human involvement. You can disable personalized recommendations in your account settings.
             </p>
           </section>
 
@@ -115,32 +184,46 @@ export default function PrivacyPolicy() {
             <ul className="list-disc pl-6 space-y-2">
               <li><strong>Essential Cookies:</strong> Required for the Site to function (authentication, security)</li>
               <li><strong>Preference Cookies:</strong> Remember your settings (theme, view mode, filters)</li>
-              <li><strong>Analytics Cookies:</strong> Help us understand how visitors use our Site (can be disabled)</li>
-              <li><strong>Advertising Cookies:</strong> Track ad impressions and clicks for our advertising partners</li>
+              <li><strong>Analytics Cookies:</strong> Help us understand how visitors use our Site (off unless you opt in)</li>
+              <li><strong>Advertising Cookies:</strong> Where enabled, used by advertising partners to personalize ads and measure campaigns (off unless you opt in)</li>
             </ul>
             <p>
-              You can control cookies through your browser settings. Note that disabling certain cookies may affect Site functionality.
+              Non-essential cookies are <strong>off by default</strong> and are only set after you opt in. You can change your
+              choices at any time from the <strong>Your Privacy Choices</strong> control, and we honor the Global Privacy
+              Control (GPC) browser signal automatically. For full details, see our{" "}
+              <Link to="/cookie-policy" className="text-primary underline">Cookie Policy</Link>.
             </p>
           </section>
 
           <section className="mb-8">
             <h2 className="text-2xl font-semibold mt-8 mb-4">Data Sharing and Disclosure</h2>
-            <p>We do not sell your personal information. We may share your information with:</p>
+            <p>
+              We do not sell your personal information for money. We may allow certain analytics and advertising partners to
+              process site-activity data, which can be considered "sharing" or "sale" under some US state laws — you can opt out
+              of this at any time (see <strong>Do Not Sell or Share My Personal Information</strong> below). We may share your
+              information with:
+            </p>
             <ul className="list-disc pl-6 space-y-2">
-              <li><strong>Service Providers:</strong> Third-party vendors who help us operate the Site (hosting, analytics, email delivery, payment processing)</li>
+              <li><strong>Service Providers / Processors:</strong> Third-party vendors who help us operate the Site (hosting, analytics, email delivery, payment processing) under contractual data-protection obligations</li>
               <li><strong>Business Partners:</strong> Event organizers and venue owners may see anonymized aggregate data</li>
               <li><strong>Legal Requirements:</strong> When required by law, court order, or to protect our rights</li>
               <li><strong>Business Transfers:</strong> In connection with a merger, acquisition, or sale of assets</li>
             </ul>
 
-            <h3 className="text-xl font-medium mt-6 mb-3">Third-Party Service Providers</h3>
-            <p>We use the following third-party services:</p>
+            <h3 className="text-xl font-medium mt-6 mb-3">Third-Party Sub-Processors</h3>
+            <p>We rely on the following sub-processors to deliver our services:</p>
             <ul className="list-disc pl-6 space-y-2">
               <li><strong>Supabase:</strong> Database hosting and user authentication</li>
-              <li><strong>Cloudflare:</strong> Content delivery and security</li>
+              <li><strong>Cloudflare:</strong> Content delivery, hosting, and security</li>
               <li><strong>Stripe:</strong> Payment processing (PCI compliant)</li>
-              <li><strong>Google Analytics:</strong> Website analytics (opt-out available)</li>
+              <li><strong>Resend / SendGrid:</strong> Transactional and marketing email delivery</li>
+              <li><strong>OpenAI &amp; Anthropic:</strong> AI content and recommendation features (no personal data used for model training)</li>
+              <li><strong>Google Analytics:</strong> Website analytics, where you have opted in (opt-out available)</li>
             </ul>
+            <p>
+              A complete and current list of sub-processors, including the categories of data and safeguards, is maintained in
+              our <Link to="/dpa" className="text-primary underline">Data Processing Agreement</Link>.
+            </p>
           </section>
 
           <section className="mb-8">
@@ -153,24 +236,56 @@ export default function PrivacyPolicy() {
               <li><strong>Account Data:</strong> Retained until you delete your account</li>
               <li><strong>Usage Data:</strong> Retained for up to 24 months for analytics purposes</li>
               <li><strong>Newsletter Subscriptions:</strong> Until you unsubscribe</li>
+              <li><strong>Consent Records:</strong> Retained as proof of your consent choices, as required by law</li>
               <li><strong>Transaction Records:</strong> Retained for 7 years for legal and tax purposes</li>
             </ul>
           </section>
 
           <section className="mb-8">
             <h2 className="text-2xl font-semibold mt-8 mb-4">Your Rights and Choices</h2>
-            <p>You have the right to:</p>
+            <p>
+              Depending on where you live, you have some or all of the following rights over your personal information. We
+              honor these rights for all users regardless of location wherever practical:
+            </p>
             <ul className="list-disc pl-6 space-y-2">
-              <li><strong>Access Your Data:</strong> Request a copy of the personal information we hold about you</li>
-              <li><strong>Correct Your Data:</strong> Update or correct inaccurate information in your account settings</li>
-              <li><strong>Delete Your Data:</strong> Request deletion of your account and associated data</li>
+              <li><strong>Access:</strong> Request a copy of the personal information we hold about you</li>
+              <li><strong>Rectification / Correction:</strong> Update or correct inaccurate information in your account settings</li>
+              <li><strong>Erasure / Deletion:</strong> Request deletion of your account and associated data</li>
+              <li><strong>Portability:</strong> Download a machine-readable copy of your data</li>
+              <li><strong>Object:</strong> Object to processing based on our legitimate interests</li>
+              <li><strong>Restriction:</strong> Ask us to restrict processing in certain circumstances</li>
+              <li><strong>Withdraw Consent:</strong> Withdraw consent for analytics, advertising, or marketing at any time</li>
               <li><strong>Opt-Out of Marketing:</strong> Unsubscribe from newsletters using the link in each email</li>
-              <li><strong>Disable Analytics:</strong> Turn off personalized tracking in your account preferences</li>
-              <li><strong>Export Your Data:</strong> Download your preferences and saved content</li>
+              <li><strong>Non-Discrimination:</strong> We will not discriminate against you for exercising any of these rights</li>
             </ul>
             <p>
-              To exercise these rights, visit your account settings or contact us at privacy@desmoinesinsider.com.
+              You can exercise most of these rights directly from your{" "}
+              <Link to="/profile" className="text-primary underline">account settings</Link> (which include self-service
+              data export and account deletion) or by emailing{" "}
+              <a href="mailto:privacy@desmoinesinsider.com" className="text-primary underline">privacy@desmoinesinsider.com</a>.
+              We will respond within the timeframes required by applicable law (generally 30–45 days). If we decline a request,
+              you have the right to appeal by replying to our response, and to lodge a complaint with your local data protection
+              authority.
             </p>
+          </section>
+
+          <section className="mb-8" id="do-not-sell">
+            <h2 className="text-2xl font-semibold mt-8 mb-4">Do Not Sell or Share My Personal Information</h2>
+            <p>
+              We do not sell your personal information for money. However, our use of analytics and advertising cookies may
+              constitute a "sale" or "sharing" of personal information (including cross-context behavioral advertising) under
+              the California Privacy Rights Act (CPRA) and similar US state laws. You have the right to opt out.
+            </p>
+            <p>
+              To opt out, use the <strong>Your Privacy Choices</strong> control below (also available any time from the site
+              footer) and turn off the Advertising and Analytics categories. We also automatically treat the Global Privacy
+              Control (GPC) browser signal as a valid opt-out request.
+            </p>
+            <div className="not-prose my-4">
+              <Button variant="outline" onClick={reopenConsentBanner}>
+                Your Privacy Choices
+              </Button>
+            </div>
           </section>
 
           <section className="mb-8">
@@ -181,6 +296,7 @@ export default function PrivacyPolicy() {
             <ul className="list-disc pl-6 space-y-2">
               <li>Encryption of data in transit (HTTPS/TLS) and at rest</li>
               <li>Secure password hashing and account lockout protection</li>
+              <li>Row-level security (RLS) restricting each user's data to that user</li>
               <li>Regular security audits and vulnerability assessments</li>
               <li>Access controls limiting employee access to personal data</li>
               <li>IP address hashing to enhance privacy while maintaining security</li>
@@ -194,31 +310,47 @@ export default function PrivacyPolicy() {
           <section className="mb-8">
             <h2 className="text-2xl font-semibold mt-8 mb-4">Children's Privacy</h2>
             <p>
-              Our Site is not intended for children under 13 years of age. We do not knowingly collect personal information
+              Our Site is not intended for children under 13 years of age, and where consent is required for data processing in
+              the EEA/UK, our services are directed to users aged 16 and older. We do not knowingly collect personal information
               from children under 13. If you believe we have collected information from a child under 13, please contact us
-              immediately so we can delete it.
+              immediately at <a href="mailto:privacy@desmoinesinsider.com" className="text-primary underline">privacy@desmoinesinsider.com</a>{" "}
+              so we can delete it.
             </p>
           </section>
 
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mt-8 mb-4">California Privacy Rights</h2>
+            <h2 className="text-2xl font-semibold mt-8 mb-4">US State Privacy Rights</h2>
             <p>
-              If you are a California resident, you have additional rights under the California Consumer Privacy Act (CCPA):
+              Residents of California (CCPA/CPRA) and other states with comprehensive privacy laws — including Virginia (VCDPA),
+              Colorado (CPA), Connecticut (CTDPA), Utah (UCPA), and others as they take effect — have the rights described in
+              <strong> Your Rights and Choices</strong> above, including the right to know, delete, correct, and opt out of the
+              sale/sharing of personal information and targeted advertising, and the right to limit the use of sensitive personal
+              information. We do not use or disclose sensitive personal information for purposes that require a right-to-limit
+              option. To exercise any of these rights, use the tools in your account settings, the{" "}
+              <strong>Your Privacy Choices</strong> control, or email{" "}
+              <a href="mailto:privacy@desmoinesinsider.com" className="text-primary underline">privacy@desmoinesinsider.com</a>.
+              You may use an authorized agent to submit a request on your behalf.
             </p>
-            <ul className="list-disc pl-6 space-y-2">
-              <li>Right to know what personal information is collected and how it's used</li>
-              <li>Right to delete personal information</li>
-              <li>Right to opt-out of the sale of personal information (we do not sell your data)</li>
-              <li>Right to non-discrimination for exercising your privacy rights</li>
-            </ul>
           </section>
 
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mt-8 mb-4">International Users</h2>
+            <h2 className="text-2xl font-semibold mt-8 mb-4">International Users and Data Transfers</h2>
             <p>
               Our Site is operated in the United States. If you access our Site from outside the United States,
-              please be aware that your information may be transferred to, stored, and processed in the United States
-              where our servers are located. By using our Site, you consent to this transfer.
+              your information may be transferred to, stored, and processed in the United States where our servers and
+              sub-processors are located. Where we transfer personal data out of the EEA or UK, we rely on appropriate
+              safeguards such as the European Commission's Standard Contractual Clauses (SCCs) and the UK International Data
+              Transfer Addendum, as described in our{" "}
+              <Link to="/dpa" className="text-primary underline">Data Processing Agreement</Link>.
+            </p>
+            <h3 className="text-xl font-medium mt-6 mb-3">EU / UK Representative</h3>
+            <p>
+              {/* TODO(legal): appoint and name a GDPR Art. 27 / UK representative if we
+                  target or monitor EEA/UK data subjects, then replace this paragraph. */}
+              If and where required under Article 27 of the GDPR, we will appoint a representative in the EU and/or UK. Until a
+              representative is named here, EEA and UK residents may contact our privacy team directly at{" "}
+              <a href="mailto:privacy@desmoinesinsider.com" className="text-primary underline">privacy@desmoinesinsider.com</a>{" "}
+              for any data-protection matter.
             </p>
           </section>
 
@@ -234,11 +366,14 @@ export default function PrivacyPolicy() {
           <section className="mb-8">
             <h2 className="text-2xl font-semibold mt-8 mb-4">Contact Us</h2>
             <p>
-              If you have questions about this Privacy Policy or our data practices, please contact us at:
+              If you have questions about this Privacy Policy or our data practices, or wish to exercise your privacy rights,
+              please contact us at:
             </p>
             <address className="not-italic mt-4 p-4 bg-muted rounded-lg">
               <strong>Des Moines Insider</strong><br />
               Email: privacy@desmoinesinsider.com<br />
+              {/* TODO(legal): replace with a full registered postal address (street or
+                  PO box) for legal notices and CAN-SPAM compliance. */}
               Des Moines, Iowa, USA
             </address>
           </section>
@@ -246,7 +381,8 @@ export default function PrivacyPolicy() {
           <section className="mt-12 pt-8 border-t">
             <p className="text-sm text-muted-foreground">
               By using Des Moines Insider, you acknowledge that you have read and understood this Privacy Policy.
-              Please also review our <Link to="/terms" className="text-primary hover:underline">Terms of Service</Link>.
+              Please also review our <Link to="/terms" className="text-primary underline">Terms of Service</Link>{" "}
+              and <Link to="/cookie-policy" className="text-primary underline">Cookie Policy</Link>.
             </p>
           </section>
         </article>

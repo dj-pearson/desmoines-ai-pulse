@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useTabState } from "@/hooks/useTabState";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import AdminNav from "@/components/admin/AdminNav";
@@ -9,7 +9,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 export default function AdminMedia() {
   useAdminAuth();
   useDocumentTitle("Media Library - Admin");
-  const [activeTab, setActiveTab] = useState("library");
+  const [activeTab, setActiveTab] = useTabState("library", {
+    validTabs: ["library", "backfill"],
+  });
 
   return (
     <div className="min-h-screen bg-background">

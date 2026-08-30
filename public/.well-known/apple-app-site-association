@@ -21,5 +21,10 @@
     "apps": [
       "TEAM_ID_HERE.com.desmoines.aipulse"
     ]
+  },
+  "appclips": {
+    "apps": [
+      "TEAM_ID_HERE.com.desmoines.aipulse.Clip"
+    ]
   }
 }

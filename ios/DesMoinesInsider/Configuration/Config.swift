@@ -53,6 +53,12 @@ enum Config {
     static let siteURL = URL(string: "https://desmoinesinsider.com")!
     static let supportEmail = "support@desmoinesinsider.com"
 
+    /// Marketing version (CFBundleShortVersionString), e.g. "1.2.0". Sent to the
+    /// `version-check` edge function on launch (IOS-AUDIT-REL-001).
+    static var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+    }
+
     // MARK: - Defaults
 
     /// Des Moines, Iowa center coordinates
@@ -74,8 +80,27 @@ enum Config {
     static let enableAIFeatures = true
     static let enablePushNotifications = false
 
+    /// Certificate pinning enforcement (IOS-AUDIT-SEC-001). The pinning delegate
+    /// is ALWAYS installed on the Supabase URLSession, but enforcement (rejecting
+    /// a non-pinned cert) only happens in Release when this is `true`. It ships
+    /// `false` so the delegate runs report-only until the pinned SPKI hashes in
+    /// CertificatePinningService are verified against the live Supabase host —
+    /// flipping it on with stale hashes would block all API traffic. DEBUG is
+    /// always report-only regardless.
+    static let certificatePinningEnforced = false
+
     // MARK: - Testing
 
     /// `true` when the app is launched by XCUITest (Fastlane Snapshot, etc.).
     static let isUITesting: Bool = ProcessInfo.processInfo.arguments.contains("--uitesting")
+
+    /// Optional screen for Fastlane Snapshot to deep-link into for App Store
+    /// screenshots (IOS-COMPLY-005). Passed as `--uiTestScreen <name>`, e.g.
+    /// "discover", "tripPlanner", "paywall", or "hub". Only meaningful under
+    /// `isUITesting`; returns nil when absent.
+    static var uiTestScreen: String? {
+        let args = ProcessInfo.processInfo.arguments
+        guard let idx = args.firstIndex(of: "--uiTestScreen"), idx + 1 < args.count else { return nil }
+        return args[idx + 1]
+    }
 }

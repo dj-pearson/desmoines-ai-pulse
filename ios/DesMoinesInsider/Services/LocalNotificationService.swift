@@ -10,7 +10,38 @@ final class LocalNotificationService {
 
     private(set) var scheduledEventIds: Set<String> = []
 
+    /// The Settings master switch for event reminders (IOS-AUDIT-BUG-012).
+    ///
+    /// It used to be written and read in exactly ONE place - the Toggle in
+    /// SettingsView - and nowhere else in the app consulted it. Turning "Event
+    /// Reminders" off changed nothing: already-scheduled reminders still fired,
+    /// and an event page would happily schedule new ones. A settings switch
+    /// wired to nothing is worse than a missing setting, because it tells the
+    /// user something untrue.
+    ///
+    /// Living on the service rather than in the view is what makes it
+    /// load-bearing: scheduleReminder consults it, and turning it off clears
+    /// what is already pending.
+    var remindersEnabled: Bool {
+        didSet {
+            guard remindersEnabled != oldValue else { return }
+            UserDefaults.standard.set(remindersEnabled, forKey: Self.remindersEnabledKey)
+            if !remindersEnabled {
+                cancelAllReminders()
+            }
+        }
+    }
+
+    /// Unchanged from the key the Toggle already wrote, so a user who had
+    /// switched reminders off keeps that preference across this change.
+    private static let remindersEnabledKey = "eventRemindersEnabled"
+
     private init() {
+        // Defaults to ON for anyone who has never touched the switch, which is
+        // the behaviour they have had until now: UserDefaults.bool returns false
+        // for a missing key, and defaulting to false would silently disable
+        // reminders for every existing user on upgrade.
+        remindersEnabled = UserDefaults.standard.object(forKey: Self.remindersEnabledKey) as? Bool ?? true
         Task { await refreshScheduledEvents() }
     }
 
@@ -18,6 +49,8 @@ final class LocalNotificationService {
 
     /// Schedules a local notification 1 hour before the event.
     func scheduleReminder(for event: Event) async {
+        // The master switch, honoured here so every call site gets it.
+        guard remindersEnabled else { return }
         guard let eventDate = event.parsedDate else { return }
 
         let center = UNUserNotificationCenter.current()
@@ -70,6 +103,14 @@ final class LocalNotificationService {
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: ["event-reminder-\(eventId)"])
         scheduledEventIds.remove(eventId)
+    }
+
+    /// Clears every pending event reminder. Used when the master switch goes off.
+    func cancelAllReminders() {
+        let center = UNUserNotificationCenter.current()
+        let identifiers = scheduledEventIds.map { "event-reminder-\($0)" }
+        center.removePendingNotificationRequests(withIdentifiers: identifiers)
+        scheduledEventIds.removeAll()
     }
 
     // MARK: - Toggle

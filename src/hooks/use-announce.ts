@@ -27,7 +27,7 @@ export function useAnnounce(politeness: 'polite' | 'assertive' = 'polite') {
 
   const regionProps = {
     role: 'status' as const,
-    'aria-live': politeness as const,
+    'aria-live': politeness,
     'aria-atomic': true as const,
     className: 'sr-only',
   };

@@ -1,5 +1,7 @@
 package com.desmoines.aipulse.di
 
+import com.desmoines.aipulse.data.repository.AskPulseRepository
+import com.desmoines.aipulse.data.repository.AskPulseRepositoryImpl
 import com.desmoines.aipulse.data.repository.AttractionsRepository
 import com.desmoines.aipulse.data.repository.AttractionsRepositoryImpl
 import com.desmoines.aipulse.data.repository.AuthRepository
@@ -8,8 +10,28 @@ import com.desmoines.aipulse.data.repository.EventsRepository
 import com.desmoines.aipulse.data.repository.EventsRepositoryImpl
 import com.desmoines.aipulse.data.repository.FavoritesRepository
 import com.desmoines.aipulse.data.repository.FavoritesRepositoryImpl
+import com.desmoines.aipulse.data.repository.ForYouRepository
+import com.desmoines.aipulse.data.repository.ForYouRepositoryImpl
 import com.desmoines.aipulse.data.repository.RestaurantsRepository
 import com.desmoines.aipulse.data.repository.RestaurantsRepositoryImpl
+import com.desmoines.aipulse.data.repository.ArticlesRepository
+import com.desmoines.aipulse.data.repository.ArticlesRepositoryImpl
+import com.desmoines.aipulse.data.repository.DealsRepository
+import com.desmoines.aipulse.data.repository.DealsRepositoryImpl
+import com.desmoines.aipulse.data.repository.HotelsRepository
+import com.desmoines.aipulse.data.repository.HotelsRepositoryImpl
+import com.desmoines.aipulse.data.repository.ReviewsRepository
+import com.desmoines.aipulse.data.repository.ReviewsRepositoryImpl
+import com.desmoines.aipulse.data.repository.BestOfRepository
+import com.desmoines.aipulse.data.repository.BestOfRepositoryImpl
+import com.desmoines.aipulse.data.repository.GroupSessionRepository
+import com.desmoines.aipulse.data.repository.GroupSessionRepositoryImpl
+import com.desmoines.aipulse.data.repository.SavedSearchRepository
+import com.desmoines.aipulse.data.repository.SavedSearchRepositoryImpl
+import com.desmoines.aipulse.data.repository.SurpriseMeRepository
+import com.desmoines.aipulse.data.repository.SurpriseMeRepositoryImpl
+import com.desmoines.aipulse.data.repository.TripPlannerRepository
+import com.desmoines.aipulse.data.repository.TripPlannerRepositoryImpl
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -36,4 +58,37 @@ abstract class RepositoryModule {
 
     @Binds
     abstract fun bindFavoritesRepository(impl: FavoritesRepositoryImpl): FavoritesRepository
+
+    @Binds
+    abstract fun bindSurpriseMeRepository(impl: SurpriseMeRepositoryImpl): SurpriseMeRepository
+
+    @Binds
+    abstract fun bindSavedSearchRepository(impl: SavedSearchRepositoryImpl): SavedSearchRepository
+
+    @Binds
+    abstract fun bindArticlesRepository(impl: ArticlesRepositoryImpl): ArticlesRepository
+
+    @Binds
+    abstract fun bindDealsRepository(impl: DealsRepositoryImpl): DealsRepository
+
+    @Binds
+    abstract fun bindHotelsRepository(impl: HotelsRepositoryImpl): HotelsRepository
+
+    @Binds
+    abstract fun bindReviewsRepository(impl: ReviewsRepositoryImpl): ReviewsRepository
+
+    @Binds
+    abstract fun bindBestOfRepository(impl: BestOfRepositoryImpl): BestOfRepository
+
+    @Binds
+    abstract fun bindGroupSessionRepository(impl: GroupSessionRepositoryImpl): GroupSessionRepository
+
+    @Binds
+    abstract fun bindAskPulseRepository(impl: AskPulseRepositoryImpl): AskPulseRepository
+
+    @Binds
+    abstract fun bindForYouRepository(impl: ForYouRepositoryImpl): ForYouRepository
+
+    @Binds
+    abstract fun bindTripPlannerRepository(impl: TripPlannerRepositoryImpl): TripPlannerRepository
 }

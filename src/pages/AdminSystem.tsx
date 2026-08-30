@@ -1,26 +1,36 @@
-import { useState } from "react";
+import { Suspense } from "react";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
+import { useTabState } from "@/hooks/useTabState";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import AdminNav from "@/components/admin/AdminNav";
 import UserRoleManager from "@/components/UserRoleManager";
 import AdminSystemControls from "@/components/AdminSystemControls";
 import AdminApplicationSettings from "@/components/AdminApplicationSettings";
+import JobHealthPanel from "@/components/admin/JobHealthPanel";
+import WebVitalsPanel from "@/components/admin/WebVitalsPanel";
+import SubscriptionEventsPanel from "@/components/admin/SubscriptionEventsPanel";
 import {
   Users,
   Server,
   Cog,
+  Activity,
+  Gauge,
 } from "lucide-react";
 
 const SYSTEM_TABS = [
   { id: "users", label: "User Management", icon: Users },
+  { id: "jobs", label: "Job Health", icon: Activity },
+  { id: "vitals", label: "Web Vitals", icon: Gauge },
   { id: "system", label: "System Controls", icon: Server },
   { id: "settings", label: "Settings", icon: Cog },
 ];
 
+const SYSTEM_TAB_IDS = SYSTEM_TABS.map((tab) => tab.id);
+
 export default function AdminSystem() {
   const { userRole } = useAdminAuth();
   useDocumentTitle("System Settings");
-  const [activeTab, setActiveTab] = useState("users");
+  const [activeTab, setActiveTab] = useTabState("users", { validTabs: SYSTEM_TAB_IDS });
 
   const canManageUsers = () => ["admin", "root_admin"].includes(userRole);
   const canManageContent = () =>
@@ -69,6 +79,20 @@ export default function AdminSystem() {
 
         {/* Tab Content */}
         {canManageUsers() && activeTab === "users" && <UserRoleManager />}
+
+        {activeTab === "jobs" && (
+          <div className="space-y-6">
+            <JobHealthPanel />
+            <WebVitalsPanel />
+            <SubscriptionEventsPanel />
+          </div>
+        )}
+
+        {activeTab === "vitals" && (
+          <Suspense fallback={<div className="py-12 text-center text-muted-foreground">Loading…</div>}>
+            <WebVitalsPanel />
+          </Suspense>
+        )}
 
         {canManageUsers() && activeTab === "system" && <AdminSystemControls />}
 

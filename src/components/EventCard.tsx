@@ -1,3 +1,13 @@
+/**
+ * EventCard — the denser/legacy event card.
+ *
+ * Primary event LIST pages standardized on SocialEventCard (WEB-UX-009) for a
+ * consistent layout that always shows the event time. EventCard is retained
+ * deliberately for denser, secondary contexts — the related-events rail on
+ * EventDetails, featured/nearby rails, dashboards, and profile lists — where
+ * the social-preview chrome of SocialEventCard would be too heavy. Do not use
+ * it for the main browse/list grids.
+ */
 import {
   Card,
   CardContent,
@@ -21,18 +31,15 @@ import {
   createEventSlugWithCentralTime,
   formatEventDateShort,
 } from "@/lib/timezone";
-import {
-  Calendar,
-  MapPin,
-  DollarSign,
-  ExternalLink,
-  Sparkles,
-  ImageOff,
-} from "lucide-react";
+import { DollarSign, ImageOff } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useState, useEffect, memo, useCallback } from "react";
+import { useState, useEffect, memo, useCallback, useRef } from "react";
 import { OptimizedImage } from "@/components/OptimizedImage";
 import { SponsoredBadge } from "@/components/SponsoredBadge";
+import { isSponsoredActive, logSponsoredClick } from "@/lib/sponsored";
+import { useSponsoredImpression } from "@/hooks/useSponsoredImpression";
+import { getEventCategoryBadgeClass } from "@/lib/categoryStyles";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const createSlug = (name: string): string => {
   return name
@@ -66,7 +73,24 @@ function EventCardComponent({ event, onViewDetails }: EventCardProps) {
   // Determine if trending based on view data
   const isTrending = viewData.trending_score > 70 || viewData.recent_views > 100;
 
+  // EXPIRY IS PART OF BEING SPONSORED. This card read `event.is_sponsored`
+  // directly in three places, so an event whose sponsored_until had already
+  // passed kept the amber ring and the "Sponsored" label until somebody flipped
+  // the boolean by hand. RestaurantCard has always gone through this helper
+  // (RestaurantCard.tsx:105); EventCard was the one display path that did not.
+  // isSponsoredActive treats a null sponsored_until as open-ended, so rows
+  // without an end date behave exactly as before. (WEB-FEAT-005)
+  const sponsoredActive = isSponsoredActive(event);
+
+  // Sponsored telemetry, matching RestaurantCard (:107, :116). EventCard had the
+  // boost and the badge and reported NOTHING - an advertiser buying an event
+  // listing got no impression or click record while a restaurant listing did.
+  const cardRef = useRef<HTMLDivElement>(null);
+  useSponsoredImpression(cardRef, "event", event.id, sponsoredActive);
+
   const handleViewDetails = useCallback(() => {
+    if (sponsoredActive) logSponsoredClick("event", event.id);
+
     // Track interaction
     if (isAuthenticated) {
       trackInteraction(event.id, "view");
@@ -79,19 +103,12 @@ function EventCardComponent({ event, onViewDetails }: EventCardProps) {
     trackView();
 
     onViewDetails(event);
-  }, [isAuthenticated, trackInteraction, event, addToRecentlyViewed, trackView, onViewDetails]);
+  }, [isAuthenticated, trackInteraction, event, addToRecentlyViewed, trackView, onViewDetails, sponsoredActive]);
 
-  const getCategoryColor = (category: string) => {
-    const lowerCategory = category.toLowerCase();
-    if (lowerCategory.includes("music")) return "bg-purple-500 text-white";
-    if (lowerCategory.includes("food")) return "bg-orange-500 text-white";
-    if (lowerCategory.includes("sport")) return "bg-green-500 text-white";
-    if (lowerCategory.includes("art")) return "bg-pink-500 text-white";
-    return "bg-primary text-white";
-  };
+
 
   return (
-    <Card className={`overflow-hidden hover:shadow-lg transition-all duration-200 hover:scale-[1.02] card-interactive group focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2 ${event.is_sponsored ? 'ring-2 ring-amber-400/60' : ''}`}>
+    <Card ref={cardRef} className={`overflow-hidden hover:shadow-lg transition-all duration-200 hover:scale-[1.02] card-interactive group focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2 ${sponsoredActive ? 'ring-2 ring-amber-400/60' : ''}`}>
       {/* Image with overlay badges */}
       <div className="relative overflow-hidden">
         {event.image_url && !imageError ? (
@@ -116,15 +133,15 @@ function EventCardComponent({ event, onViewDetails }: EventCardProps) {
         {/* Overlay badges for urgency/social proof */}
         <div className="absolute top-2 left-2 right-2 flex items-start justify-between gap-2">
           <div className="flex flex-col gap-2">
-            {event.is_sponsored && <SponsoredBadge />}
-            {!event.is_sponsored && isTrending && <SocialProofBadge type="trending" count={viewData.recent_views} size="sm" />}
-            {!event.is_sponsored && isNew && !isTrending && <SocialProofBadge type="new" size="sm" />}
+            {sponsoredActive && <SponsoredBadge />}
+            {!sponsoredActive && isTrending && <SocialProofBadge type="trending" count={viewData.recent_views} size="sm" />}
+            {!sponsoredActive && isNew && !isTrending && <SocialProofBadge type="new" size="sm" />}
           </div>
 
           {/* Distance Badge (only shown in Near Me mode) */}
           {(event as any).distance_meters && (
             <Badge variant="secondary" className="text-xs bg-primary text-primary-foreground shadow-lg">
-              <MapPin className="h-3 w-3 mr-1" />
+              <SpriteIcon name="map-pin" className="h-3 w-3 mr-1" />
               {((event as any).distance_meters * 0.000621371).toFixed(1)} mi
             </Badge>
           )}
@@ -133,7 +150,7 @@ function EventCardComponent({ event, onViewDetails }: EventCardProps) {
 
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-          <Badge className={getCategoryColor(event.category)}>
+          <Badge className={getEventCategoryBadgeClass(event.category)}>
             {event.category}
           </Badge>
           <div className="flex items-center gap-2">
@@ -155,12 +172,12 @@ function EventCardComponent({ event, onViewDetails }: EventCardProps) {
 
         <div className="space-y-2 text-sm text-neutral-600 dark:text-neutral-400">
           <div className="flex items-center">
-            <Calendar className="h-4 w-4 mr-2" aria-hidden="true" />
+            <SpriteIcon name="calendar" className="h-4 w-4 mr-2" aria-hidden="true" />
             <span>{formatEventDateShort(event)}</span>
           </div>
 
           <div className="flex items-center">
-            <MapPin className="h-4 w-4 mr-2" aria-hidden="true" />
+            <SpriteIcon name="map-pin" className="h-4 w-4 mr-2" aria-hidden="true" />
             <span>{event.venue || event.location}</span>
           </div>
 
@@ -193,12 +210,12 @@ function EventCardComponent({ event, onViewDetails }: EventCardProps) {
               )}`}
             >
               <Button variant="outline" size="sm" aria-label={`View full page for ${event.title}`}>
-                <ExternalLink className="h-4 w-4 mr-1" aria-hidden="true" />
+                <SpriteIcon name="external-link" className="h-4 w-4 mr-1" aria-hidden="true" />
                 Full Page
               </Button>
             </Link>
 
-            <FavoriteButton eventId={event.id} variant="ghost" size="icon" />
+            <FavoriteButton eventId={event.id} itemName={event.title} variant="ghost" size="icon" />
 
             <ShareDialog
               title={event.title}

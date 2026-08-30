@@ -7,7 +7,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import { Trophy, MapPin, Calendar, ExternalLink } from 'lucide-react';
+import { Trophy } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export default function TeamDetail() {
   const { slug } = useParams<{ slug: string }>();
@@ -78,7 +79,7 @@ export default function TeamDetail() {
               <Badge variant="outline">{team.league}</Badge>
               {team.venue_name && (
                 <Badge variant="outline">
-                  <MapPin className="h-3 w-3 mr-1" /> {team.venue_name}
+                  <SpriteIcon name="map-pin" className="h-3 w-3 mr-1" /> {team.venue_name}
                 </Badge>
               )}
             </div>
@@ -89,14 +90,14 @@ export default function TeamDetail() {
               {team.website && (
                 <a href={team.website} target="_blank" rel="noopener noreferrer">
                   <Button variant="outline" size="sm">
-                    <ExternalLink className="h-4 w-4 mr-1" /> Official Website
+                    <SpriteIcon name="external-link" className="h-4 w-4 mr-1" /> Official Website
                   </Button>
                 </a>
               )}
               {team.schedule_url && (
                 <a href={team.schedule_url} target="_blank" rel="noopener noreferrer">
                   <Button variant="outline" size="sm">
-                    <Calendar className="h-4 w-4 mr-1" /> Full Schedule
+                    <SpriteIcon name="calendar" className="h-4 w-4 mr-1" /> Full Schedule
                   </Button>
                 </a>
               )}
@@ -106,7 +107,7 @@ export default function TeamDetail() {
           {/* Upcoming Games */}
           <section>
             <div className="flex items-center gap-2 mb-4">
-              <Calendar className="h-5 w-5 text-primary" />
+              <SpriteIcon name="calendar" className="h-5 w-5 text-primary" />
               <h2 className="text-2xl font-bold">Upcoming Games</h2>
             </div>
             {games && games.length > 0 ? (

@@ -6,10 +6,11 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ExternalLink, AlertTriangle, CheckCircle2, XCircle, Loader2, Link, RefreshCw, AlertCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, XCircle, Loader2, Link, RefreshCw, AlertCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('CatchDesmoinUrlExtractor');
 
@@ -69,6 +70,10 @@ export default function CatchDesmoinUrlExtractor() {
     }
     setProgress(0);
 
+    // Declared outside try so the finally block can always clear it,
+    // even if the fetch below throws.
+    let progressInterval: ReturnType<typeof setInterval> | undefined;
+
     try {
       // Get auth token
       const { data: { session } } = await supabase.auth.getSession();
@@ -78,7 +83,7 @@ export default function CatchDesmoinUrlExtractor() {
       }
 
       // Show progress animation
-      const progressInterval = setInterval(() => {
+      progressInterval = setInterval(() => {
         setProgress((prev) => {
           if (prev >= 90) return 90;
           return prev + 5;
@@ -136,6 +141,8 @@ export default function CatchDesmoinUrlExtractor() {
         setResult(errorResult);
       }
     } finally {
+      // Always clear the progress interval so it can never leak on error.
+      if (progressInterval) clearInterval(progressInterval);
       if (dryRun) {
         setIsDryRunning(false);
       } else {
@@ -222,7 +229,7 @@ export default function CatchDesmoinUrlExtractor() {
               </>
             ) : (
               <>
-                <ExternalLink className="h-4 w-4" />
+                <SpriteIcon name="external-link" className="h-4 w-4" />
                 Dry Run (Test)
               </>
             )}
@@ -240,7 +247,7 @@ export default function CatchDesmoinUrlExtractor() {
               </>
             ) : (
               <>
-                <ExternalLink className="h-4 w-4" />
+                <SpriteIcon name="external-link" className="h-4 w-4" />
                 Extract URLs
               </>
             )}

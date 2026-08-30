@@ -8,6 +8,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
+import { errorResponse } from "../_shared/errorResponse.ts";
+import { requireAdminOrApiKey, timingSafeEqual } from "../_shared/apiKeyAuth.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -25,15 +28,20 @@ serve(async (req) => {
     const cronSecret = Deno.env.get("CRON_SECRET");
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Verify cron secret if configured
-    if (cronSecret) {
-      const authHeader = req.headers.get("Authorization");
-      if (!authHeader || authHeader !== `Bearer ${cronSecret}`) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+    // Authenticate the scheduled trigger. FAIL CLOSED: never skip auth.
+    // Accept, in order: a matching CRON_SECRET bearer (the historical caller),
+    // or — via requireAdminOrApiKey — the EDGE_FUNCTION_API_KEY, the
+    // service-role key (server-to-server), or an admin user JWT. If none of
+    // these are present/valid the request is rejected 401/403; if no secret is
+    // configured at all it still cannot pass, so it can never run unauthenticated.
+    const authHeader = req.headers.get("Authorization") || "";
+    const bearer = authHeader.toLowerCase().startsWith("bearer ")
+      ? authHeader.slice(7).trim()
+      : "";
+    const cronOk = !!cronSecret && !!bearer && timingSafeEqual(bearer, cronSecret);
+    if (!cronOk) {
+      const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+      if (authFailure) return authFailure;
     }
 
     const { scheduleId, url } = await req.json();
@@ -296,15 +304,10 @@ serve(async (req) => {
   } catch (error) {
     console.error("Error in run-scheduled-audit function:", error);
 
-    return new Response(
-      JSON.stringify({
-        error: error.message,
-        details: error.stack,
-      }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+    return errorResponse(error, {
+      status: 500,
+      headers: corsHeaders,
+      logContext: "run-scheduled-audit",
+    });
   }
 });

@@ -9,6 +9,7 @@ struct RestaurantDetailView: View {
     @State private var showSubscription = false
     @State private var favorites = FavoritesService.shared
     @State private var storeKit = StoreKitService.shared
+    @State private var auth = AuthService.shared
 
     private var hasPremiumAccess: Bool {
         storeKit.currentTier == .insider || storeKit.currentTier == .vip
@@ -27,6 +28,18 @@ struct RestaurantDetailView: View {
                     currentTier: storeKit.currentTier,
                     showSubscription: $showSubscription
                 )
+
+                // "Promote this listing" advertiser funnel (IOS-ADS-016) — admin/
+                // owner-only, opens web campaign checkout in Safari (not StoreKit).
+                if auth.isAdmin {
+                    PromoteListingButton(
+                        listing: .restaurant(id: restaurant.id, name: restaurant.name),
+                        style: .inline
+                    )
+                    .padding(.horizontal)
+                }
+
+                ReviewsSection(contentType: "restaurant", contentId: restaurant.id)
 
                 AdSlot(.feed)
             }
@@ -55,6 +68,8 @@ struct RestaurantDetailView: View {
                             .foregroundStyle(favorites.isRestaurantFavorited(restaurant.id) ? .red : .primary)
                     }
                     .accessibilityLabel(favorites.isRestaurantFavorited(restaurant.id) ? "Remove from saved" : "Save restaurant")
+                    .accessibilityValue(favorites.isRestaurantFavorited(restaurant.id) ? "Saved" : "Not saved")
+                    .accessibilityAddTraits(favorites.isRestaurantFavorited(restaurant.id) ? .isSelected : [])
                 }
             }
         }
@@ -62,10 +77,20 @@ struct RestaurantDetailView: View {
             ShareSheet(items: [shareText])
         }
         .fullScreenCover(isPresented: $showImageViewer) {
-            FullScreenImageViewer(imageUrl: restaurant.imageUrl, isPresented: $showImageViewer)
+            FullScreenImageViewer(
+                imageUrl: restaurant.imageUrl,
+                isPresented: $showImageViewer,
+                accessibilityDescription: "Photo of \(restaurant.name)",
+            )
         }
         .sheet(isPresented: $showSubscription) {
-            SubscriptionView()
+            PaywallView(context: .diningTips)
+        }
+        .task {
+            // IOS-PARITY-007 — feed the Dashboard "Jump back in" rail.
+            RecentlyViewedService.shared.record(
+                type: "restaurant", id: restaurant.id, title: restaurant.name, imageUrl: restaurant.imageUrl
+            )
         }
     }
 
@@ -74,8 +99,14 @@ struct RestaurantDetailView: View {
     private func openInMaps() {
         guard let coord = restaurant.coordinate else { return }
         let name = restaurant.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-        let url = URL(string: "maps://?daddr=\(coord.latitude),\(coord.longitude)&q=\(name)")!
-        UIApplication.shared.open(url)
+        let query = "daddr=\(coord.latitude),\(coord.longitude)&q=\(name)"
+        // Prefer the Apple Maps app, but fall back to the universal https link so
+        // we never force-unwrap and never silently no-op if Maps is unavailable.
+        if let appURL = URL(string: "maps://?\(query)"), UIApplication.shared.canOpenURL(appURL) {
+            UIApplication.shared.open(appURL)
+        } else if let webURL = URL(string: "https://maps.apple.com/?\(query)") {
+            UIApplication.shared.open(webURL)
+        }
     }
 
     private var shareText: String {

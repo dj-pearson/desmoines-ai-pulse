@@ -1,5 +1,16 @@
 /// <reference types="https://esm.sh/@supabase/functions-js/src/edge-runtime.d.ts" />
 
+// find-image-candidates
+//
+// Powers the admin manual-override image picker (ImagePickerDialog.tsx). Given a
+// content record, returns every plausible image candidate — page metadata
+// (og/twitter/JSON-LD/img), an existing venue record, and Google Places photos —
+// so a human can pick the right one when the automatic backfill chose wrong or
+// found nothing. Read-only: it never mutates content (apply-image does that).
+//
+// This was referenced by the UI but never implemented, so the manual escape
+// hatch was dead. All the heavy lifting already exists in _shared helpers.
+
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import {
   extractAllImagesFromHtml,
@@ -10,6 +21,8 @@ import {
   getGooglePlacesPhotos,
 } from "../_shared/imageFallbacks.ts";
 import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+import { validateURLForSSRF } from "../_shared/validation.ts";
+import { fetchTextWithSizeCap } from "../_shared/fetchGuard.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -20,57 +33,68 @@ const corsHeaders = {
 
 type Category = "events" | "restaurants" | "attractions" | "playgrounds";
 
-interface RequestBody {
-  category: Category;
-  id: string;
-}
-
 const NAME_COL: Record<Category, string> = {
   events: "title",
   restaurants: "name",
   attractions: "name",
   playgrounds: "name",
 };
+
 const URL_COL: Record<Category, string> = {
   events: "source_url",
   restaurants: "website",
   attractions: "website",
   playgrounds: "source_url",
 };
+
 const SELECT_COLS: Record<Category, string> = {
   events: "id, title, source_url, image_url, venue, latitude, longitude",
   restaurants: "id, name, website, image_url, latitude, longitude",
   attractions: "id, name, website, image_url, latitude, longitude",
-  playgrounds: "id, name, image_url, latitude, longitude",
+  playgrounds: "id, name, source_url, image_url, latitude, longitude",
 };
 
-async function fetchHtml(url: string): Promise<string | null> {
+const MAX_HTML_BYTES = 200 * 1024; // enough for meta tags + hero images
+const MAX_CANDIDATES = 24;
+
+interface FindRequest {
+  category?: Category;
+  id?: string;
+}
+
+/** Scrape a page through the SSRF guard + size cap and return its image candidates. */
+async function candidatesFromPage(pageUrl: string): Promise<ImageCandidate[]> {
+  const ssrf = validateURLForSSRF(pageUrl, {
+    allowedProtocols: ["http:", "https:"],
+    blockPrivateIPs: true,
+  });
+  if (!ssrf.valid) {
+    console.warn(`find-image-candidates: refusing unsafe URL ${pageUrl}: ${ssrf.error}`);
+    return [];
+  }
+
   try {
-    const res = await fetch(url, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        Accept:
-          "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+    const { ok, status, text } = await fetchTextWithSizeCap(
+      pageUrl,
+      {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          Accept:
+            "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        },
+        signal: AbortSignal.timeout(15_000),
       },
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (!res.ok) return null;
-    const reader = res.body?.getReader();
-    if (!reader) return null;
-    let html = "";
-    let bytesRead = 0;
-    const MAX = 200 * 1024;
-    while (bytesRead < MAX) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      html += new TextDecoder().decode(value);
-      bytesRead += value.byteLength;
+      MAX_HTML_BYTES,
+    );
+    if (!ok || !text) {
+      console.warn(`find-image-candidates: page fetch failed (${status}) for ${pageUrl}`);
+      return [];
     }
-    reader.cancel();
-    return html;
-  } catch {
-    return null;
+    return extractAllImagesFromHtml(text, pageUrl);
+  } catch (err) {
+    console.warn(`find-image-candidates: scrape error for ${pageUrl}:`, (err as Error).message);
+    return [];
   }
 }
 
@@ -88,87 +112,86 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, serviceKey);
-
-    const body = (await req.json().catch(() => ({}))) as Partial<RequestBody>;
-    if (!body.category || !body.id) {
+    const body = (await req.json().catch(() => ({}))) as FindRequest;
+    const category = body.category;
+    const id = body.id;
+    if (!category || !id || !(category in NAME_COL)) {
       return new Response(
         JSON.stringify({ error: "category and id are required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
-    const category = body.category as Category;
-    const { data: record, error: recordErr } = await supabase
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+
+    const { data: record, error: recErr } = await supabase
       .from(category)
       .select(SELECT_COLS[category])
-      .eq("id", body.id)
+      .eq("id", id)
       .maybeSingle();
 
-    if (recordErr || !record) {
-      return new Response(
-        JSON.stringify({ error: recordErr?.message ?? "Record not found" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+    if (recErr) {
+      return new Response(JSON.stringify({ error: recErr.message }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (!record) {
+      return new Response(JSON.stringify({ error: "Record not found" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    const name: string = (record as Record<string, unknown>)[NAME_COL[category]] as string;
+    const name: string = (record as Record<string, unknown>)[NAME_COL[category]] as string ?? id;
     const pageUrl: string | null =
-      ((record as Record<string, unknown>)[URL_COL[category]] as string) ?? null;
-    const venueName: string | null =
-      ((record as Record<string, unknown>).venue as string | null) ?? null;
-    const lat: number | null =
-      ((record as Record<string, unknown>).latitude as number | null) ?? null;
-    const lng: number | null =
-      ((record as Record<string, unknown>).longitude as number | null) ?? null;
-    const lookupName = venueName || name;
+      ((record as Record<string, unknown>)[URL_COL[category]] as string | null) ?? null;
+    const venue: string | null = ((record as Record<string, unknown>).venue as string | null) ?? null;
+    const lat: number | null = ((record as Record<string, unknown>).latitude as number | null) ?? null;
+    const lng: number | null = ((record as Record<string, unknown>).longitude as number | null) ?? null;
+    const lookupName = venue || name;
 
     const candidates: ImageCandidate[] = [];
 
-    // 1) Source page scrape — all candidates, not just the top one
+    // 1) Page metadata + hero images from the record's own source page.
     if (pageUrl) {
-      const html = await fetchHtml(pageUrl);
-      if (html) candidates.push(...extractAllImagesFromHtml(html, pageUrl));
+      candidates.push(...(await candidatesFromPage(pageUrl)));
     }
 
-    // 2) Existing venue record + their website
+    // 2) An existing venue/business record we already stored an image for.
     if (lookupName) {
-      const venue = await findExistingVenueRecord(supabase, lookupName);
-      if (venue?.imageUrl) candidates.push({ url: venue.imageUrl, source: "venue" });
-      if (venue?.website) {
-        const html = await fetchHtml(venue.website);
-        if (html) {
-          for (const c of extractAllImagesFromHtml(html, venue.website)) {
-            candidates.push({ ...c, source: "venue" });
-          }
-        }
+      const venueRecord = await findExistingVenueRecord(supabase, lookupName);
+      if (venueRecord?.imageUrl) {
+        candidates.push({ url: venueRecord.imageUrl, source: "venue" });
       }
     }
 
-    // 3) Google Places photos (up to 6)
+    // 3) Google Places photos (best for restaurants/attractions/venues).
     if (lookupName) {
-      const placesUrls = await getGooglePlacesPhotos(lookupName, lat, lng, 6);
-      for (const url of placesUrls) candidates.push({ url, source: "places" });
+      const placePhotos = await getGooglePlacesPhotos(lookupName, lat, lng, 6);
+      for (const url of placePhotos) candidates.push({ url, source: "places" });
     }
 
-    // Final dedupe across all sources
+    // Dedupe by URL, preserving discovery order (best sources first), cap output.
     const seen = new Set<string>();
-    const unique = candidates.filter((c) =>
-      seen.has(c.url) ? false : (seen.add(c.url), true),
-    );
+    const deduped = candidates
+      .filter((c) => c.url && !seen.has(c.url) && seen.add(c.url))
+      .slice(0, MAX_CANDIDATES);
 
     return new Response(
       JSON.stringify({
         record: {
-          id: body.id,
+          id,
           name,
-          currentImageUrl: (record as Record<string, unknown>).image_url ?? null,
+          currentImageUrl:
+            ((record as Record<string, unknown>).image_url as string | null) ?? null,
           sourceUrl: pageUrl,
-          venue: venueName,
+          venue,
         },
-        candidates: unique,
+        candidates: deduped,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );

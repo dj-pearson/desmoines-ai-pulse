@@ -1,5 +1,6 @@
 package com.desmoines.aipulse.data.model
 
+import com.desmoines.aipulse.util.UiFormatLocale
 import androidx.compose.runtime.Immutable
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -141,7 +142,7 @@ data class Event(
         get() {
             val parts = mutableListOf(title, eventCategory.displayName)
             parsedDate?.let {
-                parts.add(it.format(DateTimeFormatter.ofPattern("EEEE, MMMM d")))
+                parts.add(it.format(DateTimeFormatter.ofPattern("EEEE, MMMM d", UiFormatLocale)))
             }
             if (isFree) {
                 parts.add("Free event")

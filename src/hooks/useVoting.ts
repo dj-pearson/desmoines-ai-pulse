@@ -35,7 +35,10 @@ export interface VoteResult {
   vote_count: number;
   // Joined entity data
   name?: string;
-  image_url?: string;
+  /** Nullable in the database (restaurants.image_url / attractions.image_url),
+   *  so the optional marker alone was not enough — `string | undefined` cannot
+   *  hold the `null` those columns actually return. */
+  image_url?: string | null;
 }
 
 /**
@@ -46,7 +49,7 @@ export function useVotingCategories() {
     queryKey: ['voting-categories'],
     queryFn: async (): Promise<VotingCategory[]> => {
       const { data: categories, error } = await supabase
-        .from('voting_categories' as string)
+        .from('voting_categories')
         .select('*')
         .eq('is_active', true)
         .order('name');
@@ -56,16 +59,24 @@ export function useVotingCategories() {
         return [];
       }
 
-      // Get vote counts per category
-      const { data: counts } = await supabase
-        .from('votes' as string)
-        .select('category_id');
+      // Vote counts per category, aggregated server-side (WEB-SEC-025 step 2).
+      // This used to select every row of `votes` and count them in the browser,
+      // which meant the client held one row per ballot -- and `votes` carries
+      // `user_id`. The RPC returns counts and nothing else, so the leaderboard
+      // stops depending on a read that has to be revoked in step 3.
+      const { data: counts, error: countsError } = await supabase.rpc('voting_category_tallies');
+
+      if (countsError) {
+        // Counts absent, categories present: the page still renders, every
+        // category reading 0. Deliberately not falling back to the raw table --
+        // a fallback is a read path that survives the policy change and fails
+        // then instead, when it is harder to notice.
+        log.warn('useVotingCategories', 'Failed to fetch vote tallies', { error: countsError.message });
+      }
 
       const countMap: Record<string, number> = {};
-      if (counts) {
-        for (const v of counts as Array<{ category_id: string }>) {
-          countMap[v.category_id] = (countMap[v.category_id] || 0) + 1;
-        }
+      for (const row of (counts ?? []) as Array<{ category_id: string; vote_count: number }>) {
+        countMap[row.category_id] = Number(row.vote_count);
       }
 
       return ((categories || []) as unknown as VotingCategory[]).map((cat) => ({
@@ -86,7 +97,7 @@ export function useCategoryResults(categorySlug: string) {
     queryFn: async (): Promise<{ category: VotingCategory | null; results: VoteResult[] }> => {
       // Fetch the category
       const { data: catData, error: catError } = await supabase
-        .from('voting_categories' as string)
+        .from('voting_categories')
         .select('*')
         .eq('slug', categorySlug)
         .single();
@@ -97,35 +108,32 @@ export function useCategoryResults(categorySlug: string) {
 
       const category = catData as unknown as VotingCategory;
 
-      // Fetch votes for this category
-      const { data: votes, error: votesError } = await supabase
-        .from('votes' as string)
-        .select('entity_type, entity_id, custom_entry')
-        .eq('category_id', category.id);
+      // Tallies for this category, aggregated server-side (WEB-SEC-025 step 2).
+      // The RPC groups by entity_id, falling back to custom_entry, and returns
+      // no user_id and no vote ids -- the same grouping this hook used to do in
+      // the browser over the raw ballots.
+      const { data: tallies, error: talliesError } = await supabase
+        .rpc('voting_results', { p_category_id: category.id });
 
-      if (votesError || !votes) {
+      if (talliesError || !tallies) {
         return { category, results: [] };
       }
 
-      // Aggregate votes by entity
-      const voteMap = new Map<string, VoteResult>();
-      for (const v of votes as unknown as Array<{ entity_type: string; entity_id: string | null; custom_entry: string | null }>) {
-        const key = v.entity_id || v.custom_entry || 'unknown';
-        const existing = voteMap.get(key);
-        if (existing) {
-          existing.vote_count++;
-        } else {
-          voteMap.set(key, {
-            entity_type: v.entity_type,
-            entity_id: v.entity_id,
-            custom_entry: v.custom_entry,
-            vote_count: 1,
-          });
-        }
-      }
-
-      // Sort by vote count descending
-      const results = Array.from(voteMap.values()).sort((a, b) => b.vote_count - a.vote_count);
+      // Already ordered by count descending in SQL; kept explicit so a change to
+      // the function's ORDER BY cannot silently reorder the leaderboard.
+      const results: VoteResult[] = (tallies as Array<{
+        entity_type: string;
+        entity_id: string | null;
+        custom_entry: string | null;
+        vote_count: number;
+      }>)
+        .map((row) => ({
+          entity_type: row.entity_type,
+          entity_id: row.entity_id,
+          custom_entry: row.custom_entry,
+          vote_count: Number(row.vote_count),
+        }))
+        .sort((a, b) => b.vote_count - a.vote_count);
 
       // Enrich with entity names for restaurants
       const restaurantIds = results.filter((r) => r.entity_type === 'restaurant' && r.entity_id).map((r) => r.entity_id!);
@@ -197,7 +205,7 @@ export function useUserVote(categoryId: string) {
       if (!user) return null;
 
       const { data, error } = await supabase
-        .from('votes' as string)
+        .from('votes')
         .select('*')
         .eq('category_id', categoryId)
         .eq('user_id', user.id)
@@ -234,13 +242,13 @@ export function useCastVote() {
 
       // Upsert: delete existing vote then insert new one
       await supabase
-        .from('votes' as string)
+        .from('votes')
         .delete()
         .eq('category_id', categoryId)
         .eq('user_id', user.id);
 
       const { error } = await supabase
-        .from('votes' as string)
+        .from('votes')
         .insert({
           category_id: categoryId,
           entity_type: entityType,

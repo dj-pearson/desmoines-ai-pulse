@@ -121,29 +121,43 @@ export function useCrmContactSummary(contactId: string | undefined) {
 
       if (contactError) throw contactError;
 
-      // Fetch deal counts
-      const { data: deals } = await supabase
+      // EVERY ONE OF THESE FOUR FAILS TODAY AND THE SCREEN LOOKS FINE. crm_deals,
+      // crm_communications and crm_contact_segments do not exist (confirmed with
+      // to_regclass, not an anon probe), and crm_activities exists with an
+      // entirely different column set - no contact_id at all. With the errors
+      // discarded, the contact detail rendered 0 deals, 0 communications, 0
+      // activities and no segments, which is indistinguishable from a real
+      // contact nobody has touched.
+      //
+      // They throw now, so a dead CRM looks dead. That is the point: WEB-QA-018's
+      // build-or-delete decision is easier to make about a screen that visibly
+      // does not work than about one that convincingly shows zeroes.
+      const { data: deals, error: dealsError } = await supabase
         .from('crm_deals')
         .select('status, value')
         .eq('contact_id', contactId);
+      if (dealsError) throw dealsError;
 
       // Fetch communications count
-      const { count: communicationsCount } = await supabase
+      const { count: communicationsCount, error: communicationsError } = await supabase
         .from('crm_communications')
         .select('*', { count: 'exact', head: true })
         .eq('contact_id', contactId);
+      if (communicationsError) throw communicationsError;
 
       // Fetch activities count
-      const { count: activitiesCount } = await supabase
+      const { count: activitiesCount, error: activitiesError } = await supabase
         .from('crm_activities')
         .select('*', { count: 'exact', head: true })
         .eq('contact_id', contactId);
+      if (activitiesError) throw activitiesError;
 
       // Fetch segment names
-      const { data: segments } = await supabase
+      const { data: segments, error: segmentsError } = await supabase
         .from('crm_contact_segments')
         .select('segment:crm_segments(name)')
         .eq('contact_id', contactId);
+      if (segmentsError) throw segmentsError;
 
       const openDeals = deals?.filter(d => d.status === 'open') || [];
       const wonDeals = deals?.filter(d => d.status === 'won') || [];
@@ -322,20 +336,27 @@ export function useCrmContactStats() {
       startOfMonth.setDate(1);
       startOfMonth.setHours(0, 0, 0, 0);
 
-      const { count: newThisMonth } = await supabase
+      const { count: newThisMonth, error: newThisMonthError } = await supabase
         .from('crm_contacts')
         .select('*', { count: 'exact', head: true })
         .gte('created_at', startOfMonth.toISOString());
+      if (newThisMonthError) throw newThisMonthError;
 
       // Get average lead score
-      const { data: avgScore } = await supabase
+      // This one collapsed the error INTO THE STATISTIC: `if (result.error ||
+      // !result.data?.length) return { data: 0 }` publishes "average lead score
+      // 0" for a query that never ran, and 0 is a plausible-looking average. No
+      // rows still averages to 0, which is fine; a failed read does not.
+      const { data: avgScore, error: avgScoreError } = await supabase
         .from('crm_contacts')
         .select('lead_score')
         .then(result => {
-          if (result.error || !result.data?.length) return { data: 0 };
+          if (result.error) return { data: 0, error: result.error };
+          if (!result.data?.length) return { data: 0, error: null };
           const sum = result.data.reduce((acc, c) => acc + (c.lead_score || 0), 0);
-          return { data: Math.round(sum / result.data.length) };
+          return { data: Math.round(sum / result.data.length), error: null };
         });
+      if (avgScoreError) throw avgScoreError;
 
       return {
         byStatus: statusCounts,

@@ -1,4 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, lazy, Suspense } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { STALE_TIME } from '@/lib/queryConfig';
+import type { MapEntity } from '@/components/map/DiscoverMapCanvas';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
+
+const DiscoverMapCanvas = lazy(() => import('@/components/map/DiscoverMapCanvas'));
 import { createLogger } from '@/lib/logger';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 
@@ -25,37 +32,12 @@ import { format, addDays, differenceInDays } from "date-fns";
 import { EmailCaptureModal } from "@/components/EmailCaptureModal";
 import { FAQSection } from "@/components/FAQSection";
 import { useSubscription } from "@/hooks/useSubscription";
+import { toast } from "sonner";
+import { buildTripICS, downloadICS, googleCalendarUrl } from "@/lib/tripCalendar";
+import { UpgradeModal } from "@/components/UpgradeModal";
 import { PremiumGate } from "@/components/PremiumGate";
 import { AIDisclosureNotice } from "@/components/AIDisclosureBadge";
-import {
-  Calendar,
-  MapPin,
-  Clock,
-  DollarSign,
-  Users,
-  Sparkles,
-  ArrowRight,
-  ChevronDown,
-  ChevronRight,
-  Trash2,
-  Edit2,
-  Share2,
-  Copy,
-  Check,
-  Plus,
-  Lightbulb,
-  Utensils,
-  Music,
-  TreePine,
-  Palette,
-  Baby,
-  Car,
-  Coffee,
-  Loader2,
-  ExternalLink,
-  AlertCircle,
-  Download,
-} from "lucide-react";
+import { DollarSign, ChevronDown, ChevronRight, Trash2, Edit2, Copy, Check, Plus, Lightbulb, Utensils, Music, TreePine, Palette, Baby, Car, Coffee, Loader2, AlertCircle, Download, ArrowUp, ArrowDown, CalendarPlus } from "lucide-react";
 
 export default function TripPlanner() {
   const { user } = useAuth();
@@ -71,11 +53,59 @@ export default function TripPlanner() {
     updateTrip,
     deleteTrip,
     shareTrip,
+    reorderItems,
     getItemsByDay,
     interests,
     budgetOptions,
     paceOptions,
   } = useTripPlanner();
+  const { tier, hasFeature } = useSubscription();
+  const canUseTripPlanner = hasFeature("trip_planner");
+  const [showPaywall, setShowPaywall] = useState(false);
+
+  // Map preview of stops (WEB-FEAT-011): trip items don't carry coordinates, so
+  // batch-fetch lat/lng for content-linked stops (events/restaurants/attractions).
+  const { data: tripStops = [] } = useQuery({
+    queryKey: ["trip-stops", selectedTrip?.id],
+    enabled: !!selectedTrip?.items?.length,
+    staleTime: STALE_TIME.CONTENT_DETAIL,
+    queryFn: async (): Promise<MapEntity[]> => {
+      const items = (selectedTrip?.items || []).filter((i) => i.content_details);
+      const titleById = new Map<string, string>();
+      const idsByType: Record<string, string[]> = {};
+      for (const i of items) {
+        const cd = i.content_details!;
+        (idsByType[cd.type] ||= []).push(cd.id);
+        titleById.set(cd.id, i.title);
+      }
+      const tables: Record<string, string> = {
+        event: "events",
+        restaurant: "restaurants",
+        attraction: "attractions",
+      };
+      const out: MapEntity[] = [];
+      await Promise.all(
+        Object.entries(idsByType).map(async ([type, ids]) => {
+          const { data } = await supabase
+            .from(tables[type] as never)
+            .select("id, latitude, longitude")
+            .in("id", ids);
+          (data as Array<{ id: string; latitude: number | null; longitude: number | null }> | null)?.forEach((r) => {
+            if (r.latitude != null && r.longitude != null) {
+              out.push({
+                id: r.id,
+                name: titleById.get(r.id) || "Stop",
+                type: type as MapEntity["type"],
+                latitude: Number(r.latitude),
+                longitude: Number(r.longitude),
+              });
+            }
+          });
+        })
+      );
+      return out;
+    },
+  });
 
   // Form state
   const [startDate, setStartDate] = useState(format(addDays(new Date(), 7), 'yyyy-MM-dd'));
@@ -99,6 +129,13 @@ export default function TripPlanner() {
       return;
     }
 
+    // Free users get the contextual paywall instead of a failed request
+    // (WEB-FEAT-011 / WEB-FEAT-001).
+    if (!canUseTripPlanner) {
+      setShowPaywall(true);
+      return;
+    }
+
     const preferences: TripPreferences = {
       interests: selectedInterests,
       budget,
@@ -116,6 +153,11 @@ export default function TripPlanner() {
       setShowEmailCapture(true);
     } catch (error) {
       log.error('generateItinerary', 'Error generating itinerary', { error });
+      // Server-enforced quota/entitlement -> show the contextual paywall.
+      const code = (error as { code?: string })?.code;
+      if (code === 'quota_exceeded' || code === 'upgrade_required') {
+        setShowPaywall(true);
+      }
     }
   };
 
@@ -123,6 +165,50 @@ export default function TripPlanner() {
     const fullTrip = await fetchTripDetails(trip.id);
     if (fullTrip) {
       setSelectedTrip(fullTrip);
+    }
+  };
+
+  // Reorder an item up/down within its day, persisting the swap (WEB-FEAT-011).
+  const handleMoveItem = (
+    dayItems: TripPlanItem[],
+    idx: number,
+    dir: -1 | 1
+  ) => {
+    const a = dayItems[idx];
+    const b = dayItems[idx + dir];
+    if (!a || !b) return;
+    void reorderItems([
+      { id: a.item_id, order_index: b.order_index },
+      { id: b.item_id, order_index: a.order_index },
+    ]);
+  };
+
+  // Export the whole trip to an .ics file (WEB-FEAT-011).
+  const handleAddToCalendar = (trip: TripPlan) => {
+    if (!trip.items || trip.items.length === 0) return;
+    downloadICS(`${trip.title || "des-moines-trip"}.ics`, buildTripICS(trip, trip.items));
+    toast.success("Calendar file (.ics) downloaded");
+  };
+
+  // Export a single day to an .ics file (WEB-FEAT-011).
+  const handleAddDayToCalendar = (trip: TripPlan, items: TripPlanItem[], dayNum: number) => {
+    if (items.length === 0) return;
+    downloadICS(`${trip.title || "trip"}-day-${dayNum}.ics`, buildTripICS(trip, items));
+    toast.success(`Day ${dayNum} downloaded (.ics)`);
+  };
+
+  // Share: publish + copy link (hook), then offer the native share sheet.
+  const handleShareTrip = async (trip: TripPlan) => {
+    const code = await shareTrip(trip.id);
+    if (code && typeof navigator !== "undefined" && navigator.share) {
+      try {
+        await navigator.share({
+          title: trip.title || "My Des Moines trip",
+          url: `${window.location.origin}/trips/shared/${code}`,
+        });
+      } catch {
+        // user dismissed the share sheet — link is already copied
+      }
     }
   };
 
@@ -142,10 +228,10 @@ export default function TripPlanner() {
     switch (itemType) {
       case 'event': return <Music className="h-4 w-4" />;
       case 'restaurant': return <Utensils className="h-4 w-4" />;
-      case 'attraction': return <MapPin className="h-4 w-4" />;
+      case 'attraction': return <SpriteIcon name="map-pin" className="h-4 w-4" />;
       case 'transport': return <Car className="h-4 w-4" />;
       case 'break': return <Coffee className="h-4 w-4" />;
-      default: return <Calendar className="h-4 w-4" />;
+      default: return <SpriteIcon name="calendar" className="h-4 w-4" />;
     }
   };
 
@@ -191,7 +277,7 @@ export default function TripPlanner() {
           {/* Page Header */}
           <div className="text-center space-y-4 mb-8">
             <div className="flex items-center justify-center gap-2">
-              <Sparkles className="h-8 w-8 text-primary" />
+              <SpriteIcon name="sparkles" className="h-8 w-8 text-primary" />
               <h1 className="text-3xl md:text-4xl font-bold">AI Trip Planner</h1>
             </div>
             <p className="text-muted-foreground max-w-2xl mx-auto">
@@ -237,7 +323,7 @@ export default function TripPlanner() {
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                      <Calendar className="h-5 w-5" />
+                      <SpriteIcon name="calendar" className="h-5 w-5" />
                       Trip Dates
                     </CardTitle>
                     <CardDescription>When are you visiting Des Moines?</CardDescription>
@@ -277,7 +363,7 @@ export default function TripPlanner() {
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                      <Users className="h-5 w-5" />
+                      <SpriteIcon name="users" className="h-5 w-5" />
                       Who's Going?
                     </CardTitle>
                     <CardDescription>Tell us about your group</CardDescription>
@@ -341,7 +427,7 @@ export default function TripPlanner() {
                           onClick={() => toggleInterest(interest.value)}
                           className="gap-2"
                         >
-                          {interestIcons[interest.value] || <Sparkles className="h-4 w-4" />}
+                          {interestIcons[interest.value] || <SpriteIcon name="sparkles" className="h-4 w-4" />}
                           {interest.label}
                         </Button>
                       ))}
@@ -383,7 +469,7 @@ export default function TripPlanner() {
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                      <Clock className="h-5 w-5" />
+                      <SpriteIcon name="clock" className="h-5 w-5" />
                       Trip Pace
                     </CardTitle>
                     <CardDescription>How packed do you want your days?</CardDescription>
@@ -419,6 +505,16 @@ export default function TripPlanner() {
                       <p className="text-sm text-muted-foreground">
                         Our AI will create a personalized {numDays}-day itinerary based on your preferences.
                       </p>
+                      {/* Quota meter (WEB-FEAT-011) */}
+                      <p className="text-xs mt-1 font-medium">
+                        {tier === "vip" ? (
+                          <span className="text-purple-500">VIP · Unlimited AI trips</span>
+                        ) : tier === "insider" ? (
+                          <span className="text-amber-600 dark:text-amber-400">Insider · 5 AI trips per month</span>
+                        ) : (
+                          <span className="text-muted-foreground">Free · AI Trip Planner is an Insider feature</span>
+                        )}
+                      </p>
                     </div>
                     <Button
                       size="lg"
@@ -433,7 +529,7 @@ export default function TripPlanner() {
                         </>
                       ) : (
                         <>
-                          <Sparkles className="h-5 w-5" />
+                          <SpriteIcon name="sparkles" className="h-5 w-5" />
                           Generate Itinerary
                         </>
                       )}
@@ -469,7 +565,7 @@ export default function TripPlanner() {
                           </CardDescription>
                           <div className="flex flex-wrap gap-2 mt-4">
                             <Badge variant="outline">
-                              <Calendar className="h-3 w-3 mr-1" />
+                              <SpriteIcon name="calendar" className="h-3 w-3 mr-1" />
                               {format(new Date(selectedTrip.start_date), 'MMM d')} -{' '}
                               {format(new Date(selectedTrip.end_date), 'MMM d, yyyy')}
                             </Badge>
@@ -481,16 +577,25 @@ export default function TripPlanner() {
                             )}
                             {selectedTrip.ai_generated && (
                               <Badge className="bg-gradient-to-r from-purple-500 to-pink-500">
-                                <Sparkles className="h-3 w-3 mr-1" />
+                                <SpriteIcon name="sparkles" className="h-3 w-3 mr-1" />
                                 AI Generated
                               </Badge>
                             )}
                           </div>
                         </div>
-                        <div className="flex gap-2">
-                          <Button variant="outline" size="sm" onClick={() => shareTrip(selectedTrip.id)}>
-                            <Share2 className="h-4 w-4 mr-1" />
+                        <div className="flex gap-2 flex-wrap">
+                          <Button variant="outline" size="sm" onClick={() => handleShareTrip(selectedTrip)}>
+                            <SpriteIcon name="share-2" className="h-4 w-4 mr-1" />
                             Share
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleAddToCalendar(selectedTrip)}
+                            disabled={!selectedTrip.items || selectedTrip.items.length === 0}
+                          >
+                            <CalendarPlus className="h-4 w-4 mr-1" />
+                            Add to Calendar
                           </Button>
                           <Button
                             variant="outline"
@@ -504,6 +609,21 @@ export default function TripPlanner() {
                       </div>
                     </CardHeader>
                   </Card>
+
+                  {/* Map preview of stops (WEB-FEAT-011), lazy Leaflet */}
+                  {tripStops.length > 0 && (
+                    <div className="relative h-72 rounded-lg overflow-hidden border">
+                      <Suspense fallback={<div className="absolute inset-0 bg-muted animate-pulse" />}>
+                        <DiscoverMapCanvas
+                          entities={tripStops}
+                          selectedId={null}
+                          onSelect={() => {}}
+                          onBoundsChange={() => {}}
+                          flyTo={null}
+                        />
+                      </Suspense>
+                    </div>
+                  )}
 
                   {/* Itinerary Days */}
                   {selectedTrip.items && selectedTrip.items.length > 0 ? (
@@ -528,17 +648,32 @@ export default function TripPlanner() {
                                   )}
                                   Day {day}: {format(dayDate, 'EEEE, MMMM d')}
                                 </CardTitle>
-                                <Badge variant="secondary">
-                                  {items.length} {items.length === 1 ? 'activity' : 'activities'}
-                                </Badge>
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="secondary">
+                                    {items.length} {items.length === 1 ? 'activity' : 'activities'}
+                                  </Badge>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7"
+                                    aria-label={`Add Day ${day} to calendar`}
+                                    title="Download this day (.ics)"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleAddDayToCalendar(selectedTrip, items, dayNum);
+                                    }}
+                                  >
+                                    <CalendarPlus className="h-4 w-4" />
+                                  </Button>
+                                </div>
                               </div>
                             </CardHeader>
                             {isExpanded && (
                               <CardContent>
                                 <div className="space-y-4">
-                                  {items
+                                  {[...items]
                                     .sort((a, b) => a.order_index - b.order_index)
-                                    .map((item, idx) => (
+                                    .map((item, idx, sortedItems) => (
                                       <div
                                         key={item.item_id}
                                         className="flex gap-4 p-4 rounded-lg border bg-card"
@@ -557,7 +692,7 @@ export default function TripPlanner() {
                                               <h4 className="font-medium">{item.title}</h4>
                                               {item.start_time && (
                                                 <p className="text-sm text-muted-foreground flex items-center gap-1">
-                                                  <Clock className="h-3 w-3" />
+                                                  <SpriteIcon name="clock" className="h-3 w-3" />
                                                   {item.start_time}
                                                   {item.end_time && ` - ${item.end_time}`}
                                                   {item.duration_minutes && (
@@ -576,7 +711,7 @@ export default function TripPlanner() {
                                           </div>
                                           {item.location && (
                                             <p className="text-sm text-muted-foreground flex items-center gap-1">
-                                              <MapPin className="h-3 w-3" />
+                                              <SpriteIcon name="map-pin" className="h-3 w-3" />
                                               {item.location}
                                             </p>
                                           )}
@@ -600,9 +735,42 @@ export default function TripPlanner() {
                                               className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
                                             >
                                               View details
-                                              <ExternalLink className="h-3 w-3" />
+                                              <SpriteIcon name="external-link" className="h-3 w-3" />
                                             </Link>
                                           )}
+                                        </div>
+                                        {/* Reorder + per-stop calendar (WEB-FEAT-011) */}
+                                        <div className="flex flex-col gap-1 shrink-0">
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-7 w-7"
+                                            disabled={idx === 0}
+                                            onClick={() => handleMoveItem(sortedItems, idx, -1)}
+                                            aria-label={`Move ${item.title} earlier`}
+                                          >
+                                            <ArrowUp className="h-4 w-4" />
+                                          </Button>
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-7 w-7"
+                                            disabled={idx === sortedItems.length - 1}
+                                            onClick={() => handleMoveItem(sortedItems, idx, 1)}
+                                            aria-label={`Move ${item.title} later`}
+                                          >
+                                            <ArrowDown className="h-4 w-4" />
+                                          </Button>
+                                          <a
+                                            href={googleCalendarUrl(selectedTrip, item)}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent"
+                                            aria-label={`Add ${item.title} to Google Calendar`}
+                                            title="Add to Google Calendar"
+                                          >
+                                            <CalendarPlus className="h-4 w-4" />
+                                          </a>
                                         </div>
                                       </div>
                                     ))}
@@ -671,12 +839,12 @@ export default function TripPlanner() {
               ) : (
                 <Card className="text-center py-12">
                   <CardContent>
-                    <Sparkles className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                    <SpriteIcon name="sparkles" className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                     <h3 className="text-lg font-medium mb-2">No itinerary selected</h3>
                     <p className="text-muted-foreground mb-4">
                       Generate a new itinerary or select one from your saved trips.
                     </p>
-                    <Button onClick={() => document.querySelector('[value="plan"]')?.click()}>
+                    <Button onClick={() => (document.querySelector('[value="plan"]') as HTMLElement | null)?.click()}>
                       Plan a Trip
                     </Button>
                   </CardContent>
@@ -689,7 +857,7 @@ export default function TripPlanner() {
               {!user ? (
                 <Card className="text-center py-12">
                   <CardContent>
-                    <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                    <SpriteIcon name="users" className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                     <h3 className="text-lg font-medium mb-2">Sign in to see your trips</h3>
                     <p className="text-muted-foreground mb-4">
                       Create an account to save and manage your itineraries.
@@ -714,12 +882,12 @@ export default function TripPlanner() {
               ) : tripPlans.length === 0 ? (
                 <Card className="text-center py-12">
                   <CardContent>
-                    <Calendar className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                    <SpriteIcon name="calendar" className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                     <h3 className="text-lg font-medium mb-2">No trips yet</h3>
                     <p className="text-muted-foreground mb-4">
                       Start planning your first Des Moines adventure!
                     </p>
-                    <Button onClick={() => document.querySelector('[value="plan"]')?.click()}>
+                    <Button onClick={() => (document.querySelector('[value="plan"]') as HTMLElement | null)?.click()}>
                       Plan Your First Trip
                     </Button>
                   </CardContent>
@@ -737,7 +905,7 @@ export default function TripPlanner() {
                           <CardTitle className="text-lg line-clamp-1">{trip.title}</CardTitle>
                           {trip.ai_generated && (
                             <Badge className="bg-gradient-to-r from-purple-500 to-pink-500 shrink-0">
-                              <Sparkles className="h-3 w-3" />
+                              <SpriteIcon name="sparkles" className="h-3 w-3" />
                             </Badge>
                           )}
                         </div>
@@ -748,7 +916,7 @@ export default function TripPlanner() {
                       <CardContent>
                         <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
                           <span className="flex items-center gap-1">
-                            <Calendar className="h-3 w-3" />
+                            <SpriteIcon name="calendar" className="h-3 w-3" />
                             {format(new Date(trip.start_date), 'MMM d')} -{' '}
                             {format(new Date(trip.end_date), 'MMM d')}
                           </span>
@@ -763,7 +931,7 @@ export default function TripPlanner() {
                       <CardFooter className="flex justify-between">
                         <Badge variant="secondary">{trip.status}</Badge>
                         <Button size="sm" variant="ghost">
-                          View <ArrowRight className="h-4 w-4 ml-1" />
+                          View <SpriteIcon name="arrow-right" className="h-4 w-4 ml-1" />
                         </Button>
                       </CardFooter>
                     </Card>
@@ -814,6 +982,11 @@ export default function TripPlanner() {
           open={showEmailCapture}
           onOpenChange={setShowEmailCapture}
           source="trip_planner"
+        />
+        <UpgradeModal
+          open={showPaywall}
+          onOpenChange={setShowPaywall}
+          feature="trip_planner"
         />
       </div>
     </>

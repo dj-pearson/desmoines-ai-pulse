@@ -138,7 +138,7 @@ export const PLACEMENT_SPECS: Record<PlacementType, PlacementSpec> = {
     ],
     specifications: [
       'Select the specific event or restaurant to promote',
-      'Listing must already exist on Des Moines AI Pulse',
+      'Listing must already exist on Des Moines Insider',
       'Sponsored label shown per FTC 16 CFR Part 255 guidelines',
       'Campaign end date removes sponsorship automatically',
     ],

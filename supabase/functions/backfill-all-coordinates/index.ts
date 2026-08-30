@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,6 +12,23 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+
+  // NO CALLER CHECK EXISTED. This builds a service-role client and geocodes
+  // four tables, which costs money per address. There is no config.toml entry,
+  // so verify_jwt defaults to true - and that only means "a valid Supabase
+  // JWT", which the publishable anon key is. Anyone who had loaded the site
+  // could start a paid batch job.
+  //
+  // Both real callers keep working:
+  //   pg_cron  sends Bearer <service_role_key> and RAISES rather than posting
+  //            unauthenticated (20260823000008:68-74) - the helper accepts it.
+  //   the UI   is CoordinateManager, mounted only in AdminTools, which sits
+  //            behind <ProtectedRoute requireAdmin> (App.tsx:454). Its
+  //            functions.invoke sends the admin user JWT, which the helper
+  //            checks server-side. The route already assumed admin; this makes
+  //            the server enforce it rather than trust the client.
+  const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+  if (authFailure) return authFailure;
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;

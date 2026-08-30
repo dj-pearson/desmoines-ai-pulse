@@ -1,21 +1,24 @@
 import React, { useState, useEffect } from "react";
 import { createLogger } from '@/lib/logger';
 import { supabase } from "@/integrations/supabase/client";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('EventsToday');
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import EventCard from "@/components/EventCard";
+import { ListFreshness } from "@/components/ListFreshness";
+import { FAQSection } from "@/components/FAQSection";
+import { SocialEventCard } from "@/components/SocialEventCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Calendar, MapPin, Clock } from "lucide-react";
 import { format } from "date-fns";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { Link } from "react-router-dom";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { formatCount } from "@/lib/pluralize";
 
 interface EventItem {
   id: string;
@@ -85,7 +88,7 @@ export default function EventsToday() {
   const faqData = [
     {
       question: `What's happening today in Des Moines?`,
-      answer: `We have ${todaysEvents.length} events happening today in Des Moines and surrounding areas. See our complete list with times, locations, and details.`,
+      answer: `See everything happening today in Des Moines and surrounding areas, with times, locations and details. The list is rebuilt daily.`,
     },
     {
       question: "How current is this information?",
@@ -109,6 +112,12 @@ export default function EventsToday() {
         canonicalUrl={getCanonicalUrl('/events/today')}
         pageType="website"
         breadcrumbs={breadcrumbs}
+        // Withheld until the data lands (WEB-SEO-008). Every answer here
+        // interpolates a live count, so the loading render and the loaded
+        // render produce DIFFERENT FAQPage JSON - and react-helmet-async
+        // appends script children that differ rather than replacing them, so
+        // the prerender captured both. Production served two FAQPage blocks
+        // on this page, one saying "0 events" and one saying "8 events".
         faqData={faqData}
         isTimeSensitive={true}
       />
@@ -134,17 +143,27 @@ export default function EventsToday() {
         {/* Hero Section */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">
-            <Calendar className="h-6 w-6 text-primary" />
+            <SpriteIcon name="calendar" className="h-6 w-6 text-primary" />
             <h1 className="text-3xl font-bold">Events Today in Des Moines</h1>
           </div>
 
+          {/* SEO-009: a visible, absolute freshness date. These are the pages
+              somebody checks again next Friday, and the only freshness claim on
+              them lived in the meta description ("Updated daily"), where the
+              reader it is aimed at cannot check it. Absolute rather than
+              relative on purpose - these pages are prerendered, so a relative
+              string is computed once at build time and frozen, and would still
+              read "2 hours ago" days later. Renders nothing when no row carries
+              a usable date. */}
+          <ListFreshness rows={todaysEvents} className="mb-4" />
+
           <div className="flex items-center gap-4 text-muted-foreground mb-4">
             <div className="flex items-center gap-1">
-              <Clock className="h-4 w-4" />
+              <SpriteIcon name="clock" className="h-4 w-4" />
               <span>{format(new Date(), "EEEE, MMMM d, yyyy")}</span>
             </div>
             <div className="flex items-center gap-1">
-              <MapPin className="h-4 w-4" />
+              <SpriteIcon name="map-pin" className="h-4 w-4" />
               <span>Des Moines Metro Area</span>
             </div>
           </div>
@@ -199,13 +218,13 @@ export default function EventsToday() {
         ) : todaysEvents.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
             {todaysEvents.map((event) => (
-              <EventCard key={event.id} event={event} onViewDetails={() => {}} />
+              <SocialEventCard key={event.id} event={event} onViewDetails={() => {}} />
             ))}
           </div>
         ) : (
           <Card className="text-center py-12">
             <CardContent>
-              <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <SpriteIcon name="calendar" className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h2 className="text-xl font-semibold mb-2">
                 No Events Scheduled for Today
               </h2>
@@ -261,6 +280,13 @@ export default function EventsToday() {
             </div>
           </CardContent>
         </Card>
+        {/* SEO-003: the FAQ is rendered here, not only declared in the head.
+            This page used to pass faqData to EnhancedLocalSEO, which emitted a
+            FAQPage block into <Helmet> and nothing else - so it declared an FAQ
+            that no visitor could see, which Google's FAQPage guidance does not
+            allow. FAQSection renders the questions and emits the single block. */}
+        <FAQSection faqs={faqData} />
+
       </div>
 
       <Footer />

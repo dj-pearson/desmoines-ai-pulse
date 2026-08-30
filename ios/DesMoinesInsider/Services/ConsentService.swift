@@ -81,7 +81,17 @@ final class ConsentService {
         AppLogger.general.info("All consent revoked")
     }
 
-    private init() {}
+    private init() {
+        // Non-EU users never see the consent screen (needsConsentPrompt is gated
+        // on isLikelyEU), so without this their analytics/ad telemetry stays OFF
+        // by default and measurement is silently disabled for the largest segment.
+        // Default analytics consent to granted (opt-out) for non-EU regions; EU
+        // users remain opt-in. register(defaults:) only supplies a value when none
+        // was explicitly written, so an explicit Settings opt-out still wins.
+        if !isLikelyEU {
+            UserDefaults.standard.register(defaults: [Keys.analytics: true])
+        }
+    }
 
     private enum Keys {
         static let hasCompleted = "gdpr_consent_completed"

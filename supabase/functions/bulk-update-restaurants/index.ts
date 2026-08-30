@@ -3,6 +3,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
 import { requireApiKey } from "../_shared/apiKeyAuth.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
+import { writeAuditLog, auditIp } from "../_shared/auditLog.ts";
+import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
 
 interface GooglePlaceDetails {
   id: string;
@@ -150,7 +152,7 @@ serve(async (req) => {
             console.log(`Searching for: "${searchQuery}"`)
             const searchUrl = `https://places.googleapis.com/v1/places:searchText`
             
-            const searchResponse = await fetch(searchUrl, {
+            const searchResponse = await fetchWithTimeout(searchUrl, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -209,7 +211,7 @@ serve(async (req) => {
         if (placeId) {
           const detailsUrl = `https://places.googleapis.com/v1/places/${placeId}`
           
-          const detailsResponse = await fetch(detailsUrl, {
+          const detailsResponse = await fetchWithTimeout(detailsUrl, {
             method: 'GET',
             headers: {
               'X-Goog-Api-Key': googleApiKey,
@@ -403,6 +405,16 @@ serve(async (req) => {
     }
 
     console.log('Bulk update completed:', response)
+
+    await writeAuditLog(supabase, {
+      eventType: "admin_action",
+      actorId: null, // API-key/cron triggered; no end-user actor
+      action: "bulk_update_restaurants",
+      resource: "restaurants",
+      severity: "medium",
+      ipAddress: auditIp(req),
+      details: { processed: restaurants.length, updated: updatedCount, errors: errors.length },
+    });
 
     return new Response(
       JSON.stringify(response),

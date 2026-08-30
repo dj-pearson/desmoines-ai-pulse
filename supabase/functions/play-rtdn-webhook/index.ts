@@ -45,6 +45,7 @@
 
 import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
+import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -128,6 +129,29 @@ interface GoogleSubscriptionPurchase {
 }
 
 // ---------------------------------------------------------------------------
+// Transient upstream failures
+// ---------------------------------------------------------------------------
+
+/**
+ * Signals a *transient* failure talking to Google (network error, timeout, 5xx,
+ * 408, 429). These are safe — and desirable — to retry, so the webhook returns a
+ * non-2xx status and lets Pub/Sub redeliver the notification. Permanent failures
+ * (bad request, auth/config, 404) throw a plain Error / return null instead and
+ * are acked (200), because redelivery wouldn't help.
+ */
+class TransientPlayApiError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'TransientPlayApiError';
+  }
+}
+
+/** HTTP statuses from Google that are worth retrying. */
+function isTransientHttpStatus(status: number): boolean {
+  return status >= 500 || status === 429 || status === 408;
+}
+
+// ---------------------------------------------------------------------------
 // Base64 helpers
 // ---------------------------------------------------------------------------
 
@@ -176,7 +200,7 @@ async function fetchGoogleJwks(): Promise<GoogleJwk[]> {
   if (cachedJwks && Date.now() - cachedJwks.fetchedAt < JWKS_TTL_MS) {
     return cachedJwks.keys;
   }
-  const res = await fetch(GOOGLE_OAUTH_CERTS_URL);
+  const res = await fetchWithTimeout(GOOGLE_OAUTH_CERTS_URL);
   if (!res.ok) throw new Error(`Failed to fetch Google JWKS: HTTP ${res.status}`);
   const body = await res.json();
   cachedJwks = { fetchedAt: Date.now(), keys: body.keys ?? [] };
@@ -304,16 +328,29 @@ async function getGoogleAccessToken(sa: ServiceAccountKey): Promise<string> {
   );
   const jwt = `${signingInput}.${base64UrlEncode(new Uint8Array(sig))}`;
 
-  const res = await fetch(GOOGLE_TOKEN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-      assertion: jwt,
-    }),
-  });
+  let res: Response;
+  try {
+    res = await fetchWithTimeout(GOOGLE_TOKEN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+        assertion: jwt,
+      }),
+    });
+  } catch (err) {
+    // Network error / timeout reaching Google's OAuth endpoint — transient.
+    throw new TransientPlayApiError(
+      `Google token endpoint unreachable: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
   if (!res.ok) {
     const body = await res.text().catch(() => '');
+    if (isTransientHttpStatus(res.status)) {
+      throw new TransientPlayApiError(
+        `Google token exchange transient failure: ${res.status} ${body}`,
+      );
+    }
     throw new Error(`Google token exchange failed: ${res.status} ${body}`);
   }
   const data = await res.json();
@@ -327,12 +364,28 @@ async function fetchSubscriptionState(
   purchaseToken: string,
 ): Promise<GoogleSubscriptionPurchase | null> {
   const url = `${GOOGLE_API_BASE}/applications/${packageName}/purchases/subscriptions/${subscriptionId}/tokens/${purchaseToken}`;
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  let res: Response;
+  try {
+    res = await fetchWithTimeout(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+  } catch (err) {
+    // Network error / timeout reaching the Play Developer API — transient.
+    throw new TransientPlayApiError(
+      `Play subscriptions.get unreachable: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
   if (res.status === 200) return (await res.json()) as GoogleSubscriptionPurchase;
   const body = await res.text().catch(() => '');
-  console.error(`Play API error: status=${res.status}, body=${body}`);
+  if (isTransientHttpStatus(res.status)) {
+    // 5xx/429/408 — Google is temporarily unavailable; signal a retry.
+    throw new TransientPlayApiError(
+      `Play subscriptions.get transient failure: status=${res.status}, body=${body}`,
+    );
+  }
+  // Permanent (4xx): the purchase can't be retrieved, but the notification is
+  // still handled below via the notificationType-derived status. Ack (200).
+  console.error(`Play API permanent error: status=${res.status}, body=${body}`);
   return null;
 }
 
@@ -483,11 +536,27 @@ serve(async (req) => {
   // -------------------------------------------------------------------------
   // 3. Idempotency — short-circuit if we've already processed this messageId
   // -------------------------------------------------------------------------
-  const { data: existingLog } = await supabase
+  // The error is captured, not discarded. Destructuring only `{ data }` here
+  // made a failing lookup indistinguishable from "no prior row", so the
+  // duplicate check silently passed and every retry was reprocessed. Play uses
+  // at-least-once delivery, so that path is exercised in normal operation, not
+  // only in incidents. Mirrors appstore-server-notifications-v2, which already
+  // captures and logs its lookup error (WEB-BE-030).
+  const { data: existingLog, error: logLookupError } = await supabase
     .from('play_rtdn_log')
     .select('id, processed_at')
     .eq('message_id', messageId)
     .maybeSingle();
+
+  if (logLookupError) {
+    // Deliberately NOT fatal: the subscription state update below is the part
+    // that matters, and refusing the notification would make Play retry it
+    // forever. But it must be loud — a permanently broken idempotency guard
+    // that logs nothing looks exactly like one that is working.
+    console.error(
+      `play_rtdn_log lookup failed (idempotency DISABLED for message_id=${messageId}): ${logLookupError.message}`,
+    );
+  }
 
   if (existingLog) {
     console.log(`Duplicate Pub/Sub message_id=${messageId}, already processed at ${existingLog.processed_at}`);
@@ -522,15 +591,33 @@ serve(async (req) => {
   // -------------------------------------------------------------------------
   if (vn) {
     const purchaseToken = vn.purchaseToken;
-    const { data: subRow } = await supabase
+    // WEB-BE-032. Unlike the idempotency guard above, this one IS fatal, and the
+    // reason is what the play_rtdn_log row says afterwards: with the error
+    // discarded, a failed lookup produced subRow === null, the refund was never
+    // applied, and the log recorded status 'no_match' - an affirmative claim
+    // that we looked and there was no such subscription. A refunded user keeps
+    // their entitlement and the audit trail says that was correct.
+    //
+    // Throwing returns 500 before anything is written to play_rtdn_log, so Play
+    // redelivers and the retry reprocesses cleanly.
+    const { data: subRow, error: subLookupError } = await supabase
       .from('user_subscriptions')
       .select('id, user_id')
       .eq('platform', 'android')
       .eq('google_purchase_token', purchaseToken)
       .maybeSingle();
 
+    if (subLookupError) {
+      console.error(
+        `Voided-purchase subscription lookup failed for token=${purchaseToken}: ${subLookupError.message}`,
+      );
+      throw subLookupError;
+    }
+
     if (subRow) {
-      await supabase
+      // The revocation itself. A silent failure here leaves a refunded customer
+      // entitled, so it throws for the same reason.
+      const { error: revokeError } = await supabase
         .from('user_subscriptions')
         .update({
           status: 'canceled',
@@ -538,6 +625,11 @@ serve(async (req) => {
           updated_at: new Date().toISOString(),
         })
         .eq('id', subRow.id);
+
+      if (revokeError) {
+        console.error(`Failed to revoke refunded subscription id=${subRow.id}:`, revokeError.message);
+        throw revokeError;
+      }
     }
 
     await supabase.from('play_rtdn_log').insert({
@@ -584,6 +676,7 @@ serve(async (req) => {
 
   let purchase: GoogleSubscriptionPurchase | null = null;
   let fetchError: string | null = null;
+  let transientFailure = false;
   try {
     const accessToken = await getGoogleAccessToken(sa);
     purchase = await fetchSubscriptionState(
@@ -594,16 +687,48 @@ serve(async (req) => {
     );
   } catch (err) {
     fetchError = err instanceof Error ? err.message : String(err);
+    transientFailure = err instanceof TransientPlayApiError;
     console.error(`Play API fetch failed for messageId=${messageId}:`, fetchError);
   }
 
-  // Resolve the user_subscriptions row (Android, by purchaseToken)
-  const { data: subRow } = await supabase
+  // TRANSIENT upstream failure (network / timeout / 5xx / 429) reaching the
+  // Google Play Developer API. Return a non-2xx so Pub/Sub REDELIVERS this
+  // notification and we retry against fresh state. Crucially we do NOT insert a
+  // play_rtdn_log row (nor mutate user_subscriptions) here: leaving message_id
+  // unrecorded keeps the idempotency guard from short-circuiting the retry, and
+  // avoids persisting a half-applied state. Permanent failures fall through and
+  // are acked (200) below. As a backstop, the next /validate-android-receipt
+  // call from the app reconciles any state we couldn't fetch here.
+  if (transientFailure) {
+    console.error(
+      `Transient Play API failure for messageId=${messageId}; returning 503 so Pub/Sub retries`,
+    );
+    return new Response(
+      JSON.stringify({ error: 'Upstream temporarily unavailable, retry', retry: true }),
+      { status: 503, headers: { 'Content-Type': 'application/json' } },
+    );
+  }
+
+  // Resolve the user_subscriptions row (Android, by purchaseToken).
+  //
+  // WEB-BE-032: with the error discarded, a failed lookup fell into the `else`
+  // branch below, which warns "no matching subscription" and logs the
+  // notification as handled. Every state change Play sent - renewal, cancel,
+  // grace period, hold - was then dropped on a database hiccup and recorded as
+  // if there had been nothing to apply. Throws so Play redelivers.
+  const { data: subRow, error: subRowError } = await supabase
     .from('user_subscriptions')
     .select('id, user_id, plan_id')
     .eq('platform', 'android')
     .eq('google_purchase_token', subNotif.purchaseToken)
     .maybeSingle();
+
+  if (subRowError) {
+    console.error(
+      `Subscription lookup failed for token=${subNotif.purchaseToken}: ${subRowError.message}`,
+    );
+    throw subRowError;
+  }
 
   const { status: nextStatus, cancelAtPeriodEnd } = statusForNotificationType(typeName);
 
@@ -619,12 +744,24 @@ serve(async (req) => {
 
     const tier = resolveProductTier(subNotif.subscriptionId);
     if (tier) {
-      const { data: plan } = await supabase
+      // WEB-BE-032: genuinely optional - the rest of the update still applies
+      // without it - so this one does NOT throw. But it is not silent either:
+      // .single() raised PGRST116 whenever no plan matched the tier name, which
+      // is indistinguishable from a real failure with the error dropped, and the
+      // consequence is a row left on its previous plan_id after a tier change.
+      const { data: plan, error: planError } = await supabase
         .from('subscription_plans')
         .select('id')
         .ilike('name', `%${tier}%`)
         .limit(1)
-        .single();
+        .maybeSingle();
+
+      if (planError) {
+        console.error(`subscription_plans lookup failed for tier=${tier}:`, planError.message);
+      } else if (!plan) {
+        console.warn(`No subscription_plans row matches tier=${tier}; plan_id left unchanged.`);
+      }
+
       if (plan?.id) update.plan_id = plan.id;
     }
 

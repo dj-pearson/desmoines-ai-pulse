@@ -11,10 +11,6 @@ import {
 import {
   Menu,
   X,
-  Calendar,
-  Utensils,
-  Compass,
-  FileText,
   ChevronRight,
   Crown,
   User,
@@ -23,7 +19,6 @@ import {
   Shield,
   LogOut,
   Trophy,
-  MapPin,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { prefetchRoute } from "@/lib/prefetch";
@@ -38,9 +33,19 @@ interface MobileNavProps {
   swipeRef: React.RefObject<HTMLDivElement>;
   isAuthenticated: boolean;
   isAdmin: boolean;
-  profile: { first_name?: string; last_name?: string; email?: string } | null;
-  userLevel: number | null;
-  userXP: number | null;
+  /** Only the fields these menus render. Declared with `| null` rather than
+   *  optional because the underlying profile columns are nullable — a row
+   *  straight from the database has `first_name: string | null`, which does not
+   *  satisfy `first_name?: string`. */
+  profile: {
+    first_name?: string | null;
+    last_name?: string | null;
+    email?: string | null;
+  } | null;
+  /** useGamification derives these from `reputation?.…`, so they are undefined
+   *  before the query resolves — not null. */
+  userLevel: number | null | undefined;
+  userXP: number | null | undefined;
   onLogout: () => void;
   getInitials: () => string;
 }
@@ -108,50 +113,16 @@ export function MobileNav({
           role="none"
         >
           <nav className="space-y-6" role="navigation" aria-label="Mobile navigation">
-            {/* Things to Do Section */}
-            <NavSection
-              title="Things to Do"
-              icon={MapPin}
-              items={navigationGroups.thingsToDo.items}
-              isActivePath={isActivePath}
-              onLinkClick={handleLinkClick}
-            />
-
-            {/* Events Section */}
-            <NavSection
-              title="Events"
-              icon={Calendar}
-              items={navigationGroups.events.items}
-              isActivePath={isActivePath}
-              onLinkClick={handleLinkClick}
-            />
-
-            {/* Dining Section */}
-            <NavSection
-              title="Dining"
-              icon={Utensils}
-              items={navigationGroups.dining.items}
-              isActivePath={isActivePath}
-              onLinkClick={handleLinkClick}
-            />
-
-            {/* Explore Section */}
-            <NavSection
-              title="Explore"
-              icon={Compass}
-              items={navigationGroups.explore.items}
-              isActivePath={isActivePath}
-              onLinkClick={handleLinkClick}
-            />
-
-            {/* Resources Section */}
-            <NavSection
-              title="Resources"
-              icon={FileText}
-              items={navigationGroups.resources.items}
-              isActivePath={isActivePath}
-              onLinkClick={handleLinkClick}
-            />
+            {Object.values(navigationGroups).map((group) => (
+              <NavSection
+                key={group.label}
+                title={group.label}
+                icon={group.icon}
+                items={group.items}
+                isActivePath={isActivePath}
+                onLinkClick={handleLinkClick}
+              />
+            ))}
           </nav>
 
           {/* Mobile Theme Toggle */}

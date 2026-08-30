@@ -1,0 +1,55 @@
+# Dependency & CVE scan (AOS-SEC-002)
+# Runs npm audit daily and posts the report to the agent-dep-scan edge function,
+# which opens tier-appropriate remediation tasks and closes resolved CVEs.
+
+name: Dependency CVE Scan
+
+on:
+  schedule:
+    - cron: '0 9 * * *' # daily at 09:00 UTC
+  workflow_dispatch:
+
+jobs:
+  audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run npm audit (JSON, non-blocking)
+        id: audit
+        run: |
+          # npm audit exits non-zero when vulns exist; capture the report anyway.
+          npm audit --json > audit.json || true
+          echo "vuln_total=$(node -e "try{const a=require('./audit.json');console.log(a.metadata?.vulnerabilities?.total??0)}catch(e){console.log(0)}")" >> "$GITHUB_OUTPUT"
+
+      - name: Post report to agent-dep-scan
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          EDGE_FUNCTION_API_KEY: ${{ secrets.EDGE_FUNCTION_API_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$EDGE_FUNCTION_API_KEY" ]; then
+            echo "SUPABASE_URL / EDGE_FUNCTION_API_KEY not set — skipping post."
+            exit 0
+          fi
+          # Wrap the audit report as { "audit": <report> } and POST it.
+          node -e "const a=require('./audit.json');process.stdout.write(JSON.stringify({audit:a}))" > payload.json
+          curl -sS -X POST \
+            "${SUPABASE_URL}/functions/v1/agent-dep-scan" \
+            -H "x-api-key: ${EDGE_FUNCTION_API_KEY}" \
+            -H "Content-Type: application/json" \
+            --data-binary @payload.json \
+            && echo "posted audit report"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Dependency CVE Scan" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Total advisories: ${{ steps.audit.outputs.vuln_total || 'n/a' }}" >> "$GITHUB_STEP_SUMMARY"

@@ -77,26 +77,31 @@ export default function EventSchema({
     },
     image: image || undefined,
     ...(url && { url }),
-    organizer: organizer
-      ? {
-          "@type": "Organization",
-          name: organizer.name,
-          ...(organizer.url && { url: organizer.url }),
-        }
-      : {
-          "@type": "Organization",
-          name: "Des Moines Insider",
-          url: "https://desmoinesinsider.com",
-        },
-    performer: performer
-      ? {
-          "@type": "Organization",
-          name: performer.name,
-          ...(performer.url && { url: performer.url }),
-        }
-      : organizer
-        ? { "@type": "Organization", name: organizer.name }
-        : { "@type": "Organization", name: "Des Moines Insider" },
+    // WEB-SEO-010: both of these used to fall back to "Des Moines Insider" when
+    // the source data had no organizer or performer — which claimed we organize
+    // touring Broadway shows and perform at symphony concerts. We are an
+    // aggregator; inserting our own name as organizer/performer on third-party
+    // events is both false and a recognisable scraped-content spam pattern.
+    // Neither field is required by Google's Event guidance, and an omitted
+    // field is strictly better than a fabricated one.
+    ...(organizer && {
+      organizer: {
+        "@type": "Organization",
+        name: organizer.name,
+        ...(organizer.url && { url: organizer.url }),
+      },
+    }),
+    // Fall back to the organizer only when it is a real organizer from the data
+    // — for many events the presenting organization genuinely is the performer.
+    ...((performer || organizer) && {
+      performer: performer
+        ? {
+            "@type": "Organization",
+            name: performer.name,
+            ...(performer.url && { url: performer.url }),
+          }
+        : { "@type": "Organization", name: organizer!.name },
+    }),
     ...(category && {
       category: {
         "@type": "Thing",

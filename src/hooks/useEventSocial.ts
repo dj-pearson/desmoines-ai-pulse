@@ -2,6 +2,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { createLogger } from '@/lib/logger';
+import type { RealtimeChannel } from '@supabase/supabase-js';
+
+const logger = createLogger('useEventSocial');
 
 export interface EventAttendee {
   id: string;
@@ -17,20 +21,26 @@ export interface EventDiscussion {
   user_id: string;
   message: string;
   message_type: 'comment' | 'photo' | 'video' | 'tip';
-  media_url?: string;
-  parent_id?: string;
+  // Nullable in the database, so nullable here. Declaring these as
+  // `?: string` claimed absent-or-string when Postgres returns null, which is
+  // what made the mapped row unassignable (WEB-QA-016).
+  media_url?: string | null;
+  parent_id?: string | null;
   likes_count: number;
   created_at: string;
   updated_at: string;
 }
 
 export interface EventLiveStats {
+  // Every column except event_id is nullable in public.event_live_stats; the
+  // row does not exist until the first attendee, check-in or comment. Callers
+  // must coalesce rather than assume a number (WEB-QA-016).
   event_id: string;
-  current_attendees: number;
-  total_checkins: number;
-  discussion_count: number;
-  photos_count: number;
-  last_activity: string;
+  current_attendees: number | null;
+  total_checkins: number | null;
+  discussion_count: number | null;
+  photos_count: number | null;
+  last_activity: string | null;
 }
 
 export interface EventCheckin {
@@ -61,7 +71,7 @@ export function useEventSocial(eventId: string) {
     
     try {
       // Fetch attendees
-      const { data: attendeesData } = await supabase
+      const { data: attendeesData, error: attendeesError } = await supabase
         .from('event_attendees')
         .select('*')
         .eq('event_id', eventId)
@@ -69,7 +79,7 @@ export function useEventSocial(eventId: string) {
         .order('created_at', { ascending: false });
 
       // Fetch discussions
-      const { data: discussionsData } = await supabase
+      const { data: discussionsData, error: discussionsError } = await supabase
         .from('event_discussions')
         .select('*')
         .eq('event_id', eventId)
@@ -77,15 +87,24 @@ export function useEventSocial(eventId: string) {
         .limit(50);
 
       // Fetch live stats
-      const { data: statsData } = await supabase
+      const { data: statsData, error: statsError } = await supabase
         .from('event_live_stats')
         .select('*')
         .eq('event_id', eventId)
         .maybeSingle();
 
-      // Check user's attendance status
+      // Check user's attendance status.
+      //
+      // THESE TWO ARE THE DANGEROUS ONES. Their results were destructured
+      // without `error`, so a failed read produced null and the setters below
+      // asserted "you are not attending" and "you are not checked in" to a user
+      // who might be both. The UI then offers to RSVP again and to check in
+      // again, and the user duplicates a row they already own. On a failed read
+      // the previous state is LEFT ALONE - not knowing is not the same as
+      // knowing the answer is no, and the list reads above can be blank without
+      // telling the user anything false about themselves.
       if (user) {
-        const { data: userAttendanceData } = await supabase
+        const { data: userAttendanceData, error: userAttendanceError } = await supabase
           .from('event_attendees')
           .select('status')
           .eq('event_id', eventId)
@@ -93,15 +112,42 @@ export function useEventSocial(eventId: string) {
           .maybeSingle();
 
         // Check if user is checked in
-        const { data: checkinData } = await supabase
+        const { data: checkinData, error: checkinError } = await supabase
           .from('event_checkins')
           .select('id')
           .eq('event_id', eventId)
           .eq('user_id', user.id)
           .maybeSingle();
 
-        setUserAttendanceStatus(userAttendanceData?.status || null);
-        setIsCheckedIn(!!checkinData);
+        if (userAttendanceError) {
+          logger.error('fetchEventSocialData', 'Could not read your attendance status', {
+            eventId,
+            error: userAttendanceError,
+          });
+        } else {
+          setUserAttendanceStatus(userAttendanceData?.status || null);
+        }
+
+        if (checkinError) {
+          logger.error('fetchEventSocialData', 'Could not read your check-in status', {
+            eventId,
+            error: checkinError,
+          });
+        } else {
+          setIsCheckedIn(!!checkinData);
+        }
+      }
+
+      // A blank list because the read failed and a blank list because nobody
+      // is going render identically. Logged so the difference exists somewhere.
+      if (attendeesError) {
+        logger.error('fetchEventSocialData', 'Could not read attendees', { eventId, error: attendeesError });
+      }
+      if (discussionsError) {
+        logger.error('fetchEventSocialData', 'Could not read discussions', { eventId, error: discussionsError });
+      }
+      if (statsError) {
+        logger.error('fetchEventSocialData', 'Could not read live stats', { eventId, error: statsError });
       }
 
       setAttendees((attendeesData || []).map(a => ({
@@ -125,7 +171,7 @@ export function useEventSocial(eventId: string) {
       })));
       setLiveStats(statsData);
     } catch (error) {
-      console.error('Error fetching event social data:', error);
+      logger.error('fetchEventSocialData', 'Error fetching event social data', { error });
     } finally {
       setIsLoading(false);
     }
@@ -135,7 +181,9 @@ export function useEventSocial(eventId: string) {
   useEffect(() => {
     if (!eventId) return;
 
-    const channels = [];
+    // Typed explicitly: an empty array literal infers never[]/any[] here, which
+    // strict mode reports as an implicit-any escape (TS7034/TS7005).
+    const channels: RealtimeChannel[] = [];
 
     // Subscribe to attendees changes
     const attendeesChannel = supabase
@@ -149,7 +197,7 @@ export function useEventSocial(eventId: string) {
           filter: `event_id=eq.${eventId}`,
         },
         (payload) => {
-          console.log('Attendees change:', payload);
+          logger.debug('realtime', 'Attendees change', { payload });
           if (payload.eventType === 'INSERT') {
             setAttendees(prev => [payload.new as EventAttendee, ...prev]);
           } else if (payload.eventType === 'UPDATE') {
@@ -175,7 +223,7 @@ export function useEventSocial(eventId: string) {
           filter: `event_id=eq.${eventId}`,
         },
         (payload) => {
-          console.log('Discussions change:', payload);
+          logger.debug('realtime', 'Discussions change', { payload });
           if (payload.eventType === 'INSERT') {
             setDiscussions(prev => [payload.new as EventDiscussion, ...prev]);
           } else if (payload.eventType === 'UPDATE') {
@@ -201,7 +249,7 @@ export function useEventSocial(eventId: string) {
           filter: `event_id=eq.${eventId}`,
         },
         (payload) => {
-          console.log('Stats change:', payload);
+          logger.debug('realtime', 'Stats change', { payload });
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
             setLiveStats(payload.new as EventLiveStats);
           }
@@ -247,7 +295,7 @@ export function useEventSocial(eventId: string) {
         description: `You are now marked as "${status}" for this event`,
       });
     } catch (error) {
-      console.error('Error updating attendance status:', error);
+      logger.error('updateAttendanceStatus', 'Error updating attendance status', { error });
       toast({
         title: "Error",
         description: "Failed to update your attendance status",
@@ -278,7 +326,7 @@ export function useEventSocial(eventId: string) {
         description: "You've successfully checked in to this event",
       });
     } catch (error) {
-      console.error('Error checking in:', error);
+      logger.error('checkInToEvent', 'Error checking in', { error });
       toast({
         title: "Error",
         description: "Failed to check in to the event",
@@ -312,7 +360,7 @@ export function useEventSocial(eventId: string) {
         description: "Your comment has been posted",
       });
     } catch (error) {
-      console.error('Error adding discussion:', error);
+      logger.error('addDiscussion', 'Error adding discussion', { error });
       toast({
         title: "Error",
         description: "Failed to post your comment",
@@ -340,7 +388,7 @@ export function useEventSocial(eventId: string) {
         d.id === discussionId ? { ...d, likes_count: d.likes_count + 1 } : d
       ));
     } catch (error) {
-      console.error('Error liking discussion:', error);
+      logger.error('likeDiscussion', 'Error liking discussion', { error });
     }
   }, [user]);
 

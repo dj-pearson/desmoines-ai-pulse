@@ -3,6 +3,8 @@
  * Supports multiple scraping backends: Puppeteer, Playwright, and Firecrawl
  */
 
+import { isCrawlAllowed } from './robots.ts';
+
 export type ScraperBackend = 'browserless' | 'fetch' | 'puppeteer' | 'playwright' | 'firecrawl';
 
 export interface ScraperConfig {
@@ -11,6 +13,14 @@ export interface ScraperConfig {
   waitTime?: number;
   timeout?: number;
   userAgent?: string;
+  /**
+   * True when SCRAPER_USER_AGENT was set deliberately, rather than the
+   * built-in desktop-Chrome default. Backends that can forward a
+   * User-Agent to the crawled site only do so when this is true, so
+   * leaving the variable unset keeps every backend behaving exactly as
+   * it did before. See WEB-SEC-024.
+   */
+  userAgentDeclared?: boolean;
   firecrawlApiKey?: string;
   browserlessApiKey?: string;
   browserlessUrl?: string;
@@ -41,6 +51,7 @@ export function getScraperConfig(): ScraperConfig {
     timeout: parseInt(Deno.env.get('SCRAPER_TIMEOUT') || '30000'),
     userAgent: Deno.env.get('SCRAPER_USER_AGENT') || 
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    userAgentDeclared: !!Deno.env.get('SCRAPER_USER_AGENT'),
     firecrawlApiKey: Deno.env.get('FIRECRAWL_API_KEY'),
     browserlessApiKey: browserlessKey,
     browserlessUrl: Deno.env.get('BROWSERLESS_URL') || 'https://production-sfo.browserless.io',
@@ -83,9 +94,17 @@ async function scrapeWithBrowserless(
           timeout: 10000,
         },
       }),
-      // Try to wait for common event detail page elements
+      // Return the WHOLE document, not just <body>.
+      //
+      // This was `{ selector: 'body' }`, which returns the body subtree only —
+      // so every <script type="application/ld+json"> and <meta property="og:*">
+      // in <head> was discarded before it reached the callers. Both the
+      // schema.org/Event pre-pass and the og:image fallback read from <head>, so
+      // on any site that emits its structured data there (WordPress "The Events
+      // Calendar", Squarespace, Wix, most Next.js themes) they silently found
+      // nothing and the crawl fell back to fuzzy text extraction.
       elements: [
-        { selector: 'body' }
+        { selector: 'html' }
       ],
     };
 
@@ -419,6 +438,15 @@ async function scrapeWithFirecrawl(
         formats: ['markdown', 'html'],
         waitFor: config.waitTime,
         timeout: config.timeout,
+        // WEB-SEC-024: this is the ONLY backend besides plain fetch that can
+        // carry our identity to the crawled site. Firecrawl's /v1/scrape takes
+        // a `headers` object and applies it to the target request; without it
+        // the site sees Firecrawl's own agent and SCRAPER_USER_AGENT reaches
+        // nobody. Sent only when the variable was set deliberately, so the
+        // default path is byte-identical to before.
+        ...(config.userAgentDeclared && config.userAgent
+          ? { headers: { 'User-Agent': config.userAgent } }
+          : {}),
       }),
     });
     
@@ -465,7 +493,28 @@ export async function scrapeUrl(
   const config = { ...defaults, ...overrides } as ScraperConfig;
   
   console.log(`🚀 Starting scrape of ${url} using ${config.backend}`);
-  
+
+  // WEB-SEC-024: ask the site first. Every ingestion path in the project goes
+  // through scrapeUrl, and none of them checked robots.txt, so a site that had
+  // explicitly asked not to be crawled was crawled anyway. Checked here rather
+  // than in each backend because the fallback chain below would otherwise route
+  // straight around it.
+  //
+  // Fail-open by construction (see robots.ts): only an explicit Disallow blocks.
+  // SCRAPER_IGNORE_ROBOTS=true is an escape hatch for an incident, not a default.
+  if (Deno.env.get('SCRAPER_IGNORE_ROBOTS') !== 'true') {
+    const allowed = await isCrawlAllowed(url, config.userAgent || '*');
+    if (!allowed) {
+      console.log(`⛔ ${url} is disallowed by robots.txt — not fetching`);
+      return {
+        success: false,
+        error: 'Disallowed by robots.txt',
+        backend: config.backend,
+        duration: 0,
+      };
+    }
+  }
+
   let result: ScraperResult;
   
   switch (config.backend) {

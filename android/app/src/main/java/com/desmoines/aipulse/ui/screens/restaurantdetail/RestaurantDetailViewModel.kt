@@ -5,6 +5,9 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.desmoines.aipulse.data.model.Restaurant
+import com.desmoines.aipulse.data.remote.BillingService
+import com.desmoines.aipulse.data.repository.AuthRepository
+import com.desmoines.aipulse.data.repository.FavoritesRepository
 import com.desmoines.aipulse.data.repository.RestaurantsRepository
 import com.desmoines.aipulse.util.LocationService
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -13,6 +16,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import java.util.Locale
 
 /**
  * ViewModel for the Restaurant Detail screen.
@@ -22,6 +26,9 @@ import javax.inject.Inject
 class RestaurantDetailViewModel @Inject constructor(
     private val restaurantsRepository: RestaurantsRepository,
     private val locationService: LocationService,
+    private val favoritesRepository: FavoritesRepository,
+    private val authRepository: AuthRepository,
+    private val billingService: BillingService,
 ) : ViewModel() {
 
     private val _restaurant = MutableStateFlow<Restaurant?>(null)
@@ -33,9 +40,11 @@ class RestaurantDetailViewModel @Inject constructor(
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
-    // Favorites placeholder — wired in AND-024
     private val _isFavorited = MutableStateFlow(false)
     val isFavorited: StateFlow<Boolean> = _isFavorited.asStateFlow()
+
+    private val _favoriteError = MutableStateFlow<String?>(null)
+    val favoriteError: StateFlow<String?> = _favoriteError.asStateFlow()
 
     fun loadRestaurant(id: String) {
         viewModelScope.launch {
@@ -43,16 +52,59 @@ class RestaurantDetailViewModel @Inject constructor(
             _errorMessage.value = null
 
             restaurantsRepository.fetchRestaurant(id)
-                .onSuccess { _restaurant.value = it }
+                .onSuccess {
+                    _restaurant.value = it
+                    refreshFavoriteState(it.id)
+                }
                 .onFailure { _errorMessage.value = it.message }
 
             _isLoading.value = false
         }
     }
 
+    /**
+     * Reads the persisted favorite state for [restaurantId].
+     *
+     * Until this was wired the heart was a local boolean that flipped on tap and
+     * reset the moment the screen was reopened, so every save from a detail
+     * screen was silently discarded.
+     */
+    private fun refreshFavoriteState(restaurantId: String) {
+        val userId = authRepository.currentUserId
+        if (userId == null) {
+            _isFavorited.value = false
+            return
+        }
+        viewModelScope.launch {
+            favoritesRepository.loadFavorites(userId).onSuccess { state ->
+                _isFavorited.value = restaurantId in state.favoriteRestaurantIds
+            }
+        }
+    }
+
     fun toggleFavorite() {
-        // Placeholder — will connect to FavoritesRepository in AND-024
-        _isFavorited.value = !_isFavorited.value
+        val restaurantId = _restaurant.value?.id ?: return
+        val userId = authRepository.currentUserId
+        if (userId == null) {
+            _favoriteError.value = "Sign in to save restaurants."
+            return
+        }
+
+        viewModelScope.launch {
+            val currentIds = if (_isFavorited.value) setOf(restaurantId) else emptySet()
+            favoritesRepository.toggleRestaurantFavorite(
+                userId = userId,
+                restaurantId = restaurantId,
+                currentIds = currentIds,
+                tier = billingService.currentTier.value,
+            )
+                .onSuccess { _isFavorited.value = it }
+                .onFailure { _favoriteError.value = it.message }
+        }
+    }
+
+    fun clearFavoriteError() {
+        _favoriteError.value = null
     }
 
     /**
@@ -101,7 +153,7 @@ class RestaurantDetailViewModel @Inject constructor(
             val parts = mutableListOf(r.name)
             r.cuisine?.let { parts.add("($it)") }
             parts.add("- ${r.displayLocation}")
-            r.rating?.let { parts.add("\u2B50 ${String.format("%.1f", it)}") }
+            r.rating?.let { parts.add("\u2B50 ${String.format(Locale.US, "%.1f", it)}") }
             return parts.joinToString(" ") + "\n\nFound on Des Moines Insider"
         }
 

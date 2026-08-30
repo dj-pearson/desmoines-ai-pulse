@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Link } from 'react-router-dom';
 import { Calendar, MapPin, DollarSign } from 'lucide-react';
 import type { PseoDimensionRef } from '../../schemas';
+import { CATEGORY_FILTERS, temporalRange } from '../../listingFilters';
 
 interface PseoLiveListingsProps {
   dimensions: PseoDimensionRef[];
@@ -21,9 +22,11 @@ interface PseoLiveListingsProps {
 
 export function PseoLiveListings({ dimensions, pageTypeId }: PseoLiveListingsProps) {
   const contentType = dimensions.find((d) => d.dimension === 'content_type');
-  const location = dimensions.find((d) => d.dimension === 'location');
   const category = dimensions.find((d) => d.dimension === 'category');
 
+  // `location` used to be bound here and never read - the same dead-binding
+  // shape as `temporal` in fetchListings, which is the bug that made every
+  // temporal variant of a page render the same twelve rows.
   const entityType = resolveEntityType(contentType?.slug, category?.slug);
 
   const { data: items, isLoading } = useQuery({
@@ -167,26 +170,57 @@ async function fetchListings(
   const category = dimensions.find((d) => d.dimension === 'category');
   const temporal = dimensions.find((d) => d.dimension === 'temporal');
 
+  // An incoherent page lists nothing rather than everything. The taxonomy
+  // crosses every content_type with every category, so it produced
+  // /events/italian and /things-to-do/bbq - a cuisine narrowing an events page.
+  // There is no such thing as an Italian event, and dropping the filter as
+  // unapplicable would render the generic next-twelve events under a URL
+  // promising Italian ones, which is the doorway-page shape AC5 exists to stop.
+  // 20 published pages are this way; the audit reports them with no inventory,
+  // which is the truth about them.
+  const categoryFilter = category ? CATEGORY_FILTERS[category.slug] : undefined;
+  if (category && categoryFilter && categoryFilter.entity !== entityType) return [];
+
   if (entityType === 'events') {
     let query = supabase
       .from('events')
-      .select('id, title, description, location, date, price, category, image_url')
+      // public.events has no `description` (enhanced_description /
+      // original_description instead). Selecting it failed the whole query with
+      // 42703, so every pSEO event landing page rendered an empty listing block.
+      .select('id, title, enhanced_description, original_description, location, date, price, category, image_url')
       .gte('date', new Date().toISOString())
+      .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
       .order('date', { ascending: true })
       .limit(12);
 
     if (location) {
-      query = query.or(`city.ilike.%${location.name}%,location.ilike.%${location.name}%`);
+      // venue is in the OR because that is where a neighbourhood name actually
+      // lands on this table - events.city is NULL on 1,243 of 1,249 rows, so the
+      // city arm almost never fires. Same fields EventsByLocation.tsx matches.
+      query = query.or(
+        `city.ilike.%${location.name}%,location.ilike.%${location.name}%,venue.ilike.%${location.name}%`,
+      );
     }
-    if (category) {
-      query = query.ilike('category', `%${category.name}%`);
+    if (categoryFilter?.entity === 'events') {
+      query = query.filter(categoryFilter.column, 'imatch', categoryFilter.pattern);
+    }
+    if (temporal) {
+      const range = temporalRange(temporal.slug);
+      if (range) query = query.gte('date', range.from).lte('date', range.to);
     }
 
-    const { data } = await query;
+    const { data, error } = await query;
+    // The component renders NOTHING when this returns empty - `if (!items?.length)
+    // return null` - so a failed query removes the listing block from the page
+    // entirely and the pSEO page silently becomes prose with no inventory. That
+    // is exactly the doorway-page shape WEB-SEO-013 AC5 exists to prevent, and
+    // an empty listing from a failed read is indistinguishable from a genuinely
+    // empty one. Throwing lets react-query surface it instead.
+    if (error) throw error;
     return (data ?? []).map((e) => ({
       id: e.id,
       name: e.title,
-      description: e.description ?? undefined,
+      description: e.enhanced_description ?? e.original_description ?? undefined,
       location: e.location ?? undefined,
       date: e.date ?? undefined,
       price: e.price ?? undefined,
@@ -205,11 +239,16 @@ async function fetchListings(
     if (location) {
       query = query.or(`city.ilike.%${location.name}%,location.ilike.%${location.name}%`);
     }
-    if (category) {
-      query = query.ilike('cuisine', `%${category.name}%`);
+    if (categoryFilter?.entity === 'restaurants') {
+      query = query.filter(categoryFilter.column, 'imatch', categoryFilter.pattern);
     }
+    // No temporal filter here on purpose: restaurants carry no date, so
+    // /italian/today and /italian/winter list the same restaurants. That is the
+    // taxonomy generating a dimension the entity does not have, not a bug to fix
+    // in this query.
 
-    const { data } = await query;
+    const { data, error } = await query;
+    if (error) throw error;
     return (data ?? []).map((r) => ({
       id: r.id,
       name: r.name,
@@ -234,7 +273,8 @@ async function fetchListings(
     query = query.ilike('location', `%${location.name}%`);
   }
 
-  const { data } = await query;
+  const { data, error } = await query;
+  if (error) throw error;
   return (data ?? []).map((a) => ({
     id: a.id,
     name: a.name,

@@ -147,6 +147,14 @@ enum ContentType: String, Codable {
     case restaurant
     case attraction
     case playground
+
+    /// Decode tolerantly. The backing DB enum can gain values additively per
+    /// CLAUDE.md's backward-compat rules; an unrecognized value falls back to
+    /// `.event` instead of throwing and failing the whole response decode.
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = ContentType(rawValue: raw) ?? .event
+    }
 }
 
 // MARK: - User Role
@@ -156,17 +164,17 @@ enum UserRole: String, Codable {
     case moderator
     case admin
     case rootAdmin = "root_admin"
+
+    /// Decode tolerantly, defaulting an unknown role to the least-privileged
+    /// `.user` — both to honor additive enum growth and to fail safe (an
+    /// unrecognized role must never be treated as elevated).
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = UserRole(rawValue: raw) ?? .user
+    }
 }
 
 // MARK: - Sort Option
-
-enum EventSortOption: String, CaseIterable, Identifiable {
-    case date = "Date"
-    case distance = "Distance"
-    case popularity = "Popularity"
-
-    var id: String { rawValue }
-}
 
 enum RestaurantSortOption: String, CaseIterable, Identifiable {
     case popularity = "Popular"
@@ -243,6 +251,14 @@ enum SubscriptionTier: String, Codable {
     case insider
     case vip
 
+    /// Decode tolerantly, defaulting an unknown tier to `.free` — fail safe so a
+    /// backend value this binary doesn't recognize never unlocks premium and
+    /// never crashes the response decode (additive-enum backward-compat rule).
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = SubscriptionTier(rawValue: raw) ?? .free
+    }
+
     var displayName: String {
         switch self {
         case .free: return "Free"
@@ -255,6 +271,35 @@ enum SubscriptionTier: String, Codable {
         switch self {
         case .free: return 3
         case .insider, .vip: return -1  // unlimited
+        }
+    }
+
+    /// Per-tier count limits for the other quota-gated features (IOS-SUB-011),
+    /// mirroring the web `SubscriptionLimits`. `-1` means unlimited. Saved
+    /// searches / alerts (IOS-PARITY-008) and the AI Trip Planner quota
+    /// (IOS-PARITY-001) read these once those screens land.
+    var maxSavedSearches: Int {
+        switch self {
+        case .free: return 0
+        case .insider: return 10
+        case .vip: return -1
+        }
+    }
+
+    var maxAlerts: Int {
+        switch self {
+        case .free: return 0
+        case .insider: return 10
+        case .vip: return -1
+        }
+    }
+
+    /// AI Trip Planner: Insider 5 trips/month, VIP unlimited (per the PRD).
+    var maxTripPlansPerMonth: Int {
+        switch self {
+        case .free: return 0
+        case .insider: return 5
+        case .vip: return -1
         }
     }
 

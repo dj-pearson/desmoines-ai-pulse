@@ -16,16 +16,34 @@
 # These must match the Fastfile screenshots lane and the
 # ios-screenshots.yml GitHub Actions workflow.
 #
-# NOTE: Pro Max models produce non-standard pixel dimensions
-# (1290×2796, 1320×2868) that App Store Connect rejects.
-# Use Plus/standard models from the correct generation instead.
+# THE NOTE THAT USED TO BE HERE WAS WRONG, and the repo disproves it. It read
+# "Pro Max models produce non-standard pixel dimensions (1290×2796,
+# 1320×2868) that App Store Connect rejects", and that claim is why the
+# 6.9" size was missing from this lane (IOS-AUDIT-REL-008 AC2/AC4).
 #
-#   iPhone 11 Pro Max → 6.5" (1242×2688) — Required by App Store
-#   iPhone 16 Plus    → 6.7" (1284×2778) — Required by App Store
-#   iPad Pro 13" (M4) → 13"              — Required by App Store
+# app-store-screenshots/en-US/ holds 16 committed screenshots, and measuring
+# them gives exactly those two dimensions: eight at 1290×2796 (iPhone 15
+# Pro Max) and eight at 1320×2868 (iPhone 16 Pro Max). Someone produced
+# the sizes this file calls rejected, by hand, outside this lane. Whichever
+# half is right, the lane and the committed assets have been describing
+# different device sets.
+#
+# iPhone 16 Pro Max is ADDED rather than swapped in. Adding a device to a
+# workflow_dispatch lane costs one more simulator run and cannot break
+# anything; DROPPING 6.5" is a submission decision that needs the current
+# App Store Connect requirements in front of whoever makes it, which is what
+# keeps AC2 open.
+#
+#   iPhone 11 Pro Max → 6.5" (1242×2688)
+#   iPhone 16 Plus    → 6.7" (1284×2778)
+#   iPhone 15 Pro Max → 6.7"/6.9" (1290×2796)
+#   iPhone 16 Pro Max → 6.9" (1320×2868)
+#   iPad Pro 13" (M4) → 13"
 devices([
   "iPhone 11 Pro Max",
   "iPhone 16 Plus",
+  "iPhone 15 Pro Max",
+  "iPhone 16 Pro Max",
   "iPad Pro 13-inch (M4)",
 ])
 
@@ -56,8 +74,10 @@ xcargs("CODE_SIGN_IDENTITY='' CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO")
 # ──────────────────────────────────────────────────
 # Behavior
 # ──────────────────────────────────────────────────
-stop_after_first_error(true)
-number_of_retries(0)
+# Don't let a single flaky screen zero out every device's assets, and retry
+# transient simulator failures (IOS-AUDIT-REL-008).
+stop_after_first_error(false)
+number_of_retries(1)
 override_status_bar(true)
 override_status_bar_arguments("--time 9:41 --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4")
 

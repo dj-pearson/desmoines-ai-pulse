@@ -1,7 +1,9 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
-import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
+import { getAIConfig, buildClaudeRequest, getClaudeHeaders, getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -13,10 +15,22 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // No caller check existed, and this one SPENDS MONEY: it runs as service_role
+  // and calls Claude through _shared/aiConfig. verify_jwt does not help -
+  // it defaults to true, and true only means "a valid Supabase JWT", which the
+  // publishable anon key is.
+  //
+  // Both callers keep working: pg_cron (20260823000008:56) sends
+  // Bearer <service_role_key>, and the UI is WeekendGuideManager inside
+  // AdminTools, behind <ProtectedRoute requireAdmin> (App.tsx:454) - its
+  // functions.invoke sends the admin JWT, which the helper checks server-side.
+  const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+  if (authFailure) return authFailure;
+
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const claudeApiKey = Deno.env.get('CLAUDE_API');
+    const claudeApiKey = getAnthropicApiKey();
 
     if (!claudeApiKey) {
       throw new Error('Claude API key not configured');
@@ -135,11 +149,11 @@ Structure it with clear day sections and make it sound exciting and informative!
       }
     );
 
-    const claudeResponse = await fetch(config.api_endpoint, {
+    const claudeResponse = await fetchWithTimeout(config.api_endpoint, {
       method: 'POST',
       headers,
       body: JSON.stringify(requestBody)
-    });
+    }, 60_000);
 
     if (!claudeResponse.ok) {
       const errorText = await claudeResponse.text();
@@ -147,7 +161,12 @@ Structure it with clear day sections and make it sound exciting and informative!
     }
 
     const claudeData = await claudeResponse.json();
-    const generatedContent = claudeData.content[0].text;
+    const extracted = extractClaudeText(claudeData);
+    if (!extracted.ok) {
+      console.error("Claude response not usable:", extracted.reason, extracted.detail);
+      throw new Error(`AI response ${extracted.reason}: ${extracted.detail}`);
+    }
+    const generatedContent = extracted.text;
 
     console.log('Generated content length:', generatedContent.length);
 

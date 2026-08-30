@@ -185,6 +185,74 @@ final class DesMoinesInsiderUITests: XCTestCase {
         }
     }
 
+    /// Screenshot 9 / 10: iPad sidebar destinations (IOS-IA-005) in BOTH
+    /// orientations. On iPhone there's no sidebar, so the sidebar taps are
+    /// skipped and this captures the current screen instead — never fails.
+    func test09_iPadSidebarDestinationsPortrait() throws {
+        XCUIDevice.shared.orientation = .portrait
+        captureSidebar("Discover", name: "09_iPad_Discover_Portrait")
+        captureSidebar("Dashboard", name: "09_iPad_Dashboard_Portrait")
+    }
+
+    func test10_iPadSidebarDestinationsLandscape() throws {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        captureSidebar("Trip Planner", name: "10_iPad_TripPlanner_Landscape")
+        captureSidebar("Discover", name: "10_iPad_Discover_Landscape")
+        XCUIDevice.shared.orientation = .portrait
+    }
+
+    // MARK: - Expanded feature-set screenshots (IOS-COMPLY-005)
+    //
+    // These relaunch the app with `--uiTestScreen <name>`, which MainTabView
+    // honors (UI-test only) to deep-link straight into the destination so the
+    // screenshot lands there on iPhone too — not just the iPad sidebar.
+
+    /// Screenshot 11: Discover hub (information-architecture entry point).
+    func test11_DiscoverHub() throws {
+        relaunch(intoScreen: "discover")
+        snapshot("11_DiscoverHub")
+    }
+
+    /// Screenshot 12: AI Trip Planner (premium parity feature).
+    func test12_TripPlanner() throws {
+        relaunch(intoScreen: "tripPlanner")
+        snapshot("12_TripPlanner")
+    }
+
+    /// Screenshot 13: Contextual paywall (Insider / VIP subscription tiers).
+    func test13_Paywall() throws {
+        relaunch(intoScreen: "paywall")
+        snapshot("13_Paywall")
+    }
+
+    /// Screenshot 14: A curated content hub (Music/Sports/Outdoors).
+    func test14_ContentHub() throws {
+        relaunch(intoScreen: "hub")
+        snapshot("14_ContentHub")
+    }
+
+    /// Relaunches the app deep-linked into a screenshot destination, then waits
+    /// for it to settle. Never fails — if the destination doesn't present, the
+    /// caller still snapshots whatever is on screen.
+    private func relaunch(intoScreen screen: String) {
+        app.terminate()
+        app.launchArguments += ["--uiTestScreen", screen]
+        app.launch()
+        waitForContentToLoad()
+        // Give the fullScreenCover a beat to present + render before capture.
+        sleep(1)
+    }
+
+    /// Taps a sidebar destination if the iPad sidebar is present, then snapshots.
+    private func captureSidebar(_ label: String, name: String) {
+        let cell = app.cells.staticTexts[label]
+        if cell.waitForExistence(timeout: 3) {
+            cell.tap()
+            waitForContentToLoad()
+        }
+        snapshot(name)
+    }
+
     // MARK: - Helpers
 
     /// Navigate to a tab by name, handling various iOS tab bar layouts.

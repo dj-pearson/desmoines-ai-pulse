@@ -13,24 +13,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
 import { useConversionFunnel } from "@/hooks/useConversionFunnel";
-import {
-  Check,
-  Star,
-  Crown,
-  Sparkles,
-  Calendar,
-  Bell,
-  Heart,
-  Search,
-  Zap,
-  Shield,
-  MessageCircle,
-  Smartphone,
-  Gift,
-  Users,
-  ArrowRight,
-  Loader2,
-} from "lucide-react";
+import { Check, Star, Crown, Bell, Heart, Search, Zap, Shield, MessageCircle, Smartphone, Gift, Loader2 } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface PlanFeature {
   text: string;
@@ -79,7 +63,7 @@ const plans: PricingPlan[] = [
     description: "For the passionate Des Moines explorer",
     priceMonthly: 4.99,
     priceYearly: 49.99,
-    icon: <Sparkles className="h-6 w-6" />,
+    icon: <SpriteIcon name="sparkles" className="h-6 w-6" />,
     cta: "Become an Insider",
     popular: true,
     badge: "Most Popular",
@@ -119,6 +103,16 @@ const plans: PricingPlan[] = [
   },
 ];
 
+// Computed annual savings — the biggest % a paid plan saves by paying yearly
+// vs 12× monthly. Drives the billing-toggle badge so copy never drifts from the
+// real prices (WEB-FEAT-002).
+const maxYearlySavingsPct = Math.max(
+  0,
+  ...plans
+    .filter((p) => p.priceMonthly > 0 && p.priceYearly > 0)
+    .map((p) => Math.round((1 - p.priceYearly / (p.priceMonthly * 12)) * 100)),
+);
+
 const faqs = [
   {
     question: "Do subscriptions auto-renew?",
@@ -130,7 +124,7 @@ const faqs = [
   },
   {
     question: "Is there a free trial?",
-    answer: "New Insider and VIP members get a 7-day free trial. If you don't cancel before the trial ends, your card will be charged the plan price shown at checkout and will auto-renew at the same price each period. Cancel any time during the trial from Account › Subscription and you won't be charged.",
+    answer: "New Insider and VIP members get a 7-day free trial. We email you before it ends, stating the exact amount and the date of the first charge. If you don't cancel before the trial ends, your card will be charged the plan price shown at checkout and will auto-renew at the same price each period. Cancel any time during the trial from Account › Subscription and you won't be charged.",
   },
   {
     question: "What payment methods do you accept?",
@@ -160,7 +154,8 @@ export default function Pricing() {
   } = useSubscription();
   const { toast } = useToast();
   const { trackFunnelEvent } = useConversionFunnel();
-  const [isYearly, setIsYearly] = useState(false);
+  // Honor an incoming ?billing=yearly deep link (e.g. from the contextual paywall).
+  const [isYearly, setIsYearly] = useState(searchParams.get("billing") === "yearly");
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
 
   // Track pricing page view
@@ -311,7 +306,7 @@ export default function Pricing() {
                 >
                   Yearly
                   <Badge variant="secondary" className="ml-2 bg-green-100 text-green-800">
-                    Save 17%
+                    Save up to {maxYearlySavingsPct}%
                   </Badge>
                 </Label>
               </div>
@@ -367,10 +362,15 @@ export default function Pricing() {
                     {plan.badge && (
                       <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                         <Badge
+                          // WEB-UX-030: the non-popular branch overrode only the
+                          // BACKGROUND, so it kept the default variant's
+                          // text-primary-foreground on a red surface — fine in
+                          // the light theme where both are near-white/near-black
+                          // by luck, 3.4:1 in the dark one. Override the pair.
                           className={
                             plan.popular
                               ? "bg-primary text-primary-foreground"
-                              : "bg-secondary"
+                              : "bg-secondary text-secondary-foreground"
                           }
                         >
                           {plan.badge}
@@ -461,7 +461,7 @@ export default function Pricing() {
                         ) : (
                           <>
                             {plan.cta}
-                            <ArrowRight className="h-4 w-4 ml-2" />
+                            <SpriteIcon name="arrow-right" className="h-4 w-4 ml-2" />
                           </>
                         )}
                       </Button>
@@ -484,7 +484,7 @@ export default function Pricing() {
 
               <div className="grid md:grid-cols-4 gap-6 max-w-5xl mx-auto">
                 <div className="p-6 bg-card rounded-lg border text-center">
-                  <Calendar className="h-8 w-8 mx-auto mb-3 text-primary" />
+                  <SpriteIcon name="calendar" className="h-8 w-8 mx-auto mb-3 text-primary" />
                   <h3 className="font-semibold mb-2">Event Discovery</h3>
                   <p className="text-sm text-muted-foreground">
                     Browse thousands of local events updated daily
@@ -516,15 +516,24 @@ export default function Pricing() {
           </section>
 
           {/* WEB-LEGAL-002: a testimonials section stood here and was removed.
-              It carried three invented members - "Sarah M.", "Mike T." and
-              "Jessica L." - each with a hardcoded five-star rating, under
-              "Loved by Des Moines Explorers" and "Join thousands of happy
-              members". Nobody by those names subscribed, and nothing counts
-              members. Fabricated consumer endorsements are prohibited under the
-              FTC endorsement guides (16 CFR 255) and, since 2024, carry civil
-              penalties under 16 CFR 465. If real testimonials are wired up later
-              they belong here, attributed to people who actually said them. Do
-              not reintroduce placeholder quotes "for layout". */}
+
+              It carried three invented members - "Sarah M." (Insider), "Mike T."
+              (VIP) and "Jessica L." (Insider) - each with a hardcoded five-star
+              rating, under the headings "Loved by Des Moines Explorers" and
+              "Join thousands of happy members". Nobody by those names subscribed,
+              and nothing counts members.
+
+              The same three personas were deleted from SocialProof.tsx once
+              already (WEB-SEO-016); this copy survived on the page that asks for
+              money, which is the worst place to keep one. Fabricated consumer
+              endorsements are prohibited under the FTC endorsement guides
+              (16 CFR 255) and, since 2024, carry civil penalties per violation
+              under the Rule on Consumer Reviews and Testimonials (16 CFR 465).
+
+              If real testimonials or ratings are wired up later they belong here,
+              sourced and attributed to people who actually said them. user_ratings
+              holds genuine reviews and would be the place to start. Do not
+              reintroduce placeholder quotes "for layout". */}
 
           {/* FAQ */}
           <section className="py-16 bg-muted/30">
@@ -560,7 +569,7 @@ export default function Pricing() {
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Button size="lg" onClick={() => navigate("/auth")}>
                   Get Started Free
-                  <ArrowRight className="h-4 w-4 ml-2" />
+                  <SpriteIcon name="arrow-right" className="h-4 w-4 ml-2" />
                 </Button>
                 <Button
                   size="lg"

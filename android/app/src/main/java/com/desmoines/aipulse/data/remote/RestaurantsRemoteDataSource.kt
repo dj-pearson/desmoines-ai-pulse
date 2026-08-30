@@ -1,6 +1,6 @@
 package com.desmoines.aipulse.data.remote
 
-import android.util.Log
+import com.desmoines.aipulse.util.AppLogger
 import com.desmoines.aipulse.data.model.Restaurant
 import com.desmoines.aipulse.data.model.RestaurantSortOption
 import com.desmoines.aipulse.util.Config
@@ -14,9 +14,6 @@ import io.github.jan.supabase.postgrest.rpc
 import kotlinx.serialization.Serializable
 import javax.inject.Inject
 import javax.inject.Singleton
-
-private const val TAG = "RestaurantsRemoteDS"
-
 /**
  * Query parameters for fetching restaurants.
  * Mirrors iOS RestaurantsService.RestaurantsQuery.
@@ -70,7 +67,7 @@ class RestaurantsRemoteDataSource @Inject constructor(
             try {
                 return fetchRestaurantsRotated(query)
             } catch (e: Exception) {
-                Log.w(TAG, "Rotated RPC failed, falling back to direct query: ${e.message}")
+                AppLogger.network.warning("Rotated RPC failed, falling back to direct query: ${e.message}")
             }
         }
 
@@ -141,7 +138,7 @@ class RestaurantsRemoteDataSource @Inject constructor(
         val restaurants = result.decodeList<Restaurant>()
         val total = result.countOrNull()?.toInt() ?: restaurants.size
 
-        Log.d(TAG, "fetchRestaurants: ${restaurants.size} restaurants, total=$total, offset=${query.offset}")
+        AppLogger.network.debug("fetchRestaurants: ${restaurants.size} restaurants, total=$total, offset=${query.offset}")
 
         return RestaurantsResponse(
             restaurants = restaurants,
@@ -204,7 +201,7 @@ class RestaurantsRemoteDataSource @Inject constructor(
         val restaurants = rows.map { it.restaurant_data }
         val total = (rows.firstOrNull()?.total_count ?: restaurants.size.toLong()).toInt()
 
-        Log.d(TAG, "fetchRestaurantsRotated: ${restaurants.size} restaurants, total=$total, offset=${query.offset}")
+        AppLogger.network.debug("fetchRestaurantsRotated: ${restaurants.size} restaurants, total=$total, offset=${query.offset}")
 
         return RestaurantsResponse(
             restaurants = restaurants,
@@ -257,7 +254,7 @@ class RestaurantsRemoteDataSource @Inject constructor(
             val rpcResults = fetchNearbyRestaurantsViaRPC(latitude, longitude, radiusMiles, limit)
             if (rpcResults.isNotEmpty()) return rpcResults
         } catch (e: Exception) {
-            Log.w(TAG, "Nearby restaurants RPC failed, falling back to table query: ${e.message}")
+            AppLogger.network.warning("Nearby restaurants RPC failed, falling back to table query: ${e.message}")
         }
 
         // Fallback: direct table query with client-side distance filtering

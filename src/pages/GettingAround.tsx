@@ -1,10 +1,12 @@
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
+import { FAQSection } from "@/components/FAQSection";
 import { Helmet } from 'react-helmet-async';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Car, Building, Bike, Plane, Bus, MapPin, Navigation, Footprints, ExternalLink } from 'lucide-react';
+import { Car, Building, Bike, Plane, Bus, Navigation, Footprints } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const PARKING_GARAGES = [
   { name: 'Capital Square Garage', address: '400 Locust St', rate: '$1/hr, $10 max', hours: '24/7', lat: 41.5867, lng: -93.6250 },
@@ -38,17 +40,6 @@ export default function GettingAround() {
       <Helmet>
         <title>Getting Around Des Moines — Parking, Skywalk, Transit Guide | Des Moines Insider</title>
         <meta name="description" content="How to get around Des Moines: downtown parking map, skywalk system guide, BCycle bike share, DART transit, airport info, and rideshare tips." />
-        <script type="application/ld+json">
-          {JSON.stringify({
-            '@context': 'https://schema.org',
-            '@type': 'FAQPage',
-            mainEntity: FAQ_ITEMS.map(faq => ({
-              '@type': 'Question',
-              name: faq.question,
-              acceptedAnswer: { '@type': 'Answer', text: faq.answer },
-            })),
-          })}
-        </script>
       </Helmet>
       <div className="min-h-screen bg-background">
         <Header />
@@ -82,7 +73,7 @@ export default function GettingAround() {
                   <CardContent className="p-4">
                     <h3 className="font-semibold">{garage.name}</h3>
                     <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
-                      <MapPin className="h-3 w-3" /> {garage.address}
+                      <SpriteIcon name="map-pin" className="h-3 w-3" /> {garage.address}
                     </p>
                     <div className="flex gap-2 mt-2 flex-wrap">
                       <Badge variant="outline">{garage.rate}</Badge>
@@ -138,7 +129,7 @@ export default function GettingAround() {
                 </ul>
                 <a href="https://desmoines.bcycle.com" target="_blank" rel="noopener noreferrer">
                   <Button variant="outline" size="sm">
-                    <ExternalLink className="h-4 w-4 mr-1" /> BCycle Website
+                    <SpriteIcon name="external-link" className="h-4 w-4 mr-1" /> BCycle Website
                   </Button>
                 </a>
               </CardContent>
@@ -217,7 +208,7 @@ export default function GettingAround() {
                 </ul>
                 <a href="https://www.ridedart.com" target="_blank" rel="noopener noreferrer">
                   <Button variant="outline" size="sm">
-                    <ExternalLink className="h-4 w-4 mr-1" /> DART Website
+                    <SpriteIcon name="external-link" className="h-4 w-4 mr-1" /> DART Website
                   </Button>
                 </a>
               </CardContent>
@@ -258,19 +249,12 @@ export default function GettingAround() {
             </Card>
           </section>
 
-          {/* FAQ */}
+          {/* SEO-003: FAQSection renders these AND emits the single FAQPage
+              block, from the same FAQ_ITEMS. This page was a fifth hand-rolled
+              copy of that pairing - valid, but a copy, and copies are how the
+              other four came to disagree. */}
           <section className="mb-12">
-            <h2 className="text-2xl font-bold mb-4">Frequently Asked Questions</h2>
-            <div className="space-y-4">
-              {FAQ_ITEMS.map((faq) => (
-                <Card key={faq.question}>
-                  <CardContent className="p-5">
-                    <h3 className="font-semibold mb-2">{faq.question}</h3>
-                    <p className="text-muted-foreground text-sm">{faq.answer}</p>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+            <FAQSection faqs={FAQ_ITEMS} />
           </section>
         </div>
         <Footer />

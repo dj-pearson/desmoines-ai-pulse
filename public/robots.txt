@@ -1,4 +1,4 @@
-# Des Moines AI Pulse - Robots.txt
+# Des Moines Insider - Robots.txt
 # Optimized for search engine indexing and AI search crawlers
 # Last updated: 2026-03-16
 
@@ -207,3 +207,4 @@ Sitemap: https://desmoinesinsider.com/sitemap-attractions.xml
 Sitemap: https://desmoinesinsider.com/sitemap-playgrounds.xml
 Sitemap: https://desmoinesinsider.com/sitemap-articles.xml
 Sitemap: https://desmoinesinsider.com/sitemap-guides.xml
+Sitemap: https://desmoinesinsider.com/sitemap-pseo.xml

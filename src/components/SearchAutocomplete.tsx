@@ -2,8 +2,12 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { storage } from '@/lib/safeStorage';
-import { Search, Clock, TrendingUp, X } from 'lucide-react';
+import { Search, X } from "lucide-react";
 import { cn } from '@/lib/utils';
+import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
+
+const log = createLogger('SearchAutocomplete');
 
 type ContentType = 'events' | 'restaurants' | 'attractions';
 
@@ -55,6 +59,9 @@ export function SearchAutocomplete({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const debouncedValue = useDebouncedValue(value, 300);
 
+  const listboxId = `search-listbox-${contentType}`;
+  const optionId = (idx: number) => `${listboxId}-option-${idx}`;
+
   const recentSearches = getRecentSearches(contentType);
 
   const { data: suggestions = [] } = useQuery({
@@ -65,12 +72,17 @@ export function SearchAutocomplete({
       const searchTerm = `%${debouncedValue}%`;
 
       if (contentType === 'events') {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('events')
           .select('id, title, venue')
           .ilike('title', searchTerm)
           .gte('date', new Date().toISOString())
+          .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
           .limit(5);
+        // A search that FAILED and a search with no matches both render as
+        // "no suggestions", so a user typing a restaurant that exists is told it
+        // is not listed. The empty result is still the right UI; the silence was not.
+        if (error) log.error('suggestions', 'Suggestion query failed', { contentType, error });
         return (data || []).map((e) => ({
           id: e.id,
           title: e.title,
@@ -79,11 +91,15 @@ export function SearchAutocomplete({
       }
 
       if (contentType === 'restaurants') {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('restaurants')
           .select('id, name, cuisine')
           .ilike('name', searchTerm)
           .limit(5);
+        // A search that FAILED and a search with no matches both render as
+        // "no suggestions", so a user typing a restaurant that exists is told it
+        // is not listed. The empty result is still the right UI; the silence was not.
+        if (error) log.error('suggestions', 'Suggestion query failed', { contentType, error });
         return (data || []).map((r) => ({
           id: r.id,
           title: r.name,
@@ -92,11 +108,15 @@ export function SearchAutocomplete({
       }
 
       if (contentType === 'attractions') {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('attractions')
           .select('id, name, type')
           .ilike('name', searchTerm)
           .limit(5);
+        // A search that FAILED and a search with no matches both render as
+        // "no suggestions", so a user typing a restaurant that exists is told it
+        // is not listed. The empty result is still the right UI; the silence was not.
+        if (error) log.error('suggestions', 'Suggestion query failed', { contentType, error });
         return (data || []).map((a) => ({
           id: a.id,
           title: a.name,
@@ -213,6 +233,33 @@ export function SearchAutocomplete({
     return () => input.removeEventListener('focus', handleFocus);
   }, [inputRef, hasContent]);
 
+  // Wire ARIA combobox semantics onto the parent-owned input so screen readers
+  // announce the active suggestion as the user arrows through them.
+  useEffect(() => {
+    const input = inputRef?.current;
+    if (!input) return;
+    const open = isOpen && hasContent;
+    input.setAttribute('role', 'combobox');
+    input.setAttribute('aria-autocomplete', 'list');
+    input.setAttribute('aria-expanded', String(open));
+    if (open) {
+      input.setAttribute('aria-controls', listboxId);
+    } else {
+      input.removeAttribute('aria-controls');
+    }
+    if (open && activeIndex >= 0) {
+      input.setAttribute('aria-activedescendant', optionId(activeIndex));
+    } else {
+      input.removeAttribute('aria-activedescendant');
+    }
+    return () => {
+      input.removeAttribute('aria-activedescendant');
+      input.removeAttribute('aria-expanded');
+      input.removeAttribute('aria-controls');
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inputRef, isOpen, hasContent, activeIndex]);
+
   const [, forceUpdate] = useState(0);
   const handleClearRecent = useCallback(() => {
     clearRecentSearches(contentType);
@@ -226,6 +273,7 @@ export function SearchAutocomplete({
   return (
     <div
       ref={dropdownRef}
+      id={listboxId}
       className={cn(
         'absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-50 max-h-80 overflow-y-auto',
         className
@@ -237,12 +285,12 @@ export function SearchAutocomplete({
         <div className="p-2">
           <div className="flex items-center justify-between px-2 py-1">
             <span className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center gap-1">
-              <Clock className="h-3 w-3" />
+              <SpriteIcon name="clock" className="h-3 w-3" />
               Recent Searches
             </span>
             <button
               onClick={handleClearRecent}
-              className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-0.5"
+              className="text-xs text-gray-500 hover:text-gray-600 flex items-center gap-0.5"
               aria-label="Clear recent searches"
             >
               <X className="h-3 w-3" />
@@ -255,6 +303,7 @@ export function SearchAutocomplete({
             return (
               <button
                 key={`recent-${search}`}
+                id={optionId(idx)}
                 role="option"
                 aria-selected={activeIndex === idx}
                 className={cn(
@@ -266,7 +315,7 @@ export function SearchAutocomplete({
                 onClick={() => handleSelect(search)}
                 onMouseEnter={() => setActiveIndex(idx)}
               >
-                <Clock className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+                <SpriteIcon name="clock" className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" />
                 {search}
               </button>
             );
@@ -282,7 +331,7 @@ export function SearchAutocomplete({
         <div className="p-2">
           <div className="px-2 py-1">
             <span className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center gap-1">
-              <TrendingUp className="h-3 w-3" />
+              <SpriteIcon name="trending-up" className="h-3 w-3" />
               Suggestions
             </span>
           </div>
@@ -292,6 +341,7 @@ export function SearchAutocomplete({
             return (
               <button
                 key={`suggestion-${suggestion.id}`}
+                id={optionId(idx)}
                 role="option"
                 aria-selected={activeIndex === idx}
                 className={cn(
@@ -303,11 +353,11 @@ export function SearchAutocomplete({
                 onClick={() => handleSelect(suggestion.title)}
                 onMouseEnter={() => setActiveIndex(idx)}
               >
-                <Search className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+                <Search className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" />
                 <div className="min-w-0">
                   <div className="truncate">{suggestion.title}</div>
                   {suggestion.subtitle && (
-                    <div className="text-xs text-gray-400 truncate">
+                    <div className="text-xs text-gray-500 truncate">
                       {suggestion.subtitle}
                     </div>
                   )}

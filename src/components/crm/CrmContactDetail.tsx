@@ -212,6 +212,7 @@ export function CrmContactDetail({ contactId, onBack }: CrmContactDetailProps) {
                       size="icon"
                       className="h-6 w-6"
                       onClick={() => handleScoreAdjust(5)}
+                      aria-label="Increase lead score by 5"
                     >
                       <TrendingUp className="h-3 w-3 text-green-600" />
                     </Button>
@@ -220,6 +221,7 @@ export function CrmContactDetail({ contactId, onBack }: CrmContactDetailProps) {
                       size="icon"
                       className="h-6 w-6"
                       onClick={() => handleScoreAdjust(-5)}
+                      aria-label="Decrease lead score by 5"
                     >
                       <TrendingUp className="h-3 w-3 rotate-180 text-red-600" />
                     </Button>

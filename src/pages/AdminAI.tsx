@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
+import { useTabState } from "@/hooks/useTabState";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { createLogger } from '@/lib/logger';
 
@@ -43,10 +44,12 @@ const AI_TABS = [
   { id: "pseo", label: "pSEO Pages", icon: Globe },
 ];
 
+const AI_TAB_IDS = AI_TABS.map((tab) => tab.id);
+
 export default function AdminAI() {
   const { userRole } = useAdminAuth();
   useDocumentTitle("AI Management");
-  const [activeTab, setActiveTab] = useState("ai-crawler");
+  const [activeTab, setActiveTab] = useTabState("ai-crawler", { validTabs: AI_TAB_IDS });
   const [showScraperWizard, setShowScraperWizard] = useState(false);
   const [showJobManager, setShowJobManager] = useState(false);
   const scraping = useScraping();

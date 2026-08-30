@@ -71,7 +71,7 @@ struct BrandPrimaryButtonStyle: ButtonStyle {
             }
             .glassBar(cornerRadius: PremiumTokens.cornerLg, material: .ultraThinMaterial, elevation: PremiumTokens.elevation8)
             .opacity(configuration.isPressed ? 0.92 : 1)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .scaleEffect(configuration.isPressed && !UIAccessibility.isReduceMotionEnabled ? 0.98 : 1)
             .animation(PremiumTokens.springSnappy, value: configuration.isPressed)
             .contentShape(Rectangle())
     }
@@ -97,7 +97,7 @@ struct BrandSecondaryButtonStyle: ButtonStyle {
                     .strokeBorder(Color.accentColor.opacity(0.45), lineWidth: 1)
             )
             .opacity(configuration.isPressed ? 0.85 : 1)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .scaleEffect(configuration.isPressed && !UIAccessibility.isReduceMotionEnabled ? 0.98 : 1)
             .animation(PremiumTokens.springSnappy, value: configuration.isPressed)
             .contentShape(Rectangle())
     }
@@ -143,7 +143,7 @@ struct BrandDestructiveButtonStyle: ButtonStyle {
             )
             .glassBar(cornerRadius: PremiumTokens.cornerLg, material: .ultraThinMaterial, elevation: PremiumTokens.elevation4)
             .opacity(configuration.isPressed ? 0.9 : 1)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .scaleEffect(configuration.isPressed && !UIAccessibility.isReduceMotionEnabled ? 0.98 : 1)
             .animation(PremiumTokens.springSnappy, value: configuration.isPressed)
             .contentShape(Rectangle())
     }

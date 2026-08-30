@@ -16,6 +16,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCors, isOriginAllowed } from "../_shared/cors.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 
 const INDEXING_API_ENDPOINT = "https://indexing.googleapis.com/v3/urlNotifications:publish";
 const BATCH_ENDPOINT = "https://indexing.googleapis.com/batch";
@@ -115,7 +117,7 @@ async function getAccessToken(
 ): Promise<string> {
   const jwt = await createSignedJWT(serviceAccount);
 
-  const response = await fetch(TOKEN_URI, {
+  const response = await fetchWithTimeout(TOKEN_URI, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -142,7 +144,7 @@ async function submitUrl(
   accessToken: string
 ): Promise<IndexingResult> {
   try {
-    const response = await fetch(INDEXING_API_ENDPOINT, {
+    const response = await fetchWithTimeout(INDEXING_API_ENDPOINT, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -199,46 +201,17 @@ serve(async (req) => {
   }
 
   try {
-    // Verify the user is authenticated and is an admin
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Missing authorization header" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    // WEB-SEC-023: was a hand-rolled gate on profiles.role keyed by the row PK.
+    // Beyond locking real admins out, this is the endpoint WEB-SEO-011's daily
+    // indexing submission depends on, so the failure was silent and structural.
+    // requireAdminOrApiKey also accepts EDGE_FUNCTION_API_KEY, which is what
+    // lets a scheduled job call it without a browser session.
+    const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+    if (authFailure) return authFailure;
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
-
-    // Verify the JWT token and check admin role
-    const token = authHeader.replace("Bearer ", "");
-    const {
-      data: { user },
-      error: authError,
-    } = await supabaseClient.auth.getUser(token);
-
-    if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Check admin role from profiles
-    const { data: profile } = await supabaseClient
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (!profile || profile.role !== "admin") {
-      return new Response(
-        JSON.stringify({ error: "Forbidden: admin access required" }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
 
     // Parse the service account JSON from environment
     const serviceAccountJson = Deno.env.get("GOOGLE_SERVICE_ACCOUNT_JSON");

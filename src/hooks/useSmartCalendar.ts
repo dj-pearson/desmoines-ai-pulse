@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
+import { createLogger } from '@/lib/logger';
 import { useAuth } from './useAuth';
 import { toast } from 'sonner';
+
+const logger = createLogger('useSmartCalendar');
 
 export interface CalendarProvider {
   id: string;
@@ -90,7 +93,7 @@ export function useSmartCalendar() {
     
     setLoading(true);
     try {
-      console.log("Preferences would be updated:", prefs);
+      logger.info('updatePreferences', 'Preferences would be updated', { prefs });
       toast.success('Preferences updated successfully');
     } catch (_error) {
       toast.error('Failed to update preferences');
@@ -100,7 +103,7 @@ export function useSmartCalendar() {
   };
 
   const checkConflicts = async (startTime: string, endTime: string): Promise<CalendarConflict> => {
-    console.log("Checking conflicts for:", startTime, endTime);
+    logger.debug('checkConflicts', 'Checking conflicts', { startTime, endTime });
     return { count: 0, events: [] };
   };
 
@@ -109,7 +112,7 @@ export function useSmartCalendar() {
     
     setLoading(true);
     try {
-      console.log("Generating smart suggestions for user:", user.id);
+      logger.info('generateSuggestions', 'Generating smart suggestions for user', { userId: user.id });
       toast.success('Smart suggestions updated');
     } catch (_error) {
       toast.error('Failed to generate suggestions');
@@ -119,12 +122,12 @@ export function useSmartCalendar() {
   };
 
   const acceptSuggestion = async (suggestionId: string) => {
-    console.log("Accepting suggestion:", suggestionId);
+    logger.info('acceptSuggestion', 'Accepting suggestion', { suggestionId });
     toast.success('Event added to your interests');
   };
 
   const dismissSuggestion = async (suggestionId: string) => {
-    console.log("Dismissing suggestion:", suggestionId);
+    logger.debug('dismissSuggestion', 'Dismissing suggestion', { suggestionId });
   };
 
   const addManualEvent = async (eventData: {
@@ -137,7 +140,7 @@ export function useSmartCalendar() {
   }) => {
     if (!user) return;
     
-    console.log("Adding manual event:", eventData);
+    logger.info('addManualEvent', 'Adding manual event', { eventData });
     toast.success('Event added to calendar');
   };
 

@@ -13,6 +13,7 @@ struct AttractionDetailView: View {
                 infoSection
                 actionButtons
                 descriptionSection
+                ReviewsSection(contentType: "attraction", contentId: attraction.id)
             }
             .frame(maxWidth: .infinity)
         }
@@ -32,6 +33,12 @@ struct AttractionDetailView: View {
         .sheet(isPresented: $showShareSheet) {
             ShareSheet(items: [shareText])
         }
+        .task {
+            // IOS-PARITY-007 — feed the Dashboard "Jump back in" rail.
+            RecentlyViewedService.shared.record(
+                type: "attraction", id: attraction.id, title: attraction.name, imageUrl: attraction.imageUrl
+            )
+        }
     }
 
     // MARK: - Hero Image
@@ -45,6 +52,7 @@ struct AttractionDetailView: View {
                     Image(systemName: attraction.attractionType.icon)
                         .font(.system(size: 64))
                         .foregroundStyle(.teal.opacity(0.3))
+                        .accessibilityHidden(true)
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 300, maxHeight: 300)
@@ -60,8 +68,9 @@ struct AttractionDetailView: View {
                 HStack(spacing: 4) {
                     Image(systemName: attraction.attractionType.icon)
                         .font(.caption2)
+                        .accessibilityHidden(true)
                     Text(attraction.type)
-                        .font(.caption.bold())
+                        .appText(.caption)
                 }
                 .foregroundStyle(.white)
                 .padding(.horizontal, 10)
@@ -69,7 +78,7 @@ struct AttractionDetailView: View {
                 .background(.ultraThinMaterial, in: Capsule())
 
                 Text(attraction.name)
-                    .font(.title2.bold())
+                    .appText(.headline)
                     .foregroundStyle(.white)
                     .lineLimit(3)
             }
@@ -90,10 +99,11 @@ struct AttractionDetailView: View {
                             Image(systemName: Double(star) <= rating ? "star.fill" : (Double(star) - 0.5 <= rating ? "star.leadinghalf.filled" : "star"))
                                 .font(.system(size: 14))
                                 .foregroundStyle(Double(star) <= rating ? .yellow : .gray.opacity(0.3))
+                                .accessibilityHidden(true)
                         }
                     }
                     Text(String(format: "%.1f", rating))
-                        .font(.subheadline.weight(.semibold))
+                        .appText(.bodyEmphasized)
 
                     Spacer()
 
@@ -103,6 +113,14 @@ struct AttractionDetailView: View {
                             .foregroundStyle(.orange)
                     }
                 }
+                // Combine the star row + numeric value into one VoiceOver element
+                // (IOS-AUDIT-UX-013) so it announces the rating once instead of
+                // reading five individual star images.
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(
+                    "Rating: \(String(format: "%.1f", rating)) out of 5 stars"
+                    + (attraction.isFeatured == true ? ". Featured" : "")
+                )
             }
 
             Divider()
@@ -116,7 +134,7 @@ struct AttractionDetailView: View {
                         .frame(width: 28)
 
                     Text(location)
-                        .font(.subheadline)
+                        .appText(.bodySmall)
                         .foregroundStyle(.secondary)
 
                     Spacer()
@@ -144,24 +162,16 @@ struct AttractionDetailView: View {
                         .foregroundStyle(.blue)
                         .frame(width: 28)
                     Text(distance)
-                        .font(.subheadline)
+                        .appText(.bodySmall)
                         .foregroundStyle(.secondary)
                 }
             }
 
-            // Website
-            if let url = attraction.websiteURL {
-                Divider()
-                HStack(spacing: 10) {
-                    Image(systemName: "safari")
-                        .font(.title3)
-                        .foregroundStyle(Color.accentColor)
-                        .frame(width: 28)
-
-                    Link("Visit Website", destination: url)
-                        .font(.subheadline)
-                }
-            }
+            // The website row that used to sit here was the SECOND link to
+            // the same URL on this screen - actionButtons already renders a
+            // prominent "Website" button. Two controls doing the same thing
+            // make a reader stop and check whether they differ
+            // (IOS-AUDIT-UX-057).
         }
         .padding()
     }
@@ -173,7 +183,7 @@ struct AttractionDetailView: View {
             if let websiteURL = attraction.websiteURL {
                 Link(destination: websiteURL) {
                     Label("Website", systemImage: "safari")
-                        .font(.subheadline.weight(.medium))
+                        .appText(.bodyEmphasized)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 12))
@@ -188,7 +198,7 @@ struct AttractionDetailView: View {
                     openInMaps()
                 } label: {
                     Label("Directions", systemImage: "map.fill")
-                        .font(.subheadline.weight(.medium))
+                        .appText(.bodyEmphasized)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .background(Color.blue, in: RoundedRectangle(cornerRadius: 12))
@@ -206,10 +216,10 @@ struct AttractionDetailView: View {
         VStack(alignment: .leading, spacing: 10) {
             if let description = attraction.description, !description.isEmpty {
                 Text("About")
-                    .font(.title3.bold())
+                    .appText(.title)
 
                 Text(description)
-                    .font(.body)
+                    .appText(.body)
                     .foregroundStyle(.secondary)
                     .lineSpacing(4)
             }
@@ -223,8 +233,14 @@ struct AttractionDetailView: View {
     private func openInMaps() {
         guard let coord = attraction.coordinate else { return }
         let name = attraction.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-        let url = URL(string: "maps://?daddr=\(coord.latitude),\(coord.longitude)&q=\(name)")!
-        UIApplication.shared.open(url)
+        let query = "daddr=\(coord.latitude),\(coord.longitude)&q=\(name)"
+        // Prefer the Apple Maps app, but fall back to the universal https link so
+        // we never force-unwrap and never silently no-op if Maps is unavailable.
+        if let appURL = URL(string: "maps://?\(query)"), UIApplication.shared.canOpenURL(appURL) {
+            UIApplication.shared.open(appURL)
+        } else if let webURL = URL(string: "https://maps.apple.com/?\(query)") {
+            UIApplication.shared.open(webURL)
+        }
     }
 
     private var shareText: String {

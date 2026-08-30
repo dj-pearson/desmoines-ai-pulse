@@ -1,8 +1,9 @@
 import React from "react";
-import { Calendar, MapPin, Star, Clock, Users, Utensils } from "lucide-react";
+import { Star, Utensils } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface SeasonalEvent {
   title: string;
@@ -23,7 +24,9 @@ export default function SeasonalContent() {
     6: {
       title: "Iowa State Fair Business Guide",
       description: "Complete guide to cyclist-friendly services and businesses during Iowa's premier event",
-      dates: "August 8-18, 2024",
+      // WEB-SEO-015: was "August 8-18, 2024" — two years stale. Owner-confirmed
+      // dates. Keep in step with FAIR in src/pages/IowaStateFairPage.tsx.
+      dates: "August 13-23, 2026",
       location: "Iowa State Fairgrounds, Des Moines",
       category: "Major Events",
       searchVolume: "10,000+ monthly searches",
@@ -130,7 +133,7 @@ export default function SeasonalContent() {
       {/* Seasonal Header */}
       <div className="bg-gradient-to-r from-orange-500 to-red-600 text-white p-6 rounded-lg">
         <div className="flex items-center gap-2 mb-2">
-          <Calendar className="h-6 w-6" />
+          <SpriteIcon name="calendar" className="h-6 w-6" />
           <Badge className="bg-white/20 text-white">
             {currentSeason.searchVolume}
           </Badge>
@@ -140,15 +143,15 @@ export default function SeasonalContent() {
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
           <div className="flex items-center gap-2">
-            <Clock className="h-4 w-4" />
+            <SpriteIcon name="clock" className="h-4 w-4" />
             <span>{currentSeason.dates}</span>
           </div>
           <div className="flex items-center gap-2">
-            <MapPin className="h-4 w-4" />
+            <SpriteIcon name="map-pin" className="h-4 w-4" />
             <span className="truncate">{currentSeason.location}</span>
           </div>
           <div className="flex items-center gap-2">
-            <Users className="h-4 w-4" />
+            <SpriteIcon name="users" className="h-4 w-4" />
             <span>{currentSeason.category}</span>
           </div>
         </div>

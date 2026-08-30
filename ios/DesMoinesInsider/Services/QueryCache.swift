@@ -15,14 +15,26 @@ actor QueryCache {
 
     private let cacheDir: URL
     private let defaultTTL: TimeInterval
-    private let maxDiskBytes: Int = 50 * 1024 * 1024 // 50 MB
+
+    /// Maximum total on-disk size for the cache. When exceeded, the least
+    /// recently used entries are evicted (see `enforceSizeCap`). Settable so the
+    /// cap can be exercised in tests without writing the full 50 MB.
+    private var maxDiskBytes: Int = 50 * 1024 * 1024 // 50 MB
 
     /// Cache format version. Increment to force a full cache purge on upgrade
     /// (e.g. when switching from unencrypted to encrypted storage).
     private static let cacheVersion = 2
 
     private init() {
-        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        // Fall back to the temporary directory rather than force-unwrapping and
+        // crashing at launch if the caches directory is unavailable (IOS-AUDIT-PERF-012).
+        let caches: URL
+        if let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
+            caches = dir
+        } else {
+            AppLogger.cache.error("Caches directory unavailable; falling back to temporary directory")
+            caches = FileManager.default.temporaryDirectory
+        }
         cacheDir = caches.appendingPathComponent("QueryCache", isDirectory: true)
         defaultTTL = TimeInterval(Config.cacheExpirationMinutes * 60)
 
@@ -71,6 +83,14 @@ actor QueryCache {
             }
 
             AppLogger.cache.debug("Cache hit for key: \(key), stale: \(entry.isExpired)")
+            // Touch the file's modification date so it reflects last access.
+            // The size cap (enforceSizeCap) evicts by oldest mtime, so recording
+            // reads here makes eviction least-recently-*used* rather than
+            // least-recently-written (IOS-AUDIT-PERF-005).
+            try? FileManager.default.setAttributes(
+                [.modificationDate: Date()],
+                ofItemAtPath: fileURL.path
+            )
             return entry.value
         } catch {
             AppLogger.cache.error("Cache decode failed for key: \(key) — \(error.localizedDescription)")
@@ -87,6 +107,9 @@ actor QueryCache {
             let data = try JSONEncoder().encode(entry)
             try data.write(to: fileURL, options: [.atomic, .completeFileProtection])
             AppLogger.cache.debug("Cached \(data.count) bytes for key: \(key)")
+            // Per-filter cache keys accumulate unbounded, so enforce the disk
+            // budget after every write (IOS-AUDIT-PERF-005).
+            enforceSizeCap()
         } catch {
             AppLogger.cache.error("Cache write failed for key: \(key) — \(error.localizedDescription)")
         }
@@ -118,6 +141,66 @@ actor QueryCache {
         if removedCount > 0 {
             AppLogger.cache.info("Pruned \(removedCount) expired cache entries")
         }
+
+        // After dropping expired entries, make sure the surviving set still fits
+        // within the disk budget.
+        enforceSizeCap()
+    }
+
+    /// Enforces the `maxDiskBytes` budget using LRU eviction.
+    ///
+    /// `get(_:)` touches each file's modification date on access, so the file
+    /// mtime is a proxy for last-access time. When the total on-disk size of the
+    /// cache exceeds `maxDiskBytes`, the least-recently-used entries are evicted
+    /// (oldest mtime first) until the total is back under the cap
+    /// (IOS-AUDIT-PERF-005).
+    func enforceSizeCap() {
+        let fm = FileManager.default
+        let keys: [URLResourceKey] = [.contentModificationDateKey, .fileSizeKey, .isRegularFileKey]
+        guard let files = try? fm.contentsOfDirectory(
+            at: cacheDir,
+            includingPropertiesForKeys: keys
+        ) else { return }
+
+        // Gather (url, size, mtime) for each regular file, skipping the
+        // version marker and anything we can't stat.
+        struct Entry {
+            let url: URL
+            let size: Int
+            let modified: Date
+        }
+
+        var entries: [Entry] = []
+        var totalBytes = 0
+        for file in files where file.lastPathComponent != ".cache-version" {
+            guard let values = try? file.resourceValues(forKeys: Set(keys)),
+                  values.isRegularFile == true,
+                  let size = values.fileSize,
+                  let modified = values.contentModificationDate else { continue }
+            entries.append(Entry(url: file, size: size, modified: modified))
+            totalBytes += size
+        }
+
+        guard totalBytes > maxDiskBytes else { return }
+
+        // Evict least-recently-used first (oldest modification date).
+        entries.sort { $0.modified < $1.modified }
+
+        var evictedCount = 0
+        for entry in entries {
+            guard totalBytes > maxDiskBytes else { break }
+            do {
+                try fm.removeItem(at: entry.url)
+                totalBytes -= entry.size
+                evictedCount += 1
+            } catch {
+                AppLogger.cache.error("LRU eviction failed for \(entry.url.lastPathComponent) — \(error.localizedDescription)")
+            }
+        }
+
+        if evictedCount > 0 {
+            AppLogger.cache.info("Evicted \(evictedCount) LRU cache entries to stay under \(self.maxDiskBytes) bytes")
+        }
     }
 
     /// Removes all cached data.
@@ -137,6 +220,34 @@ actor QueryCache {
         let safeKey = key.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? key
         return cacheDir.appendingPathComponent(safeKey + ".json")
     }
+
+    // MARK: - Test Support
+
+    #if DEBUG
+    /// Overrides the disk budget so the LRU size cap can be exercised in tests
+    /// without writing the full 50 MB. Not used in production code.
+    func setMaxDiskBytesForTesting(_ bytes: Int) {
+        maxDiskBytes = bytes
+    }
+
+    /// Total on-disk size of the cache in bytes (excludes the version marker).
+    /// Test-only helper for asserting the cap is honoured.
+    func totalDiskBytesForTesting() -> Int {
+        let fm = FileManager.default
+        guard let files = try? fm.contentsOfDirectory(
+            at: cacheDir,
+            includingPropertiesForKeys: [.fileSizeKey]
+        ) else { return 0 }
+
+        var total = 0
+        for file in files where file.lastPathComponent != ".cache-version" {
+            if let size = try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+                total += size
+            }
+        }
+        return total
+    }
+    #endif
 }
 
 // MARK: - Cache Entry Wrapper

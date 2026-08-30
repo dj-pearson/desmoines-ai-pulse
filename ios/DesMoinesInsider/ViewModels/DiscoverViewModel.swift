@@ -67,10 +67,19 @@ enum SwipeItem: Identifiable, Hashable {
         }
     }
 
+    /// Short location label for the swipe card (city / venue only — not the
+    /// full geocoded address string which can be 80+ characters long and
+    /// causes the HStack subtitle row to show mid-string content).
     var locationText: String {
         switch self {
-        case .event(let e): return e.displayLocation
-        case .restaurant(let r): return r.displayLocation
+        case .event(let e):
+            // Events already store a clean [venue, city] display location.
+            return e.displayLocation
+        case .restaurant(let r):
+            // Use only the city; the raw `location` column contains the full
+            // geocoded string ("1234 Main St, Des Moines, IA 50309, USA") which
+            // is far too long for a one-line card label.
+            return r.city ?? ""
         }
     }
 
@@ -151,7 +160,25 @@ final class DiscoverViewModel {
     }
     private(set) var filter: DiscoverFilterContext
     private(set) var deck: [SwipeItem] = []
+
+    /// A liked card could not be saved for a reason that is not the free-tier
+    /// cap. The cap has its own app-level paywall, so surfacing it here too
+    /// would double up (IOS-AUDIT-UX-057).
+    private(set) var favoriteSaveFailed = false
+
+    func acknowledgeFavoriteFailure() {
+        favoriteSaveFailed = false
+    }
     private(set) var isLoading = false
+
+    /// True when the last batch fetch threw (IOS-AUDIT-UX-051 AC3).
+    ///
+    /// Both batch fetchers used to swallow their error and set hasMore... = false,
+    /// so a network failure produced an empty deck and the "You've seen
+    /// everything" screen. That tells the user they have exhausted the content
+    /// when in fact nothing loaded - and the only affordance offered was a Reset
+    /// that would fail the same way, silently.
+    private(set) var lastLoadFailed = false
     private(set) var totalSwipes = 0
     private(set) var likedItems: [SwipeItem] = []
 
@@ -165,13 +192,34 @@ final class DiscoverViewModel {
     private var hasMoreRestaurants = true
     private var isPrefetching = false
 
-    private let eventsService = EventsService.shared
-    private let restaurantsService = RestaurantsService.shared
+    /// Bumped whenever the deck is reset (reload / boost). A fetch captures the
+    /// generation when it runs and discards its results if the generation has
+    /// since changed — so an in-flight pre-reset fetch can't append stale,
+    /// wrong-filter cards into the freshly-reset deck.
+    private var fetchGeneration = 0
+    /// The most recently enqueued fetch. New fetches chain after it so a reset's
+    /// refetch is never skipped by the `isPrefetching` guard while an older
+    /// fetch is still draining.
+    private var fetchTask: Task<Void, Never>?
+
+    private let eventsService: EventPageProviding
+    private let restaurantsService: RestaurantPageProviding
     private let swipeService = SwipeInteractionService.shared
 
-    init(mode: DiscoverMode = .mixed, filter: DiscoverFilterContext = .init()) {
+    /// Providers default to the shared services, so no call site changes. They
+    /// exist so a test can hold a fetch open and bump the deck generation while
+    /// it is in flight - the only way the discard behaviour this view model
+    /// depends on can be observed (IOS-AUDIT-TEST-006).
+    init(
+        mode: DiscoverMode = .mixed,
+        filter: DiscoverFilterContext = .init(),
+        eventsService: EventPageProviding = EventsService.shared,
+        restaurantsService: RestaurantPageProviding = RestaurantsService.shared
+    ) {
         self.mode = mode
         self.filter = filter
+        self.eventsService = eventsService
+        self.restaurantsService = restaurantsService
     }
 
     // MARK: - Load
@@ -183,12 +231,16 @@ final class DiscoverViewModel {
 
     func reload() async {
         isLoading = true
+        lastLoadFailed = false
         deck = []
         eventOffset = 0
         restaurantOffset = 0
         hasMoreEvents = true
         hasMoreRestaurants = true
-        await fetchMore()
+        // Invalidate in-flight fetches and run the fresh fetch after they drain
+        // (so the isPrefetching guard can't skip it).
+        fetchGeneration += 1
+        await enqueueFetch().value
         isLoading = false
     }
 
@@ -234,8 +286,19 @@ final class DiscoverViewModel {
         hasMoreEvents = true
         hasMoreRestaurants = true
         totalSwipes += 1
+        // Invalidate any in-flight (pre-boost) fetch so its results are dropped
+        // instead of mixed into the narrowed deck.
+        fetchGeneration += 1
+        // Show the loading state while the narrowed batch loads instead of
+        // flashing the "you've seen everything" empty state, which the deck-
+        // empty branch would otherwise render mid-boost (IOS-AUDIT-UX-019).
+        isLoading = true
         Task { await self.record(.boost, item: item) }
-        Task { await self.fetchMore() }
+        let task = enqueueFetch()
+        Task {
+            await task.value
+            self.isLoading = false
+        }
     }
 
     /// Tap → opened detail view. Logged as a positive but weaker signal.
@@ -250,7 +313,10 @@ final class DiscoverViewModel {
         // Drop the top card. SwipeCardStack also removes it visually; this
         // call is the single source of truth for the data model.
         if !deck.isEmpty { deck.removeFirst() }
-        if deck.count <= prefetchThreshold { Task { await self.fetchMore() } }
+        // Throttle background prefetch: only enqueue when nothing is already
+        // fetching, so rapid swipes don't queue N sequential page fetches.
+        // (reload/boost call enqueueFetch unconditionally — they must always run.)
+        if deck.count <= prefetchThreshold && !isPrefetching { enqueueFetch() }
     }
 
     private func record(_ action: SwipeInteractionService.Action, item: SwipeItem) async {
@@ -275,8 +341,20 @@ final class DiscoverViewModel {
                 }
             }
         } catch {
-            // Hitting the free-tier favorites cap is the realistic failure
-            // here. Swallow silently — DiscoverView surfaces it via toast.
+            // THE CAP IS ALREADY HANDLED, and not by this view. enforceFavoritesCap
+            // posts .favoritesLimitReached, which MainTabView turns into the
+            // app-level upsell paywall - so a toast here would be a second,
+            // redundant message on top of it. That is what
+            // FavoritesService.isLimitReached exists for.
+            //
+            // EVERYTHING ELSE was swallowed with it: a dropped connection or an
+            // expired session meant the card animated away as a save and nothing
+            // was saved, with no output of any kind. The previous comment claimed
+            // DiscoverView surfaced this via toast; DiscoverView declares a toast
+            // and assigns it nowhere (IOS-AUDIT-UX-057).
+            if !FavoritesService.isLimitReached(error) {
+                favoriteSaveFailed = true
+            }
         }
     }
 
@@ -293,24 +371,42 @@ final class DiscoverViewModel {
 
     // MARK: - Fetch
 
+    /// Enqueue a fetch that runs after any in-flight fetch drains, so a reset
+    /// (reload/boost) isn't skipped by the `isPrefetching` guard. Returns the
+    /// task so callers can await completion.
+    @discardableResult
+    private func enqueueFetch() -> Task<Void, Never> {
+        let previous = fetchTask
+        let task = Task {
+            await previous?.value
+            await self.fetchMore()
+        }
+        fetchTask = task
+        return task
+    }
+
     private func fetchMore() async {
         guard !isPrefetching else { return }
         isPrefetching = true
         defer { isPrefetching = false }
 
+        // Capture the deck generation for this run; the batch fetchers drop their
+        // results if a reset bumped it while we were awaiting the network.
+        let generation = fetchGeneration
+
         switch mode {
         case .events:
-            await fetchEventBatch()
+            await fetchEventBatch(generation)
         case .restaurants:
-            await fetchRestaurantBatch()
+            await fetchRestaurantBatch(generation)
         case .mixed:
-            async let events: () = fetchEventBatch()
-            async let restaurants: () = fetchRestaurantBatch()
+            async let events: () = fetchEventBatch(generation)
+            async let restaurants: () = fetchRestaurantBatch(generation)
             _ = await (events, restaurants)
         }
     }
 
-    private func fetchEventBatch() async {
+    private func fetchEventBatch(_ generation: Int) async {
         guard hasMoreEvents else { return }
         var query = EventsService.EventsQuery()
         query.category = filter.eventCategory?.rawValue
@@ -333,6 +429,9 @@ final class DiscoverViewModel {
 
         do {
             let response = try await eventsService.fetchEvents(query: query)
+            // A reload/boost reset the deck while we were awaiting — these results
+            // belong to the old filter/offset; drop them rather than mixing in.
+            guard generation == fetchGeneration else { return }
             let fresh = response.events
                 .filter { !swipeService.hasSwiped(itemType: .event, itemId: $0.id) }
                 .map { SwipeItem.event($0) }
@@ -340,11 +439,13 @@ final class DiscoverViewModel {
             eventOffset += response.events.count
             hasMoreEvents = response.hasMore
         } catch {
+            guard generation == fetchGeneration else { return }
             hasMoreEvents = false
+            lastLoadFailed = true
         }
     }
 
-    private func fetchRestaurantBatch() async {
+    private func fetchRestaurantBatch(_ generation: Int) async {
         guard hasMoreRestaurants else { return }
         var query = RestaurantsService.RestaurantsQuery()
         query.cuisines = filter.cuisines.isEmpty ? nil : filter.cuisines
@@ -357,6 +458,8 @@ final class DiscoverViewModel {
 
         do {
             let response = try await restaurantsService.fetchRestaurants(query: query)
+            // Drop results if a reload/boost reset the deck mid-flight.
+            guard generation == fetchGeneration else { return }
             var fresh = response.restaurants
             if filter.openNow {
                 fresh = fresh.filter { $0.isOpenNow() == true }
@@ -368,7 +471,9 @@ final class DiscoverViewModel {
             restaurantOffset += response.restaurants.count
             hasMoreRestaurants = response.hasMore
         } catch {
+            guard generation == fetchGeneration else { return }
             hasMoreRestaurants = false
+            lastLoadFailed = true
         }
     }
 

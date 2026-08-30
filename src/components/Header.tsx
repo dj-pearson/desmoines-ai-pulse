@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthFlags, useAuthActions } from "@/contexts/AuthContext";
 import { useProfile } from "@/hooks/useProfile";
 import { useGamification } from "@/hooks/useGamification";
 import { useAccessibility } from "@/hooks/useAccessibility";
@@ -15,7 +15,10 @@ import { createLogger } from '@/lib/logger';
 const log = createLogger('Header');
 
 export default function Header() {
-  const { isAuthenticated, isAdmin, logout } = useAuth();
+  // Flags + actions only (no user/session) so the header doesn't re-render on
+  // token-refresh ticks. (WEB-PERF-005)
+  const { isAuthenticated, isAdmin } = useAuthFlags();
+  const { logout } = useAuthActions();
   const { profile } = useProfile();
   const { userLevel, userXP } = useGamification();
   const { announceToScreenReader, useFocusRestore } = useAccessibility();
@@ -89,7 +92,7 @@ export default function Header() {
           {/* Logo */}
           <Link
             to="/"
-            className="flex items-center smooth-transition hover:opacity-80 flex-shrink-0"
+            className="tap-area-44 flex items-center smooth-transition hover:opacity-80 flex-shrink-0"
             aria-label="Des Moines Insider Home"
           >
             <OptimizedLogo

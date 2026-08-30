@@ -4,15 +4,56 @@ import SwiftUI
 /// callbacks for each commit direction. The parent ViewModel is the source
 /// of truth for which item is on top — this view only owns the transient
 /// drag offset for the in-flight gesture.
+///
+/// `containerWidth` and `containerHeight` must be supplied by the parent via
+/// a `GeometryReader` measured *after* any padding is applied. Passing the
+/// already-constrained size avoids the race where a background GeometryReader
+/// could read the full unpadded screen width before padding resolves, which
+/// caused cards to render wider than the viewport.
 struct SwipeCardStack: View {
     let items: [SwipeItem]
+    /// Available width of the deck area, measured after padding by the parent.
+    let containerWidth: CGFloat
+    /// Available height of the deck area, measured after padding by the parent.
+    let containerHeight: CGFloat
     var onLike: (SwipeItem) -> Void
     var onSkip: (SwipeItem) -> Void
     var onBoost: (SwipeItem) -> Void
     var onTap: (SwipeItem) -> Void
+    /// Set by the parent's action-bar buttons to drive the same animated fly-off
+    /// as a gesture swipe (IOS-AUDIT-UX-018). Reset to nil once consumed.
+    @Binding var command: Command?
+
+    /// A button-driven swipe, mapped to the matching commit direction.
+    /// A one-shot instruction from the action bar, carrying an identity token.
+    ///
+    /// IOS-AUDIT-BUG-010 AC1. This was a bare enum, so two taps of the same
+    /// button produced the SAME value and onChange had nothing to observe. It was
+    /// papered over by writing `command = nil` after handling, which works only if
+    /// the nil is observed before the next tap - and SwiftUI coalesces state
+    /// changes within an update cycle, so a fast double tap could go .skip -> .skip
+    /// with the nil never seen, and the second tap was swallowed.
+    ///
+    /// The token makes every issue distinct, so no two commands can ever compare
+    /// equal and the clear-to-nil is belt-and-braces rather than load-bearing.
+    struct Command: Equatable {
+        enum Action: Equatable { case skip, like, boost }
+
+        let action: Action
+        private let token = UUID()
+
+        static func skip() -> Command { Command(action: .skip) }
+        static func like() -> Command { Command(action: .like) }
+        static func boost() -> Command { Command(action: .boost) }
+    }
 
     @State private var dragOffset: CGSize = .zero
     @State private var isDismissing = false
+
+    // Reduce Motion (IOS-COMPLY-003): drop the card rotation and the springy
+    // overshoot for users who opt out of motion. The drag itself is direct
+    // manipulation (not suppressed); only the decorative tilt/spring is.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Up to 3 cards; deeper cards aren't rendered to keep the layer count low.
     private var visibleItems: ArraySlice<SwipeItem> {
@@ -28,23 +69,22 @@ struct SwipeCardStack: View {
     /// Shrink the card so rotation overshoot stays inside the deck area.
     private static let rotationSafetyScale: CGFloat = 0.86
 
-    /// Measured width of the deck container, captured via a background
-    /// GeometryReader. Starts at zero; updates to the real value on the first
-    /// layout pass and on every device/orientation change.
-    @State private var deckWidth: CGFloat = 0
-    @State private var deckHeight: CGFloat = 0
-
     private var cardWidth: CGFloat {
-        guard deckWidth > 0 else { return 0 }
-        return deckWidth * Self.rotationSafetyScale
+        guard containerWidth > 0 else { return 0 }
+        return containerWidth * Self.rotationSafetyScale
     }
 
     private var cardHeight: CGFloat {
-        guard deckHeight > 0 else { return 0 }
-        let availableH = max(0, deckHeight - Self.backCardPeekRoom)
+        guard containerHeight > 0 else { return 0 }
+        let availableH = max(0, containerHeight - Self.backCardPeekRoom)
         let fromHeight = availableH * Self.cardAspectRatio
         // Use whichever axis is the binding constraint.
-        return (min(cardWidth, fromHeight * Self.rotationSafetyScale)) / Self.cardAspectRatio
+        let computed = (min(cardWidth, fromHeight * Self.rotationSafetyScale)) / Self.cardAspectRatio
+        // Never exceed the measured deck area: on wide/short layouts (landscape,
+        // iPad, large Dynamic Type) cardWidth can win the min() and make the card
+        // taller than its container, which the parent .clipped() would cut off
+        // (IOS-AUDIT-UX-030).
+        return min(computed, availableH)
     }
 
     var body: some View {
@@ -59,33 +99,43 @@ struct SwipeCardStack: View {
                 .scaleEffect(scale(for: index))
                 .offset(y: stackYOffset(for: index))
                 .offset(index == 0 ? dragOffset : .zero)
-                .rotationEffect(index == 0 ? .degrees(rotationDegrees) : .zero)
+                .rotationEffect(index == 0 && !reduceMotion ? .degrees(rotationDegrees) : .zero)
                 .zIndex(Double(visibleItems.count - index))
-                .animation(.interactiveSpring(response: 0.32, dampingFraction: 0.78), value: dragOffset)
+                .animation(
+                    reduceMotion
+                        ? .linear(duration: 0)
+                        : .interactiveSpring(response: 0.32, dampingFraction: 0.78),
+                    value: dragOffset
+                )
                 .gesture(dragGesture(for: item), including: index == 0 ? .gesture : .none)
                 .onTapGesture { if index == 0 { onTap(item) } }
                 .allowsHitTesting(index == 0 && !isDismissing)
+                // VoiceOver can't perform the raw drag gesture or the bare
+                // onTapGesture, so expose the top card as an activatable button
+                // (double-tap opens detail) with named rotor actions mirroring
+                // the swipe commits. Back cards are hidden (IOS-AUDIT-UX-037).
+                .accessibilityHidden(index != 0)
+                .accessibilityAddTraits(index == 0 ? .isButton : [])
+                .accessibilityHint(index == 0
+                    ? "Double tap to open details. Use the rotor for Save, Skip, and More like this."
+                    : "")
+                .accessibilityAction { if index == 0 { onTap(item) } }
+                .accessibilityAction(named: Text("Save")) { if index == 0 { programmaticLike() } }
+                .accessibilityAction(named: Text("Skip")) { if index == 0 { programmaticSkip() } }
+                .accessibilityAction(named: Text("More like this")) { if index == 0 { programmaticBoost() } }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // background(GeometryReader) is the idiomatic SwiftUI pattern for
-        // reading a parent's resolved size. Unlike a foreground GeometryReader
-        // inside a VStack, the background is sized by the parent *after* layout
-        // resolves — so it always reports the real dimensions, not (0, 0), and
-        // updates automatically on rotation or split-view resize.
-        .background(
-            GeometryReader { geo in
-                Color.clear
-                    .onAppear {
-                        deckWidth = geo.size.width
-                        deckHeight = geo.size.height
-                    }
-                    .onChange(of: geo.size) { _, newSize in
-                        deckWidth = newSize.width
-                        deckHeight = newSize.height
-                    }
+        // Drive button taps through the same animated commit path as a swipe.
+        .onChange(of: command) { _, newValue in
+            guard let newValue else { return }
+            switch newValue.action {
+            case .skip: programmaticSkip()
+            case .like: programmaticLike()
+            case .boost: programmaticBoost()
             }
-        )
+            command = nil
+        }
     }
 
     // MARK: - Stack geometry
@@ -137,8 +187,8 @@ struct SwipeCardStack: View {
                 } else if leftCommitted {
                     commit(item: item, direction: .left, action: onSkip)
                 } else {
-                    // Spring back.
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                    // Spring back (linear snap under Reduce Motion).
+                    withAnimation(reduceMotion ? .linear(duration: 0.1) : .spring(response: 0.4, dampingFraction: 0.7)) {
                         dragOffset = .zero
                     }
                 }
@@ -161,10 +211,12 @@ struct SwipeCardStack: View {
         case .up: HapticFeedback.shared.premiumUnlock()
         }
 
-        withAnimation(.easeOut(duration: 0.28)) {
+        // Reduce Motion: minimize the fly-off travel time (the card must still
+        // leave, but we don't draw out the long kinetic sweep).
+        withAnimation(.easeOut(duration: reduceMotion ? 0.12 : 0.28)) {
             dragOffset = target
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + (reduceMotion ? 0.12 : 0.28)) {
             action(item)
             dragOffset = .zero
             isDismissing = false
@@ -179,7 +231,7 @@ struct SwipeCardStack: View {
     func programmaticBoost() { triggerProgrammatic(.up) }
 
     private func triggerProgrammatic(_ direction: CommitDirection) {
-        guard let item = items.first else { return }
+        guard !isDismissing, let item = items.first else { return }
         let action: (SwipeItem) -> Void
         switch direction {
         case .left: action = onSkip

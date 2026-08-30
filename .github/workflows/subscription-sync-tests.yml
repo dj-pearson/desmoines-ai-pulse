@@ -1,19 +1,35 @@
-name: Cross-Platform Subscription Sync Tests
+name: Edge Function & Cross-Platform Contract Tests
 
+# Trigger scope was previously four billing functions plus _tests/, which left
+# ~69 of the 73 edge functions with no CI execution on change. Edge functions
+# are versioned API surfaces that shipped iOS/Android binaries call by name
+# (CLAUDE.md, "Supabase Edge Functions"), so a contract drift there breaks
+# clients that cannot be redeployed.
+#
+# That gap is not theoretical: delete-user-account's documented "legacy POST
+# without action field" branch was retired from the implementation while both
+# mobile clients still invoke it with no body, so account deletion 400s on
+# every mobile attempt — an App Store 5.1.1(v) blocker that no CI lane saw.
+#
+# Any change under supabase/functions/ now runs the invariant suite.
 on:
   pull_request:
     branches: [main, develop]
     paths:
-      - 'supabase/functions/validate-ios-receipt/**'
-      - 'supabase/functions/validate-android-receipt/**'
-      - 'supabase/functions/appstore-server-notifications-v2/**'
-      - 'supabase/functions/play-rtdn-webhook/**'
-      - 'supabase/functions/_tests/**'
-      - 'supabase/migrations/**subscription**'
-      - 'supabase/migrations/**platform**'
+      - 'supabase/functions/**'
+      - 'supabase/migrations/**'
+      # The contract has two ends. Watching only the server half is how
+      # delete-user-account drifted: the edge function was changed and the
+      # clients were not, and nothing here ran when a client changed either.
+      - 'ios/DesMoinesInsider/**'
+      - 'android/app/src/main/java/**'
       - 'src/hooks/useSubscription.ts'
       - 'src/hooks/__tests__/useSubscription.test.ts'
       - 'src/components/SubscriptionPlatformBreakdown.tsx'
+      # The IndexNow key file. Its contents have to match INDEXNOW_KEY exactly
+      # or every submission 403s, and the file lives nowhere near the function
+      # that depends on it — so a PR touching only public/ must run this suite.
+      - 'public/*.txt'
       - '.github/workflows/subscription-sync-tests.yml'
 
 concurrency:
@@ -38,7 +54,118 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # deno.lock is lockfile v5, which Deno 1.x refuses to read ("Unsupported
+      # lockfile version '5'"), so this job died on its first step. Deno 2 also
+      # dropped the `--allow-none` flag — the steps below rely on the default,
+      # which is already "no permissions".
       - uses: denoland/setup-deno@v1
         with:
-          deno-version: v1.x
+          deno-version: v2.x
       - run: deno test --allow-read supabase/functions/_tests/cross-platform-sync.test.ts
+      - run: deno test supabase/functions/_tests/version-check.test.ts
+      # Reads the iOS/Android sources as well as the edge function, so the
+      # client/server deletion contract can't drift again (XPLAT-001).
+      # XPLAT-011. Asserts docstring, implementation and all three clients agree
+      # on the request contract -- the comparison nobody was making when
+      # XPLAT-001 shipped a two-step docstring against three bodyless clients.
+      - run: deno test --allow-read supabase/functions/_tests/client-contract.test.ts
+      - run: deno test --allow-read supabase/functions/_tests/account-deletion-contract.test.ts
+      # Erasure has to reach uploaded files, not just table rows. Every upload
+      # bucket is public, so anything the purge misses stays fetchable by URL
+      # (WEB-LEGAL-003).
+      - run: deno test --allow-read supabase/functions/_tests/purge-user-storage.test.ts
+      # Fails when a table with a user_id column is neither purged nor
+      # deliberately retained, so erasure coverage cannot drift silently
+      # the next time a feature adds a table (WEB-LEGAL-004).
+      - run: deno test --allow-read supabase/functions/_tests/user-data-tables.test.ts
+      # The marketing opt-out has to be read from the key the clients write.
+      # The classifier read communication_preferences.marketing/.email; the clients
+      # write email_notifications, so a stored opt-out was invisible to every sender
+      # and nothing typed, compiled or tested said so (WEB-LEGAL-012).
+      - run: deno test --allow-read supabase/functions/_tests/marketing-consent-contract.test.ts
+      # WEB-LEGAL-012 AC6, the other half of the same defect. The contract test
+      # above compares the key the clients write against the key the classifier
+      # reads, which catches a rename and cannot catch a sender that reads the
+      # right key and mails anyway. These RUN one agent from each family -
+      # nurture, re-engagement, churn, milestone, outreach - against an opted-out
+      # profile and assert no send is attempted, each paired with an opted-in run
+      # that proves the fixture drives the agent that far.
+      # --allow-env because the suite DELETES RESEND_API_KEY and the Anthropic
+      # keys before importing anything: without that, a runner holding them would
+      # turn this into real outbound mail.
+      # --no-check=remote, and this step is why the whole job has been red.
+      # Alone among these suites it imports an agent that imports supabase-js,
+      # and Deno type-checks the downloaded index.d.mts, which carries a
+      # reference to @types/node. There is no node_modules for Deno to resolve
+      # that from on the runner, so the run dies before any test executes:
+      #   error: Could not find "@types/node" in a node_modules folder.
+      # WEB-LEGAL-012's notes predicted the opposite - "CI has the network and
+      # needs neither the map nor --no-check" - which was true of the import MAP
+      # and wrong about the type check.
+      # =remote was the first attempt at that, on the reasoning that it would
+      # keep type-checking the test's own source while skipping the downloaded
+      # .d.ts files. It does not work: --no-check=remote skips the BODIES of
+      # remote declaration files but still resolves their type-reference
+      # directives, and the reference to @types/node is exactly such a
+      # directive. So the step kept dying at the same line and these four tests
+      # have never once executed.
+      # Bare --no-check gives up type-checking the test source too. That is a
+      # real loss, and still the better trade: four tests that run beat four
+      # tests that are type-checked and skipped. The alternative that keeps both
+      # is a root deno.json with nodeModulesDir + an @types/node import and a
+      # deno install step, which is a lot of machinery for one suite.
+      - run: deno test --allow-read --allow-env --no-check supabase/functions/_tests/marketing-optout-agents.test.ts
+      # XPLAT-007. The right of ACCESS must stay sourced from the same list as
+      # the right of erasure - they had drifted by 57 tables, and the export
+      # named three that do not exist.
+      - run: deno test --allow-read supabase/functions/_tests/export-user-data.test.ts
+      # XPLAT-008. Two admin diagnostics that returned 404 on every press.
+      # test-article-webhook POSTs to a caller-supplied URL, so the SSRF guard
+      # running BEFORE the request is the assertion that matters.
+      - run: deno test --allow-read supabase/functions/_tests/admin-diagnostics.test.ts
+      # WEB-SEC-024. scrapeUrl is the single entry point for every ingestion path
+      # and checked nothing, so a site that had asked not to be crawled was
+      # crawled anyway. Found while drafting the Privacy Policy's sources section:
+      # the ordinary reassurance would have been a false statement in it.
+      - run: deno test --allow-read supabase/functions/_tests/robots.test.ts
+      # WEB-BE-032. The ops digest counted with `count ?? 0` and discarded the
+      # error, so a digest that could read nothing printed the same eleven
+      # zeros as a system with nothing wrong. Pins that an unreadable section
+      # never renders as a healthy one.
+      - run: deno test supabase/functions/_tests/digest-format.test.ts
+      # Crisis floor on the public AI surfaces: pins the matcher in both
+      # directions and asserts every surface short-circuits before the model
+      # call, which is the whole design (WEB-LEGAL-005).
+      - run: deno test --allow-read supabase/functions/_tests/crisis-support.test.ts
+      # The trial-conversion notice must state amount, date and cancel path,
+      # and must not be gated on marketing consent or an LLM score
+      # (WEB-LEGAL-006).
+      - run: deno test --allow-read supabase/functions/_tests/trial-notice.test.ts
+      # A bucket created public must say why. Public means anonymous GET on a
+      # guessable path with no expiry (WEB-LEGAL-007).
+      # WEB-BE-030 AC4. Asserts the UNIQUE constraint that makes the guard real,
+      # and that both webhooks read the lookup error instead of only its data.
+      - run: deno test --allow-read supabase/functions/_tests/billing-webhook-idempotency.test.ts
+      - run: deno test --allow-read supabase/functions/_tests/storage-bucket-posture.test.ts
+      - run: deno test supabase/functions/_shared/jsonLdEvents.test.ts
+      # IndexNow payload filtering plus the key-file/constant drift check
+      # (WEB-SEO-011). Needs --allow-read for public/<key>.txt.
+      - run: deno test --allow-read supabase/functions/_tests/indexnow.test.ts
+      # Event-source parsing invariants — see docs/scraping/EVENT_SOURCE_PLAYBOOK.md.
+      # All fixture-based; no network access needed.
+      - run: deno test supabase/functions/_shared/centralTime.test.ts
+      - run: deno test supabase/functions/_shared/eventSourceProfiles.test.ts
+      - run: deno test supabase/functions/_shared/eventPageDiscovery.test.ts
+      - run: deno test supabase/functions/_shared/htmlContentWindow.test.ts
+      - run: deno test supabase/functions/_shared/domain-adapters/dispatch.test.ts
+      - run: deno test supabase/functions/_shared/domain-adapters/tribeEvents.test.ts
+      - run: deno test supabase/functions/_shared/domain-adapters/venueProfile.test.ts
+      # Menu-scraping invariants — see docs/scraping/MENU_SCRAPER.md.
+      # All fixture-based; no network access needed.
+      - run: deno test supabase/functions/_shared/menu/menuNormalize.test.ts
+      - run: deno test supabase/functions/_shared/menu/menuContent.test.ts
+      - run: deno test supabase/functions/_shared/menu/menuJsonLd.test.ts
+      - run: deno test supabase/functions/_shared/menu/menuPlatforms.test.ts
+      - run: deno test supabase/functions/_shared/menu/menuDiscovery.test.ts
+      - run: deno test supabase/functions/_shared/menu/menuJson.test.ts
+      - run: deno test supabase/functions/_shared/menu/menuUrls.test.ts

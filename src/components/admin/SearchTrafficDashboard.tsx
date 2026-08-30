@@ -4,27 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  BarChart3,
-  TrendingUp,
-  TrendingDown,
-  Search,
-  Globe,
-  Link2,
-  RefreshCw,
-  Download,
-  Settings,
-  AlertCircle,
-  CheckCircle2,
-  Eye,
-  MousePointer,
-  Activity,
-  Target,
-  Zap,
-  ArrowUpRight,
-  ArrowDownRight,
-  Trash2,
-} from "lucide-react";
+import { BarChart3, TrendingDown, Search, Globe, Link2, RefreshCw, Download, Settings, AlertCircle, CheckCircle2, Eye, MousePointer, Activity, Target, Zap, ArrowUpRight, ArrowDownRight, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { AreaChart, Area, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
@@ -39,6 +19,7 @@ import { SEOOpportunities } from "./SearchTrafficDashboard/SEOOpportunities";
 import { SiteHealth } from "./SearchTrafficDashboard/SiteHealth";
 import { ComparativeAnalysis } from "./SearchTrafficDashboard/ComparativeAnalysis";
 import { createLogger } from '@/lib/logger';
+import { getErrorMessage } from "@/lib/errorHandler";
 
 const log = createLogger('SearchTrafficDashboard');
 
@@ -79,7 +60,7 @@ export function SearchTrafficDashboard() {
 
       // Load GSC properties (split into two queries to avoid PostgREST join 400 errors)
       const { data: properties, error } = await supabase
-        .from("gsc_properties" as any)
+        .from("gsc_properties")
         .select("id, property_url, property_type, status, last_sync_at, created_at, oauth_credential_id")
         .order("created_at", { ascending: false });
 
@@ -87,24 +68,33 @@ export function SearchTrafficDashboard() {
         log.debug('loadProviders', 'gsc_properties not available yet', { data: error });
       }
 
-      const propRows = (properties || []) as any[];
+      const propRows = properties || [];
 
       // Separately fetch credential status for all credential IDs
-      const credIds = propRows.map((p: any) => p.oauth_credential_id).filter(Boolean);
+      const credIds = propRows.map((p) => p.oauth_credential_id).filter(Boolean);
       const credMap: Record<string, { id: string; is_active: boolean; expires_at: string }> = {};
 
       if (credIds.length > 0) {
-        const { data: creds } = await supabase
-          .from("gsc_oauth_credentials" as any)
+        const { data: creds, error: credsError } = await supabase
+          .from("gsc_oauth_credentials")
           .select("id, is_active, expires_at")
           .in("id", credIds);
 
-        for (const cred of (creds || []) as any[]) {
+        // An unread credential is not a healthy credential. This error was
+        // discarded, so a failed read left credMap empty and every property
+        // rendered with cred undefined - which makes isExpired false and shows
+        // the token as fine when we simply could not look.
+        if (credsError) {
+          log.error('loadProviders', 'could not read gsc_oauth_credentials', { data: credsError });
+          toast.error("Could not read credential status", { description: getErrorMessage(credsError) });
+        }
+
+        for (const cred of creds || []) {
           credMap[cred.id] = cred;
         }
       }
 
-      const providers: ConnectedProvider[] = propRows.map((prop: any) => {
+      const providers: ConnectedProvider[] = propRows.map((prop) => {
         const cred = credMap[prop.oauth_credential_id];
         const isExpired = cred?.expires_at ? new Date(cred.expires_at) < new Date() : false;
         const isActive = cred?.is_active === true;
@@ -133,14 +123,23 @@ export function SearchTrafficDashboard() {
       // synthetic "connected" entry so the user knows the OAuth worked and
       // can click Sync Data to pull their properties.
       if (providers.length === 0) {
-        const { data: activeCreds } = await supabase
-          .from("gsc_oauth_credentials" as any)
+        const { data: activeCreds, error: activeCredsError } = await supabase
+          .from("gsc_oauth_credentials")
           .select("id, is_active, expires_at, created_at")
           .eq("is_active", true)
           .order("created_at", { ascending: false })
           .limit(1);
 
-        const latestCred = ((activeCreds || []) as any[])[0];
+        // This branch exists to tell the user their OAuth worked even before any
+        // property is stored. A discarded error made a failed read look exactly
+        // like "no credentials", so a connected account was shown as
+        // disconnected and the fix on offer was to reconnect - which is the
+        // wrong advice for a read failure.
+        if (activeCredsError) {
+          log.error('loadProviders', 'could not read active gsc credentials', { data: activeCredsError });
+        }
+
+        const latestCred = (activeCreds || [])[0];
         if (latestCred) {
           const isExpired = latestCred.expires_at
             ? new Date(latestCred.expires_at) < new Date()
@@ -263,9 +262,9 @@ export function SearchTrafficDashboard() {
       });
 
       loadConnectedProviders();
-    } catch (error: any) {
+    } catch (error) {
       log.error('syncData', 'Sync error', { data: error });
-      toast.error("Failed to sync data", { description: error.message || "Please try again later" });
+      toast.error("Failed to sync data", { description: getErrorMessage(error, "Please try again later") });
     } finally {
       setSyncing(false);
     }
@@ -300,10 +299,10 @@ export function SearchTrafficDashboard() {
       window.URL.revokeObjectURL(url);
 
       toast.success("Export completed!");
-    } catch (error: any) {
+    } catch (error) {
       log.error('exportData', 'Export error', { data: error });
       toast.error("Failed to export data", {
-        description: error.message || "Please try again later",
+        description: getErrorMessage(error, "Please try again later"),
       });
     }
   };
@@ -314,23 +313,55 @@ export function SearchTrafficDashboard() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data: creds } = await supabase
-        .from("gsc_oauth_credentials" as any)
+      // EVERY STEP OF A DISCONNECT IS CHECKED, because the failure mode here is
+      // telling someone their account is disconnected when it is not.
+      //
+      // The read below discarded its error, so a failure gave credIds = [], both
+      // writes were skipped, and the code fell through to setConnectedProviders([])
+      // and a "Disconnected" toast. The UI showed no connection while the OAuth
+      // credential stayed active and every property row remained. The two writes
+      // discarded their errors too, so the same false confirmation appeared even
+      // when the read had worked.
+      const { data: creds, error: credsError } = await supabase
+        .from("gsc_oauth_credentials")
         .select("id")
         .eq("user_id", user.id);
 
-      const credIds = ((creds || []) as any[]).map((c) => c.id);
+      if (credsError) {
+        toast.error("Could not disconnect — nothing was changed", {
+          description: getErrorMessage(credsError),
+        });
+        return;
+      }
+
+      const credIds = (creds || []).map((c) => c.id);
 
       if (credIds.length > 0) {
-        await supabase
-          .from("gsc_properties" as any)
+        const { error: propsError } = await supabase
+          .from("gsc_properties")
           .delete()
           .in("oauth_credential_id", credIds);
 
-        await supabase
-          .from("gsc_oauth_credentials" as any)
+        if (propsError) {
+          toast.error("Could not remove properties — still connected", {
+            description: getErrorMessage(propsError),
+          });
+          return;
+        }
+
+        const { error: deactivateError } = await supabase
+          .from("gsc_oauth_credentials")
           .update({ is_active: false })
           .in("id", credIds);
+
+        if (deactivateError) {
+          // The properties are gone but the credential is still live, which is
+          // the state most worth naming rather than reporting as success.
+          toast.error("Properties removed but the credential is still active", {
+            description: getErrorMessage(deactivateError),
+          });
+          return;
+        }
       }
 
       setConnectedProviders([]);
@@ -338,9 +369,9 @@ export function SearchTrafficDashboard() {
       toast.success("Disconnected", {
         description: "All GSC connections removed. Connect again to start fresh.",
       });
-    } catch (error: any) {
+    } catch (error) {
       log.error('disconnect', 'Disconnect failed', { data: error });
-      toast.error("Failed to disconnect", { description: error.message });
+      toast.error("Failed to disconnect", { description: getErrorMessage(error) });
     }
   };
 
@@ -392,7 +423,7 @@ export function SearchTrafficDashboard() {
         toast.success(`Properties refreshed: ${propJson.count ?? 0} found`);
       }
       await loadConnectedProviders();
-    } catch (error: any) {
+    } catch (error) {
       log.error('refreshProps', 'Refresh failed', { data: error });
       toast.error("Failed to refresh properties");
     }
@@ -416,11 +447,24 @@ export function SearchTrafficDashboard() {
       }
 
       // Fetch all properties, then delete those that don't match the domain
-      const { data: allProps } = await supabase
-        .from("gsc_properties" as any)
+      const { data: allProps, error: allPropsError } = await supabase
+        .from("gsc_properties")
         .select("id, property_url");
 
-      const toDelete = ((allProps || []) as any[])
+      // THIS READ DECIDES WHAT GETS DELETED, so a failure must stop the action
+      // rather than narrow it. The error was discarded, so a failed read gave
+      // allProps null, `toDelete` came out empty, and the branch below reported
+      // "Already showing only your site's properties" with a SUCCESS toast. The
+      // delete direction was safe - nothing was removed - but the user was told
+      // a cleanup had happened when nothing had been read at all.
+      if (allPropsError) {
+        toast.error("Could not read properties — nothing was changed", {
+          description: getErrorMessage(allPropsError),
+        });
+        return;
+      }
+
+      const toDelete = (allProps || [])
         .filter((p) => !p.property_url.toLowerCase().includes(domain))
         .map((p) => p.id);
 
@@ -431,18 +475,18 @@ export function SearchTrafficDashboard() {
       }
 
       const { error } = await supabase
-        .from("gsc_properties" as any)
+        .from("gsc_properties")
         .delete()
         .in("id", toDelete);
 
       if (error) {
-        toast.error("Could not remove extra properties", { description: error.message });
+        toast.error("Could not remove extra properties", { description: getErrorMessage(error) });
         return;
       }
 
       toast.success(`Removed ${toDelete.length} extra properties. Now showing ${domain} only.`);
       await loadConnectedProviders();
-    } catch (err: any) {
+    } catch (err) {
       log.error('directCleanup', 'Cleanup failed', { data: err });
       toast.error("Cleanup failed — use Disconnect and reconnect instead.");
     }

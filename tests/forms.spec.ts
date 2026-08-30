@@ -165,8 +165,17 @@ test.describe('Form Field Validation', () => {
 
       await page.waitForTimeout(300);
 
-      // Should show some indication of weakness or invalidity
-      const showsWeakness = await page.locator('[role="alert"], .error, text=/weak|strong|password/i').count() > 0;
+      // Should show some indication of weakness or invalidity.
+      //
+      // Was a single selector string mixing CSS with Playwright's text=
+      // engine: '[role="alert"], .error, text=/weak|strong|password/i'. That is
+      // not parseable — Playwright threw `Unexpected token "=" while parsing
+      // css selector` and the test failed before asserting anything. The two
+      // engines cannot be combined in one comma-separated string; they need
+      // separate locators.
+      const showsWeakness =
+        (await page.locator('[role="alert"], .error').count()) > 0 ||
+        (await page.getByText(/weak|strong|password/i).count()) > 0;
 
       if (showsWeakness) {
         console.log('Password strength indicator working');
@@ -224,10 +233,28 @@ test.describe('Form Accessibility', () => {
         console.log('Form uses ARIA for error announcements');
       }
 
-      // At minimum, errors should be visible
-      const hasVisibleErrors = await page.locator('.error, .text-red-500, .text-destructive, [aria-invalid="true"]').count() > 0;
+      // At minimum, invalid input must be communicated — by custom error
+      // markup OR by native constraint validation.
+      //
+      // This previously accepted only custom markup (.text-destructive,
+      // aria-invalid, ...). The auth form uses NATIVE HTML5 validation: the
+      // email input is `required`, the form is not `novalidate`, and after an
+      // empty submit the browser blocks submission with input.validity.valid
+      // === false and announces its own message. That is a legitimate,
+      // screen-reader-accessible pattern — the test was asserting one
+      // implementation choice rather than the outcome it cares about.
+      const hasCustomErrors =
+        (await page.locator('.error, .text-red-500, .text-destructive, [aria-invalid="true"]').count()) > 0;
 
-      expect(hasVisibleErrors, 'Form should display validation errors').toBe(true);
+      const hasNativeValidation = await page.evaluate(() => {
+        const controls = [...document.querySelectorAll('input, select, textarea')] as HTMLInputElement[];
+        return controls.some((c) => c.willValidate && !c.validity.valid);
+      });
+
+      expect(
+        hasCustomErrors || hasNativeValidation,
+        'Form should communicate validation errors (custom markup or native constraint validation)'
+      ).toBe(true);
     }
   });
 
@@ -293,14 +320,35 @@ test.describe('Form Submission', () => {
         console.log('Form shows loading state during submission');
       }
 
-      // Form should either succeed or show an error
-      await page.waitForTimeout(2000);
+      // Form should either succeed or show an error.
+      //
+      // Feedback here is a TRANSIENT sonner toast. The old version waited
+      // 2000ms and then counted '[role="alert"], .error, .toast' — by which
+      // point the toast had already auto-dismissed, and the selector missed
+      // sonner's markup anyway. Verified against production: a failed login
+      // returns 400 from /auth/v1/token and a toast is present at t=1000ms
+      // and gone by t=2000ms. The test was reporting "no feedback" on a form
+      // that does give feedback.
+      //
+      // Observing from before the click catches it regardless of lifetime.
+      const sawFeedback = await page.evaluate(() => {
+        return new Promise<boolean>((resolve) => {
+          const SELECTOR = '[data-sonner-toast], [role="alert"], [role="status"], .toast, .text-destructive';
+          if (document.querySelector(SELECTOR)) return resolve(true);
+          const obs = new MutationObserver(() => {
+            if (document.querySelector(SELECTOR)) { obs.disconnect(); resolve(true); }
+          });
+          obs.observe(document.body, { childList: true, subtree: true });
+          setTimeout(() => { obs.disconnect(); resolve(false); }, 6000);
+        });
+      });
 
-      const hasError = await page.locator('[role="alert"], .error, .toast').count() > 0;
       const urlChanged = !page.url().includes('/auth');
 
-      const hasResponse = hasError || urlChanged;
-      expect(hasResponse, 'Form should provide feedback after submission').toBe(true);
+      expect(
+        sawFeedback || urlChanged,
+        'Form should provide feedback after submission (toast, inline error, or navigation)'
+      ).toBe(true);
     }
   });
 
@@ -332,8 +380,24 @@ test.describe('Form UX Features', () => {
     const passwordInput = page.locator('input[type="password"]').first();
 
     if (await passwordInput.count() > 0) {
-      // Look for password toggle button
-      const toggleButton = page.locator('button:near(input[type="password"]), [aria-label*="password"]').first();
+      // Look for a password VISIBILITY toggle specifically.
+      //
+      // Was `button:near(input[type="password"]), [aria-label*="password"]`,
+      // which matched the "Forgot password?" link sitting beside the field.
+      // The test then clicked it, navigated away from the sign-in form, and
+      // timed out looking for the now-absent password input — reporting a
+      // broken toggle on a page that simply has none. This test already has an
+      // else-branch to skip gracefully when no toggle exists; the loose
+      // selector was what defeated it.
+      //
+      // /auth currently has NO visibility toggle, so this should take the skip
+      // path rather than fail.
+      const toggleButton = page
+        .locator(
+          'button[aria-label*="show password" i], button[aria-label*="hide password" i], ' +
+            'button[aria-label*="toggle password" i], button[data-testid*="password-toggle" i]'
+        )
+        .first();
 
       if (await toggleButton.count() > 0) {
         const initialType = await passwordInput.getAttribute('type');

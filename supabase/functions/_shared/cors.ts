@@ -42,6 +42,10 @@ export function getAllowedOrigins(): string[] {
     staging: [
       'https://staging.desmoinesinsider.com',
       'https://lovable.dev',
+      // Explicit, env-configured preview origins (comma-separated) replace the
+      // old blanket *.lovable.dev wildcard. e.g.
+      // CORS_PREVIEW_ORIGINS="https://my-project.lovable.dev,https://preview.x.dev"
+      ...getPreviewOrigins(),
       ...(siteUrl ? [siteUrl] : []),
     ],
     development: [
@@ -56,6 +60,17 @@ export function getAllowedOrigins(): string[] {
   };
 
   return allowedOrigins[env] || allowedOrigins.development;
+}
+
+/**
+ * Explicit preview origins from the CORS_PREVIEW_ORIGINS secret
+ * (comma-separated). Empty when unset. Never consulted in production.
+ */
+function getPreviewOrigins(): string[] {
+  return (Deno.env.get('CORS_PREVIEW_ORIGINS') || '')
+    .split(',')
+    .map((s) => s.trim().replace(/\/$/, ''))
+    .filter(Boolean);
 }
 
 /**
@@ -138,14 +153,20 @@ export function addCorsHeaders(response: Response, origin?: string): Response {
 export function isOriginAllowed(origin: string): boolean {
   const allowedOrigins = getAllowedOrigins();
 
-  // Check exact match against allowed origins
+  // Check exact match against allowed origins (includes any explicit
+  // CORS_PREVIEW_ORIGINS in non-production).
   if (allowedOrigins.includes(origin)) {
     return true;
   }
 
-  // Allow Lovable preview domains (for development and staging)
+  // Lovable preview domains: NEVER in production, and no longer a blanket
+  // suffix match. Only a single-label https subdomain of lovable.dev
+  // (e.g. https://my-project.lovable.dev) — this rejects nested/forged hosts
+  // like https://evil.attacker.lovable.dev and any http: origin. Opt out
+  // entirely with ALLOW_LOVABLE_PREVIEWS=false.
   const env = Deno.env.get('ENVIRONMENT') || 'development';
-  if (env !== 'production' && origin.endsWith('.lovable.dev')) {
+  const lovableOptOut = (Deno.env.get('ALLOW_LOVABLE_PREVIEWS') || '').toLowerCase() === 'false';
+  if (env !== 'production' && !lovableOptOut && /^https:\/\/[a-z0-9-]+\.lovable\.dev$/.test(origin)) {
     return true;
   }
 

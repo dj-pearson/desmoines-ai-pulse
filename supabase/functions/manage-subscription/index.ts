@@ -103,6 +103,28 @@ serve(async (req) => {
       .in("status", ["active", "trialing", "past_due"])
       .single();
 
+    // PGRST116 is .single() finding no row: the ordinary "this user has no
+    // subscription" case, handled per-action below. EVERY OTHER ERROR WAS
+    // DISCARDED, and all four branches read the resulting null as proof of
+    // absence - "portal" and "cancel" answer "No active subscription found",
+    // and "status" answers subscription: null. So one failed read told a
+    // paying customer they had no subscription, and told the UI to render
+    // them as a free user.
+    //
+    // Failing closed is the right side to err on here. With no trustworthy
+    // read we cannot distinguish "no subscription" from "could not look",
+    // and only one of those is safe to act on.
+    if (subError && subError.code !== "PGRST116") {
+      console.error("[manage-subscription] subscription read failed", subError);
+      return new Response(
+        JSON.stringify({ error: "Could not read your subscription. Please try again." }),
+        {
+          status: 503,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
     // Handle different actions
     switch (action) {
       case "portal": {

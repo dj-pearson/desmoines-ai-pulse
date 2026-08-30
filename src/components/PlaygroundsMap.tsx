@@ -8,13 +8,18 @@ const createSlug = (name: string): string => {
     .replace(/^-+|-+$/g, "");
 };
 
+/** Mirrors the nullable shape of public.playgrounds. These were declared
+ *  optional (`number | undefined`) but the columns are nullable
+ *  (`number | null`), so a row straight from the database did not satisfy this
+ *  interface. The runtime already handles null — see the `!= null` guard below —
+ *  only the type was wrong. */
 interface Playground {
   id: string;
   name: string;
-  latitude?: number;
-  longitude?: number;
-  description?: string;
-  amenities?: string[];
+  latitude?: number | null;
+  longitude?: number | null;
+  description?: string | null;
+  amenities?: string[] | null;
 }
 
 interface PlaygroundsMapProps {
@@ -32,7 +37,9 @@ const PlaygroundsMap = ({ playgrounds }: PlaygroundsMapProps) => {
       latitude: playground.latitude!,
       longitude: playground.longitude!,
       slug: createSlug(playground.name),
-      description: playground.description,
+      // MapLocation.description is `string | undefined`; the column is nullable,
+      // so convert at the boundary rather than loosening MapLocation.
+      description: playground.description ?? undefined,
       type: 'playground',
     }));
 
@@ -40,7 +47,9 @@ const PlaygroundsMap = ({ playgrounds }: PlaygroundsMapProps) => {
     <InteractiveMap
       locations={mapLocations}
       showUserLocation={!!location}
-      userLocation={location}
+      // useGeolocation returns null when unavailable and also carries `accuracy`,
+      // which InteractiveMap does not accept — narrow to the two fields it wants.
+      userLocation={location ? { latitude: location.latitude, longitude: location.longitude } : undefined}
       linkPrefix="/playgrounds"
       height="600px"
       zoom={12}

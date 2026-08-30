@@ -47,6 +47,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useDebounce } from "@/hooks/useDebounce";
 import { supabase } from "@/integrations/supabase/client";
 import { handleError } from "@/lib/errorHandler";
+import { SecurityUtils } from "@/lib/securityUtils";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -653,8 +654,11 @@ export default function FeedbackInbox() {
                           </div>
                           <div
                             className="text-sm prose prose-sm dark:prose-invert max-w-none"
-                            // Admin-authored HTML; trusted source.
-                            dangerouslySetInnerHTML={{ __html: r.body_html }}
+                            // body_html holds BOTH admin replies and user→admin
+                            // messages, so sanitize before render (PROD-SEC-008).
+                            dangerouslySetInnerHTML={{
+                              __html: SecurityUtils.sanitizeRichHTML(r.body_html),
+                            }}
                           />
                         </div>
                       ))

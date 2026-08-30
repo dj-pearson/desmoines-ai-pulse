@@ -40,6 +40,30 @@ export enum ErrorSeverity {
 }
 
 /**
+ * Report an error that has already been handled visibly - an error boundary
+ * showing its fallback, a form showing its own message - without ALSO showing a
+ * toast. handleError() at ERROR severity does both, so a boundary calling it
+ * rendered the fallback and popped a toast for the same failure.
+ *
+ * Everything else is identical: same tracker, same production pipeline.
+ */
+export function captureHandledError(error: Error | unknown, context: ErrorContext = {}): void {
+  const errorObj = error instanceof Error ? error : new Error(String(error));
+
+  const contextStr = context.component || context.action
+    ? `${context.component || ''}${context.component && context.action ? ':' : ''}${context.action || ''}`
+    : 'unknown';
+  logger.error(contextStr, `ERROR: ${errorObj.message}`, context.metadata);
+
+  if (import.meta.env.PROD && errorTracker) {
+    errorTracker.captureException(errorObj, context);
+  }
+  if (import.meta.env.PROD) {
+    reportErrorEvent(errorObj.message, context, ErrorSeverity.ERROR);
+  }
+}
+
+/**
  * Handle application errors with consistent behavior
  */
 export function handleError(
@@ -61,14 +85,60 @@ export function handleError(
     errorTracker.captureException(errorObj, context);
   }
 
+  // Ship to the production-error pipeline (AOS-DEV-001). Best-effort and
+  // non-blocking; PII is scrubbed server-side at ingest.
+  if (import.meta.env.PROD) {
+    reportErrorEvent(errorObj.message, context, severity);
+  }
+
   // Don't show user-facing errors for info/warning levels
   if (severity === ErrorSeverity.INFO || severity === ErrorSeverity.WARNING) {
     return;
   }
 
-  // Show user-friendly error message based on error type
+  // Build the user-facing message and dispatch it. NOTE: nothing currently
+  // listens - see showErrorToUser's docstring before relying on this to notify.
   const userMessage = getUserFriendlyMessage(errorObj);
   showErrorToUser(userMessage, severity);
+}
+
+// ── Production-error pipeline sink (AOS-DEV-001) ─────────────────────────────
+// Client-side throttle: cap sends of the same message to once per minute so an
+// error storm (e.g. a render loop) can't flood the sink.
+const recentSends = new Map<string, number>();
+const SEND_THROTTLE_MS = 60_000;
+
+function reportErrorEvent(message: string, context: ErrorContext, severity: ErrorSeverity): void {
+  try {
+    const now = Date.now();
+    const key = `${context.component ?? ''}:${context.action ?? ''}:${message}`.slice(0, 200);
+    const last = recentSends.get(key);
+    if (last && now - last < SEND_THROTTLE_MS) return;
+    recentSends.set(key, now);
+    if (recentSends.size > 200) recentSends.clear(); // bound memory
+
+    const url = import.meta.env.VITE_SUPABASE_URL;
+    const anon = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    if (!url || !anon) return;
+
+    // Fire-and-forget; never block or throw. PII is scrubbed server-side.
+    void fetch(`${url}/functions/v1/log-error`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: anon },
+      keepalive: true,
+      body: JSON.stringify({
+        message,
+        component: context.component,
+        action: context.action,
+        route: typeof window !== 'undefined' ? window.location?.pathname : undefined,
+        severity,
+        source: 'client',
+        userId: context.userId,
+      }),
+    }).catch(() => {});
+  } catch {
+    // Sink must never affect the app.
+  }
 }
 
 /**
@@ -105,12 +175,28 @@ function getUserFriendlyMessage(error: Error): string {
 }
 
 /**
- * Show error to user (stub - implement with your toast library)
+ * NOTHING SHOWS THIS TO THE USER TODAY. Read this before assuming handleError
+ * notifies anybody.
+ *
+ * It dispatches an `app-error` CustomEvent, and as of 2026-08-23 the ONLY
+ * addEventListener('app-error') in the repository is inside
+ * src/lib/__tests__/errorHandler.test.ts, which adds one in order to observe
+ * the dispatch. No component listens. So the "Show user-friendly error message"
+ * step in handleError above is a dispatch into an empty room, across 75 call
+ * sites, and the tests pass because they assert the dispatch rather than the
+ * delivery.
+ *
+ * It is left as an event rather than wired to a toast because turning it on is
+ * a product decision, not a code one: several of those 75 sites are background
+ * or best-effort paths where a toast would be noise, and switching them all on
+ * at once is a UX change nobody has asked for. Whoever wires this up should
+ * pick the severities that deserve a toast rather than routing all of them.
+ *
+ * The error itself is NOT lost - handleError logs it and, in production, sends
+ * it to the error tracker and the AOS-DEV-001 pipeline before reaching here.
+ * What is missing is the half the user can see.
  */
 function showErrorToUser(message: string, severity: ErrorSeverity): void {
-  // This should be implemented with your actual toast/notification system
-  // Example: toast.error(message);
-
   logger.debug('showErrorToUser', `${severity}: ${message}`);
 
   // Create a custom event that components can listen to
@@ -202,6 +288,36 @@ export function withErrorBoundary<T extends (...args: any[]) => any>(
       throw error;
     }
   }) as T;
+}
+
+/**
+ * Extract a human-readable message from an unknown thrown value.
+ *
+ * Exists so `catch` blocks can be typed `catch (error)` — which TypeScript
+ * gives the type `unknown` — instead of `catch (error: any)` purely to reach
+ * `.message` (WEB-QUAL-004). `any` there is not free: it silently permits
+ * `error.mesage`, `error.response.data` and similar unchecked access on a value
+ * that may not be an Error at all. Anything can be thrown in JS, including
+ * strings, and Supabase/PostgREST rejections are plain objects, not Errors.
+ *
+ * @param error - the caught value, of genuinely unknown shape
+ * @param fallback - returned when no message can be recovered
+ */
+export function getErrorMessage(
+  error: unknown,
+  fallback = 'An unexpected error occurred'
+): string {
+  if (typeof error === 'string') return error || fallback;
+  if (error instanceof Error) return error.message || fallback;
+
+  // PostgREST/Supabase errors are plain objects carrying `message`, and often
+  // `details`/`hint`, without being Error instances.
+  if (error && typeof error === 'object') {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string' && message) return message;
+  }
+
+  return fallback;
 }
 
 /**

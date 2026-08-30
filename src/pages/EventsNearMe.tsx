@@ -1,4 +1,4 @@
-import { useState, lazy, Suspense } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import SEOHead from '@/components/SEOHead';
@@ -8,12 +8,14 @@ import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { LoadingSpinner } from '@/components/ui/loading-skeleton';
-import { MapPin, Navigation, Calendar, DollarSign, List, Map as MapIcon, Loader2 } from 'lucide-react';
+import { Navigation, DollarSign, List, Map as MapIcon, Loader2 } from "lucide-react";
 import { Link } from 'react-router-dom';
 import { useEventsNearby, useGeolocation, getDistanceDisplay } from '@/hooks/useProximitySearch';
-import { InteractiveMap, MapLocation } from '@/components/InteractiveMap';
+import type { MapLocation } from '@/components/InteractiveMap';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import { formatCount } from "@/lib/pluralize";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 // Lazy load map component
 const EventsMap = lazy(() => import('@/components/InteractiveMap').then(mod => ({ default: mod.InteractiveMap })));
@@ -41,14 +43,19 @@ export default function EventsNearMe() {
 
   const handleRequestLocation = () => {
     requestLocation();
+  };
+
+  // Surface geolocation failures once they resolve (getCurrentPosition is async,
+  // so we can't read locationError synchronously after requestLocation()).
+  useEffect(() => {
     if (locationError) {
       toast({
-        title: 'Location Error',
-        description: locationError,
+        title: 'Location unavailable',
+        description: `${locationError} Showing events across Des Moines instead.`,
         variant: 'destructive',
       });
     }
-  };
+  }, [locationError, toast]);
 
   const mapLocations: MapLocation[] = events.map(event => ({
     id: event.id,
@@ -85,7 +92,7 @@ export default function EventsNearMe() {
           <Card className="mb-6">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <MapPin className="h-5 w-5" />
+                <SpriteIcon name="map-pin" className="h-5 w-5" />
                 Your Location
               </CardTitle>
               <CardDescription>
@@ -113,6 +120,20 @@ export default function EventsNearMe() {
                 <Badge variant="secondary" className="ml-2">
                   Accuracy: ±{location.accuracy.toFixed(0)} meters
                 </Badge>
+              )}
+
+              {locationError && (
+                <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm">
+                  <p className="text-destructive font-medium">{locationError}</p>
+                  <p className="text-muted-foreground mt-1">
+                    We're showing events across Des Moines as a fallback. You can
+                    also{' '}
+                    <Link to="/events" className="underline font-medium">
+                      browse all events
+                    </Link>
+                    .
+                  </p>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -187,7 +208,7 @@ export default function EventsNearMe() {
           {/* Results Count */}
           <div className="mb-4">
             <p className="text-sm text-muted-foreground">
-              Found {events.length} events within {radiusMiles} miles
+              Found {formatCount(events.length, 'event')} within {formatCount(radiusMiles, 'mile')}
               {location && ' of your location'}
             </p>
           </div>
@@ -241,13 +262,13 @@ export default function EventsNearMe() {
                       <div className="space-y-2 text-sm">
                         {event.date && (
                           <div className="flex items-center gap-2 text-muted-foreground">
-                            <Calendar className="h-4 w-4" />
+                            <SpriteIcon name="calendar" className="h-4 w-4" />
                             {format(new Date(event.date), 'MMM d, yyyy')}
                           </div>
                         )}
                         {event.distance_miles !== undefined && (
                           <div className="flex items-center gap-2 text-muted-foreground">
-                            <MapPin className="h-4 w-4" />
+                            <SpriteIcon name="map-pin" className="h-4 w-4" />
                             {getDistanceDisplay(event.distance_miles)}
                           </div>
                         )}
@@ -271,7 +292,7 @@ export default function EventsNearMe() {
           {/* Map View */}
           {!isLoading && !error && viewMode === 'map' && (
             <Suspense fallback={<LoadingSpinner />}>
-              <InteractiveMap
+              <EventsMap
                 locations={mapLocations}
                 showUserLocation={!!location}
                 userLocation={searchCenter}
@@ -288,7 +309,7 @@ export default function EventsNearMe() {
           {!isLoading && !error && events.length === 0 && (
             <Card>
               <CardContent className="py-12 text-center">
-                <MapPin className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <SpriteIcon name="map-pin" className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                 <h3 className="text-lg font-semibold mb-2">No events found</h3>
                 <p className="text-muted-foreground mb-4">
                   Try increasing the search radius or changing the category filter.

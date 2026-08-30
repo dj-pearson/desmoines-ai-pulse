@@ -1,7 +1,13 @@
 {
   "extends": "./tsconfig.app.json",
   "compilerOptions": {
-    /* Strict Type-Checking Options - Enable gradually */
+    /*
+     * TIER 1 — the near-term target (WEB-CI-007).
+     *
+     * These are the checks this migration is actually about: null safety and
+     * implicit any. Together they currently produce ~88 errors, which is a
+     * tractable number to ratchet down.
+     */
     "strict": true,
     "noImplicitAny": true,
     "strictNullChecks": true,
@@ -10,29 +16,47 @@
     "strictPropertyInitialization": true,
     "noImplicitThis": true,
     "alwaysStrict": true,
-
-    /* Additional Checks */
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
-    "noPropertyAccessFromIndexSignature": true,
 
     /* Import Checks */
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true
+
+    /*
+     * TIER 2 — deliberately DEFERRED, not forgotten.
+     *
+     *   "noUncheckedIndexedAccess": true
+     *   "noPropertyAccessFromIndexSignature": true
+     *   "noUnusedLocals": true
+     *   "noUnusedParameters": true
+     *
+     * These were enabled here previously and accounted for 185 of the 273 errors
+     * on their own. 78 were TS4111 alone, which only asks that `obj.foo` be
+     * written `obj['foo']` on index-signature types. That volume of mechanical
+     * noise buried the genuine null-safety failures and made the gate
+     * unactionable, which is a large part of why this migration never moved.
+     *
+     * Re-enable one at a time once tier 1 reaches zero, each as its own ratchet
+     * step. noUnusedLocals/noUnusedParameters are cheapest and should go first;
+     * ESLint already reports most of what they would.
+     */
   },
   /*
-   * Usage: Gradually migrate files to strict mode
+   * NOTE ON HOW THIS LIST ACTUALLY BEHAVES (WEB-CI-007).
    *
-   * Option 1: Migrate individual files
-   * Add this comment at the top of files that pass strict checks:
-   * // @ts-check with strict enabled
+   * `include` does NOT limit what TypeScript checks. tsc checks every file
+   * reachable by import from these roots, so this project already reports errors
+   * across ~59 files even though only nine roots were listed. Adding a "batch of
+   * compliant files" therefore does not tighten the gate the way it appears to —
+   * it adds roots, which usually pulls MORE non-compliant files into the graph
+   * and makes the count go up.
    *
-   * Option 2: Migrate directories
-   * Update "include" below to add directories that are fully strict-compliant
+   * That is why enforcement lives in scripts/strict-ratchet.mjs — a per-file
+   * error baseline that must not regress — rather than in this list. Grow this
+   * list when a subtree is genuinely clean; use the ratchet to hold the line
+   * everywhere else.
    */
   "include": [
     "src/vite-env.d.ts",
@@ -43,11 +67,9 @@
     "src/hooks/useAttractions.ts",
     "src/hooks/useSubscription.ts",
     "src/hooks/useTripPlanner.ts",
-    "src/hooks/useAuth.ts"
+    "src/hooks/useAuth.ts",
+    "src/hooks/useEventBySlug.ts",
+    "src/hooks/useActiveAds.ts"
   ],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "build"
-  ]
+  "exclude": ["node_modules", "dist", "build"]
 }

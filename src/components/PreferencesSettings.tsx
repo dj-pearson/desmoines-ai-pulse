@@ -19,17 +19,9 @@ import {
   DietaryRestriction,
 } from '@/types/preferences';
 import { cn } from '@/lib/utils';
-import {
-  Heart,
-  MapPin,
-  Clock,
-  Bell,
-  Check,
-  Loader2,
-  Settings,
-  Sparkles,
-} from 'lucide-react';
+import { Heart, Bell, Check, Loader2, Settings } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export function PreferencesSettings() {
   const { preferences, updateInterests, updateCuisine, updateLocation, updateNotifications, isSaving } =
@@ -195,7 +187,7 @@ export function PreferencesSettings() {
       <Card className="border-primary/20 bg-primary/5">
         <CardContent className="pt-6">
           <div className="flex items-start gap-3">
-            <Sparkles className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+            <SpriteIcon name="sparkles" className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
             <div className="space-y-1">
               <h4 className="font-semibold text-sm">AI-Powered Recommendations Active</h4>
               <p className="text-xs text-muted-foreground">
@@ -309,7 +301,7 @@ export function PreferencesSettings() {
                     variant={isSelected ? 'default' : 'outline'}
                     className={cn(
                       'justify-start h-auto py-3',
-                      isSelected && 'bg-primary text-white'
+                      isSelected && 'bg-primary text-primary-foreground'
                     )}
                     onClick={() => toggleDietary(option.id)}
                   >
@@ -329,7 +321,7 @@ export function PreferencesSettings() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <MapPin className="h-5 w-5 text-primary" />
+              <SpriteIcon name="map-pin" className="h-5 w-5 text-primary" />
               <CardTitle>Location</CardTitle>
             </div>
             <Button
@@ -363,7 +355,7 @@ export function PreferencesSettings() {
                     className="justify-start"
                     onClick={() => toggleNeighborhood(neighborhood)}
                   >
-                    <MapPin className="h-4 w-4 mr-2" />
+                    <SpriteIcon name="map-pin" className="h-4 w-4 mr-2" />
                     {neighborhood}
                     {isSelected && <Check className="h-4 w-4 ml-auto" />}
                   </Button>
@@ -451,7 +443,7 @@ export function PreferencesSettings() {
             </div>
             {preferences.lastUpdated && (
               <Badge variant="secondary" className="text-xs">
-                <Clock className="h-3 w-3 mr-1" />
+                <SpriteIcon name="clock" className="h-3 w-3 mr-1" />
                 Updated {new Date(preferences.lastUpdated).toLocaleDateString()}
               </Badge>
             )}

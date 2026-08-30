@@ -8,16 +8,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Calendar, MapPin, ExternalLink, Sparkles, CalendarPlus, Brain, Zap, TrendingUp, Share2, ArrowRight } from "lucide-react";
+import { CalendarPlus, Brain, Zap } from "lucide-react";
 import { downloadICS } from "@/lib/calendar";
 import { createEventSlugWithCentralTime } from "@/lib/timezone";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { useEventScraper } from "@/hooks/useSupabase";
 import { Event } from "@/lib/types";
 import { BRAND } from "@/lib/brandConfig";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { openExternalUrl } from "@/lib/capacitorUtils";
 import Header from "@/components/Header";
 import { FAQSection } from "@/components/FAQSection";
@@ -25,6 +24,7 @@ import SEOHead from "@/components/SEOHead";
 import SEOStructure from "@/components/SEOStructure";
 import { SEOEnhancedHead } from "@/components/SEOEnhancedHead";
 import SearchSection from "@/components/SearchSection";
+import { NLPSearchBar } from "@/components/NLPSearchBar";
 import { EnhancedHero } from "@/components/EnhancedHero";
 import { ForYouRail } from "@/components/ForYouRail";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
@@ -33,6 +33,7 @@ import { BackToTop } from "@/components/BackToTop";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import SpeakableSchema from "@/components/schema/SpeakableSchema";
 import { AdBanner } from "@/components/AdBanner";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 // Lazy load below-the-fold and heavy components to improve initial load
 const Footer = lazy(() => import("@/components/Footer"));
@@ -40,7 +41,6 @@ const AllInclusiveDashboard = lazy(() => import("@/components/AllInclusiveDashbo
 const PersonalizedDashboard = lazy(() => import("@/components/PersonalizedDashboard"));
 const SmartEventNavigation = lazy(() => import("@/components/SmartEventNavigation"));
 const MostSearched = lazy(() => import("@/components/MostSearched"));
-const EventFilters = lazy(() => import("@/components/EventFilters"));
 const GEOContent = lazy(() => import("@/components/GEOContent"));
 const Newsletter = lazy(() => import("@/components/Newsletter"));
 const EventSocialHub = lazy(() => import("@/components/EventSocialHub").then(m => ({ default: m.EventSocialHub })));
@@ -48,6 +48,8 @@ const EventSocialHub = lazy(() => import("@/components/EventSocialHub").then(m =
 const PreferencesOnboarding = lazy(() => import("@/components/PreferencesOnboarding").then(m => ({ default: m.PreferencesOnboarding })));
 const PersonalizedRecommendations = lazy(() => import("@/components/PersonalizedRecommendations").then(m => ({ default: m.PersonalizedRecommendations })));
 const RecentlyViewed = lazy(() => import("@/components/RecentlyViewed").then(m => ({ default: m.RecentlyViewed })));
+const RecentlyViewedRail = lazy(() => import("@/components/RecentlyViewedRail").then(m => ({ default: m.RecentlyViewedRail })));
+const HomeInterestNav = lazy(() => import("@/components/HomeInterestNav").then(m => ({ default: m.HomeInterestNav })));
 const SocialProof = lazy(() => import("@/components/SocialProof").then(m => ({ default: m.SocialProof })));
 
 // Shape-matched skeleton loaders for lazy-loaded sections
@@ -99,13 +101,29 @@ const DashboardSkeleton = () => (
   </div>
 );
 
+// WEB-SEO-012: shared by the two head managers this page renders
+// (SEOEnhancedHead and SEOStructure) so they cannot disagree.
+//
+// SEO-008: RE-TARGETED. This was "Things to Do in Des Moines This Weekend",
+// which put the homepage in direct competition with two of its own pages:
+// /things-to-do owns "things to do in des moines" and /events/this-weekend
+// owns the weekend phrase (with /weekend 301'd onto it). Measured 2026-08-28,
+// the homepage sat at position 30.03 with 12 clicks in sixteen months while
+// /things-to-do sat at 39.8 and /events/this-weekend at 37.2, so all three were
+// losing the same query rather than covering three different ones.
+//
+// The homepage takes the brand and the city entity, and names the categories
+// without claiming any hub's exact head term. The hubs keep theirs.
+const HOME_TITLE = 'Des Moines Insider | Events, Restaurants and What to Do in Des Moines';
+const HOME_DESCRIPTION =
+  "What's happening in Des Moines, Iowa right now: live events, concerts and festivals, restaurants open tonight, family activities and weekend plans. Updated daily across Des Moines, West Des Moines, Ankeny, Urbandale, Johnston, Altoona and the metro.";
+
 export default function Index() {
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [showEventDetails, setShowEventDetails] = useState(false);
   // Consolidated view state: which secondary view is active
   const [activeView, setActiveView] = useState<
     | { type: 'default' }
-    | { type: 'allEvents' }
     | { type: 'socialHub'; eventId: string }
   >({ type: 'default' });
   const [searchFilters, setSearchFilters] = useState<{
@@ -124,6 +142,7 @@ export default function Index() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const { toast } = useToast();
   const { isAuthenticated, user } = useAuth();
+  const navigate = useNavigate();
   const { preferences, isLoading: preferencesLoading } = useUserPreferences();
   const { eventsToday, restaurantsCount, newThisWeek, isLoading: statsLoading } = useHomepageStats();
 
@@ -186,15 +205,10 @@ export default function Index() {
   };
 
   const handleAIPlanClick = () => {
-    // Placeholder for AI Trip Planner (Month 4 feature)
-    // For now, show a toast to indicate coming soon
-    toast({
-      title: "AI Trip Planner Coming Soon!",
-      description: "Our intelligent trip planning feature is currently in development. Stay tuned!",
-    });
+    // Route to the real, shipped AI Trip Planner (no more "coming soon" dead CTA).
+    navigate("/trip-planner");
   };
 
-  const scrapeMutation = useEventScraper();
 
   // WebSite Schema
   const structuredData = {
@@ -204,12 +218,17 @@ export default function Index() {
     "alternateName": BRAND.shortName,
     "url": BRAND.baseUrl,
     "description": BRAND.description,
-    "applicationCategory": "City Guide, AI Assistant, Event Discovery",
-    "keywords": `conversational AI, semantic search, multi-channel city guide, predictive analytics, behavioral intelligence, AI trip planner, context-aware recommendations, ${BRAND.city} events`,
+    // NO applicationCategory. It said "City Guide, AI Assistant, Event
+    // Discovery" and was wrong twice over: it is a property of
+    // SoftwareApplication, not WebSite, so it is invalid on this node and
+    // contributes nothing - and it told crawlers this site is an AI assistant.
+    // Ask Pulse ships on iOS and Android and has never been built for web
+    // (XPLAT-009). Structured data is the one place a claim is machine-read.
+    "keywords": `semantic search, multi-channel city guide, predictive analytics, behavioral intelligence, AI trip planner, context-aware recommendations, ${BRAND.city} events`,
     "publisher": {
       "@type": "Organization",
       "name": BRAND.name,
-      "description": "AI-powered conversational city guide platform",
+      "description": "AI-powered city guide platform",
       "logo": {
         "@type": "ImageObject",
         "url": `${BRAND.baseUrl}${BRAND.logo}`
@@ -305,12 +324,13 @@ export default function Index() {
       "name": BRAND.region,
       "description": `${BRAND.city}, West Des Moines, Ankeny, Urbandale, Johnston, Clive, Waukee, Windsor Heights, and surrounding Central ${BRAND.state} communities`
     },
-    "hasMap": `https://www.google.com/maps/place/${BRAND.city.replace(' ', '+')},+${BRAND.stateAbbr}/@41.5868,-93.6250,12z`
-    // WEB-LEGAL-002: an aggregateRating of 4.8 from 1247 reviews was published
-    // here. There is no reviews table to derive either number from. A fabricated
-    // AggregateRating is what powers star ratings in search results, so this is
-    // both an endorsement claim and a structured-data policy violation. Re-add
-    // only when real review data exists to compute it.
+    "hasMap": `https://www.google.com/maps/place/${BRAND.city.replace(' ', '+')},+${BRAND.stateAbbr}/@41.5868,-93.6250,12z`,
+    // WEB-SEO-016: an aggregateRating of 4.8 from 1,247 reviews used to sit
+    // here. Nothing produces those numbers — there is no reviews or ratings
+    // table in the schema at all. Publishing a fabricated rating for our own
+    // business is a direct breach of Google's review-snippet guidelines and is
+    // the kind of thing that draws a manual action. Removed rather than
+    // adjusted: there is no honest value to put in its place.
   };
 
   const handleSearch = (
@@ -357,31 +377,8 @@ export default function Index() {
     setShowEventDetails(true);
   };
 
-  const handleViewAllEvents = () => {
-    setActiveView({ type: 'allEvents' });
-  };
-
   const handleViewSocial = (eventId: string) => {
     setActiveView({ type: 'socialHub', eventId });
-  };
-
-  const handleScrapeEvents = () => {
-    scrapeMutation.mutate(undefined, {
-      onSuccess: () => {
-        toast({
-          title: "Events Updated!",
-          description: "Latest events have been scraped and enhanced with AI.",
-        });
-      },
-      onError: (error: Error) => {
-        toast({
-          title: "Scraping Failed",
-          description:
-            error.message || "Failed to scrape events. Please try again.",
-          variant: "destructive",
-        });
-      },
-    });
   };
 
   const formatEventDate = (date: string | Date) => {
@@ -394,20 +391,21 @@ export default function Index() {
 
   return (
     <div className="min-h-screen bg-background overflow-x-hidden">
+      {/* WEB-SEO-012: the homepage used to be titled "Conversational City Guide
+          | AI-Powered Event & Restaurant Discovery" and described with
+          BRAND.description. That sold the product to itself on our
+          highest-authority page — nobody searches for how we are built.
+          Title and description now lead with the query. BRAND.description is
+          deliberately left alone: it is the Organization/LocalBusiness
+          description in schema, where self-description is correct. */}
       <SEOEnhancedHead
-        title={`${BRAND.name} - Conversational City Guide | AI-Powered Event & Restaurant Discovery`}
-        description={BRAND.description}
+        title={HOME_TITLE}
+        description={HOME_DESCRIPTION}
         url={`${BRAND.baseUrl}/`}
         type="website"
         structuredData={structuredData}
       />
 
-      {/* LocalBusiness Structured Data - Critical for Local SEO */}
-      <Helmet>
-        <script type="application/ld+json">
-          {JSON.stringify(localBusinessData)}
-        </script>
-      </Helmet>
 
       {/* BreadcrumbList Schema - Helps with rich snippets in search results */}
       <BreadcrumbListSchema
@@ -424,7 +422,30 @@ export default function Index() {
       />
 
       {/* SEO and structured data for AI optimization */}
-      <SEOStructure canonicalUrl={`${BRAND.baseUrl}/`} />
+      {/* WEB-SEO-012: SEOStructure mounts AFTER SEOEnhancedHead above and its
+          Helmet also sets <title> and <meta name="description">. React Helmet
+          resolves last-mount-wins, so with only canonicalUrl passed here its
+          defaults silently overrode whatever SEOEnhancedHead set — which is why
+          editing the title above had no effect on the shipped HTML until this
+          was found by grepping dist/index.html rather than trusting the source.
+          Both components are given the same values so the winner is correct
+          whichever way the tree evolves. Collapsing the two head managers into
+          one is tracked separately (WEB-SEO-002). */}
+      <SEOStructure
+        title={HOME_TITLE}
+        description={HOME_DESCRIPTION}
+        canonicalUrl={`${BRAND.baseUrl}/`}
+        /* WEB-SEO-013: without this SEOStructure emits its OWN LocalBusiness
+           default, so the homepage shipped TWO LocalBusiness blocks - measured
+           in dist/index.html at 1437 and 799 bytes, different content, both
+           describing the same business. Google treats a duplicated entity type
+           on one page as ambiguous and may use neither. Passing the block
+           rendered above makes the two emitters agree on one object, which is
+           the same trick the WEB-SEO-012 comment applies to title and
+           description. The default also carried a placeholder telephone,
+           +1-515-000-0000, which is now not emitted at all. */
+        structuredData={localBusinessData}
+      />
 
       {/* Main content wrapper with semantic HTML for AI parsing */}
       <div itemScope itemType="https://schema.org/WebPage">
@@ -439,10 +460,51 @@ export default function Index() {
           onAIPlanClick={handleAIPlanClick}
         />
 
+        {/* Primary: natural-language (NLP) search */}
+        <section className="border-b bg-gradient-to-b from-background to-muted/20 py-8">
+          <div className="mx-auto max-w-3xl px-4">
+            <div className="mb-4 text-center">
+              <h2 className="text-xl font-bold sm:text-2xl">
+                Just describe what you're looking for
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Try "free things to do this weekend with kids" — our AI understands plain language.
+              </p>
+            </div>
+            <NLPSearchBar
+              placeholder="Search naturally, like 'Family dinner under $50 near downtown Saturday'"
+              showExamples
+              showResults
+            />
+          </div>
+        </section>
+
+        {/* Secondary: structured filter search */}
+        <div className="bg-muted/10 py-2 text-center text-sm text-muted-foreground">
+          Prefer to filter by category, date, and price?
+        </div>
         <SearchSection onSearch={handleSearch} />
 
         {/* For You / Trending rail — IOS-DISCOVER-2026-002 web parity */}
         <ForYouRail />
+
+        {/* Data-driven domain ordering + recently-viewed rail (WEB-FEAT-007).
+            Both compute synchronously from the local store, so no layout shift. */}
+        <Suspense fallback={null}>
+          <HomeInterestNav />
+          <RecentlyViewedRail />
+        </Suspense>
+
+        {/* All-Inclusive Dashboard — real content first, before marketing (WEB-UX-015) */}
+        <div data-dashboard="all-inclusive">
+          <Suspense fallback={<DashboardSkeleton />}>
+            <AllInclusiveDashboard
+              onViewEventDetails={handleViewEventDetails}
+              filters={searchFilters}
+              onClearFilters={handleClearFilters}
+            />
+          </Suspense>
+        </div>
 
         {/* Top Banner Ad Placement */}
         <div className="py-4 bg-muted/10">
@@ -459,7 +521,7 @@ export default function Index() {
                 More Than a Directory—Your AI-Powered City Companion
               </h2>
               <p className="text-lg text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
-                Des Moines AI Pulse goes beyond traditional event listings. We understand context, learn from your behavior, and proactively guide you to the best experiences across every channel.
+                Des Moines Insider goes beyond traditional event listings. We understand context, learn from your behavior, and proactively guide you to the best experiences across every channel.
               </p>
             </div>
 
@@ -477,10 +539,10 @@ export default function Index() {
                 </p>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400">
-                    <Sparkles className="h-4 w-4" />
+                    <SpriteIcon name="sparkles" className="h-4 w-4" />
                     <span>Semantic search understands intent</span>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-blue-600 dark:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <SpriteIcon name="arrow-right" className="h-4 w-4 text-blue-600 dark:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
               </Link>
 
@@ -496,11 +558,11 @@ export default function Index() {
                   We consider time, weather, location, your past preferences, and real-time availability to suggest the perfect experiences for you.
                 </p>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+                  <div className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400">
                     <Brain className="h-4 w-4" />
                     <span>Learns from your behavior</span>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-green-600 dark:text-green-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <SpriteIcon name="arrow-right" className="h-4 w-4 text-green-600 dark:text-green-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
               </Link>
 
@@ -508,7 +570,7 @@ export default function Index() {
               <Link to="/events/today" className="group bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all hover:border-orange-300 dark:hover:border-orange-600">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="bg-orange-100 dark:bg-orange-900/30 rounded-full p-3">
-                    <TrendingUp className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+                    <SpriteIcon name="trending-up" className="h-6 w-6 text-orange-600 dark:text-orange-400" />
                   </div>
                   <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Proactive Intelligence</h3>
                 </div>
@@ -516,11 +578,11 @@ export default function Index() {
                   Get alerts for events you'll love, weather changes affecting your plans, and last-minute availability—before you even ask.
                 </p>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm text-orange-600 dark:text-orange-400">
-                    <Sparkles className="h-4 w-4" />
+                  <div className="flex items-center gap-2 text-sm text-orange-700 dark:text-orange-400">
+                    <SpriteIcon name="sparkles" className="h-4 w-4" />
                     <span>Smart notifications & alerts</span>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-orange-600 dark:text-orange-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <SpriteIcon name="arrow-right" className="h-4 w-4 text-orange-600 dark:text-orange-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
               </Link>
 
@@ -528,7 +590,7 @@ export default function Index() {
               <Link to="/restaurants" className="group bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all hover:border-red-300 dark:hover:border-red-600">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="bg-red-100 dark:bg-red-900/30 rounded-full p-3">
-                    <TrendingUp className="h-6 w-6 text-red-600 dark:text-red-400" />
+                    <SpriteIcon name="trending-up" className="h-6 w-6 text-red-600 dark:text-red-400" />
                   </div>
                   <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Predictive Insights</h3>
                 </div>
@@ -537,10 +599,10 @@ export default function Index() {
                 </p>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
-                    <TrendingUp className="h-4 w-4" />
+                    <SpriteIcon name="trending-up" className="h-4 w-4" />
                     <span>Real-time demand analytics</span>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-red-600 dark:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <SpriteIcon name="arrow-right" className="h-4 w-4 text-red-600 dark:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
               </Link>
 
@@ -548,7 +610,7 @@ export default function Index() {
               <Link to="/trip-planner" className="group bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all hover:border-indigo-300 dark:hover:border-indigo-600">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="bg-indigo-100 dark:bg-indigo-900/30 rounded-full p-3">
-                    <Calendar className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
+                    <SpriteIcon name="calendar" className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
                   </div>
                   <h3 className="text-xl font-semibold text-gray-900 dark:text-white">AI Trip Planner</h3>
                 </div>
@@ -557,10 +619,10 @@ export default function Index() {
                 </p>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-sm text-indigo-600 dark:text-indigo-400">
-                    <Sparkles className="h-4 w-4" />
+                    <SpriteIcon name="sparkles" className="h-4 w-4" />
                     <span>Automated itinerary generation</span>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-indigo-600 dark:text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <SpriteIcon name="arrow-right" className="h-4 w-4 text-indigo-600 dark:text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
               </Link>
 
@@ -568,7 +630,7 @@ export default function Index() {
               <Link to="/attractions" className="group bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all hover:border-purple-300 dark:hover:border-purple-600">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="bg-purple-100 dark:bg-purple-900/30 rounded-full p-3">
-                    <MapPin className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                    <SpriteIcon name="map-pin" className="h-6 w-6 text-purple-600 dark:text-purple-400" />
                   </div>
                   <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Attractions & More</h3>
                 </div>
@@ -577,26 +639,15 @@ export default function Index() {
                 </p>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-sm text-purple-600 dark:text-purple-400">
-                    <Sparkles className="h-4 w-4" />
+                    <SpriteIcon name="sparkles" className="h-4 w-4" />
                     <span>50+ attractions mapped</span>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-purple-600 dark:text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <SpriteIcon name="arrow-right" className="h-4 w-4 text-purple-600 dark:text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
               </Link>
             </div>
           </div>
         </section>
-
-        {/* All-Inclusive Dashboard */}
-        <div data-dashboard="all-inclusive">
-          <Suspense fallback={<DashboardSkeleton />}>
-            <AllInclusiveDashboard
-              onViewEventDetails={handleViewEventDetails}
-              filters={searchFilters}
-              onClearFilters={handleClearFilters}
-            />
-          </Suspense>
-        </div>
 
         {activeView.type === 'default' && (
           <Suspense fallback={<CardGridSkeleton />}>
@@ -665,33 +716,6 @@ export default function Index() {
           </Suspense>
         )}
 
-        {activeView.type === 'allEvents' && (
-          <Suspense fallback={<DashboardSkeleton />}>
-            <div className="py-8">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-8">
-                <div className="flex items-center justify-between">
-                  <Button
-                    variant="outline"
-                    onClick={() => setActiveView({ type: 'default' })}
-                  >
-                    ← Back to Smart Discovery
-                  </Button>
-                  <Button
-                    onClick={handleScrapeEvents}
-                    disabled={scrapeMutation.isPending}
-                    className="bg-accent hover:bg-green-700 text-white"
-                  >
-                    <Sparkles className="h-4 w-4 mr-2" />
-                    {scrapeMutation.isPending ? "Updating..." : "Update Events"}
-                  </Button>
-                </div>
-              </div>
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <EventFilters onViewEventDetails={handleViewEventDetails} />
-              </div>
-            </div>
-          </Suspense>
-        )}
 
         {/* GEO-optimized content section */}
         <Suspense fallback={<SectionLoader />}>
@@ -708,57 +732,58 @@ export default function Index() {
         {/* FAQ Section for Featured Snippets - directly rendered for SEO */}
         <section className="py-16 bg-background">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            {/* WEB-SEO-012: these questions used to be about our own product —
+                "What makes Des Moines Insider different from other event
+                directories?", "How does behavioral learning improve my
+                experience?". Eight of eleven described the software rather than
+                the city, on the page with the most authority to spend. They now
+                answer what visitors actually search for. Substantive answers
+                matter more than the markup here: Google retired FAQ rich
+                results for non-gov/health sites in 2023, so the value of this
+                block is on-page relevance plus extraction by AI assistants,
+                and both reward real answers over restated marketing. */}
             <FAQSection
-                title="Frequently Asked Questions About Des Moines AI Pulse"
-                description="Learn how our conversational AI technology transforms the way you discover and experience Des Moines."
+                title="Des Moines: Frequently Asked Questions"
+                description="Quick answers about events, dining, and things to do across the Des Moines metro."
                 faqs={[
                   {
-                    question: "What makes Des Moines AI Pulse different from other event directories?",
-                    answer: "Des Moines AI Pulse is the first truly conversational city guide powered by advanced AI. Unlike traditional directories that require manual searching, our platform understands natural language, learns from your behavior, and proactively recommends experiences across multiple channels (web, SMS, voice assistants, ChatGPT). We use semantic search to understand intent—ask 'romantic dinner with live music' and get context-aware results, not just keyword matches. Our behavioral intelligence and predictive analytics create a personalized experience that gets smarter the more you use it."
+                    question: "What is there to do in Des Moines this weekend?",
+                    answer: "Des Moines has live events every weekend across music, food, arts, sports and family activities. The Downtown Farmers' Market runs Saturday mornings May through October in the Historic Court District, touring Broadway shows play the Des Moines Civic Center, concerts run at Wells Fargo Arena and smaller venues like xBk Live, and the East Village and Historic Valley Junction host regular gallery and shopping events. See our full this-weekend listing for what is confirmed for the coming Saturday and Sunday, updated daily."
                   },
                   {
-                    question: "How can I access Des Moines AI Pulse recommendations?",
-                    answer: "Access recommendations your way: (1) Web - Browse our intelligent platform with semantic search, (2) SMS - Text your questions to our AI concierge for instant recommendations, (3) Voice - Ask Alexa or Google Assistant about Des Moines events and dining, (4) ChatGPT - Use our plugin for conversational planning. All channels sync your preferences and learn from your interactions to provide increasingly personalized suggestions. Your city guide follows you wherever you need it."
+                    question: "What free things are there to do in Des Moines?",
+                    answer: "Several of the best-known attractions in Des Moines are free year-round: the Des Moines Art Center, the John and Mary Pappajohn Sculpture Park, the State Historical Museum of Iowa in the East Village, the Iowa State Capitol grounds, and Lauridsen Skatepark — at 88,000 square feet, the largest skatepark in the United States. Free splash pads open across the metro in summer, and Saylorville Lake and the Neal Smith Trail are open for hiking and biking at no cost."
                   },
                   {
-                    question: "How does the AI understand what I'm looking for?",
-                    answer: "Our semantic search technology powered by advanced AI models understands the meaning and context of your queries, not just keywords. Ask naturally like 'romantic dinner with live jazz' or 'family activities for rainy Saturday,' and our AI analyzes intent, preferences, constraints, and real-time factors (weather, availability, time of day). The system learns from your interactions—the more you use it, the better it understands your unique preferences. We combine natural language processing, behavioral analytics, and predictive intelligence to deliver personalized, context-aware recommendations."
+                    question: "What events are happening in Des Moines today?",
+                    answer: "Our today listing shows events confirmed for the current date in Central Time across Des Moines and the surrounding suburbs, filterable by category. It is rebuilt daily from event sources across the metro rather than depending on venues submitting their listings to us."
                   },
                   {
-                    question: "What is the AI Trip Planner and how does it work?",
-                    answer: "The AI Trip Planner generates complete day-by-day itineraries in seconds based on your interests, dates, budget, and party size. Simply input your preferences (food, arts, music, family, outdoors), and our AI optimizes a schedule considering: travel times between locations, activity variety, optimal timing (morning/afternoon/evening appropriateness), budget constraints, and real-time availability. The planner includes restaurants near events, backup options for weather changes, and reservation links. Export to PDF or add activities directly to your calendar."
+                    question: "Where are the best restaurants in Des Moines?",
+                    answer: "Des Moines dining spans fine dining, chef-driven small plates and long-standing local institutions. Well-known names include Harbinger and Alba in the East Village, 801 Chophouse and Proudfoot & Bird downtown, Splash Seafood Bar and Grill, and Latin King — where you can order Steak de Burgo, the dish most associated with the city. Our restaurant directory covers the metro with cuisine, price range, neighborhood and current open/closed status."
                   },
                   {
-                    question: "How does behavioral learning improve my experience?",
-                    answer: "Our platform tracks your interactions (searches, favorites, bookings) to build an intelligent profile of your preferences—completely privacy-first and anonymized. Over time, the AI learns patterns: if you frequently search for outdoor events, we'll prioritize parks and festivals; if you favor Italian restaurants, similar venues appear higher in recommendations. The system also detects emerging preferences and proactively suggests new experiences you'll likely enjoy. Behavioral intelligence creates a progressively personalized experience unique to you."
+                    question: "What restaurants in Des Moines are open right now?",
+                    answer: "Our open-now listing checks current hours against the time in Central Time and shows only what is serving at this moment. For late-night specifically, Fong's Pizza serves until midnight with slices until 3 a.m. on weekends, and Zombie Burger and Jethro's run until around 11 p.m."
                   },
                   {
-                    question: "Where can I find the best restaurants in Des Moines?",
-                    answer: "Des Moines has over 300 documented restaurants across diverse cuisines. Top-rated areas include East Village for farm-to-table dining, Ingersoll for local favorites, Valley Junction for unique experiences, and Downtown for upscale options. Our restaurant directory includes real-time information on new openings (tracked within 48 hours), cuisine types, price ranges, and operating hours. We update restaurant data weekly with 95% accuracy to ensure current information."
+                    question: "What is there to do in Des Moines with kids?",
+                    answer: "The metro has strong family options, many of them free. Blank Park Zoo, the Science Center of Iowa and Adventureland in Altoona are the main paid attractions; the Des Moines Art Center, the State Historical Museum and the Pappajohn Sculpture Park are free and work well with children. We also map playgrounds across the metro with age suitability and accessibility details, and maintain a kids and family events listing."
                   },
                   {
-                    question: "What family-friendly attractions are available in Des Moines?",
-                    answer: "Des Moines offers 50+ family attractions including Blank Park Zoo (year-round animal exhibits), Science Center of Iowa (interactive STEM exhibits), Adventureland Park (amusement rides and water park), Living History Farms (interactive farm experience), and 100+ mapped playgrounds with safety and accessibility information. Popular indoor options include Prairie Meadows (family entertainment), and numerous museums. Our platform provides age appropriateness, accessibility details, and current hours for all attractions."
+                    question: "Which areas does Des Moines Insider cover?",
+                    answer: "Des Moines proper plus the Greater Des Moines metro: West Des Moines, Ankeny, Urbandale, Clive, Johnston, Waukee, Windsor Heights and Altoona. We also cover Des Moines neighborhoods individually, including Downtown, the East Village, Beaverdale, Highland Park, Historic Valley Junction and the Court Avenue District."
                   },
                   {
-                    question: "What are predictive insights and how do they help me?",
-                    answer: "Our predictive analytics engine analyzes historical data, current trends, and real-time signals to forecast demand and optimize your experience. See predictions like 'High demand—73% of similar events sold out' or 'Best time to visit: Tuesday 7pm (20% less busy).' For businesses, we provide demand forecasts, pricing recommendations, and optimal staffing insights. These data-driven predictions help you avoid crowds, secure tickets before events sell out, and discover hidden gems at ideal times."
+                    question: "When is the Iowa State Fair?",
+                    answer: "The Iowa State Fair runs for 11 days each August at the Iowa State Fairgrounds on the east side of Des Moines. It is the largest single event in the state and draws over a million visitors. Our Iowa State Fair guide covers dates, the grandstand concert lineup, parking, admission and food."
                   },
                   {
-                    question: "How does Des Moines AI Pulse stay current with events and venues?",
-                    answer: "Our AI-powered web scraping and data aggregation system monitors 50+ official sources 24/7, capturing 98% of public events in the Des Moines metro area. Updates occur in real-time with an average 24-hour refresh cycle. The AI automatically detects new restaurants (within 48 hours of opening), venue changes, pricing updates, and schedule modifications. We combine automated scraping with human verification, AI-enhanced descriptions, and community contributions to ensure accuracy and freshness across 1000+ events, 300+ restaurants, and 50+ attractions."
+                    question: "How often are the listings updated?",
+                    answer: "Event listings are refreshed daily. Restaurant details, including hours used for open-now status, are reviewed weekly, and attractions monthly. Event times are stored and displayed in Central Time to avoid the timezone drift common on aggregated calendars."
                   },
-                  {
-                    question: "What areas does Des Moines Insider cover?",
-                    answer: "We provide comprehensive coverage for the entire Des Moines metropolitan area including Des Moines (all neighborhoods), West Des Moines, Ankeny, Urbandale, Johnston, Clive, Waukee, and Windsor Heights. Our geographic radius extends 50 miles from downtown Des Moines (coordinates: 41.5868°N, 93.6250°W), covering 15+ suburban communities in Polk County and surrounding areas. Location-based filtering helps you find events and restaurants near your specific area."
-                  },
-                  {
-                    question: "How do I get started with personalized AI recommendations?",
-                    answer: "Create a free account to unlock the full power of our AI intelligence. Once registered, the system begins learning from your interactions—searches, favorites, bookings, and browsing patterns. Within days, you'll receive highly personalized recommendations tailored to your unique preferences. Enable notifications for proactive alerts about events you'll love, weather changes affecting saved plans, and last-minute availability. The AI continuously adapts, delivering 40% more relevant suggestions than generic searches. Access your personalized experience across all channels: web, SMS, voice, and ChatGPT."
-                  }
                 ]}
                 showSchema={true}
-                className="border-0 shadow-lg"
               />
           </div>
         </section>
@@ -808,12 +833,12 @@ export default function Index() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="flex items-start text-neutral-600 dark:text-neutral-400">
-                    <Calendar className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0" />
+                    <SpriteIcon name="calendar" className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0" />
                     <span className="text-sm sm:text-base">{formatEventDate(selectedEvent.date)}</span>
                   </div>
 
                   <div className="flex items-start text-neutral-600 dark:text-neutral-400">
-                    <MapPin className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0" />
+                    <SpriteIcon name="map-pin" className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0" />
                     <span className="text-sm sm:text-base">{selectedEvent.location}</span>
                   </div>
                 </div>
@@ -843,7 +868,7 @@ export default function Index() {
                   </p>
                   {selectedEvent.is_enhanced && (
                     <p className="text-xs text-accent mt-2 flex items-center">
-                      <Sparkles className="h-3 w-3 mr-1" />
+                      <SpriteIcon name="sparkles" className="h-3 w-3 mr-1" />
                       Enhanced with AI
                     </p>
                   )}
@@ -857,7 +882,7 @@ export default function Index() {
                       onClick={() => setShowEventDetails(false)}
                     >
                       View Full Event Details
-                      <ArrowRight className="h-4 w-4 ml-2" />
+                      <SpriteIcon name="arrow-right" className="h-4 w-4 ml-2" />
                     </Link>
                   </Button>
 
@@ -875,7 +900,7 @@ export default function Index() {
                       className="w-full"
                       onClick={() => handleShareEvent(selectedEvent)}
                     >
-                      <Share2 className="h-4 w-4 mr-2" />
+                      <SpriteIcon name="share-2" className="h-4 w-4 mr-2" />
                       Share
                     </Button>
                   </div>
@@ -895,7 +920,7 @@ export default function Index() {
                       className="w-full"
                       onClick={() => openExternalUrl(selectedEvent.source_url!)}
                     >
-                      <ExternalLink className="h-4 w-4 mr-2" />
+                      <SpriteIcon name="external-link" className="h-4 w-4 mr-2" />
                       View Original Event
                     </Button>
                   )}

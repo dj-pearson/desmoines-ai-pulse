@@ -1,5 +1,6 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
+import { useEventBySlug } from "@/hooks/useEventBySlug";
 import { useEvents } from "@/hooks/useEvents";
 import { RatingSystem } from "@/components/RatingSystem";
 import Header from "@/components/Header";
@@ -23,47 +24,53 @@ import {
   formatInCentralTime,
   hasSpecificTime,
 } from "@/lib/timezone";
-import {
-  Calendar,
-  MapPin,
-  ExternalLink,
-  ArrowLeft,
-  Sparkles,
-  DollarSign,
-  CalendarPlus,
-  Clock,
-  Tag,
-  Info,
-  ChevronRight,
-  Navigation,
-  Ticket,
-  Users,
-} from "lucide-react";
+import { ArrowLeft, DollarSign, CalendarPlus, Tag, Info, ChevronRight, Navigation } from "lucide-react";
 import { downloadICS, getGoogleCalendarUrl } from "@/lib/calendar";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { useContentTracking } from "@/hooks/useContentTracking";
+import { useRecordRecentView } from "@/hooks/useRecentlyViewedFeed";
 import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { NearbyContent } from "@/components/NearbyContent";
-import { EventLocationMap } from "@/components/EventLocationMap";
+import { LazyLocationMap } from "@/components/LazyLocationMap";
+import { eventPriceContent } from "@/lib/eventOffers";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
+
+/** Upcoming events fetched to populate the related/nearby rails (3 shown each). */
+const RELATED_POOL_SIZE = 50;
 
 export default function EventDetails() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
-  const { events, isLoading } = useEvents();
+  // Targeted, date-windowed lookup — see useEventBySlug for why the old
+  // fetch-everything-then-Array.find approach 404'd listed events (WEB-QA-002).
+  const { event, isLoading } = useEventBySlug(slug);
 
-  const event = events.find((e) => {
-    const eventSlug = createEventSlugWithCentralTime(e.title, e);
-    return eventSlug === slug;
-  });
+  // Only feeds the "related"/"nearby" rails below — bounded on purpose, since
+  // those render at most 3 items each and never need the full upcoming set.
+  const { events: relatedPool } = useEvents({ limit: RELATED_POOL_SIZE });
 
   // Track page view and content interactions
-  const { trackShare } = useContentTracking(event?.id, 'event');
+  const { trackShare, trackClick } = useContentTracking(event?.id, 'event');
+
+  // Record into the unified recently-viewed feed (WEB-FEAT-007).
+  useRecordRecentView(
+    event
+      ? {
+          id: event.id,
+          type: "event",
+          title: event.title,
+          href: `/events/${createEventSlugWithCentralTime(event.title, event)}`,
+          image_url: event.image_url,
+          subtitle: event.venue || event.location || event.category,
+        }
+      : null,
+  );
 
   const relatedEvents = event
-    ? events
+    ? relatedPool
         .filter((e) =>
           e.id !== event.id &&
           e.category === event.category &&
@@ -74,7 +81,7 @@ export default function EventDetails() {
 
   // Nearby events (different category, same timeframe)
   const nearbyEvents = event
-    ? events
+    ? relatedPool
         .filter((e) =>
           e.id !== event.id &&
           e.category !== event.category &&
@@ -129,7 +136,7 @@ export default function EventDetails() {
           <div className="container mx-auto px-4 py-16">
             <div className="text-center space-y-4 max-w-md mx-auto">
               <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto">
-                <Calendar className="h-8 w-8 text-muted-foreground" />
+                <SpriteIcon name="calendar" className="h-8 w-8 text-muted-foreground" />
               </div>
               <h1 className="text-2xl font-bold">Event Not Found</h1>
               <p className="text-muted-foreground">
@@ -154,6 +161,13 @@ export default function EventDetails() {
 
   const eventDate = new Date(event.date);
   const isUpcoming = eventDate >= new Date();
+  // Canonical ticket-link guard: only actionable when present AND not flagged
+  // broken (WEB-AUTO link-checker). Use this everywhere a ticket CTA renders.
+  const ticketUrl =
+    event.source_url &&
+    !(event as { source_url_broken?: boolean }).source_url_broken
+      ? event.source_url
+      : null;
   const eventSlug = createEventSlugWithCentralTime(event.title, event);
   const eventUrl = `${BRAND.baseUrl}/events/${eventSlug}`;
   const isFree = !event.price || event.price.toLowerCase().includes('free') || event.price === '$0';
@@ -174,7 +188,6 @@ export default function EventDetails() {
     <>
       <EnhancedEventSEO
         event={event}
-        isUpcoming={isUpcoming}
         viewMode="detail"
       />
 
@@ -191,7 +204,7 @@ export default function EventDetails() {
 
         {/* Hero Image Section */}
         {event.image_url && (
-          <div className="relative h-64 md:h-80 lg:h-96 overflow-hidden bg-slate-900">
+          <div className="relative h-48 sm:h-64 md:h-80 lg:h-96 overflow-hidden bg-slate-900">
             <img
               src={event.image_url}
               alt={`${event.title} - ${event.category} event in ${event.city || 'Des Moines'}, Iowa`}
@@ -239,7 +252,7 @@ export default function EventDetails() {
                       <Badge variant="outline">{event.category}</Badge>
                       {event.is_featured && (
                         <Badge className="bg-amber-500 text-white border-0">
-                          <Sparkles className="h-3 w-3 mr-1" />
+                          <SpriteIcon name="sparkles" className="h-3 w-3 mr-1" />
                           Featured
                         </Badge>
                       )}
@@ -257,7 +270,7 @@ export default function EventDetails() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
                       <div className="flex items-start gap-3 p-3 rounded-xl bg-muted/50">
                         <div className="p-2 rounded-lg bg-primary/10">
-                          <Calendar className="h-5 w-5 text-primary" />
+                          <SpriteIcon name="calendar" className="h-5 w-5 text-primary" />
                         </div>
                         <div>
                           <p className="font-semibold text-foreground text-sm">{dayOfWeek}</p>
@@ -272,7 +285,7 @@ export default function EventDetails() {
 
                       <div className="flex items-start gap-3 p-3 rounded-xl bg-muted/50">
                         <div className="p-2 rounded-lg bg-primary/10">
-                          <MapPin className="h-5 w-5 text-primary" />
+                          <SpriteIcon name="map-pin" className="h-5 w-5 text-primary" />
                         </div>
                         <div itemProp="location" itemScope itemType="https://schema.org/Place">
                           {event.venue && (
@@ -288,14 +301,23 @@ export default function EventDetails() {
                       {event.price && (
                         <div className="flex items-start gap-3 p-3 rounded-xl bg-muted/50">
                           <div className="p-2 rounded-lg bg-primary/10">
-                            <Ticket className="h-5 w-5 text-primary" />
+                            <SpriteIcon name="ticket" className="h-5 w-5 text-primary" />
                           </div>
                           <div>
                             <p className="font-semibold text-foreground text-sm">Admission</p>
-                            <p className="text-sm text-muted-foreground" itemProp="offers" itemScope itemType="https://schema.org/Offer">
-                              <span itemProp="price" content={event.price.replace(/[^0-9.]/g, '') || '0'}>{event.price}</span>
-                              <meta itemProp="priceCurrency" content="USD" />
-                            </p>
+                            {/* WEB-SEO-018: microdata `price` takes one number
+                                only, so a range or an unreadable string drops
+                                the Offer scope and shows the text alone. The
+                                JSON-LD on this page still carries the full
+                                AggregateOffer. */}
+                            {eventPriceContent(event.price) ? (
+                              <p className="text-sm text-muted-foreground" itemProp="offers" itemScope itemType="https://schema.org/Offer">
+                                <span itemProp="price" content={eventPriceContent(event.price)}>{event.price}</span>
+                                <meta itemProp="priceCurrency" content="USD" />
+                              </p>
+                            ) : (
+                              <p className="text-sm text-muted-foreground">{event.price}</p>
+                            )}
                           </div>
                         </div>
                       )}
@@ -318,10 +340,10 @@ export default function EventDetails() {
 
                     {/* Quick Actions Row */}
                     <div className="flex flex-wrap gap-2 pb-2">
-                      {event.source_url && (
+                      {event.source_url && !(event as { source_url_broken?: boolean }).source_url_broken && (
                         <Button asChild size="sm">
                           <a href={event.source_url} target="_blank" rel="noopener noreferrer">
-                            <ExternalLink className="h-4 w-4 mr-2" />
+                            <SpriteIcon name="external-link" className="h-4 w-4 mr-2" />
                             Official Page
                           </a>
                         </Button>
@@ -399,7 +421,7 @@ export default function EventDetails() {
                         <h3 className="font-semibold text-sm text-foreground">Area</h3>
                         <p className="text-sm text-muted-foreground">{event.city || 'Des Moines'}, Iowa (Greater Des Moines Area)</p>
                       </div>
-                      {event.source_url && (
+                      {event.source_url && !(event as { source_url_broken?: boolean }).source_url_broken && (
                         <div>
                           <h3 className="font-semibold text-sm text-foreground">More Info</h3>
                           <a
@@ -409,7 +431,7 @@ export default function EventDetails() {
                             className="text-sm text-primary hover:underline inline-flex items-center gap-1"
                           >
                             Official Event Page
-                            <ExternalLink className="h-3 w-3" />
+                            <SpriteIcon name="external-link" className="h-3 w-3" />
                           </a>
                         </div>
                       )}
@@ -429,7 +451,7 @@ export default function EventDetails() {
                 {event.latitude && event.longitude && (
                   <Card className="overflow-hidden shadow-sm">
                     <div className="h-48 overflow-hidden">
-                      <EventLocationMap
+                      <LazyLocationMap
                         latitude={event.latitude}
                         longitude={event.longitude}
                         venue={event.venue}
@@ -467,7 +489,7 @@ export default function EventDetails() {
                       className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors text-sm"
                     >
                       <span className="flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-muted-foreground" />
+                        <SpriteIcon name="clock" className="h-4 w-4 text-muted-foreground" />
                         Events Today
                       </span>
                       <ChevronRight className="h-4 w-4 text-muted-foreground" />
@@ -477,7 +499,7 @@ export default function EventDetails() {
                       className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors text-sm"
                     >
                       <span className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
+                        <SpriteIcon name="calendar" className="h-4 w-4 text-muted-foreground" />
                         This Weekend
                       </span>
                       <ChevronRight className="h-4 w-4 text-muted-foreground" />
@@ -487,7 +509,7 @@ export default function EventDetails() {
                       className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors text-sm"
                     >
                       <span className="flex items-center gap-2">
-                        <Ticket className="h-4 w-4 text-muted-foreground" />
+                        <SpriteIcon name="ticket" className="h-4 w-4 text-muted-foreground" />
                         Free Events
                       </span>
                       <ChevronRight className="h-4 w-4 text-muted-foreground" />
@@ -520,8 +542,8 @@ export default function EventDetails() {
             {/* Hotel Callout */}
             <EventHotelCallout eventId={event.id} eventArea={event.city || undefined} />
 
-            {/* Related Events Section */}
-            {relatedEvents.length > 0 && (
+            {/* Related Events Section — hidden when fewer than 3 matches */}
+            {relatedEvents.length >= 3 && (
               <section className="mt-12 pt-8 border-t">
                 <div className="flex items-center justify-between mb-6">
                   <div>
@@ -537,7 +559,7 @@ export default function EventDetails() {
                     <ChevronRight className="h-4 w-4 ml-1" />
                   </Button>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5" onClick={trackClick}>
                   {relatedEvents.map((relatedEvent) => (
                     <EventCard
                       key={relatedEvent.id}
@@ -595,10 +617,10 @@ export default function EventDetails() {
       <StickyMobileCTA
         variant="event"
         primaryAction={
-          event.source_url
+          ticketUrl
             ? {
                 label: "Get Tickets",
-                href: event.source_url,
+                href: ticketUrl,
                 icon: "external",
                 isExternal: true,
               }
@@ -611,7 +633,7 @@ export default function EventDetails() {
             : undefined
         }
         secondaryAction={
-          event.source_url && isUpcoming
+          ticketUrl && isUpcoming
             ? {
                 label: "Add to Calendar",
                 onClick: () => downloadICS(event),

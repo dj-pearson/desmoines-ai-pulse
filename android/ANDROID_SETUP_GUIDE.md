@@ -901,7 +901,7 @@ Set-Location android; .\gradlew lint
 
 ## Related Documentation
 
-- [MOBILE_BUILD_BEST_PRACTICES.md](./MOBILE_BUILD_BEST_PRACTICES.md) - CI/CD signing and deployment checklist
+- [MOBILE_BUILD_BEST_PRACTICES.md](../docs/mobile/MOBILE_BUILD_BEST_PRACTICES.md) - CI/CD signing and deployment checklist
 - [ENVIRONMENT_SETUP.md](./ENVIRONMENT_SETUP.md) - Web app environment variables
 - [CLAUDE.md](./CLAUDE.md) - Overall project guide
 - [scripts/ralph/CLAUDE-android.md](./scripts/ralph/CLAUDE-android.md) - Ralph agent Android instructions

@@ -81,7 +81,28 @@ CREATE INDEX IF NOT EXISTS idx_payments_campaign_id ON public.payments(campaign_
 CREATE TABLE IF NOT EXISTS public.invoices (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
-    payment_id UUID REFERENCES public.payments(id) ON DELETE SET NULL,
+    -- UNIQUE, because two things already depend on there being at most one
+    -- invoice per payment and neither enforced it.
+    --
+    -- 1. billing_history LEFT JOINs invoices on this column. A second invoice
+    --    for one payment silently doubles that payment's rows in the view, and
+    --    get_user_payment_summary reads the view.
+    -- 2. generate-invoice-pdf looks up the existing invoice with
+    --    .eq('payment_id', ...).single() and DISCARDS the error. .single()
+    --    errors when no row matches, which is how its 'no invoice yet' branch
+    --    works - so a genuine read failure is indistinguishable from 'none
+    --    yet' and the function issues a SECOND invoice for the same payment.
+    --
+    -- The constraint is the better of the two available fixes because it holds
+    -- regardless of what any caller does. NULL is still allowed and still
+    -- repeatable (Postgres UNIQUE permits many NULLs), so ON DELETE SET NULL
+    -- keeps working and invoices not tied to a payment are unaffected.
+    --
+    -- Safe to add here rather than in a follow-up: this migration is ledgered
+    -- as applied and produced nothing - invoices, payments and usage_events all
+    -- return 42P01 in production today - so it has never run and this is part
+    -- of the table's initial shape, not a tightening of a live one. WEB-QA-018.
+    payment_id UUID UNIQUE REFERENCES public.payments(id) ON DELETE SET NULL,
 
     -- Invoice identifiers
     invoice_number TEXT UNIQUE NOT NULL,
@@ -120,7 +141,9 @@ CREATE TABLE IF NOT EXISTS public.invoices (
 
 -- Create indexes for invoices
 CREATE INDEX IF NOT EXISTS idx_invoices_user_id ON public.invoices(user_id);
-CREATE INDEX IF NOT EXISTS idx_invoices_payment_id ON public.invoices(payment_id);
+-- No idx_invoices_payment_id: the UNIQUE constraint on invoices.payment_id
+-- already creates a unique index on that column, and a second plain index over
+-- the same column costs every write and serves no read.
 CREATE INDEX IF NOT EXISTS idx_invoices_stripe_invoice_id ON public.invoices(stripe_invoice_id);
 CREATE INDEX IF NOT EXISTS idx_invoices_status ON public.invoices(status);
 CREATE INDEX IF NOT EXISTS idx_invoices_invoice_date ON public.invoices(invoice_date DESC);

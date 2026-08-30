@@ -1,0 +1,18 @@
+{
+  "$comment": "WEB-OPS-007 AC4. Known non-2xx responses to scheduled POSTs. This list must only ever SHRINK - each entry is a scheduled job whose target is answering with an error.",
+  "generated": "2026-08-29",
+  "signatures": [
+    {
+      "status_code": 404,
+      "signature": "{\"code\":\"NOT_FOUND\",\"message\":\"Requested function was not found\"}"
+    },
+    {
+      "status_code": 500,
+      "signature": "{\"error\":\"Failed to fetch reminders\",\"details\":{\"code\":\"N\",\"details\":\"Returned type character varying(N) does not match expected type text in column N.\",\"hint\":"
+    },
+    {
+      "status_code": 500,
+      "signature": "{\"success\":false,\"error\":\"Cannot read properties of undefined (reading 'length')\"}"
+    }
+  ]
+}

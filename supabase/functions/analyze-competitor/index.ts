@@ -7,8 +7,12 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
-import { checkRateLimit } from "../_shared/rateLimit.ts";
+import { checkRateLimitPersistent } from "../_shared/rateLimit.ts";
 import { validateURLForSSRF } from "../_shared/validation.ts";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+import { isHostAllowed, fetchTextWithSizeCap } from "../_shared/fetchGuard.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { getAnthropicApiKey, extractClaudeText } from "../_shared/aiConfig.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -25,8 +29,12 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Rate limit: 10 AI requests per 15 minutes per client
-  const rateLimit = checkRateLimit(req, { max: 10, message: 'AI competitor analysis rate limit exceeded. Please try again later.' });
+  // AUTH: admin JWT, EDGE_FUNCTION_API_KEY, or service-role key only.
+  const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+  if (authFailure) return authFailure;
+
+  // Rate limit: 10 AI requests per 15 minutes per client (persistent)
+  const rateLimit = await checkRateLimitPersistent(req, { endpoint: 'analyze-competitor', max: 10, message: 'AI competitor analysis rate limit exceeded. Please try again later.' });
   if (!rateLimit.success) {
     return rateLimit.response!;
   }
@@ -37,7 +45,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const claudeApiKey = Deno.env.get('CLAUDE_API');
+    const claudeApiKey = getAnthropicApiKey();
     if (!claudeApiKey) {
       throw new Error('CLAUDE_API is required');
     }
@@ -107,16 +115,30 @@ async function scrapeCompetitorContent(supabaseClient: any, competitorId?: strin
         continue;
       }
 
-      // Fetch competitor website
-      const response = await fetch(competitor.website_url, {
+      // Allowlist guard: even with a valid key, only fetch known hosts
+      // (configurable via CRAWLER_DOMAIN_ALLOWLIST / CRAWLER_ALLOW_ALL).
+      const hostCheck = isHostAllowed(competitor.website_url);
+      if (!hostCheck.allowed) {
+        console.error(`Host not allowed for ${competitor.name}: ${hostCheck.reason}`);
+        results.push({
+          competitor: competitor.name,
+          success: false,
+          error: `URL rejected: ${hostCheck.reason}`
+        });
+        continue;
+      }
+
+      // Fetch competitor website with a response-size cap so a huge target
+      // can't stream unbounded bandwidth through the function.
+      const fetched = await fetchTextWithSizeCap(competitor.website_url, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (compatible; DesMoinesInsiderBot/1.0)',
         }
       });
 
-      if (!response.ok) continue;
-      
-      const html = await response.text();
+      if (!fetched.ok) continue;
+
+      const html = fetched.text;
       
       // Extract content using basic parsing
       const content = extractContentFromHTML(html, competitor.website_url);
@@ -254,7 +276,7 @@ Please provide analysis in the following JSON format:
 }
 `;
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
+  const response = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -269,14 +291,19 @@ Please provide analysis in the following JSON format:
         content: analysisPrompt
       }]
     })
-  });
+  }, 60_000);
 
   if (!response.ok) {
     throw new Error(`Claude API error: ${response.status}`);
   }
 
   const aiResponse = await response.json();
-  const analysisText = aiResponse.content[0].text;
+  const extracted = extractClaudeText(aiResponse);
+  if (!extracted.ok) {
+    console.error("Claude response not usable:", extracted.reason, extracted.detail);
+    throw new Error(`AI response ${extracted.reason}: ${extracted.detail}`);
+  }
+  const analysisText = extracted.text;
   
   let analysis;
   try {
@@ -322,7 +349,10 @@ async function generateContentSuggestions(supabaseClient: any, claudeApiKey: str
 
   const { data: ourContent } = await supabaseClient
     .from('events')
-    .select('title, category, description')
+    // events has enhanced_description / original_description, never `description`.
+    // This select 42703d, so "our content" was always empty and every suggestion
+    // was generated from competitor content alone (WEB-QA-017).
+    .select('title, category, enhanced_description, original_description')
     .limit(10);
 
   if (!competitorContent?.length) {
@@ -355,7 +385,7 @@ Generate 5 content suggestions that would help us compete better. For each sugge
 Return as JSON array.
 `;
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
+  const response = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -370,14 +400,19 @@ Return as JSON array.
         content: suggestionPrompt
       }]
     })
-  });
+  }, 60_000);
 
   if (!response.ok) {
     throw new Error(`Claude API error: ${response.status}`);
   }
 
   const aiResponse = await response.json();
-  const suggestionsText = aiResponse.content[0].text;
+  const extracted = extractClaudeText(aiResponse);
+  if (!extracted.ok) {
+    console.error("Claude response not usable:", extracted.reason, extracted.detail);
+    throw new Error(`AI response ${extracted.reason}: ${extracted.detail}`);
+  }
+  const suggestionsText = extracted.text;
   
   let suggestions;
   try {

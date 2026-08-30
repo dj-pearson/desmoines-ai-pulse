@@ -36,13 +36,31 @@ final class ForYouService {
 
     private let supabase = SupabaseService.shared.client
 
+    /// Merges overlapping refreshes into one. ForYouRail calls refresh from
+    /// both a `.task` and a manual button, and the `.task` re-fires whenever
+    /// the view identity changes, so two calls landing together is ordinary
+    /// rather than exceptional.
+    private let refreshFlight = SingleFlight()
+
     private init() {}
 
     /// Decide which rail to show:
     /// - 5+ recent swipes → For You (personalized)
     /// - else → Trending Now (cold-start fallback)
     func refresh(limit: Int = 12) async {
-        guard let client = supabase, !isLoading else { return }
+        await refreshFlight.run { [weak self] in
+            await self?.performRefresh(limit: limit)
+        }
+    }
+
+    /// The refresh itself. Never call this directly - `refresh` is what
+    /// guarantees one execution per overlapping group.
+    ///
+    /// The `guard !isLoading` this replaced dropped the second caller rather
+    /// than joining it: that call returned immediately having awaited
+    /// nothing, so `await refresh()` did not mean the data had arrived.
+    private func performRefresh(limit: Int) async {
+        guard let client = supabase else { return }
         isLoading = true
         defer { isLoading = false }
 

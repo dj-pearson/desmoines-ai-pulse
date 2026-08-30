@@ -1,8 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { STALE_TIME, GC_TIME, shouldRetry } from '@/lib/queryConfig';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { toast } from 'sonner';
 import { createLogger } from '@/lib/logger';
+import { EVENT_LIST_COLUMNS, RESTAURANT_LIST_COLUMNS, ATTRACTION_LIST_COLUMNS } from '@/lib/listColumns';
+import { sanitizePostgrestPattern } from '@/lib/postgrestPattern';
 
 const log = createLogger('useAdvancedSearch');
 
@@ -68,12 +72,19 @@ const defaultFilters: AdvancedSearchFilters = {
   tags: []
 };
 
+/** Stable empty array — a fresh `[]` default would give `results` a new identity
+ *  every render and re-fire consumer effects that depend on it. */
+const EMPTY_RESULTS: SearchResult[] = [];
+
 export function useAdvancedSearch() {
   const { user } = useAuth();
   const [filters, setFilters] = useState<AdvancedSearchFilters>(defaultFilters);
-  const [results, setResults] = useState<SearchResult[]>([]);
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
-  const [loading, setLoading] = useState(false);
+  /** The filters of the most recently submitted search. This hook is imperative
+   *  by design — consumers call performSearch(...) — so the query is keyed on
+   *  what was submitted rather than on the live `filters` state (WEB-PERF-013). */
+  const [submittedFilters, setSubmittedFilters] = useState<AdvancedSearchFilters | null>(null);
+  const queryClient = useQueryClient();
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
 
   // Get user's location
@@ -140,9 +151,10 @@ export function useAdvancedSearch() {
   };
 
   // Enhanced search function
-  const performSearch = useCallback(async (searchFilters: AdvancedSearchFilters) => {
-    setLoading(true);
-    try {
+  /** Runs the actual search. Kept as a hook-scope closure because it depends on
+   *  userLocation and the per-type search helpers defined below. */
+  const executeSearch = useCallback(async (searchFilters: AdvancedSearchFilters): Promise<SearchResult[]> => {
+    {
       const searchResults: SearchResult[] = [];
 
       // Search different content types based on category filter
@@ -175,26 +187,55 @@ export function useAdvancedSearch() {
       const filteredResults = filterByLocation(searchResults, searchFilters);
       
       // Sort results
-      const sortedResults = sortResults(filteredResults, searchFilters);
+      return sortResults(filteredResults, searchFilters);
+    }
+  }, [userLocation]);
 
-      setResults(sortedResults);
+  /** Cache key for a submitted search. Identical searches reuse the cache and
+   *  concurrent identical ones dedupe, which the manual useState version could
+   *  not do. */
+  const searchQueryKey = (f: AdvancedSearchFilters | null) =>
+    ['advanced-search', f, userLocation] as const;
+
+  const { data: results = EMPTY_RESULTS, isFetching: loading } = useQuery({
+    queryKey: searchQueryKey(submittedFilters),
+    queryFn: () => executeSearch(submittedFilters as AdvancedSearchFilters),
+    enabled: submittedFilters !== null,
+    staleTime: STALE_TIME.SHORT,
+    gcTime: GC_TIME,
+    retry: shouldRetry,
+  });
+
+  const performSearch = useCallback(async (searchFilters: AdvancedSearchFilters) => {
+    setSubmittedFilters(searchFilters);
+    try {
+      // fetchQuery shares the key above, so this both awaits the result for
+      // callers that need it and primes the cache the useQuery above reads.
+      return await queryClient.fetchQuery({
+        queryKey: searchQueryKey(searchFilters),
+        queryFn: () => executeSearch(searchFilters),
+        staleTime: STALE_TIME.SHORT,
+        gcTime: GC_TIME,
+      });
     } catch (error) {
       log.error('performSearch', 'Search error', { error });
       toast.error('Search failed. Please try again.');
-    } finally {
-      setLoading(false);
+      return [];
     }
-  }, [userLocation]);
+  }, [executeSearch, queryClient, userLocation]);
 
   const searchEvents = async (searchFilters: AdvancedSearchFilters): Promise<SearchResult[]> => {
     let query = supabase
       .from('events')
-      .select('*')
-      .gte('date', new Date().toISOString());
+      .select(EVENT_LIST_COLUMNS)
+      .gte('date', new Date().toISOString())
+      .neq('is_hidden', true) // Exclude soft-hidden stale events (WEB-AUTO-006)
+      .limit(50);
 
     // Apply text search
     if (searchFilters.query) {
-      query = query.or(`title.ilike.%${searchFilters.query}%,venue.ilike.%${searchFilters.query}%,location.ilike.%${searchFilters.query}%`);
+      const safeQuery = sanitizePostgrestPattern(searchFilters.query);
+      query = query.or(`title.ilike.%${safeQuery}%,venue.ilike.%${safeQuery}%,location.ilike.%${safeQuery}%`);
     }
 
     // Apply location filter
@@ -233,11 +274,13 @@ export function useAdvancedSearch() {
   const searchRestaurants = async (searchFilters: AdvancedSearchFilters): Promise<SearchResult[]> => {
     let query = supabase
       .from('restaurants')
-      .select('*');
+      .select(RESTAURANT_LIST_COLUMNS)
+      .limit(50);
 
     // Apply text search
     if (searchFilters.query) {
-      query = query.or(`name.ilike.%${searchFilters.query}%,cuisine.ilike.%${searchFilters.query}%,location.ilike.%${searchFilters.query}%`);
+      const safeQuery = sanitizePostgrestPattern(searchFilters.query);
+      query = query.or(`name.ilike.%${safeQuery}%,cuisine.ilike.%${safeQuery}%,location.ilike.%${safeQuery}%`);
     }
 
     // Apply location filter
@@ -279,11 +322,13 @@ export function useAdvancedSearch() {
   const searchAttractions = async (searchFilters: AdvancedSearchFilters): Promise<SearchResult[]> => {
     let query = supabase
       .from('attractions')
-      .select('*');
+      .select(ATTRACTION_LIST_COLUMNS)
+      .limit(50);
 
     // Apply text search
     if (searchFilters.query) {
-      query = query.or(`name.ilike.%${searchFilters.query}%,type.ilike.%${searchFilters.query}%,location.ilike.%${searchFilters.query}%`);
+      const safeQuery = sanitizePostgrestPattern(searchFilters.query);
+      query = query.or(`name.ilike.%${safeQuery}%,type.ilike.%${safeQuery}%,location.ilike.%${safeQuery}%`);
     }
 
     // Apply location filter
@@ -319,11 +364,13 @@ export function useAdvancedSearch() {
   const searchPlaygrounds = async (searchFilters: AdvancedSearchFilters): Promise<SearchResult[]> => {
     let query = supabase
       .from('playgrounds')
-      .select('*');
+      .select('*') // No playground LIST_COLUMNS constant exists; projection left as-is
+      .limit(50);
 
     // Apply text search
     if (searchFilters.query) {
-      query = query.or(`name.ilike.%${searchFilters.query}%,location.ilike.%${searchFilters.query}%`);
+      const safeQuery = sanitizePostgrestPattern(searchFilters.query);
+      query = query.or(`name.ilike.%${safeQuery}%,location.ilike.%${safeQuery}%`);
     }
 
     // Apply location filter
@@ -356,17 +403,10 @@ export function useAdvancedSearch() {
     })) || [];
   };
 
-  const filterByLocation = (results: SearchResult[], searchFilters: AdvancedSearchFilters): SearchResult[] => {
-    if (searchFilters.location === 'Near Me' && userLocation) {
-      return results.filter(result => {
-        // This would need actual lat/lng data for each result
-        // For now, return all results with distance calculation if available
-        return true;
-      }).map(result => ({
-        ...result,
-        distance: Math.random() * searchFilters.radius // Placeholder distance
-      }));
-    }
+  const filterByLocation = (results: SearchResult[], _searchFilters: AdvancedSearchFilters): SearchResult[] => {
+    // Real per-result coordinates aren't available in this aggregated result set,
+    // so we no longer fabricate distances (was Math.random). Distance-based
+    // filtering/sorting is disabled until a proximity RPC backs it (WEB-UX-018).
     return results;
   };
 
@@ -473,7 +513,7 @@ export function useAdvancedSearch() {
 
   const resetFilters = () => {
     setFilters(defaultFilters);
-    setResults([]);
+    setSubmittedFilters(null);
   };
 
   return {

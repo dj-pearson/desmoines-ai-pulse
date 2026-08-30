@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Search, Filter, Star, MapPin } from "lucide-react";
+import { Search, Filter, Star } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +16,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface AttractionFiltersProps {
   onFiltersChange: (filters: {
@@ -102,7 +103,7 @@ export default function AttractionFilters({ onFiltersChange, totalCount }: Attra
         {/* Type Filter */}
         <Select value={selectedType} onValueChange={setSelectedType}>
           <SelectTrigger className="w-auto min-w-[140px]">
-            <MapPin className="h-4 w-4 mr-2" />
+            <SpriteIcon name="map-pin" className="h-4 w-4 mr-2" />
             <SelectValue placeholder="All Types" />
           </SelectTrigger>
           <SelectContent>

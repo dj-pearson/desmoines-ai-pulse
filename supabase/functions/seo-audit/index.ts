@@ -8,6 +8,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
+import { errorResponse } from "../_shared/errorResponse.ts";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+import { validateURLForSSRFResolved } from "../_shared/validation.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -48,6 +52,13 @@ serve(async (req) => {
   }
 
   try {
+    // AUTHORIZATION: this function fetches a caller-supplied URL with the
+    // service-role client, so it must not be callable by arbitrary users.
+    // Require an admin JWT, the EDGE_FUNCTION_API_KEY, or the service-role key
+    // (used by run-scheduled-audit). Fails closed when no credential is valid.
+    const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+    if (authFailure) return authFailure;
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -58,6 +69,22 @@ serve(async (req) => {
     if (!url) {
       return new Response(
         JSON.stringify({ error: "URL is required" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // SSRF: only audit real public http/https pages. Resolves the hostname and
+    // rejects private/link-local/metadata targets (incl. DNS-rebinding names).
+    const ssrf = await validateURLForSSRFResolved(url, {
+      allowedProtocols: ["http:", "https:"],
+      blockPrivateIPs: true,
+    });
+    if (!ssrf.valid) {
+      return new Response(
+        JSON.stringify({ error: ssrf.error || "URL failed SSRF validation" }),
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -471,15 +498,10 @@ serve(async (req) => {
   } catch (error) {
     console.error("Error in seo-audit function:", error);
 
-    return new Response(
-      JSON.stringify({
-        error: error.message,
-        details: error.stack,
-      }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+    return errorResponse(error, {
+      status: 500,
+      headers: corsHeaders,
+      logContext: "seo-audit",
+    });
   }
 });

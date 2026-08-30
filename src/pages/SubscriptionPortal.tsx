@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useTabState } from "@/hooks/useTabState";
 import { Link, useNavigate } from "react-router-dom";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import {
@@ -32,22 +32,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  ArrowLeft,
-  Crown,
-  Sparkles,
-  CreditCard,
-  Receipt,
-  FileText,
-  Download,
-  ExternalLink,
-  Calendar,
-  Check,
-  AlertCircle,
-  RefreshCw,
-  Printer,
-  Eye,
-} from "lucide-react";
+import { ArrowLeft, Crown, CreditCard, Receipt, FileText, Download, Check, AlertCircle, RefreshCw, Printer, Eye } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { usePayments } from "@/hooks/usePayments";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -55,6 +40,7 @@ import { SubscriptionPlatformBreakdown } from "@/components/SubscriptionPlatform
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export default function SubscriptionPortal() {
   const navigate = useNavigate();
@@ -79,7 +65,7 @@ export default function SubscriptionPortal() {
   } = usePayments();
   const { tier, isPremium, subscription, plans, startCheckout, checkoutLoading } =
     useSubscription();
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useTabState("overview");
 
   const formatCurrency = (amount: number, currency = "usd") => {
     return new Intl.NumberFormat("en-US", {
@@ -243,7 +229,7 @@ export default function SubscriptionPortal() {
                       {tier === "vip" ? (
                         <Crown className="h-6 w-6 text-purple-500" />
                       ) : tier === "insider" ? (
-                        <Sparkles className="h-6 w-6 text-amber-500" />
+                        <SpriteIcon name="sparkles" className="h-6 w-6 text-amber-500" />
                       ) : (
                         <CreditCard className="h-6 w-6 text-muted-foreground" />
                       )}
@@ -438,7 +424,7 @@ export default function SubscriptionPortal() {
                   )}
                   <Button variant="ghost" asChild>
                     <Link to="/pricing">
-                      <ExternalLink className="h-4 w-4 mr-2" />
+                      <SpriteIcon name="external-link" className="h-4 w-4 mr-2" />
                       View All Plans
                     </Link>
                   </Button>

@@ -28,6 +28,10 @@ struct SubscriptionTierCard: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    // IOS-COMPLY-003: price is critical content — scale the fixed point size with
+    // Dynamic Type (relative to .largeTitle) so it grows up to AX5 without clipping.
+    @ScaledMetric(relativeTo: .largeTitle) private var priceSize: CGFloat = 34
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header
@@ -48,7 +52,7 @@ struct SubscriptionTierCard: View {
             // Price row with crossfade
             HStack(alignment: .lastTextBaseline, spacing: 6) {
                 Text(price)
-                    .font(.system(size: 34, weight: .heavy))
+                    .font(.system(size: priceSize, weight: .heavy))
                     .contentTransition(.numericText())
                     .animation(
                         reduceMotion ? .linear(duration: 0) : .spring(response: 0.4, dampingFraction: 0.75),
@@ -132,13 +136,34 @@ struct SubscriptionTierCard: View {
 }
 
 /// Monthly / Annual billing toggle matching Android `BillingCycleToggle`.
+///
+/// STILL UNWIRED, and the warning has been re-checked rather than copied
+/// forward (IOS-AUDIT-FEAT-036). Neither this toggle nor `SubscriptionTierCard`
+/// has a single call site outside the #Preview at the bottom of this file. The
+/// live screens are SubscriptionView and PaywallView.
+///
+/// The original warning named placeholder "save 20%" and "$14.99" strings. Both
+/// are already gone from the component API: `price` and `billingLabel` are
+/// required lets with no default, and `annualLabel` defaults to a neutral
+/// "Annual" rather than a savings claim, so a caller cannot accidentally ship an
+/// invented number. The only "$14.99" left is in the #Preview, and it is not even
+/// a real tier price - Insider is $4.99 and VIP is $12.99.
+///
+/// So the remaining risk is not the placeholders, it is that these two are dead
+/// code carrying a stale caution. Wiring them means redesigning the subscription
+/// screen; deleting them is a product call. Whoever does wire them: pass
+/// `Product.displayPrice` and PaywallView's computed `annualSavingsPercent`,
+/// never a literal.
 struct BillingCycleToggle: View {
     @Binding var isAnnual: Bool
+    /// Defaults to a neutral label so a real savings percent (from StoreKit) is
+    /// supplied at the call site rather than hardcoded.
+    var annualLabel: String = "Annual"
 
     var body: some View {
         HStack(spacing: 4) {
             segment(label: "Monthly", selected: !isAnnual) { isAnnual = false }
-            segment(label: "Annual · save 20%", selected: isAnnual) { isAnnual = true }
+            segment(label: annualLabel, selected: isAnnual) { isAnnual = true }
         }
         .padding(4)
         .background(Color(.secondarySystemBackground))

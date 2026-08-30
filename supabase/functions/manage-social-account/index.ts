@@ -25,8 +25,8 @@ import {
   isOriginAllowed,
 } from "../_shared/cors.ts";
 import { checkRateLimit, addRateLimitHeaders } from "../_shared/rateLimit.ts";
+import { requireAdminOrApiKey, type AdminCaller } from "../_shared/apiKeyAuth.ts";
 
-const ADMIN_ROLES = ["admin", "root_admin"] as const;
 type Platform = "twitter" | "facebook" | "instagram" | "linkedin";
 
 interface CreatePayload {
@@ -174,38 +174,22 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
+    // WEB-SEC-023: was a hand-rolled gate on profiles.role keyed by the row PK.
+    const caller: AdminCaller = { user: null };
+    const authFailure = await requireAdminOrApiKey(req, corsHeaders, caller);
+    if (authFailure) return authFailure;
+
+    // Connected accounts record created_by, so a shared key with no user
+    // identity cannot drive this endpoint.
+    const user = caller.user;
+    if (!user) {
       return new Response(
-        JSON.stringify({ error: "Authorization required" }),
+        JSON.stringify({ error: "This endpoint requires an admin user session" }),
         {
           status: 401,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         },
       );
-    }
-    const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } =
-      await supabase.auth.getUser(token);
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Invalid authentication" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-    if (
-      !profile ||
-      !ADMIN_ROLES.includes(profile.role as typeof ADMIN_ROLES[number])
-    ) {
-      return new Response(JSON.stringify({ error: "Admin access required" }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
     }
 
     const body = await req.json().catch(() => ({}));

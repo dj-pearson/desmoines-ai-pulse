@@ -51,6 +51,51 @@ sealed class Route(val route: String) {
     data object Onboarding : Route("onboarding")
     data object Subscription : Route("subscription")
     data object Settings : Route("settings")
+    data object AskPulse : Route("ask_pulse")
+    data object Discover : Route("discover")
+    data object GroupSession : Route("group_session")
+    data object SurpriseMe : Route("surprise_me")
+    data object Weekend : Route("weekend")
+    data object Neighborhoods : Route("neighborhoods")
+
+    data object NeighborhoodDetail : Route("neighborhood/{slug}") {
+        fun createRoute(slug: String) = "neighborhood/$slug"
+        val arguments = listOf(navArgument("slug") { type = NavType.StringType })
+    }
+
+    data object Dashboard : Route("dashboard")
+    data object ContentHubs : Route("content_hubs")
+    data object Articles : Route("articles")
+    data object Deals : Route("deals")
+    data object Hotels : Route("hotels")
+    data object BestOf : Route("best_of")
+
+    data object BestOfCategory : Route("best_of/{categoryId}") {
+        fun createRoute(categoryId: String) = "best_of/$categoryId"
+        val arguments = listOf(navArgument("categoryId") { type = NavType.StringType })
+    }
+
+    data object HotelDetail : Route("hotel/{hotelId}") {
+        fun createRoute(hotelId: String) = "hotel/$hotelId"
+        val arguments = listOf(navArgument("hotelId") { type = NavType.StringType })
+    }
+
+    data object ArticleDetail : Route("article/{articleId}") {
+        fun createRoute(articleId: String) = "article/$articleId"
+        val arguments = listOf(navArgument("articleId") { type = NavType.StringType })
+    }
+
+    data object ContentHubDetail : Route("content_hub/{hubId}") {
+        fun createRoute(hubId: String) = "content_hub/$hubId"
+        val arguments = listOf(navArgument("hubId") { type = NavType.StringType })
+    }
+    data object TripPlanner : Route("trip_planner")
+    data object SavedTrips : Route("saved_trips")
+
+    data object ItineraryDetail : Route("itinerary_detail/{tripId}") {
+        fun createRoute(tripId: String) = "itinerary_detail/$tripId"
+        val arguments = listOf(navArgument("tripId") { type = NavType.StringType })
+    }
 
     // WebView route
     data object WebView : Route("webview/{url}") {

@@ -6,24 +6,19 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Building2,
-  MapPin,
-  Phone,
-  Globe,
-  Mail,
-  Star,
-  Clock,
-  ExternalLink,
-  ChevronRight,
-  ArrowLeft,
-} from "lucide-react";
+import { Phone, Globe, Mail, Star, ChevronRight, ArrowLeft, Navigation } from "lucide-react";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import AffiliateDisclosureBanner from "@/components/AffiliateDisclosureBanner";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { LazyLocationMap } from "@/components/LazyLocationMap";
+import { getDirectionsUrl } from "@/lib/directions";
+import { FavoriteButton } from "@/components/FavoriteButton";
+import { OpenStatusChip } from "@/components/OpenStatusChip";
+import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { getCanonicalUrl } from "@/lib/brandConfig";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 function StarRating({ rating }: { rating: number }) {
   const stars = [];
@@ -46,6 +41,16 @@ function StarRating({ rating }: { rating: number }) {
 export default function HotelDetails() {
   const { slug } = useParams<{ slug: string }>();
   const { hotel, isLoading, error } = useHotel(slug);
+
+  // WEB-FEAT-012. Three call sites below read hotel.source_url, a column
+  // public.hotels does not have — confirmed live, the REST API returns 42703
+  // "column hotels.source_url does not exist". So it was always undefined, the
+  // "Book Now" ternary was always falsy, and the monetized booking CTA never
+  // rendered on any hotel page. Resolve it once here so the three uses cannot
+  // drift apart again. affiliate_url first because that is the monetized link
+  // (it sits next to affiliate_provider and affiliate_url_updated_at); website
+  // is the fallback, and today it is the one that is actually populated.
+  const bookingUrl = hotel?.affiliate_url ?? hotel?.website ?? undefined;
 
   useDocumentTitle(hotel ? `${hotel.name} - Stay in Des Moines` : "Hotel Details");
 
@@ -79,7 +84,7 @@ export default function HotelDetails() {
         <Header />
         <div className="flex items-center justify-center flex-1 py-24">
           <div className="text-center">
-            <Building2 className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
+            <SpriteIcon name="building-2" className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
             <h1 className="text-2xl font-bold mb-2">Hotel Not Found</h1>
             <p className="text-muted-foreground mb-6">
               The hotel you're looking for doesn't exist or has been removed.
@@ -111,14 +116,14 @@ export default function HotelDetails() {
         <meta property="og:type" content="website" />
         <meta property="og:title" content={`${hotel.name} - Hotels in ${hotel.city}, ${hotel.state}`} />
         <meta property="og:description" content={hotel.short_description || `${hotel.name} in ${hotel.area || hotel.city}. Book your stay in Des Moines.`} />
-        <meta property="og:image" content={hotel.image_url || '/og-image.png'} />
+        <meta property="og:image" content={hotel.image_url || '/DMI-Logo.png'} />
         <meta property="og:image:width" content="1200" />
         <meta property="og:image:height" content="630" />
         <meta property="og:image:alt" content={`${hotel.name} - Hotel in ${hotel.city}, ${hotel.state}`} />
         <meta property="og:url" content={getCanonicalUrl(`/stay/${hotel.slug}`)} />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={`${hotel.name} - Hotels in ${hotel.city}`} />
-        <meta name="twitter:image" content={hotel.image_url || '/og-image.png'} />
+        <meta name="twitter:image" content={hotel.image_url || '/DMI-Logo.png'} />
       </Helmet>
 
       <HotelSchema
@@ -186,7 +191,7 @@ export default function HotelDetails() {
               />
             ) : (
               <div className="w-full h-full bg-gradient-to-br from-[#1a0f3c] via-[#2D1B69] to-[#DC143C] flex items-center justify-center">
-                <Building2 className="h-20 w-20 text-white/50" />
+                <SpriteIcon name="building-2" className="h-20 w-20 text-white/50" />
               </div>
             )}
             {hotel.is_featured && (
@@ -231,6 +236,24 @@ export default function HotelDetails() {
                 {hotel.hotel_type && (
                   <Badge variant="secondary" className="mb-4">{hotel.hotel_type}</Badge>
                 )}
+
+                {/*
+                  WEB-UX-010 AC1 names HotelDetails explicitly ("and HotelDetails
+                  if present") and it is present - routed at /stay/:slug - but it
+                  shipped with no save control of any kind, not even the dead
+                  static button the other three detail pages had. "hotel" was
+                  already a first-class content type in useContentFavorites and
+                  lib/guestFavorites, so the type existed with no way to reach it.
+                */}
+                <FavoriteButton
+                  contentType="hotel"
+                  contentId={hotel.id}
+                  variant="outline"
+                  size="sm"
+                  showText
+                  itemName={hotel.name}
+                  className="rounded-xl"
+                />
               </div>
 
               {/* Description */}
@@ -299,7 +322,7 @@ export default function HotelDetails() {
                     >
                       <Button className="w-full h-12 text-base" size="lg">
                         Book Now
-                        <ExternalLink className="h-4 w-4 ml-2" />
+                        <SpriteIcon name="external-link" className="h-4 w-4 ml-2" />
                       </Button>
                     </a>
                   )}
@@ -319,7 +342,7 @@ export default function HotelDetails() {
                 <CardContent className="space-y-4">
                   {/* Address */}
                   <div className="flex items-start gap-3">
-                    <MapPin className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                    <SpriteIcon name="map-pin" className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
                     <div>
                       <p className="text-sm">{hotel.address}</p>
                       <p className="text-sm text-muted-foreground">
@@ -328,8 +351,40 @@ export default function HotelDetails() {
                       {hotel.area && (
                         <Badge variant="outline" className="mt-1 text-xs">{hotel.area}</Badge>
                       )}
+                      <a
+                        href={getDirectionsUrl({
+                          latitude: hotel.latitude,
+                          longitude: hotel.longitude,
+                          address: fullAddress,
+                        })}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center text-sm text-primary hover:underline mt-1"
+                      >
+                        <Navigation className="h-3.5 w-3.5 mr-1" />
+                        Directions
+                      </a>
+                      <div className="mt-2">
+                        <OpenStatusChip
+                          hours={null}
+                          website={bookingUrl}
+                          fallbackLabel="Check hotel site for hours & check-in"
+                        />
+                      </div>
                     </div>
                   </div>
+
+                  {hotel.latitude && hotel.longitude && (
+                    <div className="overflow-hidden rounded-lg">
+                      <LazyLocationMap
+                        latitude={hotel.latitude}
+                        longitude={hotel.longitude}
+                        venue={hotel.name}
+                        location={fullAddress}
+                        className="h-48 w-full"
+                      />
+                    </div>
+                  )}
 
                   {/* Phone */}
                   {hotel.phone && (
@@ -369,7 +424,7 @@ export default function HotelDetails() {
                   {/* Check in/out */}
                   {(hotel.check_in_time || hotel.check_out_time) && (
                     <div className="flex items-start gap-3">
-                      <Clock className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                      <SpriteIcon name="clock" className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
                       <div className="text-sm">
                         {hotel.check_in_time && <p>Check-in: {hotel.check_in_time}</p>}
                         {hotel.check_out_time && <p>Check-out: {hotel.check_out_time}</p>}
@@ -380,7 +435,7 @@ export default function HotelDetails() {
                   {/* Rooms */}
                   {hotel.total_rooms && (
                     <div className="flex items-center gap-3 text-sm">
-                      <Building2 className="h-5 w-5 text-primary flex-shrink-0" />
+                      <SpriteIcon name="building-2" className="h-5 w-5 text-primary flex-shrink-0" />
                       {hotel.total_rooms} rooms
                     </div>
                   )}
@@ -392,6 +447,50 @@ export default function HotelDetails() {
 
         <Footer />
       </div>
+
+      <StickyMobileCTA
+        variant="hotel"
+        primaryAction={
+          bookingUrl
+            ? {
+                label: "Book Now",
+                href: bookingUrl,
+                icon: "external",
+                isExternal: true,
+              }
+            : hotel.phone
+            ? {
+                label: "Call to Book",
+                href: `tel:${hotel.phone}`,
+                icon: "phone",
+              }
+            : {
+                // No booking link or phone — still give a working action.
+                label: "Find Rooms",
+                href: `https://www.google.com/search?q=${encodeURIComponent(
+                  `${hotel.name} ${hotel.city ?? "Des Moines"} hotel booking`
+                )}`,
+                icon: "external",
+                isExternal: true,
+              }
+        }
+        secondaryAction={
+          hotel.latitude && hotel.longitude
+            ? {
+                label: "Directions",
+                href: getDirectionsUrl({
+                  latitude: hotel.latitude,
+                  longitude: hotel.longitude,
+                  address: fullAddress,
+                }),
+                icon: "directions",
+                isExternal: true,
+              }
+            : hotel.phone
+            ? { label: "Call", href: `tel:${hotel.phone}`, icon: "phone" }
+            : undefined
+        }
+      />
     </>
   );
 }

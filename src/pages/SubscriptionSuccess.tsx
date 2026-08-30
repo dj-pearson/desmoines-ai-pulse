@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { useSubscription } from "@/hooks/useSubscription";
-import { CheckCircle, Sparkles, Crown, ArrowRight, Loader2 } from "lucide-react";
+import { CheckCircle, Sparkles, Crown, Loader2 } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export default function SubscriptionSuccess() {
   const navigate = useNavigate();
@@ -177,7 +178,7 @@ export default function SubscriptionSuccess() {
                     onClick={() => navigate("/events")}
                   >
                     Browse Events
-                    <ArrowRight className="h-4 w-4" />
+                    <SpriteIcon name="arrow-right" className="h-4 w-4" />
                   </Button>
                   <Button
                     variant="outline"
@@ -185,7 +186,7 @@ export default function SubscriptionSuccess() {
                     onClick={() => navigate("/restaurants")}
                   >
                     Discover Restaurants
-                    <ArrowRight className="h-4 w-4" />
+                    <SpriteIcon name="arrow-right" className="h-4 w-4" />
                   </Button>
                   <Button
                     variant="outline"
@@ -193,7 +194,7 @@ export default function SubscriptionSuccess() {
                     onClick={() => navigate("/trip-planner")}
                   >
                     Plan Your Trip
-                    <ArrowRight className="h-4 w-4" />
+                    <SpriteIcon name="arrow-right" className="h-4 w-4" />
                   </Button>
                   <Button
                     variant="outline"
@@ -201,7 +202,7 @@ export default function SubscriptionSuccess() {
                     onClick={() => navigate("/profile")}
                   >
                     Set Preferences
-                    <ArrowRight className="h-4 w-4" />
+                    <SpriteIcon name="arrow-right" className="h-4 w-4" />
                   </Button>
                 </div>
               </CardContent>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useTabState } from "@/hooks/useTabState";
 import { useNavigate } from "react-router-dom";
 import { useAdminCampaigns } from "@/hooks/useAdminCampaigns";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
@@ -10,12 +11,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Filter, Eye, DollarSign, Calendar, User, Settings, Megaphone, XCircle, Hotel } from "lucide-react";
+import { Search, Filter, Eye, DollarSign, User, Settings, Megaphone, XCircle, Hotel } from "lucide-react";
 import { AdRateManager } from "@/components/admin/AdRateManager";
 import { AffiliatePartnersManager } from "@/components/admin/AffiliatePartnersManager";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { SponsoredBadge } from "@/components/SponsoredBadge";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface SponsoredListingRow {
   id: string;
@@ -58,6 +60,9 @@ export default function AdminCampaigns() {
   const { campaigns, isLoading, fetchCampaigns } = useAdminCampaigns();
   const { toast } = useToast();
   useDocumentTitle("Campaign Management");
+  const [activeTab, setActiveTab] = useTabState("campaigns", {
+    validTabs: ["campaigns", "sponsored", "rates", "affiliates"],
+  });
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
@@ -232,7 +237,7 @@ export default function AdminCampaigns() {
         </p>
       </div>
 
-      <Tabs defaultValue="campaigns" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList>
           <TabsTrigger value="campaigns">
             Campaigns
@@ -269,7 +274,7 @@ export default function AdminCampaigns() {
                 <p className="text-sm text-muted-foreground">Total Campaigns</p>
                 <p className="text-2xl font-bold">{stats.total}</p>
               </div>
-              <Calendar className="h-8 w-8 text-muted-foreground" />
+              <SpriteIcon name="calendar" className="h-8 w-8 text-muted-foreground" />
             </div>
           </CardContent>
         </Card>
@@ -381,7 +386,7 @@ export default function AdminCampaigns() {
         <CardContent>
           {campaigns.length === 0 ? (
             <div className="text-center py-12">
-              <Calendar className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <SpriteIcon name="calendar" className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
               <h3 className="text-lg font-semibold mb-2">No campaigns found</h3>
               <p className="text-muted-foreground">
                 Try adjusting your filters or search query

@@ -20,6 +20,9 @@
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { runJob } from "../_shared/jobRunner.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const FROM_ADDRESS =
@@ -27,6 +30,14 @@ const FROM_ADDRESS =
     ?? "Des Moines Insider <events@desmoinesinsider.com>";
 const BATCH_SIZE = 5;
 const MAX_CAMPAIGNS_PER_RUN = 5;
+// Page size for reading large tables (recipients / prior deliveries) so a big
+// segment can't exceed function memory by materializing everything in one query.
+const DB_PAGE_SIZE = 1000;
+// A campaign left in 'sending' longer than this was almost certainly abandoned
+// by a crashed / timed-out prior invocation (edge functions are killed well
+// under a minute). Such rows are reclaimed and resumed. Must comfortably exceed
+// the longest real dispatch to avoid clobbering an in-flight run.
+const STUCK_SENDING_MINUTES = 15;
 
 interface Segment {
   sources?: string[];
@@ -44,16 +55,56 @@ async function resolveSegment(
   supabase: ReturnType<typeof createClient>,
   segment: Segment | null,
 ): Promise<{ email: string }[]> {
-  let q = supabase
-    .from("newsletter_subscribers")
-    .select("email")
-    .eq("status", "active");
-  if (segment?.sources && segment.sources.length > 0) {
-    q = q.in("source", segment.sources);
+  // Paginate so a large segment can't blow the function's memory by loading the
+  // whole subscriber list in a single unbounded query. Ordered by email for a
+  // stable window across pages.
+  const out: { email: string }[] = [];
+  for (let from = 0; ; from += DB_PAGE_SIZE) {
+    let q = supabase
+      .from("newsletter_subscribers")
+      .select("email")
+      .eq("status", "active");
+    if (segment?.sources && segment.sources.length > 0) {
+      q = q.in("source", segment.sources);
+    }
+    const { data, error } = await q
+      .order("email", { ascending: true })
+      .range(from, from + DB_PAGE_SIZE - 1);
+    if (error) throw error;
+    const rows = (data ?? []) as { email: string }[];
+    out.push(...rows);
+    if (rows.length < DB_PAGE_SIZE) break;
   }
-  const { data, error } = await q;
-  if (error) throw error;
-  return (data ?? []) as { email: string }[];
+  return out;
+}
+
+/**
+ * Emails that already have a delivery row for this campaign. Used to make a
+ * resume (after a reclaimed 'sending' crash) idempotent — we never re-send to a
+ * recipient that was already attempted. Paginated for the same memory reason.
+ */
+async function loadAttemptedRecipients(
+  supabase: ReturnType<typeof createClient>,
+  campaignId: string,
+): Promise<Set<string>> {
+  const attempted = new Set<string>();
+  for (let from = 0; ; from += DB_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("newsletter_deliveries")
+      .select("email")
+      .eq("campaign_id", campaignId)
+      .range(from, from + DB_PAGE_SIZE - 1);
+    if (error) {
+      // Non-fatal: if we can't read prior deliveries, fall back to attempting
+      // all recipients rather than silently dropping the send.
+      console.error("loadAttemptedRecipients failed:", error.message);
+      break;
+    }
+    const rows = (data ?? []) as { email: string }[];
+    for (const r of rows) attempted.add(r.email.toLowerCase());
+    if (rows.length < DB_PAGE_SIZE) break;
+  }
+  return attempted;
 }
 
 async function sendOne(
@@ -64,7 +115,7 @@ async function sendOne(
   if (!RESEND_API_KEY) {
     throw new Error("RESEND_API_KEY is not configured");
   }
-  const r = await fetch("https://api.resend.com/emails", {
+  const r = await fetchWithTimeout("https://api.resend.com/emails", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -89,7 +140,19 @@ async function dispatchCampaign(
   supabase: ReturnType<typeof createClient>,
   campaign: CampaignRow,
 ): Promise<{ delivered: number; failed: number; errors: string[] }> {
-  const recipients = await resolveSegment(supabase, campaign.segment);
+  const allRecipients = await resolveSegment(supabase, campaign.segment);
+  // Idempotent resume: skip any recipient already attempted for this campaign
+  // (delivery row exists) so a reclaimed/resumed dispatch never double-sends.
+  const attempted = await loadAttemptedRecipients(supabase, campaign.id);
+  const recipients = attempted.size === 0
+    ? allRecipients
+    : allRecipients.filter((r) => !attempted.has(r.email.toLowerCase()));
+  if (attempted.size > 0) {
+    console.log(
+      `Campaign ${campaign.id}: resuming — ${attempted.size} already attempted, ` +
+        `${recipients.length} remaining of ${allRecipients.length}`,
+    );
+  }
   let delivered = 0;
   let failed = 0;
   const errors: string[] = [];
@@ -163,11 +226,51 @@ serve(async (req) => {
     });
   }
 
+  // THE DOCSTRING ABOVE CLAIMED THIS CHECK EXISTED AND NO CODE PERFORMED IT.
+  // There is no config.toml entry for this function, so verify_jwt defaults to
+  // TRUE - and that only means "a valid Supabase JWT". The publishable ANON KEY
+  // is a valid JWT and ships in every client bundle, so the gateway let it
+  // through and nothing here looked at the role. Verified against production:
+  // no Authorization header -> 401 at the gateway; anon bearer -> 200 and the
+  // job ran. This function then does privileged writes with the service-role
+  // client below and dispatches mail through Resend.
+  //
+  // requireAdminOrApiKey accepts EDGE_FUNCTION_API_KEY, the service-role key
+  // (which is what the pg_cron job sends - see
+  // 20260520000012_schedule_newsletter_dispatch.sql, Bearer ||
+  // current_setting(app.settings.supabase_service_role_key)), or an admin user
+  // JWT. An anon bearer falls through to the admin check and is refused, so the
+  // scheduled path is unchanged and the public path closes.
+  const corsHeaders = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers":
+      "authorization, x-client-info, apikey, content-type",
+  };
+  const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+  if (authFailure) return authFailure;
+
   try {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
+
+    // Reclaim campaigns stranded in 'sending' by a crashed/timed-out prior run
+    // (flips them back to 'scheduled' so the claim below resumes them). Runs
+    // before the claim so a stuck row can be picked up in the same invocation.
+    // Non-fatal — a reclaim failure must not block dispatching healthy rows.
+    const { data: reclaimedCount, error: reclaimError } = await supabase.rpc(
+      "reclaim_stuck_newsletter_campaigns",
+      { p_older_than_minutes: STUCK_SENDING_MINUTES },
+    );
+    if (reclaimError) {
+      console.error(
+        "reclaim_stuck_newsletter_campaigns failed:",
+        reclaimError.message,
+      );
+    } else if (typeof reclaimedCount === "number" && reclaimedCount > 0) {
+      console.log(`Reclaimed ${reclaimedCount} stuck 'sending' campaign(s)`);
+    }
 
     // Atomically claim up to MAX_CAMPAIGNS_PER_RUN due rows.
     const { data: claimed, error: claimError } = await supabase.rpc(
@@ -185,6 +288,9 @@ serve(async (req) => {
 
     const campaigns = (claimed ?? []) as CampaignRow[];
     if (campaigns.length === 0) {
+      // Nothing due. Return without opening a job-run row — this cron fires
+      // every minute, so logging a run each time would flood the Job Health
+      // panel. A run is only recorded when a batch is actually dispatched.
       return new Response(
         JSON.stringify({ ok: true, dispatched: 0 }),
         {
@@ -194,67 +300,76 @@ serve(async (req) => {
       );
     }
 
-    let totalDelivered = 0;
-    let totalFailed = 0;
-    const perCampaign: Array<{
-      id: string;
-      delivered: number;
-      failed: number;
-      status: "sent" | "failed";
-    }> = [];
+    // WEB-AUTO-008: record the send results (delivered/failed per campaign)
+    // through the WEB-AUTO-001 jobRunner so they surface in the admin Job
+    // Health panel and a terminal failure alerts the admin.
+    const job = await runJob("dispatch-scheduled-newsletters", async (ctx) => {
+      let totalDelivered = 0;
+      let totalFailed = 0;
+      const perCampaign: Array<{
+        id: string;
+        delivered: number;
+        failed: number;
+        status: "sent" | "failed";
+      }> = [];
 
-    for (const campaign of campaigns) {
-      try {
-        const { delivered, failed, errors } = await dispatchCampaign(
-          supabase,
-          campaign,
-        );
-        totalDelivered += delivered;
-        totalFailed += failed;
+      for (const campaign of campaigns) {
+        try {
+          const { delivered, failed, errors } = await dispatchCampaign(
+            supabase,
+            campaign,
+          );
+          totalDelivered += delivered;
+          totalFailed += failed;
 
-        const status = delivered > 0 || failed === 0 ? "sent" : "failed";
-        await supabase
-          .from("newsletter_campaigns")
-          .update({
-            status,
-            sent_at: new Date().toISOString(),
-            delivered,
-            failed,
-            error_message: errors.length > 0
-              ? errors.join(" | ").slice(0, 500)
-              : null,
-          })
-          .eq("id", campaign.id);
+          const status = delivered > 0 || failed === 0 ? "sent" : "failed";
+          await supabase
+            .from("newsletter_campaigns")
+            .update({
+              status,
+              sent_at: new Date().toISOString(),
+              delivered,
+              failed,
+              error_message: errors.length > 0
+                ? errors.join(" | ").slice(0, 500)
+                : null,
+            })
+            .eq("id", campaign.id);
 
-        perCampaign.push({ id: campaign.id, delivered, failed, status });
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : String(err);
-        console.error(`Campaign ${campaign.id} dispatch error:`, message);
-        await supabase
-          .from("newsletter_campaigns")
-          .update({
+          perCampaign.push({ id: campaign.id, delivered, failed, status });
+        } catch (err) {
+          const message =
+            err instanceof Error ? err.message : String(err);
+          console.error(`Campaign ${campaign.id} dispatch error:`, message);
+          await supabase
+            .from("newsletter_campaigns")
+            .update({
+              status: "failed",
+              error_message: message.slice(0, 500),
+            })
+            .eq("id", campaign.id);
+          perCampaign.push({
+            id: campaign.id,
+            delivered: 0,
+            failed: 0,
             status: "failed",
-            error_message: message.slice(0, 500),
-          })
-          .eq("id", campaign.id);
-        perCampaign.push({
-          id: campaign.id,
-          delivered: 0,
-          failed: 0,
-          status: "failed",
-        });
+          });
+        }
       }
-    }
 
-    return new Response(
-      JSON.stringify({
-        ok: true,
+      ctx.processed(totalDelivered);
+      ctx.failed(totalFailed);
+      ctx.meta({ dispatched: campaigns.length, per_campaign: perCampaign });
+      return {
         dispatched: campaigns.length,
         delivered: totalDelivered,
         failed: totalFailed,
         per_campaign: perCampaign,
-      }),
+      };
+    }, { maxAttempts: 1 });
+
+    return new Response(
+      JSON.stringify({ ok: job.ok, ...(job.result ?? {}) }),
       {
         status: 200,
         headers: { "Content-Type": "application/json" },

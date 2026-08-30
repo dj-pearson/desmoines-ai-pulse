@@ -36,8 +36,8 @@ $files = @(
     "public/openapi.yaml",
     "supabase/functions/api-events/index.ts",
     "supabase/functions/api-restaurants/index.ts",
-    "CHATGPT_INTEGRATION_GUIDE.md",
-    "CHATGPT_PLUGIN_SUMMARY.md"
+    "docs/integrations/CHATGPT_INTEGRATION_GUIDE.md",
+    "docs/integrations/CHATGPT_PLUGIN_SUMMARY.md"
 )
 
 foreach ($file in $files) {
@@ -205,6 +205,6 @@ if ($errors -eq 0 -and $warnings -eq 0) {
 
 Write-Host ""
 Write-Host "For detailed information, see:" -ForegroundColor Cyan
-Write-Host "  - CHATGPT_PLUGIN_SUMMARY.md - Overview and quick start" -ForegroundColor White
-Write-Host "  - CHATGPT_INTEGRATION_GUIDE.md - Complete documentation" -ForegroundColor White
+Write-Host "  - docs/integrations/CHATGPT_PLUGIN_SUMMARY.md - Overview and quick start" -ForegroundColor White
+Write-Host "  - docs/integrations/CHATGPT_INTEGRATION_GUIDE.md - Complete documentation" -ForegroundColor White
 Write-Host ""

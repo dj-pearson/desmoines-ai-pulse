@@ -8,6 +8,10 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { scrapeUrl } from "../_shared/scraper.ts";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { getAnthropicApiKey } from "../_shared/aiConfig.ts";
+import { sanitizeLikeInput } from '../_shared/validation.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -17,7 +21,7 @@ const corsHeaders = {
 // Initialize Supabase client
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const claudeApiKey = Deno.env.get('CLAUDE_API')!;
+const claudeApiKey = getAnthropicApiKey()!;
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -64,6 +68,9 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
+
+  const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+  if (authFailure) return authFailure;
 
   try {
     const { sources = DEFAULT_SOURCES } = await req.json().catch(() => ({}));
@@ -194,7 +201,7 @@ FORMAT AS JSON ARRAY ONLY - no other text:
 
         console.log(`🤖 Sending content to Claude AI for extraction...`);
 
-        const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
+        const claudeResponse = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: {
             'x-api-key': claudeApiKey,
@@ -209,7 +216,7 @@ FORMAT AS JSON ARRAY ONLY - no other text:
               content: claudePrompt
             }]
           }),
-        });
+        }, 60_000);
 
         if (!claudeResponse.ok) {
           const errorText = await claudeResponse.text();
@@ -246,7 +253,11 @@ FORMAT AS JSON ARRAY ONLY - no other text:
             const { data: existingList } = await supabase
               .from('restaurants')
               .select('id, name, location, status, opening_date, opening_timeframe')
-              .ilike('name', restaurant.name);
+              // A scraped name is a LIKE pattern here; a percent or underscore in
+              // it would widen this existence check and mask a genuinely new
+              // restaurant. Escaped, not stripped - sanitizeLikeInput keeps
+              // apostrophes, which most venue names here have.
+              .ilike('name', sanitizeLikeInput(restaurant.name ?? ''));
 
             // Find match only if BOTH name and location match (same restaurant in same location)
             // If name matches but location is different, treat as new location (allow it)

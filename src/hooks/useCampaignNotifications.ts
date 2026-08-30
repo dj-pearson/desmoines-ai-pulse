@@ -90,10 +90,17 @@ export async function notifyAdmins(
   metadata?: Record<string, string | number | boolean>
 ): Promise<void> {
   try {
+    // `profiles` has no `username` or `role` column — the admin flag is
+    // `user_role`. Both names were wrong, so this query failed with 42703 on
+    // every call, left `admins` undefined, and silently sent no admin
+    // notification for any campaign event. `username` was never read.
+    //
+    // Matches AuthContext's admin test, which counts root_admin as admin too;
+    // filtering on 'admin' alone would skip root admins entirely.
     const { data: admins } = await supabase
       .from('profiles')
-      .select('id, username')
-      .eq('role', 'admin');
+      .select('id')
+      .in('user_role', ['admin', 'root_admin']);
 
     if (admins && admins.length > 0) {
       await Promise.all(

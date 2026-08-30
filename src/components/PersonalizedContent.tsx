@@ -2,9 +2,10 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Sparkles, TrendingUp, Clock, MapPin, Star, DollarSign } from 'lucide-react';
+import { Star, DollarSign } from "lucide-react";
 import { usePersonalizedRecommendations } from '@/hooks/usePersonalizedRecommendations';
 import { Link } from 'react-router-dom';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface PersonalizedContentProps {
   type?: 'events' | 'restaurants' | 'attractions' | 'trending' | 'all';
@@ -67,7 +68,7 @@ export default function PersonalizedContent({
       <div className={`space-y-4 ${className}`}>
         {showTitle && (
           <div className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" />
+            <SpriteIcon name="sparkles" className="h-5 w-5 text-primary" />
             <h3 className="text-lg font-semibold">Personalized for You</h3>
           </div>
         )}
@@ -96,7 +97,7 @@ export default function PersonalizedContent({
       <div className={`text-center py-8 ${className}`}>
         {showTitle && (
           <div className="flex items-center justify-center gap-2 mb-4">
-            <Sparkles className="h-5 w-5 text-primary" />
+            <SpriteIcon name="sparkles" className="h-5 w-5 text-primary" />
             <h3 className="text-lg font-semibold">Personalized for You</h3>
           </div>
         )}
@@ -110,13 +111,13 @@ export default function PersonalizedContent({
   const getTypeIcon = (contentType: string) => {
     switch (contentType) {
       case 'event':
-        return <Clock className="h-4 w-4" />;
+        return <SpriteIcon name="clock" className="h-4 w-4" />;
       case 'restaurant':
         return <DollarSign className="h-4 w-4" />;
       case 'attraction':
-        return <MapPin className="h-4 w-4" />;
+        return <SpriteIcon name="map-pin" className="h-4 w-4" />;
       default:
-        return <TrendingUp className="h-4 w-4" />;
+        return <SpriteIcon name="trending-up" className="h-4 w-4" />;
     }
   };
 
@@ -137,7 +138,7 @@ export default function PersonalizedContent({
     <div className={`space-y-4 ${className}`}>
       {showTitle && (
         <div className="flex items-center gap-2">
-          <Sparkles className="h-5 w-5 text-primary" />
+          <SpriteIcon name="sparkles" className="h-5 w-5 text-primary" />
           <h3 className="text-lg font-semibold">
             {type === 'all' ? 'Recommended for You' : 
              type === 'trending' ? 'Trending Now' :
@@ -179,7 +180,7 @@ export default function PersonalizedContent({
               <div className="space-y-2">
                 {item.content.location && (
                   <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                    <MapPin className="h-3 w-3" />
+                    <SpriteIcon name="map-pin" className="h-3 w-3" />
                     <span className="truncate">{item.content.location}</span>
                   </div>
                 )}
@@ -200,7 +201,7 @@ export default function PersonalizedContent({
 
                 {item.content.date && (
                   <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                    <Clock className="h-3 w-3" />
+                    <SpriteIcon name="clock" className="h-3 w-3" />
                     <span>{new Date(item.content.date).toLocaleDateString()}</span>
                   </div>
                 )}

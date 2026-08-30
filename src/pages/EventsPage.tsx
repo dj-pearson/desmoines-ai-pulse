@@ -2,27 +2,11 @@ import React, { useState, useEffect, useCallback, lazy, Suspense, useRef, useMem
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  Calendar,
-  Search,
-  List,
-  Map,
-  X,
-  SearchX,
-  Sparkles,
-  Navigation,
-  AlertCircle,
-  RefreshCw,
-  Clock,
-  Users,
-  Ticket,
-  ChevronDown,
-  Star,
-  Shuffle,
-} from "lucide-react";
+import { Calendar, Search, List, Map, X, SearchX, Sparkles, Navigation, AlertCircle, RefreshCw, Clock, ChevronDown, Star, Shuffle } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { usePullToRefresh } from "@/hooks/use-pull-to-refresh";
 import { SortDropdown, EVENT_SORT_OPTIONS } from "@/components/SortDropdown";
+import { SaveSearchButton } from "@/components/SaveSearchButton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +15,9 @@ import {
   LoadingSpinner,
 } from "@/components/ui/loading-skeleton";
 import { SocialEventCard } from "@/components/SocialEventCard";
+import { arrangeSponsored } from "@/lib/sponsored";
+import { useUrlFilters } from "@/hooks/useUrlFilters";
+import { ActiveFilterChips } from "@/components/filters/ActiveFilterChips";
 import Header from "@/components/Header";
 import { AdBanner } from "@/components/AdBanner";
 import Footer from "@/components/Footer";
@@ -51,6 +38,9 @@ import { EventInlineFilters } from "@/components/EventInlineFilters";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { SearchAutocomplete, addRecentSearch } from "@/components/SearchAutocomplete";
+import { formatCount } from "@/lib/pluralize";
+import { buildEventJsonLd } from "@/lib/eventSchema";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 // Lazy load heavy map component (includes Leaflet library ~150KB)
 const EventsMap = lazy(() => import("@/components/EventsMap"));
@@ -91,6 +81,40 @@ const DATE_PRESETS = [
 ] as const;
 
 
+type DateFilterValue = {
+  start?: Date;
+  end?: Date;
+  mode: "single" | "range" | "preset";
+  preset?: string;
+} | null;
+
+/** Pure preset -> date range, so a ?preset= URL param can be re-derived on load. */
+function computePresetRange(preset: string): DateFilterValue {
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  switch (preset) {
+    case "today":
+      return { mode: "preset", preset: "today", start: today, end: today };
+    case "tomorrow":
+      return { mode: "preset", preset: "tomorrow", start: tomorrow, end: tomorrow };
+    case "this-weekend": {
+      const saturday = new Date(today);
+      saturday.setDate(today.getDate() + (6 - today.getDay()));
+      const sunday = new Date(saturday);
+      sunday.setDate(saturday.getDate() + 1);
+      return { mode: "preset", preset: "this-weekend", start: saturday, end: sunday };
+    }
+    case "this-week": {
+      const endOfWeek = new Date(today);
+      endOfWeek.setDate(today.getDate() + (6 - today.getDay()));
+      return { mode: "preset", preset: "this-week", start: today, end: endOfWeek };
+    }
+    default:
+      return null;
+  }
+}
+
 export default function EventsPage() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
@@ -99,21 +123,39 @@ export default function EventsPage() {
     navigate(`/events/${createEventSlugWithCentralTime(event.title, event as any)}`);
   }, [navigate]);
 
-  const [searchQuery, setSearchQuery] = useState("");
-  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("all");
-  const [dateFilter, setDateFilter] = useState<{
-    start?: Date;
-    end?: Date;
-    mode: "single" | "range" | "preset";
-    preset?: string;
-  } | null>(null);
-  const [activeDatePreset, setActiveDatePreset] = useState<string | null>(null);
-  const [location, setLocation] = useState("any-location");
-  const [priceRange, setPriceRange] = useState("any-price");
+  // URL-synced filters (WEB-UX-001): shareable + survive back/forward. The
+  // debounced search value lives in the URL ('q'); date presets in 'preset'.
+  const { getStr, getNum, setParam, clearParams } = useUrlFilters();
+  const debouncedSearchQuery = getStr("q", "");
+  const selectedCategory = getStr("category", "all");
+  const location = getStr("location", "any-location");
+  const priceRange = getStr("price", "any-price");
+  const sortBy = getStr("sort", "date_asc");
+  const activeDatePreset = getStr("preset", "") || null;
+  const page = getNum("page", 1);
+
+  const setSelectedCategory = (v: string) => setParam("category", v, { def: "all", resetsPage: true });
+  const setLocation = (v: string) => setParam("location", v, { def: "any-location", resetsPage: true });
+  const setPriceRange = (v: string) => setParam("price", v, { def: "any-price", resetsPage: true });
+  const setSortBy = (v: string) => setParam("sort", v, { def: "date_asc", resetsPage: true });
+  /** Accepts a number OR a React-style updater. Three call sites below pass an
+   *  updater (Load More / Previous / Next), and before this signature existed
+   *  that function was handed straight to setParam, which does String(value) —
+   *  serialising the function SOURCE into the ?page= param. getNum then parsed
+   *  NaN and fell back to 1, so those controls silently did nothing. Surfaced by
+   *  the strict type-check (WEB-CI-007). */
+  const setPage = (v: number | ((prev: number) => number)) =>
+    setParam("page", typeof v === "function" ? v(page) : v, { def: 1 });
+
+  // Local immediate search input; writes to URL 'q' debounced.
+  const [searchQuery, setSearchQuery] = useState(() => debouncedSearchQuery);
+  // Custom (non-preset) date ranges stay local; presets derive from the URL.
+  const [customDateFilter, setCustomDateFilter] = useState<DateFilterValue>(null);
+  const dateFilter: DateFilterValue = activeDatePreset
+    ? computePresetRange(activeDatePreset)
+    : customDateFilter;
+
   const [viewMode, setViewMode] = useState("list");
-  const [sortBy, setSortBy] = useState("date_asc");
-  const [page, setPage] = useState(1);
   const EVENTS_PER_PAGE = 30;
   const { toast } = useToast();
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -126,13 +168,13 @@ export default function EventsPage() {
 
   const handleClearFilters = () => {
     setSearchQuery("");
-    setSelectedCategory("all");
-    setDateFilter(null);
-    setActiveDatePreset(null);
-    setLocation("any-location");
-    setPriceRange("any-price");
+    setCustomDateFilter(null);
+    clearParams(["q", "category", "preset", "location", "price", "sort"]);
     setIsNearMeActive(false);
-    setShowMobileFilters(false);
+    // NOTE: a setShowMobileFilters(false) call sat here referencing state that no
+    // longer exists. It threw ReferenceError on every "Clear all filters" click,
+    // aborting the handler before the confirmation toast below ever fired
+    // (WEB-QA-017).
     toast({
       title: "Filters Cleared",
       description: "All filters have been reset",
@@ -152,45 +194,30 @@ export default function EventsPage() {
     onClearFilters: handleClearFilters,
   });
 
-  // Debounce search query
+  // Debounced search -> URL 'q' (replace, so typing stays out of history).
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearchQuery(searchQuery), 300);
+    if (searchQuery === debouncedSearchQuery) return;
+    const timer = setTimeout(
+      () => setParam("q", searchQuery, { def: "", resetsPage: true, replace: true }),
+      300
+    );
     return () => clearTimeout(timer);
-  }, [searchQuery]);
+  }, [searchQuery, debouncedSearchQuery, setParam]);
 
-  // Quick date preset handler
+  // Back/forward & shared links: pull URL search back into the input.
+  useEffect(() => {
+    setSearchQuery(debouncedSearchQuery);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearchQuery]);
+
+  // Quick date preset handler — toggles the 'preset' URL param; dateFilter is
+  // derived from it. Selecting a preset clears any custom range.
   const handleDatePreset = (preset: string) => {
+    setCustomDateFilter(null);
     if (activeDatePreset === preset) {
-      setActiveDatePreset(null);
-      setDateFilter(null);
-      return;
-    }
-    setActiveDatePreset(preset);
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(today.getDate() + 1);
-
-    switch (preset) {
-      case "today":
-        setDateFilter({ mode: "preset", preset: "today", start: today, end: today });
-        break;
-      case "tomorrow":
-        setDateFilter({ mode: "preset", preset: "tomorrow", start: tomorrow, end: tomorrow });
-        break;
-      case "this-weekend": {
-        const saturday = new Date(today);
-        saturday.setDate(today.getDate() + (6 - today.getDay()));
-        const sunday = new Date(saturday);
-        sunday.setDate(saturday.getDate() + 1);
-        setDateFilter({ mode: "preset", preset: "this-weekend", start: saturday, end: sunday });
-        break;
-      }
-      case "this-week": {
-        const endOfWeek = new Date(today);
-        endOfWeek.setDate(today.getDate() + (6 - today.getDay()));
-        setDateFilter({ mode: "preset", preset: "this-week", start: today, end: endOfWeek });
-        break;
-      }
+      setParam("preset", "", { resetsPage: true });
+    } else {
+      setParam("preset", preset, { resetsPage: true });
     }
   };
 
@@ -203,6 +230,7 @@ export default function EventsPage() {
       location,
       priceRange,
       page,
+      sortBy,
       isNearMeActive,
       userLocation,
     ],
@@ -241,12 +269,36 @@ export default function EventsPage() {
         return { events: filteredData, totalCount: filteredData.length };
       }
 
+      // Visibility predicates MUST match the detail lookup (useEventBySlug) and
+      // useEvents. When the list was more permissive than the detail, merged/hidden
+      // rows rendered as clickable cards that dead-ended on "Event Not Found"
+      // (WEB-QA-002). Any filter added here needs to be added there too.
       let query = supabase
         .from("events")
         .select("id, title, date, location, category, image_url, price, venue, is_featured, event_start_utc, event_start_local, city, latitude, longitude, enhanced_description, original_description", { count: 'exact' })
         .gte("date", new Date().toISOString().split("T")[0])
-        .order("date", { ascending: true })
-        .range((page - 1) * EVENTS_PER_PAGE, page * EVENTS_PER_PAGE - 1);
+        .neq("is_merged", true)
+        .neq("is_hidden", true);
+
+      // Push the active sort into the query so it covers the full result set,
+      // not just the current page (WEB-UX-018). 'newest' = recently added.
+      switch (sortBy) {
+        case "date_desc":
+          query = query.order("date", { ascending: false });
+          break;
+        case "newest":
+          query = query.order("created_at", { ascending: false });
+          break;
+        case "title_asc":
+          query = query.order("title", { ascending: true });
+          break;
+        case "date_asc":
+        default:
+          query = query.order("date", { ascending: true });
+          break;
+      }
+
+      query = query.range((page - 1) * EVENTS_PER_PAGE, page * EVENTS_PER_PAGE - 1);
 
       if (debouncedSearchQuery) {
         query = query.textSearch('search_vector', debouncedSearchQuery, {
@@ -343,26 +395,10 @@ export default function EventsPage() {
   });
 
   const rawEvents = eventsData?.events || [];
-  const priceFilteredEvents = filterEventsByPrice(rawEvents, priceRange);
-  const events = useMemo(() => {
-    const sorted = [...priceFilteredEvents];
-    switch (sortBy) {
-      case "date_desc":
-        sorted.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        break;
-      case "newest":
-        sorted.sort((a, b) => new Date(b.id > a.id ? 1 : -1));
-        break;
-      case "title_asc":
-        sorted.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
-        break;
-      case "date_asc":
-      default:
-        sorted.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-        break;
-    }
-    return sorted;
-  }, [priceFilteredEvents, sortBy]);
+  // The query already returns the page in the correct sort order (WEB-UX-018),
+  // so we only apply the client-side price filter here — no re-sorting. Then
+  // boost up to 2 active sponsored listings to the top (WEB-FEAT-005).
+  const events = arrangeSponsored(filterEventsByPrice(rawEvents, priceRange));
   const totalCount = eventsData?.totalCount || 0;
   const hasMore = totalCount > page * EVENTS_PER_PAGE;
 
@@ -370,7 +406,7 @@ export default function EventsPage() {
     return (rawEvents || []).filter((e: any) => e.is_featured).slice(0, 3);
   }, [rawEvents]);
 
-  useEffect(() => { setPage(1); }, [debouncedSearchQuery, selectedCategory, dateFilter, location, priceRange]);
+  // Page reset on filter change is handled by setParam/clearParams (resetsPage).
 
   // Announce result count to screen readers after search/filter changes
   useEffect(() => {
@@ -392,7 +428,11 @@ export default function EventsPage() {
   });
 
   const eventIds = events?.map(e => e.id) || [];
-  const { data: batchSocialData } = useBatchEventSocial(eventIds);
+  // isPending is forwarded to the cards so they can tell "batch hasn't arrived
+  // yet" from "batch has nothing for this event". Without it every card falls
+  // back to its own per-event fetch on first render and the batching is
+  // defeated — measured at 113 REST requests for 40 cards (WEB-PERF-024).
+  const { data: batchSocialData, isPending: batchSocialPending } = useBatchEventSocial(eventIds);
 
   const handleNearMe = () => {
     if (isNearMeActive) {
@@ -447,6 +487,28 @@ export default function EventsPage() {
     isNearMeActive,
   ].filter(Boolean).length;
 
+  // Active-filter chips (WEB-UX-003) — removal updates the URL state.
+  const eventChips: { key: string; label: string; onRemove: () => void }[] = [
+    ...(debouncedSearchQuery
+      ? [{ key: "q", label: `Search: "${debouncedSearchQuery}"`, onRemove: () => { setSearchQuery(""); setParam("q", "", { resetsPage: true }); } }]
+      : []),
+    ...(selectedCategory !== "all"
+      ? [{ key: "category", label: selectedCategory, onRemove: () => setSelectedCategory("all") }]
+      : []),
+    ...(activeDatePreset
+      ? [{ key: "preset", label: DATE_PRESETS.find((p) => p.key === activeDatePreset)?.label || "Date", onRemove: () => setParam("preset", "", { resetsPage: true }) }]
+      : []),
+    ...(location !== "any-location"
+      ? [{ key: "location", label: location, onRemove: () => setLocation("any-location") }]
+      : []),
+    ...(priceRange !== "any-price"
+      ? [{ key: "price", label: priceRange, onRemove: () => setPriceRange("any-price") }]
+      : []),
+    ...(isNearMeActive
+      ? [{ key: "near", label: "Near me", onRemove: () => setIsNearMeActive(false) }]
+      : []),
+  ];
+
   // SEO
   const seoTitle = searchQuery
     ? `"${searchQuery}" Events in Des Moines, Iowa`
@@ -479,38 +541,22 @@ export default function EventsPage() {
       url: BRAND.baseUrl,
       areaServed: { "@type": "City", name: "Des Moines", addressRegion: "Iowa" },
     },
-    itemListElement: events?.slice(0, 30).map((event, index) => ({
+    // SEO-002: built by src/lib/eventSchema.ts rather than inline here.
+    //
+    // This block used to be a second, divergent copy of the builder in
+    // EventListJsonLd.tsx, and the divergence was live: measured 2026-08-28,
+    // /events shipped 30 Event nodes with NO endDate while /events/this-weekend
+    // and /events/today shipped theirs WITH it, from the same event rows. Google's
+    // Events report names endDate among the fields it wants, and /events is the
+    // hub for the term this site most needs to rank for.
+    //
+    // It also hardcoded `addressLocality: event.city || "Des Moines"`, which is
+    // how a trivia night in Waukee shipped as being in Des Moines (SEO-007).
+    itemListElement: (events?.slice(0, 30) || []).map((event, index) => ({
       "@type": "ListItem",
       position: index + 1,
-      item: {
-        "@type": "Event",
-        "@id": `${BRAND.baseUrl}/events/${createEventSlugWithCentralTime(event.title, event)}`,
-        name: event.title,
-        description: event.enhanced_description || event.original_description || `${event.title} - ${event.category} event in Des Moines, Iowa`,
-        startDate: event.event_start_utc || event.date,
-        location: {
-          "@type": "Place",
-          name: event.venue || event.location || "Des Moines Area",
-          address: {
-            "@type": "PostalAddress",
-            addressLocality: event.city || "Des Moines",
-            addressRegion: "Iowa",
-            addressCountry: "US",
-          },
-          ...(event.latitude && event.longitude && {
-            geo: { "@type": "GeoCoordinates", latitude: event.latitude, longitude: event.longitude },
-          }),
-        },
-        image: [event.image_url || `${BRAND.baseUrl}/default-event-image.jpg`],
-        url: `${BRAND.baseUrl}/events/${createEventSlugWithCentralTime(event.title, event)}`,
-        eventStatus: "https://schema.org/EventScheduled",
-        eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
-        offers: event.price && event.price.toLowerCase() !== "free"
-          ? { "@type": "Offer", price: event.price.replace(/[^0-9.]/g, "") || "0", priceCurrency: "USD", availability: "https://schema.org/InStock" }
-          : { "@type": "Offer", price: "0", priceCurrency: "USD", availability: "https://schema.org/InStock" },
-        isAccessibleForFree: !event.price || event.price.toLowerCase().includes("free"),
-      },
-    })) || [],
+      item: buildEventJsonLd(event),
+    })),
   };
 
   // Loading state
@@ -639,7 +685,7 @@ export default function EventsPage() {
                       variant="ghost"
                       size="sm"
                       onClick={() => setSearchQuery("")}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 p-0 text-white/60 hover:text-white hover:bg-white/10"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 h-11 w-11 sm:h-8 sm:w-8 p-0 text-white/60 hover:text-white hover:bg-white/10"
                       aria-label="Clear search"
                     >
                       <X className="h-4 w-4" />
@@ -660,7 +706,7 @@ export default function EventsPage() {
                   <button
                     key={key}
                     onClick={() => handleDatePreset(key)}
-                    className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                    className={`inline-flex items-center gap-1.5 px-4 py-2 min-h-[44px] rounded-full text-sm font-medium transition-all ${
                       activeDatePreset === key
                         ? "bg-white text-slate-900 shadow-lg shadow-white/20"
                         : "bg-white/10 text-white/80 hover:bg-white/20 hover:text-white border border-white/10"
@@ -708,7 +754,7 @@ export default function EventsPage() {
                     onClick={() => setViewMode("list")}
                     variant="ghost"
                     size="icon"
-                    className={`h-8 w-8 rounded-full ${viewMode === "list" ? "bg-white/20 text-white" : "text-white/50 hover:text-white hover:bg-white/10"}`}
+                    className={`h-11 w-11 sm:h-8 sm:w-8 rounded-full ${viewMode === "list" ? "bg-white/20 text-white" : "text-white/50 hover:text-white hover:bg-white/10"}`}
                     aria-label="List view"
                   >
                     <List className="h-4 w-4" />
@@ -717,7 +763,7 @@ export default function EventsPage() {
                     onClick={() => setViewMode("map")}
                     variant="ghost"
                     size="icon"
-                    className={`h-8 w-8 rounded-full ${viewMode === "map" ? "bg-white/20 text-white" : "text-white/50 hover:text-white hover:bg-white/10"}`}
+                    className={`h-11 w-11 sm:h-8 sm:w-8 rounded-full ${viewMode === "map" ? "bg-white/20 text-white" : "text-white/50 hover:text-white hover:bg-white/10"}`}
                     aria-label="Map view"
                   >
                     <Map className="h-4 w-4" />
@@ -740,7 +786,7 @@ export default function EventsPage() {
                   onLocationChange={setLocation}
                   priceRange={priceRange}
                   onPriceRangeChange={setPriceRange}
-                  onDateChange={(d) => { setDateFilter(d); setActiveDatePreset(null); }}
+                  onDateChange={(d) => { setCustomDateFilter(d); setParam("preset", "", { resetsPage: true }); }}
                   categories={categories || []}
                   totalResults={events?.length || 0}
                   isLoading={isLoading}
@@ -800,17 +846,27 @@ export default function EventsPage() {
                   : "Upcoming Events"}
               </h2>
               {!isLoading && (
-                <p className="text-sm text-muted-foreground mt-0.5">
-                  {events?.length || 0} events in Des Moines{isNearMeActive ? ' near you' : ''}
+                <p className="text-sm text-muted-foreground mt-0.5" aria-live="polite">
+                  {formatCount(events?.length || 0, 'event')} in Des Moines{isNearMeActive ? ' near you' : ''}
                 </p>
               )}
             </div>
-            <SortDropdown
-              options={EVENT_SORT_OPTIONS}
-              value={sortBy}
-              onChange={setSortBy}
-            />
+            <div className="flex items-center gap-2">
+              <SaveSearchButton className="hidden sm:inline-flex" />
+              <SortDropdown
+                options={EVENT_SORT_OPTIONS}
+                value={sortBy}
+                onChange={setSortBy}
+              />
+            </div>
           </div>
+
+          {/* Sticky filter bar: removable chips (WEB-UX-003) */}
+          {eventChips.length > 0 && (
+            <div className="sticky top-16 z-30 py-2 mb-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+              <ActiveFilterChips onClearAll={handleClearFilters} chips={eventChips} />
+            </div>
+          )}
 
           {/* Featured Events Section */}
           {!isLoading && activeFiltersCount === 0 && featuredEvents.length > 0 && (
@@ -833,6 +889,7 @@ export default function EventsPage() {
                     key={`featured-${event.id}`}
                     event={event}
                     socialData={batchSocialData?.[event.id]}
+                    socialDataPending={batchSocialPending}
                     featured
                     onViewDetails={handleViewEventDetails}
                   />
@@ -855,6 +912,7 @@ export default function EventsPage() {
                   key={event.id}
                   event={event}
                   socialData={batchSocialData?.[event.id]}
+                    socialDataPending={batchSocialPending}
                   featured={index === 0 && !searchQuery && selectedCategory === "all" && events.length > 6}
                   onViewDetails={handleViewEventDetails}
                 />
@@ -866,7 +924,7 @@ export default function EventsPage() {
           {!isLoading && events && events.length > 0 && hasMore && (
             <div className="flex justify-center mt-10">
               <Button
-                onClick={() => setPage(p => p + 1)}
+                onClick={() => setPage(page + 1)}
                 variant="outline"
                 size="lg"
                 className="min-w-[200px] rounded-full"
@@ -879,7 +937,7 @@ export default function EventsPage() {
 
           {!isLoading && events && events.length > 0 && !hasMore && (
             <div className="flex justify-center mt-8 mb-4 text-sm text-muted-foreground">
-              Showing all {events.length} events
+              Showing all {formatCount(events.length, 'event')}
             </div>
           )}
 
@@ -937,7 +995,7 @@ export default function EventsPage() {
               <h3 className="text-lg font-semibold mb-4">Browse Events By</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <Link to="/events/today" className="flex items-center gap-2 p-3 rounded-lg bg-card border hover:border-primary/50 hover:shadow-sm transition-all text-sm font-medium">
-                  <Clock className="h-4 w-4 text-primary" />
+                  <SpriteIcon name="clock" className="h-4 w-4 text-primary" />
                   Events Today
                 </Link>
                 <Link to="/events/this-weekend" className="flex items-center gap-2 p-3 rounded-lg bg-card border hover:border-primary/50 hover:shadow-sm transition-all text-sm font-medium">
@@ -945,11 +1003,11 @@ export default function EventsPage() {
                   This Weekend
                 </Link>
                 <Link to="/events/free" className="flex items-center gap-2 p-3 rounded-lg bg-card border hover:border-primary/50 hover:shadow-sm transition-all text-sm font-medium">
-                  <Ticket className="h-4 w-4 text-primary" />
+                  <SpriteIcon name="ticket" className="h-4 w-4 text-primary" />
                   Free Events
                 </Link>
                 <Link to="/events/kids" className="flex items-center gap-2 p-3 rounded-lg bg-card border hover:border-primary/50 hover:shadow-sm transition-all text-sm font-medium">
-                  <Users className="h-4 w-4 text-primary" />
+                  <SpriteIcon name="users" className="h-4 w-4 text-primary" />
                   Kids & Family
                 </Link>
               </div>

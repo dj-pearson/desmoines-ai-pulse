@@ -19,6 +19,7 @@ import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import { handleCors, getCorsHeaders, isOriginAllowed } from '../_shared/cors.ts';
 import { checkRateLimit, addRateLimitHeaders } from '../_shared/rateLimit.ts';
+import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -117,7 +118,7 @@ async function getGoogleAccessToken(
 ): Promise<string> {
   const jwt = await generateServiceAccountJWT(privateKey, clientEmail);
 
-  const response = await fetch(GOOGLE_TOKEN_URL, {
+  const response = await fetchWithTimeout(GOOGLE_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
@@ -165,7 +166,7 @@ async function verifySubscriptionWithGoogle(
 ): Promise<GoogleSubscriptionPurchase | null> {
   const url = `${GOOGLE_API_BASE}/applications/${packageName}/purchases/subscriptions/${productId}/tokens/${purchaseToken}`;
 
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
@@ -433,12 +434,18 @@ serve(async (req) => {
     // -----------------------------------------------------------------------
 
     // Look up the matching subscription plan
-    const { data: plan } = await supabase
+    const { data: plan, error: planError } = await supabase
       .from('subscription_plans')
       .select('id')
       .ilike('name', `%${tier}%`)
       .limit(1)
       .single();
+
+    // Survivable: plan_id is spread in only when present, so a failed lookup
+    // writes the subscription without it rather than losing the purchase. Logged
+    // because a run of these produces entitlements nothing can price
+    // (WEB-BE-032 AC3).
+    if (planError) console.warn(`[validate-android-receipt] subscription_plans lookup failed: ${planError.message}`);
 
     const subscriptionData = {
       user_id: user.id,
@@ -458,12 +465,22 @@ serve(async (req) => {
 
     // Check if user already has an Android subscription record. Scoped to
     // platform='android' so we don't clobber a web/Stripe or iOS row.
-    const { data: existing } = await supabase
+    const { data: existing, error: existingError } = await supabase
       .from('user_subscriptions')
       .select('id')
       .eq('user_id', user.id)
       .eq('platform', 'android')
       .maybeSingle();
+
+    // This read decides UPDATE vs INSERT. A dropped error reads as "no row"
+    // and takes the INSERT branch, so every renewal validation would add
+    // ANOTHER user_subscriptions row for the same user and platform and the
+    // entitlement a reader sees would depend on row order. The store retries
+    // receipt validation, so failing is recoverable and duplicating is not
+    // (WEB-BE-032 AC2).
+    if (existingError) {
+      throw new Error(`user_subscriptions lookup failed: ${existingError.message}`);
+    }
 
     if (existing) {
       const { error: updateError } = await supabase

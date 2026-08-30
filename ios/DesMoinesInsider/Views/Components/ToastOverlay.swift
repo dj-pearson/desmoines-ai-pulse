@@ -59,6 +59,8 @@ private struct ToastView: View {
             Capsule(style: .continuous)
                 .strokeBorder(iconColor.opacity(0.25), lineWidth: 0.75)
         )
+        // Read the toast as a single element if a VoiceOver user swipes to it.
+        .accessibilityElement(children: .combine)
     }
 
     private var iconColor: Color {
@@ -74,6 +76,7 @@ private struct ToastView: View {
 
 struct ToastOverlayModifier: ViewModifier {
     @Binding var message: ToastMessage?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
         content
@@ -81,15 +84,27 @@ struct ToastOverlayModifier: ViewModifier {
                 if let message {
                     ToastView(message: message)
                         .padding(.bottom, 24)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        // Reduce Motion (IOS-COMPLY-003): fade instead of sliding up.
+                        .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
                         .zIndex(100)
                 }
             }
-            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: message)
+            .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.35, dampingFraction: 0.8), value: message)
             .onChange(of: message) { _, newValue in
-                guard newValue != nil else { return }
+                guard let newValue else { return }
+
+                // Announce to VoiceOver (IOS-AUDIT-UX-003) — it's otherwise silent.
+                // Errors get higher priority so they interrupt other speech.
+                var announcement = AttributedString(newValue.text)
+                announcement.accessibilitySpeechAnnouncementPriority =
+                    newValue.style == .error ? .high : .default
+                AccessibilityNotification.Announcement(announcement).post()
+
+                // Give VoiceOver users longer to hear/read the toast before it
+                // auto-dismisses.
+                let dismissAfter: Double = UIAccessibility.isVoiceOverRunning ? 5.0 : 2.0
                 Task { @MainActor in
-                    try? await Task.sleep(for: .seconds(2.0))
+                    try? await Task.sleep(for: .seconds(dismissAfter))
                     if self.message == newValue {
                         self.message = nil
                     }

@@ -7,6 +7,8 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -18,6 +20,17 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+
+  // Runs as service_role and had no caller check. verify_jwt defaults to
+  // true, which only means "a valid Supabase JWT" - the publishable anon
+  // key is one and ships in every client bundle.
+  //
+  // Callers, enumerated before guarding:
+  //   NO caller anywhere; also 404 in production, never deployed
+  // requireAdminOrApiKey accepts EDGE_FUNCTION_API_KEY, the service-role
+  // key and an admin JWT, so a manual or server-to-server call still works.
+  const authFailure = await requireAdminOrApiKey(req, corsHeaders);
+  if (authFailure) return authFailure;
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -71,7 +84,7 @@ serve(async (req) => {
       const googleClientId = Deno.env.get("GOOGLE_CLIENT_ID");
       const googleClientSecret = Deno.env.get("GOOGLE_CLIENT_SECRET");
 
-      const refreshResponse = await fetch("https://oauth2.googleapis.com/token", {
+      const refreshResponse = await fetchWithTimeout("https://oauth2.googleapis.com/token", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
@@ -114,7 +127,7 @@ serve(async (req) => {
     console.log(`Fetching GSC properties for credential ${credentialId}...`);
 
     // Fetch properties from GSC API
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       "https://www.googleapis.com/webmasters/v3/sites",
       {
         headers: {
@@ -186,10 +199,20 @@ serve(async (req) => {
     // Remove any existing properties for this credential that are NOT in the filtered list
     // (cleans up properties from previous unfiltered runs)
     const keepUrls = properties.map((p: any) => p.siteUrl);
-    const { data: existingProps } = await supabase
+    const { data: existingProps, error: existingPropsError } = await supabase
       .from("gsc_properties")
       .select("id, property_url")
       .eq("oauth_credential_id", credentialId);
+
+    // Logged rather than thrown: an unreadable list means the CLEANUP does not
+    // run - `idsToRemove` comes out empty and nothing is deleted, which is the
+    // safe direction - but the sync below is the primary work and should still
+    // happen. What was wrong is that a skipped cleanup was indistinguishable
+    // from a cleanup with nothing to do, so stale properties would accumulate
+    // silently.
+    if (existingPropsError) {
+      console.error("[gsc-fetch-properties] could not list existing properties; skipping cleanup:", existingPropsError.message);
+    }
 
     const idsToRemove = (existingProps || [])
       .filter((ep: any) => !keepUrls.includes(ep.property_url))
@@ -214,15 +237,25 @@ serve(async (req) => {
       }
 
       // Check if property already exists
-      const { data: existing } = await supabase
+      // PGRST116 IS THE SUCCESS CASE. .single() reports "no rows" as an error,
+      // and no rows is exactly what "this property is new" looks like. Any
+      // other error used to land in the same place, because the result was
+      // destructured without `error`: existing came back null and the else
+      // branch INSERTED, so a transient read failure created a duplicate
+      // gsc_properties row for a property that was already there.
+      const { data: existing, error: existingError } = await supabase
         .from("gsc_properties")
         .select("id")
         .eq("property_url", propertyUrl)
         .single();
 
+      if (existingError && existingError.code !== "PGRST116") {
+        throw new Error(`Could not check for existing property ${propertyUrl}: ${existingError.message}`);
+      }
+
       if (existing) {
         // Update existing property
-        const { data: updated } = await supabase
+        const { data: updated, error: updatedError } = await supabase
           .from("gsc_properties")
           .update({
             property_type: propertyType,
@@ -235,10 +268,16 @@ serve(async (req) => {
           .select()
           .single();
 
+        // savedProperties becomes the response's list of what was saved. A
+        // failed update pushed NULL into it, so the caller was told a property
+        // had been synced and handed nothing.
+        if (updatedError) {
+          throw new Error(`Could not update property ${propertyUrl}: ${updatedError.message}`);
+        }
         savedProperties.push(updated);
       } else {
         // Insert new property
-        const { data: inserted } = await supabase
+        const { data: inserted, error: insertedError } = await supabase
           .from("gsc_properties")
           .insert({
             property_url: propertyUrl,
@@ -252,6 +291,9 @@ serve(async (req) => {
           .select()
           .single();
 
+        if (insertedError) {
+          throw new Error(`Could not insert property ${propertyUrl}: ${insertedError.message}`);
+        }
         savedProperties.push(inserted);
       }
     }

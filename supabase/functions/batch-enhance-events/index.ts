@@ -1,6 +1,8 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { fetchWithTimeout } from '../_shared/fetchWithTimeout.ts';
+import { getAnthropicApiKey, extractClaudeText } from '../_shared/aiConfig.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -9,7 +11,7 @@ const corsHeaders = {
 
 const googleSearchApiKey = Deno.env.get('GOOGLE_SEARCH_API') || Deno.env.get('GOOGLE_PROGRAMMATIC_KEY');
 const googleSearchEngineId = Deno.env.get('GOOGLE_SEARCH_ENGINE_ID') || 'a67b454ea60fc4b35';
-const claudeApiKey = Deno.env.get('CLAUDE_API');
+const claudeApiKey = getAnthropicApiKey();
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
@@ -30,7 +32,7 @@ async function searchWithGoogle(query: string): Promise<SearchResult[]> {
   console.log('Google Search Engine ID:', googleSearchEngineId);
   console.log('Encoded query:', encodeURIComponent(query));
   
-  const response = await fetch(searchUrl);
+  const response = await fetchWithTimeout(searchUrl);
   
   console.log('Google Search API response status:', response.status);
   
@@ -137,7 +139,7 @@ Example format:
 
   try {
     console.log('About to make fetch request to Claude API...');
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -146,7 +148,7 @@ Example format:
       },
       body: JSON.stringify(requestBody),
       signal: controller.signal
-    });
+    }, 60_000);
 
     clearTimeout(timeoutId);
     console.log('Claude API response received');
@@ -161,7 +163,12 @@ Example format:
     }
 
     const data = await response.json();
-    const content = data.content[0]?.text || '{}';
+    const extracted = extractClaudeText(data);
+    if (!extracted.ok) {
+      console.error("Claude response not usable:", extracted.reason, extracted.detail);
+      throw new Error(`AI response ${extracted.reason}: ${extracted.detail}`);
+    }
+    const content = extracted.text;
     
     // Extract JSON from the response
     const jsonMatch = content.match(/\{[\s\S]*\}/);
@@ -222,7 +229,44 @@ serve(async (req) => {
 
   try {
     const { eventIds, fields, baseQuery } = await req.json();
-    
+
+    // SAY WHAT IS WRONG INSTEAD OF THROWING A TypeError.
+    //
+    // This went straight to eventIds.length, so a request without eventIds died
+    // with "Cannot read properties of undefined (reading 'length')" and a 500 -
+    // which names neither the field nor the caller.
+    //
+    // It is not hypothetical. The enhance-events-morning and -evening pg_cron
+    // jobs post `{"limit": 50, "forceRefresh": false}`, a shape this function has
+    // never supported: it selects with .in('id', eventIds) and has no path that
+    // chooses events for itself. Both jobs have run twice daily since 2026-08-22
+    // and every run has produced exactly that TypeError, while cron recorded
+    // success because net.http_post succeeded in ENQUEUEING the request.
+    //
+    // A 400 naming the missing field makes the next run diagnosable from
+    // net._http_response alone. Giving this function a selection mode is a
+    // separate decision, not a bug fix: it spends a Claude call and up to three
+    // Google Search calls per event, so "enhance 50 events" is a cost choice
+    // somebody has to make deliberately.
+    if (!Array.isArray(eventIds) || eventIds.length === 0) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error:
+            'eventIds must be a non-empty array. This function enhances a caller-chosen set ' +
+            'and has no mode that selects events itself.',
+          received: { eventIds: typeof eventIds, fields: typeof fields, baseQuery: typeof baseQuery },
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+    if (!Array.isArray(fields) || fields.length === 0) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'fields must be a non-empty array' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
     console.log(`Batch enhancing ${eventIds.length} events with fields: ${fields.join(', ')}`);
     console.log('Environment check - Claude API Key exists:', !!claudeApiKey);
     console.log('Environment check - Google Search API Key exists:', !!googleSearchApiKey);

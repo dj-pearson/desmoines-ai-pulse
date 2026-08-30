@@ -78,7 +78,9 @@ import com.desmoines.aipulse.data.model.Event
 import com.desmoines.aipulse.data.model.EventCategory
 import com.desmoines.aipulse.data.model.Restaurant
 import com.desmoines.aipulse.data.model.SubscriptionTier
+import com.desmoines.aipulse.data.remote.CampaignAdService
 import com.desmoines.aipulse.ui.components.AdBannerView
+import com.desmoines.aipulse.ui.components.ads.AdSlot
 import com.desmoines.aipulse.ui.components.EmptyStateView
 import com.desmoines.aipulse.ui.components.InlineLoadingView
 import com.desmoines.aipulse.ui.components.icon
@@ -135,6 +137,17 @@ fun HomeScreen(
     onNavigateToEventDetail: (String) -> Unit = {},
     onNavigateToRestaurantDetail: (String) -> Unit = {},
     onNavigateToSubscription: () -> Unit = {},
+    onNavigateToTripPlanner: () -> Unit = {},
+    onNavigateToDiscover: () -> Unit = {},
+    onNavigateToSurpriseMe: () -> Unit = {},
+    onNavigateToWeekend: () -> Unit = {},
+    onNavigateToNeighborhoods: () -> Unit = {},
+    onNavigateToContentHubs: () -> Unit = {},
+    onNavigateToDashboard: () -> Unit = {},
+    onNavigateToArticles: () -> Unit = {},
+    onNavigateToDeals: () -> Unit = {},
+    onNavigateToHotels: () -> Unit = {},
+    onNavigateToBestOf: () -> Unit = {},
     onSelectCategory: (EventCategory?) -> Unit = {},
     onSelectDatePreset: (DateFilterPreset?) -> Unit = {},
     onShowFilters: () -> Unit = {},
@@ -262,6 +275,42 @@ fun HomeScreen(
                             }
                         )
                     }
+                    item(key = "tripPlanner", span = { GridItemSpan(maxLineSpan) }) {
+                        TripPlannerHomeCard(onClick = onNavigateToTripPlanner)
+                    }
+                    item(key = "discover", span = { GridItemSpan(maxLineSpan) }) {
+                        DiscoverHomeCard(onClick = onNavigateToDiscover)
+                    }
+                    item(key = "surpriseMe", span = { GridItemSpan(maxLineSpan) }) {
+                        SurpriseMeHomeCard(onClick = onNavigateToSurpriseMe)
+                    }
+                    item(key = "weekend", span = { GridItemSpan(maxLineSpan) }) {
+                        WeekendHomeCard(onClick = onNavigateToWeekend)
+                    }
+                    item(key = "neighborhoods", span = { GridItemSpan(maxLineSpan) }) {
+                        NeighborhoodsHomeCard(onClick = onNavigateToNeighborhoods)
+                    }
+                    item(key = "contentHubs", span = { GridItemSpan(maxLineSpan) }) {
+                        ContentHubsHomeCard(onClick = onNavigateToContentHubs)
+                    }
+                    item(key = "dashboard", span = { GridItemSpan(maxLineSpan) }) {
+                        DashboardHomeCard(onClick = onNavigateToDashboard)
+                    }
+                    item(key = "articles", span = { GridItemSpan(maxLineSpan) }) {
+                        ArticlesHomeCard(onClick = onNavigateToArticles)
+                    }
+                    item(key = "deals", span = { GridItemSpan(maxLineSpan) }) {
+                        DealsHomeCard(onClick = onNavigateToDeals)
+                    }
+                    item(key = "hotels", span = { GridItemSpan(maxLineSpan) }) {
+                        HotelsHomeCard(onClick = onNavigateToHotels)
+                    }
+                    item(key = "bestOf", span = { GridItemSpan(maxLineSpan) }) {
+                        BestOfHomeCard(onClick = onNavigateToBestOf)
+                    }
+                    item(key = "forYou", span = { GridItemSpan(maxLineSpan) }) {
+                        ForYouRail(onNavigateToEvent = onNavigateToEventDetail)
+                    }
                     if (state.errorMessage != null) {
                         item(key = "error", span = { GridItemSpan(maxLineSpan) }) {
                             ErrorBanner(message = state.errorMessage, onRetry = onRefresh)
@@ -283,6 +332,9 @@ fun HomeScreen(
                                 .padding(horizontal = Dimens.SpacingLg)
                                 .padding(vertical = 4.dp)
                         )
+                    }
+                    item(key = "campaignAd", span = { GridItemSpan(maxLineSpan) }) {
+                        AdSlot(placement = CampaignAdService.BELOW_FOLD)
                     }
                     if (state.restaurants.isNotEmpty()) {
                         item(key = "restaurants", span = { GridItemSpan(maxLineSpan) }) {
@@ -397,6 +449,42 @@ fun HomeScreen(
                             }
                         )
                     }
+                    item(key = "tripPlanner") {
+                        TripPlannerHomeCard(onClick = onNavigateToTripPlanner)
+                    }
+                    item(key = "discover") {
+                        DiscoverHomeCard(onClick = onNavigateToDiscover)
+                    }
+                    item(key = "surpriseMe") {
+                        SurpriseMeHomeCard(onClick = onNavigateToSurpriseMe)
+                    }
+                    item(key = "weekend") {
+                        WeekendHomeCard(onClick = onNavigateToWeekend)
+                    }
+                    item(key = "neighborhoods") {
+                        NeighborhoodsHomeCard(onClick = onNavigateToNeighborhoods)
+                    }
+                    item(key = "contentHubs") {
+                        ContentHubsHomeCard(onClick = onNavigateToContentHubs)
+                    }
+                    item(key = "dashboard") {
+                        DashboardHomeCard(onClick = onNavigateToDashboard)
+                    }
+                    item(key = "articles") {
+                        ArticlesHomeCard(onClick = onNavigateToArticles)
+                    }
+                    item(key = "deals") {
+                        DealsHomeCard(onClick = onNavigateToDeals)
+                    }
+                    item(key = "hotels") {
+                        HotelsHomeCard(onClick = onNavigateToHotels)
+                    }
+                    item(key = "bestOf") {
+                        BestOfHomeCard(onClick = onNavigateToBestOf)
+                    }
+                    item(key = "forYou") {
+                        ForYouRail(onNavigateToEvent = onNavigateToEventDetail)
+                    }
                     if (state.errorMessage != null) {
                         item(key = "error") {
                             ErrorBanner(message = state.errorMessage, onRetry = onRefresh)
@@ -418,6 +506,9 @@ fun HomeScreen(
                                 .padding(horizontal = Dimens.SpacingLg)
                                 .padding(vertical = 4.dp)
                         )
+                    }
+                    item(key = "campaignAd") {
+                        AdSlot(placement = CampaignAdService.BELOW_FOLD)
                     }
                     if (state.restaurants.isNotEmpty()) {
                         item(key = "restaurants") {

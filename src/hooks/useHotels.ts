@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { createLogger } from "@/lib/logger";
 import { Database } from "@/integrations/supabase/types";
+
+const logger = createLogger("useHotels");
 
 type Hotel = Database["public"]["Tables"]["hotels"]["Row"];
 type HotelInsert = Database["public"]["Tables"]["hotels"]["Insert"];
@@ -162,7 +165,7 @@ export function useHotels(filters: HotelFilters = {}) {
         totalCount: count || 0,
       });
     } catch (error) {
-      console.error("Error fetching hotels:", error);
+      logger.error('fetchHotels', 'Error fetching hotels', { error });
       setState((prev) => ({
         ...prev,
         isLoading: false,
@@ -200,7 +203,7 @@ export function useHotels(filters: HotelFilters = {}) {
       fetchHotels();
       return data;
     } catch (error) {
-      console.error("Error creating hotel:", error);
+      logger.error('createHotel', 'Error creating hotel', { error });
       throw error;
     }
   };
@@ -219,7 +222,7 @@ export function useHotels(filters: HotelFilters = {}) {
       fetchHotels();
       return data;
     } catch (error) {
-      console.error("Error updating hotel:", error);
+      logger.error('updateHotel', 'Error updating hotel', { error });
       throw error;
     }
   };
@@ -235,7 +238,7 @@ export function useHotels(filters: HotelFilters = {}) {
 
       fetchHotels();
     } catch (error) {
-      console.error("Error deleting hotel:", error);
+      logger.error('deleteHotel', 'Error deleting hotel', { error });
       throw error;
     }
   };
@@ -281,7 +284,7 @@ export function useHotel(slug: string | undefined) {
 
         setHotel(data);
       } catch (err) {
-        console.error("Error fetching hotel:", err);
+        logger.error('useHotel', 'Error fetching hotel', { error: err });
         setError(
           err instanceof Error ? err.message : "Failed to fetch hotel"
         );
@@ -329,7 +332,7 @@ export function useEventHotels(eventId: string | undefined) {
 
         setHotels(linked);
       } catch (err) {
-        console.error("Error fetching event hotels:", err);
+        logger.error('useEventHotels', 'Error fetching event hotels', { error: err });
       } finally {
         setIsLoading(false);
       }
@@ -378,7 +381,7 @@ export function useHotelFilterOptions() {
           isLoading: false,
         });
       } catch (error) {
-        console.error("Error fetching hotel filter options:", error);
+        logger.error('useHotelFilterOptions', 'Error fetching hotel filter options', { error });
         setOptions((prev) => ({ ...prev, isLoading: false }));
       }
     };

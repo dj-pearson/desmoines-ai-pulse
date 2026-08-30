@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useCommunityFeatures } from "@/hooks/useCommunityFeatures";
-import { MessageSquare, Plus, Users, Calendar, Pin, Lock, Reply } from "lucide-react";
+import { MessageSquare, Plus, Pin, Lock, Reply } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
 export function CommunityForums() {

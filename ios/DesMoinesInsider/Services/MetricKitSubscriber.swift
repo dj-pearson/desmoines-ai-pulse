@@ -16,9 +16,10 @@ final class MetricKitSubscriber: NSObject, MXMetricManagerSubscriber {
         MXMetricManager.shared.add(self)
     }
 
-    deinit {
-        MXMetricManager.shared.remove(self)
-    }
+    // No deinit: this is a process-lifetime singleton (DesMoinesInsiderApp holds
+    // it) so it's never deallocated. A deinit calling the main-actor
+    // MXMetricManager.shared from a nonisolated context was both dead code and
+    // unsafe under strict concurrency (IOS-AUDIT-PERF-007).
 
     // MARK: - MXMetricManagerSubscriber
 

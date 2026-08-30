@@ -17,13 +17,14 @@ import {
   isOriginAllowed,
 } from "../_shared/cors.ts";
 import { checkRateLimit, addRateLimitHeaders } from "../_shared/rateLimit.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { requireAdminOrApiKey, type AdminCaller } from "../_shared/apiKeyAuth.ts";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const SUPPORT_FROM =
   Deno.env.get("SUPPORT_FROM")
     ?? Deno.env.get("NEWSLETTER_FROM")
     ?? "Des Moines Insider <support@desmoinesinsider.com>";
-const ADMIN_ROLES = ["admin", "root_admin"] as const;
 
 serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -60,35 +61,22 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Auth required" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } =
-      await supabase.auth.getUser(token);
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Invalid auth" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-    if (
-      !profile ||
-      !ADMIN_ROLES.includes(profile.role as typeof ADMIN_ROLES[number])
-    ) {
-      return new Response(JSON.stringify({ error: "Admin required" }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    // WEB-SEC-023: was a hand-rolled gate on profiles.role keyed by the row PK.
+    const caller: AdminCaller = { user: null };
+    const authFailure = await requireAdminOrApiKey(req, corsHeaders, caller);
+    if (authFailure) return authFailure;
+
+    // The reply is attributed to the admin who sent it (sent_by), so a shared
+    // key with no user identity cannot drive this endpoint.
+    const user = caller.user;
+    if (!user) {
+      return new Response(
+        JSON.stringify({ error: "This endpoint requires an admin user session" }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const { submission_id, body_html } = await req.json().catch(() => ({}));
@@ -121,7 +109,7 @@ serve(async (req) => {
       ? submission.subject
       : `Re: ${submission.subject ?? "Your message to Des Moines Insider"}`;
 
-    const r = await fetch("https://api.resend.com/emails", {
+    const r = await fetchWithTimeout("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

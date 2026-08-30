@@ -24,6 +24,9 @@ struct DiscoverView: View {
     @State private var showGroupSession = false
     @AppStorage("discover.hasSeenIntro.v1") private var hasSeenIntro = false
     @State private var stackId = UUID()
+    /// Drives the action-bar buttons through the swipe-deck's animated commit
+    /// path so taps fly the card off like a gesture (IOS-AUDIT-UX-018).
+    @State private var swipeCommand: SwipeCardStack.Command?
 
     init(
         initialFilter: DiscoverFilterContext = .init(),
@@ -55,6 +58,17 @@ struct DiscoverView: View {
 
                 deckArea
 
+                // Saved count lives here rather than the toolbar so it doesn't
+                // collide with the inline title on narrow widths (IOS-AUDIT-UX-030).
+                if viewModel.likedItems.count > 0 {
+                    Text("Saved \(viewModel.likedItems.count)")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .padding(.horizontal, 28)
+                        .accessibilityLabel("\(viewModel.likedItems.count) saved")
+                }
+
                 actionBar
                     .padding(.horizontal, 24)
                     .padding(.bottom, 16)
@@ -83,11 +97,6 @@ struct DiscoverView: View {
                     }
                     .accessibilityLabel("Start or join a group session")
                 }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Text("Saved \(viewModel.likedItems.count)")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                }
             }
             .sheet(isPresented: $showGroupSession) {
                 GroupSessionView()
@@ -96,6 +105,14 @@ struct DiscoverView: View {
             .navigationDestination(for: Restaurant.self) { RestaurantDetailView(restaurant: $0) }
             .task { await viewModel.loadInitial() }
             .toastOverlay(message: $toast)
+            // The toast state existed and nothing ever assigned it
+            // (IOS-AUDIT-UX-057). A liked card that failed to save animated away
+            // exactly like one that saved.
+            .onChange(of: viewModel.favoriteSaveFailed) { _, failed in
+                guard failed else { return }
+                toast = .error("Couldn't save that one. Check your connection.")
+                viewModel.acknowledgeFavoriteFailure()
+            }
             .sheet(isPresented: Binding(get: { !hasSeenIntro }, set: { hasSeenIntro = !$0 })) {
                 introSheet
                     .presentationDetents([.medium])
@@ -149,45 +166,62 @@ struct DiscoverView: View {
 
     @ViewBuilder
     private var deckArea: some View {
-        ZStack {
-            if viewModel.isLoading && viewModel.deck.isEmpty {
-                ProgressView().scaleEffect(1.4)
-            } else if viewModel.deck.isEmpty {
-                emptyState
-            } else {
-                SwipeCardStack(
-                    items: viewModel.deck,
-                    onLike: { viewModel.like($0) },
-                    onSkip: { viewModel.skip($0) },
-                    onBoost: { viewModel.boost($0) },
-                    onTap: { item in
-                        viewModel.recordDetailTap(item)
-                        switch item {
-                        case .event(let e): navigationPath.append(e)
-                        case .restaurant(let r): navigationPath.append(r)
-                        }
-                    }
-                )
-                .id(stackId)
+        // GeometryReader is placed INSIDE the padding so it measures the
+        // already-constrained space. The resulting size is passed directly to
+        // SwipeCardStack, guaranteeing cards are always bounded to the viewport
+        // regardless of layout timing or orientation changes.
+        GeometryReader { proxy in
+            ZStack {
+                if viewModel.isLoading && viewModel.deck.isEmpty {
+                    ProgressView().scaleEffect(1.4)
+                } else if viewModel.deck.isEmpty {
+                    emptyState
+                } else {
+                    SwipeCardStack(
+                        items: viewModel.deck,
+                        containerWidth: proxy.size.width,
+                        containerHeight: proxy.size.height,
+                        onLike: { viewModel.like($0) },
+                        onSkip: { viewModel.skip($0) },
+                        onBoost: { viewModel.boost($0) },
+                        onTap: { item in
+                            viewModel.recordDetailTap(item)
+                            switch item {
+                            case .event(let e): navigationPath.append(e)
+                            case .restaurant(let r): navigationPath.append(r)
+                            }
+                        },
+                        command: $swipeCommand
+                    )
+                    .id(stackId)
+                }
             }
+            // Clip any card overflow (e.g. rotation corners, dismiss animations)
+            // to the padded deck area so nothing bleeds into the side margins.
+            .clipped()
         }
-        // .frame fills the remaining VStack height so the GeometryReader inside
-        // SwipeCardStack always receives a concrete non-zero proposed size.
-        // Padding is the OUTERMOST modifier so it reduces what the ZStack
-        // (and GeometryReader) are offered, guaranteeing visible side margins.
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
     }
 
     private var emptyState: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "sparkles")
+        // IOS-AUDIT-UX-051 AC3. Three states, not one. The deck being empty
+        // because the fetch FAILED is not the same as having seen everything,
+        // and it used to render identically - so a user on a flaky connection
+        // was told they had exhausted the content and offered a Reset that would
+        // fail the same way, with no feedback either time.
+        let failed = viewModel.lastLoadFailed
+
+        return VStack(spacing: 14) {
+            Image(systemName: failed ? "wifi.exclamationmark" : "sparkles")
                 .font(.system(size: 44))
-                .foregroundStyle(.purple.opacity(0.7))
-            Text("You've seen everything")
+                .foregroundStyle(failed ? Color.orange : .purple.opacity(0.7))
+                .accessibilityHidden(true)
+            Text(failed ? "Couldn't load more" : "You've seen everything")
                 .font(.title3.weight(.semibold))
-            Text("Come back later for fresh picks, or reset to swipe again.")
+            Text(failed
+                 ? "Check your connection and try again."
+                 : "Come back later for fresh picks, or reset to swipe again.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -196,12 +230,19 @@ struct DiscoverView: View {
                 stackId = UUID()
                 Task { await viewModel.reload() }
             } label: {
-                Label("Reset deck", systemImage: "arrow.counterclockwise")
+                // The progress state is the other half of AC3: reload() already
+                // published isLoading and nothing consumed it, so pressing Reset
+                // looked like it had done nothing until the deck repopulated.
+                Label(
+                    viewModel.isLoading ? "Loading..." : (failed ? "Try again" : "Reset deck"),
+                    systemImage: viewModel.isLoading ? "arrow.triangle.2.circlepath" : "arrow.counterclockwise",
+                )
                     .font(.subheadline.weight(.semibold))
                     .padding(.horizontal, 18)
                     .padding(.vertical, 10)
                     .background(Color.accentColor.opacity(0.15), in: Capsule())
             }
+            .disabled(viewModel.isLoading)
             .padding(.top, 6)
         }
     }
@@ -210,20 +251,20 @@ struct DiscoverView: View {
 
     private var actionBar: some View {
         HStack(spacing: 24) {
+            // Buttons drive the deck's animated commit (which fires the matching
+            // haptic and calls viewModel.skip/like/boost after the fly-off), so
+            // a tap looks identical to a swipe (IOS-AUDIT-UX-018).
             actionButton(systemImage: "xmark", color: .red, label: "Skip", size: 56) {
-                guard let top = viewModel.deck.first else { return }
-                HapticFeedback.shared.medium()
-                viewModel.skip(top)
+                guard !viewModel.deck.isEmpty else { return }
+                swipeCommand = .skip()
             }
             actionButton(systemImage: "arrow.up", color: .blue, label: "More like this", size: 64) {
-                guard let top = viewModel.deck.first else { return }
-                HapticFeedback.shared.premiumUnlock()
-                viewModel.boost(top)
+                guard !viewModel.deck.isEmpty else { return }
+                swipeCommand = .boost()
             }
             actionButton(systemImage: "heart.fill", color: .green, label: "Save", size: 56) {
-                guard let top = viewModel.deck.first else { return }
-                HapticFeedback.shared.medium()
-                viewModel.like(top)
+                guard !viewModel.deck.isEmpty else { return }
+                swipeCommand = .like()
             }
         }
         .disabled(viewModel.deck.isEmpty)

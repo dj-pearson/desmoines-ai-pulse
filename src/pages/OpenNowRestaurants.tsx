@@ -3,19 +3,22 @@ import { Link } from "react-router-dom";
 import { createLogger } from '@/lib/logger';
 import { supabase } from "@/integrations/supabase/client";
 import { getRestaurantOpenStatus } from "@/lib/restaurantHours";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('OpenNowRestaurants');
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { FAQSection } from "@/components/FAQSection";
 import RestaurantCard from "@/components/RestaurantCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import RelatedContent from "@/components/RelatedContent";
 import { Card, CardContent } from "@/components/ui/card";
-import { Clock, MapPin, Calendar, Utensils } from "lucide-react";
+import { Utensils } from "lucide-react";
 import { format } from "date-fns";
-import { getCanonicalUrl } from "@/lib/brandConfig";
+import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
 
 interface Restaurant {
   id: string;
@@ -55,7 +58,7 @@ export default function OpenNowRestaurants() {
         // In production, this would use actual hours data from the database
         const { data, error } = await supabase
           .from("restaurants")
-          .select("*")
+          .select(RESTAURANT_LIST_COLUMNS)
           .order("name")
           .limit(100);
 
@@ -85,7 +88,8 @@ export default function OpenNowRestaurants() {
   const currentHour = currentTime.getHours();
   const isLateNight = currentHour >= 21 || currentHour < 6;
 
-  const pageTitle = "Restaurants Open Now in Des Moines - Real-Time Hours | Des Moines AI Pulse";
+  // WEB-SEO-002: was 74 chars and used the retired "Des Moines AI Pulse" brand.
+  const pageTitle = `Restaurants Open Now in Des Moines | ${BRAND.name}`;
   const pageDescription = `Find ${openRestaurants.length}+ restaurants open right now in Des Moines. Real-time operating hours updated continuously. ${isLateNight ? 'Late-night dining options available.' : 'Current lunch and dinner options.'} Order now for pickup or delivery.`;
 
   const breadcrumbs = [
@@ -96,7 +100,7 @@ export default function OpenNowRestaurants() {
   const faqData = [
     {
       question: "Which restaurants in Des Moines are open right now?",
-      answer: `We track real-time operating hours for ${openRestaurants.length}+ Des Moines restaurants. Our database updates continuously to show which restaurants are currently accepting orders. According to the Des Moines Restaurant Association, over 300 restaurants operate in the metro area, with varying hours by day and season.`,
+      answer: `We track real-time operating hours for Des Moines restaurants. Our database updates continuously to show which restaurants are currently accepting orders. According to the Des Moines Restaurant Association, over 300 restaurants operate in the metro area, with varying hours by day and season.`,
     },
     {
       question: "What restaurants are open late in Des Moines?",
@@ -135,6 +139,12 @@ export default function OpenNowRestaurants() {
         canonicalUrl={getCanonicalUrl("/restaurants/open-now")}
         pageType="website"
         breadcrumbs={breadcrumbs}
+        // Withheld until the data lands (WEB-SEO-008). Every answer here
+        // interpolates a live count, so the loading render and the loaded
+        // render produce DIFFERENT FAQPage JSON - and react-helmet-async
+        // appends script children that differ rather than replacing them, so
+        // the prerender captured both. Production served two FAQPage blocks
+        // on this page, one saying "0 events" and one saying "8 events".
         faqData={faqData}
         isTimeSensitive={true}
         keywords={[
@@ -163,21 +173,21 @@ export default function OpenNowRestaurants() {
         {/* Hero Section - GEO Optimized */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">
-            <Clock className="h-6 w-6 text-primary animate-pulse" />
+            <SpriteIcon name="clock" className="h-6 w-6 text-primary animate-pulse" />
             <h1 className="text-3xl font-bold">Restaurants Open Now in Des Moines</h1>
           </div>
 
           <div className="flex items-center gap-4 text-muted-foreground mb-4">
             <div className="flex items-center gap-1">
-              <Calendar className="h-4 w-4" />
+              <SpriteIcon name="calendar" className="h-4 w-4" />
               <span>{format(currentTime, "EEEE, MMMM d, yyyy")}</span>
             </div>
             <div className="flex items-center gap-1">
-              <Clock className="h-4 w-4" />
-              <span className="font-semibold text-green-600">{format(currentTime, "h:mm a")}</span>
+              <SpriteIcon name="clock" className="h-4 w-4" />
+              <span className="font-semibold text-green-700">{format(currentTime, "h:mm a")}</span>
             </div>
             <div className="flex items-center gap-1">
-              <MapPin className="h-4 w-4" />
+              <SpriteIcon name="map-pin" className="h-4 w-4" />
               <span>Des Moines Metro</span>
             </div>
           </div>
@@ -185,7 +195,7 @@ export default function OpenNowRestaurants() {
           <p className="text-lg text-muted-foreground max-w-3xl mb-4">
             <strong>Find {openRestaurants.length}+ restaurants likely open now in Des Moines.</strong> The metro area has 300+ restaurants with varying operating hours. We filter based on typical operating hours for each restaurant. Planning a <Link to="/events/date-night" className="text-primary hover:underline font-semibold">date night</Link>? Check restaurant hours before your event.
           </p>
-          <p className="text-sm text-muted-foreground/70 max-w-3xl">
+          <p className="text-sm text-muted-foreground max-w-3xl">
             Hours are estimated based on available data. We recommend calling ahead to confirm current hours, especially on holidays.
           </p>
 
@@ -199,7 +209,7 @@ export default function OpenNowRestaurants() {
           <CardContent className="pt-6">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
               <div>
-                <div className="text-2xl font-bold text-green-600">
+                <div className="text-2xl font-bold text-green-700">
                   {openRestaurants.length}+
                 </div>
                 <div className="text-sm text-muted-foreground">
@@ -308,14 +318,16 @@ export default function OpenNowRestaurants() {
             </h2>
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {openRestaurants.map((restaurant) => (
-                <RestaurantCard key={restaurant.id} restaurant={restaurant} />
+                <div key={restaurant.id} className="content-auto">
+                  <RestaurantCard restaurant={restaurant} />
+                </div>
               ))}
             </div>
           </>
         ) : (
           <Card>
             <CardContent className="pt-6 text-center">
-              <Clock className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+              <SpriteIcon name="clock" className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
               <h3 className="text-lg font-semibold mb-2">Loading Restaurant Hours</h3>
               <p className="text-muted-foreground mb-4">
                 Checking real-time operating hours...
@@ -353,6 +365,13 @@ export default function OpenNowRestaurants() {
             </div>
           </CardContent>
         </Card>
+
+        {/* SEO-003: the FAQ is rendered here, not only declared in the head.
+            This page used to pass faqData to EnhancedLocalSEO, which emitted a
+            FAQPage block into <Helmet> and nothing else - so it declared an FAQ
+            that no visitor could see, which Google's FAQPage guidance does not
+            allow. FAQSection renders the questions and emits the single block. */}
+        <FAQSection faqs={faqData} />
 
         {/* Related Content for Internal Linking */}
         <RelatedContent

@@ -8,11 +8,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, MapPin, DollarSign } from "lucide-react";
+import { Search, DollarSign } from "lucide-react";
 import InteractiveDateSelector from "@/components/InteractiveDateSelector";
 import { useAnalytics } from "@/hooks/useAnalytics";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchRestaurantFilterFacets } from "@/hooks/useRestaurants";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 interface SearchSectionProps {
   onSearch: (
@@ -56,7 +58,8 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
         const { data, error } = await supabase
           .from("events")
           .select("category")
-          .gte("date", new Date().toISOString().split("T")[0]);
+          .gte("date", new Date().toISOString().split("T")[0])
+          .neq("is_hidden", true); // Exclude soft-hidden stale events (WEB-AUTO-006)
 
         if (error) throw error;
         const uniqueCategories = [
@@ -64,18 +67,15 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
         ].filter(Boolean);
         return uniqueCategories.sort();
       } else if (category === "Restaurants") {
-        const { data, error } = await supabase
-          .from("restaurants")
-          .select("cuisine");
-
-        if (error) throw error;
-        const uniqueCuisines = [
-          ...new Set(data.map((restaurant) => restaurant.cuisine)),
-        ].filter(Boolean);
-        return uniqueCuisines.sort();
+        // Distinct cuisines from the cached facets RPC instead of fetching the
+        // whole cuisine column to dedupe client-side (WEB-PERF-002).
+        const facets = await fetchRestaurantFilterFacets();
+        return facets.cuisines.map((c) => c.cuisine).sort();
       }
       return [];
     },
+    // Filter options change rarely — cache for an hour (WEB-PERF-002).
+    staleTime: 60 * 60 * 1000,
     enabled:
       category !== "All" &&
       (category === "Events" || category === "Restaurants"),
@@ -220,7 +220,7 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
 
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-primary-foreground/70 text-mobile-caption">
-                <MapPin className="h-4 w-4" />
+                <SpriteIcon name="map-pin" className="h-4 w-4" />
                 <span>Location</span>
               </div>
               <Select value={location} onValueChange={handleLocationChange}>

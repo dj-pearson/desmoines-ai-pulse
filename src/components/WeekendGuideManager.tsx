@@ -3,20 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { 
-  CalendarDays, 
-  Loader2, 
-  RefreshCw, 
-  CheckCircle, 
-  AlertCircle, 
-  Sparkles,
-  ExternalLink,
-  Calendar
-} from "lucide-react";
+import { CalendarDays, Loader2, RefreshCw, CheckCircle, AlertCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { createLogger } from '@/lib/logger';
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('WeekendGuideManager');
 
@@ -167,7 +159,7 @@ export default function WeekendGuideManager() {
             {generating ? (
               <Loader2 className="h-4 w-4 animate-spin mr-2" />
             ) : (
-              <Sparkles className="h-4 w-4 mr-2" />
+              <SpriteIcon name="sparkles" className="h-4 w-4 mr-2" />
             )}
             Generate Guide
           </Button>
@@ -185,7 +177,7 @@ export default function WeekendGuideManager() {
 
       {/* Info Card */}
       <Alert>
-        <Calendar className="h-4 w-4" />
+        <SpriteIcon name="calendar" className="h-4 w-4" />
         <AlertDescription>
           Weekend guides are automatically generated every Sunday at 9 PM CDT using Claude AI. 
           They analyze upcoming events and create engaging content for the next weekend (Friday-Sunday).
@@ -197,13 +189,13 @@ export default function WeekendGuideManager() {
         {guides.length === 0 ? (
           <Card>
             <CardContent className="p-8 text-center">
-              <CalendarDays className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <CalendarDays className="h-12 w-12 text-gray-500 mx-auto mb-4" />
               <p className="text-gray-600 mb-4">No weekend guides found</p>
               <Button onClick={generateGuide} disabled={generating}>
                 {generating ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 ) : (
-                  <Sparkles className="h-4 w-4 mr-2" />
+                  <SpriteIcon name="sparkles" className="h-4 w-4 mr-2" />
                 )}
                 Generate First Guide
               </Button>
@@ -243,7 +235,7 @@ export default function WeekendGuideManager() {
                         rel="noopener noreferrer"
                         className="flex items-center gap-1"
                       >
-                        <ExternalLink className="h-3 w-3" />
+                        <SpriteIcon name="external-link" className="h-3 w-3" />
                         View Live
                       </a>
                     </Button>

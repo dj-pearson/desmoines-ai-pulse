@@ -135,6 +135,30 @@ actor EventsService {
         )
     }
 
+    // MARK: - Fetch Events in a Date Range (IOS-PARITY-004)
+
+    /// Fetches events whose `date` falls in `[start, end)`, ordered soonest
+    /// first. Unlike `fetchEvents`, this does NOT floor at "today" — the
+    /// "This Weekend" screen shows the whole Fri–Sun window even mid-weekend,
+    /// matching the web `/weekend` curation.
+    func fetchEventsInRange(start: Date, end: Date, limit: Int = 100) async throws -> [Event] {
+        try await withRetry { [self] in
+            let client = try db()
+            let startStr = DateParser.toISO(start)
+            let endStr = DateParser.toISO(end)
+            let events: [Event] = try await client
+                .from("events")
+                .select()
+                .gte("date", value: startStr)
+                .lt("date", value: endStr)
+                .order("date", ascending: true)
+                .limit(limit)
+                .execute()
+                .value
+            return events
+        }
+    }
+
     // MARK: - Fetch Single Event
 
     func fetchEvent(id: String) async throws -> Event {
@@ -148,6 +172,32 @@ actor EventsService {
                 .execute()
                 .value
             return event
+        }
+    }
+
+    // MARK: - Fetch by Category Terms (IOS-PARITY-006 content hubs)
+
+    /// Upcoming events whose `category` matches ANY of the given terms (case-
+    /// insensitive), soonest first. Mirrors the web hubs' `.or(category.ilike…)`
+    /// curation (Music/Sports/Outdoors).
+    func fetchEventsByCategoryTerms(_ terms: [String], limit: Int = 20) async throws -> [Event] {
+        guard !terms.isEmpty else { return [] }
+        return try await withRetry { [self] in
+            let client = try db()
+            let today = DateParser.toISO(Calendar.current.startOfDay(for: Date()))
+            let orClause = terms
+                .map { "category.ilike.%\($0.replacingOccurrences(of: "%", with: "\\%"))%" }
+                .joined(separator: ",")
+            let events: [Event] = try await client
+                .from("events")
+                .select()
+                .gte("date", value: today)
+                .or(orClause)
+                .order("date", ascending: true)
+                .limit(limit)
+                .execute()
+                .value
+            return events
         }
     }
 
@@ -204,12 +254,20 @@ actor EventsService {
         let client = try db()
         let today = DateParser.toISO( Calendar.current.startOfDay(for: Date()))
 
+        // IOS-AUDIT-PERF-027: the bounding box goes BEFORE the limit. Without it
+        // this took the next `limit` events by date across all 1,246 rows and then
+        // filtered by distance, so a user near a quiet part of the metro could get
+        // an empty list while events in radius sat past the cutoff.
+        let box = GeoBoundingBox(centerLat: latitude, centerLng: longitude, radiusMiles: radiusMiles)
+
         let events: [Event] = try await client
             .from("events")
             .select()
             .gte("date", value: today)
-            .not("latitude", operator: .is, value: "null")
-            .not("longitude", operator: .is, value: "null")
+            .gte("latitude", value: box.minLat)
+            .lte("latitude", value: box.maxLat)
+            .gte("longitude", value: box.minLng)
+            .lte("longitude", value: box.maxLng)
             .order("date", ascending: true)
             .limit(limit)
             .execute()
@@ -261,3 +319,55 @@ actor EventsService {
         return events
     }
 }
+
+/// What EventDetailViewModel needs from EventsService, and nothing else
+/// (IOS-AUDIT-TEST-006).
+///
+/// A ROLE interface, deliberately. EventsService has around forty methods; a
+/// protocol mirroring it would be unwritable and unmaintainable, and every
+/// caller would have to stub methods it never calls. This declares the two the
+/// event detail screen actually uses, so a fake in a test is a dozen lines.
+///
+/// Same shape as `AuthProviding` (IOS-AUDIT-TEST-002): a protocol beside the
+/// service, a retroactive conformance, and an initialiser defaulting to
+/// `.shared` so no existing call site changes.
+protocol EventDetailProviding: Sendable {
+    func fetchEvent(id: String) async throws -> Event
+    func fetchRelatedEvents(eventId: String, category: String, limit: Int) async throws -> [Event]
+}
+
+extension EventDetailProviding {
+    /// The service's own default limit, kept in one place rather than repeated
+    /// at the call site - a protocol requirement cannot carry a default.
+    func fetchRelatedEvents(eventId: String, category: String) async throws -> [Event] {
+        try await fetchRelatedEvents(eventId: eventId, category: category, limit: 6)
+    }
+}
+
+extension EventsService: EventDetailProviding {}
+
+/// What SearchViewModel needs from EventsService (IOS-AUDIT-TEST-006).
+///
+/// Separate from `EventDetailProviding` on purpose: two screens, two roles, two
+/// small protocols. Merging them would give each fake methods it never uses,
+/// which is how role interfaces turn back into a mirror of the service.
+/// One page of events for a query. The narrowest useful role, and the only thing
+/// DiscoverViewModel needs.
+protocol EventPageProviding: Sendable {
+    func fetchEvents(query: EventsService.EventsQuery) async throws -> EventsService.EventsResponse
+}
+
+/// Search additionally needs the fuzzy fallback. Inherits rather than repeating
+/// the page method, so a Discover fake stubs one method and a Search fake stubs
+/// two - neither stubs anything it does not use (IOS-AUDIT-TEST-006 AC4).
+protocol EventSearchProviding: EventPageProviding {
+    func fuzzySearchEvents(query: String, limit: Int) async throws -> [Event]
+}
+
+extension EventSearchProviding {
+    func fuzzySearchEvents(query: String) async throws -> [Event] {
+        try await fuzzySearchEvents(query: query, limit: 20)
+    }
+}
+
+extension EventsService: EventSearchProviding {}

@@ -10,19 +10,8 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
-import {
-  Mail,
-  Phone,
-  MapPin,
-  Send,
-  MessageSquare,
-  Building2,
-  Megaphone,
-  HelpCircle,
-  ThumbsUp,
-  Clock,
-  CheckCircle
-} from "lucide-react";
+import { Mail, Phone, Send, MessageSquare, Megaphone, HelpCircle, ThumbsUp, CheckCircle } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const inquiryTypes: { value: InquiryType; label: string; icon: React.ReactNode; description: string }[] = [
   {
@@ -46,7 +35,7 @@ const inquiryTypes: { value: InquiryType; label: string; icon: React.ReactNode; 
   {
     value: 'business',
     label: 'Business Inquiry',
-    icon: <Building2 className="w-5 h-5" />,
+    icon: <SpriteIcon name="building-2" className="w-5 h-5" />,
     description: 'Partnership or collaboration opportunities'
   },
   {
@@ -142,14 +131,14 @@ export default function Contact() {
                         <p className="font-medium">General inquiries</p>
                         <a
                           href="mailto:hello@desmoinesinsider.com"
-                          className="text-muted-foreground hover:text-primary transition-colors"
+                          className="text-muted-foreground underline hover:text-primary transition-colors"
                         >
                           hello@desmoinesinsider.com
                         </a>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
-                      <MapPin className="w-5 h-5 text-primary mt-0.5" />
+                      <SpriteIcon name="map-pin" className="w-5 h-5 text-primary mt-0.5" />
                       <div>
                         <p className="font-medium">Mailing address</p>
                         <address className="not-italic text-muted-foreground">
@@ -159,7 +148,7 @@ export default function Contact() {
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
-                      <Clock className="w-5 h-5 text-primary mt-0.5" />
+                      <SpriteIcon name="clock" className="w-5 h-5 text-primary mt-0.5" />
                       <div>
                         <p className="font-medium">Response time</p>
                         <p className="text-muted-foreground">Within 24-48 hours</p>
@@ -185,7 +174,7 @@ export default function Contact() {
                       <p className="font-medium text-foreground">Privacy requests (CCPA / GDPR)</p>
                       <a
                         href="mailto:privacy@desmoinesinsider.com"
-                        className="text-muted-foreground hover:text-primary transition-colors"
+                        className="text-muted-foreground underline hover:text-primary transition-colors"
                       >
                         privacy@desmoinesinsider.com
                       </a>
@@ -194,7 +183,7 @@ export default function Contact() {
                       <p className="font-medium text-foreground">DMCA / copyright</p>
                       <a
                         href="mailto:dmca@desmoinesinsider.com"
-                        className="text-muted-foreground hover:text-primary transition-colors"
+                        className="text-muted-foreground underline hover:text-primary transition-colors"
                       >
                         dmca@desmoinesinsider.com
                       </a>
@@ -203,7 +192,7 @@ export default function Contact() {
                       <p className="font-medium text-foreground">Abuse / acceptable-use reports</p>
                       <a
                         href="mailto:abuse@desmoinesinsider.com"
-                        className="text-muted-foreground hover:text-primary transition-colors"
+                        className="text-muted-foreground underline hover:text-primary transition-colors"
                       >
                         abuse@desmoinesinsider.com
                       </a>
@@ -212,7 +201,7 @@ export default function Contact() {
                       <p className="font-medium text-foreground">Security disclosures</p>
                       <a
                         href="mailto:security@desmoinesinsider.com"
-                        className="text-muted-foreground hover:text-primary transition-colors"
+                        className="text-muted-foreground underline hover:text-primary transition-colors"
                       >
                         security@desmoinesinsider.com
                       </a>
@@ -221,7 +210,7 @@ export default function Contact() {
                       <p className="font-medium text-foreground">Billing &amp; refunds</p>
                       <a
                         href="mailto:billing@desmoinesinsider.com"
-                        className="text-muted-foreground hover:text-primary transition-colors"
+                        className="text-muted-foreground underline hover:text-primary transition-colors"
                       >
                         billing@desmoinesinsider.com
                       </a>
@@ -230,7 +219,7 @@ export default function Contact() {
                       <p className="font-medium text-foreground">DPA / B2B legal</p>
                       <a
                         href="mailto:legal@desmoinesinsider.com"
-                        className="text-muted-foreground hover:text-primary transition-colors"
+                        className="text-muted-foreground underline hover:text-primary transition-colors"
                       >
                         legal@desmoinesinsider.com
                       </a>
@@ -239,7 +228,7 @@ export default function Contact() {
                       <p className="font-medium text-foreground">Unsubscribe</p>
                       <a
                         href="mailto:unsubscribe@desmoinesinsider.com"
-                        className="text-muted-foreground hover:text-primary transition-colors"
+                        className="text-muted-foreground underline hover:text-primary transition-colors"
                       >
                         unsubscribe@desmoinesinsider.com
                       </a>
@@ -287,7 +276,7 @@ export default function Contact() {
                       href="/business-partnership"
                       className="block p-2 rounded hover:bg-muted transition-colors text-sm"
                     >
-                      <Building2 className="w-4 h-4 inline mr-2" />
+                      <SpriteIcon name="building-2" className="w-4 h-4 inline mr-2" />
                       Business Partnership
                     </a>
                     <a

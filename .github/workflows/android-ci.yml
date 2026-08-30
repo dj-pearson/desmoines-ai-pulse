@@ -37,6 +37,14 @@ jobs:
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
+      # compileSdk is 37 and the runner image is not guaranteed to carry that
+      # platform. AGP would auto-download it, but silently and only if the
+      # licence happens to be accepted; install it explicitly so a missing
+      # platform fails here with a readable message instead of mid-build.
+      - name: Install Android SDK Platform 37
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0"
+
       - name: Create local.properties with placeholder credentials
         working-directory: android
         run: |
@@ -85,9 +93,65 @@ jobs:
         working-directory: android
         run: ./gradlew test
 
+      # AND-AUDIT-014 AC3. ArticleMarkdownTest has existed since the
+      # ClickableText -> LinkAnnotation migration and had never run anywhere: no
+      # workflow invoked connectedCheck and no device was configured to run it
+      # on. Its six tests cover composition, semantics and link hit-testing, the
+      # three things a JVM unit test cannot reach.
+      #
+      # A Gradle managed device rather than a hand-rolled emulator action: the
+      # device is declared in app/build.gradle.kts, so CI and a laptop run the
+      # same one. Verified locally before this step was written - 6 tests pass,
+      # 5m4s cold including the image download and 1m4s warm - and mutation
+      # tested by swallowing the link callback, which fails
+      # clickingALinkDispatchesItsUrl.
+      #
+      # KVM has to be opened up explicitly; without it the emulator falls back to
+      # software and the job times out rather than failing clearly.
+      - name: Enable KVM for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"'             | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run Instrumentation Tests
+        working-directory: android
+        run: ./gradlew :app:pixel6api34DebugAndroidTest
+
+      - name: Upload instrumentation results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: instrumentation-results
+          path: android/app/build/reports/androidTests/managedDevice/
+          retention-days: 7
+
       - name: Build Debug APK
         working-directory: android
         run: ./gradlew assembleDebug
+
+      # The shipping artifact is the R8-minified release build, and nothing in
+      # CI ever built it. R8 full mode is on, proguard-rules.pro carries hand-
+      # written keeps for kotlinx.serialization, Supabase, Ktor and Room, and
+      # every one of those was only ever validated by uploading to Play. This
+      # step compiles and shrinks the release variant so a broken keep rule
+      # fails here instead of in a user's crash log.
+      #
+      # The build is signed with the debug key (no release keystore in this
+      # workflow); android-release.yml is still the only path that produces a
+      # distributable artifact.
+      - name: Build Release APK (exercises R8/ProGuard)
+        working-directory: android
+        run: ./gradlew assembleRelease
+
+      - name: Upload R8 mapping and usage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r8-reports
+          path: |
+            android/app/build/outputs/mapping/release/
+          if-no-files-found: ignore
 
       - name: Upload lint results
         if: always()

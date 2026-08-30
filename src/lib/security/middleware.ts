@@ -96,7 +96,7 @@ async function getUserRole(userId: string): Promise<UserRole> {
     const { data: profileData } = await supabase
       .from('profiles')
       .select('user_role')
-      .eq('id', userId)
+      .eq('user_id', userId)
       .single();
 
     if (profileData?.user_role) {

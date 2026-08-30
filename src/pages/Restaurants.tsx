@@ -17,29 +17,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CardsGridSkeleton, LoadingSpinner } from "@/components/ui/loading-skeleton";
-import {
-  Star,
-  DollarSign,
-  ChefHat,
-  Search,
-  SearchX,
-  Utensils,
-  X,
-  Sparkles,
-  AlertCircle,
-  Clock,
-  List,
-  Map,
-  SlidersHorizontal,
-  TrendingUp,
-  ArrowRight,
-  Leaf,
-  ChevronDown,
-  Shuffle,
-} from "lucide-react";
+import { Star, DollarSign, Search, SearchX, Utensils, X, Sparkles, Clock, List, Map, SlidersHorizontal, TrendingUp, Leaf, ChevronDown, Shuffle } from "lucide-react";
 import { useState, lazy, Suspense, useMemo, useCallback, useRef, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { FAQSection } from "@/components/FAQSection";
 import { BackToTop } from "@/components/BackToTop";
 import { useAnnounce } from "@/hooks/use-announce";
@@ -47,6 +29,9 @@ import { OpenNowBanner } from "@/components/OpenNowBanner";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { useIsMobile } from "@/hooks/use-mobile";
 import RestaurantCard from "@/components/RestaurantCard";
+import { arrangeSponsored } from "@/lib/sponsored";
+import { useUrlFilters } from "@/hooks/useUrlFilters";
+import { ActiveFilterChips } from "@/components/filters/ActiveFilterChips";
 import { SearchAutocomplete, addRecentSearch } from "@/components/SearchAutocomplete";
 import {
   Pagination,
@@ -64,13 +49,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 // Lazy load map component to prevent react-leaflet bundling issues
 const RestaurantsMap = lazy(() => import("@/components/RestaurantsMap"));
 
 
 const sortOptions = [
-  { value: "popularity", label: "Most Popular", icon: TrendingUp },
+  // Labeled "Recommended", not "Most Popular" (WEB-QA-004). This option routes
+  // through get_rotated_restaurants, which shuffles by a rotation seed so the
+  // top of the list varies between visits — it is deliberately NOT a popularity
+  // ranking, and calling it "Most Popular" told visitors the three venues at the
+  // top were the city's most popular when the order was largely arbitrary.
+  // "Highest Rated" below remains the deterministic quality sort.
+  { value: "popularity", label: "Recommended", icon: TrendingUp },
   { value: "rating", label: "Highest Rated", icon: Star },
   { value: "newest", label: "Newest", icon: Clock },
   { value: "alphabetical", label: "A-Z", icon: SlidersHorizontal },
@@ -82,23 +74,85 @@ export default function Restaurants() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const [filters, setFilters] = useState<RestaurantFilterOptions>({
-    search: "",
-    cuisine: [],
-    priceRange: [],
-    rating: [0, 5],
-    location: [],
-    sortBy: "popularity",
-    featuredOnly: false,
-    openNow: false,
-    tags: [],
-  });
+  // Filters are URL-synced (WEB-UX-001): shareable + survive back/forward.
+  const { getStr, getNum, getList, setParam, setMany, clearParams } = useUrlFilters();
+  const filters: RestaurantFilterOptions = useMemo(
+    () => ({
+      search: getStr("q", ""),
+      cuisine: getList("cuisine"),
+      priceRange: getList("price"),
+      rating: [getNum("rmin", 0), getNum("rmax", 5)],
+      location: getList("location"),
+      sortBy: getStr("sort", "popularity") as RestaurantFilterOptions["sortBy"],
+      featuredOnly: getStr("featured", "") === "1",
+      openNow: getStr("open", "") === "1",
+      tags: getList("tags"),
+    }),
+    [getStr, getNum, getList]
+  );
+
+  // setFilters-compatible writer (accepts an object or an updater) that persists
+  // the whole filter object into the URL and resets pagination.
+  const setFilters = useCallback(
+    (
+      update:
+        | RestaurantFilterOptions
+        | ((prev: RestaurantFilterOptions) => RestaurantFilterOptions)
+    ) => {
+      const next = typeof update === "function" ? update(filters) : update;
+      setMany({
+        q: next.search,
+        cuisine: next.cuisine,
+        price: next.priceRange,
+        rmin: next.rating[0] !== 0 ? next.rating[0] : "",
+        rmax: next.rating[1] !== 5 ? next.rating[1] : "",
+        location: next.location,
+        sort: next.sortBy !== "popularity" ? next.sortBy : "",
+        featured: next.featuredOnly ? "1" : "",
+        open: next.openNow ? "1" : "",
+        tags: next.tags,
+      });
+    },
+    [filters, setMany]
+  );
+
+  // Active-filter chips (WEB-UX-003) — each removal updates the URL via setFilters.
+  const restaurantChips = useMemo(() => {
+    const chips: { key: string; label: string; onRemove: () => void }[] = [];
+    if (filters.search)
+      chips.push({ key: "q", label: `Search: "${filters.search}"`, onRemove: () => { setSearchInput(""); setParam("q", "", { resetsPage: true }); } });
+    filters.cuisine.forEach((c) =>
+      chips.push({ key: `cuisine-${c}`, label: c, onRemove: () => setFilters((p) => ({ ...p, cuisine: p.cuisine.filter((x) => x !== c) })) })
+    );
+    filters.priceRange.forEach((c) =>
+      chips.push({ key: `price-${c}`, label: c, onRemove: () => setFilters((p) => ({ ...p, priceRange: p.priceRange.filter((x) => x !== c) })) })
+    );
+    filters.location.forEach((c) =>
+      chips.push({ key: `loc-${c}`, label: c, onRemove: () => setFilters((p) => ({ ...p, location: p.location.filter((x) => x !== c) })) })
+    );
+    if (filters.featuredOnly)
+      chips.push({ key: "featured", label: "Featured only", onRemove: () => setFilters((p) => ({ ...p, featuredOnly: false })) });
+    if (filters.openNow)
+      chips.push({ key: "open", label: "Open now", onRemove: () => setFilters((p) => ({ ...p, openNow: false })) });
+    if (filters.rating[0] !== 0 || filters.rating[1] !== 5)
+      chips.push({ key: "rating", label: `Rating ${filters.rating[0]}–${filters.rating[1]}`, onRemove: () => setFilters((p) => ({ ...p, rating: [0, 5] })) });
+    return chips;
+  }, [filters, setFilters, setParam]);
+
   const [viewMode, setViewMode] = useState<"list" | "map">("list");
-  const [searchInput, setSearchInput] = useState("");
+  const [searchInput, setSearchInput] = useState(() => getStr("q", ""));
   const { toast } = useToast();
 
   const ITEMS_PER_PAGE = 30;
-  const [page, setPage] = useState(1);
+  const page = getNum("page", 1);
+  /** Accepts a number OR a React-style updater. Three call sites below pass an
+   *  updater (Load More / Previous / Next), and before this signature existed
+   *  that function was handed straight to setParam, which does String(value) —
+   *  serialising the function SOURCE into the ?page= param. getNum then parsed
+   *  NaN and fell back to 1, so those controls silently did nothing. Surfaced by
+   *  the strict type-check (WEB-CI-007). */
+  const setPage = (v: number | ((prev: number) => number)) =>
+    setParam("page", typeof v === "function" ? v(page) : v, { def: 1 });
 
   const { restaurants, isLoading, error, totalCount, refetch } = useRestaurants(filters);
   const filterOptions = useRestaurantFilterOptions();
@@ -111,36 +165,46 @@ export default function Restaurants() {
     navigate(`/restaurants/${random.slug || random.id}`);
   }, [restaurants, navigate]);
 
+  // Boost up to 2 active sponsored listings to the top (WEB-FEAT-005), organic
+  // order otherwise.
+  const arrangedRestaurants = useMemo(
+    () => arrangeSponsored(restaurants),
+    [restaurants]
+  );
+
   // Paginate restaurants
-  const totalPages = Math.ceil((restaurants?.length || 0) / ITEMS_PER_PAGE);
+  const totalPages = Math.ceil((arrangedRestaurants?.length || 0) / ITEMS_PER_PAGE);
   const paginatedRestaurants = useMemo(() => {
     if (isMobile) {
       // Mobile: show all up to current page (load more pattern)
-      return restaurants.slice(0, page * ITEMS_PER_PAGE);
+      return arrangedRestaurants.slice(0, page * ITEMS_PER_PAGE);
     }
     // Desktop: show current page only
     const start = (page - 1) * ITEMS_PER_PAGE;
-    return restaurants.slice(start, start + ITEMS_PER_PAGE);
-  }, [restaurants, page, isMobile]);
+    return arrangedRestaurants.slice(start, start + ITEMS_PER_PAGE);
+  }, [arrangedRestaurants, page, isMobile]);
 
   const hasMorePages = isMobile
     ? page * ITEMS_PER_PAGE < restaurants.length
     : page < totalPages;
 
-  // Reset page when filters change
-  useEffect(() => {
-    setPage(1);
-  }, [filters]);
+  // Page reset on filter change is handled by setMany/setParam (resetsPage).
 
-  // Debounced search
+  // Debounced search -> URL (WEB-UX-001). Writing only the 'q' param avoids
+  // history spam; setParam(replace) keeps typing out of the back stack.
   useEffect(() => {
+    if (searchInput === filters.search) return;
     const timer = setTimeout(() => {
-      if (searchInput !== filters.search) {
-        setFilters((prev) => ({ ...prev, search: searchInput }));
-      }
+      setParam("q", searchInput, { def: "", resetsPage: true, replace: true });
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchInput, filters.search]);
+  }, [searchInput, filters.search, setParam]);
+
+  // Back/forward & shared links: pull URL search back into the input.
+  useEffect(() => {
+    setSearchInput(filters.search);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.search]);
 
   // Announce result count to screen readers
   useEffect(() => {
@@ -152,23 +216,13 @@ export default function Restaurants() {
   }, [restaurants?.length, isLoading, filters.search, announce]);
 
   const handleClearFilters = useCallback(() => {
-    setFilters({
-      search: "",
-      cuisine: [],
-      priceRange: [],
-      rating: [0, 5],
-      location: [],
-      sortBy: "popularity",
-      featuredOnly: false,
-      openNow: false,
-      tags: [],
-    });
+    clearParams(["q", "cuisine", "price", "rmin", "rmax", "location", "sort", "featured", "open", "tags"]);
     setSearchInput("");
     toast({
       title: "Filters Cleared",
       description: "All filters have been reset",
     });
-  }, [toast]);
+  }, [toast, clearParams]);
 
   const getActiveFiltersCount = useMemo(() => {
     let count = 0;
@@ -214,14 +268,23 @@ export default function Restaurants() {
     "late night food Des Moines",
   ];
 
+  /** How many restaurants go into the ItemList. Both fields must use it. */
+  const RESTAURANT_SCHEMA_LIMIT = 20;
+
   const restaurantsSchema = {
     "@context": "https://schema.org",
     "@type": "ItemList",
     name: "Best Restaurants in Des Moines, Iowa",
     description:
       "Complete guide to the best restaurants in Des Moines, Iowa. Browse 200+ local restaurants with ratings, reviews, menus, and real-time availability.",
-    numberOfItems: totalCount || restaurants.length,
-    itemListElement: restaurants.slice(0, 20).map((restaurant, index) => ({
+    // numberOfItems COUNTS THE ITEMS ACTUALLY LISTED, not the collection the
+    // page was drawn from. This read `totalCount || restaurants.length` while
+    // itemListElement was sliced to 20, so the prerendered page declared an
+    // ItemList of 478 and then supplied 20 - the only route of the ten emitting
+    // an ItemList where the two numbers disagreed. Structured data that
+    // contradicts itself is worse than none: it is a claim a crawler can check.
+    numberOfItems: Math.min(restaurants.length, RESTAURANT_SCHEMA_LIMIT),
+    itemListElement: restaurants.slice(0, RESTAURANT_SCHEMA_LIMIT).map((restaurant, index) => ({
       "@type": "ListItem",
       position: index + 1,
       item: {
@@ -265,14 +328,17 @@ export default function Restaurants() {
   return (
     <>
       <SEOHead
-        title="Best Restaurants in Des Moines, Iowa - Complete Dining Guide 2026"
+        title="Best Restaurants in Des Moines, Iowa"
         description="Find the best restaurants in Des Moines, Iowa. Browse 200+ local restaurants with ratings, reviews, photos, and real-time open/closed status. Filter by cuisine, price, and neighborhood."
         type="website"
         keywords={restaurantsKeywords}
         structuredData={restaurantsSchema}
         url="/restaurants"
       />
-      <div className="min-h-screen bg-gray-50">
+      {/* WEB-UX-030: bg-gray-50 had no dark counterpart, so in dark mode the
+          dark:text-gray-100 section headings below rendered near-white on
+          near-white (3.0:1 at best). */}
+      <div className="min-h-screen bg-gray-50 dark:bg-background">
         <Header />
 
         {/* Hero Section */}
@@ -302,7 +368,7 @@ export default function Restaurants() {
             {/* Search Bar - The Main Event */}
             <div className="max-w-3xl mx-auto">
               <div className="relative">
-                <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 z-10" />
+                <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500 z-10" />
                 <Input
                   ref={searchInputRef}
                   type="text"
@@ -314,7 +380,7 @@ export default function Restaurants() {
                       addRecentSearch('restaurants', searchInput);
                     }
                   }}
-                  className="w-full h-14 pl-14 pr-36 text-base md:text-lg bg-white border-0 rounded-2xl shadow-2xl shadow-black/20 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-0 placeholder:text-gray-400"
+                  className="w-full h-14 pl-14 pr-36 text-base md:text-lg bg-white border-0 rounded-2xl shadow-2xl shadow-black/20 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-0 placeholder:text-gray-500"
                   aria-label="Search restaurants"
                 />
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
@@ -322,7 +388,7 @@ export default function Restaurants() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 text-gray-400 hover:text-gray-600"
+                      className="h-11 w-11 sm:h-8 sm:w-8 text-gray-500 hover:text-gray-600"
                       onClick={() => {
                         setSearchInput("");
                         setFilters((prev) => ({ ...prev, search: "" }));
@@ -377,7 +443,7 @@ export default function Restaurants() {
                       : "bg-white/15 hover:bg-white/25 text-white border-white/20"
                   }`}
                 >
-                  <Clock className="h-3.5 w-3.5 mr-1.5" />
+                  <SpriteIcon name="clock" className="h-3.5 w-3.5 mr-1.5" />
                   Open Now
                 </Button>
                 <Button
@@ -390,7 +456,7 @@ export default function Restaurants() {
                       : "bg-white/15 hover:bg-white/25 text-white border-white/20"
                   }`}
                 >
-                  <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                  <SpriteIcon name="sparkles" className="h-3.5 w-3.5 mr-1.5" />
                   Featured
                 </Button>
 
@@ -400,7 +466,7 @@ export default function Restaurants() {
                     onClick={() => setViewMode("list")}
                     variant="ghost"
                     size="icon"
-                    className={`h-8 w-8 rounded-full ${
+                    className={`h-11 w-11 sm:h-8 sm:w-8 rounded-full ${
                       viewMode === "list"
                         ? "bg-white/30 text-white"
                         : "text-white/60 hover:text-white hover:bg-white/10"
@@ -413,7 +479,7 @@ export default function Restaurants() {
                     onClick={() => setViewMode("map")}
                     variant="ghost"
                     size="icon"
-                    className={`h-8 w-8 rounded-full ${
+                    className={`h-11 w-11 sm:h-8 sm:w-8 rounded-full ${
                       viewMode === "map"
                         ? "bg-white/30 text-white"
                         : "text-white/60 hover:text-white hover:bg-white/10"
@@ -481,7 +547,7 @@ export default function Restaurants() {
                     setFilters((prev) => ({ ...prev, sortBy: value as RestaurantFilterOptions["sortBy"] }))
                   }
                 >
-                  <SelectTrigger className="w-40 bg-white dark:bg-card rounded-xl shadow-sm text-sm">
+                  <SelectTrigger aria-label="Sort restaurants" className="w-40 bg-white dark:bg-card rounded-xl shadow-sm text-sm">
                     <SelectValue placeholder="Sort by" />
                   </SelectTrigger>
                   <SelectContent>
@@ -499,13 +565,19 @@ export default function Restaurants() {
                   </SelectContent>
                 </Select>
 
-                {/* Results count */}
-                <p className="text-sm text-muted-foreground whitespace-nowrap hidden md:block">
+                {/* Results count — visible at all viewports (WEB-UX-003) */}
+                <p className="text-sm text-muted-foreground whitespace-nowrap">
                   {isLoading ? (
                     "Searching..."
                   ) : (
                     <span>
-                      <strong className="text-foreground">{totalCount}</strong> found
+                      {/* Never render a bare "found" with no number (WEB-QA-004):
+                          PostgREST can return a null count, so fall back to the
+                          number of rows actually on screen. */}
+                      <strong className="text-foreground">
+                        {totalCount ?? restaurants.length}
+                      </strong>{" "}
+                      found
                     </span>
                   )}
                 </p>
@@ -530,17 +602,20 @@ export default function Restaurants() {
               <section aria-labelledby="featured-heading">
                 <div className="flex items-center justify-between mb-4">
                   <h2 id="featured-heading" className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                    <Sparkles className="h-6 w-6 text-amber-500" />
+                    <SpriteIcon name="sparkles" className="h-6 w-6 text-amber-500" />
                     Featured Restaurants
                   </h2>
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => setFilters((prev) => ({ ...prev, featuredOnly: true }))}
-                    className="text-[#2D1B69] hover:text-[#2D1B69]/80"
+                    // WEB-UX-030: was the brand navy hardcoded past the theme,
+                    // which is 1.4:1 on the dark background. text-primary is
+                    // 15.23:1 light / 5.92:1 dark because both ends move.
+                    className="text-primary hover:text-primary/80"
                   >
                     View All
-                    <ArrowRight className="h-4 w-4 ml-1" />
+                    <SpriteIcon name="arrow-right" className="h-4 w-4 ml-1" />
                   </Button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -579,18 +654,7 @@ export default function Restaurants() {
                   label={filters.search ? `Searching for "${filters.search}"...` : filters.cuisine.length > 0 ? `Loading ${filters.cuisine.join(', ')} restaurants...` : "Loading restaurants..."}
                 />
               ) : error ? (
-                <EmptyState
-                  icon={AlertCircle}
-                  title="Unable to load restaurants"
-                  description="We're having trouble loading the restaurant list. Please check your connection and try again."
-                  actions={[
-                    {
-                      label: "Try Again",
-                      onClick: () => refetch(),
-                      variant: "default",
-                    },
-                  ]}
-                />
+                <ErrorState error={error} onRetry={() => refetch()} />
               ) : restaurants.length === 0 ? (
                 <EmptyState
                   icon={hasActiveFilters ? SearchX : Utensils}
@@ -631,8 +695,14 @@ export default function Restaurants() {
                 </Suspense>
               ) : (
                 <>
+                  {/* Sticky filter bar: removable chips (WEB-UX-003) */}
+                  {restaurantChips.length > 0 && (
+                    <div className="sticky top-16 z-30 py-2 mb-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+                      <ActiveFilterChips onClearAll={handleClearFilters} chips={restaurantChips} />
+                    </div>
+                  )}
                   {/* Results count */}
-                  <p className="text-sm text-muted-foreground mb-4">
+                  <p className="text-sm text-muted-foreground mb-4" aria-live="polite">
                     {isMobile
                       ? `Showing ${Math.min(paginatedRestaurants.length, restaurants.length)} of ${restaurants.length} restaurants`
                       : `Showing ${Math.min((page - 1) * ITEMS_PER_PAGE + 1, restaurants.length)}-${Math.min(page * ITEMS_PER_PAGE, restaurants.length)} of ${restaurants.length} restaurants`}
@@ -749,12 +819,14 @@ export default function Restaurants() {
                       key={cuisine}
                       onClick={() => {
                         setFilters((prev) => ({ ...prev, cuisine: [cuisine] }));
-                        setActiveCuisineQuick('');
+                        // A setActiveCuisineQuick('') call sat here referencing
+                        // removed state; it threw before the scroll below could
+                        // run (WEB-QA-017).
                         document.getElementById('all-restaurants-heading')?.scrollIntoView({ behavior: 'smooth' });
                       }}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border border-gray-200 dark:border-gray-700 bg-white dark:bg-card text-gray-700 dark:text-gray-300 hover:border-[#2D1B69] dark:hover:border-primary hover:bg-[#2D1B69]/5 dark:hover:bg-primary/10 transition-all duration-200 shadow-sm"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 min-h-[44px] rounded-full text-sm font-medium border border-gray-200 dark:border-gray-700 bg-white dark:bg-card text-gray-700 dark:text-gray-300 hover:border-[#2D1B69] dark:hover:border-primary hover:bg-[#2D1B69]/5 dark:hover:bg-primary/10 transition-all duration-200 shadow-sm"
                     >
-                      <ChefHat className="h-3.5 w-3.5 text-muted-foreground" />
+                      <SpriteIcon name="chef-hat" className="h-3.5 w-3.5 text-muted-foreground" />
                       {cuisine}
                       <span className="text-xs text-muted-foreground ml-0.5">({count})</span>
                     </button>
@@ -772,7 +844,7 @@ export default function Restaurants() {
 
                 <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/50 dark:to-indigo-950/50 p-6 rounded-2xl mb-8 border border-blue-100 dark:border-blue-900">
                   <h3 className="text-xl font-semibold mb-3 flex items-center gap-2 text-gray-900 dark:text-gray-100">
-                    <ChefHat className="h-5 w-5 text-blue-600" />
+                    <SpriteIcon name="chef-hat" className="h-5 w-5 text-blue-600" />
                     Des Moines Dining at a Glance
                   </h3>
                   <p className="text-lg leading-relaxed text-gray-700">
@@ -784,7 +856,7 @@ export default function Restaurants() {
                   </p>
                 </div>
 
-                <h3 className="text-2xl font-semibold mb-4 text-gray-900">Best Neighborhoods for Dining in Des Moines</h3>
+                <h3 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Best Neighborhoods for Dining in Des Moines</h3>
 
                 <div className="grid md:grid-cols-2 gap-6 mb-8 not-prose">
                   <div className="bg-white p-6 rounded-2xl shadow-sm border">
@@ -836,12 +908,12 @@ export default function Restaurants() {
                   </div>
                 </div>
 
-                <h3 className="text-2xl font-semibold mb-4 text-gray-900">Dining Tips for Des Moines</h3>
+                <h3 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Dining Tips for Des Moines</h3>
 
                 <div className="space-y-4 mb-8 not-prose">
                   <div className="bg-white p-5 rounded-xl border flex gap-4 items-start">
                     <div className="bg-amber-100 rounded-full p-2 shrink-0 mt-0.5">
-                      <Clock className="h-5 w-5 text-amber-600" />
+                      <SpriteIcon name="clock" className="h-5 w-5 text-amber-600" />
                     </div>
                     <div>
                       <h4 className="font-semibold text-gray-900 mb-1">Peak Hours & Reservations</h4>

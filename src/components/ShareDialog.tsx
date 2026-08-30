@@ -12,7 +12,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import {
-  Share2,
   Facebook,
   Twitter,
   Mail,
@@ -21,6 +20,7 @@ import {
   Copy,
   LucideIcon,
 } from "lucide-react";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 import { createLogger } from '@/lib/logger';
 import { hapticTap } from '@/lib/capacitorUtils';
 
@@ -153,7 +153,7 @@ export default function ShareDialog({
       <DialogTrigger asChild>
         {trigger || (
           <Button variant="outline" size="sm" className={className}>
-            <Share2 className="h-4 w-4 mr-2" />
+            <SpriteIcon name="share-2" className="h-4 w-4 mr-2" />
             Share
           </Button>
         )}
@@ -190,7 +190,7 @@ export default function ShareDialog({
               className="w-full border-dashed hover:border-solid transition-all duration-200"
               size="sm"
             >
-              <Share2 className="h-4 w-4 mr-2" />
+              <SpriteIcon name="share-2" className="h-4 w-4 mr-2" />
               More Share Options
             </Button>
           )}

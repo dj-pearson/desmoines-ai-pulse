@@ -40,10 +40,18 @@ export function useSecurityContext(): UseSecurityContextReturn {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
+  // Depend on the identity fields, not the `user` object. Supabase hands us a
+  // brand-new user object on every token refresh and on every tab-focus session
+  // recovery; keying the effect on the object would re-query the role (and
+  // re-render every permission consumer) each time, for an answer that cannot
+  // have changed. (WEB-UX-008)
+  const userId = user?.id ?? null;
+  const userEmail = user?.email ?? null;
+
   const buildContext = useCallback(async () => {
     if (authLoading) return;
 
-    if (!isAuthenticated || !user) {
+    if (!isAuthenticated || !userId) {
       setContext(createAnonymousContext());
       setIsLoading(false);
       return;
@@ -57,7 +65,7 @@ export function useSecurityContext(): UseSecurityContextReturn {
       const { data: roleData } = await supabase
         .from('user_roles')
         .select('role')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .in('role', ['root_admin', 'admin', 'moderator'])
         .order('role')
         .limit(1)
@@ -73,7 +81,7 @@ export function useSecurityContext(): UseSecurityContextReturn {
         const { data: profileData } = await supabase
           .from('profiles')
           .select('user_role')
-          .eq('id', user.id)
+          .eq('user_id', userId)
           .single();
 
         if (profileData?.user_role) {
@@ -85,12 +93,12 @@ export function useSecurityContext(): UseSecurityContextReturn {
 
       setContext({
         isAuthenticated: true,
-        userId: user.id,
-        email: user.email || null,
+        userId,
+        email: userEmail,
         role,
         roleLevel: getRoleLevel(role),
         permissions,
-        sessionId: user.id.slice(-8), // Last 8 chars for logging
+        sessionId: userId.slice(-8), // Last 8 chars for logging
       });
       setError(null);
     } catch (err) {
@@ -99,8 +107,8 @@ export function useSecurityContext(): UseSecurityContextReturn {
       // Still set a basic authenticated context
       setContext({
         isAuthenticated: true,
-        userId: user.id,
-        email: user.email || null,
+        userId,
+        email: userEmail,
         role: 'user',
         roleLevel: getRoleLevel('user'),
         permissions: getPermissionsForRole('user'),
@@ -108,7 +116,7 @@ export function useSecurityContext(): UseSecurityContextReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [user, isAuthenticated, isAdmin, authLoading]);
+  }, [userId, userEmail, isAuthenticated, isAdmin, authLoading]);
 
   useEffect(() => {
     buildContext();

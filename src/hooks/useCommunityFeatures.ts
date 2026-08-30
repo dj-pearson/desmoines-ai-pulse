@@ -2,21 +2,9 @@ import { useState, useEffect } from "react";
 import { useAuth } from "./useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { createLogger } from '@/lib/logger';
 
-interface PhotoUpload {
-  id: string;
-  photo_url: string;
-  caption?: string;
-  event_id: string;
-  user_id: string;
-  helpful_votes: number;
-  is_approved: boolean;
-  created_at: string;
-  user_profile?: {
-    first_name?: string;
-    last_name?: string;
-  };
-}
+const logger = createLogger('useCommunityFeatures');
 
 interface CheckIn {
   id: string;
@@ -89,69 +77,28 @@ export function useCommunityFeatures() {
   const [forums, setForums] = useState<Forum[]>([]);
   const [friends, setFriends] = useState<Friend[]>([]);
 
-  // Photo Upload Functions
-  const uploadEventPhoto = async (eventId: string, file: File, caption?: string) => {
-    if (!user) return null;
-
-    try {
-      setLoading(true);
-      
-      // Upload file to storage
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
-      
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('event-photos')
-        .upload(fileName, file);
-
-      if (uploadError) throw uploadError;
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('event-photos')
-        .getPublicUrl(fileName);
-
-      // Insert photo record
-      const { data, error } = await supabase
-        .from('event_photos')
-        .insert({
-          event_id: eventId,
-          photo_url: publicUrl,
-          caption,
-          user_id: user.id
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      toast.success('Photo uploaded successfully!');
-      return data;
-    } catch (error) {
-      console.error('Failed to upload photo:', error);
-      toast.error('Failed to upload photo');
-      return null;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const getEventPhotos = async (eventId: string): Promise<PhotoUpload[]> => {
-    try {
-      const { data, error } = await supabase
-        .from('event_photos')
-        .select('*')
-        .eq('event_id', eventId)
-        .eq('is_approved', true)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      return data || [];
-    } catch (error) {
-      console.error('Failed to fetch event photos:', error);
-      return [];
-    }
-  };
+  // WEB-QA-022 AC4. uploadEventPhoto and getEventPhotos lived here: the
+  // Option-B path, writing to and reading from `event_photos`. They are gone,
+  // and the reason is the whole point of that story - "DELETE the losing path
+  // rather than leaving it dormant, the dead path is what produced this
+  // ambiguity".
+  //
+  // Option A is what shipped. Migration 20260718000003 is applied AND effective
+  // (it is not in .github/migration-drift-baseline.json, which after WEB-QA-017
+  // is a separate fact from being ledgered), so event photos are
+  // event_discussions rows with message_type='photo' and media_url.
+  // EventPhotoUpload.tsx:90 writes that shape, EventPhotoGallery.tsx:17 reads
+  // it, EventSocialHub.tsx:188 counts it, and ownership.ts maps `photo` to it.
+  //
+  // Deleting cost nothing and risked nothing: both tables held ZERO rows, so
+  // there was no data on either side, and neither function had a single
+  // consumer - six components import this hook and not one destructured either.
+  // Both paths already shared the `event-photos` storage bucket, so no object
+  // was orphaned by this.
+  //
+  // If event_photos is ever adopted after all, it needs a moderation column
+  // before the approval filter that used to sit in getEventPhotos can come
+  // back; that filter named `is_approved`, which has never existed.
 
   // Check-in Functions
   const updateEventCheckIn = async (eventId: string, status: 'interested' | 'going' | 'maybe' | 'not_going') => {
@@ -173,35 +120,63 @@ export function useCommunityFeatures() {
       toast.success(`Marked as ${status}!`);
       return true;
     } catch (error) {
-      console.error('Failed to update check-in:', error);
+      logger.error('updateEventCheckIn', 'Failed to update check-in', { error });
       toast.error('Failed to update check-in');
       return false;
     }
   };
 
+  // WEB-SEC-025: counts come from a SECURITY DEFINER aggregate, not from the raw
+  // table. This used to select `status` for every attendee of the event and
+  // count them here, which meant the anon key could enumerate who is going to
+  // which event - while this very UI renders four numbers and never a name.
+  //
+  // It is also what was blocking the policy fix. Restricting event_attendance to
+  // a user's own rows would have turned this read into "1 attendee" with no
+  // error at all, because a denied SELECT under RLS is an empty result. See the
+  // migration header for the tightening that follows this deploy.
   const getEventCheckIns = async (eventId: string) => {
     try {
       const { data, error } = await supabase
-        .from('event_attendance')
-        .select('status')
-        .eq('event_id', eventId);
+        // `as never` because event_attendance_tallies is NOT in the generated
+        // types yet: migration 20260827000002 is on main and has never been
+        // pushed, so the function answers PGRST202 in production today. Same
+        // idiom as MergeReviewPanel.tsx:128 and ModerationQueuePanel.tsx:67.
+        //
+        // Nothing is lost by casting - the RPC's existence is tracked by
+        // check-schema-usage's PENDING_MIGRATIONS entry, which is a real check
+        // against the schema rather than a compiler guess. Without the cast the
+        // app type ratchet is red on EVERY pull request (375 vs a 374 baseline),
+        // and re-baselining is not the answer: strict-ratchet.mjs says in its
+        // header to re-baseline on Linux only, after a Windows baseline turned
+        // the check permanently red for everyone on 2026-08-23.
+        //
+        // REMOVE THE CAST once the migration is applied and types.ts is
+        // regenerated. Until then this call returns zeros for every event, which
+        // is invisible only because event_attendance holds no rows.
+        .rpc('event_attendance_tallies' as never, { p_event_id: eventId } as never);
 
       if (error) throw error;
 
-      const counts = data?.reduce((acc, item) => {
-        acc[item.status] = (acc[item.status] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>) || {};
+      const rows = (data ?? []) as { status: string; attendee_count: number }[];
+      const counts: Record<string, number> = {};
+      let total = 0;
+      for (const row of rows) {
+        const n = Number(row.attendee_count) || 0;
+        counts[row.status] = (counts[row.status] || 0) + n;
+        total += n;
+      }
 
       return {
         going: counts.going || 0,
         interested: counts.interested || 0,
         maybe: counts.maybe || 0,
         not_going: counts.not_going || 0,
-        total: data?.length || 0
+        // Every status, as before - the old `data.length` counted not_going too.
+        total,
       };
     } catch (error) {
-      console.error('Failed to fetch check-ins:', error);
+      logger.error('getEventCheckIns', 'Failed to fetch check-ins', { error });
       return { going: 0, interested: 0, maybe: 0, not_going: 0, total: 0 };
     }
   };
@@ -220,7 +195,7 @@ export function useCommunityFeatures() {
       if (error && error.code !== 'PGRST116') throw error;
       return data?.status || null;
     } catch (error) {
-      console.error('Failed to fetch user check-in:', error);
+      logger.error('getUserEventCheckIn', 'Failed to fetch user check-in', { error });
       return null;
     }
   };
@@ -238,7 +213,7 @@ export function useCommunityFeatures() {
       setForums(data || []);
       return data || [];
     } catch (error) {
-      console.error('Failed to fetch forums:', error);
+      logger.error('fetchForums', 'Failed to fetch forums', { error });
       return [];
     }
   };
@@ -262,7 +237,7 @@ export function useCommunityFeatures() {
       await fetchForums();
       return data;
     } catch (error) {
-      console.error('Failed to create forum:', error);
+      logger.error('createForum', 'Failed to create forum', { error });
       toast.error('Failed to create forum');
       return null;
     }
@@ -280,7 +255,7 @@ export function useCommunityFeatures() {
       if (error) throw error;
       return data || [];
     } catch (error) {
-      console.error('Failed to fetch threads:', error);
+      logger.error('getThreads', 'Failed to fetch threads', { error });
       return [];
     }
   };
@@ -304,7 +279,7 @@ export function useCommunityFeatures() {
       toast.success('Thread created successfully!');
       return data;
     } catch (error) {
-      console.error('Failed to create thread:', error);
+      logger.error('createThread', 'Failed to create thread', { error });
       toast.error('Failed to create thread');
       return null;
     }
@@ -321,7 +296,7 @@ export function useCommunityFeatures() {
       if (error) throw error;
       return data || [];
     } catch (error) {
-      console.error('Failed to fetch replies:', error);
+      logger.error('getReplies', 'Failed to fetch replies', { error });
       return [];
     }
   };
@@ -346,7 +321,7 @@ export function useCommunityFeatures() {
       toast.success('Reply posted successfully!');
       return data;
     } catch (error) {
-      console.error('Failed to create reply:', error);
+      logger.error('createReply', 'Failed to create reply', { error });
       toast.error('Failed to post reply');
       return null;
     }
@@ -367,7 +342,7 @@ export function useCommunityFeatures() {
       setFriends((data || []) as Friend[]);
       return (data || []) as Friend[];
     } catch (error) {
-      console.error('Failed to fetch friends:', error);
+      logger.error('fetchFriends', 'Failed to fetch friends', { error });
       return [];
     }
   };
@@ -425,7 +400,7 @@ export function useCommunityFeatures() {
       toast.success('Friend request sent!');
       return true;
     } catch (error) {
-      console.error('Failed to send friend request:', error);
+      logger.error('sendFriendRequest', 'Failed to send friend request', { error });
       toast.error('Failed to send friend request');
       return false;
     }
@@ -446,8 +421,6 @@ export function useCommunityFeatures() {
     friends,
 
     // Photo functions
-    uploadEventPhoto,
-    getEventPhotos,
 
     // Check-in functions
     updateEventCheckIn,

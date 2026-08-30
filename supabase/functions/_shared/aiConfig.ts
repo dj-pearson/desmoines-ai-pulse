@@ -29,6 +29,85 @@ let cacheTimestamp = 0;
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 /**
+ * Canonical accessor for the Anthropic API key (WEB-BE-002).
+ *
+ * The key has historically been stored under three different secret names
+ * across the 60+ edge functions: `ANTHROPIC_API_KEY`, `CLAUDE_API`, and
+ * `CLAUDE_API_KEY`. This accessor reads the canonical `ANTHROPIC_API_KEY`
+ * first, then falls back to the two legacy names so nothing breaks while the
+ * secret is migrated.
+ *
+ * DEPRECATION PLAN:
+ *   1. (this release) All functions call getAnthropicApiKey(); the canonical
+ *      secret is `ANTHROPIC_API_KEY`. Legacy `CLAUDE_API` / `CLAUDE_API_KEY`
+ *      are still read as fallbacks so key rotation is safe.
+ *   2. Set the `ANTHROPIC_API_KEY` secret in every environment, then remove
+ *      the `CLAUDE_API` / `CLAUDE_API_KEY` secrets.
+ *   3. A later release drops the fallback reads from this accessor.
+ *
+ * @returns the key string, or null if none of the names are set.
+ */
+export function getAnthropicApiKey(): string | null {
+  return (
+    Deno.env.get("ANTHROPIC_API_KEY") ||
+    Deno.env.get("CLAUDE_API") ||
+    Deno.env.get("CLAUDE_API_KEY") ||
+    null
+  );
+}
+
+/** Discriminated result of {@link extractClaudeText}. */
+export type ClaudeTextResult =
+  | { ok: true; text: string }
+  | { ok: false; reason: "empty" | "refused" | "overloaded" | "malformed"; detail: string };
+
+/**
+ * Safely extract the assistant text from a Claude Messages API response
+ * (WEB-BE-003). Guards the `content[0].text` dereference that ~12 functions
+ * did unchecked, which crashes on an empty/refused/overloaded response.
+ *
+ * Returns a discriminated result so callers can degrade gracefully (retry,
+ * escalate, or return a clean error) instead of throwing a cryptic
+ * "Cannot read properties of undefined" from a bad upstream shape.
+ */
+export function extractClaudeText(aiResult: unknown): ClaudeTextResult {
+  const r = aiResult as {
+    type?: string;
+    stop_reason?: string;
+    error?: { type?: string; message?: string };
+    content?: Array<{ type?: string; text?: string }>;
+  } | null | undefined;
+
+  if (!r || typeof r !== "object") {
+    return { ok: false, reason: "malformed", detail: "response is not an object" };
+  }
+  // Anthropic error envelope (e.g. overloaded_error, rate_limit_error).
+  if (r.type === "error" || r.error) {
+    const type = r.error?.type ?? "error";
+    const overloaded = type.includes("overloaded") || type.includes("rate_limit");
+    return {
+      ok: false,
+      reason: overloaded ? "overloaded" : "malformed",
+      detail: r.error?.message ?? type,
+    };
+  }
+  if (!Array.isArray(r.content) || r.content.length === 0) {
+    return { ok: false, reason: "empty", detail: "no content blocks in response" };
+  }
+  // A refusal / non-text stop can still return content without a text block.
+  const textBlock = r.content.find((b) => b?.type === "text" && typeof b.text === "string");
+  if (!textBlock || typeof textBlock.text !== "string" || textBlock.text.length === 0) {
+    const refused = r.stop_reason === "refusal";
+    return {
+      ok: false,
+      reason: refused ? "refused" : "empty",
+      detail: refused ? "model refused to respond" : "no text block in response content",
+    };
+  }
+  return { ok: true, text: textBlock.text };
+}
+
+/**
  * Fetch AI configuration from database with caching
  * @param supabaseUrl Supabase project URL
  * @param supabaseKey Supabase service role key

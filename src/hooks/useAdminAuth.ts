@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { User } from "@supabase/supabase-js";
 import { createLogger } from '@/lib/logger';
@@ -24,6 +24,10 @@ export function useAdminAuth() {
     isRootAdmin: false,
   });
 
+  // Id of the user we last resolved a role for, so a re-emitted SIGNED_IN for
+  // the same session doesn't trigger another round of role queries. (WEB-UX-008)
+  const resolvedForUserRef = useRef<string | null>(null);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -34,6 +38,7 @@ export function useAdminAuth() {
         const user = session?.user || null;
 
         if (!user) {
+          resolvedForUserRef.current = null;
           if (isMounted) {
             setState({
               user: null,
@@ -72,6 +77,8 @@ export function useAdminAuth() {
         const hasAdminAccess = ['moderator', 'admin', 'root_admin'].includes(userRole);
         const isRootAdmin = userRole === 'root_admin';
 
+        resolvedForUserRef.current = user.id;
+
         if (isMounted) {
           setState({
             user,
@@ -97,9 +104,19 @@ export function useAdminAuth() {
 
     initializeAuth();
 
-    // Listen for auth changes
+    // Listen for auth changes.
+    //
+    // SIGNED_IN is re-emitted for the session we already hold every time the
+    // browser tab regains visibility (GoTrueClient#_recoverAndRefresh), so only
+    // re-resolve the role when the user actually changed — otherwise every tab
+    // switch fires a fresh round of role queries and re-renders the admin nav.
+    // (WEB-UX-008)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+      if (event === 'SIGNED_OUT') {
+        initializeAuth();
+        return;
+      }
+      if (event === 'SIGNED_IN' && session?.user?.id !== resolvedForUserRef.current) {
         initializeAuth();
       }
     });

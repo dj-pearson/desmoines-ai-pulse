@@ -70,6 +70,12 @@ final class SpeechDictationService {
 
             let request = SFSpeechAudioBufferRecognitionRequest()
             request.shouldReportPartialResults = true
+            // Prefer on-device recognition where supported so recorded audio
+            // never leaves the device — keeps the privacy posture clean and
+            // avoids declaring Audio Data collection (IOS-AUDIT-SEC-009).
+            if recognizer.supportsOnDeviceRecognition {
+                request.requiresOnDeviceRecognition = true
+            }
             self.request = request
 
             let inputNode = audioEngine.inputNode
@@ -101,6 +107,18 @@ final class SpeechDictationService {
             }
         } catch {
             status = .error(error.localizedDescription)
+            // The session was already activated above, so a throw from
+            // audioEngine.start() - route contention, an interruption, another
+            // app holding the mic - would otherwise leave .record + .duckOthers
+            // engaged with a tap still installed: the exact symptom this story
+            // is about, on the one path stop() was never reached from
+            // (IOS-AUDIT-PERF-016 AC3).
+            //
+            // Safe to call here: stop() only resets status when it is
+            // .listening, so the error set on the line above survives, and both
+            // removing an uninstalled tap and stopping an unstarted engine are
+            // no-ops.
+            stop()
         }
     }
 
@@ -111,6 +129,16 @@ final class SpeechDictationService {
         task?.finish()
         request = nil
         task = nil
+        // Deactivate the recording session so the mic hardware is released and
+        // other apps' audio un-ducks — otherwise the session stays active and
+        // drains battery until the app is killed (IOS-AUDIT-PERF-016).
+        do {
+            try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        } catch {
+            #if DEBUG
+            AppLogger.general.warning("Failed to deactivate audio session: \(error.localizedDescription)")
+            #endif
+        }
         if case .listening = status {
             status = .idle
         }

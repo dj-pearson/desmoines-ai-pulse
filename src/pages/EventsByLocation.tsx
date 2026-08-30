@@ -1,21 +1,24 @@
 import React, { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useLocation as useRouterLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { createLogger } from '@/lib/logger';
 import { supabase } from "@/integrations/supabase/client";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 const log = createLogger('EventsByLocation');
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import EventCard from "@/components/EventCard";
+import { FAQSection } from "@/components/FAQSection";
+import { SocialEventCard } from "@/components/SocialEventCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MapPin, Calendar, Users, Star } from "lucide-react";
+import { Star } from "lucide-react";
 import { format, parseISO, isAfter } from "date-fns";
 import { BRAND } from "@/lib/brandConfig";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { RESTAURANT_LIST_COLUMNS } from "@/lib/listColumns";
 
 // Suburb mapping for SEO-friendly URLs and proper names
 const SUBURBS = {
@@ -71,11 +74,25 @@ const SUBURBS = {
 };
 
 export default function EventsByLocation() {
-  const { location } = useParams<{ location: string }>();
+  // WEB-SEO-002: this read `useParams().location`, but App.tsx mounts this
+  // component on SEVEN LITERAL paths (/events/ankeny, /events/urbandale, ...)
+  // rather than on /events/:location — a param route there would collide with
+  // the /events/:slug event-detail handler that follows it. With no matching
+  // param, `location` was always undefined, so suburbInfo was always null and
+  // every one of the seven pages rendered the "Location Not Found" branch.
+  //
+  // They are all in sitemap-static.xml and all prerendered, so we were serving
+  // crawlers a not-found page, under one shared title, for the seven
+  // "<suburb> events" queries — some of the most winnable terms we have.
+  // Found by auditing the shipped HTML; the source reads perfectly well.
+  //
+  // Derive the slug from the pathname, keeping the param as the preferred
+  // source so a future /events/:location route would still work.
+  const { location: locationParam } = useParams<{ location: string }>();
+  const { pathname } = useRouterLocation();
+  const slug = locationParam ?? pathname.split('/').filter(Boolean).pop() ?? null;
 
-  const suburbInfo = location
-    ? SUBURBS[location as keyof typeof SUBURBS]
-    : null;
+  const suburbInfo = slug ? SUBURBS[slug as keyof typeof SUBURBS] : null;
 
   useDocumentTitle(suburbInfo?.name ? `Events in ${suburbInfo.name}` : "Events by Location");
 
@@ -107,7 +124,11 @@ export default function EventsByLocation() {
         
         const { data, error } = await supabase
           .from("events")
-          .select("id, title, date, time, location, venue, price, category, enhanced_description, original_description, image_url, event_start_utc, status, city")
+          // NOTE: `time` and `status` are not columns on public.events (see the
+          // warning on EVENT_LIST_COLUMNS in src/lib/listColumns.ts). Naming them
+          // made PostgREST reject the whole projection with 42703, so this page
+          // rendered zero events on every load. Neither field was read downstream.
+          .select("id, title, date, location, venue, price, category, enhanced_description, original_description, image_url, event_start_utc, city")
           .gte("date", today)
           .order("date", { ascending: true });
         
@@ -142,13 +163,13 @@ export default function EventsByLocation() {
   }, [suburbInfo]);
 
   const { data: restaurants } = useQuery({
-    queryKey: ["restaurants-by-location", location],
+    queryKey: ["restaurants-by-location", slug],
     queryFn: async () => {
       if (!suburbInfo) return [];
 
       const { data, error } = await supabase
         .from("restaurants")
-        .select("*")
+        .select(RESTAURANT_LIST_COLUMNS)
         .eq("status", "active")
         .limit(5);
 
@@ -191,6 +212,16 @@ export default function EventsByLocation() {
     );
   }
 
+  // Two full rows of the lg:grid-cols-3 grid below. This route prerendered
+  // 4,077 elements inside #root against a median of 496 across all 35 routes,
+  // and Lighthouse flags above ~1,500 - a cost paid in HTML parse, DOM memory
+  // and hydration, all main-thread (WEB-PERF-023).
+  //
+  // ONLY THE RENDERED LIST IS CAPPED. Every count on this page - the FAQ answer,
+  // the stat block, the this-week filter - still reads upcomingEvents.length, so
+  // no number a user sees changes.
+  const VISIBLE_EVENTS = 24;
+
   const upcomingEvents =
     events?.filter((event) => {
       try {
@@ -200,18 +231,37 @@ export default function EventsByLocation() {
       }
     }) || [];
 
+  const visibleEvents = upcomingEvents.slice(0, VISIBLE_EVENTS);
+  const hiddenEventCount = upcomingEvents.length - visibleEvents.length;
+
   const pageTitle = `${suburbInfo.name} Events - Things To Do | ${BRAND.name}`;
   const pageDescription = `Find events in ${suburbInfo.name}, Iowa. ${suburbInfo.description} See dates, times, locations, and get directions.`;
 
   const breadcrumbs = [
     { name: "Events", url: "/events" },
-    { name: suburbInfo.name, url: `/events/${location}` },
+    { name: suburbInfo.name, url: `/events/${slug}` },
   ];
 
+  // NO LIVE COUNT IN ANY ANSWER, and that is the whole point (WEB-SEO-008).
+  //
+  // This answer used to interpolate upcomingEvents.length, which made the FAQ
+  // differ between the loading render and the loaded one - so the block below
+  // had to withhold it while loading, or react-helmet-async would append both
+  // and production would serve two FAQPage blocks saying different numbers.
+  //
+  // Withholding traded that for a worse failure: whenever the prerenderer
+  // captured a route before its query resolved, the page shipped with NO
+  // FAQPage at all. Measured on the 2026-08-28 build, /events/altoona and
+  // /events/johnston had zero while /events/clive and /events/windsor-heights -
+  // same 5 h3, same empty ItemList - had one. A race, not a data difference.
+  //
+  // A count in structured data is also wrong on its own terms: it is a snapshot
+  // that goes stale the moment an event is ingested, and Google may well read a
+  // number the page no longer shows.
   const faqData = [
     {
       question: `What events are happening in ${suburbInfo.name}?`,
-      answer: `We currently have ${upcomingEvents.length} upcoming events in ${suburbInfo.name}. Check our list below for dates, times, and locations.`,
+      answer: `Browse upcoming ${suburbInfo.name} events below for dates, times and locations. The list is updated daily as new events are announced.`,
     },
     {
       question: `What is ${suburbInfo.name} known for?`,
@@ -228,9 +278,20 @@ export default function EventsByLocation() {
       <EnhancedLocalSEO
         pageTitle={pageTitle}
         pageDescription={pageDescription}
-        canonicalUrl={`${BRAND.baseUrl}/events/${location}`}
+        canonicalUrl={`${BRAND.baseUrl}/events/${slug}`}
         pageType="website"
         breadcrumbs={breadcrumbs}
+        // Always emitted now. It used to be withheld while loading because the
+        // answers carried a live event count, so the loading and loaded renders
+        // produced different FAQPage JSON and react-helmet-async appended both
+        // rather than replacing - production served two blocks, one saying
+        // "0 events" and one saying "8 events".
+        //
+        // faqData no longer depends on any loaded value (see its definition
+        // above), so both renders produce byte-identical JSON and there is
+        // nothing to duplicate. That removes the reason to withhold, and with it
+        // the failure withholding caused: a route captured before its query
+        // resolved shipped with no FAQPage at all.
         faqData={faqData}
         suburb={suburbInfo.name}
       />
@@ -238,7 +299,7 @@ export default function EventsByLocation() {
         events={upcomingEvents || []}
         listName={`Events in ${suburbInfo.name}, Iowa`}
         listDescription={pageDescription}
-        listUrl={`${BRAND.baseUrl}/events/${location}`}
+        listUrl={`${BRAND.baseUrl}/events/${slug}`}
       />
 
       <Header />
@@ -255,7 +316,7 @@ export default function EventsByLocation() {
         {/* Hero Section */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">
-            <MapPin className="h-6 w-6 text-primary" />
+            <SpriteIcon name="map-pin" className="h-6 w-6 text-primary" />
             <h1 className="text-3xl font-bold">Events in {suburbInfo.name}</h1>
           </div>
 
@@ -316,19 +377,28 @@ export default function EventsByLocation() {
         ) : upcomingEvents.length > 0 ? (
           <div className="mb-8">
             <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-              <Calendar className="h-6 w-6" />
+              <SpriteIcon name="calendar" className="h-6 w-6" />
               Upcoming Events
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {upcomingEvents.map((event) => (
-                <EventCard key={event.id} event={event} onViewDetails={() => {}} />
+              {visibleEvents.map((event) => (
+                <SocialEventCard key={event.id} event={event} onViewDetails={() => {}} />
               ))}
             </div>
+            {hiddenEventCount > 0 && (
+              // Say what is not shown. A list that stops at 36 without saying so
+              // reads as "there are 36 events here", which is how a truncation
+              // becomes a fact (WEB-PERF-023).
+              <p className="mt-6 text-sm text-muted-foreground">
+                Showing the first {VISIBLE_EVENTS} of {upcomingEvents.length} upcoming events in{' '}
+                {suburbInfo.name}.
+              </p>
+            )}
           </div>
         ) : (
           <Card className="mb-8">
             <CardContent className="pt-6 text-center">
-              <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <SpriteIcon name="calendar" className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h2 className="text-xl font-semibold mb-2">No Upcoming Events</h2>
               <p className="text-muted-foreground mb-4">
                 No events are currently scheduled for {suburbInfo.name}. Check
@@ -353,7 +423,7 @@ export default function EventsByLocation() {
         {restaurants && restaurants.length > 0 && (
           <div className="mb-8">
             <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-              <Users className="h-6 w-6" />
+              <SpriteIcon name="users" className="h-6 w-6" />
               Local Dining in {suburbInfo.name}
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -389,20 +459,11 @@ export default function EventsByLocation() {
           </div>
         )}
 
-        {/* FAQ Section */}
-        <Card>
-          <CardHeader>
-            <CardTitle>About {suburbInfo.name}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {faqData.map((faq, index) => (
-              <div key={index} className="border-b pb-4 last:border-b-0">
-                <h3 className="font-semibold mb-2">{faq.question}</h3>
-                <p className="text-muted-foreground">{faq.answer}</p>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+        {/* SEO-003: one component renders the questions and emits the single
+            FAQPage block, so the schema cannot describe content that is not on
+            the page. The heading stays "About <suburb>" — it is the visible
+            title, and the questions underneath are the same either way. */}
+        <FAQSection faqs={faqData} title={`About ${suburbInfo.name}`} />
       </div>
 
       <Footer />

@@ -1,15 +1,23 @@
 # Des Moines Insider
 
+<!-- WEB-SEO-015: the counts below are hand-maintained and had drifted in BOTH
+     directions against the generated sitemaps — "50+ attractions" against 22
+     real URLs and "100+ playgrounds" against 69 were overstatements, while
+     "200+ restaurants" understated an actual 480. They are now rounded DOWN
+     from the sitemap counts so every figure is defensible. Generating this file
+     from the database alongside the sitemaps would stop the drift for good;
+     until then, re-check against public/sitemap-*.xml before editing. -->
+
 > The definitive AI-powered local guide for Des Moines, Iowa — events, restaurants, attractions, and family activities with real-time, verified information.
 
 ## About
-Des Moines Insider is the most comprehensive local guide for the Des Moines, Iowa metropolitan area. We provide real-time, AI-enhanced information covering 500+ monthly events, 200+ restaurants, 50+ attractions, and 100+ family activity locations across the Greater Des Moines area including West Des Moines, Ankeny, Urbandale, Clive, Johnston, Waukee, and Windsor Heights. All content is locally verified with geographic precision (41.5868°N, 93.6250°W, Central Time).
+Des Moines Insider is a local guide to the Des Moines, Iowa metropolitan area. We provide AI-enhanced information covering 250+ upcoming events, 450+ restaurants, 20+ attractions, and 65+ family activity locations across the Greater Des Moines area including West Des Moines, Ankeny, Urbandale, Clive, Johnston, Waukee, and Windsor Heights. All content is locally verified with geographic precision (41.5868°N, 93.6250°W, Central Time).
 
 ## Key Features
-- **Real-Time Events**: 500+ monthly events updated daily with Central Time scheduling, venue coordinates, pricing, and category filtering (Music, Food, Sports, Arts, Family, Business)
-- **Restaurant Directory**: 200+ establishments with cuisine types, price ranges, dietary options, operating hours, and new opening tracking
-- **Attractions & Activities**: 50+ documented attractions with admission info, hours, and geographic data across Museums, Parks, Entertainment, and Historical sites
-- **Family & Playgrounds**: 100+ mapped playgrounds and family activities with safety info, age appropriateness, and accessibility details
+- **Events**: 250+ upcoming events, refreshed daily, with Central Time scheduling, venue coordinates, pricing, and category filtering (Music, Food, Sports, Arts, Family, Business)
+- **Restaurant Directory**: 450+ establishments with cuisine types, price ranges, dietary options, operating hours, and new opening tracking
+- **Attractions & Activities**: 20+ documented attractions with admission info, hours, and geographic data across Museums, Parks, Entertainment, and Historical sites
+- **Family & Playgrounds**: 65+ mapped playgrounds and family activities with safety info, age appropriateness, and accessibility details
 - **AI Trip Planner**: Natural language itinerary building for visitors to Des Moines
 - **Neighborhood Guides**: Detailed guides for Des Moines neighborhoods and suburbs
 - **Articles & Guides**: Locally-focused content about living in, visiting, and exploring Des Moines
@@ -48,7 +56,14 @@ Des Moines Insider is the most comprehensive local guide for the Des Moines, Iow
 - **Population Served**: ~700,000 (Des Moines metro area)
 
 ## Data Freshness
-- **Events**: Updated daily
+<!-- WEB-SEO-011/015: "updated daily" was true of INGESTION but not of what a
+     crawler could see — the daily crawl wrote to the database and nothing
+     rebuilt the published sitemaps or prerendered HTML until someone deployed.
+     A post-crawl rebuild step now exists in .github/workflows/event-crawler.yml
+     but is inert until CLOUDFLARE_DEPLOY_HOOK_URL is set, so the wording below
+     states the ingestion cadence, which is the part that is verifiable today.
+     Once the hook is live these coincide and this note can go. -->
+- **Events**: Ingested daily; published to the site on each deploy
 - **Restaurants**: Updated weekly
 - **Attractions**: Updated monthly
 - **Articles**: Published 2-4x per week

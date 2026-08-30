@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom";
-import { RefreshCw, Sparkles } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useForYouRail } from "@/hooks/useForYouRail";
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 /**
  * Web parity for the iOS HomeView For You rail (IOS-DISCOVER-2026-002).
@@ -28,7 +29,7 @@ export function ForYouRail() {
             id="for-you-rail-heading"
             className="text-xl font-semibold flex items-center gap-2"
           >
-            <Sparkles className="h-5 w-5 text-primary" aria-hidden="true" />
+            <SpriteIcon name="sparkles" className="h-5 w-5 text-primary" aria-hidden="true" />
             {headerTitle}
           </h2>
           <Button
@@ -43,7 +44,15 @@ export function ForYouRail() {
         </div>
 
         <div className="flex gap-4 overflow-x-auto pb-2 -mx-4 px-4 snap-x snap-mandatory">
-          {recommendations.map((rec) => (
+          {isLoading && recommendations.length === 0
+            ? Array.from({ length: 6 }).map((_, i) => (
+                <div key={`skeleton-${i}`} className="snap-start shrink-0 w-56" aria-hidden="true">
+                  <div className="aspect-video w-56 rounded-lg bg-muted animate-pulse motion-reduce:animate-none" />
+                  <div className="mt-2 h-4 w-3/4 rounded bg-muted animate-pulse motion-reduce:animate-none" />
+                  <div className="mt-1 h-3 w-1/2 rounded bg-muted animate-pulse motion-reduce:animate-none" />
+                </div>
+              ))
+            : recommendations.map((rec) => (
             <Link
               key={rec.id}
               to={`/events/${rec.id}`}
@@ -59,7 +68,7 @@ export function ForYouRail() {
                   />
                 ) : (
                   <div className="h-full w-full flex items-center justify-center text-muted-foreground">
-                    <Sparkles className="h-8 w-8" aria-hidden="true" />
+                    <SpriteIcon name="sparkles" className="h-8 w-8" aria-hidden="true" />
                   </div>
                 )}
               </div>

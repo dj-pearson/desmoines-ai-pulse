@@ -1,0 +1,22 @@
+{
+  "total": 24,
+  "files": {
+    "src/components/RestaurantOpenings.tsx": 1,
+    "src/components/RestaurantsMap.tsx": 1,
+    "src/components/ShareDialog.tsx": 1,
+    "src/hooks/useAttractions.ts": 1,
+    "src/hooks/useEvents.ts": 1,
+    "src/hooks/useProximitySearch.ts": 2,
+    "src/hooks/useRestaurants.ts": 1,
+    "src/hooks/useSupabase.ts": 1,
+    "src/lib/consentLog.ts": 1,
+    "src/lib/contentValidation.ts": 3,
+    "src/lib/conversionTracking.ts": 1,
+    "src/lib/sponsoredTracking.ts": 1,
+    "src/pages/Attractions.tsx": 1,
+    "src/pages/EventsPage.tsx": 3,
+    "src/pages/EventsToday.tsx": 1,
+    "src/pages/FreeEvents.tsx": 1,
+    "src/pages/Restaurants.tsx": 3
+  }
+}

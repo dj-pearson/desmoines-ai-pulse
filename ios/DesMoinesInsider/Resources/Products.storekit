@@ -70,6 +70,62 @@
           "subscriptionGroupID" : "21957951",
           "type" : "RecurringSubscription",
           "winbackOffers" : []
+        },
+        {
+          "adHocOffers" : [],
+          "codeOffers" : [],
+          "displayPrice" : "49.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "INSIDER_ANNUAL_001",
+          "introductoryOffer" : {
+            "internalID" : "INSIDER_ANNUAL_TRIAL",
+            "paymentMode" : "free",
+            "displayPrice" : "0.00",
+            "numberOfPeriods" : 1,
+            "subscriptionPeriod" : "P1W"
+          },
+          "localizations" : [
+            {
+              "description" : "Everything in Insider, billed yearly — save ~17% vs monthly. Includes a 7-day free trial.",
+              "displayName" : "Insider Annual",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "prod_insider_annual",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "prod_Insider_Annual",
+          "subscriptionGroupID" : "21957951",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : []
+        },
+        {
+          "adHocOffers" : [],
+          "codeOffers" : [],
+          "displayPrice" : "129.99",
+          "familyShareable" : false,
+          "groupNumber" : 2,
+          "internalID" : "VIP_ANNUAL_001",
+          "introductoryOffer" : {
+            "internalID" : "VIP_ANNUAL_TRIAL",
+            "paymentMode" : "free",
+            "displayPrice" : "0.00",
+            "numberOfPeriods" : 1,
+            "subscriptionPeriod" : "P1W"
+          },
+          "localizations" : [
+            {
+              "description" : "Everything in VIP, billed yearly — save ~17% vs monthly. Includes a 7-day free trial.",
+              "displayName" : "VIP Annual",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "prod_vip_annual",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "prod_VIP_Annual",
+          "subscriptionGroupID" : "21957951",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : []
         }
       ]
     }

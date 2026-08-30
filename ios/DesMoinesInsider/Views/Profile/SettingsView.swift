@@ -12,8 +12,11 @@ struct SettingsView: View {
     @State private var biometric = BiometricAuthService.shared
     @State private var notifications = LocalNotificationService.shared
     @State private var showSubscription = false
+    @State private var showOfferCodeRedeem = false
     @State private var showDeleteConfirmation = false
     @State private var isDeleting = false
+    @State private var isRestoring = false
+    @State private var restoreResultMessage: String?
     @State private var errorMessage: String?
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
 
@@ -39,11 +42,27 @@ struct SettingsView: View {
                         }
 
                         Button {
-                            Task {
-                                await storeKit.restorePurchases()
-                            }
+                            Task { await restorePurchases() }
                         } label: {
-                            Label("Restore Purchases", systemImage: "arrow.clockwise")
+                            Label {
+                                Text(isRestoring ? "Restoring…" : "Restore Purchases")
+                            } icon: {
+                                if isRestoring {
+                                    ProgressView()
+                                } else {
+                                    Image(systemName: "arrow.clockwise")
+                                }
+                            }
+                        }
+                        .disabled(isRestoring)
+                        .accessibilityLabel("Restore previous purchases")
+
+                        // Offer-code redemption — win-back / promo codes (IOS-SUB-014)
+                        Button {
+                            AnalyticsService.shared.trackOfferCodeRedeem(action: "open")
+                            showOfferCodeRedeem = true
+                        } label: {
+                            Label("Redeem Offer Code", systemImage: "tag")
                         }
                     }
 
@@ -106,11 +125,12 @@ struct SettingsView: View {
                     }
 
                     if notificationStatus == .authorized {
-                        @AppStorage("eventRemindersEnabled") var remindersEnabled = true
-                        Toggle(isOn: Binding(
-                            get: { UserDefaults.standard.bool(forKey: "eventRemindersEnabled") },
-                            set: { UserDefaults.standard.set($0, forKey: "eventRemindersEnabled") }
-                        )) {
+                        // IOS-AUDIT-BUG-012: bound to the service, not straight to
+                        // UserDefaults. The key is the same one, so an existing
+                        // preference survives - what changed is that something now
+                        // READS it: scheduleReminder refuses while this is off, and
+                        // switching it off cancels what is already pending.
+                        Toggle(isOn: $notifications.remindersEnabled) {
                             Label("Event Reminders", systemImage: "calendar.badge.clock")
                         }
 
@@ -159,6 +179,23 @@ struct SettingsView: View {
                     }
                 }
 
+                // Analytics/ad-telemetry opt-out, available to EVERY user — not
+                // just EU (who get the consent prompt) or authenticated users
+                // (IOS-AUDIT-SEC-014). AnalyticsService + AdTrackingService both
+                // gate on this flag.
+                Section {
+                    Toggle(isOn: Binding(
+                        get: { ConsentService.shared.analyticsConsent },
+                        set: { ConsentService.shared.analyticsConsent = $0 }
+                    )) {
+                        Label("Usage Analytics", systemImage: "chart.bar")
+                    }
+                } header: {
+                    Text("Privacy")
+                } footer: {
+                    Text("Help improve the app with anonymous usage and ad-performance analytics. You can turn this off anytime.")
+                }
+
                 // Data & Privacy section (authenticated users only)
                 if auth.isAuthenticated {
                     Section("Privacy & Data") {
@@ -174,13 +211,6 @@ struct SettingsView: View {
                             set: { ConsentService.shared.emailConsent = $0 }
                         )) {
                             Label("Email Communications", systemImage: "envelope")
-                        }
-
-                        Toggle(isOn: Binding(
-                            get: { ConsentService.shared.analyticsConsent },
-                            set: { ConsentService.shared.analyticsConsent = $0 }
-                        )) {
-                            Label("Analytics", systemImage: "chart.bar")
                         }
                     }
 
@@ -227,6 +257,15 @@ struct SettingsView: View {
             .sheet(isPresented: $showSubscription) {
                 SubscriptionView()
             }
+            .offerCodeRedemption(isPresented: $showOfferCodeRedeem) { result in
+                switch result {
+                case .success:
+                    AnalyticsService.shared.trackOfferCodeRedeem(action: "success")
+                    Task { await storeKit.refreshRenewalState() }
+                case .failure:
+                    AnalyticsService.shared.trackOfferCodeRedeem(action: "failure")
+                }
+            }
             .alert("Delete Account?", isPresented: $showDeleteConfirmation) {
                 Button("Delete", role: .destructive) {
                     Task { await deleteAccount() }
@@ -235,13 +274,27 @@ struct SettingsView: View {
             } message: {
                 Text("This will permanently delete your account, favorites, and all associated data. This action cannot be undone.")
             }
-            .alert("Error", isPresented: .init(
+            // IOS-AUDIT-BUG-018 AC3. This alert has exactly one setter - the
+            // deletion catch below - so the retry is unambiguous here and needs
+            // no discriminator, unlike ProfileView where it is shared.
+            .alert("Couldn't Delete Account", isPresented: .init(
                 get: { errorMessage != nil },
                 set: { if !$0 { errorMessage = nil } }
             )) {
-                Button("OK", role: .cancel) {}
+                Button("Try Again") {
+                    Task { await deleteAccount() }
+                }
+                Button("Cancel", role: .cancel) {}
             } message: {
                 Text(errorMessage ?? "")
+            }
+            .alert("Restore Purchases", isPresented: .init(
+                get: { restoreResultMessage != nil },
+                set: { if !$0 { restoreResultMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(restoreResultMessage ?? "")
             }
         }
     }
@@ -293,23 +346,36 @@ struct SettingsView: View {
         AppStore.requestReview(in: scene)
     }
 
+    /// Restores previous purchases and reports the outcome. Distinguishes a
+    /// genuine restore failure (e.g. AppStore.sync network error) from a
+    /// successful sync that simply found no active subscription
+    /// (IOS-AUDIT-FEAT-016).
+    private func restorePurchases() async {
+        isRestoring = true
+        await storeKit.restorePurchases()
+        isRestoring = false
+
+        if let error = storeKit.errorMessage {
+            // restorePurchases() sets errorMessage only when AppStore.sync fails.
+            restoreResultMessage = error
+        } else if storeKit.currentTier != .free {
+            restoreResultMessage = "Your \(storeKit.currentTier.displayName) subscription has been restored."
+        } else {
+            restoreResultMessage = "No previous purchases were found to restore."
+        }
+    }
+
     private func deleteAccount() async {
         isDeleting = true
         errorMessage = nil
 
         do {
-            guard let client = SupabaseService.shared.client else {
-                throw NSError(domain: "Settings", code: -1,
-                              userInfo: [NSLocalizedDescriptionKey: "Supabase is not configured."])
-            }
-
-            // invoke returns Void in supabase-swift 2.x; throws on failure
-            try await client.functions.invoke(
-                "delete-user-account",
-                options: .init(method: .post)
-            )
-
-            try await auth.signOut()
+            // XPLAT-001 / IOS-AUDIT-BUG-018: shared with ProfileViewModel so the
+            // two deletion entry points cannot drift apart again.
+            // IOS-AUDIT-BUG-018 AC2: sign-out moved into the service and made
+            // best effort, so dismiss() now runs whenever the account is actually
+            // gone rather than being skipped by a sign-out blip.
+            try await AccountDeletionService.shared.deleteAccountAndSignOut()
             dismiss()
         } catch {
             errorMessage = error.localizedDescription

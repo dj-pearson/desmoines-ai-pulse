@@ -41,12 +41,58 @@ interface MenuScrapePanelProps {
   restaurants: RestaurantMenuRow[];
 }
 
+/**
+ * Readable names for the scraper's extraction methods. Knowing WHICH path
+ * produced a menu is the fastest way to tell whether a bad result needs a
+ * `menu_url` override, a different source, or nothing at all.
+ */
+const METHOD_LABELS: Record<string, string> = {
+  jsonld: "structured data",
+  platform: "menu platform",
+  pdf_vision: "PDF",
+  image_vision: "menu image",
+  html_text: "page text",
+  merged: "several pages",
+};
+
 interface ScrapeLogEntry {
   restaurant_id: string;
   name: string;
   status: "pending" | "running" | "success" | "skipped" | "error";
   message?: string;
   items_count?: number;
+  /** How the menu was obtained — jsonld, platform, pdf_vision, image_vision, html_text, merged. */
+  method?: string;
+  /** Quality score 0-1 the extraction was published at. */
+  confidence?: number;
+}
+
+/**
+ * Per-restaurant detail from the scraper. Additive fields on an existing
+ * response shape, so an older build of this panel still works against the
+ * current function.
+ */
+interface ScrapeResultRow {
+  restaurant_id: string;
+  name: string;
+  success: boolean;
+  skipped: boolean;
+  items_count: number;
+  method?: string;
+  source_url?: string;
+  confidence?: number;
+  error?: string;
+}
+
+interface ScrapeResponse {
+  success: boolean;
+  processed: number;
+  succeeded: number;
+  total_items: number;
+  errors?: string[];
+  deadline_reached?: boolean;
+  remaining?: number;
+  results?: ScrapeResultRow[];
 }
 
 export function MenuScrapePanel({ restaurants }: MenuScrapePanelProps) {
@@ -117,20 +163,24 @@ export function MenuScrapePanel({ restaurants }: MenuScrapePanelProps) {
         body: { restaurant_id: restaurantId, force_update: forceUpdate },
       });
       if (error) throw new Error(error.message);
-      const result = data as {
-        success: boolean;
-        processed: number;
-        succeeded: number;
-        total_items: number;
-        errors?: string[];
-      };
-      const skipped = result.total_items === 0 && result.succeeded === 0;
+      const result = data as ScrapeResponse;
+      // The function now reports per-restaurant detail, so "already current"
+      // and "nothing could be extracted" are no longer collapsed into one
+      // ambiguous line the way `total_items === 0` forced them to be.
+      const detail = result.results?.[0];
+
       appendLog({
         restaurant_id: restaurantId,
         name,
-        status: skipped ? "skipped" : result.succeeded > 0 ? "success" : "error",
-        items_count: result.total_items,
-        message: result.errors?.[0] ?? (skipped ? "Already current / no content found" : undefined),
+        status: detail?.skipped
+          ? "skipped"
+          : detail?.success ?? result.succeeded > 0
+            ? "success"
+            : "error",
+        items_count: detail?.items_count ?? result.total_items,
+        method: detail?.method,
+        confidence: detail?.confidence,
+        message: detail?.error ?? result.errors?.[0],
       });
     } catch (err) {
       appendLog({
@@ -161,19 +211,32 @@ export function MenuScrapePanel({ restaurants }: MenuScrapePanelProps) {
           body: { batch_size: parseInt(batchSize), force_update: forceUpdate },
         });
         if (error) throw new Error(error.message);
-        const result = data as {
-          success: boolean;
-          processed: number;
-          succeeded: number;
-          total_items: number;
-          errors?: string[];
-        };
+        const result = data as ScrapeResponse;
+
+        // One line per restaurant, so a batch run is as diagnosable as a
+        // single one. Falls back to the summary when an older function build
+        // returns no per-restaurant detail.
+        for (const row of result.results ?? []) {
+          appendLog({
+            restaurant_id: row.restaurant_id,
+            name: row.name,
+            status: row.skipped ? "skipped" : row.success ? "success" : "error",
+            items_count: row.items_count,
+            method: row.method,
+            confidence: row.confidence,
+            message: row.error,
+          });
+        }
+
         appendLog({
           restaurant_id: "batch",
           name: "Batch Scrape",
           status: result.succeeded > 0 || result.processed > 0 ? "success" : "error",
           items_count: result.total_items,
-          message: `${result.succeeded}/${result.processed} succeeded · ${result.total_items} items${result.errors?.length ? ` · ${result.errors.length} errors` : ""}`,
+          message:
+            `${result.succeeded}/${result.processed} succeeded · ${result.total_items} items` +
+            (result.errors?.length ? ` · ${result.errors.length} errors` : "") +
+            (result.deadline_reached ? ` · stopped early, ${result.remaining} not attempted` : ""),
         });
       }
       queryClient.invalidateQueries({ queryKey: ["admin-menu-restaurants"] });
@@ -367,6 +430,7 @@ export function MenuScrapePanel({ restaurants }: MenuScrapePanelProps) {
                             variant="ghost"
                             size="icon"
                             className="h-7 w-7"
+                            aria-label="Scrape menu"
                             disabled={running}
                             onClick={() => runBatch([r.id])}
                           >
@@ -411,6 +475,13 @@ export function MenuScrapePanel({ restaurants }: MenuScrapePanelProps) {
                   <span className="font-semibold">{entry.name}</span>
                   {entry.items_count !== undefined && entry.items_count > 0 && (
                     <span className="text-green-600 ml-1">· {entry.items_count} items</span>
+                  )}
+                  {entry.method && (
+                    <span className="text-muted-foreground ml-1">
+                      · via {METHOD_LABELS[entry.method] ?? entry.method}
+                      {entry.confidence !== undefined &&
+                        ` (${Math.round(entry.confidence * 100)}% confidence)`}
+                    </span>
                   )}
                   {entry.message && (
                     <div className="text-muted-foreground">{entry.message}</div>

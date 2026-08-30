@@ -1,7 +1,9 @@
 import { Helmet } from "react-helmet-async";
 import { BRAND } from "@/lib/brandConfig";
+import { ogImageUrl } from "@/lib/ogImage";
 
 interface AttractionData {
+  id?: string | null;
   name: string;
   type: string;
   description?: string | null;
@@ -24,6 +26,8 @@ export default function EnhancedAttractionSEO({
   slug,
 }: EnhancedAttractionSEOProps) {
   const attractionUrl = `${BRAND.baseUrl}/attractions/${slug}`;
+  // Branded dynamic OG card (WEB-FEAT-008); falls back to the item photo / default.
+  const ogImage = ogImageUrl("attraction", attraction.id) || attraction.image_url || `${BRAND.baseUrl}${BRAND.ogImage}`;
 
   const getOptimizedTitle = () => {
     const parts = [attraction.name];
@@ -88,15 +92,10 @@ export default function EnhancedAttractionSEO({
       latitude: attraction.latitude || 41.5868,
       longitude: attraction.longitude || -93.625,
     },
-    aggregateRating: attraction.rating
-      ? {
-          "@type": "AggregateRating",
-          ratingValue: attraction.rating.toFixed(1),
-          ratingCount: attraction.rating >= 4.5 ? 120 : attraction.rating >= 4.0 ? 80 : 40,
-          bestRating: "5",
-          worstRating: "1",
-        }
-      : undefined,
+    // WEB-SEO-016: aggregateRating removed. The ratingValue was real but
+    // ratingCount was invented from it (attraction.rating >= 4.5 ? ... ), and
+    // Google requires the count to reflect actual reviews. No reviews table
+    // exists, so there is no honest count to emit.
     isAccessibleForFree: true,
     publicAccess: true,
     touristType: ["Family", "Couples", "Solo travelers", "Groups"],
@@ -229,7 +228,7 @@ export default function EnhancedAttractionSEO({
       <meta property="og:locality" content={BRAND.city} />
       <meta property="og:region" content={BRAND.state} />
       <meta property="og:country-name" content="United States" />
-      <meta property="og:image" content={attraction.image_url || `${BRAND.baseUrl}${BRAND.ogImage}`} />
+      <meta property="og:image" content={ogImage} />
       <meta property="og:image:width" content="1200" />
       <meta property="og:image:height" content="630" />
       <meta
@@ -243,7 +242,7 @@ export default function EnhancedAttractionSEO({
       <meta name="twitter:card" content="summary_large_image" />
       <meta name="twitter:title" content={getOptimizedTitle()} />
       <meta name="twitter:description" content={getGEODescription()} />
-      <meta name="twitter:image" content={attraction.image_url || `${BRAND.baseUrl}${BRAND.ogImage}`} />
+      <meta name="twitter:image" content={ogImage} />
       <meta name="twitter:site" content={BRAND.twitter} />
 
       {/* Structured Data */}

@@ -9,8 +9,13 @@ import coil3.memory.MemoryCache
 import coil3.request.crossfade
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import com.desmoines.aipulse.data.local.CacheManager
+import com.desmoines.aipulse.util.AppLogger
+import com.desmoines.aipulse.util.LoggedError
+import com.desmoines.aipulse.util.CrashReportingService
+import com.desmoines.aipulse.util.CrashUploader
 import com.desmoines.aipulse.util.LocalNotificationService
 import com.desmoines.aipulse.util.PushNotificationService
+import com.desmoines.aipulse.util.QueryCache
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -27,14 +32,36 @@ class DesMoinesInsiderApp : Application(), SingletonImageLoader.Factory {
 
     @Inject lateinit var cacheManager: CacheManager
     @Inject lateinit var localNotificationService: LocalNotificationService
+    @Inject lateinit var queryCache: QueryCache
+    @Inject lateinit var crashReportingService: CrashReportingService
+    @Inject lateinit var crashUploader: CrashUploader
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
         super.onCreate()
+        // Install the crash handler as early as possible.
+        crashReportingService.install()
+        // AND-AUDIT-023: an error someone caught and logged reached nobody -
+        // AppLogger.error only wrote to logcat, on a device we are not holding.
+        // Installed straight after the crash handler and before any other
+        // startup work, so the first thing that fails is already reportable.
+        AppLogger.installErrorSink { category, message, throwable ->
+            crashReportingService.recordError(
+                throwable ?: LoggedError(message),
+                mapOf("source" to "AppLogger", "category" to category, "message" to message),
+            )
+        }
+        // Drain whatever the previous run recorded. Every crash the app has
+        // ever captured stayed on the device until now (XPLAT-004 AC1).
+        // Silent on failure, and records survive a failed attempt.
+        appScope.launch { crashUploader.uploadPending() }
         appScope.launch { cacheManager.pruneExpired() }
-        // Clean up reminder IDs for alarms that have already fired
-        localNotificationService.pruneExpiredReminders()
+        appScope.launch { queryCache.prune() }
+        // Clean up reminder IDs for alarms that have already fired. Reads
+        // SharedPreferences and rebuilds a PendingIntent per saved reminder, so
+        // it belongs off the cold-start critical path like the other three.
+        appScope.launch { localNotificationService.pruneExpiredReminders() }
 
         // Initialize Firebase Cloud Messaging push notifications
         PushNotificationService.initialize(this)
@@ -44,7 +71,7 @@ class DesMoinesInsiderApp : Application(), SingletonImageLoader.Factory {
         return ImageLoader.Builder(context)
             .memoryCache {
                 MemoryCache.Builder()
-                    .maxSizeBytes(MEMORY_CACHE_SIZE)
+                    .maxSizeBytes(imageMemoryCacheBytes())
                     .build()
             }
             .diskCache {
@@ -71,6 +98,13 @@ class DesMoinesInsiderApp : Application(), SingletonImageLoader.Factory {
     }
 
     /**
+     * Image memory cache budget, as a fraction of the heap this process is
+     * actually allowed.
+     */
+    private fun imageMemoryCacheBytes(): Long =
+        (Runtime.getRuntime().maxMemory() * MEMORY_CACHE_HEAP_FRACTION).toLong()
+
+    /**
      * Interceptor that applies a default 7-day Cache-Control header when the server
      * does not provide one, enabling LRU disk cache TTL-based expiry.
      */
@@ -95,8 +129,15 @@ class DesMoinesInsiderApp : Application(), SingletonImageLoader.Factory {
     }
 
     companion object {
-        /** 50 MB memory cache — matches iOS CachedAsyncImage memory limit */
-        private const val MEMORY_CACHE_SIZE = 50L * 1024 * 1024
+        /**
+         * Share of the app's available heap given to the image memory cache.
+         *
+         * Was a flat 50 MB to match the iOS limit, but Android heap sizes are
+         * per-device: on a low-end phone with a 96 MB heap that cache alone is
+         * over half the budget and turns image-heavy scrolling into an
+         * OutOfMemoryError. A fraction scales with whatever the device allows.
+         */
+        private const val MEMORY_CACHE_HEAP_FRACTION = 0.20
         /** 200 MB disk cache — matches iOS CachedAsyncImage disk limit */
         private const val DISK_CACHE_SIZE = 200L * 1024 * 1024
         /** Default cache TTL when server doesn't specify Cache-Control */

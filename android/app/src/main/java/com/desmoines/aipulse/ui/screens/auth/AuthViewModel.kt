@@ -1,6 +1,6 @@
 package com.desmoines.aipulse.ui.screens.auth
 
-import android.util.Log
+import com.desmoines.aipulse.util.AppLogger
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.desmoines.aipulse.data.model.UserProfile
@@ -10,6 +10,7 @@ import com.desmoines.aipulse.data.repository.AuthRepository
 import com.desmoines.aipulse.util.AuthErrorMapper
 import com.desmoines.aipulse.util.BiometricAuthService
 import com.desmoines.aipulse.util.Config
+import com.desmoines.aipulse.util.SessionTimeoutService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.jan.supabase.auth.status.SessionStatus
 import kotlinx.coroutines.Job
@@ -19,9 +20,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-
-private const val TAG = "AuthViewModel"
-
 /**
  * ViewModel for authentication flows (sign in, sign up, profile management).
  * Mirrors iOS AuthViewModel.swift with identical validation, rate limiting, and state management.
@@ -31,6 +29,7 @@ class AuthViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val biometricAuthService: BiometricAuthService,
     private val billingService: BillingService,
+    private val sessionTimeoutService: SessionTimeoutService,
 ) : ViewModel() {
 
     // MARK: - Auth State
@@ -115,6 +114,9 @@ class AuthViewModel @Inject constructor(
                         _currentProfile.value = null
                         _isAuthenticated.value = false
                         _isAdmin.value = false
+                        // Idempotent; SignOutCleaner also calls it, but not
+                        // every way a session ends goes through sign-out.
+                        sessionTimeoutService.stopTracking()
                         // Drop the cached backend tier so the next account
                         // never briefly inherits the previous account's
                         // entitlement.
@@ -138,7 +140,27 @@ class AuthViewModel @Inject constructor(
         }
         authRepository.checkAdminRole(userId).onSuccess { isAdmin ->
             _isAdmin.value = isAdmin
+            if (isAdmin) startOrExpireAdminSession()
         }
+    }
+
+    /**
+     * Begins admin session-timeout tracking, or ends the session outright if it
+     * had already expired while the app was closed.
+     *
+     * Order matters: startTracking() resets the idle timer, so the persisted
+     * timestamps have to be judged first or a session that timed out overnight
+     * would be silently renewed on next launch.
+     *
+     * Only admins are tracked; see SessionTimeoutService for why.
+     */
+    private suspend fun startOrExpireAdminSession() {
+        if (!sessionTimeoutService.isSessionValid()) {
+            AppLogger.auth.info("Admin session already expired while the app was closed; signing out")
+            authRepository.signOut()
+            return
+        }
+        sessionTimeoutService.startTracking()
     }
 
     // MARK: - Validation
@@ -278,10 +300,6 @@ class AuthViewModel @Inject constructor(
     fun signOut() {
         viewModelScope.launch {
             authRepository.signOut()
-                .onSuccess {
-                    // Clear biometric auth on sign out (matching iOS pattern)
-                    biometricAuthService.reset()
-                }
                 .onFailure { error ->
                     setError(error.message ?: "Sign out failed.")
                 }

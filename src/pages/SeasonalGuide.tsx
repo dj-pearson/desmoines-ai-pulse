@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CheckCircle2 } from 'lucide-react';
+import { BRAND } from '@/lib/brandConfig';
 
 export default function SeasonalGuide() {
   const { slug } = useParams<{ slug: string }>();
@@ -49,6 +50,15 @@ export default function SeasonalGuide() {
     <>
       <Helmet>
         <title>{guide.seo_title || guide.title} | Des Moines Insider</title>
+        {/*
+          Without this the prerender gate refuses the page: a route that does not
+          declare itself cannot be published as static HTML, because there is no
+          way to tell a rendered guide from the SPA shell. All four published
+          guides were rejected on every build for exactly this, so /guides/:slug
+          was the only sitemapped route a crawler could not read (WEB-PERF-020
+          build output; the pages themselves render fine).
+        */}
+        <link rel="canonical" href={`${BRAND.baseUrl}/guides/${slug}`} />
         <meta name="description" content={guide.seo_description || guide.description || ''} />
         <script type="application/ld+json">
           {JSON.stringify({

@@ -1,13 +1,19 @@
 import { useParams, Link } from "react-router-dom";
+import { createSlug } from "@/lib/slug";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { FavoriteButton } from "@/components/FavoriteButton";
 import { Separator } from "@/components/ui/separator";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { LazyLocationMap } from "@/components/LazyLocationMap";
+import { getDirectionsUrl } from "@/lib/directions";
+import { OpenStatusChip } from "@/components/OpenStatusChip";
+import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import ShareDialog from "@/components/ShareDialog";
 import { FAQSection } from "@/components/FAQSection";
 import { BackToTop } from "@/components/BackToTop";
@@ -15,32 +21,10 @@ import EnhancedPlaygroundSEO from "@/components/EnhancedPlaygroundSEO";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { Helmet } from "react-helmet-async";
-import {
-  MapPin,
-  Star,
-  ArrowLeft,
-  Navigation,
-  Share2,
-  Heart,
-  Sparkles,
-  Check,
-  Info,
-  Users,
-  Zap,
-  ChevronRight,
-  TreePine,
-  Baby,
-  Shield,
-} from "lucide-react";
+import { Star, ArrowLeft, Navigation, Heart, Check, Info, Zap, ChevronRight, TreePine, Baby, Shield } from "lucide-react";
 import { useState } from "react";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
-
-const createSlug = (name: string): string => {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
-};
+import { SpriteIcon } from "@/components/ui/SpriteIcon";
 
 export default function PlaygroundDetails() {
   const { slug } = useParams();
@@ -138,7 +122,7 @@ export default function PlaygroundDetails() {
         <div className="min-h-screen bg-gray-50 flex items-center justify-center">
           <Card className="max-w-md mx-auto text-center shadow-lg rounded-2xl">
             <CardContent className="p-8">
-              <TreePine className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+              <TreePine className="h-16 w-16 text-gray-500 mx-auto mb-4" />
               <h2 className="text-2xl font-bold text-gray-800 mb-2">
                 Playground Not Found
               </h2>
@@ -187,7 +171,7 @@ export default function PlaygroundDetails() {
       ? [
           {
             question: `What is the rating for ${playground.name}?`,
-            answer: `${playground.name} has a rating of ${playground.rating.toFixed(1)} out of 5 stars based on family reviews. ${playground.rating >= 4.5 ? `It's one of the highest-rated playgrounds in ${BRAND.city}.` : playground.rating >= 4.0 ? `It's a highly-rated playground in the ${BRAND.region}.` : `Families appreciate the play experience here.`} ${playground.is_featured ? "It's also featured as an editor's pick on Des Moines AI Pulse." : ""}`,
+            answer: `${playground.name} has a rating of ${playground.rating.toFixed(1)} out of 5 stars based on family reviews. ${playground.rating >= 4.5 ? `It's one of the highest-rated playgrounds in ${BRAND.city}.` : playground.rating >= 4.0 ? `It's a highly-rated playground in the ${BRAND.region}.` : `Families appreciate the play experience here.`} ${playground.is_featured ? "It's also featured as an editor's pick on Des Moines Insider." : ""}`,
           },
         ]
       : []),
@@ -239,15 +223,20 @@ export default function PlaygroundDetails() {
                 url={typeof window !== "undefined" ? window.location.href : ""}
                 trigger={
                   <Button variant="outline" size="sm" className="rounded-xl">
-                    <Share2 className="h-4 w-4 mr-1.5" />
+                    <SpriteIcon name="share-2" className="h-4 w-4 mr-1.5" />
                     Share
                   </Button>
                 }
               />
-              <Button variant="outline" size="sm" className="rounded-xl">
-                <Heart className="h-4 w-4 mr-1.5" />
-                Save
-              </Button>
+              <FavoriteButton
+                contentType="playground"
+                contentId={playground.id}
+                variant="outline"
+                size="sm"
+                showText
+                itemName={playground.name}
+                className="rounded-xl"
+              />
             </div>
           </div>
 
@@ -280,7 +269,7 @@ export default function PlaygroundDetails() {
               <div className="absolute top-4 left-4 flex gap-2 z-10">
                 {playground.is_featured && (
                   <Badge className="bg-amber-500 text-white border-0 shadow-lg text-sm font-semibold px-3 py-1">
-                    <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                    <SpriteIcon name="sparkles" className="h-3.5 w-3.5 mr-1.5" />
                     Featured
                   </Badge>
                 )}
@@ -310,13 +299,13 @@ export default function PlaygroundDetails() {
                     )}
                     {playground.age_range && (
                       <div className="flex items-center gap-1.5 bg-white/20 backdrop-blur-sm rounded-full px-3 py-1">
-                        <Users className="h-4 w-4" />
+                        <SpriteIcon name="users" className="h-4 w-4" />
                         <span className="text-sm">Ages {playground.age_range}</span>
                       </div>
                     )}
                     {playground.location && (
                       <div className="flex items-center gap-1.5 bg-white/20 backdrop-blur-sm rounded-full px-3 py-1">
-                        <MapPin className="h-4 w-4" />
+                        <SpriteIcon name="map-pin" className="h-4 w-4" />
                         <span className="text-sm">{playground.location}</span>
                       </div>
                     )}
@@ -329,7 +318,7 @@ export default function PlaygroundDetails() {
             <div className="flex flex-wrap gap-3 p-4 md:p-6 bg-gray-50 border-b">
               {playground.location && (
                 <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(playground.name + " " + playground.location)}`}
+                  href={getDirectionsUrl({ latitude: playground.latitude, longitude: playground.longitude, address: `${playground.name} ${playground.location}` })}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
@@ -392,18 +381,18 @@ export default function PlaygroundDetails() {
                 {/* Location & Access */}
                 <div>
                   <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                    <MapPin className="h-5 w-5 text-[#2D1B69]" />
+                    <SpriteIcon name="map-pin" className="h-5 w-5 text-[#2D1B69]" />
                     Location & Access
                   </h2>
                   <div className="space-y-3">
                     {playground.location && (
                       <div className="flex items-start gap-3 p-4 bg-gray-50 rounded-xl">
-                        <MapPin className="h-5 w-5 text-gray-500 mt-0.5 shrink-0" />
+                        <SpriteIcon name="map-pin" className="h-5 w-5 text-gray-500 mt-0.5 shrink-0" />
                         <div>
                           <p className="text-gray-900 font-medium">{playground.location}</p>
                           <p className="text-sm text-gray-500">{BRAND.city}, {BRAND.state}</p>
                           <a
-                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(playground.name + " " + playground.location)}`}
+                            href={getDirectionsUrl({ latitude: playground.latitude, longitude: playground.longitude, address: `${playground.name} ${playground.location}` })}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center text-sm text-[#2D1B69] hover:underline mt-1"
@@ -414,13 +403,24 @@ export default function PlaygroundDetails() {
                         </div>
                       </div>
                     )}
+                    {playground.latitude && playground.longitude && (
+                      <div className="overflow-hidden rounded-xl">
+                        <LazyLocationMap
+                          latitude={playground.latitude}
+                          longitude={playground.longitude}
+                          venue={playground.name}
+                          location={playground.location}
+                          className="h-48 w-full"
+                        />
+                      </div>
+                    )}
                     <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
                       <span className="text-gray-600">Admission</span>
                       <Badge className="bg-emerald-100 text-emerald-700 font-medium">Free</Badge>
                     </div>
                     <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
                       <span className="text-gray-600">Hours</span>
-                      <span className="text-gray-900 text-sm font-medium">Dawn to Dusk</span>
+                      <OpenStatusChip hours={null} fallbackLabel="Check local park listings" />
                     </div>
                   </div>
                 </div>
@@ -436,7 +436,7 @@ export default function PlaygroundDetails() {
                       <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
                         <span className="text-gray-600">Age Range</span>
                         <Badge variant="secondary" className="bg-[#2D1B69]/10 text-[#2D1B69] font-medium">
-                          <Users className="h-3 w-3 mr-1" />
+                          <SpriteIcon name="users" className="h-3 w-3 mr-1" />
                           Ages {playground.age_range}
                         </Badge>
                       </div>
@@ -457,7 +457,7 @@ export default function PlaygroundDetails() {
                     {playground.is_featured && (
                       <div className="p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200">
                         <div className="flex items-center text-amber-700">
-                          <Sparkles className="h-5 w-5 mr-2" />
+                          <SpriteIcon name="sparkles" className="h-5 w-5 mr-2" />
                           <span className="font-medium">Editor's Pick - Featured Playground</span>
                         </div>
                         <p className="text-sm text-amber-600 mt-1">
@@ -545,7 +545,7 @@ export default function PlaygroundDetails() {
                   <div className="space-y-3">
                     <div>
                       <h3 className="font-semibold text-sm text-gray-900">Hours</h3>
-                      <p className="text-sm text-gray-600">Dawn to Dusk, daily</p>
+                      <OpenStatusChip hours={null} fallbackLabel="Check local park listings for hours" className="mt-1" />
                     </div>
                     <div>
                       <h3 className="font-semibold text-sm text-gray-900">Area</h3>
@@ -689,6 +689,19 @@ export default function PlaygroundDetails() {
       </div>
       <Footer />
       <BackToTop />
+      <StickyMobileCTA
+        variant="playground"
+        primaryAction={{
+          label: "Directions",
+          href: getDirectionsUrl({
+            latitude: playground.latitude,
+            longitude: playground.longitude,
+            address: `${playground.name} ${playground.location ?? ""}`,
+          }),
+          icon: "directions",
+          isExternal: true,
+        }}
+      />
     </>
   );
 }

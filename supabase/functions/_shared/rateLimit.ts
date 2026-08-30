@@ -30,6 +30,13 @@ export interface RateLimitOptions {
   skipSuccessfulRequests?: boolean;
   skipFailedRequests?: boolean;
   endpoint?: string;
+  /**
+   * Verified user id (from auth.getUser, NOT from a client-supplied field).
+   * When set, the limit is keyed per-user so a single shared NAT/IP can't
+   * exhaust everyone's budget and so one user can't dodge the limit by
+   * rotating IPs. Only pass this once the JWT has actually been verified.
+   */
+  userId?: string;
 }
 
 export interface RateLimitResult {
@@ -41,21 +48,39 @@ export interface RateLimitResult {
 }
 
 /**
- * Get client identifier from request.
- * Uses IP address combined with auth token prefix for uniqueness.
+ * Resolve the trusted client IP.
+ *
+ * SECURITY: `X-Forwarded-For` is a client-controllable header — the LEFTMOST
+ * entry is whatever the caller wrote, so keying on it lets an attacker forge a
+ * fresh identity per request and evade the limit entirely. We therefore prefer
+ * Cloudflare's `CF-Connecting-IP` (set by the trusted edge in front of
+ * Supabase), then `X-Real-IP`, and only fall back to the RIGHTMOST XFF entry
+ * (the hop appended by the trusted proxy, not the spoofable client value).
  */
-function getClientIdentifier(req: Request): string {
-  const forwarded = req.headers.get('x-forwarded-for');
-  const realIp = req.headers.get('x-real-ip');
-  const ip = forwarded?.split(',')[0] || realIp || 'unknown';
+function getClientIp(req: Request): string {
+  const cf = req.headers.get('cf-connecting-ip');
+  if (cf) return cf.trim();
 
-  const authHeader = req.headers.get('authorization');
-  if (authHeader) {
-    const tokenHash = authHeader.substring(0, 20);
-    return `${ip}:${tokenHash}`;
+  const realIp = req.headers.get('x-real-ip');
+  if (realIp) return realIp.trim();
+
+  const forwarded = req.headers.get('x-forwarded-for');
+  if (forwarded) {
+    const parts = forwarded.split(',').map((s) => s.trim()).filter(Boolean);
+    if (parts.length) return parts[parts.length - 1]; // rightmost = trusted hop
   }
 
-  return ip;
+  return 'unknown';
+}
+
+/**
+ * Get client identifier for rate limiting.
+ * When a verified userId is supplied, the limit is keyed per-user; otherwise
+ * it falls back to the trusted client IP (for anonymous-allowed endpoints).
+ */
+function getClientIdentifier(req: Request, userId?: string): string {
+  if (userId) return `user:${userId}`;
+  return `ip:${getClientIp(req)}`;
 }
 
 /**
@@ -219,11 +244,18 @@ export async function checkRateLimitPersistent(
   const message = options.message || 'Too many requests, please try again later.';
   const endpoint = options.endpoint || 'default';
 
-  const clientId = getClientIdentifier(req);
+  const clientId = getClientIdentifier(req, options.userId);
 
   // Try database-backed rate limiting first
   const dbResult = await checkRateLimitDB(clientId, endpoint, windowMs, max);
   if (dbResult) return dbResult;
+
+  // FAIL OPEN: a DB-lookup miss/outage must never break the product. The
+  // in-memory fallback below still throttles within a warm isolate, but we
+  // log so a persistent DB problem is visible rather than silently degrading.
+  console.warn(
+    `[rateLimit] persistent check unavailable for endpoint="${endpoint}" — falling back to in-memory (fail-open)`,
+  );
 
   // Fallback to in-memory
   return checkRateLimitMemory(clientId, windowMs, max, message);

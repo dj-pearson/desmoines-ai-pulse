@@ -6,6 +6,8 @@ import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.compose.ui.platform.LocalContext
+import com.desmoines.aipulse.util.SafeLinkLauncher
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -76,6 +78,11 @@ fun WebViewScreen(
     var pageTitle by remember { mutableStateOf(title ?: "") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
+    val webViewContext = LocalContext.current
+    // Host the screen was opened for; everything else is treated as external.
+    val initialHost = remember(url) {
+        runCatching { android.net.Uri.parse(url).host }.getOrNull()
+    }
 
     // Timeout after 30 seconds
     LaunchedEffect(viewState) {
@@ -156,6 +163,27 @@ fun WebViewScreen(
                     factory = { context ->
                         WebView(context).apply {
                             webViewClient = object : WebViewClient() {
+                                /**
+                                 * Keeps the in-app browser on the host it was
+                                 * opened for. This screen shows the privacy
+                                 * policy and terms with JavaScript enabled, so
+                                 * without a check any link, redirect or script
+                                 * navigation could take a JS-enabled WebView
+                                 * anywhere. Off-host links hand off to the
+                                 * system browser instead.
+                                 */
+                                override fun shouldOverrideUrlLoading(
+                                    view: WebView?,
+                                    request: WebResourceRequest?,
+                                ): Boolean {
+                                    val target = request?.url ?: return false
+                                    if (target.host.equals(initialHost, ignoreCase = true)) {
+                                        return false
+                                    }
+                                    SafeLinkLauncher.openUrl(webViewContext, target.toString())
+                                    return true
+                                }
+
                                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                                     // Reset to loading on navigation within the WebView
                                     viewState = WebViewState.LOADING
@@ -184,9 +212,25 @@ fun WebViewScreen(
                             }
                             settings.javaScriptEnabled = true
                             settings.domStorageEnabled = true
+                            // Honour the system font-size setting; a WebView
+                            // ignores it by default, which fails WCAG resize.
+                            settings.textZoom = resources.configuration.fontScale
+                                .let { (it * 100).toInt() }
+                            settings.allowFileAccess = false
+                            settings.allowContentAccess = false
                             webViewRef = this
                             loadUrl(url)
                         }
+                    },
+                    onRelease = { webView ->
+                        // Compose never destroys an AndroidView's view for you.
+                        // A WebView left undestroyed keeps its renderer process
+                        // and JS context alive for the life of the app.
+                        webViewRef = null
+                        webView.stopLoading()
+                        webView.loadUrl("about:blank")
+                        webView.removeAllViews()
+                        webView.destroy()
                     },
                     modifier = Modifier
                         .fillMaxSize()
