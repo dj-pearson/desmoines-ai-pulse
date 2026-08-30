@@ -42,3 +42,23 @@ paths = [
   '''invoke-populate-playgrounds\.cjs''',
   '''scripts/event-datetime-sql-generator\.ts''',
 ]
+
+# False positives from the default `generic-api-key` rule. These are not
+# credentials and must not be moved into a secret store — see the reasoning at
+# each site. Listed as value regexes rather than file paths so the rest of each
+# file stays scanned.
+regexes = [
+  # localStorage key names (src/hooks/useGuestFavorites.ts, src/lib/guestFavorites.ts).
+  # High entropy only because they carry a "_v1" schema suffix; they name a
+  # browser storage slot and are visible in devtools to anyone on the page.
+  '''guest_favorites_v1''',
+  '''dmi-guest-favorites-v1''',
+
+  # IndexNow key (supabase/functions/_shared/indexNow.ts). Public by protocol
+  # design: it is already served at public/c2d7b3a0ed753ae68b306e25422227ff.txt
+  # so search engines can verify host ownership, and it grants exactly one
+  # capability — asking Bing to recrawl a URL on our own host, which anyone who
+  # fetches that file can already do. The edge function and the static file must
+  # agree on the value, so it cannot live in a secret store.
+  '''c2d7b3a0ed753ae68b306e25422227ff''',
+]
