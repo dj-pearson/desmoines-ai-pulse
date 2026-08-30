@@ -141,7 +141,38 @@ android {
                 )
             }
         }
+
+        // AND-AUDIT-018 AC6: "Verify each narrowing on a real minified build.
+        // R8 breakage is a runtime failure, not a compile error." That has been
+        // the blocker on this whole story - assembleRelease proves a keep rule
+        // COMPILES, and nothing proved the minified app RUNS.
+        //
+        // This build type is release's R8 configuration signed with the debug
+        // key, so the instrumentation suite can be installed on the managed
+        // device from AND-AUDIT-014 and run against shrunk, obfuscated code. The
+        // release variant stays unsigned without a keystore and cannot be
+        // installed, which is why this exists rather than testing release
+        // directly.
+        //
+        // Not shippable and not meant to be: debug-signed, and Play would refuse
+        // it.
+        create("minified") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+            isDebuggable = false
+            // AGP runs R8 over the TEST apk too when testBuildType points here.
+            // See proguard-test-rules.pro: the app stays fully minified, the
+            // test apk is left alone so it cannot add its own failure mode.
+            testProguardFiles("proguard-test-rules.pro")
+        }
     }
+
+    // Instrumentation tests run against debug by default because that is the
+    // fast path. -PminifiedTests points them at the R8 output instead:
+    //
+    //     ./gradlew :app:pixel6api34MinifiedAndroidTest -PminifiedTests
+    testBuildType = if (project.hasProperty("minifiedTests")) "minified" else "debug"
 
     bundle {
         language { enableSplit = true }
@@ -412,6 +443,19 @@ dependencies {
     androidTestImplementation(platform(libs.compose.bom))
     androidTestImplementation(libs.compose.ui.test.junit4)
     androidTestImplementation(libs.hilt.android.testing)
+
+    // AND-AUDIT-018 AC6. Under -PminifiedTests the app apk is R8'd, which inlines
+    // androidx.tracing.Trace away entirely - release/mapping.txt shows its
+    // methods folded into their callers and the class absent. androidx.test's
+    // runner references it by name from the (unminified) test apk, so the
+    // process died at handleBindApplication with ClassNotFoundException before a
+    // single test was discovered: "Starting 0 tests", which a less careful read
+    // could have taken for a pass.
+    //
+    // Giving the TEST apk its own copy rather than adding a keep to the app: a
+    // keep would make the minified variant diverge from the release config it
+    // exists to reproduce, which is the one thing this must not do.
+    androidTestImplementation("androidx.tracing:tracing:1.2.0")
     kspAndroidTest(libs.hilt.compiler)
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.test.manifest)
